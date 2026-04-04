@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Net;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -121,23 +122,34 @@ public static class EditorGUI
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
 
-    public static WidgetResult<bool> ButtonSquare(Paper paper, string id, string label, float width = 0)
+    public static WidgetResult<bool> ButtonSquare(Paper paper, string id, string icon)
     {
         Action<bool>? userCallback = null;
 
-        var el = paper.Box(id)
+        using (paper.Box(id)
             .Height(EditorTheme.RowHeight)
             .Width(EditorTheme.RowHeight)
-            .ChildLeft(12).ChildRight(12)
             .BackgroundColor(EditorTheme.ButtonNormal)
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
+            // .Alignment(PaperUI.TextAlignment.MiddleCenter)
             .BorderColor(EditorTheme.Border).BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true));
-
-        if (width > 0) el.Width(width);
-        if (Font != null) el.Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+            .OnClick(e => userCallback?.Invoke(true)).Enter())
+        {
+            if (Font != null)
+            { 
+                var iconSize = paper.MeasureText(icon, FontSz, Font);
+                paper.Box($"{id}_icon")
+                    .Text(icon, Font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(FontSz)
+                    // .Alignment(PaperUI.TextAlignment.MiddleCenter)
+                    .Margin((EditorTheme.RowHeight - iconSize.X) * 0.5f, (EditorTheme.RowHeight - iconSize.Y) * 0.5f);
+                     // vertical center;
+                    // .Height(EditorTheme.RowHeight)
+            }
+        }
 
         return new WidgetResult<bool>(cb => userCallback = cb);
     }

@@ -295,7 +295,7 @@ public static class PropertyGrid
                                 }, depth + 1);
                         }
 
-                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{stableKey}", "\u2715")
+                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{stableKey}", EditorIcons.Xmark)
                             .OnValueChanged(v =>
                             {
                                 // Remove the stable key at the same position
@@ -396,7 +396,7 @@ public static class PropertyGrid
                                 }, depth + 1);
                         }
 
-                        EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", "\u2715")
+                        EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", EditorIcons.Xmark)
                             .OnValueChanged(v =>
                             {
                                 dict.Remove(keyObj);
