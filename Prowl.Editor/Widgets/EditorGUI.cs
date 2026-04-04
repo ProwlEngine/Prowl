@@ -395,7 +395,7 @@ public static class EditorGUI
 
             if (showField)
             {
-                FloatField(paper, $"{id}_val", "", value)
+                FloatField(paper, $"{id}_val", value)
                     .OnValueChanged(v => userCallback?.Invoke(Math.Clamp(v, min, max)));
             }
         }
@@ -487,7 +487,12 @@ public static class EditorGUI
         }
 
         if (expanded)
-            drawContents();
+        {
+            using (paper.Column($"{id}_content").Height(UnitValue.Auto).Enter())
+            {
+                drawContents();
+            }
+        }
     }
 
     // ================================================================

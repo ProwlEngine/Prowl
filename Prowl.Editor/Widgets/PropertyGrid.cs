@@ -228,6 +228,10 @@ public static class PropertyGrid
         EditorGUI.Label(paper, id, $"{label}: {value ?? "(null)"}", EditorTheme.TextDim);
     }
 
+
+    // ================================================================
+    //  Collections (List<T>, T[])
+    // ================================================================
     static void DrawCollection(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
     {
@@ -244,25 +248,46 @@ public static class PropertyGrid
                     EditorGUI.Button(paper, $"{id}_create", $"Create {elementType.Name}[]")
                         .OnValueChanged(v =>
                         {
-                            if (type.IsArray)
-                                onChange(Array.CreateInstance(elementType, 0));
-                            else
-                                onChange(Activator.CreateInstance(type));
+                            onChange(type.IsArray
+                                ? Array.CreateInstance(elementType, 0)
+                                : Activator.CreateInstance(type));
                         });
                 }
                 return;
             }
 
+            // ── Stable ID list ────────────────────────────────────────────
+            // Retrieve or create a list of stable string keys, one per element.
+            // This list is stored on the foldout's column container so it
+            // survives re-renders. When items are added/removed we add/remove
+            // the corresponding stable key so order is always in sync.
+            var colEl = paper.CurrentParent;
+            var stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!)
+                            ?? new List<string>();
+
+            // Grow if elements were added externally
+            while (stableIds.Count < list.Count)
+                stableIds.Add(Guid.NewGuid().ToString("N"));
+
+            // Shrink if elements were removed externally
+            while (stableIds.Count > list.Count)
+                stableIds.RemoveAt(stableIds.Count - 1);
+
+            paper.SetElementStorage(colEl, "stableIds", stableIds);
+
+            // ── Elements ──────────────────────────────────────────────────
             using (paper.Column($"{id}_items").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
             {
                 for (int i = 0; i < list.Count; i++)
                 {
                     int idx = i;
-                    using (paper.Row($"{id}_item_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
+                    string stableKey = stableIds[i]; // identity follows the data, not the slot
+
+                    using (paper.Row($"{id}_item_{stableKey}").Height(UnitValue.Auto).RowBetween(4).Enter())
                     {
-                        using (paper.Column($"{id}_itemval_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
+                        using (paper.Column($"{id}_itemval_{stableKey}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).RowBetween(2).Enter())
                         {
-                            DrawField(paper, $"{id}_el_{i}", $"[{i}]", elementType, list[i],
+                            DrawField(paper, $"{id}_el_{stableKey}", $"[{idx}]", elementType, list[i],
                                 newVal =>
                                 {
                                     list[idx] = newVal;
@@ -270,9 +295,13 @@ public static class PropertyGrid
                                 }, depth + 1);
                         }
 
-                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{i}", "\u2715")
+                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{stableKey}", "\u2715")
                             .OnValueChanged(v =>
                             {
+                                // Remove the stable key at the same position
+                                stableIds.RemoveAt(idx);
+                                paper.SetElementStorage(colEl, "stableIds", stableIds);
+
                                 if (type.IsArray)
                                 {
                                     var newArr = Array.CreateInstance(elementType, list.Count - 1);
@@ -282,8 +311,10 @@ public static class PropertyGrid
                                 }
                                 else
                                 {
-                                    list.RemoveAt(idx);
-                                    onChange(list);
+                                    var newList = (IList)Activator.CreateInstance(list.GetType())!;
+                                    for (int j = 0; j < list.Count; j++)
+                                        if (j != idx) newList.Add(list[j]);
+                                    onChange(newList);
                                 }
                             });
                     }
@@ -292,8 +323,14 @@ public static class PropertyGrid
                 EditorGUI.Button(paper, $"{id}_add", "+ Add Element")
                     .OnValueChanged(v =>
                     {
-                        object? newElement = elementType.IsValueType ? Activator.CreateInstance(elementType) :
-                                              elementType == typeof(string) ? "" : null;
+                        object? newElement = elementType.IsValueType
+                            ? Activator.CreateInstance(elementType)
+                            : elementType == typeof(string) ? "" : null;
+
+                        // Assign a stable key for the new element immediately
+                        stableIds.Add(Guid.NewGuid().ToString("N"));
+                        paper.SetElementStorage(colEl, "stableIds", stableIds);
+
                         if (type.IsArray)
                         {
                             var newArr = Array.CreateInstance(elementType, list.Count + 1);
@@ -303,13 +340,19 @@ public static class PropertyGrid
                         }
                         else
                         {
-                            list.Add(newElement);
-                            onChange(list);
+                            var newList = (IList)Activator.CreateInstance(list.GetType())!;
+                            for (int j = 0; j < list.Count; j++) newList.Add(list[j]);
+                            newList.Add(newElement);
+                            onChange(newList);
                         }
                     });
             }
         });
     }
+
+    // ================================================================
+    //  Dictionary<K, V>
+    // ================================================================
 
     static void DrawDictionary(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth)
@@ -330,6 +373,7 @@ public static class PropertyGrid
 
             using (paper.Column($"{id}_entries").Height(UnitValue.Auto).ChildLeft(16).RowBetween(2).Enter())
             {
+                // Existing entries
                 var keys = new List<object>();
                 foreach (var key in dict.Keys) keys.Add(key);
 
@@ -359,6 +403,43 @@ public static class PropertyGrid
                                 onChange(dict);
                             });
                     }
+                }
+
+                EditorGUI.Separator(paper, $"{id}_sep");
+
+                // Add new entry row — store pending key string in element storage
+                using (paper.Row($"{id}_addrow").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+                {
+                    var addRowEl = paper.CurrentParent;
+                    string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
+
+                    EditorGUI.TextField(paper, $"{id}_newkey", "Key", pendingKey)
+                        .OnValueChanged(v => paper.SetElementStorage(addRowEl, "pendingKey", v));
+
+                    EditorGUI.Button(paper, $"{id}_addentry", "+ Add")
+                        .OnValueChanged(v =>
+                        {
+                            string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
+                            if (string.IsNullOrWhiteSpace(pk)) return;
+
+                            try
+                            {
+                                object? typedKey = keyType == typeof(string)
+                                    ? pk
+                                    : Convert.ChangeType(pk, keyType, CultureInfo.InvariantCulture);
+
+                                if (dict.Contains(typedKey!)) return;
+
+                                object? newVal = valType.IsValueType
+                                    ? Activator.CreateInstance(valType)
+                                    : valType == typeof(string) ? "" : null;
+
+                                dict.Add(typedKey!, newVal);
+                                onChange(dict);
+                                paper.SetElementStorage(addRowEl, "pendingKey", "");
+                            }
+                            catch { /* invalid key type conversion — silently ignore */ }
+                        });
                 }
             }
         });
