@@ -11,8 +11,6 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Vector;
 
-using Color = System.Drawing.Color;
-
 namespace Prowl.Editor.Widgets;
 
 /// <summary>
@@ -538,7 +536,7 @@ public static class PropertyGrid
                     onChange(Activator.CreateInstance(types[idx - 1]));
             });
     }
-    
+
     // ================================================================
     //  Reflection Helpers
     // ================================================================

@@ -1,10 +1,8 @@
 using System;
 using System.Globalization;
-using System.Net;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Runtime.Utils;
 using Prowl.Scribe;
 
 using Color = System.Drawing.Color;
@@ -133,7 +131,6 @@ public static class EditorGUI
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
-            // .Alignment(PaperUI.TextAlignment.MiddleCenter)
             .BorderColor(EditorTheme.Border).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true)).Enter())
         {
@@ -144,10 +141,7 @@ public static class EditorGUI
                     .Text(icon, Font)
                     .TextColor(EditorTheme.Text)
                     .FontSize(FontSz)
-                    // .Alignment(PaperUI.TextAlignment.MiddleCenter)
                     .Margin((EditorTheme.RowHeight - iconSize.X) * 0.5f, (EditorTheme.RowHeight - iconSize.Y) * 0.5f);
-                     // vertical center;
-                    // .Height(EditorTheme.RowHeight)
             }
         }
 
@@ -416,32 +410,6 @@ public static class EditorGUI
     }
 
     // ================================================================
-    //  Foldout (header only — content is drawn by the caller after this)
-    // ================================================================
-
-    // public static WidgetResult<bool> Foldout(Paper paper, string id, string label, bool expanded)
-    // {
-    //     Action<bool>? userCallback = null;
-
-    //     // Just the clickable header bar — fixed height
-    //     var el = paper.Box($"{id}_header")
-    //         .Height(EditorTheme.RowHeight)
-    //         .ChildLeft(4)
-    //         .BackgroundColor(EditorTheme.HeaderBackground)
-    //         .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-    //         .Rounded(2)
-    //         .OnClick(e => userCallback?.Invoke(!expanded));
-
-    //     if (Font != null)
-    //     {
-    //         string arrow = expanded ? "\u25BC " : "\u25B6 ";
-    //         el.Text(arrow + label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
-    //     }
-
-    //     return new WidgetResult<bool>(cb => userCallback = cb);
-    // }
-
-    // ================================================================
     //  Foldout (self-contained state + content callback)
     // ================================================================
 
@@ -481,7 +449,6 @@ public static class EditorGUI
                         .Margin(EditorTheme.RowHeight / 3, (EditorTheme.RowHeight / 4) - (EditorTheme.RowHeight / 3), EditorTheme.RowHeight / 8, 0)
                         .Width(16)
                         .MaxWidth(16)
-                        // .Text("\u25B6", Font)
                         .Text(EditorIcons.ChevronRight, Font)
                         .TextColor(EditorTheme.TextDim)
                         .FontSize(FontSz * 0.7f);
@@ -491,11 +458,6 @@ public static class EditorGUI
                     .TextColor(EditorTheme.Text)
                     .FontSize(FontSz);
             }
-            // string arrow = expanded ? "\u25BC " : "\u25B6 ";
-            // header
-            //     .Text(arrow + label, Font)
-            //     .TextColor(EditorTheme.Text)
-            //     .FontSize(FontSz);
         }
 
         if (expanded)
@@ -585,11 +547,6 @@ public static class EditorGUI
                                 .TextColor(EditorTheme.TextDim)
                                 .FontSize(FontSz * 0.7f);
                         }
-                        // paper.Box($"{id}_arr")
-                        //     .Width(EditorTheme.RowHeight) // square area for the arrow
-                        //     .Height(EditorTheme.RowHeight)
-                        //     .IsNotInteractable()
-                        //     .Text(isOpen ? "\u25B2" : "\u25BC", Font).TextColor(EditorTheme.TextDim).FontSize(10f);
                     }
                 }
 
