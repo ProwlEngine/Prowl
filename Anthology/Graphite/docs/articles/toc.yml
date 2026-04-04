@@ -46,6 +46,8 @@
 
 - name: Advanced
   items:
+  - name: API Validation
+    href: api-validation.md
   - name: Backend Differences
     href: backend-differences.md
   - name: Implementation Overview
