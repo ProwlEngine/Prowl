@@ -412,6 +412,8 @@ public class ProjectPanel : DockPanel
                 {
                     if (it.IsFolder)
                         _currentFolder = it.RelativePath;
+                    else
+                        EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
                 })
                 .OnDragStart(item, (it, _) =>
                 {
@@ -723,6 +725,8 @@ public class ProjectPanel : DockPanel
                         {
                             if (it.IsFolder)
                                 _currentFolder = it.RelativePath;
+                            else
+                                EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
                         })
                         .OnDragStart(item, (it, _) =>
                         {

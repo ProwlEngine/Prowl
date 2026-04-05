@@ -20,7 +20,12 @@ public class SceneViewPanel : DockPanel
     public override string Icon => EditorIcons.Video;
 
     private EditorCamera? _editorCamera;
+    private Gizmo.TransformGizmo? _transformGizmo;
+    private Gizmo.ViewManipulatorGizmo? _viewManipulator;
+    private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
     private const float ToolbarHeight = 28f;
+    private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
+    private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -48,6 +53,46 @@ public class SceneViewPanel : DockPanel
             .ChildTop(2).ChildBottom(2)
             .Enter())
         {
+            // Gizmo mode buttons
+            bool isTranslate = _gizmoMode == Gizmo.TransformGizmoMode.Translate;
+            bool isRotate = _gizmoMode == Gizmo.TransformGizmoMode.Rotate;
+            bool isScale = _gizmoMode == Gizmo.TransformGizmoMode.ScaleAll;
+            bool isUniversal = _gizmoMode == Gizmo.TransformGizmoMode.Universal;
+
+            paper.Box("sv_move_btn")
+                .Width(24).Height(24).Rounded(4)
+                .BackgroundColor(isTranslate ? EditorTheme.Accent : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Text)
+                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Translate));
+
+            paper.Box("sv_rotate_btn")
+                .Width(24).Height(24).Rounded(4)
+                .BackgroundColor(isRotate ? EditorTheme.Accent : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Text)
+                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Rotate));
+
+            paper.Box("sv_scale_btn")
+                .Width(24).Height(24).Rounded(4)
+                .BackgroundColor(isScale ? EditorTheme.Accent : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Text)
+                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll));
+
+            paper.Box("sv_universal_btn")
+                .Width(24).Height(24).Rounded(4)
+                .BackgroundColor(isUniversal ? EditorTheme.Accent : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Text)
+                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
+
+            paper.Box("sv_sep_1").Width(1).Height(18).BackgroundColor(EditorTheme.Border);
+
             // Grid toggle
             bool showGrid = _editorCamera?.ShowGrid ?? true;
             paper.Box("sv_grid_btn")
@@ -118,7 +163,10 @@ public class SceneViewPanel : DockPanel
             return;
         }
 
-        // Render scene
+        // Update transform gizmo for selected objects
+        UpdateTransformGizmo(scene, width, height);
+
+        // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
         DrawSelectionGizmos();
         _editorCamera.Render(scene);
 
@@ -126,8 +174,14 @@ public class SceneViewPanel : DockPanel
         {
             paper.Box("sv_viewport")
                 .Size(width, height)
-                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                .OnPostLayout((handle, rect) =>
                 {
+                    // Cache absolute rect for gizmo coordinate space
+                    _viewportAbsoluteRect = rect;
+
+                    // Draw RT
+                    paper.Draw(ref handle, (canvas, r) =>
+                    {
                     float rx = (float)r.Min.X;
                     float ry = (float)r.Min.Y;
                     float rw = (float)r.Size.X;
@@ -142,7 +196,17 @@ public class SceneViewPanel : DockPanel
                     //canvas.RectFilled(rx, ry, rw, rh, Color.White);
                     canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, 8f, 8f, Color.White);
                     canvas.ClearBrushTexture();
-                }))
+                    });
+
+                    // Draw transform gizmo as 2D overlay on top of the scene
+                    if (_transformGizmo != null && _gizmoActive)
+                    {
+                        paper.DrawForeground(ref handle, (canvas2, r2) =>
+                        {
+                            _transformGizmo.Draw(canvas2);
+                        });
+                    }
+                })
                 .OnClick(0, (_, e) =>
                 {
                     if (!Input.IsAltPressed)
@@ -189,6 +253,9 @@ public class SceneViewPanel : DockPanel
                 HierarchyPanel.SpawnAssetInScene(sceneDrop, null, dropPos);
                 DragDrop.EndDrag();
             }
+
+            // View manipulator (orientation cube) — drawn as 2D overlay on top-right
+            DrawViewManipulator(paper, font, width, height);
         }
     }
 
@@ -368,5 +435,139 @@ public class SceneViewPanel : DockPanel
                 Debug.DrawLine(pos - Float3.UnitZ * s, pos + Float3.UnitZ * s, col);
             }
         }
+    }
+
+    // ================================================================
+    //  Transform Gizmo
+    // ================================================================
+
+    private void SetGizmoMode(Gizmo.TransformGizmoMode mode)
+    {
+        _gizmoMode = mode;
+        _transformGizmo?.SetMode(mode);
+    }
+
+    private void UpdateTransformGizmo(Scene scene, float width, float height)
+    {
+        _gizmoActive = false;
+        if (_editorCamera == null) return;
+
+        // Only show gizmo when GameObjects are selected
+        var selectedGOs = Selection.GetSelected<GameObject>().GetEnumerator();
+        if (!selectedGOs.MoveNext()) return;
+
+        _gizmoActive = true;
+
+        var firstGO = selectedGOs.Current;
+        if (firstGO == null) return;
+
+        // Create gizmo if needed
+        _transformGizmo ??= new Gizmo.TransformGizmo(_gizmoMode);
+
+        // Compute the center of all selected objects
+        Float3 center = Float3.Zero;
+        Quaternion rotation = Quaternion.Identity;
+        Float3 scale = Float3.One;
+        int count = 0;
+
+        foreach (var go in Selection.GetSelected<GameObject>())
+        {
+            center += go.Transform.Position;
+            count++;
+        }
+        if (count > 0) center /= count;
+
+        // Use the first object's rotation/scale for the gizmo orientation
+        rotation = firstGO.Transform.Rotation;
+        scale = firstGO.Transform.LossyScale;
+
+        // Update gizmo — use absolute screen rect so coordinates match DrawForeground
+        var cam = _editorCamera.Camera;
+        var camGo = cam.GameObject;
+
+        _transformGizmo.UpdateCamera(_viewportAbsoluteRect, cam.ViewMatrix, cam.ProjectionMatrix,
+            camGo.Transform.Up, camGo.Transform.Forward, camGo.Transform.Right);
+        _transformGizmo.SetTransform(center, rotation, scale);
+
+        // Mouse position is in absolute screen coords — matches the absolute viewport
+        Float2 mouseAbs = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
+        // For the ray, we still need panel-local mouse for ScreenPointToRay
+        Float2 mouseLocal = mouseAbs - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+        var ray = _editorCamera.ScreenPointToRay(mouseLocal, new Float2(width, height));
+
+        bool blockPicking = Input.GetMouseButton(1) || Input.GetMouseButton(2); // Don't pick while camera moving
+
+        var result = _transformGizmo.Update(ray, mouseAbs, blockPicking);
+
+        // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
+
+        if (result.HasValue)
+        {
+            var r = result.Value;
+
+            // Apply translation
+            if (r.TranslationDelta.HasValue)
+            {
+                foreach (var go in Selection.GetSelected<GameObject>())
+                    go.Transform.Position += r.TranslationDelta.Value;
+            }
+
+            // Apply rotation
+            if (r.RotationDelta.HasValue && r.RotationAxis.HasValue)
+            {
+                var rotDelta = Quaternion.AxisAngle(r.RotationAxis.Value, r.RotationDelta.Value);
+                foreach (var go in Selection.GetSelected<GameObject>())
+                    go.Transform.Rotation = rotDelta * go.Transform.Rotation;
+            }
+
+            // Apply scale
+            if (r.ScaleDelta.HasValue)
+            {
+                foreach (var go in Selection.GetSelected<GameObject>())
+                    go.Transform.LocalScale *= r.ScaleDelta.Value;
+            }
+
+            EditorSceneManager.IsDirty = true;
+        }
+    }
+
+    // ================================================================
+    //  View Manipulator (orientation cube)
+    // ================================================================
+
+    private void DrawViewManipulator(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    {
+        if (_editorCamera == null) return;
+
+        _viewManipulator ??= new Gizmo.ViewManipulatorGizmo();
+
+        float cubeSize = 80;
+
+        _viewManipulator.SetCamera(_editorCamera.Camera.GameObject.Transform.Forward,
+            _editorCamera.Camera.GameObject.Transform.Up);
+
+        // Draw as overlay on top of the scene — use SelfDirected + DrawForeground
+        paper.Box("sv_view_manip")
+            .PositionType(PositionType.SelfDirected)
+            .Position(width - cubeSize - 8, 8)
+            .Size(cubeSize, cubeSize)
+            .OnPostLayout((handle, rect) => paper.DrawForeground(ref handle, (canvas, r) =>
+            {
+                // Use the absolute rect from layout for the view manipulator
+                _viewManipulator.SetRect(r);
+
+                bool blockPicking = _transformGizmo?.IsOver ?? false;
+                bool clicked = Input.GetMouseButtonDown(0);
+                Float2 mousePos = paper.PointerPos;
+
+                if (_viewManipulator.Update(canvas, mousePos, clicked, blockPicking, out var newForward))
+                {
+                    // Snap camera to face direction
+                    // Calculate yaw/pitch from the new forward vector
+                    float yaw = MathF.Atan2(newForward.X, newForward.Z) * Gizmo.GizmoUtils.Rad2Deg;
+                    float pitch = MathF.Asin(-newForward.Y) * Gizmo.GizmoUtils.Rad2Deg;
+                    _editorCamera.SetOrientation(yaw, pitch);
+                }
+            }));
     }
 }

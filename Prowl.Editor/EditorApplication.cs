@@ -589,11 +589,49 @@ public class EditorApplication : Game
     private void RegisterMenus()
     {
         // File menu
-        MenuRegistry.Register("File/New Scene", () => { /* TODO */ });
-        MenuRegistry.Register("File/Open Scene", () => { /* TODO */ });
+        MenuRegistry.Register("File/New Scene", () => EditorSceneManager.NewScene());
+        MenuRegistry.Register("File/Open Scene", () =>
+        {
+            Widgets.FileDialog.Open(Widgets.FileDialogMode.Open, path =>
+            {
+                if (path == null || Project.Current == null) return;
+                string rel = EditorAssetDatabase.NormalizePath(
+                    System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
+                EditorSceneManager.OpenScene(rel);
+            }, Project.Current?.AssetsPath,
+               new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+        });
         MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Save Scene", () => { /* TODO */ });
-        MenuRegistry.Register("File/Save Scene As...", () => { /* TODO */ });
+        MenuRegistry.Register("File/Save Scene", () =>
+        {
+            if (!EditorSceneManager.Save())
+            {
+                // No path yet — prompt Save As
+                if (Project.Current == null) return;
+                Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+                {
+                    if (path == null || Project.Current == null) return;
+                    string rel = EditorAssetDatabase.NormalizePath(
+                        System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
+                    if (!rel.EndsWith(".scene")) rel += ".scene";
+                    EditorSceneManager.SaveAs(rel);
+                }, Project.Current.AssetsPath,
+                   new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+            }
+        });
+        MenuRegistry.Register("File/Save Scene As...", () =>
+        {
+            if (Project.Current == null) return;
+            Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+            {
+                if (path == null || Project.Current == null) return;
+                string rel = EditorAssetDatabase.NormalizePath(
+                    System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
+                if (!rel.EndsWith(".scene")) rel += ".scene";
+                EditorSceneManager.SaveAs(rel);
+            }, Project.Current.AssetsPath,
+               new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+        });
         MenuRegistry.RegisterSeparator("File");
         MenuRegistry.Register("File/Open Project...", () => ReturnToLauncher());
         MenuRegistry.RegisterSeparator("File");
@@ -685,18 +723,23 @@ public class EditorApplication : Game
 
     private static DockNode CreateDefaultLayout()
     {
-        return DockNode.Split(SplitDirection.Horizontal, 0.20f,
-            DockNode.Leaf(new HierarchyPanel()),
-            DockNode.Split(SplitDirection.Horizontal, 0.75f,
-                DockNode.Split(SplitDirection.Vertical, 0.70f,
-                    DockNode.Leaf(new SceneViewPanel()),
-                    DockNode.Split(SplitDirection.Horizontal, 0.50f,
-                        DockNode.Leaf(new ProjectPanel()),
-                        DockNode.Leaf(new ConsolePanel())
-                    )
+        // Right: Inspector | Left: everything else
+        return DockNode.Split(SplitDirection.Horizontal, 0.78f,
+            // Left side: top (Hierarchy + Scene) | bottom (Project + Console)
+            DockNode.Split(SplitDirection.Vertical, 0.65f,
+                // Top: Hierarchy | Scene View
+                DockNode.Split(SplitDirection.Horizontal, 0.25f,
+                    DockNode.Leaf(new HierarchyPanel()),
+                    DockNode.Leaf(new SceneViewPanel(), new GameViewPanel())
                 ),
-                DockNode.Leaf(new InspectorPanel())
-            )
+                // Bottom: Project (65%) | Console (35%)
+                DockNode.Split(SplitDirection.Horizontal, 0.65f,
+                    DockNode.Leaf(new ProjectPanel()),
+                    DockNode.Leaf(new ConsolePanel())
+                )
+            ),
+            // Right: Inspector
+            DockNode.Leaf(new InspectorPanel())
         );
     }
 }

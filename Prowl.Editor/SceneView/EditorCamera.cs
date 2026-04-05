@@ -208,6 +208,13 @@ public class EditorCamera
         }
     }
 
+    public void SetOrientation(float yaw, float pitch)
+    {
+        _yaw = yaw;
+        _pitch = MathF.Max(-89f, MathF.Min(89f, pitch));
+        UpdateTransform();
+    }
+
     public Ray ScreenPointToRay(Float2 screenPos, Float2 panelSize)
     {
         return _camera.ScreenPointToRay(screenPos, panelSize);

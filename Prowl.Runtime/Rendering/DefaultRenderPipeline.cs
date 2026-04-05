@@ -105,6 +105,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
         foreach (ImageEffect effect in camera.Effects)
         {
+            if (effect == null) continue;
+
             // Get the stage, with backward compatibility for IsOpaqueEffect
             RenderStage stage = effect.Stage;
 
