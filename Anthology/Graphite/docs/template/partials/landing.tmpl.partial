@@ -4,7 +4,7 @@
     <div class="hero-title">One API. Every GPU.</div>
     <p class="hero-tagline">NeoVeldrid is a low-level, high-performance graphics library for .NET. Build 2D and 3D games, simulations, and tools with a single portable API across Vulkan, Direct3D 11, OpenGL, and OpenGL ES.</p>
     <div class="hero-buttons">
-      <a href="{{_rel}}articles/getting-started/intro.html" class="btn-primary-landing">Get Started</a>
+      <a href="{{_rel}}articles/intro.html" class="btn-primary-landing">Get Started</a>
       <a href="https://github.com/jhm-ciberman/neo-veldrid" class="btn-secondary-hero">GitHub</a>
     </div>
     <p class="hero-subtitle">A maintained fork of <a href="https://github.com/veldrid/veldrid">Veldrid</a>, powered by <a href="https://github.com/dotnet/Silk.NET">Silk.NET</a>. Open source under the MIT license.</p>
@@ -60,6 +60,6 @@
   <div class="container">
     <div class="cta-title">Ready to get started?</div>
     <p>Follow the tutorial to create your first NeoVeldrid application in minutes.</p>
-    <a href="{{_rel}}articles/getting-started/intro.html" class="btn-cta">Get Started</a>
+    <a href="{{_rel}}articles/intro.html" class="btn-cta">Get Started</a>
   </div>
 </div>
