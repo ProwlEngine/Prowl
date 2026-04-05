@@ -32,6 +32,8 @@ Remove the old Veldrid packages and add the NeoVeldrid equivalents:
 | `Veldrid.ImGui` | 4.9.0 | `NeoVeldrid.ImGui` | 1.0.0 |
 | `Veldrid.SPIRV` | 1.0.15 | `NeoVeldrid.SPIRV` | 1.0.0 |
 | `Veldrid.Utilities` | 4.9.0 | `NeoVeldrid.Utilities` | 1.0.0 |
+| `Veldrid.SDL2` | 4.9.0 | `NeoVeldrid.SDL2` | 1.0.0 |
+| `Veldrid.RenderDoc` | 4.9.0 | `NeoVeldrid.RenderDoc` | 1.0.0 |
 
 ## Step 2: Update Namespaces
 
