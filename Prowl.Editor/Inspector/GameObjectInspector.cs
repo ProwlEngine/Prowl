@@ -234,22 +234,14 @@ public static class GameObjectInspector
     {
         using (paper.Row("gi_add_comp_row").Height(28).ChildLeft(20).ChildRight(20).Enter())
         {
-            using (paper.Box("gi_add_comp")
+            paper.Box("gi_add_comp")
                 .Height(28).Rounded(4)
                 .BackgroundColor(EditorTheme.ButtonNormal)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Text($"{EditorIcons.Plus}  Add Component", font)
                 .TextColor(EditorTheme.Text)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
-                .Enter())
-            {
-                if (paper.IsParentHovered)
-                {
-                    var builder = new ContextMenuBuilder();
-                    BuildAddComponentMenu(builder, go);
-                    builder.Render(paper, "gi_add_comp_menu", 0, 28);
-                }
-            }
+                .OnClick(go, (g, _) => AddComponentPopup.Open(g));
         }
     }
 

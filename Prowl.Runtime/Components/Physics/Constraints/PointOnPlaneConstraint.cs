@@ -16,6 +16,7 @@ namespace Prowl.Runtime;
 /// This constraint removes one degree of translational freedom if the limit is enforced.
 /// Useful for creating sliding surfaces or limiting movement to a plane.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Point On Plane")]
 public class PointOnPlaneConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 planeNormal = Float3.UnitY;

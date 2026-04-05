@@ -11,6 +11,7 @@ using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Light/Spot Light")]
 public class SpotLight : Light
 {
     public enum Resolution : int

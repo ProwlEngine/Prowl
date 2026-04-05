@@ -9,6 +9,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Rendering/Line Renderer")]
 public class LineRenderer : MonoBehaviour, IRenderable
 {
     public Material Material;

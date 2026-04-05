@@ -8,6 +8,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Physics/Colliders/Box Collider")]
 public sealed class BoxCollider : Collider
 {
     [SerializeField] private Float3 size = new(1, 1, 1);

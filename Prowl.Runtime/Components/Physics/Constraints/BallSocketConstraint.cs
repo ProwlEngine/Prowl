@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// allowing free rotation but constraining translation.
 /// Also known as a point-to-point constraint or spherical joint.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Ball Socket")]
 public class BallSocketConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 anchor = Float3.Zero;

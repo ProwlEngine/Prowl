@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// Restricts the tilt of one body relative to another body within a cone shape.
 /// Useful for creating ball-and-socket joints with angular limits (ragdoll joints).
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Cone Limit")]
 public class ConeLimitConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 axis = Float3.UnitY;

@@ -67,6 +67,7 @@ public class EditorApplication : Game
         // Initialize editor registries
         Inspector.PropertyEditorRegistry.Initialize();
         Inspector.ComponentEditorRegistry.Initialize();
+        Inspector.AssetImporterEditorRegistry.Initialize();
 
         // Start with the project launcher
         ProjectLauncher.Initialize();
@@ -116,6 +117,13 @@ public class EditorApplication : Game
 
         // Process file changes each frame (after project is loaded)
         EditorAssetDatabase.Instance?.ProcessFileChanges();
+
+        // Lazy thumbnail generation — one per frame
+        ThumbnailGenerator.ProcessOne();
+
+        // Periodically scan for missing thumbnails (every ~120 frames)
+        if (_time % 2.0 < Time.UnscaledDeltaTime) // roughly every 2 seconds
+            ThumbnailGenerator.EnqueueMissing();
 
         // Show project launcher or intro close phase
         if (ProjectLauncher.IsOpen || _introClosing)
@@ -384,6 +392,7 @@ public class EditorApplication : Game
         // Systems drawn on top (Overlay/Topmost layers)
         Widgets.FileDialog.Draw(paper);
         Inspector.EngineObjectPropertyEditor.DrawSelectorModal(paper);
+        Inspector.AddComponentPopup.Draw(paper);
         Widgets.ModalDialog.Draw(paper);
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);

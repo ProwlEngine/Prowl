@@ -12,6 +12,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Physics/Colliders/Mesh Collider")]
 public sealed class MeshCollider : Collider
 {
     [SerializeField] private Mesh mesh;

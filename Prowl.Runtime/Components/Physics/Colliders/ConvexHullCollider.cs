@@ -12,6 +12,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Physics/Colliders/Convex Hull")]
 public sealed class ConvexHullCollider : Collider
 {
     [SerializeField] private Mesh mesh;

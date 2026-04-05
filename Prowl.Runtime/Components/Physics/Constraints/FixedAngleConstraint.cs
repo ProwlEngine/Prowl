@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// Constrains the relative orientation between two rigidbodies, preventing all rotation.
 /// Also known as a weld joint (when combined with position constraints).
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Fixed Angle")]
 public class FixedAngleConstraint : PhysicsConstraint
 {
     [SerializeField] private float softness = 0.001f;

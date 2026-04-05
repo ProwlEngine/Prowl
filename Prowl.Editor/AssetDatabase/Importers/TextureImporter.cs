@@ -6,7 +6,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
 
-[ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".gif")]
+[ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr")]
 public class TextureImporter : AssetImporter
 {
     public override int Version => 1;

@@ -9,6 +9,7 @@ namespace Prowl.Runtime;
 /// A character controller that handles collision detection and movement.
 /// provides just the core functionality.
 /// </summary>
+[AddComponentMenu("Physics/Character Controller")]
 public class CharacterController : MonoBehaviour
 {
     /// <summary>

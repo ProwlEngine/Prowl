@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// Constrains two bodies to only allow rotation around a specified axis, removing two angular degrees of freedom.
 /// A hinge joint that can optionally enforce angle limits.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Hinge Angle")]
 public class HingeAngleConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 hingeAxis = Float3.UnitY;

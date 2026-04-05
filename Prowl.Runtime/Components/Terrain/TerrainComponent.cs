@@ -19,6 +19,7 @@ namespace Prowl.Runtime.Terrain;
 /// Renders terrain using a single 32x32 mesh instanced many times.
 /// Heightmap is sampled in the vertex shader for displacement.
 /// </summary>
+[AddComponentMenu("Terrain/Terrain")]
 public class TerrainComponent : MonoBehaviour
 {
     #region Configuration

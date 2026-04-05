@@ -7,6 +7,7 @@ using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
@@ -27,6 +28,7 @@ public class ProjectPanel : DockPanel
     private bool _renameInTree; // true = renaming in folder tree, false = in content view
     private int _lastSelectionCount; // track selection changes to cancel rename
     private static readonly HashSet<Guid> _expandedAssets = new(); // files with sub-assets expanded
+    private static readonly Dictionary<Guid, Prowl.Runtime.Resources.Texture2D?> _thumbnailCache = new();
     private const float MinThumbSize = 20f;  // Below this = list mode
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
@@ -733,15 +735,32 @@ public class ProjectPanel : DockPanel
                         .Tooltip(item.Name)
                         .Enter())
                     {
-                        // Thumbnail area
-                        paper.Box($"proj_gt_{idx}")
-                            .Width(cellSize - 4).Height(cellSize - 4)
-                            .Margin(2, 2, 2, 0)
-                            .Rounded(4)
-                            .Text(item.Icon, font)
-                            .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.TextDim)
-                            .FontSize(_thumbnailSize * 0.6f)
-                            .Alignment(TextAlignment.MiddleCenter);
+                        // Thumbnail area — use cached thumbnail if available
+                        var thumbTex = GetThumbnailTexture(item.Guid);
+                        if (thumbTex != null)
+                        {
+                            paper.Box($"proj_gt_{idx}")
+                                .Width(cellSize - 4).Height(cellSize - 4)
+                                .Margin(2, 2, 2, 0)
+                                .Rounded(4)
+                                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                                {
+                                    canvas.DrawImage(thumbTex,
+                                        (float)r.Min.X, (float)r.Min.Y,
+                                        (float)r.Size.X, (float)r.Size.Y);
+                                }));
+                        }
+                        else
+                        {
+                            paper.Box($"proj_gt_{idx}")
+                                .Width(cellSize - 4).Height(cellSize - 4)
+                                .Margin(2, 2, 2, 0)
+                                .Rounded(4)
+                                .Text(item.Icon, font)
+                                .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.TextDim)
+                                .FontSize(_thumbnailSize * 0.6f)
+                                .Alignment(TextAlignment.MiddleCenter);
+                        }
 
                         // Label (inline rename or text)
                         if (_renamingPath == item.RelativePath && !_renameInTree)
@@ -876,6 +895,44 @@ public class ProjectPanel : DockPanel
             ".zip" or ".rar" or ".7z" => EditorIcons.FileZipper,
             _ => EditorIcons.File,
         };
+    }
+
+    private static Prowl.Runtime.Resources.Texture2D? GetThumbnailTexture(Guid guid)
+    {
+        if (guid == Guid.Empty) return null;
+
+        if (_thumbnailCache.TryGetValue(guid, out var cached))
+            return cached;
+
+        // Try loading from disk — don't cache null so we retry when thumbnail is generated
+        var db = EditorAssetDatabase.Instance;
+        if (db == null) return null;
+
+        byte[]? pixels = db.LoadThumbnail(guid);
+        if (pixels == null || pixels.Length == 0) return null;
+
+        try
+        {
+            int size = ThumbnailGenerator.ThumbnailSize;
+            var tex = new Prowl.Runtime.Resources.Texture2D((uint)size, (uint)size, false, TextureImageFormat.Color4b);
+            tex.SetData<byte>(pixels);
+            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+            _thumbnailCache[guid] = tex;
+            return tex;
+        }
+        catch
+        {
+            _thumbnailCache[guid] = null;
+            return null;
+        }
+    }
+
+    /// <summary>Clear the thumbnail cache (e.g. after reimport).</summary>
+    public static void ClearThumbnailCache()
+    {
+        foreach (var tex in _thumbnailCache.Values)
+            tex?.Dispose();
+        _thumbnailCache.Clear();
     }
 
     private static string GetSubAssetIcon(Type? type)

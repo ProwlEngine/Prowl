@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// A hinge joint that constrains two bodies to rotate around a shared axis.
 /// Similar to a door hinge. Composed of HingeAngle and BallSocket constraints.
 /// </summary>
+[AddComponentMenu("Physics/Joints/Hinge Joint")]
 public class HingeJoint : PhysicsJoint
 {
     [SerializeField] private Float3 anchor = Float3.Zero;

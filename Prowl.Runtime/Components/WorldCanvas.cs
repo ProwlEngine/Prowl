@@ -16,6 +16,7 @@ namespace Prowl.Runtime;
 /// Canvas component that provides a UI rendering surface in 3D space.
 /// The Canvas has its own RenderTexture and Paper instance for drawing UI.
 /// </summary>
+[AddComponentMenu("UI/World Canvas")]
 public class WorldCanvas : MonoBehaviour, IRenderable
 {
     public event Action<Paper>? OnRenderUI;

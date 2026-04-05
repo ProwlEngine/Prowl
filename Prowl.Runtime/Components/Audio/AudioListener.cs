@@ -13,7 +13,8 @@ using Prowl.Vector;
 namespace Prowl.Runtime
 {
     /// <summary> This class represents a point in the 3D space where audio is perceived or heard. </summary>
-    public sealed class AudioListener : MonoBehaviour
+    [AddComponentMenu("Audio/Audio Listener")]
+public sealed class AudioListener : MonoBehaviour
     {
         private IntPtr handle;
         private Float3 previousPosition;

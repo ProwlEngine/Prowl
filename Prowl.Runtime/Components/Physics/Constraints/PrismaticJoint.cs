@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// A prismatic (slider) joint that constrains two bodies to move along a single axis.
 /// Like a piston or drawer slide. Composed of PointOnLine with optional angle constraints and motor.
 /// </summary>
+[AddComponentMenu("Physics/Joints/Prismatic Joint")]
 public class PrismaticJoint : PhysicsJoint
 {
     [SerializeField] private Float3 anchor = Float3.Zero;

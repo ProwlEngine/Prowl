@@ -16,6 +16,7 @@ namespace Prowl.Runtime;
 /// This constraint removes one or two degrees of translational freedom depending on the limit.
 /// Useful for creating slider joints with rails.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Point On Line")]
 public class PointOnLineConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 lineAxis = Float3.UnitX;

@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// A motor constraint that drives relative translational movement along two axes fixed in the reference frames of the bodies.
 /// Useful for creating powered sliders and linear actuators.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Linear Motor")]
 public class LinearMotorConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 axis1 = Float3.UnitX;

@@ -8,6 +8,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Physics/Colliders/Cone Collider")]
 public sealed class ConeCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;

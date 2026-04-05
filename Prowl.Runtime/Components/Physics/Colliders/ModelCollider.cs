@@ -12,6 +12,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Physics/Colliders/Model Collider")]
 public sealed class ModelCollider : Collider
 {
     [SerializeField] private Model model;

@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// A motor constraint that drives relative angular movement between two axes fixed in the reference frames of the bodies.
 /// Useful for creating powered hinges, rotating platforms, and wheels.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Angular Motor")]
 public class AngularMotorConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 axis1 = Float3.UnitY;

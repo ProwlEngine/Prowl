@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// Constrains the relative twist of two bodies around specified axes.
 /// This constraint removes one angular degree of freedom when the limit is enforced.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Twist Angle")]
 public class TwistAngleConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 axis1 = Float3.UnitX;

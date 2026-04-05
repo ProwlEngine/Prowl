@@ -12,6 +12,7 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Rendering/Model Renderer")]
 public class ModelRenderer : MonoBehaviour
 {
     public Model Model;

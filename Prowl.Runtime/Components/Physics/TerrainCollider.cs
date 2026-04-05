@@ -16,6 +16,7 @@ namespace Prowl.Runtime;
 /// This component should be added to a GameObject with a TerrainComponent.
 /// </summary>
 [RequireComponent(typeof(TerrainComponent))]
+[AddComponentMenu("Physics/Colliders/Terrain Collider")]
 public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 {
     private TerrainComponent _terrain;

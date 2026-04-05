@@ -7,6 +7,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Rendering/Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, IRenderable
 {
     public Mesh Mesh;

@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// Constrains the distance between two anchor points on two rigidbodies.
 /// Can be used to create rope-like connections or maintain a specific distance.
 /// </summary>
+[AddComponentMenu("Physics/Constraints/Distance Limit")]
 public class DistanceLimitConstraint : PhysicsConstraint
 {
     [SerializeField] private Float3 anchor = Float3.Zero;

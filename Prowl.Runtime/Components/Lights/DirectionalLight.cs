@@ -11,6 +11,7 @@ using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
+[AddComponentMenu("Light/Directional Light")]
 public class DirectionalLight : Light
 {
     public enum Resolution : int

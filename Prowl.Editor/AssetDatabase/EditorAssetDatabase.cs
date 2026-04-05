@@ -456,6 +456,13 @@ public class EditorAssetDatabase : IAssetDatabase
             // Update dependency graph
             _dependencies.SetDependencies(entry.Guid, result.Dependencies);
 
+            // Queue thumbnail generation (lazy, one per frame)
+            if (result.MainAsset != null)
+            {
+                string? sourceFile = result.MainAsset is Runtime.Resources.Texture2D ? absolutePath : null;
+                ThumbnailGenerator.Enqueue(entry.Guid, result.MainAsset, sourceFile);
+            }
+
             return true;
         }
         catch (Exception ex)
@@ -550,6 +557,13 @@ public class EditorAssetDatabase : IAssetDatabase
         => _pathToGuid.Keys.ToArray();
 
     public DependencyGraph Dependencies => _dependencies;
+    public string ThumbnailsPath => _project.ThumbnailsPath;
+
+    /// <summary>Get an already-loaded asset from memory without triggering import. Returns null if not loaded.</summary>
+    public EngineObject? GetLoadedAsset(Guid guid) => _loadedAssets.GetValueOrDefault(guid);
+
+    /// <summary>Load a cached thumbnail for an asset. Returns raw RGBA bytes or null.</summary>
+    public byte[]? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
 
     // ================================================================
     //  Asset CRUD
@@ -705,6 +719,13 @@ public class EditorAssetDatabase : IAssetDatabase
         if (_guidToEntry.TryGetValue(guid, out var entry))
         {
             _loadedAssets.Remove(guid);
+
+            // Clear old thumbnails
+            ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                    ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
+
             entry.NeedsReimport = true;
             RunImport(entry);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);

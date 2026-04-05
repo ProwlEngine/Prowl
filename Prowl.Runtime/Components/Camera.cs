@@ -79,6 +79,7 @@ public enum DepthTextureMode
     MotionVectors = 4, // _CameraMotionVectorsTexture
 }
 
+[AddComponentMenu("Rendering/Camera")]
 public class Camera : MonoBehaviour
 {
     public List<ImageEffect> Effects = [];

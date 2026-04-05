@@ -15,6 +15,7 @@ namespace Prowl.Runtime.ParticleSystem;
 /// A GPU-instanced particle system component.
 /// Particles are rendered using instanced rendering for optimal performance.
 /// </summary>
+[AddComponentMenu("Effects/Particle System")]
 public class ParticleSystemComponent : MonoBehaviour
 {
     #region Configuration

@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// A universal joint (U-joint or Cardan joint) that allows rotation around two perpendicular axes.
 /// Like the joint in a drive shaft. Composed of TwistAngle and BallSocket constraints.
 /// </summary>
+[AddComponentMenu("Physics/Joints/Universal Joint")]
 public class UniversalJoint : PhysicsJoint
 {
     [SerializeField] private Float3 anchor = Float3.Zero;
