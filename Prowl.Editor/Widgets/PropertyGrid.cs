@@ -25,66 +25,70 @@ public static class PropertyGrid
     /// </summary>
     public static void Draw(Paper paper, string id, object target, Action<object>? onChanged = null, int depth = 0)
     {
-        if (target == null) return;
-        if (depth > 10) { EditorGUI.Label(paper, $"{id}_deep", "(max depth)", EditorTheme.TextDim); return; }
-
-        var type = target.GetType();
-        var fields = GetSerializableFields(type);
-
-        for (int i = 0; i < fields.Length; i++)
+        using (paper.Column($"{id}_root").ColBetween(6f).Height(UnitValue.Auto).Enter())
         {
-            var field = fields[i];
-            string fieldId = $"{id}_{field.Name}_{i}";
 
-            // [ShowIf]
-            var showIf = field.GetCustomAttribute<ShowIfAttribute>();
-            if (showIf != null && !EvaluateCondition(target, showIf.ConditionMember))
-                continue;
+            if (target == null) return;
+            if (depth > 10) { EditorGUI.Label(paper, $"{id}_deep", "(max depth)", EditorTheme.TextDim); return; }
 
-            // [Space]
-            var space = field.GetCustomAttribute<SpaceAttribute>();
-            if (space != null)
-                paper.Box($"{fieldId}_space").Height(space.Height);
+            var type = target.GetType();
+            var fields = GetSerializableFields(type);
 
-            // [Header]
-            var header = field.GetCustomAttribute<HeaderAttribute>();
-            if (header != null)
-                EditorGUI.Header(paper, $"{fieldId}_header", header.Text);
-
-            string label = NicifyName(field.Name);
-            object? value = field.GetValue(target);
-            Type fieldType = field.FieldType;
-
-            // [ReadOnly]
-            if (field.GetCustomAttribute<ReadOnlyAttribute>() != null)
+            for (int i = 0; i < fields.Length; i++)
             {
-                EditorGUI.Label(paper, fieldId, $"{label}: {value ?? "(null)"}");
-                continue;
+                var field = fields[i];
+                string fieldId = $"{id}_{field.Name}_{i}";
+
+                // [ShowIf]
+                var showIf = field.GetCustomAttribute<ShowIfAttribute>();
+                if (showIf != null && !EvaluateCondition(target, showIf.ConditionMember))
+                    continue;
+
+                // [Space]
+                var space = field.GetCustomAttribute<SpaceAttribute>();
+                if (space != null)
+                    paper.Box($"{fieldId}_space").Height(space.Height);
+
+                // [Header]
+                var header = field.GetCustomAttribute<HeaderAttribute>();
+                if (header != null)
+                    EditorGUI.Header(paper, $"{fieldId}_header", header.Text);
+
+                string label = NicifyName(field.Name);
+                object? value = field.GetValue(target);
+                Type fieldType = field.FieldType;
+
+                // [ReadOnly]
+                if (field.GetCustomAttribute<ReadOnlyAttribute>() != null)
+                {
+                    EditorGUI.Label(paper, fieldId, $"{label}: {value ?? "(null)"}");
+                    continue;
+                }
+
+                // [Range] override for numeric types
+                var range = field.GetCustomAttribute<RangeAttribute>();
+                if (range != null && (fieldType == typeof(float) || fieldType == typeof(int)))
+                {
+                    if (fieldType == typeof(float))
+                        EditorGUI.Slider(paper, fieldId, label, (float)(value ?? 0f), range.Min, range.Max)
+                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                    else
+                        EditorGUI.IntSlider(paper, fieldId, label, (int)(value ?? 0), (int)range.Min, (int)range.Max)
+                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                    continue;
+                }
+
+                // Default: dispatch to DrawField
+                DrawField(paper, fieldId, label, fieldType, value, newVal =>
+                {
+                    field.SetValue(target, newVal);
+                    onChanged?.Invoke(target);
+                }, depth);
             }
 
-            // [Range] override for numeric types
-            var range = field.GetCustomAttribute<RangeAttribute>();
-            if (range != null && (fieldType == typeof(float) || fieldType == typeof(int)))
-            {
-                if (fieldType == typeof(float))
-                    EditorGUI.Slider(paper, fieldId, label, (float)(value ?? 0f), range.Min, range.Max)
-                        .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
-                else
-                    EditorGUI.IntSlider(paper, fieldId, label, (int)(value ?? 0), (int)range.Min, (int)range.Max)
-                        .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
-                continue;
-            }
-
-            // Default: dispatch to DrawField
-            DrawField(paper, fieldId, label, fieldType, value, newVal =>
-            {
-                field.SetValue(target, newVal);
-                onChanged?.Invoke(target);
-            }, depth);
+            // [Button] methods
+            DrawButtonMethods(paper, $"{id}_btns", target);
         }
-
-        // [Button] methods
-        DrawButtonMethods(paper, $"{id}_btns", target);
     }
 
     /// <summary>
