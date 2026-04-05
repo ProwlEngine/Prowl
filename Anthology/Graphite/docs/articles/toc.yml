@@ -52,6 +52,8 @@
     href: backend-differences.md
   - name: Implementation Overview
     href: implementation/overview.md
+  - name: Public Interface
+    href: implementation/public-interface.md
   - name: Direct3D 11 Backend
     href: implementation/d3d11.md
   - name: Vulkan Backend
