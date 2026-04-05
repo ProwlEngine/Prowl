@@ -18,14 +18,13 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
   * Modern [texture](xref:textures) features, including 3D textures, array textures, multisampling, texture views, multi-output [Framebuffers](xref:framebuffers), read-write shader access, a variety of standard, compressed and packed [pixel formats](xref:NeoVeldrid.PixelFormat), and more
   * Multiple [Swapchains](xref:swapchains), with support for runtime creation and destruction
 * Targets modern graphics APIs, including Vulkan and Direct3D 11.
-* Cross-platform: Windows, macOS (via MoltenVK), Linux.
+* Cross-platform: Windows, macOS, Linux.
 * Portable Shaders: First-class support for SPIR-V bytecode allows you to write your shaders once for all platforms.
 * High-performance: Built on a thin, low-cost abstraction that is close to current-gen graphics APIs.
-* Multi-threaded: Most NeoVeldrid objects can be used from multiple threads simultaneously. See [Multi-threading](xref:multi-threading) for specifics.
-* Allocation-free: The core rendering loop can be used without allocating any garbage-collected memory.
-* Headless: Can be used without any application window, to perform GPU-accelerated operations in the background.
-* .NET-friendly: Designed with .NET in mind, integrates cleanly with regular .NET code.
-* Zero native binaries to manage: All native dependencies are handled via Silk.NET NuGet packages.
+* Multi-threaded: Most NeoVeldrid objects can be used from multiple threads simultaneously, allowing you to split your work as you see fit. See [Multi-threading](xref:multi-threading) for specifics.
+* Allocation-free: The core rendering loop (outside of resource creation and initialization) can be used without allocating any garbage-collected memory. Avoiding allocations is important for high-performance, low-latency rendering.
+* Headless: Can be used without any application window or view, to perform GPU-accelerated operations in the background.
+* .NET-friendly: Unlike native graphics APIs, NeoVeldrid was designed with .NET in mind, and integrates cleanly with regular .NET code.
 
 ## Platform Support
 
@@ -35,7 +34,7 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
 | Linux         |   ✅   |  --   |   ✅   |    ✅     |
 | macOS         | ✅ (1) |  --   |   ❌   |    --     |
 
-(1) Via [MoltenVK](https://github.com/KhronosGroup/MoltenVK), bundled automatically. No setup required.
+(1) Uses [MoltenVK](https://github.com/KhronosGroup/MoltenVK), which translates Vulkan API calls to Metal. Bundled automatically with NeoVeldrid. No extra setup required.
 
 ## What NeoVeldrid Is and Isn't
 
