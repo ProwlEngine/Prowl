@@ -11,7 +11,7 @@ A low-level, high-performance, cross-platform graphics library for .NET. Build 2
 
 NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid), with all native bindings replaced by [Silk.NET](https://github.com/dotnet/Silk.NET). The public API is fully preserved.
 
-**[Documentation](https://jhm-ciberman.github.io/neo-veldrid/)** | **[Getting Started](https://jhm-ciberman.github.io/neo-veldrid/articles/intro.html)** | **[API Reference](https://jhm-ciberman.github.io/neo-veldrid/api/)**
+**[Documentation](https://jhm-ciberman.github.io/neo-veldrid/)** | **[Getting Started](https://jhm-ciberman.github.io/neo-veldrid/articles/prologue/intro.html)** | **[API Reference](https://jhm-ciberman.github.io/neo-veldrid/api/)**
 
 ![NeoDemo - Sponza Atrium](art/sponza.webp)
 
@@ -49,7 +49,7 @@ See the [documentation](https://jhm-ciberman.github.io/neo-veldrid/) for tutoria
 
 ## Coming from Veldrid?
 
-NeoVeldrid preserves full API compatibility. Update your NuGet packages, rename the namespace, and you're done. NeoVeldid is a drop-in replacement for Veldrid, with all the same features and API you already love, but with a new binding stack that is actively maintained and updated to support the latest graphics drivers and platforms. See the [Migration Guide](https://jhm-ciberman.github.io/neo-veldrid/articles/migration.html) for details.
+NeoVeldrid preserves full API compatibility. Update your NuGet packages, rename the namespace, and you're done. NeoVeldid is a drop-in replacement for Veldrid, with all the same features and API you already love, but with a new binding stack that is actively maintained and updated to support the latest graphics drivers and platforms. See the [Migration Guide](https://jhm-ciberman.github.io/neo-veldrid/articles/prologue/migration.html) for details.
 
 ## Contributing
 

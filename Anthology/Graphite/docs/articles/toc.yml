@@ -1,9 +1,9 @@
 - name: Prologue
   items:
   - name: Introduction
-    href: intro.md
+    href: prologue/intro.md
   - name: Migration from Veldrid
-    href: migration.md
+    href: prologue/migration.md
 
 - name: Getting Started
   items:
@@ -19,44 +19,44 @@
 - name: Core Concepts
   items:
   - name: API Concepts
-    href: api-concepts.md
+    href: core-concepts/api-concepts.md
   - name: Command Lists
-    href: command-lists.md
+    href: core-concepts/command-lists.md
   - name: Textures
-    href: textures.md
+    href: core-concepts/textures.md
   - name: Framebuffers
-    href: framebuffers.md
+    href: core-concepts/framebuffers.md
   - name: Swapchains
-    href: swapchains.md
+    href: core-concepts/swapchains.md
   - name: Multi-Threading
-    href: multi-threading.md
+    href: core-concepts/multi-threading.md
 
 - name: Shaders
   items:
   - name: Shaders and Resources
-    href: shaders.md
+    href: shaders/shaders.md
   - name: Shader Resource Table
-    href: shader-resource-table.md
+    href: shaders/shader-resource-table.md
   - name: Compute Shaders
-    href: compute-shaders.md
+    href: shaders/compute-shaders.md
   - name: Specialization Constants
-    href: specialization-constants.md
+    href: shaders/specialization-constants.md
   - name: Writing Portable Shaders
-    href: portable-shaders.md
+    href: shaders/portable-shaders.md
 
 - name: Advanced
   items:
   - name: API Validation
-    href: api-validation.md
+    href: advanced/api-validation.md
   - name: Backend Differences
-    href: backend-differences.md
+    href: advanced/backend-differences.md
   - name: Implementation Overview
-    href: implementation/overview.md
+    href: advanced/implementation/overview.md
   - name: Public Interface
-    href: implementation/public-interface.md
+    href: advanced/implementation/public-interface.md
   - name: Direct3D 11 Backend
-    href: implementation/d3d11.md
+    href: advanced/implementation/d3d11.md
   - name: Vulkan Backend
-    href: implementation/vulkan.md
+    href: advanced/implementation/vulkan.md
   - name: OpenGL Backend
-    href: implementation/opengl.md
+    href: advanced/implementation/opengl.md
