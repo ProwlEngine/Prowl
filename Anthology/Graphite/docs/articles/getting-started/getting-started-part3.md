@@ -97,7 +97,7 @@ private static void DisposeResources()
 
 ## Wrapping Up
 
-The completed project of this tutorial is available [here](https://github.com/mellinoe/veldrid-samples/blob/master/src/GettingStarted/Program.cs). This is a simple example intended to demonstrate some of the core concepts in NeoVeldrid. More advanced rendering techniques are possible using these and other features available in the library.
+The completed project of this tutorial is available [here](https://github.com/jhm-ciberman/neo-veldrid/blob/main/samples/GettingStarted/Program.cs). This is a simple example intended to demonstrate some of the core concepts in NeoVeldrid. More advanced rendering techniques are possible using these and other features available in the library.
 
 See the [NeoDemo] project in the NeoVeldrid repository for a more complex application built on NeoVeldrid. It uses the following techniques:
 

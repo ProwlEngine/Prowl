@@ -4,7 +4,7 @@ uid: getting-started-intro
 
 # Getting Started
 
-This is a short walkthrough describing how to set up a simple graphical application using NeoVeldrid. The next few sections will introduce chunks of the of the application piece-by-piece for clarity. The finished product is available in the [NeoVeldrid Samples](https://github.com/mellinoe/veldrid-samples/tree/master/src/GettingStarted) repository.
+This is a short walkthrough describing how to set up a simple graphical application using NeoVeldrid. The next few sections will introduce chunks of the of the application piece-by-piece for clarity. The finished product is available in the [NeoVeldrid Samples](https://github.com/jhm-ciberman/neo-veldrid/tree/main/samples/GettingStarted) directory.
 
 __[Part 1](xref:getting-started-part1)__: Creating a Window and GraphicsDevice, and setting up a main loop
 

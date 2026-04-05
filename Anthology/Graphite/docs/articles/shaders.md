@@ -18,7 +18,7 @@ A [ShaderDescription](xref:NeoVeldrid.ShaderDescription) takes two pieces of inf
 
 ## Writing Portable Shaders
 
-In most cases, you will want to write your shader code only once, in a single language, and to use some form of cross-compilation or translation to automatically generate the other shader languages. The [NeoVeldrid.SPIRV](https://github.com/mellinoe/veldrid-spirv) library provides support for using SPIR-V bytecode in all NeoVeldrid backends using [SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross), and is the recommended portable shader solution. See the [Portable Shaders](xref:portable-shaders) article for more options and information.
+In most cases, you will want to write your shader code only once, in a single language, and to use some form of cross-compilation or translation to automatically generate the other shader languages. The [NeoVeldrid.SPIRV](https://www.nuget.org/packages/NeoVeldrid.SPIRV) library provides support for using SPIR-V bytecode in all NeoVeldrid backends using [SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross), and is the recommended portable shader solution. See the [Portable Shaders](xref:portable-shaders) article for more options and information.
 
 ## Specialization Constants
 
