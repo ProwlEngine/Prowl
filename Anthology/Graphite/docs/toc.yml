@@ -1,6 +1,6 @@
 - name: Docs
   href: articles/
-  homepage: articles/intro.md
+  homepage: articles/prologue/intro.md
 - name: API Reference
   href: api/
   homepage: api/index.md
