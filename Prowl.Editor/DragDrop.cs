@@ -37,12 +37,15 @@ public class AssetDragPayload : DragPayload
 /// <summary>Payload for dragging GameObjects in the hierarchy.</summary>
 public class GameObjectDragPayload : DragPayload
 {
-    public GameObject GameObject { get; }
+    public GameObject[] GameObjects { get; }
 
-    public override string DisplayName => GameObject.Name;
+    public override string DisplayName => GameObjects.Length == 1
+        ? GameObjects[0].Name
+        : $"{GameObjects.Length} objects";
     public override string Icon => EditorIcons.Cube;
 
-    public GameObjectDragPayload(GameObject go) => GameObject = go;
+    public GameObjectDragPayload(GameObject go) : this([go]) { }
+    public GameObjectDragPayload(GameObject[] gos) => GameObjects = gos;
 }
 
 /// <summary>

@@ -22,10 +22,18 @@ public class HierarchyPanel : DockPanel
 
     private string _searchText = "";
     private Paper? _paper;
-    private string? _renamingId; // Identifier GUID string of object being renamed
+    private HashSet<string> _renamingIds = new(); // GOs currently being renamed
     private string _renameText = "";
     private const float RowHeight = 22f;
     private const float IndentSize = 16f;
+
+    // Drag state
+    private bool _dragInitiated;
+    private Float2 _dragStartPos;
+    private const float DragThreshold = 5f;
+    private string? _dropTargetId; // GO identifier for the current drop target
+    private enum DropPosition { Into, Above, Below }
+    private DropPosition _dropPos;
 
     // Track expanded state per GO identifier
     private static readonly Dictionary<string, bool> _expandedState = new();
@@ -37,6 +45,9 @@ public class HierarchyPanel : DockPanel
         if (font == null) return;
 
         var scene = Scene.Current;
+
+        // Reset drop target each frame
+        _dropTargetId = null;
 
         using (paper.Column("hier_root").Size(width, height).Enter())
         {
@@ -91,16 +102,70 @@ public class HierarchyPanel : DockPanel
                     DrawGameObjectNode(paper, font, root, 0, flatObjects, ref drawIndex);
                 }
 
-                // Right-click on empty space
-                ContextMenuHelper.RightClickMenu(paper, "hier_bg_ctx", builder =>
+                // Single right-click menu — selection-aware
+                ContextMenuHelper.RightClickMenu(paper, "hier_ctx", builder =>
                 {
-                    BuildCreateMenu(builder, null);
+                    var selectedGOs = Selection.GetSelected<GameObject>().ToList();
+                    var firstSelected = selectedGOs.FirstOrDefault();
+                    bool multiSelect = selectedGOs.Count > 1;
+
+                    // Create submenu — parent to first selected (or root)
+                    BuildCreateMenu(builder, firstSelected);
+
+                    if (selectedGOs.Count > 0)
+                    {
+                        builder.Separator();
+
+                        if (multiSelect)
+                        {
+                            builder.Item($"Duplicate ({selectedGOs.Count})", () =>
+                            {
+                                foreach (var go in selectedGOs) DuplicateGameObject(go);
+                            }, icon: EditorIcons.Copy);
+
+                            builder.Item($"Rename ({selectedGOs.Count})", () =>
+                            {
+                                _renamingIds.Clear();
+                                foreach (var go in selectedGOs)
+                                    _renamingIds.Add(go.Identifier.ToString());
+                                _renameText = firstSelected!.Name;
+                            }, icon: EditorIcons.PenToSquare);
+
+                            builder.Item($"Delete ({selectedGOs.Count})", () =>
+                            {
+                                foreach (var go in selectedGOs.ToList()) DeleteGameObject(go);
+                            }, icon: EditorIcons.Trash);
+
+                            builder.Separator();
+
+                            bool anyEnabled = selectedGOs.Any(g => g.Enabled);
+                            builder.Item(anyEnabled ? "Disable All" : "Enable All", () =>
+                            {
+                                bool newState = !anyEnabled;
+                                foreach (var go in selectedGOs) go.Enabled = newState;
+                            }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                        }
+                        else
+                        {
+                            var go = firstSelected!;
+                            builder.Item("Duplicate", () => DuplicateGameObject(go), icon: EditorIcons.Copy);
+                            builder.Item("Rename", () =>
+                            {
+                                _renamingIds.Clear();
+                                _renamingIds.Add(go.Identifier.ToString());
+                                _renameText = go.Name;
+                            }, icon: EditorIcons.PenToSquare);
+                            builder.Item("Delete", () => DeleteGameObject(go), icon: EditorIcons.Trash);
+                            builder.Separator();
+                            builder.Item(go.Enabled ? "Disable" : "Enable", () => go.Enabled = !go.Enabled,
+                                icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                        }
+                    }
                 });
 
                 // Accept asset drops — spawn at root
                 if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
                 {
-                    // Highlight drop zone
                     paper.Box("hier_drop_zone").Height(24)
                         .BackgroundColor(Color.FromArgb(40, EditorTheme.Accent))
                         .Rounded(3)
@@ -115,6 +180,9 @@ public class HierarchyPanel : DockPanel
                     SpawnAssetInScene(assetDrop, null, Float3.Zero);
                     DragDrop.EndDrag();
                 }
+
+                // Handle GO drag drop
+                HandleGODragDrop(scene);
             }
         }
     }
@@ -174,9 +242,19 @@ public class HierarchyPanel : DockPanel
 
         string icon = GetGameObjectIcon(go);
 
+        // Drop indicator above
+        if (_dropTargetId == goId && _dropPos == DropPosition.Above)
+        {
+            paper.Box($"hier_drop_above_{goId}")
+                .Height(2).ChildLeft(indent)
+                .BackgroundColor(EditorTheme.Accent);
+        }
+
         using (paper.Row($"hier_go_{goId}")
             .Height(RowHeight)
-            .BackgroundColor(isSelected ? EditorTheme.Accent : Color.Transparent)
+            .BackgroundColor(isSelected ? EditorTheme.Accent :
+                (_dropTargetId == goId && _dropPos == DropPosition.Into)
+                    ? Color.FromArgb(60, EditorTheme.Accent) : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
             .Rounded(2)
             .ChildLeft(indent + 2)
@@ -190,8 +268,12 @@ public class HierarchyPanel : DockPanel
             {
                 _expandedState[id] = !_expandedState.GetValueOrDefault(id, true);
             })
+            .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.Select(g); })
             .Enter())
         {
+            // Initiate drag on mouse down + movement
+            HandleDragStart(paper, go);
+
             // Expand arrow
             if (hasChildren)
             {
@@ -219,18 +301,31 @@ public class HierarchyPanel : DockPanel
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
 
             // Name or rename field
-            if (_renamingId == goId)
+            if (_renamingIds.Contains(goId))
             {
                 EditorGUI.TextField(paper, $"hier_rename_{goId}", "", _renameText)
                     .OnValueChanged(v => _renameText = v);
-                if (_paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true)
+
+                bool confirm = _paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true;
+                bool cancel = _paper?.IsKeyDown(PaperKey.Escape) == true;
+
+                if (confirm)
                 {
                     if (!string.IsNullOrWhiteSpace(_renameText))
-                        go.Name = _renameText;
-                    _renamingId = null;
+                    {
+                        // Apply to all renaming objects
+                        foreach (var rid in _renamingIds)
+                        {
+                            var rgo = FindGOByIdentifier(rid);
+                            if (rgo != null) rgo.Name = _renameText;
+                        }
+                    }
+                    _renamingIds.Clear();
                 }
-                else if (_paper?.IsKeyDown(PaperKey.Escape) == true)
-                    _renamingId = null;
+                else if (cancel)
+                {
+                    _renamingIds.Clear();
+                }
             }
             else
             {
@@ -251,27 +346,16 @@ public class HierarchyPanel : DockPanel
                 .StopEventPropagation()
                 .OnClick(go, (g, _) => g.Enabled = !g.Enabled);
 
-            // Right-click context menu
-            ContextMenuHelper.RightClickMenu(paper, $"hier_ctx_{goId}", builder =>
-            {
-                if (!Selection.IsSelected(go))
-                    Selection.Select(go);
+            // Handle drop target detection
+            HandleDropTarget(paper, go, goId);
+        }
 
-                BuildCreateMenu(builder, go);
-                builder.Separator();
-
-                builder.Item("Duplicate", () => DuplicateGameObject(go), icon: EditorIcons.Copy);
-                builder.Item("Rename", () =>
-                {
-                    _renamingId = goId;
-                    _renameText = go.Name;
-                }, icon: EditorIcons.PenToSquare);
-                builder.Item("Delete", () => DeleteGameObject(go), icon: EditorIcons.Trash);
-
-                builder.Separator();
-                builder.Item(go.Enabled ? "Disable" : "Enable", () => go.Enabled = !go.Enabled,
-                    icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
-            });
+        // Drop indicator below
+        if (_dropTargetId == goId && _dropPos == DropPosition.Below)
+        {
+            paper.Box($"hier_drop_below_{goId}")
+                .Height(2).ChildLeft(indent)
+                .BackgroundColor(EditorTheme.Accent);
         }
 
         // Draw children
@@ -280,6 +364,141 @@ public class HierarchyPanel : DockPanel
             foreach (var child in go.Children)
                 DrawGameObjectNode(paper, font, child, depth + 1, flatList, ref drawIndex);
         }
+    }
+
+    // ================================================================
+    //  Drag & Drop for reparenting/reordering
+    // ================================================================
+
+    private void HandleDragStart(Paper paper, GameObject go)
+    {
+        if (DragDrop.IsDragging) return;
+
+        // Start tracking on mouse down
+        if (Input.GetMouseButtonDown(0) && paper.IsParentHovered)
+        {
+            _dragInitiated = true;
+            _dragStartPos = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
+        }
+
+        // Check threshold
+        if (_dragInitiated && Input.GetMouseButton(0))
+        {
+            var mousePos = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
+            if (Float2.Distance(mousePos, _dragStartPos) > DragThreshold)
+            {
+                _dragInitiated = false;
+
+                // Drag all selected objects (if this GO is selected), otherwise just this one
+                var selected = Selection.GetSelected<GameObject>().ToArray();
+                if (selected.Length > 0 && Selection.IsSelected(go))
+                    DragDrop.StartDrag(new GameObjectDragPayload(selected));
+                else
+                    DragDrop.StartDrag(new GameObjectDragPayload(go));
+            }
+        }
+
+        if (Input.GetMouseButtonUp(0))
+            _dragInitiated = false;
+    }
+
+    private void HandleDropTarget(Paper paper, GameObject go, string goId)
+    {
+        if (!DragDrop.IsDraggingType<GameObjectDragPayload>()) return;
+        if (!paper.IsParentHovered) return;
+
+        // Determine drop position based on mouse Y within the row
+        var parentData = paper.CurrentParent.Data;
+        float rowY = parentData.Y;
+        float mouseY = Input.MousePosition.Y;
+        float relY = mouseY - rowY;
+
+        float topZone = RowHeight * 0.25f;
+        float bottomZone = RowHeight * 0.75f;
+
+        if (relY < topZone)
+        {
+            _dropTargetId = goId;
+            _dropPos = DropPosition.Above;
+        }
+        else if (relY > bottomZone)
+        {
+            _dropTargetId = goId;
+            _dropPos = DropPosition.Below;
+        }
+        else
+        {
+            _dropTargetId = goId;
+            _dropPos = DropPosition.Into;
+        }
+    }
+
+    private void HandleGODragDrop(Scene scene)
+    {
+        // Process drop when mouse released
+        if (!DragDrop.IsDragging && DragDrop.Payload is GameObjectDragPayload goDrop && _dropTargetId != null)
+        {
+            var target = FindGOByIdentifier(_dropTargetId);
+            if (target != null)
+            {
+                var draggedObjects = goDrop.GameObjects;
+
+                foreach (var dragged in draggedObjects)
+                {
+                    // Can't drop onto self or own descendant
+                    if (dragged == target || IsDescendantOf(target, dragged))
+                        continue;
+
+                    switch (_dropPos)
+                    {
+                        case DropPosition.Into:
+                            dragged.SetParent(target);
+                            _expandedState[_dropTargetId!] = true;
+                            break;
+
+                        case DropPosition.Above:
+                        case DropPosition.Below:
+                            // Reparent to same parent as target
+                            var targetParent = target.Parent;
+                            if (targetParent != null && targetParent.IsValid())
+                            {
+                                if (dragged.Parent != targetParent)
+                                    dragged.SetParent(targetParent);
+
+                                // Reorder: place before/after target
+                                int targetIdx = target.GetSiblingIndex() ?? 0;
+                                if (_dropPos == DropPosition.Below) targetIdx++;
+                                // If dragged was before target in same parent, adjust index
+                                int dragIdx = dragged.GetSiblingIndex() ?? 0;
+                                if (dragIdx < targetIdx) targetIdx--;
+                                dragged.SetSiblingIndex(Math.Max(0, targetIdx));
+                            }
+                            else
+                            {
+                                // Target is a root object — unparent dragged to become root too
+                                if (dragged.Parent != null && dragged.Parent.IsValid())
+                                    dragged.SetParent(default); // null parent = root
+                            }
+                            break;
+                    }
+                }
+
+                EditorSceneManager.IsDirty = true;
+            }
+
+            DragDrop.EndDrag();
+        }
+    }
+
+    private static bool IsDescendantOf(GameObject potentialChild, GameObject potentialParent)
+    {
+        var current = potentialChild.Parent;
+        while (current != null && current.IsValid())
+        {
+            if (current == potentialParent) return true;
+            current = current.Parent;
+        }
+        return false;
     }
 
     // ================================================================
@@ -324,7 +543,8 @@ public class HierarchyPanel : DockPanel
         Selection.Select(go);
 
         // Enter rename
-        _renamingId = go.Identifier.ToString();
+        _renamingIds.Clear();
+        _renamingIds.Add(go.Identifier.ToString());
         _renameText = go.Name;
         return go;
     }
@@ -342,8 +562,6 @@ public class HierarchyPanel : DockPanel
         var scene = Scene.Current;
         if (scene == null) return;
 
-        // Simple duplication: create new GO with same name, position, components
-        // TODO: Deep clone via serialization
         var go = new GameObject(source.Name + " (Copy)");
         go.Transform.Position = source.Transform.Position;
         go.Transform.Rotation = source.Transform.Rotation;
@@ -359,11 +577,9 @@ public class HierarchyPanel : DockPanel
         var scene = Scene.Current;
         if (scene == null) return;
 
-        // Remove from selection
         if (Selection.IsSelected(go))
             Selection.RemoveFromSelection(go);
 
-        // Remove all children recursively
         foreach (var child in go.GetChildrenDeep().ToList())
             scene.Remove(child);
 
@@ -408,6 +624,13 @@ public class HierarchyPanel : DockPanel
         return EditorIcons.Circle;
     }
 
+    private GameObject? FindGOByIdentifier(string id)
+    {
+        var scene = Scene.Current;
+        if (scene == null) return null;
+        return scene.AllObjects.FirstOrDefault(g => g.Identifier.ToString() == id);
+    }
+
     // ================================================================
     //  Asset Drop → Spawn in Scene
     // ================================================================
@@ -437,7 +660,6 @@ public class HierarchyPanel : DockPanel
         }
         else
         {
-            // Generic asset — just create an empty GO with the name
             Runtime.Debug.Log($"Spawned empty GameObject for asset type: {asset.GetType().Name}");
         }
 

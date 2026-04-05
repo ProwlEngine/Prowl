@@ -23,7 +23,7 @@ public sealed class ShaderPass
     [SerializeField] private string _grabTextureName; // If not empty, captures screen before rendering
 
     [SerializeIgnore]
-    private Dictionary<string, GraphicsProgram> _variants;
+    private Dictionary<string, GraphicsProgram> _variants = [];
 
 
     /// <summary>
