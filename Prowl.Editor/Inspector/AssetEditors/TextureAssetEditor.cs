@@ -56,9 +56,19 @@ public class TextureAssetEditor : AssetImporterEditor
                     .Rounded(4)
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     {
-                        canvas.DrawImage(tex,
-                            (float)r.Min.X, (float)r.Min.Y,
-                            (float)r.Size.X, (float)r.Size.Y);
+                        float rx = (float)r.Min.X;
+                        float ry = (float)r.Min.Y;
+                        float rw = (float)r.Size.X;
+                        float rh = (float)r.Size.Y;
+
+                        // Flip Y — OpenGL texture has Y=0 at bottom
+                        canvas.SetBrushTexture(tex);
+                        canvas.SetBrushTextureTransform(
+                            Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
+                            Prowl.Vector.Spatial.Transform2D.CreateScale(rw, -rh));
+                        canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4,
+                            new Prowl.Vector.Color32(255, 255, 255, 255));
+                        canvas.ClearBrushTexture();
                     }));
                 paper.Box($"{id}_preview_spacer2");
             }
