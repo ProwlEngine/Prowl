@@ -44,6 +44,19 @@ NeoVeldrid is **not** a game engine, a rendering framework, or a shader library.
 
 If you've worked with Vulkan, Direct3D, or OpenGL directly, NeoVeldrid operates at a similar level of abstraction but with a cleaner, unified .NET API. If you're looking for something higher-level, consider a .NET-friendly game engine like [Stride](https://www.stride3d.net/), [MonoGame](https://monogame.net/), or [Godot with C#](https://godotengine.org/).
 
+## NuGet Packages
+
+| Package | Description |
+|---------|-------------|
+| [![NeoVeldrid](https://img.shields.io/nuget/v/NeoVeldrid)](https://www.nuget.org/packages/NeoVeldrid) | Core library with all graphics backends |
+| [![NeoVeldrid.StartupUtilities](https://img.shields.io/nuget/v/NeoVeldrid.StartupUtilities)](https://www.nuget.org/packages/NeoVeldrid.StartupUtilities) | Window creation and device setup helpers |
+| [![NeoVeldrid.SPIRV](https://img.shields.io/nuget/v/NeoVeldrid.SPIRV)](https://www.nuget.org/packages/NeoVeldrid.SPIRV) | SPIR-V shader cross-compilation |
+| [![NeoVeldrid.ImageSharp](https://img.shields.io/nuget/v/NeoVeldrid.ImageSharp)](https://www.nuget.org/packages/NeoVeldrid.ImageSharp) | Texture loading via ImageSharp |
+| [![NeoVeldrid.ImGui](https://img.shields.io/nuget/v/NeoVeldrid.ImGui)](https://www.nuget.org/packages/NeoVeldrid.ImGui) | ImGui integration |
+| [![NeoVeldrid.Utilities](https://img.shields.io/nuget/v/NeoVeldrid.Utilities)](https://www.nuget.org/packages/NeoVeldrid.Utilities) | Mesh loading, BVH, and other utilities |
+| [![NeoVeldrid.SDL2](https://img.shields.io/nuget/v/NeoVeldrid.SDL2)](https://www.nuget.org/packages/NeoVeldrid.SDL2) | SDL2 windowing |
+| [![NeoVeldrid.RenderDoc](https://img.shields.io/nuget/v/NeoVeldrid.RenderDoc)](https://www.nuget.org/packages/NeoVeldrid.RenderDoc) | RenderDoc integration |
+
 ## Getting Started
 
 See [Getting Started](xref:getting-started-intro) for a basic startup guide.

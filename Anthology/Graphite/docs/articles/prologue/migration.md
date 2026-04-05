@@ -24,16 +24,16 @@ NeoVeldrid replaces all of Veldrid's native binding libraries with [Silk.NET](ht
 
 Remove the old Veldrid packages and add the NeoVeldrid equivalents:
 
-| Old Package | Version | New Package | Version |
-|-------------|---------|-------------|---------|
-| `Veldrid` | 4.9.0 | `NeoVeldrid` | 1.0.0 |
-| `Veldrid.StartupUtilities` | 4.9.0 | `NeoVeldrid.StartupUtilities` | 1.0.0 |
-| `Veldrid.ImageSharp` | 4.9.0 | `NeoVeldrid.ImageSharp` | 1.0.0 |
-| `Veldrid.ImGui` | 4.9.0 | `NeoVeldrid.ImGui` | 1.0.0 |
-| `Veldrid.SPIRV` | 1.0.15 | `NeoVeldrid.SPIRV` | 1.0.0 |
-| `Veldrid.Utilities` | 4.9.0 | `NeoVeldrid.Utilities` | 1.0.0 |
-| `Veldrid.SDL2` | 4.9.0 | `NeoVeldrid.SDL2` | 1.0.0 |
-| `Veldrid.RenderDoc` | 4.9.0 | `NeoVeldrid.RenderDoc` | 1.0.0 |
+| Old Package | | New Package | |
+|-------------|---|-------------|---|
+| `Veldrid` | [![NuGet](https://img.shields.io/nuget/v/Veldrid)](https://www.nuget.org/packages/Veldrid) | `NeoVeldrid` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid)](https://www.nuget.org/packages/NeoVeldrid) |
+| `Veldrid.StartupUtilities` | [![NuGet](https://img.shields.io/nuget/v/Veldrid.StartupUtilities)](https://www.nuget.org/packages/Veldrid.StartupUtilities) | `NeoVeldrid.StartupUtilities` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid.StartupUtilities)](https://www.nuget.org/packages/NeoVeldrid.StartupUtilities) |
+| `Veldrid.ImageSharp` | [![NuGet](https://img.shields.io/nuget/v/Veldrid.ImageSharp)](https://www.nuget.org/packages/Veldrid.ImageSharp) | `NeoVeldrid.ImageSharp` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid.ImageSharp)](https://www.nuget.org/packages/NeoVeldrid.ImageSharp) |
+| `Veldrid.ImGui` | [![NuGet](https://img.shields.io/nuget/v/Veldrid.ImGui)](https://www.nuget.org/packages/Veldrid.ImGui) | `NeoVeldrid.ImGui` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid.ImGui)](https://www.nuget.org/packages/NeoVeldrid.ImGui) |
+| `Veldrid.SPIRV` | [![NuGet](https://img.shields.io/nuget/v/Veldrid.SPIRV)](https://www.nuget.org/packages/Veldrid.SPIRV) | `NeoVeldrid.SPIRV` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid.SPIRV)](https://www.nuget.org/packages/NeoVeldrid.SPIRV) |
+| `Veldrid.Utilities` | [![NuGet](https://img.shields.io/nuget/v/Veldrid.Utilities)](https://www.nuget.org/packages/Veldrid.Utilities) | `NeoVeldrid.Utilities` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid.Utilities)](https://www.nuget.org/packages/NeoVeldrid.Utilities) |
+| `Veldrid.SDL2` | [![NuGet](https://img.shields.io/nuget/v/Veldrid.SDL2)](https://www.nuget.org/packages/Veldrid.SDL2) | `NeoVeldrid.SDL2` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid.SDL2)](https://www.nuget.org/packages/NeoVeldrid.SDL2) |
+| `Veldrid.RenderDoc` | [![NuGet](https://img.shields.io/nuget/v/Veldrid.RenderDoc)](https://www.nuget.org/packages/Veldrid.RenderDoc) | `NeoVeldrid.RenderDoc` | [![NuGet](https://img.shields.io/nuget/v/NeoVeldrid.RenderDoc)](https://www.nuget.org/packages/NeoVeldrid.RenderDoc) |
 
 ## Step 2: Update Namespaces
 
