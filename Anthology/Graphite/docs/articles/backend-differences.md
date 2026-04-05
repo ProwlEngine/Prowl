@@ -8,11 +8,11 @@ Clip space coordinates differ by API. These are the coordinates that are output 
 
 Format: `[MinX,MaxX][MinY,MaxY][MinZ,MaxZ]`
 
-* Direct3D11 and Metal: `[-1,1][-1,1][0,1]`
+* Direct3D11: `[-1,1][-1,1][0,1]`
 * Vulkan: `[-1,1][-1,1][0,1]` NOTE: Vulkan's clip space Y axis is inverted compared to other API's.
 * OpenGL (ES): `[-1,1][-1,1][-1,1]`
 
-The data types in the `System.Numerics` namespace follow Direct3D conventions. This means that the format of a `System.Numerics.Matrix4x4` is directly usable in the Direct3D11 and Metal backends. Other numerics libraries may match other graphics API's, depending on their intended use cases. Ideally, your application should work optimally with any of the clip space conventions listed above. There are two main approaches to dealing with these differences.
+The data types in the `System.Numerics` namespace follow Direct3D conventions. This means that the format of a `System.Numerics.Matrix4x4` is directly usable in the Direct3D11 backend. Other numerics libraries may match other graphics API's, depending on their intended use cases. Ideally, your application should work optimally with any of the clip space conventions listed above. There are two main approaches to dealing with these differences.
 
 1. Use different projection matrices. Clip space depth is controlled by the format of your projection matrix. It is possible to select, at runtime, a different formula for your projection matrix which will map to the correct depth range of your API.
 

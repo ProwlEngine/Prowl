@@ -38,17 +38,14 @@ NOTE: Calling any of the above members is equivalent to accessing the same membe
 
 Like other resources, it is possible to create and destroy extra Swapchains at runtime, using a [ResourceFactory](xref:NeoVeldrid.ResourceFactory) and a [SwapchainDescription](xref:NeoVeldrid.SwapchainDescription). Constructing a SwapchainDescription requires a [SwapchainSource](xref:NeoVeldrid.SwapchainSource), which is a special kind of NeoVeldrid object representing a renderable surface that the application controls. Since this component interacts with the OS and its windowing system, it is platform-specific and created in a special way. There are a variety of static factory methods which allow you to create a SwapchainSource for a particular kind of operating system and UI framework. Due to platform limitations, each kind of SwapchainSource can only be used to create a Swapchain for a limited set of GraphicsDevice types.
 
-| Method | Vulkan | Direct3D 11 | Metal | OpenGL ES |
-| ------ | ------ | ----------- | ----- | --------- |
-| [CreateWin32(IntPtr hwnd, IntPtr hinstance)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateWin32_System_IntPtr_System_IntPtr_) | ✓ | ✓ | | |
-| [CreateUwp(object swapChainPanel, float logicalDpi)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateUwp_System_Object_System_Single_) | | ✓ | | |
-| [CreateXlib(IntPtr display, IntPtr window)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateXlib_System_IntPtr_System_IntPtr_) | ✓ | | | |
-| [CreateNSWindow(IntPtr nsWindow)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateNSWindow_System_IntPtr_) | ✓* | | ✓ | |
-| [CreateNSView(IntPtr nsWindow)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateNSView_System_IntPtr_) | | | ✓ | |
-| [CreateUIView(IntPtr uiView)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateUIView_System_IntPtr_) | ✓* | | ✓ | ✓ |
-| [CreateAndroidSurface(IntPtr surfaceHandle, IntPtr jniEnv)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateAndroidSurface_System_IntPtr_System_IntPtr_) | ✓ | | | ✓ |
+| Method | Vulkan | Direct3D 11 | OpenGL ES |
+| ------ | ------ | ----------- | --------- |
+| [CreateWin32(IntPtr hwnd, IntPtr hinstance)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateWin32_System_IntPtr_System_IntPtr_) | ✓ | ✓ | |
+| [CreateXlib(IntPtr display, IntPtr window)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateXlib_System_IntPtr_System_IntPtr_) | ✓ | | |
+| [CreateNSWindow(IntPtr nsWindow)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateNSWindow_System_IntPtr_) | ✓* | | |
+| [CreateAndroidSurface(IntPtr surfaceHandle, IntPtr jniEnv)](xref:NeoVeldrid.SwapchainSource#NeoVeldrid_SwapchainSource_CreateAndroidSurface_System_IntPtr_System_IntPtr_) | ✓ | | ✓ |
 
-_ * Vulkan support on macOS and iOS requires [MoltenVK](https://github.com/KhronosGroup/MoltenVK). _
+_ * Vulkan support on macOS requires [MoltenVK](https://github.com/KhronosGroup/MoltenVK), which is bundled automatically. _
 
 A Swapchain can be created with or without a depth target. [SwapchainDescription.DepthFormat](xref:NeoVeldrid.SwapchainDescription#NeoVeldrid_SwapchainDescription_DepthFormat) controls this. If null, no depth target will be created. If non-null, a depth target will be created with that format.
 

@@ -4,7 +4,7 @@ uid: specialization-constants
 
 # Specialization Constants
 
-SPIR-V and Metal shaders both support a notion of "Specialization Constants" (called "function constants" in Metal). These are special constant variables defined in a shader that can be "specialized" after compilation, effectively being replaced with a new value. For example, consider the following GLSL shader, which contains several SPIR-V Specialization Constants.
+SPIR-V shaders support a notion of "Specialization Constants". These are special constant variables defined in a shader that can be "specialized" after compilation, effectively being replaced with a new value. For example, consider the following GLSL shader, which contains several SPIR-V Specialization Constants.
 
 ```GLSL
 #version 450
@@ -55,7 +55,7 @@ ShaderSetDescription shaderSetDesc = new ShaderSetDescription(
     });
 ```
 
-If this ShaderSetDescription is used to create a Vulkan or Metal Pipeline, then the SpecializationConstant values listed in the array will replace the pre-defined constants in the shader. It is therefore trivial to create another Pipeline which substitutes different constant values by passing in a different array. SPIR-V Specialization Constants always contain default values, so providing SpecializationConstants is optional. You may override a subset (or none) of the Specialization Constants defined in the shader.
+If this ShaderSetDescription is used to create a Vulkan Pipeline, then the SpecializationConstant values listed in the array will replace the pre-defined constants in the shader. It is therefore trivial to create another Pipeline which substitutes different constant values by passing in a different array. SPIR-V Specialization Constants always contain default values, so providing SpecializationConstants is optional. You may override a subset (or none) of the Specialization Constants defined in the shader.
 
 ## HLSL and GLSL
 

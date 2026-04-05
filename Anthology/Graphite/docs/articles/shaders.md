@@ -14,7 +14,6 @@ A [ShaderDescription](xref:NeoVeldrid.ShaderDescription) takes two pieces of inf
 * Vulkan: [ShaderBytes](xref:NeoVeldrid.ShaderDescription#NeoVeldrid_ShaderDescription_ShaderBytes) must contain SPIR-V bytecode.
 * OpenGL: [ShaderBytes](xref:NeoVeldrid.ShaderDescription#NeoVeldrid_ShaderDescription_ShaderBytes) must contain ASCII-encoded GLSL text.
 * OpenGL ES: [ShaderBytes](xref:NeoVeldrid.ShaderDescription#NeoVeldrid_ShaderDescription_ShaderBytes) must contain ASCII-encoded GLSL ES text.
-* Metal: [ShaderBytes](xref:NeoVeldrid.ShaderDescription#NeoVeldrid_ShaderDescription_ShaderBytes) must contain UTF8-encoded Metal text or Metal bytecode (a "metallib" file created using the `metallib` tool). NOTE: Metal bytecode is platform-specific -- it is compiled differently for macOS and iOS, and the two versions cannot be used interchangeably. You must provide the correct version for the platform you are targetting, or provide UTF8 Metal code to be compiled on-device at runtime.
 
 ## Writing Portable Shaders
 
@@ -48,7 +47,6 @@ Uniform buffers correspond to the following:
 * HLSL: `cbuffer` blocks.
 * GLSL: uniform blocks.
   * NOTE: "simple" GLSL uniform variables, e.g. `uniform mat4 ProjectionMatrix;` are not supported in NeoVeldrid. They must be wrapped in a uniform block.
-* Metal: `constant T& value` variables.
 
 ### Structured Buffer
 
@@ -61,7 +59,6 @@ Structured buffers have a much larger size limit than uniform buffers (generally
 Structured buffers correspond to the following:
 * HLSL: `StructuredBuffer<T>` or `RWStructuredBuffer<T>` objects.
 * GLSL: `readonly` or normal "buffer blocks".
-* Metal: `device T* value` variables.
 
 ### DeviceBufferRange
 
@@ -81,12 +78,10 @@ Read-only TextureViews correspond to the following types in various shader langu
 * HLSL: "Texture" objects (`Texture2D`, `Texture2DArray`, `TextureCube`, etc.).
 * GLSL (OpenGL): "sampler" objects (`sampler2D`, `sampler2DArray`, `samplerCube`, etc.).
 * GLSL (Vulkan): "texture" objects in Vulkan-flavored GLSL (`texture2D`, `texture2DArray`, `textureCube`, etc.).
-* Metal: "texture" objects (`texture2d<T>`, `texture2d_ms<T>`, etc.) with `access::sample` or `access::read`.
 
 Read-write TextureViews correspond to the following:
 * HLSL: `RWTexture<T>`.
 * GLSL: uniform `image` variables.
-* Metal: "texture" objects (`texture2d<T>`, `texture2d_ms<T>`, etc.) with `access::read_write`.
 
 ### Sampler
 
@@ -143,35 +138,7 @@ GLSL is used in the example above, but the same principle applies to any SPIR-V 
     ```
     (the declaration order is unimportant -- only the register indices matter).
 
-* Metal: Metal resources are assigned slots in the same way as HLSL resources. There are only three types of slots (buffer, texture, and sampler), and indices are assigned in simple increasing order depending on where they appear in the ResourceLayout creation list. One important thing to note is that Metal treats ALL buffer bindings the same. Unlike other API's, this includes the buffers used for vertex input data. NeoVeldrid assumes that all vertex buffers for a pipeline will be assigned to the lowest-possible slots, and "regular" buffer resources (uniform, structured, etc.) will be assigned slots after those vertex buffers. For example: a Metal Pipeline is created which uses 3 vertex buffers containing vertex data, and 3 uniform buffers. The vertex buffers will use slots 0, 1, and 2 (invisible to the shader author, because they will simply use the `[[ stage_in ]]` syntax). The uniform buffers will use slots 3, 4, and 5. This can be confusing to those familiar with other graphics API's, which separate out vertex buffer bindings entirely.
- * NOTE: This "vertex-buffer-offset" is not applied to fragment stage buffer slots. If there are 5 uniform buffers (0, 1, 2, 3, 4), and buffers 3 and 4 apply to the fragment stage, then they will be placed into fragment slots 3 and 4, regardless of how many vertex buffers are used by the Pipeline.
-
 * OpenGL and OpenGL ES: Resources are matched strictly by-name. Each resource must correspond to a uniform or uniform block in the shader program, and the names must be identical. Numerical indices are ignored when matching resources to GLSL uniforms. NeoVeldrid does not support the "ARB_explicit_uniform_location" extension, primarily because it is not supported by Apple.
 
   * NOTE: GLSL `sampler2D` variables are matched to a resource with [ResourceKind.TextureReadOnly](xref:NeoVeldrid.ResourceKind). The name of the element with ResourceKind.TextureReadOnly must match the name of the `sampler2D` variable exactly. When specifying an element with ResourceKind.Sampler, the name of the element is irrelevant and unused -- the sampler in that slot will apply to the closest previous element(s) with ResourceKind.TextureReadOnly.
 
-## ResourceBindingModel.Improved
-
-NeoVeldrid 4.2.0 introduces [ResourceBindingModel.Improved](xref:NeoVeldrid.ResourceBindingModel), which is an optional flag specified in [GraphicsDeviceOptions](xref:NeoVeldrid.GraphicsDeviceOptions), or individually in a particular graphics [Pipeline](xref:NeoVeldrid.GraphicsPipelineDescription). The only affect this flag has is to alter the assignment of vertex buffer indices for Metal shaders. Instead of being assigned at the beginning of the buffer list (e.g. slots 0, 1, 2), they are instead assigned to the END of the buffer list. For example, if your Pipeline uses 3 uniform buffers and and two vertex buffers, the indices will be as follows:
-
-**ResourceBindingModel.Default**
-    | Element | Type | Name |
-    | ------- | ---- | ---- |
-    | 0 | VertexBuffer | VB0 |
-    | 1 | VertexBuffer | VB1 |
-    | 2 | VertexBuffer | VB2 |
-    | 3 | UniformBuffer | UB0 |
-    | 4 | UniformBuffer | UB1 |
-    | 5 | UniformBuffer | UB2 |
-
-**ResourceBindingModel.Improved**
-    | Element | Type | Name |
-    | ------- | ---- | ---- |
-    | 0 | UniformBuffer | UB0 |
-    | 1 | UniformBuffer | UB1 |
-    | 2 | UniformBuffer | UB2 |
-    | 3 | VertexBuffer | VB0 |
-    | 4 | VertexBuffer | VB1 |
-    | 5 | VertexBuffer | VB2 |
-
-The behavior of ResourceBindingModel.Improved is desirable because it allows you to change the number of vertex buffers without affecting any of the resource indices for any other buffers. This allows you to re-use the same shader code for multiple Pipelines which use a different number of vertex buffers. It gives you the same flexibility that is available to other graphics backends, where vertex buffer binding slots are fully separate from other buffer binding slots.
