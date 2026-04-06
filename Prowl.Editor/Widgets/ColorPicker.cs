@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -80,6 +81,98 @@ public static class ColorPicker
             { var nc2 = new Prowl.Vector.Color(c.R,c.G,nb,c.A); SyncHSV(paper,el,nc2); onChange(nc2); });
             ChannelSlider(paper, $"{id}_a2", "A", a, EditorTheme.Text, font, fontSize, na =>
             { paper.SetElementStorage(el,"a",na); onChange(HSVToColor(paper.GetElementStorage(el,"h",h),paper.GetElementStorage(el,"s",s),paper.GetElementStorage(el,"v",v),na)); });
+
+            // === Color Palette ===
+            DrawPalette(paper, $"{id}_pal", el, font, fontSize, onChange);
+        }
+    }
+
+    static void DrawPalette(Paper paper, string id, ElementHandle el, FontFile? font, float fontSize, Action<Prowl.Vector.Color> onChange)
+    {
+        List<string>? palette = null;
+        try { palette = ProjectSettingsRegistry.Get<EditorPaletteSettings>().ColorPalette; }
+        catch { }
+        if (palette == null || palette.Count == 0) return;
+
+        // Separator
+        paper.Box($"{id}_sep").Height(1).BackgroundColor(EditorTheme.Border);
+
+        // Palette grid — laid out as rows of swatches
+        const float swatchSize = 16f;
+        const float gap = 2f;
+        float availW = 280f - 16f;
+        int cols = (int)((availW + gap) / (swatchSize + gap));
+        int totalItems = palette.Count + 1; // +1 for add button
+        int rowCount = (totalItems + cols - 1) / cols;
+        int maxRows = 5;
+        int displayRows = Math.Min(rowCount, maxRows);
+
+        for (int row = 0; row < displayRows; row++)
+        {
+            using (paper.Row($"{id}_r{row}").Height(swatchSize).RowBetween(gap).Enter())
+            {
+                for (int col = 0; col < cols; col++)
+                {
+                    int itemIdx = row * cols + col;
+                    if (itemIdx >= totalItems) break;
+
+                    if (itemIdx < palette.Count)
+                    {
+                        int idx = itemIdx;
+                        var sc = ColorRamp.ParseHex(palette[idx]);
+                        paper.Box($"{id}_s{idx}")
+                            .Size(swatchSize, swatchSize)
+                            .BackgroundColor(sc)
+                            .Rounded(2)
+                            .BorderColor(EditorTheme.Border).BorderWidth(1)
+                            .Hovered.BorderColor(EditorTheme.Accent).End()
+                            .OnClick(idx, (ci, _) =>
+                            {
+                                var c = ColorRamp.ParseHex(palette[ci]);
+                                var vc = new Prowl.Vector.Color(c.R / 255f, c.G / 255f, c.B / 255f, 1f);
+                                SyncHSV(paper, el, vc);
+                                onChange(vc);
+                            })
+                            .OnRightClick(idx, (ci, _) =>
+                            {
+                                palette.RemoveAt(ci);
+                                ProjectSettingsRegistry.SaveAll();
+                            });
+                    }
+                    else
+                    {
+                        // Add button
+                        paper.Box($"{id}_add")
+                            .Size(swatchSize, swatchSize)
+                            .BackgroundColor(EditorTheme.ButtonNormal)
+                            .Rounded(2)
+                            .BorderColor(EditorTheme.Border).BorderWidth(1)
+                            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                            {
+                                float cx = (float)r.Min.X + (float)r.Size.X / 2f;
+                                float cy = (float)r.Min.Y + (float)r.Size.Y / 2f;
+                                canvas.SetStrokeColor(Color32.FromArgb(180, 200, 200, 200));
+                                canvas.SetStrokeWidth(1.5f);
+                                canvas.BeginPath(); canvas.MoveTo(cx - 4, cy); canvas.LineTo(cx + 4, cy); canvas.Stroke();
+                                canvas.BeginPath(); canvas.MoveTo(cx, cy - 4); canvas.LineTo(cx, cy + 4); canvas.Stroke();
+                            }))
+                            .OnClick(e =>
+                            {
+                                float ch = paper.GetElementStorage(el, "h", 0f);
+                                float cs = paper.GetElementStorage(el, "s", 1f);
+                                float cv = paper.GetElementStorage(el, "v", 1f);
+                                var cc = HSVToColor(ch, cs, cv);
+                                string hex = $"#{(int)(cc.R * 255):X2}{(int)(cc.G * 255):X2}{(int)(cc.B * 255):X2}";
+                                if (!palette.Contains(hex))
+                                {
+                                    palette.Add(hex);
+                                    ProjectSettingsRegistry.SaveAll();
+                                }
+                            });
+                    }
+                }
+            }
         }
     }
 

@@ -21,45 +21,69 @@ public class EditorSettings
         "Prowl", "EditorSettings.json");
 
     // Preferences
-    public float FontSize { get; set; } = 17f;
-    public bool ShowFPS { get; set; } = true;
     public string DefaultProjectsPath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ProwlProjects");
     public bool AutoSaveLayout { get; set; } = true;
+    public bool ReimportOnFocusOnly { get; set; } = true;
 
     // Theme
-    public EditorThemeData Theme { get; set; } = new();
+    public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();
 
     /// <summary>Apply the current theme to EditorTheme's static fields.</summary>
     public void ApplyTheme()
     {
         var t = Theme;
+        t.InitRamps();
 
-        // Functional aliases
-        EditorTheme.Background = ParseColor(t.Background);
-        EditorTheme.Darkest = ParseColor(t.Darkest);
-        EditorTheme.Dark = ParseColor(t.Dark);
-        EditorTheme.Normal = ParseColor(t.Normal);
-        EditorTheme.Bright = ParseColor(t.Bright);
+        // Ramp stops → EditorTheme ramp fields
+        EditorTheme.Neutral100 = t.Neutral.GetStop(0);
+        EditorTheme.Neutral200 = t.Neutral.GetStop(1);
+        EditorTheme.Neutral300 = t.Neutral.GetStop(2);
+        EditorTheme.Neutral400 = t.Neutral.GetStop(3);
+        EditorTheme.Neutral500 = t.Neutral.GetStop(4);
 
-        EditorTheme.Text = ParseColor(t.Text);
-        EditorTheme.TextDim = ParseColor(t.TextDim);
-        EditorTheme.TextDisabled = ParseColor(t.TextDisabled);
+        EditorTheme.Purple100 = t.Purple.GetStop(0);
+        EditorTheme.Purple200 = t.Purple.GetStop(1);
+        EditorTheme.Purple300 = t.Purple.GetStop(2);
+        EditorTheme.Purple400 = t.Purple.GetStop(3);
+        EditorTheme.Purple500 = t.Purple.GetStop(4);
+        EditorTheme.Purple600 = t.Purple.GetStop(5);
+        EditorTheme.Purple700 = t.Purple.GetStop(6);
 
-        EditorTheme.ButtonNormal = ParseColor(t.ButtonNormal);
-        EditorTheme.ButtonHovered = ParseColor(t.ButtonHovered);
-        EditorTheme.ButtonActive = ParseColor(t.ButtonActive);
+        EditorTheme.Blue100 = t.Blue.GetStop(0);
+        EditorTheme.Blue200 = t.Blue.GetStop(1);
+        EditorTheme.Blue300 = t.Blue.GetStop(2);
+        EditorTheme.Blue400 = t.Blue.GetStop(3);
+        EditorTheme.Blue500 = t.Blue.GetStop(4);
+        EditorTheme.Blue600 = t.Blue.GetStop(5);
+        EditorTheme.Blue700 = t.Blue.GetStop(6);
 
-        EditorTheme.Accent = ParseColor(t.Accent);
-        EditorTheme.AccentDim = ParseColor(t.AccentDim);
+        EditorTheme.Red100 = t.Red.GetStop(0);
+        EditorTheme.Red200 = t.Red.GetStop(1);
+        EditorTheme.Red300 = t.Red.GetStop(2);
+        EditorTheme.Red400 = t.Red.GetStop(3);
+        EditorTheme.Red500 = t.Red.GetStop(4);
+        EditorTheme.Red600 = t.Red.GetStop(5);
+        EditorTheme.Red700 = t.Red.GetStop(6);
 
-        EditorTheme.Splitter = ParseColor(t.Splitter);
-        EditorTheme.SplitterHovered = ParseColor(t.SplitterHovered);
+        EditorTheme.Ink100 = t.Ink.GetStop(0);
+        EditorTheme.Ink200 = t.Ink.GetStop(1);
+        EditorTheme.Ink300 = t.Ink.GetStop(2);
+        EditorTheme.Ink400 = t.Ink.GetStop(3);
+        EditorTheme.Ink500 = t.Ink.GetStop(4);
 
-        EditorTheme.TabHovered = ParseColor(t.TabHovered);
-
-        EditorTheme.HeaderBackground = ParseColor(t.Dark);
-        EditorTheme.InputBackground = ParseColor(t.Dark);
+        // Sizing
+        EditorTheme.MenuBarHeight = t.MenuBarHeight;
+        EditorTheme.RowHeight = t.RowHeight;
+        EditorTheme.FontSize = t.FontSize;
+        EditorTheme.LabelWidth = t.LabelWidth;
+        EditorTheme.Spacing = t.Spacing;
+        EditorTheme.Padding = t.Padding;
+        EditorTheme.SplitterSize = t.SplitterSize;
+        EditorTheme.DockPadding = t.DockPadding;
+        EditorTheme.TabBarHeight = t.TabBarHeight;
+        EditorTheme.TabPadding = t.TabPadding;
+        EditorTheme.Roundness = t.TabRadius;
     }
 
     public void Save()
@@ -87,6 +111,7 @@ public class EditorSettings
                 var settings = JsonSerializer.Deserialize<EditorSettings>(json);
                 if (settings != null)
                 {
+                    settings.Theme.InitRamps();
                     settings.ApplyTheme();
                     return settings;
                 }
@@ -102,7 +127,6 @@ public class EditorSettings
         return def;
     }
 
-    /// <summary>Reset theme to default and apply.</summary>
     public void ResetTheme()
     {
         Theme = EditorThemeData.CreateDefault();

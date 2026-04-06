@@ -195,7 +195,7 @@ public class SceneViewPanel : DockPanel
                         Transform2D.CreateTranslation(rx, ry + rh) *
                         Transform2D.CreateScale(rw, -rh));
                     //canvas.RectFilled(rx, ry, rw, rh, Color.White);
-                    canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, 8f, 8f, Color.White);
+                    canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
                     canvas.ClearBrushTexture();
                     });
 

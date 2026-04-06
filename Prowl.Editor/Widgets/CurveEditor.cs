@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -94,9 +96,12 @@ public static class CurveEditor
 
     static void DrawFullEditor(Paper paper, string id, AnimationCurve curve, Action<AnimationCurve> onChange)
     {
-        float editorW = 420, editorH = 300;
+        float editorW = 420;
         float graphX = RulerSize, graphY = RulerSize;
-        float graphW = editorW - RulerSize - 8, graphH = editorH - RulerSize - 40;
+        float graphW = editorW - RulerSize - 8, graphH = 220;
+        float barY = graphY + graphH + 4;
+        float paletteY = barY + 28;
+        float editorH = paletteY + 76; // 2 rows of presets + padding
 
         using (paper.Column(id)
             .Size(editorW, editorH)
@@ -281,19 +286,12 @@ public static class CurveEditor
                     });
             }
 
-            // Bottom bar
+            // Bottom bar — actions
             using (paper.Row($"{id}_bar")
                 .PositionType(PositionType.SelfDirected)
-                .Position(4, editorH - 30).Size(editorW - 8, 26)
+                .Position(4, barY).Size(editorW - 8, 26)
                 .RowBetween(4).Enter())
             {
-                PresetButton(paper, $"{id}_p_lin", "Linear", curve, el, onChange, false,
-                    new KeyFrame(0, 0, 0, 1), new KeyFrame(1, 1, 1, 0));
-                PresetButton(paper, $"{id}_p_ease", "Ease", curve, el, onChange, false,
-                    new KeyFrame(0, 0, 0, 0), new KeyFrame(1, 1, 0, 0));
-                PresetButton(paper, $"{id}_p_flat", "Flat", curve, el, onChange, false,
-                    new KeyFrame(0, 1, 0, 0), new KeyFrame(1, 1, 0, 0));
-
                 var fitBtn = paper.Box($"{id}_fit")
                     .Height(22).ChildLeft(6).ChildRight(6)
                     .BackgroundColor(EditorTheme.ButtonNormal)
@@ -310,34 +308,116 @@ public static class CurveEditor
                 if (EditorTheme.DefaultFont != null)
                     fitBtn.Text("Fit", EditorTheme.DefaultFont)
                         .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize - 2);
+
+                // Save current curve to palette
+                var saveBtn = paper.Box($"{id}_save_preset")
+                    .Height(22).ChildLeft(6).ChildRight(6)
+                    .BackgroundColor(EditorTheme.ButtonNormal)
+                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .Rounded(3)
+                    .OnClick(e =>
+                    {
+                        try
+                        {
+                            var pal = ProjectSettingsRegistry.Get<EditorPaletteSettings>();
+                            var preset = new EditorPaletteSettings.CurvePreset
+                            {
+                                Name = $"Custom {pal.CurvePalette.Count + 1}",
+                                Keys = curve.Keys.Select(EditorPaletteSettings.KeyFrameData.FromKeyFrame).ToList()
+                            };
+                            pal.CurvePalette.Add(preset);
+                            ProjectSettingsRegistry.SaveAll();
+                        }
+                        catch { }
+                    });
+                if (EditorTheme.DefaultFont != null)
+                    saveBtn.Text($"{EditorIcons.Plus} Save", EditorTheme.DefaultFont)
+                        .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize - 2);
             }
+
+            // Curve palette row
+            DrawCurvePalette(paper, $"{id}_cpal", curve, el, onChange, editorW, paletteY);
         }
     }
 
-    static void PresetButton(Paper paper, string id, string label, AnimationCurve curve,
-        ElementHandle editorEl, Action<AnimationCurve> onChange, bool smooth, params KeyFrame[] keys)
+    static void DrawCurvePalette(Paper paper, string id, AnimationCurve curve,
+        ElementHandle editorEl, Action<AnimationCurve> onChange, float editorW, float paletteY)
     {
-        var btn = paper.Box(id)
-            .Height(22).ChildLeft(6).ChildRight(6)
-            .BackgroundColor(EditorTheme.ButtonNormal)
-            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-            .Rounded(3)
-            .OnClick(e =>
+        List<EditorPaletteSettings.CurvePreset>? presets = null;
+        try { presets = ProjectSettingsRegistry.Get<EditorPaletteSettings>().CurvePalette; }
+        catch { }
+        if (presets == null || presets.Count == 0) return;
+
+        float presetW = 52f, presetH = 32f;
+        float gap = 3f;
+        float rowW = editorW - 8;
+        int cols = Math.Max(1, (int)((rowW + gap) / (presetW + gap)));
+        int rowCount = (presets.Count + cols - 1) / cols;
+        int maxRows = 2;
+        float totalH = Math.Min(rowCount, maxRows) * (presetH + gap);
+
+        // Use SelfDirected columns of rows
+        using (paper.Column($"{id}_col")
+            .PositionType(PositionType.SelfDirected)
+            .Position(4, paletteY).Size(rowW, totalH)
+            .RowBetween(gap)
+            .Clip()
+            .Enter())
+        {
+            for (int row = 0; row < Math.Min(rowCount, maxRows); row++)
             {
-                curve.Keys.Clear();
-                foreach (var k in keys) curve.Keys.Add(k);
-                if (smooth) curve.SmoothTangents(CurveTangent.Smooth);
-                onChange(curve);
-                GetCurveBounds(curve, out float fMinT, out float fMaxT, out float fMinV, out float fMaxV);
-                paper.SetElementStorage(editorEl, "vMinT", fMinT);
-                paper.SetElementStorage(editorEl, "vMaxT", fMaxT);
-                paper.SetElementStorage(editorEl, "vMinV", fMinV);
-                paper.SetElementStorage(editorEl, "vMaxV", fMaxV);
-                paper.SetElementStorage(editorEl, "sel", -1);
-            });
-        if (EditorTheme.DefaultFont != null)
-            btn.Text(label, EditorTheme.DefaultFont)
-                .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize - 2);
+                using (paper.Row($"{id}_r{row}").Height(presetH).RowBetween(gap).Enter())
+                {
+                    for (int col = 0; col < cols; col++)
+                    {
+                        int itemIdx = row * cols + col;
+                        if (itemIdx >= presets.Count) break;
+
+                        int idx = itemIdx;
+                        var preset = presets[idx];
+
+                        // Build temporary curve for preview
+                        var tempCurve = new AnimationCurve();
+                        foreach (var kd in preset.Keys) tempCurve.Keys.Add(kd.ToKeyFrame());
+
+                        using (paper.Box($"{id}_p{idx}")
+                            .Size(presetW, presetH)
+                            .BackgroundColor(EditorTheme.InputBackground)
+                            .Rounded(3)
+                            .BorderColor(EditorTheme.Border).BorderWidth(1)
+                            .Hovered.BorderColor(EditorTheme.Accent).End()
+                            .Tooltip(preset.Name)
+                            .OnClick(idx, (ci, _) =>
+                            {
+                                var p = presets[ci];
+                                curve.Keys.Clear();
+                                foreach (var kd in p.Keys) curve.Keys.Add(kd.ToKeyFrame());
+                                onChange(curve);
+                                GetCurveBounds(curve, out float fMinT, out float fMaxT, out float fMinV, out float fMaxV);
+                                paper.SetElementStorage(editorEl, "vMinT", fMinT);
+                                paper.SetElementStorage(editorEl, "vMaxT", fMaxT);
+                                paper.SetElementStorage(editorEl, "vMinV", fMinV);
+                                paper.SetElementStorage(editorEl, "vMaxV", fMaxV);
+                                paper.SetElementStorage(editorEl, "sel", -1);
+                            })
+                            .OnRightClick(idx, (ci, _) =>
+                            {
+                                presets.RemoveAt(ci);
+                                ProjectSettingsRegistry.SaveAll();
+                            })
+                            .Enter())
+                        {
+                            // Draw preview inside the box using full size
+                            paper.Box($"{id}_pv{idx}")
+                                .Size(presetW, presetH)
+                                .IsNotInteractable()
+                                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                                    DrawCurvePreview(canvas, r, tempCurve)));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ================================================================

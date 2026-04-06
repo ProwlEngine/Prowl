@@ -132,15 +132,19 @@ public class EditorApplication : Game
             }
         }
 
-        // Process file changes each frame (after project is loaded)
-        EditorAssetDatabase.Instance?.ProcessFileChanges();
+        // Process file changes — optionally only when window is focused
+        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || Window.IsFocused;
+        if (canProcessAssets)
+        {
+            EditorAssetDatabase.Instance?.ProcessFileChanges();
 
-        // Lazy thumbnail generation — one per frame
-        ThumbnailGenerator.ProcessOne();
+            // Lazy thumbnail generation — one per frame
+            ThumbnailGenerator.ProcessOne();
 
-        // Periodically scan for missing thumbnails (every ~120 frames)
-        if (_time % 2.0 < Time.UnscaledDeltaTime) // roughly every 2 seconds
-            ThumbnailGenerator.EnqueueMissing();
+            // Periodically scan for missing thumbnails (every ~120 frames)
+            if (_time % 2.0 < Time.UnscaledDeltaTime)
+                ThumbnailGenerator.EnqueueMissing();
+        }
 
         // Auto-save layout periodically (every ~30s)
         if (Project.Current != null && _time % 30.0 < Time.UnscaledDeltaTime)

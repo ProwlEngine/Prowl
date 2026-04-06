@@ -33,8 +33,6 @@ public class DockSpace
     // --- Layout cache ---
     private readonly Dictionary<DockNode, Rect> _leafRects = new();
 
-    private const float IndicatorSize = 28f;
-    private const float IndicatorGap = 4f;
 
     public DockSpace(DockNode root) { Root = root; }
 
@@ -167,11 +165,6 @@ public class DockSpace
     //  LEAF
     // ================================================================
 
-    private const float TabPadding = 12f;
-    private const float TabCloseSize = 14f;
-    private const float TabRadius = 8f;
-    private const float TabInsetRadius = 10f;
-    private const float TabGap = 0f;
 
     private void DrawLeaf(Paper paper, DockNode node, float x, float y, float w, float h, FloatingWindow? fw)
     {
@@ -200,7 +193,7 @@ public class DockSpace
                     textW = (float)measured.X;
                 }
                 bool hasIcon = !string.IsNullOrEmpty(node.Tabs[i].Icon);
-                tabWidths[i] = (hasIcon ? iconW : 0) + textW + TabPadding * 3 + TabCloseSize + 3;
+                tabWidths[i] = (hasIcon ? iconW : 0) + textW + EditorTheme.TabPadding * 3 + EditorTheme.TabCloseSize + 3;
             }
 
             // Draw merged background via canvas (inactive tab bgs + active tab shape + panel body)
@@ -228,7 +221,7 @@ public class DockSpace
             for (int i = 0; i < node.Tabs.Count; i++)
             {
                 tabPositions[i] = tabX;
-                tabX += tabWidths[i] + TabGap;
+                tabX += tabWidths[i] + EditorTheme.TabGap;
             }
 
             // Draw inactive tabs FIRST (behind), then active tab ON TOP
@@ -251,7 +244,7 @@ public class DockSpace
                 var tabEl = paper.Box($"t_{node.GetHashCode()}_{i}")
                     .PositionType(PositionType.SelfDirected)
                     .Position(tx, inactiveOffset).Size(tw, inactiveH)
-                    .RoundedTop(TabRadius)
+                    .RoundedTop(EditorTheme.Roundness)
                     .StopEventPropagation()
                     .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
                     .OnDragStart((node, ci, fw), (cap, e) =>
@@ -287,7 +280,7 @@ public class DockSpace
                     });
 
                 bool hasIcon = !string.IsNullOrEmpty(tab.Icon);
-                float contentX = tx + TabPadding;
+                float contentX = tx + EditorTheme.TabPadding;
 
                 // Icon
                 if (hasIcon && font != null)
@@ -310,7 +303,7 @@ public class DockSpace
                         .PositionType(PositionType.SelfDirected)
                         .Position(contentX, inactiveOffset)
                         .Height(inactiveH)
-                        .Width(tw - TabPadding * 2 - TabCloseSize - (hasIcon ? iconW : 0) + 4)
+                        .Width(tw - EditorTheme.TabPadding * 2 - EditorTheme.TabCloseSize - (hasIcon ? iconW : 0) + 4)
                         .IsNotInteractable()
                         .Text(tab.Title, font)
                         .TextColor(isActive ? EditorTheme.Ink500 : EditorTheme.Ink300)
@@ -321,9 +314,9 @@ public class DockSpace
                 // Close button (X)
                 paper.Box($"t_close_{node.GetHashCode()}_{i}")
                     .PositionType(PositionType.SelfDirected)
-                    .Position(tx + tw - TabCloseSize - TabPadding + 2, inactiveOffset + (inactiveH - TabCloseSize) / 2)
-                    .Size(TabCloseSize, TabCloseSize)
-                    .Rounded(TabCloseSize / 2)
+                    .Position(tx + tw - EditorTheme.TabCloseSize - EditorTheme.TabPadding + 2, inactiveOffset + (inactiveH - EditorTheme.TabCloseSize) / 2)
+                    .Size(EditorTheme.TabCloseSize, EditorTheme.TabCloseSize)
+                    .Rounded(EditorTheme.TabCloseSize / 2)
                     .StopEventPropagation()
                     .OnClick((node, ci, fw), (cap, e) =>
                     {
@@ -355,8 +348,8 @@ public class DockSpace
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
         float w = (float)r.Size.X, h = (float)r.Size.Y;
-        float rad = TabRadius;
-        float ir = TabInsetRadius;
+        float rad = EditorTheme.Roundness;
+        float ir = EditorTheme.Roundness + 2;
 
         var panelColor = EditorTheme.Neutral400;
         float panelTop = y + tabH;
@@ -378,13 +371,13 @@ public class DockSpace
                 canvas.RoundedRectFilled(itx, y + inactiveOffset, tabWidths[i], tabH - inactiveOffset,
                     rad, rad, 0, 0, EditorTheme.Neutral300);
             }
-            itx += tabWidths[i] + TabGap;
+            itx += tabWidths[i] + EditorTheme.TabGap;
         }
 
         // Compute active tab X position
         float tabX = x;
         for (int i = 0; i < activeIdx; i++)
-            tabX += tabWidths[i] + TabGap;
+            tabX += tabWidths[i] + EditorTheme.TabGap;
         float tw = tabWidths[activeIdx];
 
         bool isFirst = activeIdx == 0;
@@ -476,15 +469,15 @@ public class DockSpace
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
         float w = (float)r.Size.X, h = (float)r.Size.Y;
-        float rad = TabRadius;
-        float ir = TabInsetRadius;
+        float rad = EditorTheme.Roundness;
+        float ir = EditorTheme.Roundness + 2;
         float panelTop = y + tabH;
 
         if (activeIdx < 0 || activeIdx >= tabWidths.Length) return;
 
         float tabX = x;
         for (int i = 0; i < activeIdx; i++)
-            tabX += tabWidths[i] + TabGap;
+            tabX += tabWidths[i] + EditorTheme.TabGap;
         float tw = tabWidths[activeIdx];
 
         bool isFirst = activeIdx == 0;
@@ -650,7 +643,7 @@ public class DockSpace
 
     private DockZone GetZoneFromIndicator(Float2 m, float cx, float cy)
     {
-        float s = IndicatorSize, g = IndicatorGap, hs = s / 2;
+        float s = EditorTheme.IndicatorSize, g = EditorTheme.IndicatorGap, hs = s / 2;
         if (Hit(m, cx - hs, cy - hs, s, s)) return DockZone.Center;
         if (Hit(m, cx - hs, cy - hs - g - s, s, s)) return DockZone.Top;
         if (Hit(m, cx - hs, cy + hs + g, s, s)) return DockZone.Bottom;
@@ -671,7 +664,7 @@ public class DockSpace
         if (_hoveredLeaf == null) return;
         var rect = _hoveredLeafRect;
         float cx = rect.Min.X + rect.Size.X / 2, cy = rect.Min.Y + rect.Size.Y / 2;
-        float s = IndicatorSize, g = IndicatorGap, hs = s / 2;
+        float s = EditorTheme.IndicatorSize, g = EditorTheme.IndicatorGap, hs = s / 2;
 
         var bg = Color.FromArgb(85, EditorTheme.Blue400);
         var hi = Color.FromArgb(85, EditorTheme.Blue500);
