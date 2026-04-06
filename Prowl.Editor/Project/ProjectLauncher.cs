@@ -92,14 +92,14 @@ public static class ProjectLauncher
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200)
             .BorderWidth(1)
-            .Rounded(12)
+            .Rounded(EditorTheme.Roundness)
             .Enter())
         {
             // Header
             using (paper.Row("pl_header")
                 .Height(60)
                 .BackgroundColor(EditorTheme.Neutral200)
-                .RoundedTop(12)
+                .RoundedTop(EditorTheme.Roundness)
                 .ChildLeft(24)
                 .ChildRight(24)
                 .RowBetween(12)
@@ -260,7 +260,9 @@ public static class ProjectLauncher
                     .BackgroundColor(exists ? EditorTheme.Neutral400 : EditorTheme.Red400)
                     .Hovered.BackgroundColor(exists ? EditorTheme.Neutral500 : EditorTheme.Red500).End()
                     .Rounded(6)
-                    .ChildLeft(12).ChildRight(12).RowBetween(12)
+                    .ChildLeft(12)
+                    .ChildRight(12)
+                    .RowBetween(12)
                     .OnClick(entry, (e, _) =>
                     {
                         if (Directory.Exists(e.Path))
