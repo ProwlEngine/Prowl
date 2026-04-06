@@ -28,6 +28,7 @@ public static class EditorSceneManager
         SceneViewPanel.CreateAndLoadDefaultScene();
         CurrentScenePath = null;
         IsDirty = false;
+        SaveLastScenePath(null);
     }
 
     /// <summary>
@@ -63,6 +64,7 @@ public static class EditorSceneManager
             CurrentScenePath = relativePath;
             IsDirty = false;
 
+            SaveLastScenePath(relativePath);
             Debug.Log($"Opened scene: {relativePath}");
             return true;
         }
@@ -90,14 +92,56 @@ public static class EditorSceneManager
         if (SaveTo(relativePath))
         {
             CurrentScenePath = relativePath;
+            SaveLastScenePath(relativePath);
             return true;
         }
         return false;
     }
 
     /// <summary>
-    /// Save the current scene to a path.
+    /// Ensure a scene is loaded. If Scene.Current is null, restore the last scene or create a default.
+    /// Called after project open.
     /// </summary>
+    public static void EnsureSceneLoaded()
+    {
+        if (Scene.Current != null) return;
+
+        // Try to restore last scene
+        if (ProjectSettingsRegistry.Entries.Count > 0)
+        {
+            var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+            if (!string.IsNullOrEmpty(general.LastScenePath))
+            {
+                if (OpenScene(general.LastScenePath))
+                    return;
+
+                // Path was invalid, clear it
+                general.LastScenePath = null;
+                ProjectSettingsRegistry.SaveAll();
+            }
+        }
+
+        // No saved scene or failed to load — create default
+        NewScene();
+    }
+
+    /// <summary>
+    /// Handle double-clicking an asset in the project panel.
+    /// Returns true if the asset was handled.
+    /// </summary>
+    public static bool HandleAssetDoubleClick(string relativePath, Guid guid)
+    {
+        string ext = Path.GetExtension(relativePath).ToLowerInvariant();
+
+        switch (ext)
+        {
+            case ".scene":
+                return OpenScene(relativePath);
+            default:
+                return false;
+        }
+    }
+
     private static bool SaveTo(string relativePath)
     {
         if (Project.Current == null || Scene.Current == null) return false;
@@ -135,20 +179,15 @@ public static class EditorSceneManager
         }
     }
 
-    /// <summary>
-    /// Handle double-clicking an asset in the project panel.
-    /// Returns true if the asset was handled.
-    /// </summary>
-    public static bool HandleAssetDoubleClick(string relativePath, Guid guid)
+    private static void SaveLastScenePath(string? path)
     {
-        string ext = Path.GetExtension(relativePath).ToLowerInvariant();
-
-        switch (ext)
+        if (ProjectSettingsRegistry.Entries.Count == 0) return;
+        try
         {
-            case ".scene":
-                return OpenScene(relativePath);
-            default:
-                return false;
+            var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+            general.LastScenePath = path;
+            ProjectSettingsRegistry.SaveAll();
         }
+        catch { }
     }
 }

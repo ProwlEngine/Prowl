@@ -241,16 +241,26 @@ public class SceneViewPanel : DockPanel
                     .Alignment(TextAlignment.MiddleCenter);
             }
 
-            if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload sceneDrop)
+            if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
             {
-                // Raycast to find drop position
-                Float2 mouseLocal = paper.PointerPos - new Float2(
-                    paper.CurrentParent.Data.X,
-                    paper.CurrentParent.Data.Y);
-                Float2 panelSize = new Float2(width, height);
-                Float3 dropPos = GetDropPosition(scene, mouseLocal, panelSize);
+                if (assetDrop.AssetType == typeof(Scene))
+                {
+                    // Scene asset — load it instead of spawning
+                    var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
+                    if (entry != null)
+                        EditorSceneManager.OpenScene(entry.Path);
+                }
+                else
+                {
+                    // Regular asset — spawn in scene
+                    Float2 mouseLocal = paper.PointerPos - new Float2(
+                        paper.CurrentParent.Data.X,
+                        paper.CurrentParent.Data.Y);
+                    Float2 panelSize = new Float2(width, height);
+                    Float3 dropPos = GetDropPosition(scene, mouseLocal, panelSize);
 
-                HierarchyPanel.SpawnAssetInScene(sceneDrop, null, dropPos);
+                    HierarchyPanel.SpawnAssetInScene(assetDrop, null, dropPos);
+                }
                 DragDrop.EndDrag();
             }
 

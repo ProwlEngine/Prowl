@@ -59,6 +59,9 @@ public class EditorApplication : Game
         LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
         LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
 
+        // Load editor settings (global, persists across projects)
+        _ = EditorSettings.Instance; // triggers load + ApplyTheme
+
         _dockSpace = new DockSpace(CreateDefaultLayout());
 
         ScanAndRegisterPanels();
@@ -68,6 +71,7 @@ public class EditorApplication : Game
         Inspector.PropertyEditorRegistry.Initialize();
         Inspector.ComponentEditorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
+        ProjectSettingsRegistry.Initialize();
 
         // Start with the project launcher
         ProjectLauncher.Initialize();
@@ -112,6 +116,19 @@ public class EditorApplication : Game
                 // Initialize the asset database for the opened project
                 var db = new EditorAssetDatabase(Project.Current);
                 db.Initialize();
+
+                // Load project settings
+                ProjectSettingsRegistry.OnProjectOpened();
+
+                // Restore layout from project (or use default)
+                var savedLayout = Docking.LayoutSerializer.Load(_dockSpace);
+                if (savedLayout != null)
+                    _dockSpace.Root = savedLayout;
+                else
+                    _dockSpace.Root = CreateDefaultLayout();
+
+                // Ensure a scene is always loaded
+                EditorSceneManager.EnsureSceneLoaded();
             }
         }
 
@@ -124,6 +141,10 @@ public class EditorApplication : Game
         // Periodically scan for missing thumbnails (every ~120 frames)
         if (_time % 2.0 < Time.UnscaledDeltaTime) // roughly every 2 seconds
             ThumbnailGenerator.EnqueueMissing();
+
+        // Auto-save layout periodically (every ~30s)
+        if (Project.Current != null && _time % 30.0 < Time.UnscaledDeltaTime)
+            Docking.LayoutSerializer.Save(_dockSpace);
 
         // Show project launcher or intro close phase
         if (ProjectLauncher.IsOpen || _introClosing)
@@ -154,6 +175,10 @@ public class EditorApplication : Game
                 return; // launcher still active, don't draw editor
             }
         }
+
+        // Ensure a scene always exists
+        if (Project.Current != null && Runtime.Resources.Scene.Current == null)
+            EditorSceneManager.EnsureSceneLoaded();
 
         // Animated background gradients
         paper.Box("bg_gradients")
@@ -641,7 +666,10 @@ public class EditorApplication : Game
         MenuRegistry.Register("Edit/Undo", () => { /* TODO */ }, enabled: false);
         MenuRegistry.Register("Edit/Redo", () => { /* TODO */ }, enabled: false);
         MenuRegistry.RegisterSeparator("Edit");
-        MenuRegistry.Register("Edit/Preferences...", () => { /* TODO */ });
+        MenuRegistry.Register("Edit/Project Settings...", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
+        MenuRegistry.Register("Edit/Save Layout", () => SaveProjectState());
+        MenuRegistry.RegisterSeparator("Edit");
+        MenuRegistry.Register("Edit/Preferences...", () => OpenPanel(typeof(Panels.PreferencesPanel)));
 
         // Assets menu
         AssetCreateMenu.RegisterMenus();
@@ -659,10 +687,18 @@ public class EditorApplication : Game
     //  Project Switching
     // ================================================================
 
+    /// <summary>Save layout and settings for the current project.</summary>
+    public void SaveProjectState()
+    {
+        if (Project.Current == null) return;
+        Docking.LayoutSerializer.Save(_dockSpace);
+        ProjectSettingsRegistry.SaveAll();
+    }
+
     public void ReturnToLauncher()
     {
-        // TODO: Check for unsaved changes and show confirmation dialog
-        // For now, go straight back to launcher
+        // Save before closing
+        SaveProjectState();
 
         // Clean up current project
         EditorAssetDatabase.Instance?.Dispose();

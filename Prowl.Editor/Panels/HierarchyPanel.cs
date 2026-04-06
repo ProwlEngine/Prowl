@@ -46,8 +46,12 @@ public class HierarchyPanel : DockPanel
 
         var scene = Scene.Current;
 
-        // Reset drop target each frame
-        _dropTargetId = null;
+        // Reset drop target each frame — but only if still actively dragging GOs
+        // (on release frame, we need the last target to process the drop)
+        if (DragDrop.IsDraggingType<GameObjectDragPayload>())
+            _dropTargetId = null;
+        else if (!DragDrop.IsDragging && DragDrop.Payload is not GameObjectDragPayload)
+            _dropTargetId = null;
 
         using (paper.Column("hier_root").Size(width, height).Enter())
         {
@@ -177,7 +181,16 @@ public class HierarchyPanel : DockPanel
 
                 if (!DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop && paper.IsParentHovered)
                 {
-                    SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                    if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
+                    {
+                        var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
+                        if (entry != null)
+                            EditorSceneManager.OpenScene(entry.Path);
+                    }
+                    else
+                    {
+                        SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                    }
                     DragDrop.EndDrag();
                 }
 
