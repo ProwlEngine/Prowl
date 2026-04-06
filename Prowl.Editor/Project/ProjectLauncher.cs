@@ -91,25 +91,25 @@ public static class ProjectLauncher
 
         using (paper.Box("container").Size(w, h).Position(0, 0).PositionType(PositionType.SelfDirected).Enter())
         {
-        using (paper.Column("pl_window")
-            .Margin(UnitValue.StretchOne)
-            .Size(cardW, cardH)
-            .BorderColor(EditorTheme.Ink100)
-            .BorderWidth(1)
-            .Rounded(EditorTheme.Roundness)
-            .BackgroundColor(EditorTheme.Neutral300)
-            .Enter())
-        {
-            // Header
-            using (paper.Row("header")
-                .Height(60)
-                .RowBetween(0)
-                .RoundedTop(EditorTheme.Roundness)
-                .BackgroundColor(EditorTheme.Neutral300)
+            using (paper.Column("pl_window")
+                .Margin(UnitValue.StretchOne)
+                .Size(cardW, cardH)
                 .BorderColor(EditorTheme.Ink100)
                 .BorderWidth(1)
+                .Rounded(EditorTheme.Roundness)
+                .BackgroundColor(EditorTheme.Neutral300)
                 .Enter())
             {
+                // Header
+                using (paper.Row("header")
+                    .Height(60)
+                    .RowBetween(0)
+                    .RoundedTop(EditorTheme.Roundness)
+                    .BackgroundColor(EditorTheme.Neutral300)
+                    .BorderColor(EditorTheme.Ink100)
+                    .BorderWidth(1)
+                    .Enter())
+                {
                     paper.Box("pl_title")
                         .Height(60)
                         .Width(110)
@@ -158,64 +158,64 @@ public static class ProjectLauncher
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(12f)
                         .Alignment(TextAlignment.MiddleRight);
-            }
+                }
 
 
-            using (paper.Column("content")
-                .Size(cardW, cardH - 90)
-                .Enter())
-            {
-                // New / Open buttons
-                using (paper.Row("toolbar")
-                    .Height(30)
-                    .Margin(10, 10, 16, 0)
-                    .RowBetween(8)
+                using (paper.Column("content")
+                    .Size(cardW, cardH - 90)
                     .Enter())
                 {
-                    // Spacer
-                    EditorGUI.SearchBar(paper, "search", "", "Search Projects");
-
-                    EditorGUI.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", 130)
-                        .OnValueChanged(_ =>
-                        {
-                            FileDialog.Open(FileDialogMode.SelectFolder, path =>
-                            {
-                                if (path == null) return;
-                                TryOpenProject(path);
-                            });
-                        });
-
-                    using (paper.Box("tl_btn_new")
-                        .Height(EditorTheme.RowHeight)
-                        .Width(120)
-                        .BackgroundColor(EditorTheme.Blue300)
-                        .Hovered.BackgroundColor(EditorTheme.Blue400).End()
-                        .Rounded(3)
-                        .BorderColor(EditorTheme.Blue400)
-                        .BorderWidth(1)
-                        .OnClick((_) => _showNewProject = !_showNewProject)
+                    // New / Open buttons
+                    using (paper.Row("toolbar")
+                        .Height(30)
+                        .Margin(10, 10, 16, 0)
+                        .RowBetween(8)
                         .Enter())
                     {
-                        paper.Box($"label")
+                        // Spacer
+                        EditorGUI.SearchBar(paper, "search", "", "Search Projects");
+
+                        EditorGUI.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", 130)
+                            .OnValueChanged(_ =>
+                            {
+                                FileDialog.Open(FileDialogMode.SelectFolder, path =>
+                                {
+                                    if (path == null) return;
+                                    TryOpenProject(path);
+                                });
+                            });
+
+                        using (paper.Box("tl_btn_new")
                             .Height(EditorTheme.RowHeight)
-                            .Margin(EditorTheme.RowHeight / 4, 0)
-                            .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                            .Text($" {EditorIcons.Plus}  New Project", EditorTheme.DefaultFont)
-                            .TextColor(EditorTheme.Ink500)
-                            .FontSize(EditorTheme.FontSize);
+                            .Width(120)
+                            .BackgroundColor(EditorTheme.Blue300)
+                            .Hovered.BackgroundColor(EditorTheme.Blue400).End()
+                            .Rounded(3)
+                            .BorderColor(EditorTheme.Blue400)
+                            .BorderWidth(1)
+                            .OnClick((_) => _showNewProject = !_showNewProject)
+                            .Enter())
+                        {
+                            paper.Box($"label")
+                                .Height(EditorTheme.RowHeight)
+                                .Margin(EditorTheme.RowHeight / 4, 0)
+                                .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                                .Text($" {EditorIcons.Plus}  New Project", EditorTheme.DefaultFont)
+                                .TextColor(EditorTheme.Ink500)
+                                .FontSize(EditorTheme.FontSize);
+                        }
                     }
-                }
 
-                // New project panel (collapsible)
-                if (_showNewProject)
-                {
-                    DrawNewProjectPanel(paper, font);
-                }
+                    // New project panel (collapsible)
+                    if (_showNewProject)
+                    {
+                        DrawNewProjectPanel(paper, font);
+                    }
 
-                // Recent projects list
-                DrawRecentProjects(paper, font, cardW, cardH - 60 - 46 - (_showNewProject ? 80 : 0));
+                    // Recent projects list
+                    DrawRecentProjects(paper, font, cardW, cardH - 60 - 46 - (_showNewProject ? 80 : 0));
+                }
             }
-        }
         }
     }
 
