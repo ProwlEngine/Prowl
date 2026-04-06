@@ -150,7 +150,7 @@ public static class ProjectLauncher
                       WebService.OpenUrl("https://youtube.com/@prowlengine");
                     });
 
-                    EditorGUI.Button(paper, "gh_link", "Github").OnValueChanged((_) =>
+                    EditorGUI.Button(paper, "gh_link", "GitHub").OnValueChanged((_) =>
                     {
                       WebService.OpenUrl("https://github.com/ProwlEngine/Prowl");
                     });
