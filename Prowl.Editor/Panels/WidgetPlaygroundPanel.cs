@@ -340,7 +340,7 @@ public class WidgetPlaygroundPanel : DockPanel
                     paper.Box("ctx_hint")
                         .IsNotInteractable()
                         .Text("Right-click here for a context menu", EditorTheme.DefaultFont)
-                        .TextColor(EditorTheme.TextDim).FontSize(EditorTheme.FontSize);
+                        .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize);
 
                 ContextMenuHelper.RightClickMenu(paper, "ctx_test", menu =>
                 {

@@ -114,7 +114,7 @@ public class SceneViewPanel : DockPanel
             //    paper.Box("sv_cam_info")
             //        .Width(UnitValue.Auto).Height(24)
             //        .ChildLeft(4).ChildRight(4)
-            //        .Text(info, font).TextColor(EditorTheme.TextDim)
+            //        .Text(info, font).TextColor(EditorTheme.Ink400)
             //        .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
             //}
         }
@@ -144,7 +144,7 @@ public class SceneViewPanel : DockPanel
                 paper.Box("sv_no_scene_text")
                     .Height(30)
                     .Text("No Scene Loaded", font)
-                    .TextColor(EditorTheme.TextDisabled)
+                    .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 

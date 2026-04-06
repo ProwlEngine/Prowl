@@ -61,14 +61,14 @@ public static class GameObjectInspector
             .Enter())
         {
             paper.Box("gi_tag_lbl").Width(30).Height(22)
-                .Text("Tag", font).TextColor(EditorTheme.TextDim)
+                .Text("Tag", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
 
             EditorGUI.TextField(paper, "gi_tag", "", go.Tag)
                 .OnValueChanged(v => go.Tag = v);
 
             paper.Box("gi_layer_lbl").Width(36).Height(22)
-                .Text("Layer", font).TextColor(EditorTheme.TextDim)
+                .Text("Layer", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
 
             EditorGUI.TextField(paper, "gi_layer", "", go.Layer)
@@ -150,7 +150,7 @@ public static class GameObjectInspector
                 paper.Box($"{compId}_label")
                     .Height(24)
                     .Text($"{icon}  {compName}", font)
-                    .TextColor(comp.Enabled ? EditorTheme.Ink500 : EditorTheme.TextDisabled)
+                    .TextColor(comp.Enabled ? EditorTheme.Ink500 : EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 // Spacer
@@ -160,7 +160,7 @@ public static class GameObjectInspector
                 using (paper.Box($"{compId}_gear")
                     .Width(20).Height(24).Rounded(3)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                    .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.TextDim)
+                    .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.Ink400)
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                     .Enter())
                 {

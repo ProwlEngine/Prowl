@@ -69,7 +69,7 @@ public class PreferencesPanel : DockPanel
             .BackgroundColor(sel ? EditorTheme.Accent : Color.Transparent)
             .Hovered.BackgroundColor(sel ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
             .Text($"{icon}  {label}", font)
-            .TextColor(sel ? EditorTheme.Ink500 : EditorTheme.TextDim)
+            .TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize - 1)
             .Alignment(TextAlignment.MiddleLeft)
             .OnClick(tab, (t, _) => _tab = t);

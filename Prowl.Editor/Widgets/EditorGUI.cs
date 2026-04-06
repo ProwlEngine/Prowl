@@ -33,7 +33,7 @@ public static class EditorGUI
         if (Font != null) s.Font = Font;
         s.TextColor = EditorTheme.Ink500;
         s.Placeholder = "0";
-        s.PlaceholderColor = EditorTheme.TextDisabled;
+        s.PlaceholderColor = EditorTheme.Ink300;
         s.CharFilter = filter;
         return s;
     }
@@ -225,7 +225,7 @@ public static class EditorGUI
                         onChange: v => userCallback?.Invoke(v),
                         textColor: EditorTheme.Ink500,
                         placeholder: "",
-                        placeholderColor: EditorTheme.TextDisabled,
+                        placeholderColor: EditorTheme.Ink300,
                         intID: id.GetHashCode());
             }
         }
@@ -455,7 +455,7 @@ public static class EditorGUI
                         .MaxWidth(16)
                         // .Text("\u25BC", Font)
                         .Text(EditorIcons.ChevronDown, Font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink400)
                         .FontSize(FontSz * 0.7f);
                 }
                 else
@@ -465,7 +465,7 @@ public static class EditorGUI
                         .Width(16)
                         .MaxWidth(16)
                         .Text(EditorIcons.ChevronRight, Font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink400)
                         .FontSize(FontSz * 0.7f);
                 }
                 paper.Box($"{id}_header_lbl")
@@ -548,7 +548,7 @@ public static class EditorGUI
                                 .MaxWidth(16)
                                 // .Text("\u25BC", Font)
                                 .Text(EditorIcons.ChevronUp, Font)
-                                .TextColor(EditorTheme.TextDim)
+                                .TextColor(EditorTheme.Ink400)
                                 .FontSize(FontSz * 0.7f);
                         }
                         else
@@ -559,7 +559,7 @@ public static class EditorGUI
                                 .MaxWidth(16)
                                 // .Text("\u25B6", Font)
                                 .Text(EditorIcons.ChevronDown, Font)
-                                .TextColor(EditorTheme.TextDim)
+                                .TextColor(EditorTheme.Ink400)
                                 .FontSize(FontSz * 0.7f);
                         }
                     }
@@ -666,7 +666,7 @@ public static class EditorGUI
                 paper.Box($"{id}_icon")
                     .Width(16)
                     .Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 8, 0)
-                    .Text(EditorIcons.MagnifyingGlass, Font).TextColor(EditorTheme.TextDim).FontSize(FontSz * 0.7f);
+                    .Text(EditorIcons.MagnifyingGlass, Font).TextColor(EditorTheme.Ink400).FontSize(FontSz * 0.7f);
 
             paper.Box($"{id}_tf")
                 .Height(EditorTheme.RowHeight)
@@ -679,7 +679,7 @@ public static class EditorGUI
                     onChange: v => userCallback?.Invoke(v),
                     textColor: EditorTheme.Ink500,
                     placeholder: placeholder,
-                    placeholderColor: EditorTheme.TextDisabled,
+                    placeholderColor: EditorTheme.Ink300,
                     intID: id.GetHashCode());
 
             if (!string.IsNullOrEmpty(value))
@@ -688,7 +688,7 @@ public static class EditorGUI
                     .Rounded(8)
                     .Size(16).Margin(2, UnitValue.StretchOne)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                    .Text(EditorIcons.Xmark, Font).TextColor(EditorTheme.TextDim).FontSize(14).Alignment(PaperUI.TextAlignment.MiddleCenter)
+                    .Text(EditorIcons.Xmark, Font).TextColor(EditorTheme.Ink400).FontSize(14).Alignment(PaperUI.TextAlignment.MiddleCenter)
                     .OnClick(e => userCallback?.Invoke(""));
             }
         }

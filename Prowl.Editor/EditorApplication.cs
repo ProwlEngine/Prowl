@@ -248,7 +248,7 @@ public class EditorApplication : Game
             .Position(w - 130, 0).Size(120, EditorTheme.MenuBarHeight)
             .IsNotInteractable()
             .Text($"Prowl v{version}", font)
-            .TextColor(EditorTheme.TextDim)
+            .TextColor(EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize - 2)
             .Alignment(TextAlignment.MiddleRight);
 

@@ -276,7 +276,7 @@ public static class FileDialog
             float btnW = 28f;
 
             // Back
-            var backColor = _historyIndex > 0 ? EditorTheme.Ink500 : EditorTheme.TextDisabled;
+            var backColor = _historyIndex > 0 ? EditorTheme.Ink500 : EditorTheme.Ink300;
             paper.Box("fd_back").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.ArrowLeft, font).TextColor(backColor).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
@@ -285,7 +285,7 @@ public static class FileDialog
                 .OnClick(0, (_, _) => NavigateBack());
 
             // Forward
-            var fwdColor = _historyIndex < _pathHistory.Count - 1 ? EditorTheme.Ink500 : EditorTheme.TextDisabled;
+            var fwdColor = _historyIndex < _pathHistory.Count - 1 ? EditorTheme.Ink500 : EditorTheme.Ink300;
             paper.Box("fd_fwd").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.ArrowRight, font).TextColor(fwdColor).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
@@ -353,7 +353,7 @@ public static class FileDialog
         {
             // Quick access
             paper.Box("fd_qa_label").Height(20)
-                .Text("Quick Access", font).TextColor(EditorTheme.TextDim)
+                .Text("Quick Access", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleLeft)
                 .ChildLeft(8);
 
@@ -377,7 +377,7 @@ public static class FileDialog
 
             // Drives
             paper.Box("fd_drv_label").Height(20)
-                .Text("Drives", font).TextColor(EditorTheme.TextDim)
+                .Text("Drives", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleLeft)
                 .ChildLeft(8);
 
@@ -416,7 +416,7 @@ public static class FileDialog
                 if (width.HasValue) el.Width(width.Value);
                 el.ChildLeft(8)
                     .Text(label + (_sortColumn == col ? (_sortAscending ? " \u25B4" : " \u25BE") : ""), font)
-                    .TextColor(EditorTheme.TextDim).FontSize(EditorTheme.FontSize - 3)
+                    .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 3)
                     .Alignment(TextAlignment.MiddleLeft)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                     .OnClick(col, (c, _) =>
@@ -508,7 +508,7 @@ public static class FileDialog
                 {
                     // Icon + Name
                     string icon = entry.IsDirectory ? EditorIcons.Folder : GetFileIcon(entry.Name);
-                    var iconColor = entry.IsDirectory ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.TextDim;
+                    var iconColor = entry.IsDirectory ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.Ink400;
 
                     paper.Box($"fd_ico_{i}").Width(20).Height(RowHeight)
                         .Text(icon, font).TextColor(iconColor)
@@ -522,14 +522,14 @@ public static class FileDialog
                     // Size
                     string sizeText = entry.IsDirectory ? "" : FormatSize(entry.Size);
                     paper.Box($"fd_size_{i}").Width(80).Height(RowHeight)
-                        .Text(sizeText, font).TextColor(EditorTheme.TextDim)
+                        .Text(sizeText, font).TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleRight)
                         .ChildRight(8);
 
                     // Date
                     paper.Box($"fd_date_{i}").Width(140).Height(RowHeight)
                         .Text(entry.LastModified.ToString("yyyy-MM-dd  HH:mm"), font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleRight)
                         .ChildRight(8);
                 }
@@ -538,7 +538,7 @@ public static class FileDialog
             if (displayEntries.Count == 0)
             {
                 paper.Box("fd_empty").Height(60)
-                    .Text("This folder is empty", font).TextColor(EditorTheme.TextDisabled)
+                    .Text("This folder is empty", font).TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
             }
         }
@@ -559,7 +559,7 @@ public static class FileDialog
             {
                 paper.Box("fd_name_lbl").Width(70).Height(24)
                     .Text(_mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font)
-                    .TextColor(EditorTheme.TextDim).FontSize(EditorTheme.FontSize - 2)
+                    .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
 
                 EditorGUI.TextField(paper, "fd_filename", "", _fileName)

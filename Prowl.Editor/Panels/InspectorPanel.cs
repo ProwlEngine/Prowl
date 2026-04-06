@@ -89,13 +89,13 @@ public class InspectorPanel : DockPanel
     {
         paper.Box("insp_empty").Height(80)
             .Text("Nothing Selected", font)
-            .TextColor(EditorTheme.TextDisabled)
+            .TextColor(EditorTheme.Ink300)
             .FontSize(EditorTheme.FontSize)
             .Alignment(TextAlignment.MiddleCenter);
 
         paper.Box("insp_hint").Height(30)
             .Text("Select an asset or object to inspect it.", font)
-            .TextColor(EditorTheme.TextDisabled)
+            .TextColor(EditorTheme.Ink300)
             .FontSize(EditorTheme.FontSize - 4)
             .Alignment(TextAlignment.MiddleCenter);
     }
@@ -151,7 +151,7 @@ public class InspectorPanel : DockPanel
                 paper.Box("insp_h_type")
                     .Height(14)
                     .Text(typeName, font)
-                    .TextColor(EditorTheme.TextDim)
+                    .TextColor(EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSize - 4)
                     .Alignment(TextAlignment.MiddleLeft);
             }

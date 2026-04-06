@@ -85,7 +85,7 @@ public static class MainMenuBar
                     continue;
                 }
 
-                var textColor = item.IsEnabled ? EditorTheme.Ink500 : EditorTheme.TextDisabled;
+                var textColor = item.IsEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
                 // Menu item row — submenu is a child so IsParentHovered keeps it open
                 using (paper.Row($"{id}_i_{index}")
