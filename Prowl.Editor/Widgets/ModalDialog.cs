@@ -124,7 +124,7 @@ public static class ModalDialog
             {
                 paper.Box("modal_title")
                     .Height(32)
-                    .BackgroundColor(EditorTheme.HeaderBackground)
+                    .BackgroundColor(EditorTheme.Neutral300)
                     .Rounded(8)
                     .ChildLeft(12)
                     .Text(modal.Title, font)

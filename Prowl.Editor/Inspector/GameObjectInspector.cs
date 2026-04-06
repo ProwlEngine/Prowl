@@ -136,7 +136,7 @@ public static class GameObjectInspector
             // Component foldout header
             using (paper.Row($"{compId}_header")
                 .Height(24)
-                .BackgroundColor(EditorTheme.HeaderBackground)
+                .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(3)
                 .ChildLeft(4)
                 .RowBetween(4)

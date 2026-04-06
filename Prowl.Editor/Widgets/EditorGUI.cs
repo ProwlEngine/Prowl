@@ -435,7 +435,7 @@ public static class EditorGUI
             .Row($"{id}_header")
             .Height(EditorTheme.RowHeight)
             .ChildLeft(4)
-            .BackgroundColor(EditorTheme.HeaderBackground)
+            .BackgroundColor(EditorTheme.Neutral300)
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Rounded(2);
 
