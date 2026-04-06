@@ -364,7 +364,7 @@ public class SceneViewPanel : DockPanel
         cube2Renderer.Material = defaultMat;
         scene.Add(cube2);
 
-        Scene.Load(scene);
+        Scene.LoadWithoutEnable(scene); // Editor: no OnEnable/Start
         Runtime.Debug.Log("Created default scene.");
     }
 

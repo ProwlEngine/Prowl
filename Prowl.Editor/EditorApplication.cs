@@ -25,6 +25,11 @@ public class EditorApplication : Game
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
 
+    // Play mode state
+    private Echo.EchoObject? _savedEditorScene;
+    private int _savedActiveTabIndex = -1;
+    private DockNode? _savedActiveTabNode;
+
     // All registered panel types (from [EditorWindow] attribute scan)
     private readonly List<(Type type, string path)> _registeredPanels = new();
 
@@ -362,9 +367,10 @@ public class EditorApplication : Game
             .Rounded(4)
             .BackgroundColor(Application.IsPlaying ? System.Drawing.Color.FromArgb(255, 60, 160, 60) : System.Drawing.Color.Transparent)
             .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.Play, font).TextColor(EditorTheme.Ink500).FontSize(14f)
+            .Text(Application.IsPlaying ? EditorIcons.CircleStop : EditorIcons.Play, font)
+            .TextColor(EditorTheme.Ink500).FontSize(14f)
             .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, e) => Application.IsPlaying = !Application.IsPlaying);
+            .OnClick(0, (_, _) => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); });
 
         bx += btnSize + 4f;
 
@@ -373,10 +379,12 @@ public class EditorApplication : Game
             .PositionType(PositionType.SelfDirected)
             .Position(bx, btnY).Size(btnSize, btnSize)
             .Rounded(4)
-            .BackgroundColor(System.Drawing.Color.Transparent)
+            .BackgroundColor(Application.IsPaused ? System.Drawing.Color.FromArgb(255, 160, 160, 60) : System.Drawing.Color.Transparent)
             .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.Pause, font).TextColor(EditorTheme.Ink500).FontSize(14f)
-            .Alignment(TextAlignment.MiddleCenter);
+            .Text(EditorIcons.Pause, font)
+            .TextColor(Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300).FontSize(14f)
+            .Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => TogglePause());
 
         bx += btnSize + 4f;
 
@@ -387,8 +395,10 @@ public class EditorApplication : Game
             .Rounded(4)
             .BackgroundColor(System.Drawing.Color.Transparent)
             .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.ForwardStep, font).TextColor(EditorTheme.Ink500).FontSize(14f)
-            .Alignment(TextAlignment.MiddleCenter);
+            .Text(EditorIcons.ForwardStep, font)
+            .TextColor(Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300).FontSize(14f)
+            .Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => StepOneFrame());
 
         bx += btnSize + 8f;
 
@@ -720,6 +730,178 @@ public class EditorApplication : Game
     }
 
     // ================================================================
+    //  Play Mode
+    // ================================================================
+
+    private void EnterPlayMode()
+    {
+        if (Application.IsPlaying) return;
+
+        var scene = Runtime.Resources.Scene.Current;
+        if (scene == null) return;
+
+        // Save active tab (to restore on stop)
+        SaveActiveTab();
+
+        // Serialize the current editor scene
+        var ctx = new Echo.SerializationContext();
+        Runtime.AssetDatabase.ConfigureContext(ctx);
+        _savedEditorScene = Echo.Serializer.Serialize(scene, ctx);
+        if (_savedEditorScene == null)
+        {
+            Runtime.Debug.LogError("Failed to serialize scene for play mode.");
+            return;
+        }
+
+        // Clear selection (references will be invalid)
+        Selection.Clear();
+
+        // Unload the editor scene
+        Runtime.Resources.Scene.Unload();
+
+        // Deserialize a fresh play copy
+        var playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
+        var playScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, playCtx);
+        if (playScene == null)
+        {
+            Runtime.Debug.LogError("Failed to deserialize play scene.");
+            return;
+        }
+
+        // Load with full lifecycle (Enable → OnEnable/Start will fire)
+        Runtime.Resources.Scene.Load(playScene);
+
+        // Apply physics settings to the new scene
+        try { ProjectSettingsRegistry.Get<PhysicsSettings>().Apply(); } catch { }
+
+        // Set play mode flags
+        Application.IsPlaying = true;
+        Application.IsPaused = false;
+        Application.StepRequested = false;
+        ResetFixedTimeAccumulator();
+
+        // Focus the Game View tab
+        FocusPanel(typeof(Panels.GameViewPanel));
+
+        Runtime.Debug.Log("Entered play mode.");
+    }
+
+    private void ExitPlayMode()
+    {
+        if (!Application.IsPlaying) return;
+
+        // Clear flags first
+        Application.IsPlaying = false;
+        Application.IsPaused = false;
+        Application.StepRequested = false;
+
+        // Clear selection (play scene references)
+        Selection.Clear();
+
+        // Unload the play scene
+        Runtime.Resources.Scene.Unload();
+
+        // Restore the editor scene WITHOUT lifecycle callbacks
+        if (_savedEditorScene != null)
+        {
+            var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
+            var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
+            if (restoredScene != null)
+                Runtime.Resources.Scene.LoadWithoutEnable(restoredScene);
+            _savedEditorScene = null;
+        }
+
+        // Restore the previously active tab
+        RestoreActiveTab();
+
+        Runtime.Debug.Log("Exited play mode.");
+    }
+
+    private void TogglePause()
+    {
+        if (!Application.IsPlaying) return;
+        Application.IsPaused = !Application.IsPaused;
+        Runtime.Time.TimeScale = Application.IsPaused ? 0f : 1f;
+    }
+
+    private void StepOneFrame()
+    {
+        if (!Application.IsPlaying) return;
+        Application.IsPaused = true;
+        Application.StepRequested = true;
+        // Temporarily restore time scale for the step frame
+        Runtime.Time.TimeScale = 1f;
+    }
+
+    // ================================================================
+    //  Tab Focus Helpers
+    // ================================================================
+
+    private void SaveActiveTab()
+    {
+        _savedActiveTabNode = FindNodeContainingPanel(_dockSpace.Root, typeof(Panels.GameViewPanel));
+        if (_savedActiveTabNode == null)
+        {
+            foreach (var fw in _dockSpace.FloatingWindows)
+            {
+                _savedActiveTabNode = FindNodeContainingPanel(fw.Node, typeof(Panels.GameViewPanel));
+                if (_savedActiveTabNode != null) break;
+            }
+        }
+        _savedActiveTabIndex = _savedActiveTabNode?.ActiveTabIndex ?? -1;
+    }
+
+    private void RestoreActiveTab()
+    {
+        if (_savedActiveTabNode?.Tabs != null && _savedActiveTabIndex >= 0
+            && _savedActiveTabIndex < _savedActiveTabNode.Tabs.Count)
+        {
+            _savedActiveTabNode.ActiveTabIndex = _savedActiveTabIndex;
+        }
+        _savedActiveTabNode = null;
+        _savedActiveTabIndex = -1;
+    }
+
+    private void FocusPanel(Type panelType)
+    {
+        var node = FindNodeContainingPanel(_dockSpace.Root, panelType);
+        if (node == null)
+        {
+            foreach (var fw in _dockSpace.FloatingWindows)
+            {
+                node = FindNodeContainingPanel(fw.Node, panelType);
+                if (node != null) break;
+            }
+        }
+
+        if (node?.Tabs != null)
+        {
+            for (int i = 0; i < node.Tabs.Count; i++)
+            {
+                if (node.Tabs[i].GetType() == panelType)
+                {
+                    node.ActiveTabIndex = i;
+                    return;
+                }
+            }
+        }
+    }
+
+    private static DockNode? FindNodeContainingPanel(DockNode? node, Type panelType)
+    {
+        if (node == null) return null;
+        if (node.IsLeaf && node.Tabs != null)
+        {
+            foreach (var tab in node.Tabs)
+                if (tab.GetType() == panelType)
+                    return node;
+            return null;
+        }
+        return FindNodeContainingPanel(node.ChildA, panelType)
+            ?? FindNodeContainingPanel(node.ChildB, panelType);
+    }
+
+    // ================================================================
     //  Scene Control — Editor overrides Game's default scene lifecycle
     // ================================================================
 
@@ -728,15 +910,11 @@ public class EditorApplication : Game
     /// </summary>
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
-        // In editor mode, we don't run scene Update/FixedUpdate/DrawGizmos automatically.
-        // The SceneView panel drives scene rendering and gizmo drawing.
-        // When play mode is active, we'll call scene.Update() here.
-        if (Application.IsPlaying)
-        {
+        // Only run scene Update when gameplay should execute
+        if (Application.ShouldRunGameplay)
             scene?.Update();
-        }
 
-        // Always allow gizmos in editor
+        // Always allow gizmos in editor (even when not playing)
         if (scene != null)
             scene.DrawGizmos();
     }

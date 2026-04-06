@@ -25,6 +25,7 @@ public static class EditorSceneManager
     /// </summary>
     public static void NewScene()
     {
+        if (Application.IsPlaying) { Debug.LogWarning("Cannot create new scene during play mode."); return; }
         SceneViewPanel.CreateAndLoadDefaultScene();
         CurrentScenePath = null;
         IsDirty = false;
@@ -36,6 +37,7 @@ public static class EditorSceneManager
     /// </summary>
     public static bool OpenScene(string relativePath)
     {
+        if (Application.IsPlaying) { Debug.LogWarning("Cannot open scenes during play mode."); return false; }
         if (Project.Current == null) return false;
 
         string absolutePath = Path.Combine(Project.Current.AssetsPath, relativePath);
@@ -60,7 +62,7 @@ public static class EditorSceneManager
             }
 
             scene.Name = Path.GetFileNameWithoutExtension(relativePath);
-            Scene.Load(scene);
+            Scene.LoadWithoutEnable(scene); // Editor: no OnEnable/Start
             CurrentScenePath = relativePath;
             IsDirty = false;
 
@@ -80,6 +82,7 @@ public static class EditorSceneManager
     /// </summary>
     public static bool Save()
     {
+        if (Application.IsPlaying) { Debug.LogWarning("Cannot save scenes during play mode."); return false; }
         if (CurrentScenePath == null) return false;
         return SaveTo(CurrentScenePath);
     }

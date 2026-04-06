@@ -81,16 +81,31 @@ public abstract class Game
 
                 Scene? currentScene = Scene.Current;
 
-                // Fixed update loop
+                // Fixed update loop — only when gameplay should run
                 fixedTimeAccumulator += delta;
-                int count = 0;
-                while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < 10)
+                if (Application.ShouldRunGameplay)
                 {
-                    currentScene?.FixedUpdate();
-                    fixedTimeAccumulator -= Time.FixedDeltaTime;
+                    int count = 0;
+                    while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < 10)
+                    {
+                        currentScene?.FixedUpdate();
+                        fixedTimeAccumulator -= Time.FixedDeltaTime;
+                    }
+                }
+                else
+                {
+                    // Clamp accumulator to prevent burst when unpausing/starting play
+                    fixedTimeAccumulator = MathF.Min(fixedTimeAccumulator, Time.FixedDeltaTime);
                 }
 
                 OnUpdate(currentScene);
+
+                // Consume step request — re-pause after one frame
+                if (Application.StepRequested)
+                {
+                    Application.StepRequested = false;
+                    Application.IsPaused = true;
+                }
 
                 EndUpdate();
 
@@ -307,6 +322,9 @@ public abstract class Game
         else if (Input.GetKeyUp(silkKey))
             _paper.SetKeyState(paperKey, false);
     }
+
+    /// <summary>Reset the fixed-update accumulator. Call when entering play mode to prevent a burst.</summary>
+    protected void ResetFixedTimeAccumulator() => fixedTimeAccumulator = 0f;
 
     public static void Quit()
     {

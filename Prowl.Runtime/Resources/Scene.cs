@@ -50,6 +50,27 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// Unloads the current scene, disabling and disposing it.
     /// After calling this, Scene.Current will be null.
     /// </summary>
+    /// <summary>
+    /// Loads a scene as Current without calling Enable().
+    /// Used by the editor to restore scenes without triggering OnEnable/Start.
+    /// RenderCollect and DrawGizmos still work (they check EnabledInHierarchy, not IsActive).
+    /// </summary>
+    public static void LoadWithoutEnable(Scene scene)
+    {
+        if (scene == null)
+            throw new ArgumentNullException(nameof(scene));
+
+        if (Current != null)
+        {
+            if (Current.IsActive)
+                Current.Disable();
+            Current.Dispose();
+        }
+
+        Current = scene;
+        // Deliberately NOT calling Enable() — no OnEnable/Start callbacks.
+    }
+
     public static void Unload()
     {
         if (Current != null)

@@ -17,4 +17,18 @@ public static class Application
     /// True when running inside the editor (false in standalone builds).
     /// </summary>
     public static bool IsEditor { get; internal set; }
+
+    /// <summary>
+    /// True when play mode is paused. Update/FixedUpdate/LateUpdate stop, but rendering continues.
+    /// </summary>
+    public static bool IsPaused { get; set; }
+
+    /// <summary>
+    /// When true, one frame of gameplay executes then IsPaused reasserts.
+    /// Set by the editor Step button, consumed by the game loop.
+    /// </summary>
+    internal static bool StepRequested { get; set; }
+
+    /// <summary>Whether gameplay should execute this frame (playing and not paused, or stepping).</summary>
+    public static bool ShouldRunGameplay => IsPlaying && (!IsPaused || StepRequested);
 }

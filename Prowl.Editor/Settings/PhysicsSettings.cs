@@ -12,7 +12,14 @@ public class PhysicsSettings : ProjectSettingsBase
 
     public override void Apply()
     {
-        // TODO: Apply gravity to physics system
+        Runtime.Time.FixedDeltaTime = FixedTimestep;
+
+        var scene = Runtime.Resources.Scene.Current;
+        if (scene != null)
+        {
+            scene.Physics.Gravity = new Prowl.Vector.Float3(0, Gravity, 0);
+            scene.Physics.Substep = MaxSubSteps;
+        }
     }
 
     public override void ResetToDefaults()
