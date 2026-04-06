@@ -135,7 +135,7 @@ public class InspectorPanel : DockPanel
                 .BackgroundColor(Color.FromArgb(30, 255, 255, 255))
                 .Rounded(6)
                 .Text(icon, font)
-                .TextColor(EditorTheme.Accent)
+                .TextColor(EditorTheme.Purple400)
                 .FontSize(18f)
                 .Alignment(TextAlignment.MiddleCenter);
 

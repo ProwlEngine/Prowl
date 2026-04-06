@@ -125,7 +125,7 @@ public static class ColorPicker
                             .BackgroundColor(sc)
                             .Rounded(2)
                             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                            .Hovered.BorderColor(EditorTheme.Accent).End()
+                            .Hovered.BorderColor(EditorTheme.Purple400).End()
                             .OnClick(idx, (ci, _) =>
                             {
                                 var c = ColorRamp.ParseHex(palette[ci]);

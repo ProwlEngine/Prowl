@@ -362,8 +362,8 @@ public static class FileDialog
                 string qPath = pathFn();
                 bool isCurrent = _currentPath.Equals(qPath, StringComparison.OrdinalIgnoreCase);
                 paper.Box($"fd_qa_{label}").Height(24)
-                    .BackgroundColor(isCurrent ? EditorTheme.Accent : Color.Transparent)
-                    .Hovered.BackgroundColor(isCurrent ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+                    .BackgroundColor(isCurrent ? EditorTheme.Purple400 : Color.Transparent)
+                    .Hovered.BackgroundColor(isCurrent ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
                     .Rounded(4)
                     .ChildLeft(8)
                     .Text($"{icon}  {label}", font).TextColor(EditorTheme.Ink500)
@@ -389,8 +389,8 @@ public static class FileDialog
                     string dLabel = $"{EditorIcons.HardDrive}  {dName}";
                     bool isCurrent = _currentPath.StartsWith(dName, StringComparison.OrdinalIgnoreCase);
                     paper.Box($"fd_drv_{dName}").Height(24)
-                        .BackgroundColor(isCurrent ? EditorTheme.Accent : Color.Transparent)
-                        .Hovered.BackgroundColor(isCurrent ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+                        .BackgroundColor(isCurrent ? EditorTheme.Purple400 : Color.Transparent)
+                        .Hovered.BackgroundColor(isCurrent ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
                         .Rounded(4)
                         .ChildLeft(8)
                         .Text(dLabel, font).TextColor(EditorTheme.Ink500)
@@ -445,7 +445,7 @@ public static class FileDialog
             {
                 using (paper.Row("fd_newfolder_row")
                     .Height(RowHeight)
-                    .BackgroundColor(EditorTheme.Accent)
+                    .BackgroundColor(EditorTheme.Purple400)
                     .ChildLeft(8).RowBetween(8)
                     .Enter())
                 {
@@ -487,8 +487,8 @@ public static class FileDialog
 
                 using (paper.Row($"fd_row_{i}")
                     .Height(RowHeight)
-                    .BackgroundColor(isSelected ? EditorTheme.Accent : (i % 2 == 0 ? Color.Transparent : Color.FromArgb(15, 255, 255, 255)))
-                    .Hovered.BackgroundColor(isSelected ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+                    .BackgroundColor(isSelected ? EditorTheme.Purple400 : (i % 2 == 0 ? Color.Transparent : Color.FromArgb(15, 255, 255, 255)))
+                    .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
                     .ChildLeft(8).RowBetween(0)
                     .OnClick(entry, (e, ev) =>
                     {

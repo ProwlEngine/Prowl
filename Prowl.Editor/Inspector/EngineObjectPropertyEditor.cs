@@ -54,10 +54,10 @@ public class EngineObjectPropertyEditor : PropertyEditor
             // Object field row
             var fieldEl = paper.Row($"{id}_field")
                 .Height(EditorTheme.RowHeight)
-                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Accent) : EditorTheme.Neutral300)
+                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
-                .BorderColor(isDragTarget ? EditorTheme.Accent : EditorTheme.Ink200).BorderWidth(1)
+                .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
                 .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
 
             using (fieldEl.Enter())
@@ -86,7 +86,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Width(16).Height(EditorTheme.RowHeight)
                     .IsNotInteractable()
                     .Text(icon, font)
-                    .TextColor(eo != null ? EditorTheme.Accent : EditorTheme.Ink300)
+                    .TextColor(eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
                 // Name
@@ -102,7 +102,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Width(20).Height(EditorTheme.RowHeight)
                     .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.Ink400)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .Rounded(3)
                     .OnClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
             }
@@ -181,7 +181,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 // None option
                 paper.Box("eo_sel_none")
                     .Height(EditorTheme.RowHeight).ChildLeft(8)
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .Rounded(3)
                     .Text("None", font)
                     .TextColor(EditorTheme.Ink400)
@@ -245,7 +245,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
     {
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight).ChildLeft(12).RowBetween(4)
-            .Hovered.BackgroundColor(EditorTheme.Accent).End()
+            .Hovered.BackgroundColor(EditorTheme.Purple400).End()
             .Rounded(3)
             .OnClick(guid, (g, _) =>
             {

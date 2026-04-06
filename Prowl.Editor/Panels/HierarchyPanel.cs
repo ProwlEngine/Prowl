@@ -171,10 +171,10 @@ public class HierarchyPanel : DockPanel
                 if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
                 {
                     paper.Box("hier_drop_zone").Height(24)
-                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Accent))
+                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                         .Rounded(3)
                         .Text("Drop to spawn here", font)
-                        .TextColor(EditorTheme.Accent)
+                        .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSize - 2)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
@@ -260,15 +260,15 @@ public class HierarchyPanel : DockPanel
         {
             paper.Box($"hier_drop_above_{goId}")
                 .Height(2).ChildLeft(indent)
-                .BackgroundColor(EditorTheme.Accent);
+                .BackgroundColor(EditorTheme.Purple400);
         }
 
         using (paper.Row($"hier_go_{goId}")
             .Height(RowHeight)
-            .BackgroundColor(isSelected ? EditorTheme.Accent :
+            .BackgroundColor(isSelected ? EditorTheme.Purple400 :
                 (_dropTargetId == goId && _dropPos == DropPosition.Into)
-                    ? Color.FromArgb(60, EditorTheme.Accent) : Color.Transparent)
-            .Hovered.BackgroundColor(isSelected ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+                    ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
+            .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
             .Rounded(2)
             .ChildLeft(indent + 2)
             .OnClick((go, currentIndex, flatList), (cap, e) =>
@@ -368,7 +368,7 @@ public class HierarchyPanel : DockPanel
         {
             paper.Box($"hier_drop_below_{goId}")
                 .Height(2).ChildLeft(indent)
-                .BackgroundColor(EditorTheme.Accent);
+                .BackgroundColor(EditorTheme.Purple400);
         }
 
         // Draw children

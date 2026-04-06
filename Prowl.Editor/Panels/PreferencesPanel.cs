@@ -66,8 +66,8 @@ public class PreferencesPanel : DockPanel
         bool sel = _tab == tab;
         paper.Box($"pref_tab_{tab}")
             .Height(26).ChildLeft(8).Rounded(3)
-            .BackgroundColor(sel ? EditorTheme.Accent : Color.Transparent)
-            .Hovered.BackgroundColor(sel ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+            .BackgroundColor(sel ? EditorTheme.Purple400 : Color.Transparent)
+            .Hovered.BackgroundColor(sel ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
             .Text($"{icon}  {label}", font)
             .TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize - 1)

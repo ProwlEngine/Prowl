@@ -39,7 +39,7 @@ public static class CurveEditor
                 .Height(40).Width(UnitValue.Stretch())
                 .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                .Hovered.BorderColor(EditorTheme.Accent).End()
+                .Hovered.BorderColor(EditorTheme.Purple400).End()
                 .Enter())
             {
                 bool isOpen = paper.IsParentFocusWithin;
@@ -252,7 +252,7 @@ public static class CurveEditor
                     .PositionType(PositionType.SelfDirected)
                     .Position(kx - 5, ky - 5).Size(10, 10)
                     .BackgroundColor(isSelected ? Color.FromArgb(255, 255, 200, 50) : Color.FromArgb(255, 255, 255, 255))
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .Rounded(5)
                     .StopEventPropagation()
                     .Tooltip($"({key.Position:F2}, {key.Value:F2})")
@@ -385,7 +385,7 @@ public static class CurveEditor
                             .BackgroundColor(EditorTheme.Neutral300)
                             .Rounded(3)
                             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                            .Hovered.BorderColor(EditorTheme.Accent).End()
+                            .Hovered.BorderColor(EditorTheme.Purple400).End()
                             .Tooltip(preset.Name)
                             .OnClick(idx, (ci, _) =>
                             {

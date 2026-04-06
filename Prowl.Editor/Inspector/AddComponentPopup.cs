@@ -168,7 +168,7 @@ public static class AddComponentPopup
     {
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
-            .Hovered.BackgroundColor(EditorTheme.Accent).End()
+            .Hovered.BackgroundColor(EditorTheme.Purple400).End()
             .Rounded(3).ChildLeft(8).RowBetween(6)
             .OnClick(comp.Type, (type, _) =>
             {

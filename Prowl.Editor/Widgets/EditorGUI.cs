@@ -164,8 +164,8 @@ public static class EditorGUI
         {
             var box = paper.Box($"{id}_box")
                 .Size(16, 16)
-                .BackgroundColor(value ? EditorTheme.Accent : EditorTheme.Neutral300)
-                .Hovered.BackgroundColor(value ? EditorTheme.AccentDim : EditorTheme.ButtonHovered).End()
+                .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.Neutral300)
+                .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.ButtonHovered).End()
                 .Rounded(3)
                 .Alignment(PaperUI.TextAlignment.MiddleCenter)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1);
@@ -209,7 +209,7 @@ public static class EditorGUI
                 
                 .BackgroundColor(EditorTheme.Neutral200)
                 .BorderColor(EditorTheme.Neutral100)
-                .Focused.BorderColor(EditorTheme.Accent).End()
+                .Focused.BorderColor(EditorTheme.Purple400).End()
 
                 .TabIndex(0)
                 .Enter())
@@ -261,7 +261,7 @@ public static class EditorGUI
                 
                 .BackgroundColor(EditorTheme.Neutral200)
                 .BorderColor(EditorTheme.Neutral100)
-                .Focused.BorderColor(EditorTheme.Accent).End()
+                .Focused.BorderColor(EditorTheme.Purple400).End()
 
                 .TabIndex(0)
                 .Enter())
@@ -317,7 +317,7 @@ public static class EditorGUI
                 
                 .BackgroundColor(EditorTheme.Neutral200)
                 .BorderColor(EditorTheme.Neutral100)
-                .Focused.BorderColor(EditorTheme.Accent).End()
+                .Focused.BorderColor(EditorTheme.Purple400).End()
                 
                 .TabIndex(0)
                 .Enter())
@@ -404,7 +404,7 @@ public static class EditorGUI
                     if (t > 0f)
                     {
                         canvas.RoundedRectFilled(rx, trackY, rw * t, trackH, trackR, trackR, trackR, trackR,
-                            EditorTheme.Accent);
+                            EditorTheme.Purple400);
                     }
 
                     // ── Thumb body ────────────────────────────────────────
@@ -511,7 +511,7 @@ public static class EditorGUI
                 .BackgroundColor(EditorTheme.Neutral200)
                 .Rounded(3)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                .Hovered.BorderColor(EditorTheme.Accent).End()
+                .Hovered.BorderColor(EditorTheme.Purple400).End()
                 .ChildLeft(6).ChildRight(6)
                 .OnClick(e =>
                 {
@@ -589,8 +589,8 @@ public static class EditorGUI
                             var opt = paper.Box($"{id}_o_{i}")
                                 .Height(EditorTheme.RowHeight)
                                 .ChildLeft(6)
-                                .BackgroundColor(isSel ? EditorTheme.AccentDim : Color.Transparent)
-                                .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                                .BackgroundColor(isSel ? EditorTheme.Purple300 : Color.Transparent)
+                                .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                                 .Rounded(3)
                                 .HookToParent()
                                 .OnClick(e =>
@@ -621,8 +621,8 @@ public static class EditorGUI
         using (paper.Box(id)
             .Height(EditorTheme.RowHeight)
             .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
-            .BackgroundColor(value ? EditorTheme.Accent : EditorTheme.ButtonNormal)
-            .Hovered.BackgroundColor(value ? EditorTheme.AccentDim : EditorTheme.ButtonHovered).End()
+            .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.ButtonNormal)
+            .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
@@ -655,7 +655,7 @@ public static class EditorGUI
             
             .BackgroundColor(EditorTheme.Neutral200)
             .BorderColor(EditorTheme.Neutral100)
-            .Focused.BorderColor(EditorTheme.Accent).End()
+            .Focused.BorderColor(EditorTheme.Purple400).End()
             
             .ChildLeft(6).ChildRight(4)
             .RowBetween(4)
@@ -870,7 +870,7 @@ public static class EditorGUI
                     (int)(value.B * 255)))
                 .Rounded(3)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                .Hovered.BorderColor(EditorTheme.Accent).End()
+                .Hovered.BorderColor(EditorTheme.Purple400).End()
                 .Enter())
             {
                 bool isOpen = paper.IsParentFocusWithin;
@@ -949,7 +949,7 @@ public static class EditorGUI
                     // ── Track fill ────────────────────────────────────────
                     if (progress > 0f)
                         canvas.RoundedRectFilled(rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
-                            EditorTheme.Accent);
+                            EditorTheme.Purple400);
                 }));
 
             if (Font != null)

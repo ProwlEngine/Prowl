@@ -92,7 +92,7 @@ public static class MainMenuBar
                     .Height(ItemHeight)
                     .BackgroundColor(Color.Transparent)
                     .Rounded(3)
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .OnClick(item, (captured, e) =>
                     {
                         if (captured.IsEnabled && captured.OnClick != null)

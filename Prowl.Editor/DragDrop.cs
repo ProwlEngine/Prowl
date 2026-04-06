@@ -134,7 +134,7 @@ public static class DragDrop
             .Position((float)DragPosition.X + 12, (float)DragPosition.Y + 4)
             .Width(UnitValue.Auto).Height(22)
             .BackgroundColor(System.Drawing.Color.FromArgb(200, 40, 40, 45))
-            .BorderColor(EditorTheme.Accent).BorderWidth(1)
+            .BorderColor(EditorTheme.Purple400).BorderWidth(1)
             .Rounded(4).ChildLeft(6).ChildRight(6)
             .IsNotInteractable()
             .Layer(Layer.Topmost)
