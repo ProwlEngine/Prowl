@@ -31,6 +31,7 @@ public abstract class MonoBehaviour : EngineObject
     /// <summary>
     /// Gets or sets the hide flags for this MonoBehaviour.
     /// </summary>
+    [HideInInspector]
     public HideFlags HideFlags;
 
     [SerializeIgnore]
