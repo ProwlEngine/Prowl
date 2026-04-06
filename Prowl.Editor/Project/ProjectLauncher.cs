@@ -142,7 +142,7 @@ public static class ProjectLauncher
                 using (paper.Column("pl_header")
                     .Height(60)
                     .ColBetween(12)
-                    .Margin(12, 12)
+                    .Margin(16, 12)
                     .Enter())
                 {
                     EditorGUI.Button(paper, "yt_link", "YouTube").OnValueChanged((_) =>
