@@ -67,6 +67,13 @@ public static class DragDrop
 
     public static void UpdateDrag()
     {
+        // Clear stale payload — if drag ended last frame and nobody consumed it, clear now
+        if (!IsDragging && Payload != null)
+        {
+            Payload = null;
+            return;
+        }
+
         if (!IsDragging) return;
         DragPosition = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
 
