@@ -18,6 +18,17 @@ public static class ScrollView
     private const float MinThumbSize = 20f;
     private const float ScrollSpeed = 30f;
 
+    // Pending scroll-to request: id → target Y offset
+    private static string? _pendingScrollId;
+    private static float _pendingScrollY;
+
+    /// <summary>Request a scroll view to scroll to a specific Y offset next frame.</summary>
+    public static void ScrollTo(string scrollViewId, float targetY)
+    {
+        _pendingScrollId = scrollViewId;
+        _pendingScrollY = targetY;
+    }
+
     public static IDisposable Begin(Paper paper, string id, float width, float height,
         float paddingLeft = 0, float paddingRight = 0, float paddingTop = 0, float paddingBottom = 0,
         float colSpacing = 0)
@@ -42,9 +53,18 @@ public static class ScrollView
         var outerDisposable = outerBuilder.Enter();
         outerHandle = paper.CurrentParent;
 
+        // Apply pending scroll-to request
+        if (_pendingScrollId == id)
+        {
+            paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0, _pendingScrollY));
+            _pendingScrollId = null;
+        }
+
         // Read scroll position (persisted from last frame)
         float scrollY = paper.GetElementStorage(outerHandle, "scrollY", 0f);
-        float contentW = width - ScrollBarWidth;
+        float contentHeight = paper.GetElementStorage(outerHandle, "contentH", height);
+        bool needsScrollbar = contentHeight > height;
+        float contentW = needsScrollbar ? width - ScrollBarWidth : width;
 
         // Content column
         var contentBuilder = paper.Column($"{id}_content")
