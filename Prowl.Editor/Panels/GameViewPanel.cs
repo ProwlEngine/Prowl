@@ -190,6 +190,9 @@ public class GameViewPanel : DockPanel
                     canvas.RectFilled(rx, ry, rw, rh, new Prowl.Vector.Color32(255, 255, 255, 255));
                     canvas.ClearBrushTexture();
                 }));
+
+            // Game view is focused when hovered — play-mode input is routed here
+            GameViewInputHandler.IsGameViewFocused = paper.IsParentHovered;
         }
         else
         {

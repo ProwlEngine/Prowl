@@ -104,6 +104,9 @@ public class EditorApplication : Game
 
     public override void BeginGui(Paper paper)
     {
+        // Reset per-frame state
+        GameViewInputHandler.IsGameViewFocused = false;
+
         int w = Window.InternalWindow.Size.X;
         int h = Window.InternalWindow.Size.Y;
 
@@ -786,6 +789,9 @@ public class EditorApplication : Game
         Runtime.Time.TimeStack.Clear();
         Runtime.Time.TimeStack.Push(new TimeData());
 
+        // Push play-mode input handler (only forwards input when Game View focused)
+        Input.PushHandler(new GameViewInputHandler(Input.Current));
+
         // Focus the Game View tab
         FocusPanel(typeof(Panels.GameViewPanel));
 
@@ -816,6 +822,10 @@ public class EditorApplication : Game
                 Runtime.Resources.Scene.LoadWithoutEnable(restoredScene);
             _savedEditorScene = null;
         }
+
+        // Pop play-mode input handler
+        if (Input.Current is GameViewInputHandler)
+            Input.PopHandler();
 
         // Restore editor time
         if (_savedEditorTime != null)
