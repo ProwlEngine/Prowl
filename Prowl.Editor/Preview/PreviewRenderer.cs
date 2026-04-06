@@ -173,47 +173,33 @@ public class PreviewRenderer : IDisposable
     }
 
     /// <summary>
-    /// Process orbit input. Call each frame when the preview is hovered.
-    /// </summary>
-    public void ProcessOrbitInput(bool isHovered)
-    {
-        if (!isHovered) return;
-
-        // Left mouse drag = orbit
-        if (Input.GetMouseButton(0))
-        {
-            Float2 delta = Input.MouseDelta;
-            _orbitYaw += delta.X * 0.5f;
-            _orbitPitch -= delta.Y * 0.5f;
-            _orbitPitch = MathF.Max(-89f, MathF.Min(89f, _orbitPitch));
-            UpdateCameraPosition();
-        }
-
-        // Scroll = zoom
-        float scroll = Input.MouseWheelDelta;
-        if (scroll != 0)
-        {
-            _orbitDistance *= 1f - scroll * 0.1f;
-            _orbitDistance = MathF.Max(0.5f, MathF.Min(50f, _orbitDistance));
-            UpdateCameraPosition();
-        }
-    }
-
-    /// <summary>
     /// Draw the preview into a Paper element area. Returns true if hovered.
     /// </summary>
-    public bool DrawPreview(Paper paper, string id, float width, float height)
+    public void DrawPreview(Paper paper, string id, float width, float height)
     {
         Resize((int)width, (int)height);
         Render();
 
-        if (_rt == null || _rt.MainTexture == null) return false;
+        if (_rt == null || _rt.MainTexture == null) return;
 
-        bool hovered = false;
         paper.Box(id)
             .Size(width, height)
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 38, 42))
             .Rounded(4)
+            .StopEventPropagation()
+            .OnDragging((e) => {
+                Float2 delta = e.Delta;
+                _orbitYaw += delta.X * 0.5f;
+                _orbitPitch += delta.Y * 0.5f;
+                _orbitPitch = MathF.Max(-89f, MathF.Min(89f, _orbitPitch));
+                UpdateCameraPosition();
+            })
+            .OnScroll((e) =>
+            {
+                _orbitDistance *= 1f - e.Delta * 0.1f;
+                _orbitDistance = MathF.Max(0.5f, MathF.Min(50f, _orbitDistance));
+                UpdateCameraPosition();
+            })
             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float rx = (float)r.Min.X;
@@ -229,9 +215,6 @@ public class PreviewRenderer : IDisposable
                 canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4, new Prowl.Vector.Color32(255, 255, 255, 255));
                 canvas.ClearBrushTexture();
             }));
-
-        hovered = paper.IsParentHovered;
-        return hovered;
     }
 
     private void ClearSubject()

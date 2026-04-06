@@ -147,8 +147,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 _preview.SetupForModel(model);
             }
 
-            bool hovered = _preview.DrawPreview(paper, $"{id}_preview", 256, 256);
-            _preview.ProcessOrbitInput(hovered);
+            _preview.DrawPreview(paper, $"{id}_preview", 256, 256);
         }
     }
 

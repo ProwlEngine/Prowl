@@ -80,8 +80,7 @@ public class MaterialAssetEditor : AssetImporterEditor
             _preview.SetupForMaterial(material);
         }
 
-        bool hovered = _preview.DrawPreview(paper, $"{id}_preview", 256, 256);
-        _preview.ProcessOrbitInput(hovered);
+        _preview.DrawPreview(paper, $"{id}_preview", 256, 256);
     }
 
     private void DrawShaderProperty(Paper paper, string id, Material material, ShaderProperty prop)
