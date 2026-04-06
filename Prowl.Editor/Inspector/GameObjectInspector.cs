@@ -26,7 +26,6 @@ public static class GameObjectInspector
         EditorGUI.Separator(paper, "gi_sep_transform");
         DrawComponents(paper, font, go);
         DrawAddComponentButton(paper, font, go);
-
         paper.Box("gi_bottom_pad").Height(20);
     }
 
@@ -37,8 +36,14 @@ public static class GameObjectInspector
     private static void DrawHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
         // Enabled toggle + Name
-        using (paper.Row("gi_header").Height(28).ChildLeft(4).RowBetween(6).Enter())
+        using (paper.Row("gi_header")
+            .Height(EditorTheme.RowHeight)
+            .Margin(0, 6)
+            .RowBetween(6)
+            .Enter())
         {
+            paper.Box("gi_icon").Margin(6, 6, 0, 6).FontSize(EditorTheme.FontSize * 1.5f).Width(UnitValue.Auto).Text(EditorIcons.Cube, font);
+
             // Enabled checkbox
             EditorGUI.Toggle(paper, "gi_enabled", "", go.Enabled)
                 .OnValueChanged(v => go.Enabled = v);
@@ -49,7 +54,11 @@ public static class GameObjectInspector
         }
 
         // Tag + Layer row
-        using (paper.Row("gi_tag_layer").Height(22).ChildLeft(4).RowBetween(6).Enter())
+        using (paper.Row("gi_tag_layer")
+            .Height(22)
+            .RowBetween(6)
+            .RowBetween(6)
+            .Enter())
         {
             paper.Box("gi_tag_lbl").Width(30).Height(22)
                 .Text("Tag", font).TextColor(EditorTheme.TextDim)
@@ -67,7 +76,11 @@ public static class GameObjectInspector
         }
 
         // Static toggle
-        using (paper.Row("gi_static_row").Height(20).ChildLeft(4).RowBetween(4).Enter())
+        using (paper.Row("gi_static_row")
+            .Height(20)
+            .RowBetween(6)
+            .RowBetween(4)
+            .Enter())
         {
             EditorGUI.Toggle(paper, "gi_static", "Static", go.IsStatic)
                 .OnValueChanged(v => go.IsStatic = v);
@@ -81,11 +94,10 @@ public static class GameObjectInspector
     private static void DrawTransform(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
         var t = go.Transform;
-
+        
         paper.Box("gi_transform_header").Height(22).ChildLeft(8)
-            .BackgroundColor(EditorTheme.HeaderBackground)
             .Text($"{EditorIcons.ArrowsUpDownLeftRight}  Transform", font)
-            .TextColor(EditorTheme.Text)
+            .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
         // Position
@@ -126,7 +138,8 @@ public static class GameObjectInspector
                 .Height(24)
                 .BackgroundColor(EditorTheme.HeaderBackground)
                 .Rounded(3)
-                .ChildLeft(4).RowBetween(4)
+                .ChildLeft(4)
+                .RowBetween(4)
                 .Enter())
             {
                 // Enabled toggle
