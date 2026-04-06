@@ -59,12 +59,22 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
         Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
         Float3 localOrigin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);
-        Float3 localDir = Float3.Normalize(Float4x4.TransformNormal(worldRay.Direction, worldToLocal));
+        // Transform direction through the full matrix (handles scale)
+        Float3 localDirRaw = Float4x4.TransformPoint(worldRay.Origin + worldRay.Direction, worldToLocal) - localOrigin;
+        Float3 localDir = Float3.Normalize(localDirRaw);
         var localRay = new Ray(localOrigin, localDir);
 
         if (!localRay.Intersects(mesh.bounds, out _, out _))
             return false;
 
-        return mesh.Raycast(localRay, out distance);
+        if (mesh.Raycast(localRay, out float localDist))
+        {
+            // Convert local hit point back to world space for accurate distance
+            Float3 localHit = localOrigin + localDir * localDist;
+            Float3 worldHit = Float4x4.TransformPoint(localHit, Transform.LocalToWorldMatrix);
+            distance = Float3.Distance(worldRay.Origin, worldHit);
+            return true;
+        }
+        return false;
     }
 }

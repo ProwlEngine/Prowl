@@ -300,11 +300,12 @@ public class ModelRenderer : MonoBehaviour
                 var mesh = modelMesh.Mesh.Res;
                 if (mesh == null) continue;
 
-                // Transform ray to this mesh's local space
+                // Transform ray to this mesh's local space (handles scale correctly)
                 Float4x4 worldToLocalMatrix = boneWorldMatrix.Invert();
 
                 Float3 localOrigin = Float4x4.TransformPoint(ray.Origin, worldToLocalMatrix);
-                Float3 localDirection = Float4x4.TransformNormal(ray.Direction, worldToLocalMatrix);
+                Float3 localDirRaw = Float4x4.TransformPoint(ray.Origin + ray.Direction, worldToLocalMatrix) - localOrigin;
+                Float3 localDirection = Float3.Normalize(localDirRaw);
                 Ray localRay = new(localOrigin, localDirection);
 
                 if (mesh.Raycast(localRay, out float localDistance))
