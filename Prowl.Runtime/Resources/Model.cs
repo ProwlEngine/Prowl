@@ -70,6 +70,8 @@ public class Model : EngineObject
             var importer = new AssetImporting.ModelImporter();
             Model result = importer.Import(stream, resourcePath);
             result.AssetPath = $"$Default:{model}";
+            result.AssetID = BuiltInAssets.GuidFor(model);
+            result.Name = model.ToString();
             return result;
         }
     }

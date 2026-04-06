@@ -359,6 +359,8 @@ public sealed class Texture2D : Texture, ISerializable
         {
             Texture2D result = FromStream(stream, true);
             result.AssetPath = $"$Default:{texture}";
+            result.AssetID = BuiltInAssets.GuidFor(texture);
+            result.Name = texture.ToString();
             return result;
         }
     }

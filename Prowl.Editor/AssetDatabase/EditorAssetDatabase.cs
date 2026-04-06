@@ -525,10 +525,15 @@ public class EditorAssetDatabase : IAssetDatabase
 
     /// <summary>
     /// Find all assets AND sub-assets matching the given type.
+    /// Includes built-in assets (embedded in runtime).
     /// Returns tuples of (guid, displayName, parentPath, type).
     /// </summary>
     public IEnumerable<(Guid guid, string name, string parentPath, Type assetType)> FindAllOfType(Type type)
     {
+        // Built-in assets first
+        foreach (var item in Runtime.BuiltInAssets.FindAllOfType(type))
+            yield return item;
+
         // Main assets
         foreach (var entry in _guidToEntry.Values)
         {

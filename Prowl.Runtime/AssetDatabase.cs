@@ -34,10 +34,15 @@ public static class AssetDatabase
 
     /// <summary>
     /// Resolves an <see cref="EngineObject"/> by asset ID from the current database.
-    /// Returns null if no database is set or the asset is not found.
+    /// Checks built-in assets first, then falls back to the current database.
+    /// Returns null if the asset is not found.
     /// </summary>
     public static EngineObject? Get(Guid assetId)
     {
+        // Try built-in assets first (deterministic GUIDs for embedded resources)
+        var builtIn = BuiltInAssets.Get(assetId);
+        if (builtIn != null) return builtIn;
+
         return Current?.Get(assetId);
     }
 

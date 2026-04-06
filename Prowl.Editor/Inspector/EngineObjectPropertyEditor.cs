@@ -192,40 +192,41 @@ public class EngineObjectPropertyEditor : PropertyEditor
                         _selectorOpen = false;
                     });
 
-                if (matchingItems.Count > 0)
-                    paper.Box("eo_sel_sep").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Border);
+                // Split into built-in and project assets
+                var builtInItems = matchingItems.Where(m => Runtime.BuiltInAssets.IsBuiltIn(m.guid)).ToList();
+                var projectItems = matchingItems.Where(m => !Runtime.BuiltInAssets.IsBuiltIn(m.guid)).ToList();
 
-                for (int i = 0; i < matchingItems.Count; i++)
+                // Built-in assets section
+                if (builtInItems.Count > 0)
                 {
-                    var (guid, name, parentPath, assetType) = matchingItems[i];
-                    string displayPath = Path.GetFileName(parentPath);
+                    paper.Box("eo_sel_bi_hdr").Height(EditorTheme.RowHeight).ChildLeft(6)
+                        .Text($"{EditorIcons.Cube}  Built-In", font)
+                        .TextColor(EditorTheme.TextDim)
+                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
 
-                    using (paper.Row($"eo_sel_item_{i}")
-                        .Height(EditorTheme.RowHeight).ChildLeft(6).RowBetween(4)
-                        .Hovered.BackgroundColor(EditorTheme.Accent).End()
-                        .Rounded(3)
-                        .OnClick(guid, (g, _) =>
-                        {
-                            var asset = Runtime.AssetDatabase.Get(g);
-                            if (asset != null) _selectorCallback?.Invoke(asset);
-                            _selectorOpen = false;
-                        })
-                        .Enter())
+                    for (int i = 0; i < builtInItems.Count; i++)
                     {
-                        paper.Box($"eo_sel_ico_{i}")
-                            .Width(14).Height(EditorTheme.RowHeight)
-                            .Text(EditorIcons.Cube, font).TextColor(EditorTheme.TextDim)
-                            .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
+                        var (guid, name, parentPath, assetType) = builtInItems[i];
+                        DrawSelectorItem(paper, font, $"eo_sel_bi_{i}", guid, name, "Built-In", EditorIcons.Star);
+                    }
+                }
 
-                        paper.Box($"eo_sel_name_{i}")
-                            .Height(EditorTheme.RowHeight).Clip()
-                            .Text(name, font).TextColor(EditorTheme.Text)
-                            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+                // Project assets section
+                if (projectItems.Count > 0)
+                {
+                    if (builtInItems.Count > 0)
+                        paper.Box("eo_sel_sep2").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Border);
 
-                        paper.Box($"eo_sel_path_{i}")
-                            .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
-                            .Text($"({displayPath})", font).TextColor(EditorTheme.TextDisabled)
-                            .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
+                    paper.Box("eo_sel_proj_hdr").Height(EditorTheme.RowHeight).ChildLeft(6)
+                        .Text($"{EditorIcons.FolderOpen}  Project", font)
+                        .TextColor(EditorTheme.TextDim)
+                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+
+                    for (int i = 0; i < projectItems.Count; i++)
+                    {
+                        var (guid, name, parentPath, assetType) = projectItems[i];
+                        string displayPath = Path.GetFileName(parentPath);
+                        DrawSelectorItem(paper, font, $"eo_sel_proj_{i}", guid, name, displayPath, EditorIcons.Cube);
                     }
                 }
 
@@ -237,6 +238,37 @@ public class EngineObjectPropertyEditor : PropertyEditor
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
                 }
             }
+        }
+    }
+
+    private static void DrawSelectorItem(Paper paper, Prowl.Scribe.FontFile font, string id, Guid guid, string name, string pathLabel, string icon)
+    {
+        using (paper.Row(id)
+            .Height(EditorTheme.RowHeight).ChildLeft(12).RowBetween(4)
+            .Hovered.BackgroundColor(EditorTheme.Accent).End()
+            .Rounded(3)
+            .OnClick(guid, (g, _) =>
+            {
+                var asset = Runtime.AssetDatabase.Get(g);
+                if (asset != null) _selectorCallback?.Invoke(asset);
+                _selectorOpen = false;
+            })
+            .Enter())
+        {
+            paper.Box($"{id}_ico")
+                .Width(14).Height(EditorTheme.RowHeight)
+                .Text(icon, font).TextColor(EditorTheme.TextDim)
+                .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
+
+            paper.Box($"{id}_name")
+                .Height(EditorTheme.RowHeight).Clip()
+                .Text(name, font).TextColor(EditorTheme.Text)
+                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+            paper.Box($"{id}_path")
+                .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
+                .Text($"({pathLabel})", font).TextColor(EditorTheme.TextDisabled)
+                .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
         }
     }
 }

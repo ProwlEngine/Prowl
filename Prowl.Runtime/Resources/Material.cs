@@ -55,10 +55,14 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     private bool _isDirty = true;
 
 
-    internal Material() : base("New Material")
+    public Material() : base("New Material")
     {
         _properties = new();
         _localKeywords = [];
+        // Default to Standard shader so new materials are immediately usable
+        var standard = Shader.LoadDefault(DefaultShader.Standard);
+        if (standard != null)
+            SetShader(standard);
     }
 
     public Material(Shader shader, PropertyState? properties = null, Dictionary<string, bool>? keywords = null) : base("New Material")

@@ -58,6 +58,8 @@ public abstract class Game
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
 
+            BuiltInAssets.Initialize();
+
             Initialize();
         };
 

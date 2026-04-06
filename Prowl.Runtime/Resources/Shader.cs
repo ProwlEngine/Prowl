@@ -176,6 +176,8 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
             throw new System.Exception($"Default shader parsing returned null: {shader}");
 
         result.AssetPath = $"$Default:{shader}";
+        result.AssetID = BuiltInAssets.GuidFor(shader);
+        result.Name = shader.ToString();
         return result;
     }
 
