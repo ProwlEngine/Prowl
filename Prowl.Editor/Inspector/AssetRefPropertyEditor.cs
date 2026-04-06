@@ -86,13 +86,17 @@ public class AssetRefPropertyEditor : PropertyEditor
                     .TextColor(instance != null ? EditorTheme.Purple400 : EditorTheme.Ink300)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-                // Name
+                // Name — click to focus/reveal the asset in the Project panel
                 paper.Box($"{id}_name")
                     .Height(EditorTheme.RowHeight).Clip()
-                    .IsNotInteractable()
                     .Text(displayName, font)
                     .TextColor(instance != null ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft)
+                    .OnClick(assetRef.AssetID, (g, _) =>
+                    {
+                        if (g != Guid.Empty)
+                            Selection.FocusAsset(g);
+                    });
 
                 // Picker button
                 paper.Box($"{id}_pick")
