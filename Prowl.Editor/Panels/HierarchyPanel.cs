@@ -24,7 +24,9 @@ public class HierarchyPanel : DockPanel
     private Paper? _paper;
     private HashSet<string> _renamingIds = new(); // GOs currently being renamed
     private string _renameText = "";
-    private const float RowHeight = 22f;
+
+    private const float ToolbarHeight = 30f;
+    // private const float RowHeight = 30f;
     private const float IndentSize = 16f;
 
     // Drag state
@@ -60,7 +62,8 @@ public class HierarchyPanel : DockPanel
 
             if (scene == null)
             {
-                paper.Box("hier_empty").Height(60)
+                paper.Box("hier_empty")
+                    .Height(60)
                     .Text("No Scene Loaded", font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
@@ -72,16 +75,23 @@ public class HierarchyPanel : DockPanel
             }
 
             // Scene name header
-            paper.Box("hier_scene_name")
-                .Height(22).ChildLeft(8)
-                .BackgroundColor(EditorTheme.Neutral200)
-                .Text($"{EditorIcons.Film}  {scene.Name}", font)
-                .TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 1)
-                .Alignment(TextAlignment.MiddleLeft);
+            using (paper.Box("hier_scene_name")
+                .Height(EditorTheme.RowHeight)
+                .Margin(6, 6, 0, 6)
+                .Rounded(4)
+                .BackgroundColor(EditorTheme.Neutral200).Enter())
+            {
+                paper.Box("hier_scene_name_text")
+                    .Margin(8, 0)
+                    .Height(EditorTheme.RowHeight)
+                    .Text($"{EditorIcons.Film}  {scene.Name}", font)
+                    .TextColor(EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSize - 1)
+                    .Alignment(TextAlignment.MiddleLeft);
+            }
 
             // Tree view
-            using (ScrollView.Begin(paper, "hier_scroll", width, height - RowHeight - 22))
+            using (ScrollView.Begin(paper, "hier_scroll", width, height - EditorTheme.RowHeight - 22))
             {
                 var roots = GetDisplayRoots(scene);
 
@@ -203,24 +213,28 @@ public class HierarchyPanel : DockPanel
     private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
     {
         using (paper.Row("hier_toolbar")
-            .Height(RowHeight)
-            .ChildLeft(4).ChildRight(4).RowBetween(4)
-            .ChildTop(2).ChildBottom(2)
+            .Height(ToolbarHeight)
+            .Margin(4, 4, 4, 0)
+            .RowBetween(4)
             .Enter())
         {
             // Create button
             using (paper.Box("hier_add")
-                .Width(RowHeight - 4).Height(RowHeight - 4).Rounded(4)
+                .Width(EditorTheme.RowHeight)
+                .Height(EditorTheme.RowHeight)
+                .Rounded(4)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Ink500)
-                .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
+                .Text(EditorIcons.Plus, font)
+                .TextColor(EditorTheme.Ink500)
+                .FontSize(16f)
+                .Alignment(TextAlignment.MiddleCenter)
                 .Enter())
             {
                 if (paper.IsParentHovered)
                 {
                     var builder = new ContextMenuBuilder();
                     BuildCreateMenu(builder, null);
-                    builder.Render(paper, "hier_add_menu", 0, RowHeight - 4);
+                    builder.Render(paper, "hier_add_menu", 0, EditorTheme.RowHeight - 4);
                 }
             }
 
@@ -263,14 +277,15 @@ public class HierarchyPanel : DockPanel
                 .BackgroundColor(EditorTheme.Purple400);
         }
 
-        using (paper.Row($"hier_go_{goId}")
-            .Height(RowHeight)
+        using (paper
+            .Row($"hier_go_{goId}")
+            .Height(EditorTheme.RowHeight)
             .BackgroundColor(isSelected ? EditorTheme.Purple400 :
                 (_dropTargetId == goId && _dropPos == DropPosition.Into)
                     ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-            .Rounded(2)
-            .ChildLeft(indent + 2)
+            .Rounded(4)
+            .Margin(indent + 8, 0, 0, 0)
             .OnClick((go, currentIndex, flatList), (cap, e) =>
             {
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
@@ -291,7 +306,8 @@ public class HierarchyPanel : DockPanel
             if (hasChildren)
             {
                 paper.Box($"hier_arr_{goId}")
-                    .Width(14).Height(RowHeight)
+                    .Width(14)
+                    .Height(EditorTheme.RowHeight)
                     .Text(isExpanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
@@ -303,12 +319,12 @@ public class HierarchyPanel : DockPanel
             }
             else
             {
-                paper.Box($"hier_arr_{goId}").Width(14).Height(RowHeight);
+                paper.Box($"hier_arr_{goId}").Width(14).Height(EditorTheme.RowHeight);
             }
 
             // Icon
             paper.Box($"hier_ico_{goId}")
-                .Width(16).Height(RowHeight)
+                .Width(16).Height(EditorTheme.RowHeight)
                 .Text(icon, font)
                 .TextColor(go.EnabledInHierarchy ? EditorTheme.Ink400 : EditorTheme.Ink300)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
@@ -343,7 +359,7 @@ public class HierarchyPanel : DockPanel
             else
             {
                 paper.Box($"hier_name_{goId}")
-                    .Height(RowHeight).ChildLeft(4)
+                    .Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(go.Name, font)
                     .TextColor(go.EnabledInHierarchy ? EditorTheme.Ink500 : EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 1)
@@ -352,7 +368,7 @@ public class HierarchyPanel : DockPanel
 
             // Enable/disable toggle (eye icon)
             paper.Box($"hier_vis_{goId}")
-                .Width(18).Height(RowHeight)
+                .Width(18).Height(EditorTheme.RowHeight)
                 .Text(go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash, font)
                 .TextColor(go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
@@ -426,8 +442,8 @@ public class HierarchyPanel : DockPanel
         float mouseY = Input.MousePosition.Y;
         float relY = mouseY - rowY;
 
-        float topZone = RowHeight * 0.25f;
-        float bottomZone = RowHeight * 0.75f;
+        float topZone = EditorTheme.RowHeight * 0.25f;
+        float bottomZone = EditorTheme.RowHeight * 0.75f;
 
         if (relY < topZone)
         {
