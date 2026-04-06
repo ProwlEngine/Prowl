@@ -588,10 +588,10 @@ public static class FileDialog
                     _ => "Open"
                 };
 
-                EditorGUI.Button(paper, "fd_btn_ok", confirmLabel, width: 90)
+                EditorGUI.Button(paper, "fd_btn_ok", confirmLabel, width: 101)
                     .OnValueChanged(_ => ConfirmSelection());
 
-                EditorGUI.Button(paper, "fd_btn_cancel", "Cancel", width: 90)
+                EditorGUI.Button(paper, "fd_btn_cancel", "Cancel", width: 60)
                     .OnValueChanged(_ => Close(null));
             }
         }
