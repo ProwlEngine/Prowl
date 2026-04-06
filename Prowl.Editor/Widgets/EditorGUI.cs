@@ -86,14 +86,11 @@ public static class EditorGUI
     // ================================================================
 
     public static void Separator(Paper paper, string id)
-    {
-        using (paper.Box(id).Height(12).Enter())
-        {
-            paper.Box(id + "_line")
-                .Height(1)
-                .Margin(0, 6, 0, 6)
-                .BackgroundColor(EditorTheme.Border);
-        }
+{
+        paper.Box(id + "_line")
+            .Height(1)
+            .Margin(6, 6)
+            .BackgroundColor(EditorTheme.Ink100);
     }
 
     // ================================================================
@@ -132,7 +129,11 @@ public static class EditorGUI
     {
         Action<bool>? userCallback = null;
 
-        using (paper.Box(id)
+        paper.Box(id)
+            .Alignment(PaperUI.TextAlignment.MiddleCenter)
+            .Text(icon, Font)
+            .TextColor(EditorTheme.Text)
+            .FontSize(FontSz)
             .Height(EditorTheme.RowHeight)
             .Width(EditorTheme.RowHeight)
             .BackgroundColor(EditorTheme.ButtonNormal)
@@ -140,18 +141,7 @@ public static class EditorGUI
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Border).BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true)).Enter())
-        {
-            if (Font != null)
-            { 
-                var iconSize = paper.MeasureText(icon, FontSz, Font);
-                paper.Box($"{id}_icon")
-                    .Text(icon, Font)
-                    .TextColor(EditorTheme.Text)
-                    .FontSize(FontSz)
-                    .Margin((EditorTheme.RowHeight - iconSize.X) * 0.5f, (EditorTheme.RowHeight - iconSize.Y) * 0.5f);
-            }
-        }
+            .OnClick(e => userCallback?.Invoke(true));
 
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
@@ -167,6 +157,7 @@ public static class EditorGUI
 
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
+            .Width(UnitValue.Auto)
             .RowBetween(6)
             .OnClick(e => userCallback?.Invoke(!value))
             .Enter())
@@ -180,10 +171,11 @@ public static class EditorGUI
                 .BorderColor(EditorTheme.Border).BorderWidth(1);
 
             if (value && Font != null)
-                box.Text("\u2713", Font).TextColor(EditorTheme.Text).FontSize(12f);
+                box.Text(EditorIcons.Check, Font).TextColor(EditorTheme.Text).FontSize(12f);
 
             if (Font != null)
                 paper.Box($"{id}_lbl")
+                    .Width(UnitValue.Auto)
                     .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
         }
 
@@ -257,7 +249,7 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(paper.MeasureText(label, EditorTheme.FontSize, EditorTheme.DefaultFont).X).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
 
             using (paper.Box($"{id}_input")
@@ -312,7 +304,7 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(paper.MeasureText(label, EditorTheme.FontSize, EditorTheme.DefaultFont).X).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
 
 
