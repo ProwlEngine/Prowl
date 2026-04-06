@@ -194,8 +194,8 @@ public class ProjectPanel : DockPanel
 
         using (paper.Row($"proj_fn_{relativePath.GetHashCode()}")
             .Height(22)
-            .BackgroundColor(isSelected ? EditorTheme.Neutral400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Neutral500).End()
+            .BackgroundColor(isSelected ? EditorTheme.Ink100 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
             .ChildLeft(indent + 4)
             .OnClick(relativePath, (path, _) => _currentFolder = path)
