@@ -106,7 +106,7 @@ public static class EditorGUI
 
         var el = paper.Box(id)
             .Height(EditorTheme.RowHeight)
-            .ChildLeft(12).ChildRight(12)
+            .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
             .BackgroundColor(EditorTheme.ButtonNormal)
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
@@ -115,7 +115,15 @@ public static class EditorGUI
             .OnClick(e => userCallback?.Invoke(true));
 
         if (width > 0) el.Width(width);
-        if (Font != null) el.Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+        using (el.Enter())
+        {
+            if (Font != null) 
+                paper.Box($"{id}_label")
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                    .Text(label, Font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(FontSz);
+        }
 
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
@@ -168,6 +176,7 @@ public static class EditorGUI
                 .BackgroundColor(value ? EditorTheme.Accent : EditorTheme.InputBackground)
                 .Hovered.BackgroundColor(value ? EditorTheme.AccentDim : EditorTheme.ButtonHovered).End()
                 .Rounded(3)
+                .Alignment(PaperUI.TextAlignment.MiddleCenter)
                 .BorderColor(EditorTheme.Border).BorderWidth(1);
 
             if (value && Font != null)
@@ -602,18 +611,24 @@ public static class EditorGUI
     public static WidgetResult<bool> ToggleButton(Paper paper, string id, string label, bool value)
     {
         Action<bool>? userCallback = null;
-
-        var el = paper.Box(id)
+        
+        using (paper.Box(id)
             .Height(EditorTheme.RowHeight)
-            .ChildLeft(10).ChildRight(10)
+            .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
             .BackgroundColor(value ? EditorTheme.Accent : EditorTheme.ButtonNormal)
             .Hovered.BackgroundColor(value ? EditorTheme.AccentDim : EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Border).BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(!value));
-
-        if (Font != null) el.Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+            .OnClick(e => userCallback?.Invoke(!value)).Enter())
+        {
+            if (Font != null)
+                paper.Box($"{id}_label")
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                    .Text(label, Font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(FontSz);
+        }
 
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
@@ -825,9 +840,13 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Width(LabelW)
+                    .Height(EditorTheme.RowHeight)
                     .IsNotInteractable()
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                    .Text(label, Font)
+                    .TextColor(EditorTheme.Text)
+                    .FontSize(FontSz);
 
             // Color swatch (FocusWithin-based popup using cached ancestor set)
             using (paper.Box($"{id}_swatch")
@@ -852,11 +871,14 @@ public static class EditorGUI
                     int g = (int)(value.G * 255);
                     int b = (int)(value.B * 255);
                     paper.Box($"{id}_hex")
-                        .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                        .ChildLeft(6)
+                        .Width(UnitValue.Stretch())
+                        .Height(EditorTheme.RowHeight)
+                        .Margin(EditorTheme.RowHeight / 4, 0)
                         .IsNotInteractable()
+                        .Alignment(PaperUI.TextAlignment.MiddleLeft)
                         .Text($"#{r:X2}{g:X2}{b:X2}", Font)
-                        .TextColor(EditorTheme.Text).FontSize(FontSz - 1);
+                        .TextColor(EditorTheme.Text)
+                        .FontSize(FontSz - 1);
                 }
 
                 if (isOpen)

@@ -102,7 +102,7 @@ public class ConsolePanel : DockPanel
                 .OnValueChanged(_ => _messages.Clear());
 
             // Separator
-            paper.Box("con_sep1").Width(1).Height(20).BackgroundColor(EditorTheme.Border);
+            paper.Box("con_sep1").Width(1).Height(20).BackgroundColor(EditorTheme.Ink200);
 
             // Filter toggles
             int infoCount = 0, warnCount = 0, errCount = 0;
@@ -168,7 +168,7 @@ public class ConsolePanel : DockPanel
                         break;
                     default:
                         icon = EditorIcons.CircleInfo;
-                        textColor = EditorTheme.Text;
+                        textColor = EditorTheme.Ink500;
                         bgColor = i % 2 == 0 ? Color.FromArgb(8, 255, 255, 255) : Color.Transparent;
                         break;
                 }
@@ -189,7 +189,7 @@ public class ConsolePanel : DockPanel
                     paper.Box($"con_time_{i}")
                         .Width(50).Height(RowHeight)
                         .Text(msg.Time.ToString("HH:mm:ss"), font)
-                        .TextColor(EditorTheme.TextDisabled)
+                        .TextColor(EditorTheme.Ink200)
                         .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleLeft);
 
                     // Message
@@ -206,7 +206,7 @@ public class ConsolePanel : DockPanel
                             .ChildLeft(4).ChildRight(4)
                             .BackgroundColor(Color.FromArgb(120, 80, 80, 85))
                             .Rounded(8)
-                            .Text($"{msg.Count}", font).TextColor(EditorTheme.TextDim)
+                            .Text($"{msg.Count}", font).TextColor(EditorTheme.Ink300)
                             .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleCenter);
                     }
                 }
