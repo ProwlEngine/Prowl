@@ -52,79 +52,101 @@ public static class ProjectLauncher
         int h = Window.InternalWindow.Size.Y;
 
         // Full background
-        // paper.Box("pl_bg")
-        //     .PositionType(PositionType.SelfDirected)
-        //     .Position(0, 0)
-        //     .Size(w, h)
-        //     .BackgroundColor(EditorTheme.Neutral100)
-        //     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-        //     {
-        //         float cx = w / 2f;
-        //         float cy = h / 2f;
-        //         float radius = Math.Max(cx, cy) * 1.2f;
-        //         float t = _animTime * 0.05f;
-        //         var transparent = Prowl.Vector.Color32.FromArgb(0, 0, 0, 0);
-
-        //         // Subtle background gradients (same as editor but dimmer)
-        //         float px = cx + (float)Math.Sin(t) * cx * 0.6f;
-        //         float py = cy + (float)Math.Sin(t * 2) * cy * 0.3f;
-        //         var purple = Prowl.Vector.Color32.FromArgb(25, 140, 60, 200);
-        //         canvas.SetRadialBrush(px, py, 0, radius, purple, transparent);
-        //         canvas.BeginPath();
-        //         canvas.Rect(0, 0, w, h);
-        //         canvas.Fill();
-
-        //         float bx = cx - (float)Math.Sin(t) * cx * 0.6f;
-        //         float by = cy - (float)Math.Sin(t * 2) * cy * 0.3f;
-        //         var blue = Prowl.Vector.Color32.FromArgb(25, 60, 140, 220);
-        //         canvas.SetRadialBrush(bx, by, 0, radius, blue, transparent);
-        //         canvas.BeginPath();
-        //         canvas.Rect(0, 0, w, h);
-        //         canvas.Fill();
-        //     }));
-
-        // Center card
-        // float cardW = 600f;
-        // float cardH = 500f;
-
-        float sidebarW = 200f;
-
-        using (paper.Row("root")
+        paper.Box("pl_bg")
             .PositionType(PositionType.SelfDirected)
             .Position(0, 0)
             .Size(w, h)
+            .BackgroundColor(EditorTheme.Neutral100)
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+            {
+                float cx = w / 2f;
+                float cy = h / 2f;
+                float radius = Math.Max(cx, cy) * 1.2f;
+                float t = _animTime * 0.05f;
+                var transparent = Prowl.Vector.Color32.FromArgb(0, 0, 0, 0);
+
+                // Subtle background gradients (same as editor but dimmer)
+                float px = cx + (float)Math.Sin(t) * cx * 0.6f;
+                float py = cy + (float)Math.Sin(t * 2) * cy * 0.3f;
+                var purple = Prowl.Vector.Color32.FromArgb(25, 140, 60, 200);
+                canvas.SetRadialBrush(px, py, 0, radius, purple, transparent);
+                canvas.BeginPath();
+                canvas.Rect(0, 0, w, h);
+                canvas.Fill();
+
+                float bx = cx - (float)Math.Sin(t) * cx * 0.6f;
+                float by = cy - (float)Math.Sin(t * 2) * cy * 0.3f;
+                var blue = Prowl.Vector.Color32.FromArgb(25, 60, 140, 220);
+                canvas.SetRadialBrush(bx, by, 0, radius, blue, transparent);
+                canvas.BeginPath();
+                canvas.Rect(0, 0, w, h);
+                canvas.Fill();
+            }));
+
+        // Center card
+        float cardW = 600f;
+        float cardH = 500f;
+
+        // float sidebarW = 200f;
+
+        using (paper.Column("root")
+            .Margin(UnitValue.StretchOne)
+            .Size(cardW, cardH)
             .BorderColor(EditorTheme.Ink100)
             .BorderWidth(1)
+            .Rounded(EditorTheme.Roundness)
             .BackgroundColor(EditorTheme.Neutral300)
             .Enter())
         {
-            using (paper.Column("sidebar")
-                .BackgroundColor(EditorTheme.Neutral400)
-                .Size(sidebarW, h)
+            // Header
+            using (paper.Row("header")
+                .Height(60)
+                .RowBetween(0)
+                .RoundedTop(EditorTheme.Roundness)
+                .BackgroundColor(EditorTheme.Neutral300)
                 .BorderColor(EditorTheme.Ink100)
                 .BorderWidth(1)
                 .Enter())
             {
-
-                // Prowl Emblem
-                using (paper.Row("pl_header")
-                    .Height(60)
-                    .RowBetween(12)
-                    .BackgroundColor(EditorTheme.Neutral300)
-                    .BorderColor(EditorTheme.Ink100)
-                    .BorderWidth(1)
-                    .Enter())
-                {
                     paper.Box("pl_title")
                         .Height(60)
-                        .Margin(16, 16, 0, 8)
+                        .Width(110)
+                        .Margin(16, 0, 8, 0)
                         .Text("PROWL", boldFont)
                         .TextColor(EditorTheme.Ink500)
                         .FontSize(28f)
                         .Alignment(TextAlignment.MiddleLeft);
 
-                    // Spacer
-                    paper.Box("pl_spacer");
+                    // Links
+                    using (paper.Row("pl_header")
+                        .Height(UnitValue.Auto)
+                        .RowBetween(12)
+                        .Margin(0, 0, 28, 0)
+                        .Enter())
+                    {
+                        EditorGUI.ButtonSquareGhost(paper, "www_link", EditorIcons.Globe).OnValueChanged((_) =>
+                        {
+                            ReferenceOpenerService.OpenUrl("https://prowlengine.com");
+                        });
+
+                        EditorGUI.ButtonSquareGhost(paper, "ds_link", EditorIcons.Message).OnValueChanged((_) =>
+                        {
+                            ReferenceOpenerService.OpenUrl("https://discord.gg/HgBsBqfSpa");
+                        });
+
+                        EditorGUI.ButtonSquareGhost(paper, "yt_link", EditorIcons.Video).OnValueChanged((_) =>
+                        {
+                            ReferenceOpenerService.OpenUrl("https://youtube.com/@prowlengine");
+                        });
+
+                        EditorGUI.ButtonSquareGhost(paper, "gh_link", EditorIcons.Code).OnValueChanged((_) =>
+                        {
+                            ReferenceOpenerService.OpenUrl("https://github.com/ProwlEngine/Prowl");
+                        });
+                    }
+
+                    paper.Box("spacer");
+
 
                     paper.Box("pl_version")
                         .Height(60)
@@ -134,63 +156,22 @@ public static class ProjectLauncher
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(12f)
                         .Alignment(TextAlignment.MiddleRight);
-                }
-
-                paper.Box("spacer").Height(UnitValue.Stretch());
-
-                // Links
-                using (paper.Column("pl_header")
-                    .Height(60)
-                    .ColBetween(12)
-                    .Margin(16, 12)
-                    .Enter())
-                {
-                    EditorGUI.Button(paper, "yt_link", "Website").OnValueChanged((_) =>
-                    {
-                        ReferenceOpenerService.OpenUrl("https://prowlengine.com");
-                    });
-
-                    EditorGUI.Button(paper, "yt_link", "Discord").OnValueChanged((_) =>
-                    {
-                        ReferenceOpenerService.OpenUrl("https://discord.gg/HgBsBqfSpa");
-                    });
-
-                    EditorGUI.Button(paper, "yt_link", "YouTube").OnValueChanged((_) =>
-                    {
-                        ReferenceOpenerService.OpenUrl("https://youtube.com/@prowlengine");
-                    });
-
-                    EditorGUI.Button(paper, "gh_link", "GitHub").OnValueChanged((_) =>
-                    {
-                        ReferenceOpenerService.OpenUrl("https://github.com/ProwlEngine/Prowl");
-                    });
-                }
             }
 
+
             using (paper.Column("content")
-                .Size(w - sidebarW, h)
+                .Size(cardW, cardH - 90)
                 .Enter())
             {
                 // New / Open buttons
                 using (paper.Row("toolbar")
-                    .Height(40)
-                    .Margin(10, 10, 32, 0)
+                    .Height(30)
+                    .Margin(10, 10, 16, 0)
                     .RowBetween(8)
                     .Enter())
                 {
-                    paper.Box("tl_label")
-                        .Width(UnitValue.Auto)
-                        .Height(EditorTheme.RowHeight)
-                        .Text("Projects", boldFont)
-                        .TextColor(EditorTheme.Ink500)
-                        .FontSize(EditorTheme.FontSize + 8)
-                        .Alignment(TextAlignment.MiddleLeft);
-
                     // Spacer
-                    paper.Box("tl_tb_spacer");
-
-                    // Spacer
-                    EditorGUI.SearchBar(paper, "search", "", "Search");
+                    EditorGUI.SearchBar(paper, "search", "", "Search Projects");
 
                     EditorGUI.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", 130)
                         .OnValueChanged(_ =>
@@ -211,7 +192,8 @@ public static class ProjectLauncher
                         .BorderColor(EditorTheme.Blue400)
                         .BorderWidth(1)
                         .OnClick((_) => _showNewProject = !_showNewProject)
-                        .Enter()) {
+                        .Enter())
+                    {
                         paper.Box($"label")
                             .Height(EditorTheme.RowHeight)
                             .Margin(EditorTheme.RowHeight / 4, 0)
@@ -229,7 +211,7 @@ public static class ProjectLauncher
                 }
 
                 // Recent projects list
-                DrawRecentProjects(paper, font, w - sidebarW, h - 60 - 40 - (_showNewProject ? 80 : 0));
+                DrawRecentProjects(paper, font, cardW, cardH - 60 - 46 - (_showNewProject ? 80 : 0));
             }
         }
     }
@@ -301,7 +283,7 @@ public static class ProjectLauncher
     {
         var entries = RecentProjects.Entries;
 
-        using (ScrollView.Begin(paper, "pl_scroll", width, height, colSpacing: 8, paddingLeft: 8))
+        using (ScrollView.Begin(paper, "pl_scroll", width, height, colSpacing: 8, paddingLeft: 8, paddingRight: 8))
         {
             if (entries.Count == 0)
             {
@@ -389,6 +371,8 @@ public static class ProjectLauncher
                     }
                 }
             }
+
+            paper.Box("spacer").Height(6);
         }
     }
 

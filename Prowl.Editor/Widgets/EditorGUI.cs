@@ -106,7 +106,36 @@ public static class EditorGUI
             .BackgroundColor(EditorTheme.Ink100)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
-            .BorderColor(EditorTheme.Ink200)
+            .BorderColor(EditorTheme.Ink100)
+            .BorderWidth(1)
+            .OnClick(e => userCallback?.Invoke(true));
+
+        if (width > 0) el.Width(width);
+        using (el.Enter())
+        {
+            if (Font != null) 
+                paper.Box($"{id}_label")
+                    .Height(EditorTheme.RowHeight)
+                    .Margin(EditorTheme.RowHeight/4, 0)
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                    .Text(label, Font)
+                    .TextColor(EditorTheme.Ink500)
+                    .FontSize(FontSz);
+        }
+
+        return new WidgetResult<bool>(cb => userCallback = cb);
+    }
+
+    public static WidgetResult<bool> ButtonGhost(Paper paper, string id, string label, float width = 0)
+    {
+        Action<bool>? userCallback = null;
+
+        var el = paper.Box(id)
+            .Height(EditorTheme.RowHeight)
+            // .BackgroundColor(EditorTheme.Ink100)
+            .Hovered.BackgroundColor(EditorTheme.Ink100).End()
+            .Rounded(3)
+            .BorderColor(EditorTheme.Ink100)
             .BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true));
 
@@ -140,7 +169,29 @@ public static class EditorGUI
             .BackgroundColor(EditorTheme.Ink100)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
-            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+            .BorderColor(EditorTheme.Ink100)
+            .BorderWidth(1)
+            .OnClick(e => userCallback?.Invoke(true));
+
+        return new WidgetResult<bool>(cb => userCallback = cb);
+    }
+
+    public static WidgetResult<bool> ButtonSquareGhost(Paper paper, string id, string icon)
+    {
+        Action<bool>? userCallback = null;
+
+        paper.Box(id)
+            .Alignment(PaperUI.TextAlignment.MiddleCenter)
+            .Text(icon, Font)
+            .TextColor(EditorTheme.Ink500)
+            .FontSize(FontSz)
+            .Height(EditorTheme.RowHeight)
+            .Width(EditorTheme.RowHeight)
+            // .BackgroundColor(EditorTheme.Ink100)
+            .Hovered.BackgroundColor(EditorTheme.Ink100).End()
+            .Rounded(3)
+            .BorderColor(EditorTheme.Ink100)
+            .BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true));
 
         return new WidgetResult<bool>(cb => userCallback = cb);
