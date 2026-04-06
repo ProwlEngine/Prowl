@@ -103,11 +103,11 @@ public static class EditorGUI
 
         var el = paper.Box(id)
             .Height(EditorTheme.RowHeight)
-            .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
             .BackgroundColor(EditorTheme.Ink100)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
-            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+            .BorderColor(EditorTheme.Ink200)
+            .BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true));
 
         if (width > 0) el.Width(width);
@@ -115,6 +115,8 @@ public static class EditorGUI
         {
             if (Font != null) 
                 paper.Box($"{id}_label")
+                    .Height(EditorTheme.RowHeight)
+                    .Margin(EditorTheme.RowHeight/4, 0)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .Text(label, Font)
                     .TextColor(EditorTheme.Ink500)
