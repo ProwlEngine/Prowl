@@ -119,14 +119,15 @@ public class ConsolePanel : DockPanel
                 else errCount += m.Count;
             }
 
-            EditorGUI.ToggleButton(paper, "con_info", $"{EditorIcons.CircleInfo} {infoCount}", _showInfo)
-                .OnValueChanged(v => _showInfo = v);
-            EditorGUI.ToggleButton(paper, "con_warn", $"{EditorIcons.TriangleExclamation} {warnCount}", _showWarnings)
-                .OnValueChanged(v => _showWarnings = v);
-            EditorGUI.ToggleButton(paper, "con_err", $"{EditorIcons.CircleExclamation} {errCount}", _showErrors)
-                .OnValueChanged(v => _showErrors = v);
-
-            paper.Box("con_spacer");
+            using (paper.Row("buttons").Enter())
+            {
+                EditorGUI.ToggleButton(paper, "con_info", $"{EditorIcons.CircleInfo} {infoCount}", _showInfo)
+                    .OnValueChanged(v => _showInfo = v);
+                EditorGUI.ToggleButton(paper, "con_warn", $"{EditorIcons.TriangleExclamation} {warnCount}", _showWarnings)
+                    .OnValueChanged(v => _showWarnings = v);
+                EditorGUI.ToggleButton(paper, "con_err", $"{EditorIcons.CircleExclamation} {errCount}", _showErrors)
+                    .OnValueChanged(v => _showErrors = v);
+            }
 
             // Search
             EditorGUI.SearchBar(paper, "con_search", _searchText, "Filter...")
