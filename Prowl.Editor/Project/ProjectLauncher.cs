@@ -147,12 +147,12 @@ public static class ProjectLauncher
                 {
                     EditorGUI.Button(paper, "yt_link", "YouTube").OnValueChanged((_) =>
                     {
-                        WebService.OpenUrl("https://youtube.com/@prowlengine");
+                        ReferenceOpenerService.OpenUrl("https://youtube.com/@prowlengine");
                     });
 
                     EditorGUI.Button(paper, "gh_link", "GitHub").OnValueChanged((_) =>
                     {
-                        WebService.OpenUrl("https://github.com/ProwlEngine/Prowl");
+                        ReferenceOpenerService.OpenUrl("https://github.com/ProwlEngine/Prowl");
                     });
                 }
             }

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
@@ -698,19 +700,7 @@ public class ProjectPanel : DockPanel
     private static void ShowInExplorer(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        ShowInExplorerPath(absPath);
-    }
-
-    private static void ShowInExplorerPath(string absPath)
-    {
-        try
-        {
-            if (Directory.Exists(absPath))
-                System.Diagnostics.Process.Start("explorer.exe", absPath);
-            else if (File.Exists(absPath))
-                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{absPath}\"");
-        }
-        catch { }
+        ReferenceOpenerService.OpenFileSystemPath(absPath);
     }
 
     // ================================================================
