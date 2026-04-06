@@ -29,6 +29,8 @@ public class ConsolePanel : DockPanel
     private bool _autoScroll = true;
     private string _searchText = "";
 
+    private const float ToolbarHeight = 30f;
+
     private struct LogEntry
     {
         public string Message;
@@ -93,8 +95,12 @@ public class ConsolePanel : DockPanel
     private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
     {
         using (paper.Row("con_toolbar")
-            .Height(26).ChildLeft(4).ChildRight(4).RowBetween(4)
-            .ChildTop(2).ChildBottom(2)
+            .Height(ToolbarHeight)
+            .ChildLeft(4)
+            .ChildRight(4)
+            .RowBetween(4)
+            .ChildTop(4)
+            .ChildBottom(0)
             .Enter())
         {
             // Clear
@@ -113,14 +119,15 @@ public class ConsolePanel : DockPanel
                 else errCount += m.Count;
             }
 
-            EditorGUI.ToggleButton(paper, "con_info", $"{EditorIcons.CircleInfo} {infoCount}", _showInfo)
-                .OnValueChanged(v => _showInfo = v);
-            EditorGUI.ToggleButton(paper, "con_warn", $"{EditorIcons.TriangleExclamation} {warnCount}", _showWarnings)
-                .OnValueChanged(v => _showWarnings = v);
-            EditorGUI.ToggleButton(paper, "con_err", $"{EditorIcons.CircleExclamation} {errCount}", _showErrors)
-                .OnValueChanged(v => _showErrors = v);
-
-            paper.Box("con_spacer");
+            using (paper.Row("buttons").Enter())
+            {
+                EditorGUI.ToggleButton(paper, "con_info", $"{EditorIcons.CircleInfo} {infoCount}", _showInfo)
+                    .OnValueChanged(v => _showInfo = v);
+                EditorGUI.ToggleButton(paper, "con_warn", $"{EditorIcons.TriangleExclamation} {warnCount}", _showWarnings)
+                    .OnValueChanged(v => _showWarnings = v);
+                EditorGUI.ToggleButton(paper, "con_err", $"{EditorIcons.CircleExclamation} {errCount}", _showErrors)
+                    .OnValueChanged(v => _showErrors = v);
+            }
 
             // Search
             EditorGUI.SearchBar(paper, "con_search", _searchText, "Filter...")

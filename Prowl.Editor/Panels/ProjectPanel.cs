@@ -69,8 +69,11 @@ public class ProjectPanel : DockPanel
     {
         using (paper.Row("proj_toolbar")
             .Height(ToolbarHeight)
-            .ChildLeft(6).ChildRight(6).RowBetween(4)
-            .ChildTop(3).ChildBottom(3)
+            .ChildLeft(4)
+            .ChildRight(4)
+            .RowBetween(4)
+            .ChildTop(4)
+            .ChildBottom(0)
             .Enter())
         {
             // Add button with context menu
@@ -141,12 +144,6 @@ public class ProjectPanel : DockPanel
         {
             DrawFolderTree(paper, font, height);
             DrawContent(paper, font, width - FolderTreeWidth, height);
-
-            paper.DrawForeground((canvas, r) =>
-            {
-                canvas.SetLinearBrush(r.Min.X, r.Min.Y, r.Min.X, r.Min.Y + 5, Color.FromArgb(25, Color.Black), Color.Transparent);
-                canvas.RectFilled(r.Min.X, r.Min.Y, r.Size.X, 5, Color.White);
-            });
         }
     }
 
@@ -158,7 +155,7 @@ public class ProjectPanel : DockPanel
     {
         using (paper.Box("proj_tree_bg")
             .Size(FolderTreeWidth, height)
-            .BackgroundColor(EditorTheme.Neutral300)
+            .BackgroundColor(EditorTheme.Neutral400)
             .Enter())
         {
             using (ScrollView.Begin(paper, "proj_tree", FolderTreeWidth, height, 4, 4, 4, 4))
@@ -172,12 +169,6 @@ public class ProjectPanel : DockPanel
                     DrawFolderNode(paper, font, Project.Current!.AssetsPath, "Assets", 0);
                 }
             }
-
-            paper.DrawForeground((canvas, r) =>
-            {
-                canvas.SetLinearBrush(r.Max.X, r.Min.Y, r.Max.X - 4, r.Min.Y, Color.FromArgb(50, Color.Black), Color.Transparent);
-                canvas.RectFilled(r.Max.X - 4, r.Min.Y, 4, r.Size.Y, Color.White);
-            });
         }
     }
 
@@ -203,8 +194,8 @@ public class ProjectPanel : DockPanel
 
         using (paper.Row($"proj_fn_{relativePath.GetHashCode()}")
             .Height(22)
-            .BackgroundColor(isSelected ? EditorTheme.ButtonActive : Color.Transparent)
-            .Hovered.BackgroundColor(isSelected ? EditorTheme.Bright : EditorTheme.ButtonHovered).End()
+            .BackgroundColor(isSelected ? EditorTheme.Neutral400 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Neutral500).End()
             .Rounded(3)
             .ChildLeft(indent + 4)
             .OnClick(relativePath, (path, _) => _currentFolder = path)
@@ -222,7 +213,7 @@ public class ProjectPanel : DockPanel
                 paper.Box($"proj_fa_{relativePath.GetHashCode()}")
                     .Width(16).Height(22)
                     .Text(isOpen ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(stateKey, (key, _) =>
                     {
@@ -262,7 +253,7 @@ public class ProjectPanel : DockPanel
                     .Height(22)
                     .Margin(4, 0, 0, 0)
                     .Text(displayName, font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
             }
@@ -298,7 +289,7 @@ public class ProjectPanel : DockPanel
 
         using (paper.Box("proj_content_bg")
             .Size(width, height)
-            .BackgroundColor(EditorTheme.Dark)
+            .BackgroundColor(EditorTheme.Neutral300)
             .Enter())
         {
             // Breadcrumb
@@ -307,14 +298,16 @@ public class ProjectPanel : DockPanel
             using (ScrollView.Begin(paper, "proj_content", width, height - 20))
             {
                 using (paper.Column("proj_content_inner")
+                    .Margin(6, 0, 0, 6)
                     .Height(UnitValue.Auto)
                     .Enter())
                 {
                     if (entries.Count == 0)
                     {
-                        paper.Box("proj_empty").Height(60)
+                        paper.Box("proj_empty")
+                            .Height(60)
                             .Text("This folder is empty", font)
-                            .TextColor(EditorTheme.TextDisabled)
+                            .TextColor(EditorTheme.Ink300)
                             .FontSize(EditorTheme.FontSize - 2)
                             .Alignment(TextAlignment.MiddleCenter);
                     }
@@ -328,19 +321,15 @@ public class ProjectPanel : DockPanel
                     }
                 }
             }
-
-            paper.DrawForeground((canvas, r) =>
-            {
-                canvas.SetLinearBrush(r.Min.X, r.Min.Y, r.Min.X + 4, r.Min.Y, Color.FromArgb(5, Color.White), Color.Transparent);
-                canvas.RectFilled(r.Min.X, r.Min.Y, 4, r.Size.Y, Color.White);
-            });
         }
     }
 
     private void DrawBreadcrumb(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
     {
         using (paper.Row("proj_breadcrumb")
-            .Height(height).ChildLeft(4).RowBetween(2)
+            .Height(height)
+            .Margin(6, 6)
+            .RowBetween(2)
             .Enter())
         {
             // Split current folder into parts
@@ -361,22 +350,31 @@ public class ProjectPanel : DockPanel
                 if (i > 0)
                 {
                     paper.Box($"proj_bc_sep_{i}")
-                        .Width(UnitValue.Auto).Height(20)
+                        .Width(UnitValue.Auto)
+                        .Height(EditorTheme.RowHeight)
                         .Text(EditorIcons.AngleRight, font)
-                        .TextColor(EditorTheme.TextDisabled)
-                        .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
+                        .TextColor(EditorTheme.Ink300)
+                        .FontSize(8f)
+                        .Alignment(TextAlignment.MiddleCenter);
                 }
-
-                paper.Box($"proj_bc_{i}")
-                    .Width(UnitValue.Auto).Height(20)
-                    .ChildLeft(4).ChildRight(4)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                
+                using (paper.Box($"proj_bc_{i}")
+                    .Width(UnitValue.Auto)
+                    .Height(EditorTheme.RowHeight)
+                    .Hovered.BackgroundColor(EditorTheme.Neutral500).End()
                     .Rounded(3)
-                    .Text(name, font)
-                    .TextColor(i == parts.Count - 1 ? EditorTheme.Text : EditorTheme.TextDim)
-                    .FontSize(EditorTheme.FontSize - 2)
-                    .Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(path, (p, _) => _currentFolder = p);
+                    .OnClick(path, (p, _) => _currentFolder = p)
+                    .Enter())
+                {
+                    paper.Box("breadcrump")
+                        .Width(UnitValue.Auto)
+                        .Height(EditorTheme.RowHeight)
+                        .Margin(5, 0)
+                        .Text(name, font)
+                        .TextColor(i == parts.Count - 1 ? EditorTheme.Ink500 : EditorTheme.Ink300)
+                        .FontSize(EditorTheme.FontSize - 2)
+                        .Alignment(TextAlignment.MiddleCenter);
+                }
             }
         }
     }
@@ -398,10 +396,10 @@ public class ProjectPanel : DockPanel
 
             using (paper.Row($"proj_li_{i}")
                 .Height(22)
-                .BackgroundColor(isSelected ? EditorTheme.Accent : (i % 2 == 0 ? Color.Transparent : Color.FromArgb(10, 255, 255, 255)))
-                .Hovered.BackgroundColor(isSelected ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+                .BackgroundColor(isSelected ? EditorTheme.Purple300 : (i % 2 == 0 ? Color.Transparent : EditorTheme.Neutral400))
+                .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : EditorTheme.Neutral500).End()
                 .Rounded(3)
-                .ChildLeft(4).RowBetween(4)
+                .RowBetween(4)
                 .OnClick((item, idx, itemObjects), (cap, e) =>
                 {
                     bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
@@ -452,7 +450,7 @@ public class ProjectPanel : DockPanel
                     paper.Box($"proj_li_arrow_{i}")
                         .Width(14).Height(22)
                         .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(item.Guid, (guid, _) =>
                         {
@@ -465,7 +463,7 @@ public class ProjectPanel : DockPanel
                 paper.Box($"proj_li_ico_{i}")
                     .Width(18).Height(22)
                     .Text(item.Icon, font)
-                    .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : (item.IsSubAsset ? EditorTheme.Accent : EditorTheme.TextDim))
+                    .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : (item.IsSubAsset ? EditorTheme.Purple300 : EditorTheme.Ink400))
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
                 // Name (inline rename or label)
@@ -484,7 +482,7 @@ public class ProjectPanel : DockPanel
                     paper.Box($"proj_li_name_{i}")
                         .Height(22)
                         .Text(item.Name, font)
-                        .TextColor(EditorTheme.Text)
+                        .TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize - 3)
                         .Alignment(TextAlignment.MiddleLeft);
                 }
@@ -495,7 +493,7 @@ public class ProjectPanel : DockPanel
                     paper.Box($"proj_li_type_{i}")
                         .Width(80).Height(22)
                         .Text(item.TypeLabel, font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 4)
                         .Alignment(TextAlignment.MiddleRight);
                 }
@@ -701,7 +699,8 @@ public class ProjectPanel : DockPanel
         for (int i = 0; i < entries.Count; i += cols)
         {
             using (paper.Row($"proj_gr_{row}")
-                .Height(totalCellH).RowBetween(4).ChildLeft(4)
+                .Height(totalCellH)
+                .RowBetween(6)
                 .Enter())
             {
                 for (int j = 0; j < cols && i + j < entries.Count; j++)
@@ -712,8 +711,8 @@ public class ProjectPanel : DockPanel
 
                     using (paper.Column($"proj_gc_{idx}")
                         .Width(cellSize).Height(totalCellH)
-                        .BackgroundColor(isSelected ? EditorTheme.Accent : Color.Transparent)
-                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Accent : Color.FromArgb(30, 255, 255, 255)).End()
+                        .BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.Transparent)
+                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.FromArgb(30, 255, 255, 255)).End()
                         .Rounded(4)
                         .OnClick((item, idx, itemObjects), (cap, e) =>
                         {
@@ -761,7 +760,7 @@ public class ProjectPanel : DockPanel
                                 .Margin(2, 2, 2, 0)
                                 .Rounded(4)
                                 .Text(item.Icon, font)
-                                .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.TextDim)
+                                .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.Ink400)
                                 .FontSize(_thumbnailSize * 0.6f)
                                 .Alignment(TextAlignment.MiddleCenter);
                         }
