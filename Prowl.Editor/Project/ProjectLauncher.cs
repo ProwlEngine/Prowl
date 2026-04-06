@@ -92,14 +92,14 @@ public static class ProjectLauncher
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200)
             .BorderWidth(1)
-            .Rounded(12)
+            .Rounded(EditorTheme.Roundness)
             .Enter())
         {
             // Header
             using (paper.Row("pl_header")
                 .Height(60)
                 .BackgroundColor(EditorTheme.Neutral200)
-                .RoundedTop(12)
+                .RoundedTop(EditorTheme.Roundness)
                 .ChildLeft(24)
                 .ChildRight(24)
                 .RowBetween(12)
@@ -110,13 +110,6 @@ public static class ProjectLauncher
                     .Text("PROWL", boldFont)
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(28f)
-                    .Alignment(TextAlignment.MiddleLeft);
-
-                paper.Box("pl_subtitle")
-                    .Height(60)
-                    .Text("Game Engine", font)
-                    .TextColor(EditorTheme.Ink400)
-                    .FontSize(14f)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 // Spacer
@@ -157,7 +150,7 @@ public static class ProjectLauncher
 
                 paper.Box("pl_recent_label")
                     .Width(UnitValue.Auto)
-                    .Height(28)
+                    .Height(EditorTheme.RowHeight)
                     .Text("Recent Projects", font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2)
@@ -178,33 +171,43 @@ public static class ProjectLauncher
     private static void DrawNewProjectPanel(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Column("pl_newproj")
-            .Height(80)
-            .BackgroundColor(EditorTheme.Neutral200).Rounded(6)
-            .ChildLeft(16).ChildRight(16).ChildTop(8).ChildBottom(8).ColBetween(6)
+            .BackgroundColor(EditorTheme.Neutral400)
+            .Rounded(6)
+            .Height(UnitValue.Auto)
+            .Margin(8, 8, 0, 8)
             .Enter())
         {
-            using (paper.Row("pl_np_row1").Height(26).RowBetween(8).Enter())
+            using (paper.Row("pl_np_row1").Height(EditorTheme.RowHeight).Margin(8).RowBetween(8).Enter())
             {
-                paper.Box("pl_np_lbl").Width(50).Height(26)
-                    .Text("Name:", font).TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+                paper.Box("pl_np_lbl")
+                    .Width(50)
+                    .Height(EditorTheme.RowHeight)
+                    .Text("Name:", font)
+                    .TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSize - 2)
+                    .Alignment(TextAlignment.MiddleRight);
 
                 EditorGUI.TextField(paper, "pl_np_name", "", _newProjectName)
                     .OnValueChanged(v => _newProjectName = v);
             }
 
-            using (paper.Row("pl_np_row2").Height(26).RowBetween(8).Enter())
+            using (paper.Row("pl_np_row2").Height(EditorTheme.RowHeight).Margin(8, 8, 0, 8).RowBetween(8).Enter())
             {
-                paper.Box("pl_np_lbl2").Width(50).Height(26)
-                    .Text("Path:", font).TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+                paper.Box("pl_np_lbl2")
+                    .Width(50)
+                    .Height(EditorTheme.RowHeight)
+                    .Text("Path:", font)
+                    .TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSize - 2)
+                    .Alignment(TextAlignment.MiddleRight);
 
                 using (paper.Box("prject_path_display")
                         .Height(EditorTheme.RowHeight)
                         .ChildLeft(4)
                         .ChildRight(4)
-                        .BackgroundColor(EditorTheme.Neutral400)
-                        .Rounded(4).Enter())
+                        .BackgroundColor(EditorTheme.Neutral300)
+                        .Rounded(4)
+                        .Enter())
                 {
                     paper.Box("pl_np_path")
                         .Text(" " + _newProjectPath, font)
@@ -260,7 +263,9 @@ public static class ProjectLauncher
                     .BackgroundColor(exists ? EditorTheme.Neutral400 : EditorTheme.Red400)
                     .Hovered.BackgroundColor(exists ? EditorTheme.Neutral500 : EditorTheme.Red500).End()
                     .Rounded(6)
-                    .ChildLeft(12).ChildRight(12).RowBetween(12)
+                    .ChildLeft(12)
+                    .ChildRight(12)
+                    .RowBetween(12)
                     .OnClick(entry, (e, _) =>
                     {
                         if (Directory.Exists(e.Path))
