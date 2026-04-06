@@ -89,7 +89,9 @@ public static class ProjectLauncher
 
         // float sidebarW = 200f;
 
-        using (paper.Column("root")
+        using (paper.Box("container").Size(w, h).Position(0, 0).PositionType(PositionType.SelfDirected).Enter())
+        {
+        using (paper.Column("pl_window")
             .Margin(UnitValue.StretchOne)
             .Size(cardW, cardH)
             .BorderColor(EditorTheme.Ink100)
@@ -213,6 +215,7 @@ public static class ProjectLauncher
                 // Recent projects list
                 DrawRecentProjects(paper, font, cardW, cardH - 60 - 46 - (_showNewProject ? 80 : 0));
             }
+        }
         }
     }
 
