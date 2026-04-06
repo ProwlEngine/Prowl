@@ -139,7 +139,7 @@ public class ModelAssetEditor : AssetImporterEditor
 
         if (model != null)
         {
-            _preview ??= new PreviewRenderer(256, 256);
+            _preview ??= new PreviewRenderer(256, 256) { ShowGrid = true };
 
             if (_lastPreviewAsset != model)
             {

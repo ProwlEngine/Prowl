@@ -56,6 +56,7 @@ public abstract class Game
             _paperRenderer = new PaperRenderer();
             _paperRenderer.Initialize(fbSize.X, fbSize.Y);
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
+            _paper.SetClipboardHandler(new RuntimeClipboardHandler());
 
             Initialize();
         };
@@ -310,4 +311,13 @@ public abstract class Game
         Window.Stop();
         Debug.Log("Is terminating...");
     }
+}
+
+/// <summary>
+/// Clipboard handler that bridges Paper's clipboard interface to Prowl's Input system.
+/// </summary>
+internal class RuntimeClipboardHandler : PaperUI.IClipboardHandler
+{
+    public string GetClipboardText() => Input.Clipboard ?? "";
+    public void SetClipboardText(string text) => Input.Clipboard = text;
 }

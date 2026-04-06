@@ -25,6 +25,7 @@ public class EditorCamera
 
     // Grid
     public bool ShowGrid { get; set; } = true;
+    private readonly EditorGrid _grid = new();
 
     public Camera Camera => _camera;
     public RenderTexture? RenderTarget => _renderTarget;
@@ -80,6 +81,10 @@ public class EditorCamera
 
         // Collect renderables/lights from all components
         scene.RenderCollect();
+
+        // Draw editor grid
+        if (ShowGrid)
+            _grid.Draw(scene, _position);
 
         // Build rendering data
         var renderData = new RenderingData

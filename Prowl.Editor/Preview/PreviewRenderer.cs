@@ -23,6 +23,10 @@ public class PreviewRenderer : IDisposable
     private GameObject _lightGo;
     private GameObject? _subjectGo;
     private RenderTexture? _rt;
+    private readonly EditorGrid _grid = new() { MaxDistance = 10f, Falloff = 2f };
+
+    /// <summary>Whether to draw a grid plane in the preview.</summary>
+    public bool ShowGrid { get; set; }
 
     // Orbit camera state
     private float _orbitYaw = 30f;
@@ -144,6 +148,9 @@ public class PreviewRenderer : IDisposable
 
         _camera.UpdateRenderData();
         _scene.RenderCollect();
+
+        if (ShowGrid)
+            _grid.Draw(_scene, _cameraGo.Transform.Position);
 
         var pipeline = _camera.Pipeline ?? DefaultRenderPipeline.Default;
         pipeline.Render(_camera, new RenderingData());

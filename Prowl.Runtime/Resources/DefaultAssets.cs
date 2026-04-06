@@ -30,7 +30,8 @@ public enum DefaultShader
     Bloom,
     BokehDoF,
     GTAO,
-    SSPT
+    SSPT,
+    Grid
 }
 
 /// <summary>
