@@ -67,7 +67,7 @@ public static class ColorPicker
                 {
                     int ri=(int)(nc.R*255), gi=(int)(nc.G*255), bi=(int)(nc.B*255);
                     paper.Box($"{id}_hex").Width(UnitValue.Stretch()).Height(24).ChildLeft(4).IsNotInteractable()
-                        .Text($"#{ri:X2}{gi:X2}{bi:X2}{(int)(a*255):X2}", font).TextColor(EditorTheme.Ink500).FontSize(fontSize);
+                        .Text($"#{ri:X2}{gi:X2}{bi:X2}{(int)(a*255):X2}", font).TextColor(EditorTheme.Text).FontSize(fontSize);
                 }
             }
 
@@ -79,7 +79,7 @@ public static class ColorPicker
             { var nc2 = new Prowl.Vector.Color(c.R,ng,c.B,c.A); SyncHSV(paper,el,nc2); onChange(nc2); });
             ChannelSlider(paper, $"{id}_b", "B", c.B, SysColor.FromArgb(255,60,60,200), font, fontSize, nb =>
             { var nc2 = new Prowl.Vector.Color(c.R,c.G,nb,c.A); SyncHSV(paper,el,nc2); onChange(nc2); });
-            ChannelSlider(paper, $"{id}_a2", "A", a, EditorTheme.Ink500, font, fontSize, na =>
+            ChannelSlider(paper, $"{id}_a2", "A", a, EditorTheme.Text, font, fontSize, na =>
             { paper.SetElementStorage(el,"a",na); onChange(HSVToColor(paper.GetElementStorage(el,"h",h),paper.GetElementStorage(el,"s",s),paper.GetElementStorage(el,"v",v),na)); });
 
             // === Color Palette ===
@@ -281,7 +281,7 @@ public static class ColorPicker
                         canvas.RoundedRectFilled((float)r.Min.X,(float)r.Min.Y,fillW,(float)r.Size.Y,2,0,0,2,
                             new Prowl.Vector.Color(labelColor.R/255f,labelColor.G/255f,labelColor.B/255f,0.7f));
                 }));
-            if (font != null) paper.Box($"{id}_v").Width(28).IsNotInteractable().Text($"{(int)(value*255)}", font).TextColor(EditorTheme.Ink500).FontSize(fontSize);
+            if (font != null) paper.Box($"{id}_v").Width(28).IsNotInteractable().Text($"{(int)(value*255)}", font).TextColor(EditorTheme.Text).FontSize(fontSize);
         }
     }
 

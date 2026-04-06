@@ -248,7 +248,7 @@ public class EditorApplication : Game
             .Position(w - 130, 0).Size(120, EditorTheme.MenuBarHeight)
             .IsNotInteractable()
             .Text($"Prowl v{version}", font)
-            .TextColor(EditorTheme.Ink500Dim)
+            .TextColor(EditorTheme.TextDim)
             .FontSize(EditorTheme.FontSize - 2)
             .Alignment(TextAlignment.MiddleRight);
 
@@ -340,7 +340,7 @@ public class EditorApplication : Game
             .Position(bx, flapContentY).Size(projW, EditorTheme.MenuBarHeight)
             .IsNotInteractable()
             .Text(projectText, font)
-            .TextColor(EditorTheme.Ink500)
+            .TextColor(EditorTheme.Text)
             .FontSize(EditorTheme.FontSize)
             .Alignment(TextAlignment.MiddleCenter);
 
@@ -362,7 +362,7 @@ public class EditorApplication : Game
             .Rounded(4)
             .BackgroundColor(Application.IsPlaying ? System.Drawing.Color.FromArgb(255, 60, 160, 60) : System.Drawing.Color.Transparent)
             .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.Play, font).TextColor(EditorTheme.Ink500).FontSize(14f)
+            .Text(EditorIcons.Play, font).TextColor(EditorTheme.Text).FontSize(14f)
             .Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, e) => Application.IsPlaying = !Application.IsPlaying);
 
@@ -375,7 +375,7 @@ public class EditorApplication : Game
             .Rounded(4)
             .BackgroundColor(System.Drawing.Color.Transparent)
             .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.Pause, font).TextColor(EditorTheme.Ink500).FontSize(14f)
+            .Text(EditorIcons.Pause, font).TextColor(EditorTheme.Text).FontSize(14f)
             .Alignment(TextAlignment.MiddleCenter);
 
         bx += btnSize + 4f;
@@ -387,7 +387,7 @@ public class EditorApplication : Game
             .Rounded(4)
             .BackgroundColor(System.Drawing.Color.Transparent)
             .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.ForwardStep, font).TextColor(EditorTheme.Ink500).FontSize(14f)
+            .Text(EditorIcons.ForwardStep, font).TextColor(EditorTheme.Text).FontSize(14f)
             .Alignment(TextAlignment.MiddleCenter);
 
         bx += btnSize + 8f;
@@ -407,7 +407,7 @@ public class EditorApplication : Game
             .Position(bx, flapContentY).Size(fpsW, EditorTheme.MenuBarHeight)
             .IsNotInteractable()
             .Text(fpsText, font)
-            .TextColor(EditorTheme.Ink500)
+            .TextColor(EditorTheme.Text)
             .FontSize(EditorTheme.FontSize)
             .Alignment(TextAlignment.MiddleCenter);
     }

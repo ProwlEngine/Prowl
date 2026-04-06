@@ -72,7 +72,7 @@ public class ContextMenuBuilder
                         continue;
                     }
 
-                    var textColor = item.IsEnabled ? EditorTheme.Ink500 : EditorTheme.Ink500Disabled;
+                    var textColor = item.IsEnabled ? EditorTheme.Text : EditorTheme.TextDisabled;
 
                     using (paper.Row($"{id}_i_{i}")
                         .Height(EditorTheme.RowHeight)

@@ -62,7 +62,7 @@ public class HierarchyPanel : DockPanel
             {
                 paper.Box("hier_empty").Height(60)
                     .Text("No Scene Loaded", font)
-                    .TextColor(EditorTheme.Ink500Disabled)
+                    .TextColor(EditorTheme.TextDisabled)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
@@ -76,7 +76,7 @@ public class HierarchyPanel : DockPanel
                 .Height(22).ChildLeft(8)
                 .BackgroundColor(EditorTheme.Neutral200)
                 .Text($"{EditorIcons.Film}  {scene.Name}", font)
-                .TextColor(EditorTheme.Ink500)
+                .TextColor(EditorTheme.Text)
                 .FontSize(EditorTheme.FontSize - 1)
                 .Alignment(TextAlignment.MiddleLeft);
 
@@ -89,7 +89,7 @@ public class HierarchyPanel : DockPanel
                 {
                     paper.Box("hier_empty_scene").Height(40)
                         .Text("Scene is empty", font)
-                        .TextColor(EditorTheme.Ink500Disabled)
+                        .TextColor(EditorTheme.TextDisabled)
                         .FontSize(EditorTheme.FontSize - 2)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
@@ -212,7 +212,7 @@ public class HierarchyPanel : DockPanel
             using (paper.Box("hier_add")
                 .Width(RowHeight - 4).Height(RowHeight - 4).Rounded(4)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Ink500)
+                .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Text)
                 .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                 .Enter())
             {
@@ -293,7 +293,7 @@ public class HierarchyPanel : DockPanel
                 paper.Box($"hier_arr_{goId}")
                     .Width(14).Height(RowHeight)
                     .Text(isExpanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
-                    .TextColor(EditorTheme.Ink500Dim)
+                    .TextColor(EditorTheme.TextDim)
                     .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(goId, (id, _) =>
                     {
@@ -310,7 +310,7 @@ public class HierarchyPanel : DockPanel
             paper.Box($"hier_ico_{goId}")
                 .Width(16).Height(RowHeight)
                 .Text(icon, font)
-                .TextColor(go.EnabledInHierarchy ? EditorTheme.Ink500Dim : EditorTheme.Ink500Disabled)
+                .TextColor(go.EnabledInHierarchy ? EditorTheme.TextDim : EditorTheme.TextDisabled)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
 
             // Name or rename field
@@ -345,7 +345,7 @@ public class HierarchyPanel : DockPanel
                 paper.Box($"hier_name_{goId}")
                     .Height(RowHeight).ChildLeft(4)
                     .Text(go.Name, font)
-                    .TextColor(go.EnabledInHierarchy ? EditorTheme.Ink500 : EditorTheme.Ink500Disabled)
+                    .TextColor(go.EnabledInHierarchy ? EditorTheme.Text : EditorTheme.TextDisabled)
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
             }
@@ -354,7 +354,7 @@ public class HierarchyPanel : DockPanel
             paper.Box($"hier_vis_{goId}")
                 .Width(18).Height(RowHeight)
                 .Text(go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash, font)
-                .TextColor(go.Enabled ? EditorTheme.Ink500Dim : EditorTheme.Ink500Disabled)
+                .TextColor(go.Enabled ? EditorTheme.TextDim : EditorTheme.TextDisabled)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                 .StopEventPropagation()
                 .OnClick(go, (g, _) => g.Enabled = !g.Enabled);

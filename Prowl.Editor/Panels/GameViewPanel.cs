@@ -71,7 +71,7 @@ public class GameViewPanel : DockPanel
                 paper.Box("gv_cam_count")
                     .Width(UnitValue.Auto).Height(22).ChildLeft(4).ChildRight(4)
                     .Text($"{EditorIcons.Camera} {camCount} camera(s)", font)
-                    .TextColor(EditorTheme.Ink500Dim)
+                    .TextColor(EditorTheme.TextDim)
                     .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleRight);
             }
         }
@@ -86,7 +86,7 @@ public class GameViewPanel : DockPanel
                 .Size(width, height)
                 .BackgroundColor(Color.FromArgb(255, 20, 20, 22))
                 .Text("No scene loaded", font)
-                .TextColor(EditorTheme.Ink500Disabled)
+                .TextColor(EditorTheme.TextDisabled)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
             return;
         }

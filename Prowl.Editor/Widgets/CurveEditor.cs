@@ -33,7 +33,7 @@ public static class CurveEditor
                     .Width(EditorTheme.LabelWidth).Height(40).ChildLeft(4)
                     .IsNotInteractable()
                     .Text(label, EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+                    .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize);
 
             using (paper.Box($"{id}_preview")
                 .Height(40).Width(UnitValue.Stretch())
@@ -307,7 +307,7 @@ public static class CurveEditor
                     });
                 if (EditorTheme.DefaultFont != null)
                     fitBtn.Text("Fit", EditorTheme.DefaultFont)
-                        .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2);
+                        .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize - 2);
 
                 // Save current curve to palette
                 var saveBtn = paper.Box($"{id}_save_preset")
@@ -332,7 +332,7 @@ public static class CurveEditor
                     });
                 if (EditorTheme.DefaultFont != null)
                     saveBtn.Text($"{EditorIcons.Plus} Save", EditorTheme.DefaultFont)
-                        .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2);
+                        .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize - 2);
             }
 
             // Curve palette row

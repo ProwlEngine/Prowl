@@ -89,13 +89,13 @@ public class InspectorPanel : DockPanel
     {
         paper.Box("insp_empty").Height(80)
             .Text("Nothing Selected", font)
-            .TextColor(EditorTheme.Ink500Disabled)
+            .TextColor(EditorTheme.TextDisabled)
             .FontSize(EditorTheme.FontSize)
             .Alignment(TextAlignment.MiddleCenter);
 
         paper.Box("insp_hint").Height(30)
             .Text("Select an asset or object to inspect it.", font)
-            .TextColor(EditorTheme.Ink500Disabled)
+            .TextColor(EditorTheme.TextDisabled)
             .FontSize(EditorTheme.FontSize - 4)
             .Alignment(TextAlignment.MiddleCenter);
     }
@@ -144,14 +144,14 @@ public class InspectorPanel : DockPanel
                 paper.Box("insp_h_name")
                     .Height(18)
                     .Text(name, font)
-                    .TextColor(EditorTheme.Ink500)
+                    .TextColor(EditorTheme.Text)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("insp_h_type")
                     .Height(14)
                     .Text(typeName, font)
-                    .TextColor(EditorTheme.Ink500Dim)
+                    .TextColor(EditorTheme.TextDim)
                     .FontSize(EditorTheme.FontSize - 4)
                     .Alignment(TextAlignment.MiddleLeft);
             }
@@ -291,14 +291,14 @@ public class InspectorPanel : DockPanel
                 .BackgroundColor(System.Drawing.Color.FromArgb(255, 80, 80, 100))
                 .Rounded(4)
                 .Text("Sub-Asset", font)
-                .TextColor(EditorTheme.Ink500)
+                .TextColor(EditorTheme.Text)
                 .FontSize(EditorTheme.FontSize - 3)
                 .Alignment(TextAlignment.MiddleCenter);
 
             paper.Box("insp_sub_name")
                 .Height(28)
                 .Text(item.Name, font)
-                .TextColor(EditorTheme.Ink500)
+                .TextColor(EditorTheme.Text)
                 .FontSize(EditorTheme.FontSize)
                 .Alignment(TextAlignment.MiddleLeft);
         }

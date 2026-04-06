@@ -128,7 +128,7 @@ public static class ModalDialog
                     .Rounded(8)
                     .ChildLeft(12)
                     .Text(modal.Title, font)
-                    .TextColor(EditorTheme.Ink500)
+                    .TextColor(EditorTheme.Text)
                     .FontSize(EditorTheme.FontSize + 1);
             }
 

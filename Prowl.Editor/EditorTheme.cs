@@ -42,14 +42,14 @@ public static class EditorTheme
     // public static Color MenuBarBackground => Darkest;
     // public static Color WindowBackground => Normal;
     // public static Color PanelBackground => Normal;
-    // public static Color HeaderBackground = Color.FromArgb(255, 30, 30, 33);
-    // public static Color InputBackground = Color.FromArgb(255, 28, 28, 30);
+    public static Color HeaderBackground = Color.FromArgb(255, 30, 30, 33);
+    public static Color InputBackground = Color.FromArgb(255, 28, 28, 30);
     // public static Color Border => Bright;
 
     // Text
-    // public static Color Text = Color.FromArgb(255, 220, 220, 220);
-    // public static Color TextDim = Color.FromArgb(255, 150, 150, 150);
-    // public static Color TextDisabled = Color.FromArgb(255, 90, 90, 90);
+    public static Color Text = Color.FromArgb(255, 220, 220, 220);
+    public static Color TextDim = Color.FromArgb(255, 150, 150, 150);
+    public static Color TextDisabled = Color.FromArgb(255, 90, 90, 90);
 
     // Interactive
     public static Color ButtonNormal = Color.FromArgb(255, 55, 55, 58);

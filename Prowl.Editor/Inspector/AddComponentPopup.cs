@@ -79,7 +79,7 @@ public static class AddComponentPopup
             {
                 paper.Box("acp_title").Height(32)
                     .Text("Add Component", font)
-                    .TextColor(EditorTheme.Ink500)
+                    .TextColor(EditorTheme.Text)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("acp_spacer");
@@ -87,7 +87,7 @@ public static class AddComponentPopup
                 paper.Box("acp_close")
                     .Width(24).Height(24).Rounded(4)
                     .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
-                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink500Dim)
+                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.TextDim)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(0, (_, _) => Close());
             }
@@ -120,7 +120,7 @@ public static class AddComponentPopup
                     {
                         paper.Box("acp_empty").Height(40)
                             .Text("No matching components", font)
-                            .TextColor(EditorTheme.Ink500Disabled)
+                            .TextColor(EditorTheme.TextDisabled)
                             .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
                     }
 
@@ -146,7 +146,7 @@ public static class AddComponentPopup
                         paper.Box($"acp_cat_{category.GetHashCode()}")
                             .Height(20).ChildLeft(8)
                             .Text(category, font)
-                            .TextColor(EditorTheme.Ink500Dim)
+                            .TextColor(EditorTheme.TextDim)
                             .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleLeft);
 
                         foreach (var comp in group.OrderBy(c => c.Name))
@@ -183,13 +183,13 @@ public static class AddComponentPopup
             // Icon
             paper.Box($"{id}_ico")
                 .Width(16).Height(EditorTheme.RowHeight)
-                .Text(comp.Icon, font).TextColor(EditorTheme.Ink500Dim)
+                .Text(comp.Icon, font).TextColor(EditorTheme.TextDim)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
 
             // Name
             paper.Box($"{id}_name")
                 .Height(EditorTheme.RowHeight)
-                .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
+                .Text(comp.Name, font).TextColor(EditorTheme.Text)
                 .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
         }
     }
