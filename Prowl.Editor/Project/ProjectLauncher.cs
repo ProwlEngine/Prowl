@@ -53,8 +53,9 @@ public static class ProjectLauncher
 
         // Full background
         paper.Box("pl_bg")
-            .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
-            .BackgroundColor(EditorTheme.Background)
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, 0).Size(w, h)
+            .BackgroundColor(EditorTheme.Neutral100)
             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
                 float cx = w / 2f;
@@ -88,28 +89,33 @@ public static class ProjectLauncher
         using (paper.Column("pl_card")
             .Size(cardW, cardH)
             .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Normal)
-            .BorderColor(EditorTheme.Bright).BorderWidth(1).Rounded(12)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200)
+            .BorderWidth(1)
+            .Rounded(12)
             .Enter())
         {
             // Header
             using (paper.Row("pl_header")
                 .Height(60)
-                .BackgroundColor(EditorTheme.Darkest)
-                .ChildLeft(24).ChildRight(24).RowBetween(12)
+                .BackgroundColor(EditorTheme.Neutral200)
+                .RoundedTop(12)
+                .ChildLeft(24)
+                .ChildRight(24)
+                .RowBetween(12)
                 .Enter())
             {
                 paper.Box("pl_title")
                     .Height(60)
                     .Text("PROWL", boldFont)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(28f)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("pl_subtitle")
                     .Height(60)
                     .Text("Game Engine", font)
-                    .TextColor(EditorTheme.TextDim)
+                    .TextColor(EditorTheme.Ink400)
                     .FontSize(14f)
                     .Alignment(TextAlignment.MiddleLeft);
 
@@ -119,7 +125,7 @@ public static class ProjectLauncher
                 paper.Box("pl_version")
                     .Height(60).Width(80)
                     .Text("v0.0.1", font)
-                    .TextColor(EditorTheme.TextDim)
+                    .TextColor(EditorTheme.Ink400)
                     .FontSize(12f)
                     .Alignment(TextAlignment.MiddleRight);
             }
@@ -127,7 +133,10 @@ public static class ProjectLauncher
             // Toolbar: New / Open buttons
             using (paper.Row("pl_toolbar")
                 .Height(40)
-                .ChildLeft(16).ChildRight(16).ChildTop(8).ChildBottom(4).RowBetween(8)
+                .ChildLeft(10)
+                .ChildRight(10)
+                .ChildTop(8)
+                .RowBetween(8)
                 .Enter())
             {
                 EditorGUI.Button(paper, "pl_btn_new", $"{EditorIcons.Plus}  New Project")
@@ -147,10 +156,10 @@ public static class ProjectLauncher
                 paper.Box("pl_tb_spacer");
 
                 paper.Box("pl_recent_label")
-                    .Width(UnitValue.Auto).Height(28)
-                    .ChildLeft(4).ChildRight(4)
+                    .Width(UnitValue.Auto)
+                    .Height(28)
                     .Text("Recent Projects", font)
-                    .TextColor(EditorTheme.TextDim)
+                    .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
             }
@@ -170,14 +179,14 @@ public static class ProjectLauncher
     {
         using (paper.Column("pl_newproj")
             .Height(80)
-            .BackgroundColor(Color.FromArgb(255, 30, 30, 33))
+            .BackgroundColor(EditorTheme.Neutral200).Rounded(6)
             .ChildLeft(16).ChildRight(16).ChildTop(8).ChildBottom(8).ColBetween(6)
             .Enter())
         {
             using (paper.Row("pl_np_row1").Height(26).RowBetween(8).Enter())
             {
                 paper.Box("pl_np_lbl").Width(50).Height(26)
-                    .Text("Name:", font).TextColor(EditorTheme.TextDim)
+                    .Text("Name:", font).TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
 
                 EditorGUI.TextField(paper, "pl_np_name", "", _newProjectName)
@@ -187,14 +196,22 @@ public static class ProjectLauncher
             using (paper.Row("pl_np_row2").Height(26).RowBetween(8).Enter())
             {
                 paper.Box("pl_np_lbl2").Width(50).Height(26)
-                    .Text("Path:", font).TextColor(EditorTheme.TextDim)
+                    .Text("Path:", font).TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
 
-                paper.Box("pl_np_path").Height(26)
-                    .BackgroundColor(EditorTheme.InputBackground).Rounded(4)
-                    .ChildLeft(6)
-                    .Text(_newProjectPath, font).TextColor(EditorTheme.Text)
-                    .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleLeft);
+                using (paper.Box("prject_path_display")
+                        .Height(EditorTheme.RowHeight)
+                        .ChildLeft(4)
+                        .ChildRight(4)
+                        .BackgroundColor(EditorTheme.Neutral400)
+                        .Rounded(4).Enter())
+                {
+                    paper.Box("pl_np_path")
+                        .Text(" " + _newProjectPath, font)
+                        .TextColor(EditorTheme.Ink500)
+                        .FontSize(EditorTheme.FontSize - 3)
+                        .Alignment(TextAlignment.MiddleLeft);
+                }
 
                 EditorGUI.Button(paper, "pl_np_browse", EditorIcons.FolderOpen, width: 30)
                     .OnValueChanged(_ =>
@@ -215,19 +232,19 @@ public static class ProjectLauncher
     {
         var entries = RecentProjects.Entries;
 
-        using (ScrollView.Begin(paper, "pl_scroll", width, height, paddingTop: 4, paddingBottom: 4))
+        using (ScrollView.Begin(paper, "pl_scroll", width, height, colSpacing: 8, paddingLeft: 8))
         {
             if (entries.Count == 0)
             {
                 paper.Box("pl_empty").Height(100)
                     .Text("No recent projects", font)
-                    .TextColor(EditorTheme.TextDisabled)
+                    .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
                 paper.Box("pl_hint").Height(30)
                     .Text("Create a new project or open an existing one to get started.", font)
-                    .TextColor(EditorTheme.TextDisabled)
+                    .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 3)
                     .Alignment(TextAlignment.MiddleCenter);
             }
@@ -240,9 +257,8 @@ public static class ProjectLauncher
 
                 using (paper.Row($"pl_proj_{i}")
                     .Height(52)
-                    .Margin(4, 2, 4, 2)
-                    .BackgroundColor(Color.FromArgb(exists ? 20 : 10, 255, 255, 255))
-                    .Hovered.BackgroundColor(exists ? EditorTheme.ButtonHovered : Color.FromArgb(20, 255, 100, 100)).End()
+                    .BackgroundColor(exists ? EditorTheme.Neutral400 : EditorTheme.Red400)
+                    .Hovered.BackgroundColor(exists ? EditorTheme.Neutral500 : EditorTheme.Red500).End()
                     .Rounded(6)
                     .ChildLeft(12).ChildRight(12).RowBetween(12)
                     .OnClick(entry, (e, _) =>
@@ -255,7 +271,7 @@ public static class ProjectLauncher
                     // Project icon
                     paper.Box($"pl_pi_{i}").Width(32).Height(52)
                         .Text(EditorIcons.Cubes, font)
-                        .TextColor(exists ? EditorTheme.Accent : EditorTheme.TextDisabled)
+                        .TextColor(exists ? EditorTheme.Purple400 : EditorTheme.Ink300)
                         .FontSize(20f).Alignment(TextAlignment.MiddleCenter);
 
                     // Name + Path
@@ -263,13 +279,13 @@ public static class ProjectLauncher
                     {
                         paper.Box($"pl_pn_{i}").Height(20)
                             .Text(entry.Name, font)
-                            .TextColor(exists ? EditorTheme.Text : EditorTheme.TextDisabled)
+                            .TextColor(exists ? EditorTheme.Ink500 : EditorTheme.Ink300)
                             .FontSize(EditorTheme.FontSize)
                             .Alignment(TextAlignment.MiddleLeft);
 
                         paper.Box($"pl_pp_{i}").Height(16)
                             .Text(entry.Path, font)
-                            .TextColor(EditorTheme.TextDim)
+                            .TextColor(EditorTheme.Ink300)
                             .FontSize(EditorTheme.FontSize - 4)
                             .Alignment(TextAlignment.MiddleLeft);
                     }
@@ -278,14 +294,14 @@ public static class ProjectLauncher
                     string timeAgo = FormatTimeAgo(entry.LastOpened);
                     paper.Box($"pl_pt_{i}").Width(80).Height(52)
                         .Text(timeAgo, font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSize - 3)
                         .Alignment(TextAlignment.MiddleRight);
 
                     // Remove button
                     paper.Box($"pl_pr_{i}").Width(24).Height(52)
                         .Text(EditorIcons.Xmark, font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink300)
                         .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
                         .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
                         .Rounded(4)
@@ -296,7 +312,7 @@ public static class ProjectLauncher
                     {
                         paper.Box($"pl_pmissing_{i}").Width(60).Height(52)
                             .Text("Missing", font)
-                            .TextColor(Color.FromArgb(255, 200, 80, 80))
+                            .TextColor(EditorTheme.Red400)
                             .FontSize(EditorTheme.FontSize - 3)
                             .Alignment(TextAlignment.MiddleCenter);
                     }
