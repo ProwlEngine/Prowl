@@ -25,7 +25,7 @@ public class InspectorPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        using (ScrollView.Begin(paper, "insp_scroll", width, height, paddingLeft: 8, paddingRight: 8, paddingTop: 8))
+        using (ScrollView.Begin(paper, "insp_scroll", width, height, paddingLeft: 8, paddingRight: 0, paddingTop: 8))
         {
             if (Selection.Count == 0)
             {
