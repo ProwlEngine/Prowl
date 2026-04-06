@@ -69,6 +69,10 @@ public static class CurveEditor
     //  Preview
     // ================================================================
 
+    /// <summary>Public accessor for drawing a curve preview. Used by PaletteUI.</summary>
+    public static void DrawCurvePreviewStatic(Canvas canvas, Rect r, AnimationCurve curve)
+        => DrawCurvePreview(canvas, r, curve);
+
     static void DrawCurvePreview(Canvas canvas, Rect r, AnimationCurve curve)
     {
         if (curve.Keys.Count == 0) return;
@@ -319,11 +323,11 @@ public static class CurveEditor
                     {
                         try
                         {
-                            var pal = ProjectSettingsRegistry.Get<EditorPaletteSettings>();
-                            var preset = new EditorPaletteSettings.CurvePreset
+                            var pal = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+                            var preset = new ProjectsEditorSettings.CurvePreset
                             {
                                 Name = $"Custom {pal.CurvePalette.Count + 1}",
-                                Keys = curve.Keys.Select(EditorPaletteSettings.KeyFrameData.FromKeyFrame).ToList()
+                                Keys = curve.Keys.Select(ProjectsEditorSettings.KeyFrameData.FromKeyFrame).ToList()
                             };
                             pal.CurvePalette.Add(preset);
                             ProjectSettingsRegistry.SaveAll();
@@ -343,20 +347,18 @@ public static class CurveEditor
     static void DrawCurvePalette(Paper paper, string id, AnimationCurve curve,
         ElementHandle editorEl, Action<AnimationCurve> onChange, float editorW, float paletteY)
     {
-        List<EditorPaletteSettings.CurvePreset>? presets = null;
-        try { presets = ProjectSettingsRegistry.Get<EditorPaletteSettings>().CurvePalette; }
+        List<ProjectsEditorSettings.CurvePreset>? presets = null;
+        try { presets = ProjectSettingsRegistry.Get<ProjectsEditorSettings>().CurvePalette; }
         catch { }
         if (presets == null || presets.Count == 0) return;
 
-        float presetW = 52f, presetH = 32f;
-        float gap = 3f;
         float rowW = editorW - 8;
-        int cols = Math.Max(1, (int)((rowW + gap) / (presetW + gap)));
-        int rowCount = (presets.Count + cols - 1) / cols;
-        int maxRows = 2;
-        float totalH = Math.Min(rowCount, maxRows) * (presetH + gap);
+        float presetH = 32f;
+        float gap = 3f;
+        int cols = Math.Max(1, (int)((rowW + gap) / (52f + gap)));
+        int rowCount = Math.Min((presets.Count + cols - 1) / cols, 2);
+        float totalH = rowCount * (presetH + gap);
 
-        // Use SelfDirected columns of rows
         using (paper.Column($"{id}_col")
             .PositionType(PositionType.SelfDirected)
             .Position(4, paletteY).Size(rowW, totalH)
@@ -364,59 +366,19 @@ public static class CurveEditor
             .Clip()
             .Enter())
         {
-            for (int row = 0; row < Math.Min(rowCount, maxRows); row++)
-            {
-                using (paper.Row($"{id}_r{row}").Height(presetH).RowBetween(gap).Enter())
+            PaletteUI.DrawCurvePresets(paper, id, presets, rowW, presetW: 52f, presetH: 32f, maxRows: 2,
+                onSelect: preset =>
                 {
-                    for (int col = 0; col < cols; col++)
-                    {
-                        int itemIdx = row * cols + col;
-                        if (itemIdx >= presets.Count) break;
-
-                        int idx = itemIdx;
-                        var preset = presets[idx];
-
-                        // Build temporary curve for preview
-                        var tempCurve = new AnimationCurve();
-                        foreach (var kd in preset.Keys) tempCurve.Keys.Add(kd.ToKeyFrame());
-
-                        using (paper.Box($"{id}_p{idx}")
-                            .Size(presetW, presetH)
-                            .BackgroundColor(EditorTheme.Neutral300)
-                            .Rounded(3)
-                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                            .Hovered.BorderColor(EditorTheme.Purple400).End()
-                            .Tooltip(preset.Name)
-                            .OnClick(idx, (ci, _) =>
-                            {
-                                var p = presets[ci];
-                                curve.Keys.Clear();
-                                foreach (var kd in p.Keys) curve.Keys.Add(kd.ToKeyFrame());
-                                onChange(curve);
-                                GetCurveBounds(curve, out float fMinT, out float fMaxT, out float fMinV, out float fMaxV);
-                                paper.SetElementStorage(editorEl, "vMinT", fMinT);
-                                paper.SetElementStorage(editorEl, "vMaxT", fMaxT);
-                                paper.SetElementStorage(editorEl, "vMinV", fMinV);
-                                paper.SetElementStorage(editorEl, "vMaxV", fMaxV);
-                                paper.SetElementStorage(editorEl, "sel", -1);
-                            })
-                            .OnRightClick(idx, (ci, _) =>
-                            {
-                                presets.RemoveAt(ci);
-                                ProjectSettingsRegistry.SaveAll();
-                            })
-                            .Enter())
-                        {
-                            // Draw preview inside the box using full size
-                            paper.Box($"{id}_pv{idx}")
-                                .Size(presetW, presetH)
-                                .IsNotInteractable()
-                                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                                    DrawCurvePreview(canvas, r, tempCurve)));
-                        }
-                    }
-                }
-            }
+                    curve.Keys.Clear();
+                    foreach (var kd in preset.Keys) curve.Keys.Add(kd.ToKeyFrame());
+                    onChange(curve);
+                    GetCurveBounds(curve, out float fMinT, out float fMaxT, out float fMinV, out float fMaxV);
+                    paper.SetElementStorage(editorEl, "vMinT", fMinT);
+                    paper.SetElementStorage(editorEl, "vMaxT", fMaxT);
+                    paper.SetElementStorage(editorEl, "vMinV", fMinV);
+                    paper.SetElementStorage(editorEl, "vMaxV", fMaxV);
+                    paper.SetElementStorage(editorEl, "sel", -1);
+                });
         }
     }
 

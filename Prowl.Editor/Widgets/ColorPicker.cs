@@ -90,90 +90,26 @@ public static class ColorPicker
     static void DrawPalette(Paper paper, string id, ElementHandle el, FontFile? font, float fontSize, Action<Prowl.Vector.Color> onChange)
     {
         List<string>? palette = null;
-        try { palette = ProjectSettingsRegistry.Get<EditorPaletteSettings>().ColorPalette; }
+        try { palette = ProjectSettingsRegistry.Get<ProjectsEditorSettings>().ColorPalette; }
         catch { }
         if (palette == null || palette.Count == 0) return;
 
-        // Separator
         paper.Box($"{id}_sep").Height(1).BackgroundColor(EditorTheme.Ink200);
 
-        // Palette grid — laid out as rows of swatches
-        const float swatchSize = 16f;
-        const float gap = 2f;
-        float availW = 280f - 16f;
-        int cols = (int)((availW + gap) / (swatchSize + gap));
-        int totalItems = palette.Count + 1; // +1 for add button
-        int rowCount = (totalItems + cols - 1) / cols;
-        int maxRows = 5;
-        int displayRows = Math.Min(rowCount, maxRows);
-
-        for (int row = 0; row < displayRows; row++)
-        {
-            using (paper.Row($"{id}_r{row}").Height(swatchSize).RowBetween(gap).Enter())
+        PaletteUI.DrawColorPalette(paper, id, palette, 280f - 16f, swatchSize: 16f, maxRows: 5,
+            onSelect: vc =>
             {
-                for (int col = 0; col < cols; col++)
-                {
-                    int itemIdx = row * cols + col;
-                    if (itemIdx >= totalItems) break;
-
-                    if (itemIdx < palette.Count)
-                    {
-                        int idx = itemIdx;
-                        var sc = ColorRamp.ParseHex(palette[idx]);
-                        paper.Box($"{id}_s{idx}")
-                            .Size(swatchSize, swatchSize)
-                            .BackgroundColor(sc)
-                            .Rounded(2)
-                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                            .Hovered.BorderColor(EditorTheme.Purple400).End()
-                            .OnClick(idx, (ci, _) =>
-                            {
-                                var c = ColorRamp.ParseHex(palette[ci]);
-                                var vc = new Prowl.Vector.Color(c.R / 255f, c.G / 255f, c.B / 255f, 1f);
-                                SyncHSV(paper, el, vc);
-                                onChange(vc);
-                            })
-                            .OnRightClick(idx, (ci, _) =>
-                            {
-                                palette.RemoveAt(ci);
-                                ProjectSettingsRegistry.SaveAll();
-                            });
-                    }
-                    else
-                    {
-                        // Add button
-                        paper.Box($"{id}_add")
-                            .Size(swatchSize, swatchSize)
-                            .BackgroundColor(EditorTheme.Ink100)
-                            .Rounded(2)
-                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                            {
-                                float cx = (float)r.Min.X + (float)r.Size.X / 2f;
-                                float cy = (float)r.Min.Y + (float)r.Size.Y / 2f;
-                                canvas.SetStrokeColor(Color32.FromArgb(180, 200, 200, 200));
-                                canvas.SetStrokeWidth(1.5f);
-                                canvas.BeginPath(); canvas.MoveTo(cx - 4, cy); canvas.LineTo(cx + 4, cy); canvas.Stroke();
-                                canvas.BeginPath(); canvas.MoveTo(cx, cy - 4); canvas.LineTo(cx, cy + 4); canvas.Stroke();
-                            }))
-                            .OnClick(e =>
-                            {
-                                float ch = paper.GetElementStorage(el, "h", 0f);
-                                float cs = paper.GetElementStorage(el, "s", 1f);
-                                float cv = paper.GetElementStorage(el, "v", 1f);
-                                var cc = HSVToColor(ch, cs, cv);
-                                string hex = $"#{(int)(cc.R * 255):X2}{(int)(cc.G * 255):X2}{(int)(cc.B * 255):X2}";
-                                if (!palette.Contains(hex))
-                                {
-                                    palette.Add(hex);
-                                    ProjectSettingsRegistry.SaveAll();
-                                }
-                            });
-                    }
-                }
-            }
-        }
+                SyncHSV(paper, el, vc);
+                onChange(vc);
+            },
+            onAdd: () =>
+            {
+                float ch = paper.GetElementStorage(el, "h", 0f);
+                float cs = paper.GetElementStorage(el, "s", 1f);
+                float cv = paper.GetElementStorage(el, "v", 1f);
+                var cc = HSVToColor(ch, cs, cv);
+                return $"#{(int)(cc.R * 255):X2}{(int)(cc.G * 255):X2}{(int)(cc.B * 255):X2}";
+            });
     }
 
     static void DrawSVSquare(Paper paper, string id, ElementHandle el, float h, float s, float v, float a, Action<Prowl.Vector.Color> onChange)
