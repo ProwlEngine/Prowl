@@ -337,6 +337,37 @@ public static unsafe class Graphics
         };
     }
 
+    /// <summary>
+    /// Resets GL rasterizer state to known defaults and syncs the cache.
+    /// Call at the start of each pipeline Render to prevent stale state
+    /// from a previous render pass leaking in.
+    /// </summary>
+    public static void ResetState()
+    {
+        GL.Enable(EnableCap.DepthTest);
+        depthTest = true;
+
+        GL.DepthMask(true);
+        depthWrite = true;
+
+        GL.DepthFunc(DepthFunction.Lequal);
+        depthMode = RasterizerState.DepthMode.Lequal;
+
+        GL.Disable(EnableCap.Blend);
+        doBlend = false;
+
+        blendSrc = RasterizerState.Blending.One;
+        blendDst = RasterizerState.Blending.Zero;
+        blendEquation = RasterizerState.BlendMode.Add;
+
+        GL.Enable(EnableCap.CullFace);
+        GL.CullFace(TriangleFace.Back);
+        cullFace = RasterizerState.PolyFace.Back;
+
+        GL.FrontFace(FrontFaceDirection.CW);
+        winding = RasterizerState.WindingOrder.CW;
+    }
+
     // Helper method to combine program ID and string hash into a unique ulong key
     private static ulong CombineKey(int programId, string name)
     {

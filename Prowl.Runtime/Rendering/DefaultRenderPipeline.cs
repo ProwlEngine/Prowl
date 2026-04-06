@@ -84,6 +84,10 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         ValidateDefaults();
 
+        // Reset GL rasterizer state to known defaults so this render pass
+        // doesn't inherit stale state from a previous pipeline render.
+        Graphics.ResetState();
+
         // Main rendering with correct order of operations
         Internal_Render(camera, data);
 
