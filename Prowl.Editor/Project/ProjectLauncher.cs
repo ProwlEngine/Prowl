@@ -117,7 +117,7 @@ public static class ProjectLauncher
                 {
                     paper.Box("pl_title")
                         .Height(60)
-                        .Margin(16, 16, 8, 8)
+                        .Margin(16, 16, 0, 8)
                         .Text("PROWL", boldFont)
                         .TextColor(EditorTheme.Ink500)
                         .FontSize(28f)
@@ -142,7 +142,7 @@ public static class ProjectLauncher
                 using (paper.Column("pl_header")
                     .Height(60)
                     .ColBetween(12)
-                    .Margin(24, 12)
+                    .Margin(12, 12)
                     .Enter())
                 {
                     EditorGUI.Button(paper, "yt_link", "YouTube").OnValueChanged((_) =>
