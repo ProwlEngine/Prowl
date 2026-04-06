@@ -144,7 +144,7 @@ public static class ColorPicker
                         // Add button
                         paper.Box($"{id}_add")
                             .Size(swatchSize, swatchSize)
-                            .BackgroundColor(EditorTheme.ButtonNormal)
+                            .BackgroundColor(EditorTheme.Ink100)
                             .Rounded(2)
                             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()

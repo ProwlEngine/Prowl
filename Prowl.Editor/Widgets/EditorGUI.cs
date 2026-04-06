@@ -104,7 +104,7 @@ public static class EditorGUI
         var el = paper.Box(id)
             .Height(EditorTheme.RowHeight)
             .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
-            .BackgroundColor(EditorTheme.ButtonNormal)
+            .BackgroundColor(EditorTheme.Ink100)
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
@@ -136,7 +136,7 @@ public static class EditorGUI
             .FontSize(FontSz)
             .Height(EditorTheme.RowHeight)
             .Width(EditorTheme.RowHeight)
-            .BackgroundColor(EditorTheme.ButtonNormal)
+            .BackgroundColor(EditorTheme.Ink100)
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
@@ -398,7 +398,7 @@ public static class EditorGUI
 
                     // ── Track background ──────────────────────────────────
                     canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
-                        EditorTheme.ButtonNormal);
+                        EditorTheme.Ink100);
 
                     // ── Track fill ────────────────────────────────────────
                     if (t > 0f)
@@ -621,7 +621,7 @@ public static class EditorGUI
         using (paper.Box(id)
             .Height(EditorTheme.RowHeight)
             .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
-            .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.ButtonNormal)
+            .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.Ink100)
             .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
@@ -944,7 +944,7 @@ public static class EditorGUI
 
                     // ── Track background ──────────────────────────────────
                     canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
-                        EditorTheme.ButtonNormal);
+                        EditorTheme.Ink100);
 
                     // ── Track fill ────────────────────────────────────────
                     if (progress > 0f)

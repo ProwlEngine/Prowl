@@ -294,7 +294,7 @@ public static class CurveEditor
             {
                 var fitBtn = paper.Box($"{id}_fit")
                     .Height(22).ChildLeft(6).ChildRight(6)
-                    .BackgroundColor(EditorTheme.ButtonNormal)
+                    .BackgroundColor(EditorTheme.Ink100)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                     .Rounded(3)
                     .OnClick(e =>
@@ -312,7 +312,7 @@ public static class CurveEditor
                 // Save current curve to palette
                 var saveBtn = paper.Box($"{id}_save_preset")
                     .Height(22).ChildLeft(6).ChildRight(6)
-                    .BackgroundColor(EditorTheme.ButtonNormal)
+                    .BackgroundColor(EditorTheme.Ink100)
                     .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                     .Rounded(3)
                     .OnClick(e =>

@@ -400,7 +400,7 @@ public class WidgetPlaygroundPanel : DockPanel
             var tooltipBtn = paper.Box("tooltip_demo")
                 .Height(EditorTheme.RowHeight)
                 .Width(200)
-                .BackgroundColor(EditorTheme.ButtonNormal)
+                .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(3)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)

@@ -52,7 +52,7 @@ public static class EditorTheme
     // public static Color TextDisabled = Color.FromArgb(255, 90, 90, 90);
 
     // Interactive
-    public static Color ButtonNormal = Color.FromArgb(255, 55, 55, 58);
+    // public static Color ButtonNormal = Color.FromArgb(255, 55, 55, 58);
     public static Color ButtonHovered = Color.FromArgb(255, 70, 70, 74);
     public static Color ButtonActive = Color.FromArgb(255, 40, 40, 43);
 

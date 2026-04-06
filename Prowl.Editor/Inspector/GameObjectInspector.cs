@@ -249,7 +249,7 @@ public static class GameObjectInspector
         {
             paper.Box("gi_add_comp")
                 .Height(28).Rounded(4)
-                .BackgroundColor(EditorTheme.ButtonNormal)
+                .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Text($"{EditorIcons.Plus}  Add Component", font)
                 .TextColor(EditorTheme.Ink500)
