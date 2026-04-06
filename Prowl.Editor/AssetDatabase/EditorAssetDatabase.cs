@@ -617,6 +617,13 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         if (obj.AssetID == Guid.Empty || string.IsNullOrEmpty(obj.AssetPath)) return;
 
+        // Sub-assets have paths like "Model.fbx#Mesh_0" — can't save those directly
+        if (obj.AssetPath.Contains('#'))
+        {
+            Runtime.Debug.LogWarning($"Cannot save sub-asset directly: {obj.AssetPath}");
+            return;
+        }
+
         string absolutePath = Path.Combine(_project.AssetsPath, obj.AssetPath);
         var ctx = new SerializationContext();
         Runtime.AssetDatabase.ConfigureContext(ctx);
@@ -740,6 +747,15 @@ public class EditorAssetDatabase : IAssetDatabase
             RunImport(entry);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
             OnAssetsImported?.Invoke(new[] { entry.Path });
+
+            // Invalidate cached versions of all assets that depend on this one
+            // so they pick up the new version on next Get()
+            var dependents = _dependencies.GetDependents(guid);
+            foreach (var depGuid in dependents)
+            {
+                _loadedAssets.Remove(depGuid);
+                Panels.ProjectPanel.InvalidateThumbnail(depGuid);
+            }
 
             // Reload the asset and enqueue thumbnail regeneration
             var reloaded = Get(guid);
