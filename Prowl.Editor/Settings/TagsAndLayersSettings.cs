@@ -48,7 +48,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                 paper.Box($"tl_tag_name_{i}")
                     .Height(22).ChildLeft(4)
                     .Text(Tags[i], font)
-                    .TextColor(isBuiltin ? EditorTheme.TextDim : EditorTheme.Text)
+                    .TextColor(isBuiltin ? EditorTheme.Ink500Dim : EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
 
@@ -57,7 +57,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                     paper.Box($"tl_tag_del_{i}")
                         .Width(20).Height(22).Rounded(3)
                         .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                        .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.TextDim)
+                        .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink500Dim)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(idx, (id, _) =>
                         {
@@ -98,13 +98,13 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                 {
                     paper.Box($"tl_layer_idx_{i}")
                         .Width(24).Height(22)
-                        .Text(i.ToString(), font).TextColor(EditorTheme.TextDim)
+                        .Text(i.ToString(), font).TextColor(EditorTheme.Ink500Dim)
                         .FontSize(EditorTheme.FontSize - 2)
                         .Alignment(TextAlignment.MiddleRight);
 
                     paper.Box($"tl_layer_name_{i}")
                         .Height(22).ChildLeft(4)
-                        .Text(Layers[i], font).TextColor(EditorTheme.TextDim)
+                        .Text(Layers[i], font).TextColor(EditorTheme.Ink500Dim)
                         .FontSize(EditorTheme.FontSize - 1)
                         .Alignment(TextAlignment.MiddleLeft);
                 }

@@ -139,7 +139,7 @@ public static class DragDrop
             .IsNotInteractable()
             .Layer(Layer.Topmost)
             .Text($"{Payload.Icon}  {Payload.DisplayName}", font)
-            .TextColor(EditorTheme.Text)
+            .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize - 2)
             .Alignment(TextAlignment.MiddleLeft);
     }

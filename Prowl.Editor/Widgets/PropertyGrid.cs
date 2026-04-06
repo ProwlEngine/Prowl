@@ -29,7 +29,7 @@ public static class PropertyGrid
         {
 
             if (target == null) return;
-            if (depth > 10) { EditorGUI.Label(paper, $"{id}_deep", "(max depth)", EditorTheme.TextDim); return; }
+            if (depth > 10) { EditorGUI.Label(paper, $"{id}_deep", "(max depth)", EditorTheme.Ink500Dim); return; }
 
             var type = target.GetType();
             var fields = GetSerializableFields(type);
@@ -150,7 +150,7 @@ public static class PropertyGrid
         }
 
         // 7. Fallback
-        EditorGUI.Label(paper, id, $"{label}: {value ?? "(null)"}", EditorTheme.TextDim);
+        EditorGUI.Label(paper, id, $"{label}: {value ?? "(null)"}", EditorTheme.Ink500Dim);
     }
 
     // ================================================================
@@ -213,7 +213,7 @@ public static class PropertyGrid
 
         if (types.Length == 0)
         {
-            EditorGUI.Label(paper, $"{id}_none", "(no implementations)", EditorTheme.TextDim);
+            EditorGUI.Label(paper, $"{id}_none", "(no implementations)", EditorTheme.Ink500Dim);
             return;
         }
 
