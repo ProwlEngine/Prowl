@@ -87,8 +87,6 @@ public static class ProjectLauncher
         float cardW = 600f;
         float cardH = 500f;
 
-        // float sidebarW = 200f;
-
         using (paper.Box("container").Size(w, h).Position(0, 0).PositionType(PositionType.SelfDirected).Enter())
         {
             using (paper.Column("pl_window")
