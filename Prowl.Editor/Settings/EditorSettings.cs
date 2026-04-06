@@ -83,7 +83,7 @@ public class EditorSettings
         EditorTheme.DockPadding = t.DockPadding;
         EditorTheme.TabBarHeight = t.TabBarHeight;
         EditorTheme.TabPadding = t.TabPadding;
-        EditorTheme.Roundness = t.TabRadius;
+        EditorTheme.Roundness = t.Roundness;
     }
 
     public void Save()

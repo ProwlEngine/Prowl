@@ -101,7 +101,7 @@ public class EditorThemeData
     public float DockPadding { get; set; } = 14f;
     public float TabBarHeight { get; set; } = 26f;
     public float TabPadding { get; set; } = 12f;
-    public float TabRadius { get; set; } = 8f;
+    public float Roundness { get; set; } = 8f;
 
     // Default ramp colors for computing offsets
     private static readonly Color[] DefaultNeutral = [H("#101116"), H("#16151A"), H("#18191D"), H("#1D1E22"), H("#2E2D35")];

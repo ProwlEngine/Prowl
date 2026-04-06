@@ -175,6 +175,7 @@ public class PreferencesPanel : DockPanel
             SzSlider(paper, s, "Label Width", theme.LabelWidth, 60, 240, v => theme.LabelWidth = v);
             SzSlider(paper, s, "Spacing", theme.Spacing, 0, 12, v => theme.Spacing = v);
             SzSlider(paper, s, "Padding", theme.Padding, 0, 16, v => theme.Padding = v);
+            SzSlider(paper, s, "Roundness", theme.Roundness, 0, 20, v => theme.Roundness = v);
         });
 
         EditorGUI.Foldout(paper, "pref_sz_docking", "Docking", () =>
@@ -187,7 +188,6 @@ public class PreferencesPanel : DockPanel
         {
             SzSlider(paper, s, "Tab Bar Height", theme.TabBarHeight, 18, 40, v => theme.TabBarHeight = v);
             SzSlider(paper, s, "Tab Padding", theme.TabPadding, 4, 24, v => theme.TabPadding = v);
-            SzSlider(paper, s, "Tab Radius", theme.TabRadius, 0, 20, v => theme.TabRadius = v);
         });
     }
 
