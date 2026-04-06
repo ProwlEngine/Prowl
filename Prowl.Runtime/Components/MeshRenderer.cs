@@ -22,7 +22,9 @@ public class MeshRenderer : MonoBehaviour, IRenderable
         {
             _properties.Clear();
             _properties.SetInt("_ObjectID", InstanceID);
-            _properties.SetColor("_MainColor", MainColor);
+            // Only override material's _MainColor if the per-instance tint is non-default
+            if (MainColor != Color.White)
+                _properties.SetColor("_MainColor", MainColor);
             GameObject.Scene.PushRenderable(this);
         }
     }

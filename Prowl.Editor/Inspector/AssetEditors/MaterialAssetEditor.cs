@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 
+using Prowl.Echo;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -59,16 +61,12 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         }
 
-        // Save button
+        // Save button — writes material to disk then reimports
         if (_dirty)
         {
             EditorGUI.Separator(paper, $"{id}_sep_save");
             EditorGUI.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material")
-                .OnValueChanged(_ =>
-                {
-                    _dirty = false;
-                    EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-                });
+                .OnValueChanged(_ => SaveMaterial(material, entry));
         }
 
         // 3D Preview
@@ -164,6 +162,40 @@ public class MaterialAssetEditor : AssetImporterEditor
                     }, 0);
                 break;
             }
+        }
+    }
+
+    private void SaveMaterial(Material material, AssetEntry entry)
+    {
+        if (Project.Current == null) return;
+
+        string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        try
+        {
+            // Temporarily clear AssetID so the serializer writes the full object
+            // instead of just an $assetId reference
+            var savedId = material.AssetID;
+            material.AssetID = Guid.Empty;
+
+            var ctx = new SerializationContext();
+            Runtime.AssetDatabase.ConfigureContext(ctx);
+
+            var echo = Serializer.Serialize(material, ctx);
+            material.AssetID = savedId;
+
+            if (echo != null)
+            {
+                File.WriteAllText(absolutePath, echo.WriteToString());
+                _dirty = false;
+                _lastPreviewAsset = null;
+
+                // Reimport to update cache + thumbnail
+                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+            }
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to save material: {ex.Message}");
         }
     }
 }

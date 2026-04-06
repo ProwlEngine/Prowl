@@ -134,11 +134,17 @@ public class PreviewRenderer : IDisposable
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
         var renderer = _subjectGo.AddComponent<MeshRenderer>();
-        renderer.Mesh = Mesh.CreateCube(Float3.One); // TODO: Use sphere when available
+        renderer.Mesh = Mesh.CreateSphere(0.5f, 32, 32);
+
+        if (material.Shader == null || !material.Shader.IsValid())
+            material.Shader = Shader.LoadDefault(DefaultShader.Standard);
         renderer.Material = material;
+
         _scene.Add(_subjectGo);
 
         FitToSubject(AABB.FromCenterAndSize(Float3.Zero, Float3.One));
+        _orbitDistance *= 1.25f; // Zoom out a bit more for materials
+        UpdateCameraPosition();
     }
 
     /// <summary>Render the preview to the RenderTexture.</summary>

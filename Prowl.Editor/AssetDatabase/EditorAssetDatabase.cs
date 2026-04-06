@@ -725,16 +725,42 @@ public class EditorAssetDatabase : IAssetDatabase
         {
             _loadedAssets.Remove(guid);
 
-            // Clear old thumbnails
+            // Clear old thumbnails and invalidate UI cache
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
+            Panels.ProjectPanel.InvalidateThumbnail(guid);
             if (entry.SubAssets != null)
                 foreach (var sub in entry.SubAssets)
+                {
+                    _loadedAssets.Remove(sub.Guid);
                     ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
+                    Panels.ProjectPanel.InvalidateThumbnail(sub.Guid);
+                }
 
             entry.NeedsReimport = true;
             RunImport(entry);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
             OnAssetsImported?.Invoke(new[] { entry.Path });
+
+            // Reload the asset and enqueue thumbnail regeneration
+            var reloaded = Get(guid);
+            if (reloaded != null)
+            {
+                string? sourceFile = entry.MainAssetType == typeof(Runtime.Resources.Texture2D)
+                    ? System.IO.Path.Combine(_project.AssetsPath, entry.Path)
+                    : null;
+                ThumbnailGenerator.Enqueue(guid, reloaded, sourceFile);
+            }
+
+            // Also regenerate sub-asset thumbnails
+            if (entry.SubAssets != null)
+            {
+                foreach (var sub in entry.SubAssets)
+                {
+                    var subAsset = Get(sub.Guid);
+                    if (subAsset != null)
+                        ThumbnailGenerator.Enqueue(sub.Guid, subAsset, null);
+                }
+            }
         }
     }
 

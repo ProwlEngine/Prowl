@@ -15,7 +15,7 @@ namespace Prowl.Editor;
 /// </summary>
 public static class ThumbnailGenerator
 {
-    public const int ThumbnailSize = 32;
+    public static int ThumbnailSize => EditorSettings.Instance.ThumbnailSize;
 
     private static readonly Queue<ThumbnailJob> _queue = new();
     private static readonly HashSet<Guid> _queued = new();
@@ -124,6 +124,23 @@ public static class ThumbnailGenerator
         _queued.Remove(guid);
     }
 
+    /// <summary>Delete all thumbnail files on disk and clear the queue.</summary>
+    public static void DeleteAll()
+    {
+        var project = Project.Current;
+        if (project == null) return;
+
+        try
+        {
+            foreach (var file in Directory.GetFiles(project.ThumbnailsPath, "*.thumb"))
+                File.Delete(file);
+        }
+        catch { }
+
+        _queue.Clear();
+        _queued.Clear();
+    }
+
     public static string GetThumbnailPath(Guid guid, string thumbnailsPath)
         => Path.Combine(thumbnailsPath, $"{guid}.thumb");
 
@@ -142,7 +159,8 @@ public static class ThumbnailGenerator
             using var image = new MagickImage(filePath);
 
             // Resize maintaining aspect ratio, then extent to square with transparent padding
-            var geo = new MagickGeometry(ThumbnailSize, ThumbnailSize)
+            var size = (uint)ThumbnailSize;
+            var geo = new MagickGeometry(size, size)
             {
                 IgnoreAspectRatio = false,
                 FillArea = false
@@ -151,7 +169,7 @@ public static class ThumbnailGenerator
 
             // Center in a square canvas
             image.BackgroundColor = MagickColors.Transparent;
-            image.Extent(ThumbnailSize, ThumbnailSize, Gravity.Center);
+            image.Extent(size, size, Gravity.Center);
 
             // Output as RGBA
             var pixels = image.GetPixels();

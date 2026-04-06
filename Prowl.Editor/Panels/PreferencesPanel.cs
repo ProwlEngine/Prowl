@@ -92,6 +92,17 @@ public class PreferencesPanel : DockPanel
 
         EditorGUI.Toggle(paper, "pref_reimport_focus", "Reimport Only on Focus", s.ReimportOnFocusOnly)
             .OnValueChanged(v => { s.ReimportOnFocusOnly = v; s.Save(); });
+
+        string[] thumbOptions = ["32", "64", "128"];
+        int thumbIndex = s.ThumbnailSize switch { 64 => 1, 128 => 2, _ => 0 };
+        EditorGUI.Dropdown(paper, "pref_thumb_size", "Thumbnail Size", thumbIndex, thumbOptions)
+            .OnValueChanged(v =>
+            {
+                s.ThumbnailSize = v switch { 1 => 64, 2 => 128, _ => 32 };
+                s.Save();
+                ThumbnailGenerator.DeleteAll();
+                ProjectPanel.ClearThumbnailCache();
+            });
     }
 
     // ================================================================

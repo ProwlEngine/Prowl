@@ -25,6 +25,7 @@ public class EditorSettings
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ProwlProjects");
     public bool AutoSaveLayout { get; set; } = true;
     public bool ReimportOnFocusOnly { get; set; } = true;
+    public int ThumbnailSize { get; set; } = 32;
 
     // Theme
     public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();

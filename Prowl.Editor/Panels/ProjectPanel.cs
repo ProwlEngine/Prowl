@@ -938,6 +938,16 @@ public class ProjectPanel : DockPanel
         _thumbnailCache.Clear();
     }
 
+    /// <summary>Invalidate a single thumbnail so it reloads from disk on next access.</summary>
+    public static void InvalidateThumbnail(Guid guid)
+    {
+        if (_thumbnailCache.TryGetValue(guid, out var tex))
+        {
+            tex?.Dispose();
+            _thumbnailCache.Remove(guid);
+        }
+    }
+
     private static string GetSubAssetIcon(Type? type)
     {
         if (type == null) return EditorIcons.File;
