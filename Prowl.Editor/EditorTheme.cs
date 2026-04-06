@@ -57,8 +57,8 @@ public static class EditorTheme
     public static Color ButtonActive = Color.FromArgb(255, 40, 40, 43);
 
     // Accent
-    public static Color Accent = Color.FromArgb(255, 51, 122, 183);
-    public static Color AccentDim = Color.FromArgb(255, 40, 90, 140);
+    // public static Color Accent = Color.FromArgb(255, 51, 122, 183);
+    // public static Color AccentDim = Color.FromArgb(255, 40, 90, 140);
 
     // Borders
     // public static Color BorderFocused = Color.FromArgb(255, 51, 122, 183);
