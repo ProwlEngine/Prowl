@@ -17,7 +17,7 @@ public class ConsolePanel : DockPanel
     public override string Title => "Console";
     public override string Icon => EditorIcons.Terminal;
 
-    private const float ToolbarHeight = 30f;
+    private const float ToolbarHeight = 26f;
     private const int MaxMessages = 500;
     private const float RowHeight = 20f;
     private static readonly List<LogEntry> _messages = new();
@@ -88,7 +88,7 @@ public class ConsolePanel : DockPanel
         using (paper.Column("con_root").Size(width, height).Enter())
         {
             DrawToolbar(paper, font, width);
-            DrawMessages(paper, font, width, height - 26);
+            DrawMessages(paper, font, width, height - 33);
         }
     }
 

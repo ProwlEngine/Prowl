@@ -33,7 +33,7 @@ public class ProjectPanel : DockPanel
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
 
-    private const float ToolbarHeight = 30f;
+    private const float ToolbarHeight = 30;
     private const float FolderTreeWidth = 180f;
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -295,7 +295,7 @@ public class ProjectPanel : DockPanel
             // Breadcrumb
             DrawBreadcrumb(paper, font, width, 20);
 
-            using (ScrollView.Begin(paper, "proj_content", width, height - 20))
+            using (ScrollView.Begin(paper, "proj_content", width, height - 31))
             {
                 using (paper.Column("proj_content_inner")
                     .Margin(6, 0, 0, 6)
