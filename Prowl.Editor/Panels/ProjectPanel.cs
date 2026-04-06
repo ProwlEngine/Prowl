@@ -29,6 +29,12 @@ public class ProjectPanel : DockPanel
     private int _lastSelectionCount; // track selection changes to cancel rename
     private static readonly HashSet<Guid> _expandedAssets = new(); // files with sub-assets expanded
     private static readonly Dictionary<Guid, Prowl.Runtime.Resources.Texture2D?> _thumbnailCache = new();
+    private static Guid _pendingFocusGuid; // Asset to focus/reveal on next frame
+
+    static ProjectPanel()
+    {
+        Selection.OnFocusAsset += guid => _pendingFocusGuid = guid;
+    }
     private const float MinThumbSize = 20f;  // Below this = list mode
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
@@ -41,6 +47,31 @@ public class ProjectPanel : DockPanel
         _paper = paper;
         var font = EditorTheme.DefaultFont;
         if (font == null || Project.Current == null) return;
+
+        // Handle pending focus — navigate to the asset's folder and select it
+        if (_pendingFocusGuid != Guid.Empty)
+        {
+            var focusGuid = _pendingFocusGuid;
+            _pendingFocusGuid = Guid.Empty;
+            var db = EditorAssetDatabase.Instance;
+            if (db != null)
+            {
+                string? path = db.GuidToPath(focusGuid);
+                if (path != null)
+                {
+                    // Navigate to the folder containing this asset
+                    string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
+                    _currentFolder = folder;
+                    // Select the asset's ContentItem
+                    Selection.Select(new ContentItem
+                    {
+                        Name = System.IO.Path.GetFileNameWithoutExtension(path),
+                        RelativePath = path,
+                        Guid = focusGuid,
+                    });
+                }
+            }
+        }
 
         // Cancel rename if selection changed
         if (_renamingPath != null)

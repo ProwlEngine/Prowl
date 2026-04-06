@@ -673,29 +673,31 @@ public class HierarchyPanel : DockPanel
         if (asset == null) return;
 
         string name = System.IO.Path.GetFileNameWithoutExtension(payload.AssetName);
-        var go = new GameObject(name);
-        go.Transform.Position = position;
 
         if (asset is Model model)
         {
+            var go = new GameObject(name);
+            go.Transform.Position = position;
             var renderer = go.AddComponent<ModelRenderer>();
             renderer.Model = model;
+            scene.Add(go);
+            if (parent != null) go.SetParent(parent);
+            Selection.Select(go);
         }
         else if (asset is Mesh mesh)
         {
+            var go = new GameObject(name);
+            go.Transform.Position = position;
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.Mesh = mesh;
             renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+            scene.Add(go);
+            if (parent != null) go.SetParent(parent);
+            Selection.Select(go);
         }
         else
         {
-            Runtime.Debug.Log($"Spawned empty GameObject for asset type: {asset.GetType().Name}");
+            Runtime.Debug.LogWarning($"Cannot spawn asset of type {asset.GetType().Name} in scene.");
         }
-
-        scene.Add(go);
-        if (parent != null)
-            go.SetParent(parent);
-
-        Selection.Select(go);
     }
 }

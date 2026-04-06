@@ -227,42 +227,80 @@ public class SceneViewPanel : DockPanel
                 Float2.Zero,
                 new Float2(width, height));
 
-            // Accept asset drops — raycast to find drop position
+            // Accept asset drops — only for spawnable types (Model, Mesh) and special types (Scene, Material)
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
-                // Show drop indicator
-                paper.Box("sv_drop_indicator")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(0, height - 24).Size(width, 24)
-                    .BackgroundColor(Color.FromArgb(150, 30, 30, 35))
-                    .IsNotInteractable()
-                    .Text($"{EditorIcons.ArrowDown}  Drop to spawn in scene", font)
-                    .TextColor(EditorTheme.Purple400)
-                    .FontSize(EditorTheme.FontSize - 2)
-                    .Alignment(TextAlignment.MiddleCenter);
+                var dragPayload = (AssetDragPayload)DragDrop.Payload!;
+                bool isSpawnable = dragPayload.AssetType == typeof(Model)
+                    || dragPayload.AssetType == typeof(Mesh)
+                    || dragPayload.AssetType == typeof(Scene)
+                    || typeof(Material).IsAssignableFrom(dragPayload.AssetType ?? typeof(object));
+
+                if (isSpawnable)
+                {
+                    string hint = typeof(Material).IsAssignableFrom(dragPayload.AssetType ?? typeof(object))
+                        ? $"{EditorIcons.ArrowDown}  Drop on object to assign material"
+                        : $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
+
+                    paper.Box("sv_drop_indicator")
+                        .PositionType(PositionType.SelfDirected)
+                        .Position(0, height - 24).Size(width, 24)
+                        .BackgroundColor(Color.FromArgb(150, 30, 30, 35))
+                        .IsNotInteractable()
+                        .Text(hint, font)
+                        .TextColor(EditorTheme.Purple400)
+                        .FontSize(EditorTheme.FontSize - 2)
+                        .Alignment(TextAlignment.MiddleCenter);
+                }
             }
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
             {
+                bool handled = false;
+
                 if (assetDrop.AssetType == typeof(Scene))
                 {
-                    // Scene asset — load it instead of spawning
                     var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
                     if (entry != null)
                         EditorSceneManager.OpenScene(entry.Path);
+                    handled = true;
                 }
-                else
+                else if (typeof(Material).IsAssignableFrom(assetDrop.AssetType ?? typeof(object)))
                 {
-                    // Regular asset — spawn in scene
+                    // Material drop — raycast to find the object and assign material
                     Float2 mouseLocal = paper.PointerPos - new Float2(
-                        paper.CurrentParent.Data.X,
-                        paper.CurrentParent.Data.Y);
+                        paper.CurrentParent.Data.X, paper.CurrentParent.Data.Y);
+                    Float2 panelSize = new Float2(width, height);
+                    var hitGO = PickObjectAt(scene, mouseLocal, panelSize);
+                    if (hitGO != null)
+                    {
+                        var mat = Runtime.AssetDatabase.Get(assetDrop.AssetGuid) as Material;
+                        if (mat != null)
+                        {
+                            var meshRenderer = hitGO.GetComponent<MeshRenderer>();
+                            if (meshRenderer != null)
+                            {
+                                meshRenderer.Material = mat;
+                                EditorSceneManager.IsDirty = true;
+                            }
+                            var modelRenderer = hitGO.GetComponent<ModelRenderer>();
+                            // TODO: assign to model renderer materials
+                        }
+                    }
+                    handled = true;
+                }
+                else if (assetDrop.AssetType == typeof(Model) || assetDrop.AssetType == typeof(Mesh))
+                {
+                    Float2 mouseLocal = paper.PointerPos - new Float2(
+                        paper.CurrentParent.Data.X, paper.CurrentParent.Data.Y);
                     Float2 panelSize = new Float2(width, height);
                     Float3 dropPos = GetDropPosition(scene, mouseLocal, panelSize);
-
                     HierarchyPanel.SpawnAssetInScene(assetDrop, null, dropPos);
+                    handled = true;
                 }
-                DragDrop.EndDrag();
+
+                if (handled)
+                    DragDrop.EndDrag();
             }
 
             // View manipulator (orientation cube) — drawn as 2D overlay on top-right
@@ -270,9 +308,9 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)
+    private GameObject? PickObjectAt(Scene scene, Float2 screenPos, Float2 panelSize)
     {
-        if (_editorCamera == null) return;
+        if (_editorCamera == null) return null;
 
         var ray = _editorCamera.ScreenPointToRay(screenPos, panelSize);
 
@@ -283,7 +321,6 @@ public class SceneViewPanel : DockPanel
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
-            // Check MeshRenderer
             var meshRenderer = go.GetComponent<MeshRenderer>();
             if (meshRenderer != null && meshRenderer.Raycast(ray, out float dist))
             {
@@ -291,13 +328,19 @@ public class SceneViewPanel : DockPanel
                 continue;
             }
 
-            // Check ModelRenderer
             var modelRenderer = go.GetComponent<ModelRenderer>();
             if (modelRenderer != null && modelRenderer.Raycast(ray, out dist))
             {
                 if (dist < bestDist) { bestDist = dist; bestHit = go; }
             }
         }
+
+        return bestHit;
+    }
+
+    private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)
+    {
+        var bestHit = PickObjectAt(scene, screenPos, panelSize);
 
         if (bestHit != null)
         {
