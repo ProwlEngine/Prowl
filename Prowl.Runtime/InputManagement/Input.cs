@@ -20,7 +20,8 @@ public static class Input
     private static float _currentTime = 0;
 
     public static Stack<IInputHandler> Handlers => _handlers;
-    public static IInputHandler Current => _handlers.Peek();
+    private static readonly NullInputHandler _nullHandler = new();
+    public static IInputHandler Current => _handlers.Count > 0 ? _handlers.Peek() : _nullHandler;
 
     public static void PushHandler(IInputHandler handler) => _handlers.Push(handler);
     public static void PopHandler() => _handlers.Pop();
