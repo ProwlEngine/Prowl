@@ -100,6 +100,12 @@ Sdl2Native.SDL_SetWindowTitle(window.SdlWindowHandle, title);
 window.SdlInstance.SetWindowTitle(window.SdlWindowHandle, title);
 ```
 
+### ImGui.NET 1.91.x
+
+**Likelihood Of Impact: Low**
+
+The `NeoVeldrid.ImGui` package now uses ImGui.NET 1.91.6.1 (up from 1.90.1.1). The NeoVeldrid.ImGui API itself is unchanged, but if your own code also calls ImGui.NET directly, you may need to update it. See the [ImGui.NET releases](https://github.com/ImGuiNET/ImGui.NET/releases) for breaking changes.
+
 ### ImageSharp 3.x
 
 **Likelihood Of Impact: Low**
