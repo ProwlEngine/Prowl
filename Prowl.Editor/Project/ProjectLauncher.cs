@@ -145,6 +145,16 @@ public static class ProjectLauncher
                     .Margin(16, 12)
                     .Enter())
                 {
+                    EditorGUI.Button(paper, "yt_link", "Website").OnValueChanged((_) =>
+                    {
+                        ReferenceOpenerService.OpenUrl("https://prowlengine.com");
+                    });
+
+                    EditorGUI.Button(paper, "yt_link", "Discord").OnValueChanged((_) =>
+                    {
+                        ReferenceOpenerService.OpenUrl("https://discord.gg/HgBsBqfSpa");
+                    });
+
                     EditorGUI.Button(paper, "yt_link", "YouTube").OnValueChanged((_) =>
                     {
                         ReferenceOpenerService.OpenUrl("https://youtube.com/@prowlengine");
