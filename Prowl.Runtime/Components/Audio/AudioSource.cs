@@ -37,7 +37,7 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     }
 
     // Audio clip and playback settings
-    private AudioClip _clip;
+    private AssetRef<AudioClip> _clip;
     private bool _playOnStart = false;
     private bool _loop = false;
     private float _volume = 1.0f;
@@ -78,13 +78,13 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     /// <summary>
     /// The AudioClip to play.
     /// </summary>
-    public AudioClip Clip
+    public AudioClip? Clip
     {
-        get => _clip;
+        get => _clip.Res;
         set
         {
             _clip = value;
-            if (_mainSource != null && _clip != null && _playOnStart)
+            if (_mainSource != null && _clip.Res != null && _playOnStart)
             {
                 Play();
             }
@@ -329,7 +329,7 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
             ApplySettings();
 
             // Handle playback
-            if (_clip != null)
+            if (_clip.Res != null)
             {
                 if (ResumePositionOnLoad && _wasPlaying && _savedCursor > 0)
                 {
@@ -426,16 +426,16 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     /// </summary>
     public void Play()
     {
-        if (_soundGroup.pointer == IntPtr.Zero || _clip == null) return;
+        if (_soundGroup.pointer == IntPtr.Zero || _clip.Res == null) return;
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
         _mainSource.atEnd = false;
         MiniAudioExNative.ma_ex_audio_source_set_loop(_mainSource.handle, _loop ? (uint)1 : 0);
 
-        if (_clip.Handle != IntPtr.Zero)
-            MiniAudioExNative.ma_ex_audio_source_play_from_memory(_mainSource.handle, _clip.Handle, _clip.DataSize);
+        if (_clip.Res.Handle != IntPtr.Zero)
+            MiniAudioExNative.ma_ex_audio_source_play_from_memory(_mainSource.handle, _clip.Res.Handle, _clip.Res.DataSize);
         else
-            MiniAudioExNative.ma_ex_audio_source_play_from_file(_mainSource.handle, _clip.FilePath, _clip.StreamFromDisk ? (uint)1 : 0);
+            MiniAudioExNative.ma_ex_audio_source_play_from_file(_mainSource.handle, _clip.Res.FilePath, _clip.Res.StreamFromDisk ? (uint)1 : 0);
     }
 
     /// <summary>

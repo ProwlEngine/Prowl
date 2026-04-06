@@ -51,7 +51,7 @@ public sealed class ConvexHullCollider : Collider
             MeshRenderer? renderer2 = GetComponent<MeshRenderer>();
             if (renderer2.IsValid())
             {
-                mesh = renderer2.Mesh;
+                mesh = renderer2.Mesh.Res;
             }
             else
             {

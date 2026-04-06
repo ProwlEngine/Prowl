@@ -60,7 +60,7 @@ public sealed class ModelCollider : Collider
             ModelRenderer? renderer2 = GetComponent<ModelRenderer>();
             if (renderer2.IsValid())
             {
-                model = renderer2.Model;
+                model = renderer2.Model.Res;
             }
             else
             {
@@ -75,8 +75,10 @@ public sealed class ModelCollider : Collider
 
         foreach (var mesh in model.Meshes)
         {
-            Vector.Float3[] vertices = mesh.Mesh.Vertices;
-            int[] indices = [.. mesh.Mesh.Indices.Select(i => (int)i)];
+            var m = mesh.Mesh.Res;
+            if (m == null) continue;
+            Vector.Float3[] vertices = m.Vertices;
+            int[] indices = [.. m.Indices.Select(i => (int)i)];
 
 
             for (int i = 0; i < indices.Length; i += 3)

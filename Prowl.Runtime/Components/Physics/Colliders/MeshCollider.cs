@@ -15,29 +15,29 @@ namespace Prowl.Runtime;
 [AddComponentMenu("Physics/Colliders/Mesh Collider")]
 public sealed class MeshCollider : Collider
 {
-    [SerializeField] private Mesh mesh;
+    [SerializeField] private AssetRef<Mesh> mesh;
 
-    public Mesh Mesh
+    public AssetRef<Mesh> Mesh
     {
         get => mesh;
         set
         {
-            mesh = value;
+            mesh.Res = value.Res;
             OnValidate();
         }
     }
 
     public override RigidBodyShape[] CreateShapes()
     {
-        if (mesh.IsNotValid())
+        if (mesh.Res == null)
         {
             OnEnable(); // Trigger OnEnable to grab the mesh from a renderer
-            if (mesh.IsNotValid())
+            if (mesh.Res == null)
                 Debug.LogError("Mesh is null");
             return null;
         }
 
-        List<JTriangle> triangles = ToTriangleList(mesh);
+        List<JTriangle> triangles = ToTriangleList(mesh.Res);
         TriangleMesh triangleMesh = new(triangles, true);
 
         TriangleShape[] shapes = new TriangleShape[triangles.Count];
@@ -51,7 +51,7 @@ public sealed class MeshCollider : Collider
     {
         base.OnEnable();
 
-        if (mesh.IsNotValid())
+        if (mesh.Res == null)
         {
             MeshRenderer? renderer2 = GetComponent<MeshRenderer>();
             if (renderer2.IsValid())

@@ -48,16 +48,17 @@ public class EditorModelImporter : AssetImporter
             for (int i = 0; i < model.Meshes.Count; i++)
             {
                 var modelMesh = model.Meshes[i];
-                if (modelMesh.Mesh != null)
+                var mesh = modelMesh.Mesh.Res;
+                if (mesh != null)
                 {
-                    modelMesh.Mesh.Name = !string.IsNullOrEmpty(modelMesh.Name) ? modelMesh.Name : $"Mesh_{i}";
-                    subAssets.Add(modelMesh.Mesh);
+                    mesh.Name = !string.IsNullOrEmpty(modelMesh.Name) ? modelMesh.Name : $"Mesh_{i}";
+                    subAssets.Add(mesh);
                 }
             }
 
             for (int i = 0; i < model.Materials.Count; i++)
             {
-                var mat = model.Materials[i];
+                var mat = model.Materials[i].Res;
                 if (mat != null)
                 {
                     if (string.IsNullOrEmpty(mat.Name)) mat.Name = $"Material_{i}";

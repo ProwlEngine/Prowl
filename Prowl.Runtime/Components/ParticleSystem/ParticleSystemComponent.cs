@@ -20,7 +20,7 @@ public class ParticleSystemComponent : MonoBehaviour
 {
     #region Configuration
 
-    public Material Material;
+    public AssetRef<Material> Material;
     public int MaxParticles = 1000;
     public float Duration = 5.0f;
     public bool Looping = true;
@@ -138,7 +138,7 @@ public class ParticleSystemComponent : MonoBehaviour
         }
 
         // Render particles using Graphics.DrawMeshInstanced
-        if (_particles.Count > 0 && Material.IsValid() && _quadMesh != null)
+        if (_particles.Count > 0 && Material.Res != null && _quadMesh != null)
         {
             // Update instance data from particles
             UpdateInstanceData();
@@ -152,7 +152,7 @@ public class ParticleSystemComponent : MonoBehaviour
                 GameObject.Scene,
                 _quadMesh,
                 _transforms,
-                Material,
+                Material.Res,
                 Transform.Position, // Use particle system's transform position for stable depth sorting (prevents flickering)
                 _colors,
                 _customData,

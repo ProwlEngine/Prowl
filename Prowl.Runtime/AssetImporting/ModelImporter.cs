@@ -188,7 +188,7 @@ public class ModelImporter
         return model;
     }
 
-    private unsafe void LoadMaterials(Scene* scene, DirectoryInfo? parentDir, List<Material> mats)
+    private unsafe void LoadMaterials(Scene* scene, DirectoryInfo? parentDir, List<AssetRef<Material>> mats)
     {
         for (uint i = 0; i < scene->MNumMaterials; i++)
         {
@@ -300,7 +300,7 @@ public class ModelImporter
         }
     }
 
-    private unsafe void LoadMeshes(string assetPath, ModelImporterSettings settings, Scene* scene, float scale, List<Material> mats, List<ModelMesh> meshMats)
+    private unsafe void LoadMeshes(string assetPath, ModelImporterSettings settings, Scene* scene, float scale, List<AssetRef<Material>> mats, List<ModelMesh> meshMats)
     {
         for (uint meshIndex = 0; meshIndex < scene->MNumMeshes; meshIndex++)
         {
@@ -485,7 +485,7 @@ public class ModelImporter
                 }
             }
 
-            meshMats.Add(new ModelMesh(m->MName.AsString, mesh, mats[(int)m->MMaterialIndex], m->MNumBones > 0));
+            meshMats.Add(new ModelMesh(m->MName.AsString, mesh, mats[(int)m->MMaterialIndex].Res, m->MNumBones > 0));
         }
     }
 
@@ -612,14 +612,15 @@ public class ModelImporter
 
         foreach (ModelMesh modelMesh in meshes)
         {
-            if (modelMesh.HasBones && modelMesh.Mesh.boneNames != null && modelMesh.Mesh.bindPoses != null)
+            var mesh = modelMesh.Mesh.Res;
+            if (modelMesh.HasBones && mesh?.boneNames != null && mesh?.bindPoses != null)
             {
-                for (int i = 0; i < modelMesh.Mesh.boneNames.Length; i++)
+                for (int i = 0; i < mesh.boneNames.Length; i++)
                 {
-                    string boneName = modelMesh.Mesh.boneNames[i];
+                    string boneName = mesh.boneNames[i];
                     if (!boneOffsetMatrices.ContainsKey(boneName))
                     {
-                        boneOffsetMatrices[boneName] = modelMesh.Mesh.bindPoses[i];
+                        boneOffsetMatrices[boneName] = mesh.bindPoses[i];
                     }
                 }
             }

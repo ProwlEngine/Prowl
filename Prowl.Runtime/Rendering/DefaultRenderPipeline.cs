@@ -72,7 +72,7 @@ public class DefaultRenderPipeline : RenderPipeline
         if (s_skyDome.IsNotValid())
         {
             Model skyDomeModel = Model.LoadDefault(DefaultModel.SkyDome) ?? throw new Exception("SkyDome model not found. Please ensure the model is included in the project.");
-            s_skyDome = skyDomeModel.Meshes[0].Mesh;
+            s_skyDome = skyDomeModel.Meshes[0].Mesh.Res;
         }
     }
 

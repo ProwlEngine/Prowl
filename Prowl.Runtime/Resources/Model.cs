@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Resources;
 public class Model : EngineObject
 {
     public new string Name { get; set; }
-    public List<Material> Materials { get; set; } = [];
+    public List<AssetRef<Material>> Materials { get; set; } = [];
     public List<ModelMesh> Meshes { get; set; } = [];
     public List<AnimationClip> Animations { get; set; } = [];
     public Skeleton Skeleton { get; set; }
@@ -80,8 +80,8 @@ public class Model : EngineObject
 public class ModelMesh
 {
     public string Name { get; set; }
-    public Mesh Mesh { get; set; }
-    public Material Material { get; set; }
+    public AssetRef<Mesh> Mesh { get; set; }
+    public AssetRef<Material> Material { get; set; }
     public bool HasBones { get; set; }
 
     public ModelMesh(string name, Mesh mesh, Material material, bool hasBones = false)

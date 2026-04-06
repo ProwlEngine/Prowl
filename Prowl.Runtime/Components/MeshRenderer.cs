@@ -10,15 +10,15 @@ namespace Prowl.Runtime;
 [AddComponentMenu("Rendering/Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, IRenderable
 {
-    public Mesh Mesh;
-    public Material Material;
+    public AssetRef<Mesh> Mesh;
+    public AssetRef<Material> Material;
     public Color MainColor = Color.White;
 
     private PropertyState _properties = new();
 
     public override void OnRenderCollect()
     {
-        if (Mesh.IsValid() && Material.IsValid())
+        if (Mesh.Res != null && Material.Res != null)
         {
             _properties.Clear();
             _properties.SetInt("_ObjectID", InstanceID);
@@ -29,13 +29,13 @@ public class MeshRenderer : MonoBehaviour, IRenderable
         }
     }
 
-    public Material GetMaterial() => Material;
+    public Material GetMaterial() => Material.Res!;
     public int GetLayer() => GameObject.LayerIndex;
     public Float3 GetPosition() => Transform.Position;
 
     public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh drawData, out Float4x4 model, out InstanceData[]? instanceData)
     {
-        drawData = Mesh;
+        drawData = Mesh.Res!;
         properties = _properties;
         model = Transform.LocalToWorldMatrix;
         instanceData = null; // Single instance rendering
@@ -45,7 +45,7 @@ public class MeshRenderer : MonoBehaviour, IRenderable
     {
         isRenderable = true;
         //bounds = Bounds.CreateFromMinMax(new Vector3(999999), new Vector3(999999));
-        bounds = Mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+        bounds = Mesh.Res!.bounds.TransformBy(Transform.LocalToWorldMatrix);
     }
 
     /// <summary>
@@ -54,18 +54,17 @@ public class MeshRenderer : MonoBehaviour, IRenderable
     public bool Raycast(Ray worldRay, out float distance)
     {
         distance = float.MaxValue;
-        if (!Mesh.IsValid()) return false;
+        var mesh = Mesh.Res;
+        if (mesh == null) return false;
 
-        // Transform ray to local space
         Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
         Float3 localOrigin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);
         Float3 localDir = Float3.Normalize(Float4x4.TransformNormal(worldRay.Direction, worldToLocal));
         var localRay = new Ray(localOrigin, localDir);
 
-        // First check AABB
-        if (!localRay.Intersects(Mesh.bounds, out _, out _))
+        if (!localRay.Intersects(mesh.bounds, out _, out _))
             return false;
 
-        return Mesh.Raycast(localRay, out distance);
+        return mesh.Raycast(localRay, out distance);
     }
 }

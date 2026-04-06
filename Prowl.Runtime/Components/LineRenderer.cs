@@ -12,7 +12,7 @@ namespace Prowl.Runtime;
 [AddComponentMenu("Rendering/Line Renderer")]
 public class LineRenderer : MonoBehaviour, IRenderable
 {
-    public Material Material;
+    public AssetRef<Material> Material;
     public float StartWidth = 0.1f;
     public float EndWidth = 0.1f;
     public List<Float3> Points = [];
@@ -50,7 +50,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
     public override void Update()
     {
-        if (Material.IsValid() && Points != null && Points.Count >= 2)
+        if (Material.Res != null && Points != null && Points.Count >= 2)
         {
             // Check if we need to regenerate
             bool needsUpdate = _isDirty ||
@@ -85,7 +85,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
     public override void OnRenderCollect()
     {
-        if (Material.IsValid() && Points != null && Points.Count >= 2)
+        if (Material.Res != null && Points != null && Points.Count >= 2)
             GameObject.Scene.PushRenderable(this);
     }
 
@@ -172,7 +172,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
     #region IRenderable Implementation
 
-    public Material GetMaterial() => Material;
+    public Material GetMaterial() => Material.Res;
     public int GetLayer() => GameObject.LayerIndex;
     Float3 IRenderable.GetPosition() => Transform.Position;
 
@@ -202,7 +202,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
     public void GetCullingData(out bool isRenderable, out AABB bounds)
     {
-        isRenderable = Points != null && Points.Count >= 2 && Material.IsValid();
+        isRenderable = Points != null && Points.Count >= 2 && Material != null;
         bounds = _bounds;
     }
 

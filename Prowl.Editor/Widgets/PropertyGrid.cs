@@ -134,7 +134,14 @@ public static class PropertyGrid
             return;
         }
 
-        // 5. EngineObject (fallback if not caught by registry — handles inheritance)
+        // 5. AssetRef<T> (implements IAssetRef)
+        if (typeof(IAssetRef).IsAssignableFrom(type))
+        {
+            new AssetRefPropertyEditor().OnGUI(paper, id, label, value, onChange, depth);
+            return;
+        }
+
+        // 6. EngineObject (fallback if not caught by registry — handles inheritance)
         if (typeof(EngineObject).IsAssignableFrom(type))
         {
             EngineObjectPropertyEditor.SetFieldType(type);

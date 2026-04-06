@@ -289,8 +289,9 @@ public class PreviewRenderer : IDisposable
 
         foreach (var modelMesh in model.Meshes)
         {
-            if (modelMesh.Mesh == null) continue;
-            var b = modelMesh.Mesh.bounds;
+            var mesh = modelMesh.Mesh.Res;
+            if (mesh == null) continue;
+            var b = mesh.bounds;
             min = new Float3(MathF.Min(min.X, b.Min.X), MathF.Min(min.Y, b.Min.Y), MathF.Min(min.Z, b.Min.Z));
             max = new Float3(MathF.Max(max.X, b.Max.X), MathF.Max(max.Y, b.Max.Y), MathF.Max(max.Z, b.Max.Z));
         }

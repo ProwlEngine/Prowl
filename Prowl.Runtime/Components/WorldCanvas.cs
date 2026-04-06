@@ -29,7 +29,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
     public Camera? TargetCamera;
 
     // Rendering
-    public Material? Material;
+    public AssetRef<Material> Material;
 
     private RenderTexture? _renderTexture;
     private PaperRenderer? _paperRenderer;
@@ -62,7 +62,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
         _paper = new Paper(_paperRenderer, Width, Height, new Prowl.Quill.FontAtlasSettings());
 
         // Create a default material if none is provided
-        if (Material.IsNotValid())
+        if (Material.Res?.IsNotValid() ?? false)
         {
             Material = new Material(Shader.LoadDefault(DefaultShader.Unlit));
         }
@@ -105,7 +105,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
     public override void OnRenderCollect()
     {
         // Push this canvas as a renderable
-        if (_renderTexture.IsValid() && Material.IsValid() && _quadMesh.IsValid())
+        if (_renderTexture.IsValid() && (Material.Res?.IsValid() ?? false) && _quadMesh.IsValid())
         {
             _properties.Clear();
             _properties.SetInt("_ObjectID", InstanceID);
@@ -245,7 +245,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
     }
 
     // IRenderable implementation
-    public Material GetMaterial() => Material ?? new Material(Shader.LoadDefault(DefaultShader.Unlit));
+    public Material GetMaterial() => Material.Res ?? new Material(Shader.LoadDefault(DefaultShader.Unlit));
 
     public int GetLayer() => GameObject.LayerIndex;
 
@@ -261,7 +261,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
 
     public void GetCullingData(out bool isRenderable, out AABB bounds)
     {
-        isRenderable = _renderTexture.IsValid() && Material.IsValid();
+        isRenderable = _renderTexture.IsValid() && Material.Res != null;
 
         // Create bounds for the fullscreen quad (-1 to 1 in local space)
         Float3 min = new(-1, -1, 0);
