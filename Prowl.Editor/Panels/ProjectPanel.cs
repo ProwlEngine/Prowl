@@ -69,8 +69,11 @@ public class ProjectPanel : DockPanel
     {
         using (paper.Row("proj_toolbar")
             .Height(ToolbarHeight)
-            .ChildLeft(6).ChildRight(6).RowBetween(4)
-            .ChildTop(3).ChildBottom(3)
+            .ChildLeft(4)
+            .ChildRight(4)
+            .RowBetween(4)
+            .ChildTop(4)
+            .ChildBottom(0)
             .Enter())
         {
             // Add button with context menu

@@ -29,6 +29,8 @@ public class ConsolePanel : DockPanel
     private bool _autoScroll = true;
     private string _searchText = "";
 
+    private const float ToolbarHeight = 30f;
+
     private struct LogEntry
     {
         public string Message;
@@ -93,8 +95,12 @@ public class ConsolePanel : DockPanel
     private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
     {
         using (paper.Row("con_toolbar")
-            .Height(26).ChildLeft(4).ChildRight(4).RowBetween(4)
-            .ChildTop(2).ChildBottom(2)
+            .Height(ToolbarHeight)
+            .ChildLeft(4)
+            .ChildRight(4)
+            .RowBetween(4)
+            .ChildTop(4)
+            .ChildBottom(0)
             .Enter())
         {
             // Clear
