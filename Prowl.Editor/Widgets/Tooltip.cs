@@ -73,7 +73,7 @@ public static class Tooltip
             .Layer(Layer.Topmost)
             .IsNotInteractable()
             .Text(_pendingText, font)
-            .TextColor(EditorTheme.Text)
+            .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize - 1);
 
         _pendingText = null;

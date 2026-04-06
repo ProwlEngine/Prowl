@@ -276,7 +276,7 @@ public static class FileDialog
             float btnW = 28f;
 
             // Back
-            var backColor = _historyIndex > 0 ? EditorTheme.Text : EditorTheme.TextDisabled;
+            var backColor = _historyIndex > 0 ? EditorTheme.Ink500 : EditorTheme.TextDisabled;
             paper.Box("fd_back").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.ArrowLeft, font).TextColor(backColor).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
@@ -285,7 +285,7 @@ public static class FileDialog
                 .OnClick(0, (_, _) => NavigateBack());
 
             // Forward
-            var fwdColor = _historyIndex < _pathHistory.Count - 1 ? EditorTheme.Text : EditorTheme.TextDisabled;
+            var fwdColor = _historyIndex < _pathHistory.Count - 1 ? EditorTheme.Ink500 : EditorTheme.TextDisabled;
             paper.Box("fd_fwd").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.ArrowRight, font).TextColor(fwdColor).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
@@ -295,7 +295,7 @@ public static class FileDialog
 
             // Up
             paper.Box("fd_up").Width(btnW).Height(ToolbarHeight)
-                .Text(EditorIcons.ArrowUp, font).TextColor(EditorTheme.Text).FontSize(14f)
+                .Text(EditorIcons.ArrowUp, font).TextColor(EditorTheme.Ink500).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(4)
@@ -307,13 +307,13 @@ public static class FileDialog
                 .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(4)
                 .ChildLeft(8)
-                .Text(_currentPath, font).TextColor(EditorTheme.Text)
+                .Text(_currentPath, font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize - 3)
                 .Alignment(TextAlignment.MiddleLeft);
 
             // New folder button
             paper.Box("fd_newfolder").Width(btnW).Height(ToolbarHeight)
-                .Text(EditorIcons.FolderPlus, font).TextColor(EditorTheme.Text).FontSize(14f)
+                .Text(EditorIcons.FolderPlus, font).TextColor(EditorTheme.Ink500).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(4)
@@ -366,7 +366,7 @@ public static class FileDialog
                     .Hovered.BackgroundColor(isCurrent ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
                     .Rounded(4)
                     .ChildLeft(8)
-                    .Text($"{icon}  {label}", font).TextColor(EditorTheme.Text)
+                    .Text($"{icon}  {label}", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft)
                     .OnClick(qPath, (p, _) => NavigateTo(p));
             }
@@ -393,7 +393,7 @@ public static class FileDialog
                         .Hovered.BackgroundColor(isCurrent ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
                         .Rounded(4)
                         .ChildLeft(8)
-                        .Text(dLabel, font).TextColor(EditorTheme.Text)
+                        .Text(dLabel, font).TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft)
                         .OnClick(dName, (p, _) => NavigateTo(p));
                 }
@@ -450,7 +450,7 @@ public static class FileDialog
                     .Enter())
                 {
                     paper.Box("fd_nf_ico").Width(20).Height(RowHeight)
-                        .Text(EditorIcons.Folder, font).TextColor(EditorTheme.Text)
+                        .Text(EditorIcons.Folder, font).TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
 
                     EditorGUI.TextField(paper, "fd_nf_name", "Name", _newFolderName)
@@ -516,7 +516,7 @@ public static class FileDialog
 
                     paper.Box($"fd_name_{i}").Height(RowHeight)
                         .ChildLeft(4)
-                        .Text(entry.Name, font).TextColor(EditorTheme.Text)
+                        .Text(entry.Name, font).TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
 
                     // Size

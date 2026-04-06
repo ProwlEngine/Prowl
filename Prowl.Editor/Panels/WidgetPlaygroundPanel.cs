@@ -166,7 +166,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 .FontSize(EditorTheme.FontSize)
                 .TextField(_textValue, EditorTheme.DefaultFont!,
                     onChange: v => _textValue = v,
-                    textColor: EditorTheme.Text);
+                    textColor: EditorTheme.Ink500);
 
             EditorGUI.Separator(paper, "sep_raw");
 
@@ -407,7 +407,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 .Tooltip("This is a tooltip! It appears after a short hover delay.");
             if (EditorTheme.DefaultFont != null)
                 tooltipBtn.Text("Hover me for tooltip", EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize);
+                    .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
 
             EditorGUI.Separator(paper, "sep13");
 

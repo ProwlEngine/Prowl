@@ -44,7 +44,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
             if (!string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, font).TextColor(EditorTheme.Text)
+                    .Text(label, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
             // Check if a compatible asset is being dragged over this field
@@ -94,7 +94,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Height(EditorTheme.RowHeight).Clip()
                     .IsNotInteractable()
                     .Text(displayName, font)
-                    .TextColor(eo != null ? EditorTheme.Text : EditorTheme.TextDisabled)
+                    .TextColor(eo != null ? EditorTheme.Ink500 : EditorTheme.TextDisabled)
                     .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
 
                 // Picker circle button
@@ -162,7 +162,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
             {
                 paper.Box("eo_sel_title").Height(32)
                     .Text($"Select {_selectorType.Name}", font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("eo_sel_spacer");
@@ -262,7 +262,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
             paper.Box($"{id}_name")
                 .Height(EditorTheme.RowHeight).Clip()
-                .Text(name, font).TextColor(EditorTheme.Text)
+                .Text(name, font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_path")

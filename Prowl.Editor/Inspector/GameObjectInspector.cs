@@ -150,7 +150,7 @@ public static class GameObjectInspector
                 paper.Box($"{compId}_label")
                     .Height(24)
                     .Text($"{icon}  {compName}", font)
-                    .TextColor(comp.Enabled ? EditorTheme.Text : EditorTheme.TextDisabled)
+                    .TextColor(comp.Enabled ? EditorTheme.Ink500 : EditorTheme.TextDisabled)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 // Spacer
@@ -252,7 +252,7 @@ public static class GameObjectInspector
                 .BackgroundColor(EditorTheme.ButtonNormal)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Text($"{EditorIcons.Plus}  Add Component", font)
-                .TextColor(EditorTheme.Text)
+                .TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(go, (g, _) => AddComponentPopup.Open(g));
         }

@@ -31,7 +31,7 @@ public static class EditorGUI
     {
         var s = ElementBuilder.TextInputSettings.Default;
         if (Font != null) s.Font = Font;
-        s.TextColor = EditorTheme.Text;
+        s.TextColor = EditorTheme.Ink500;
         s.Placeholder = "0";
         s.PlaceholderColor = EditorTheme.TextDisabled;
         s.CharFilter = filter;
@@ -62,7 +62,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight)
             .ChildLeft(4)
             .Text(text, Font)
-            .TextColor(color ?? EditorTheme.Text)
+            .TextColor(color ?? EditorTheme.Ink500)
             .FontSize(FontSz);
     }
 
@@ -77,7 +77,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight + 4)
             .Margin(8, 10, 0, 2)
             .Text(text, Font)
-            .TextColor(EditorTheme.Text)
+            .TextColor(EditorTheme.Ink500)
             .FontSize(FontSz + 2);
     }
 
@@ -118,7 +118,7 @@ public static class EditorGUI
                 paper.Box($"{id}_label")
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .Text(label, Font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(FontSz);
         }
 
@@ -132,7 +132,7 @@ public static class EditorGUI
         paper.Box(id)
             .Alignment(PaperUI.TextAlignment.MiddleCenter)
             .Text(icon, Font)
-            .TextColor(EditorTheme.Text)
+            .TextColor(EditorTheme.Ink500)
             .FontSize(FontSz)
             .Height(EditorTheme.RowHeight)
             .Width(EditorTheme.RowHeight)
@@ -171,12 +171,12 @@ public static class EditorGUI
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1);
 
             if (value && Font != null)
-                box.Text(EditorIcons.Check, Font).TextColor(EditorTheme.Text).FontSize(12f);
+                box.Text(EditorIcons.Check, Font).TextColor(EditorTheme.Ink500).FontSize(12f);
 
             if (Font != null)
                 paper.Box($"{id}_lbl")
                     .Width(UnitValue.Auto)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
         }
 
         return new WidgetResult<bool>(cb => userCallback = cb);
@@ -198,7 +198,7 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
@@ -223,7 +223,7 @@ public static class EditorGUI
                     .FontSize(FontSz)
                     .TextField(value, Font!,
                         onChange: v => userCallback?.Invoke(v),
-                        textColor: EditorTheme.Text,
+                        textColor: EditorTheme.Ink500,
                         placeholder: "",
                         placeholderColor: EditorTheme.TextDisabled,
                         intID: id.GetHashCode());
@@ -250,7 +250,7 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Ink500).FontSize(FontSz);
 
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
@@ -305,7 +305,7 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Ink500).FontSize(FontSz);
 
 
             using (paper.Box($"{id}_input")
@@ -362,7 +362,7 @@ public static class EditorGUI
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
                     .IsNotInteractable()
                     .Text(label, Font)
-                    .TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
@@ -408,7 +408,7 @@ public static class EditorGUI
                     }
 
                     // ── Thumb body ────────────────────────────────────────
-                    canvas.SetFillColor(EditorTheme.Text);
+                    canvas.SetFillColor(EditorTheme.Ink500);
                     canvas.BeginPath();
                     canvas.Circle(thumbCx, thumbCy, thumbR, 24);
                     canvas.Fill();
@@ -470,7 +470,7 @@ public static class EditorGUI
                 }
                 paper.Box($"{id}_header_lbl")
                     .Text(label, Font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(FontSz);
             }
         }
@@ -501,7 +501,7 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             PaperUI.LayoutEngine.ElementHandle btnHandle = default;
 
@@ -537,7 +537,7 @@ public static class EditorGUI
                         paper.Box($"{id}_txt")
                             .Width(UnitValue.Stretch())
                             .IsNotInteractable()
-                            .Text(displayText, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                            .Text(displayText, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
                         
                         // chevron down if open, right if closed
                         if (isOpen)
@@ -600,7 +600,7 @@ public static class EditorGUI
                                 });
 
                             if (Font != null)
-                                opt.Text(options[i], Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                                opt.Text(options[i], Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
                         }
                     }
                 }
@@ -632,7 +632,7 @@ public static class EditorGUI
                 paper.Box($"{id}_label")
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .Text(label, Font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(FontSz);
         }
 
@@ -677,7 +677,7 @@ public static class EditorGUI
                 .Alignment(PaperUI.TextAlignment.MiddleLeft)
                 .TextField(value, Font,
                     onChange: v => userCallback?.Invoke(v),
-                    textColor: EditorTheme.Text,
+                    textColor: EditorTheme.Ink500,
                     placeholder: placeholder,
                     placeholderColor: EditorTheme.TextDisabled,
                     intID: id.GetHashCode());
@@ -748,7 +748,7 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             // X
             FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
@@ -779,7 +779,7 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             // X
             FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
@@ -814,7 +814,7 @@ public static class EditorGUI
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             // X
             FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
@@ -856,7 +856,7 @@ public static class EditorGUI
                     .IsNotInteractable()
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .Text(label, Font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(FontSz);
 
             // Color swatch (FocusWithin-based popup using cached ancestor set)
@@ -888,7 +888,7 @@ public static class EditorGUI
                         .IsNotInteractable()
                         .Alignment(PaperUI.TextAlignment.MiddleLeft)
                         .Text($"#{r:X2}{g:X2}{b:X2}", Font)
-                        .TextColor(EditorTheme.Text)
+                        .TextColor(EditorTheme.Ink500)
                         .FontSize(FontSz - 1);
                 }
 
@@ -925,7 +925,7 @@ public static class EditorGUI
                 paper.Box($"{id}_lbl")
                     .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
                     .IsNotInteractable()
-                    .Text(label, Font).TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
@@ -957,7 +957,7 @@ public static class EditorGUI
                     .Width(40).Height(EditorTheme.RowHeight)
                     .IsNotInteractable()
                     .Text($"{(int)(progress * 100)}%", Font)
-                    .TextColor(EditorTheme.Text).FontSize(FontSz);
+                    .TextColor(EditorTheme.Ink500).FontSize(FontSz);
         }
     }
 

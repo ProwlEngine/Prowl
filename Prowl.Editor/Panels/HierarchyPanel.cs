@@ -76,7 +76,7 @@ public class HierarchyPanel : DockPanel
                 .Height(22).ChildLeft(8)
                 .BackgroundColor(EditorTheme.Neutral200)
                 .Text($"{EditorIcons.Film}  {scene.Name}", font)
-                .TextColor(EditorTheme.Text)
+                .TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize - 1)
                 .Alignment(TextAlignment.MiddleLeft);
 
@@ -212,7 +212,7 @@ public class HierarchyPanel : DockPanel
             using (paper.Box("hier_add")
                 .Width(RowHeight - 4).Height(RowHeight - 4).Rounded(4)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Text)
+                .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Ink500)
                 .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                 .Enter())
             {
@@ -345,7 +345,7 @@ public class HierarchyPanel : DockPanel
                 paper.Box($"hier_name_{goId}")
                     .Height(RowHeight).ChildLeft(4)
                     .Text(go.Name, font)
-                    .TextColor(go.EnabledInHierarchy ? EditorTheme.Text : EditorTheme.TextDisabled)
+                    .TextColor(go.EnabledInHierarchy ? EditorTheme.Ink500 : EditorTheme.TextDisabled)
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
             }

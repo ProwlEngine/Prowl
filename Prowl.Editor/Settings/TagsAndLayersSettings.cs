@@ -48,7 +48,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                 paper.Box($"tl_tag_name_{i}")
                     .Height(22).ChildLeft(4)
                     .Text(Tags[i], font)
-                    .TextColor(isBuiltin ? EditorTheme.TextDim : EditorTheme.Text)
+                    .TextColor(isBuiltin ? EditorTheme.TextDim : EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
 

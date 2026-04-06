@@ -79,7 +79,7 @@ public static class AddComponentPopup
             {
                 paper.Box("acp_title").Height(32)
                     .Text("Add Component", font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("acp_spacer");
@@ -189,7 +189,7 @@ public static class AddComponentPopup
             // Name
             paper.Box($"{id}_name")
                 .Height(EditorTheme.RowHeight)
-                .Text(comp.Name, font).TextColor(EditorTheme.Text)
+                .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
         }
     }

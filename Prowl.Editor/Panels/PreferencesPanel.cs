@@ -36,7 +36,7 @@ public class PreferencesPanel : DockPanel
             {
                 paper.Box("pref_sidebar_hdr")
                     .Height(28).ChildLeft(8)
-                    .Text("Preferences", font).TextColor(EditorTheme.Text)
+                    .Text("Preferences", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 EditorGUI.Separator(paper, "pref_sidebar_sep");
@@ -69,7 +69,7 @@ public class PreferencesPanel : DockPanel
             .BackgroundColor(sel ? EditorTheme.Accent : Color.Transparent)
             .Hovered.BackgroundColor(sel ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
             .Text($"{icon}  {label}", font)
-            .TextColor(sel ? EditorTheme.Text : EditorTheme.TextDim)
+            .TextColor(sel ? EditorTheme.Ink500 : EditorTheme.TextDim)
             .FontSize(EditorTheme.FontSize - 1)
             .Alignment(TextAlignment.MiddleLeft)
             .OnClick(tab, (t, _) => _tab = t);

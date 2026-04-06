@@ -44,7 +44,7 @@ public class ProjectSettingsPanel : DockPanel
             {
                 paper.Box("ps_sidebar_header")
                     .Height(28).ChildLeft(8)
-                    .Text("Settings", font).TextColor(EditorTheme.Text)
+                    .Text("Settings", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 EditorGUI.Separator(paper, "ps_sidebar_sep");
@@ -61,7 +61,7 @@ public class ProjectSettingsPanel : DockPanel
                         .BackgroundColor(isSelected ? EditorTheme.Accent : Color.Transparent)
                         .Hovered.BackgroundColor(isSelected ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
                         .Text($"{icon}  {entry.Name}", font)
-                        .TextColor(isSelected ? EditorTheme.Text : EditorTheme.TextDim)
+                        .TextColor(isSelected ? EditorTheme.Ink500 : EditorTheme.TextDim)
                         .FontSize(EditorTheme.FontSize - 1)
                         .Alignment(TextAlignment.MiddleLeft)
                         .OnClick(idx, (id, _) => _selectedIndex = id);
