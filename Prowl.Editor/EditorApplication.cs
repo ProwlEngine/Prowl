@@ -29,6 +29,7 @@ public class EditorApplication : Game
     private Echo.EchoObject? _savedEditorScene;
     private int _savedActiveTabIndex = -1;
     private DockNode? _savedActiveTabNode;
+    private TimeData? _savedEditorTime;
 
     // All registered panel types (from [EditorWindow] attribute scan)
     private readonly List<(Type type, string path)> _registeredPanels = new();
@@ -780,6 +781,11 @@ public class EditorApplication : Game
         Application.StepRequested = false;
         ResetFixedTimeAccumulator();
 
+        // Push fresh play-mode time (game code sees Time.TimeSinceStartup = 0)
+        _savedEditorTime = Runtime.Time.CurrentTime;
+        Runtime.Time.TimeStack.Clear();
+        Runtime.Time.TimeStack.Push(new TimeData());
+
         // Focus the Game View tab
         FocusPanel(typeof(Panels.GameViewPanel));
 
@@ -811,6 +817,14 @@ public class EditorApplication : Game
             _savedEditorScene = null;
         }
 
+        // Restore editor time
+        if (_savedEditorTime != null)
+        {
+            Runtime.Time.TimeStack.Clear();
+            Runtime.Time.TimeStack.Push(_savedEditorTime);
+            _savedEditorTime = null;
+        }
+
         // Restore the previously active tab
         RestoreActiveTab();
 
@@ -821,7 +835,6 @@ public class EditorApplication : Game
     {
         if (!Application.IsPlaying) return;
         Application.IsPaused = !Application.IsPaused;
-        Runtime.Time.TimeScale = Application.IsPaused ? 0f : 1f;
     }
 
     private void StepOneFrame()
@@ -829,8 +842,6 @@ public class EditorApplication : Game
         if (!Application.IsPlaying) return;
         Application.IsPaused = true;
         Application.StepRequested = true;
-        // Temporarily restore time scale for the step frame
-        Runtime.Time.TimeScale = 1f;
     }
 
     // ================================================================
