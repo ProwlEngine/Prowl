@@ -211,7 +211,7 @@ public class HierarchyPanel : DockPanel
             // Create button
             using (paper.Box("hier_add")
                 .Width(RowHeight - 4).Height(RowHeight - 4).Rounded(4)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.Plus, font).TextColor(EditorTheme.Ink500)
                 .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                 .Enter())
@@ -268,7 +268,7 @@ public class HierarchyPanel : DockPanel
             .BackgroundColor(isSelected ? EditorTheme.Purple400 :
                 (_dropTargetId == goId && _dropPos == DropPosition.Into)
                     ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
-            .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
+            .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Rounded(2)
             .ChildLeft(indent + 2)
             .OnClick((go, currentIndex, flatList), (cap, e) =>

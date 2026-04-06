@@ -280,7 +280,7 @@ public static class FileDialog
             paper.Box("fd_back").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.ArrowLeft, font).TextColor(backColor).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(4)
                 .OnClick(0, (_, _) => NavigateBack());
 
@@ -289,7 +289,7 @@ public static class FileDialog
             paper.Box("fd_fwd").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.ArrowRight, font).TextColor(fwdColor).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(4)
                 .OnClick(0, (_, _) => NavigateForward());
 
@@ -297,7 +297,7 @@ public static class FileDialog
             paper.Box("fd_up").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.ArrowUp, font).TextColor(EditorTheme.Ink500).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(4)
                 .OnClick(0, (_, _) => NavigateUp());
 
@@ -315,7 +315,7 @@ public static class FileDialog
             paper.Box("fd_newfolder").Width(btnW).Height(ToolbarHeight)
                 .Text(EditorIcons.FolderPlus, font).TextColor(EditorTheme.Ink500).FontSize(14f)
                 .Alignment(TextAlignment.MiddleCenter)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(4)
                 .OnClick(0, (_, _) =>
                 {
@@ -363,7 +363,7 @@ public static class FileDialog
                 bool isCurrent = _currentPath.Equals(qPath, StringComparison.OrdinalIgnoreCase);
                 paper.Box($"fd_qa_{label}").Height(24)
                     .BackgroundColor(isCurrent ? EditorTheme.Purple400 : Color.Transparent)
-                    .Hovered.BackgroundColor(isCurrent ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
+                    .Hovered.BackgroundColor(isCurrent ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
                     .Rounded(4)
                     .ChildLeft(8)
                     .Text($"{icon}  {label}", font).TextColor(EditorTheme.Ink500)
@@ -390,7 +390,7 @@ public static class FileDialog
                     bool isCurrent = _currentPath.StartsWith(dName, StringComparison.OrdinalIgnoreCase);
                     paper.Box($"fd_drv_{dName}").Height(24)
                         .BackgroundColor(isCurrent ? EditorTheme.Purple400 : Color.Transparent)
-                        .Hovered.BackgroundColor(isCurrent ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
+                        .Hovered.BackgroundColor(isCurrent ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
                         .Rounded(4)
                         .ChildLeft(8)
                         .Text(dLabel, font).TextColor(EditorTheme.Ink500)
@@ -418,7 +418,7 @@ public static class FileDialog
                     .Text(label + (_sortColumn == col ? (_sortAscending ? " \u25B4" : " \u25BE") : ""), font)
                     .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 3)
                     .Alignment(TextAlignment.MiddleLeft)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .OnClick(col, (c, _) =>
                     {
                         if (_sortColumn == c) _sortAscending = !_sortAscending;
@@ -488,7 +488,7 @@ public static class FileDialog
                 using (paper.Row($"fd_row_{i}")
                     .Height(RowHeight)
                     .BackgroundColor(isSelected ? EditorTheme.Purple400 : (i % 2 == 0 ? Color.Transparent : Color.FromArgb(15, 255, 255, 255)))
-                    .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
+                    .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
                     .ChildLeft(8).RowBetween(0)
                     .OnClick(entry, (e, ev) =>
                     {

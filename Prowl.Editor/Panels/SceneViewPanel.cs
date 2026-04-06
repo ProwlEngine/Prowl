@@ -62,7 +62,7 @@ public class SceneViewPanel : DockPanel
             paper.Box("sv_move_btn")
                 .Width(24).Height(24).Rounded(4)
                 .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Translate));
@@ -70,7 +70,7 @@ public class SceneViewPanel : DockPanel
             paper.Box("sv_rotate_btn")
                 .Width(24).Height(24).Rounded(4)
                 .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Rotate));
@@ -78,7 +78,7 @@ public class SceneViewPanel : DockPanel
             paper.Box("sv_scale_btn")
                 .Width(24).Height(24).Rounded(4)
                 .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll));
@@ -86,7 +86,7 @@ public class SceneViewPanel : DockPanel
             paper.Box("sv_universal_btn")
                 .Width(24).Height(24).Rounded(4)
                 .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
@@ -98,7 +98,7 @@ public class SceneViewPanel : DockPanel
             paper.Box("sv_grid_btn")
                 .Width(24).Height(24).Rounded(4)
                 .BackgroundColor(showGrid ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.TableCellsLarge, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; });

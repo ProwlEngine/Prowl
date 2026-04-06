@@ -401,7 +401,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 .Height(EditorTheme.RowHeight)
                 .Width(200)
                 .BackgroundColor(EditorTheme.Ink100)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(3)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Tooltip("This is a tooltip! It appears after a short hover delay.");

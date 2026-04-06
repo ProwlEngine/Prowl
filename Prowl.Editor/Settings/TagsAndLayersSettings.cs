@@ -56,7 +56,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                 {
                     paper.Box($"tl_tag_del_{i}")
                         .Width(20).Height(22).Rounded(3)
-                        .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(idx, (id, _) =>

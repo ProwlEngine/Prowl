@@ -55,7 +55,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
             var fieldEl = paper.Row($"{id}_field")
                 .Height(EditorTheme.RowHeight)
                 .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
                 .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));

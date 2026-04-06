@@ -105,8 +105,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight)
             .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
             .BackgroundColor(EditorTheme.Ink100)
-            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-            .Active.BackgroundColor(EditorTheme.ButtonActive).End()
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true));
@@ -137,8 +136,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight)
             .Width(EditorTheme.RowHeight)
             .BackgroundColor(EditorTheme.Ink100)
-            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-            .Active.BackgroundColor(EditorTheme.ButtonActive).End()
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true));
@@ -165,7 +163,7 @@ public static class EditorGUI
             var box = paper.Box($"{id}_box")
                 .Size(16, 16)
                 .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.Neutral300)
-                .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.Ink200).End()
                 .Rounded(3)
                 .Alignment(PaperUI.TextAlignment.MiddleCenter)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1);
@@ -436,7 +434,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight)
             .ChildLeft(4)
             .BackgroundColor(EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(2);
 
         bool expanded = paper.GetElementStorage(header._handle, "exp", defaultValue);
@@ -622,8 +620,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight)
             .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
             .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.Ink100)
-            .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.ButtonHovered).End()
-            .Active.BackgroundColor(EditorTheme.ButtonActive).End()
+            .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.Ink200).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(!value)).Enter())
@@ -687,7 +684,7 @@ public static class EditorGUI
                 var clearBtn = paper.Box($"{id}_clear")
                     .Rounded(8)
                     .Size(16).Margin(2, UnitValue.StretchOne)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Text(EditorIcons.Xmark, Font).TextColor(EditorTheme.Ink400).FontSize(14).Alignment(PaperUI.TextAlignment.MiddleCenter)
                     .OnClick(e => userCallback?.Invoke(""));
             }

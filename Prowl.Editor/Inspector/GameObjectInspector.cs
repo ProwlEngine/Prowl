@@ -159,7 +159,7 @@ public static class GameObjectInspector
                 // Context menu button
                 using (paper.Box($"{compId}_gear")
                     .Width(20).Height(24).Rounded(3)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.Ink400)
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                     .Enter())
@@ -250,7 +250,7 @@ public static class GameObjectInspector
             paper.Box("gi_add_comp")
                 .Height(28).Rounded(4)
                 .BackgroundColor(EditorTheme.Ink100)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text($"{EditorIcons.Plus}  Add Component", font)
                 .TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)

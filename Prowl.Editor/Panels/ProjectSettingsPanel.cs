@@ -59,7 +59,7 @@ public class ProjectSettingsPanel : DockPanel
                     paper.Box($"ps_cat_{i}")
                         .Height(26).ChildLeft(8).Rounded(3)
                         .BackgroundColor(isSelected ? EditorTheme.Purple400 : Color.Transparent)
-                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
+                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
                         .Text($"{icon}  {entry.Name}", font)
                         .TextColor(isSelected ? EditorTheme.Ink500 : EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 1)

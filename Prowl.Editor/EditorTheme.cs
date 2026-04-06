@@ -53,7 +53,7 @@ public static class EditorTheme
 
     // Interactive
     // public static Color ButtonNormal = Color.FromArgb(255, 55, 55, 58);
-    public static Color ButtonHovered = Color.FromArgb(255, 70, 70, 74);
+    // public static Color ButtonHovered = Color.FromArgb(255, 70, 70, 74);
     public static Color ButtonActive = Color.FromArgb(255, 40, 40, 43);
 
     // Accent

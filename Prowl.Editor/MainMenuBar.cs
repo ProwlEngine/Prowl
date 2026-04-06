@@ -36,7 +36,7 @@ public static class MainMenuBar
                 using (paper.Box($"menu_{index}")
                     .Height(EditorTheme.MenuBarHeight)
                     .Width(UnitValue.Auto)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(item.Label, font)
                         .TextColor(EditorTheme.Ink500)
                         .Alignment(TextAlignment.MiddleCenter)

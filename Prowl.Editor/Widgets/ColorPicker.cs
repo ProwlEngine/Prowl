@@ -147,7 +147,7 @@ public static class ColorPicker
                             .BackgroundColor(EditorTheme.Ink100)
                             .Rounded(2)
                             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-                            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                             {
                                 float cx = (float)r.Min.X + (float)r.Size.X / 2f;

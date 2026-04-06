@@ -67,7 +67,7 @@ public class PreferencesPanel : DockPanel
         paper.Box($"pref_tab_{tab}")
             .Height(26).ChildLeft(8).Rounded(3)
             .BackgroundColor(sel ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(sel ? EditorTheme.Purple400 : EditorTheme.ButtonHovered).End()
+            .Hovered.BackgroundColor(sel ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Text($"{icon}  {label}", font)
             .TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize - 1)
