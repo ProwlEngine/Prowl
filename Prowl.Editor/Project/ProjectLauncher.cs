@@ -179,8 +179,13 @@ public static class ProjectLauncher
     {
         using (paper.Column("pl_newproj")
             .Height(80)
-            .BackgroundColor(EditorTheme.Neutral200).Rounded(6)
-            .ChildLeft(16).ChildRight(16).ChildTop(8).ChildBottom(8).ColBetween(6)
+            .BackgroundColor(EditorTheme.Neutral400)
+            .Rounded(6)
+            .Margin(8, 8)
+            .ChildLeft(8)
+            .ChildRight(8)
+            .ChildTop(8)
+            .ColBetween(6)
             .Enter())
         {
             using (paper.Row("pl_np_row1").Height(26).RowBetween(8).Enter())
