@@ -112,13 +112,6 @@ public static class ProjectLauncher
                     .FontSize(28f)
                     .Alignment(TextAlignment.MiddleLeft);
 
-                paper.Box("pl_subtitle")
-                    .Height(60)
-                    .Text("Game Engine", font)
-                    .TextColor(EditorTheme.Ink400)
-                    .FontSize(14f)
-                    .Alignment(TextAlignment.MiddleLeft);
-
                 // Spacer
                 paper.Box("pl_spacer");
 
@@ -157,7 +150,7 @@ public static class ProjectLauncher
 
                 paper.Box("pl_recent_label")
                     .Width(UnitValue.Auto)
-                    .Height(28)
+                    .Height(EditorTheme.RowHeight)
                     .Text("Recent Projects", font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2)
@@ -178,38 +171,43 @@ public static class ProjectLauncher
     private static void DrawNewProjectPanel(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Column("pl_newproj")
-            .Height(80)
             .BackgroundColor(EditorTheme.Neutral400)
             .Rounded(6)
-            .Margin(8, 8)
-            .ChildLeft(8)
-            .ChildRight(8)
-            .ChildTop(8)
-            .ColBetween(6)
+            .Height(UnitValue.Auto)
+            .Margin(8, 8, 0, 8)
             .Enter())
         {
-            using (paper.Row("pl_np_row1").Height(26).RowBetween(8).Enter())
+            using (paper.Row("pl_np_row1").Height(EditorTheme.RowHeight).Margin(8).RowBetween(8).Enter())
             {
-                paper.Box("pl_np_lbl").Width(50).Height(26)
-                    .Text("Name:", font).TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+                paper.Box("pl_np_lbl")
+                    .Width(50)
+                    .Height(EditorTheme.RowHeight)
+                    .Text("Name:", font)
+                    .TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSize - 2)
+                    .Alignment(TextAlignment.MiddleRight);
 
                 EditorGUI.TextField(paper, "pl_np_name", "", _newProjectName)
                     .OnValueChanged(v => _newProjectName = v);
             }
 
-            using (paper.Row("pl_np_row2").Height(26).RowBetween(8).Enter())
+            using (paper.Row("pl_np_row2").Height(EditorTheme.RowHeight).Margin(8, 8, 0, 8).RowBetween(8).Enter())
             {
-                paper.Box("pl_np_lbl2").Width(50).Height(26)
-                    .Text("Path:", font).TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+                paper.Box("pl_np_lbl2")
+                    .Width(50)
+                    .Height(EditorTheme.RowHeight)
+                    .Text("Path:", font)
+                    .TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSize - 2)
+                    .Alignment(TextAlignment.MiddleRight);
 
                 using (paper.Box("prject_path_display")
                         .Height(EditorTheme.RowHeight)
                         .ChildLeft(4)
                         .ChildRight(4)
-                        .BackgroundColor(EditorTheme.Neutral400)
-                        .Rounded(4).Enter())
+                        .BackgroundColor(EditorTheme.Neutral300)
+                        .Rounded(4)
+                        .Enter())
                 {
                     paper.Box("pl_np_path")
                         .Text(" " + _newProjectPath, font)
