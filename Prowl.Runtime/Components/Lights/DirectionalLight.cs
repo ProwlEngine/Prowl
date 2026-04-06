@@ -51,31 +51,31 @@ public class DirectionalLight : Light
         Debug.DrawArrow(Transform.Position, -Transform.Forward, Color.Yellow);
         Debug.DrawWireCircle(Transform.Position, Transform.Forward, 0.5f, Color.Yellow);
 
-        // Create and Draw each Frustum
-        foreach (var cascade in _cascadeShadowMatrices)
-        {
-            Frustum frustum = Frustum.FromMatrix(cascade);
-            var corners = frustum.GetCorners();
-
-            // Corner indices from GetCorners():
-            // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
-            // 4: Far-Left-Bottom,   5: Far-Right-Bottom,   6: Far-Left-Top,   7: Far-Right-Top
-
-            Debug.DrawLine(corners[0], corners[1], Color.Cyan);
-            Debug.DrawLine(corners[1], corners[3], Color.Cyan);
-            Debug.DrawLine(corners[3], corners[2], Color.Cyan);
-            Debug.DrawLine(corners[2], corners[0], Color.Cyan);
-
-            Debug.DrawLine(corners[4], corners[5], Color.Cyan);
-            Debug.DrawLine(corners[5], corners[7], Color.Cyan);
-            Debug.DrawLine(corners[7], corners[6], Color.Cyan);
-            Debug.DrawLine(corners[6], corners[4], Color.Cyan);
-
-            Debug.DrawLine(corners[0], corners[4], Color.Cyan);
-            Debug.DrawLine(corners[1], corners[5], Color.Cyan);
-            Debug.DrawLine(corners[2], corners[6], Color.Cyan);
-            Debug.DrawLine(corners[3], corners[7], Color.Cyan);
-        }
+        //// Create and Draw each Frustum
+        //foreach (var cascade in _cascadeShadowMatrices)
+        //{
+        //    Frustum frustum = Frustum.FromMatrix(cascade);
+        //    var corners = frustum.GetCorners();
+        //
+        //    // Corner indices from GetCorners():
+        //    // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
+        //    // 4: Far-Left-Bottom,   5: Far-Right-Bottom,   6: Far-Left-Top,   7: Far-Right-Top
+        //
+        //    Debug.DrawLine(corners[0], corners[1], Color.Cyan);
+        //    Debug.DrawLine(corners[1], corners[3], Color.Cyan);
+        //    Debug.DrawLine(corners[3], corners[2], Color.Cyan);
+        //    Debug.DrawLine(corners[2], corners[0], Color.Cyan);
+        //
+        //    Debug.DrawLine(corners[4], corners[5], Color.Cyan);
+        //    Debug.DrawLine(corners[5], corners[7], Color.Cyan);
+        //    Debug.DrawLine(corners[7], corners[6], Color.Cyan);
+        //    Debug.DrawLine(corners[6], corners[4], Color.Cyan);
+        //
+        //    Debug.DrawLine(corners[0], corners[4], Color.Cyan);
+        //    Debug.DrawLine(corners[1], corners[5], Color.Cyan);
+        //    Debug.DrawLine(corners[2], corners[6], Color.Cyan);
+        //    Debug.DrawLine(corners[3], corners[7], Color.Cyan);
+        //}
     }
 
 

@@ -93,8 +93,8 @@ public class Camera : MonoBehaviour
 
     public float FieldOfView = 60f;
     public float OrthographicSize = 0.5f;
-    public float NearClipPlane = 0.01f;
-    public float FarClipPlane = 1000f;
+    public float NearClipPlane = 0.1f;
+    public float FarClipPlane = 100f;
     //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
     public int Depth = -1;
 
@@ -152,6 +152,34 @@ public class Camera : MonoBehaviour
     public override void OnEnable()
     {
         _firstFrame = true;
+    }
+
+    public override void DrawGizmos()
+    {
+        float aspect = 1280 / 720;
+        Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * GetViewMatrix();
+
+        Frustum frustum = Frustum.FromMatrix(viewProjectionMatrix);
+        var corners = frustum.GetCorners();
+        
+        // Corner indices from GetCorners():
+        // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
+        // 4: Far-Left-Bottom,   5: Far-Right-Bottom,   6: Far-Left-Top,   7: Far-Right-Top
+        
+        Debug.DrawLine(corners[0], corners[1], Color.White);
+        Debug.DrawLine(corners[1], corners[3], Color.White);
+        Debug.DrawLine(corners[3], corners[2], Color.White);
+        Debug.DrawLine(corners[2], corners[0], Color.White);
+        
+        Debug.DrawLine(corners[4], corners[5], Color.White);
+        Debug.DrawLine(corners[5], corners[7], Color.White);
+        Debug.DrawLine(corners[7], corners[6], Color.White);
+        Debug.DrawLine(corners[6], corners[4], Color.White);
+        
+        Debug.DrawLine(corners[0], corners[4], Color.White);
+        Debug.DrawLine(corners[1], corners[5], Color.White);
+        Debug.DrawLine(corners[2], corners[6], Color.White);
+        Debug.DrawLine(corners[3], corners[7], Color.White);
     }
 
     public void Render(in RenderingData? data = null)
