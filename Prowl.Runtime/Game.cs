@@ -46,7 +46,6 @@ public abstract class Game
         Window.Load += () =>
         {
             AudioContext.Initialize(44100, 2, 2048);
-            //AudioContext.Initialize(sampleRate, channels, 2048);
 
             // Renderer projection uses framebuffer (physical) pixels;
             // Paper resolution uses window (logical) size.
@@ -87,7 +86,7 @@ public abstract class Game
                 {
                     Application.IsGameplayExecuting = true;
                     int count = 0;
-                    while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < 10)
+                    while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
                     {
                         currentScene?.FixedUpdate();
                         fixedTimeAccumulator -= Time.FixedDeltaTime;
@@ -327,6 +326,7 @@ public abstract class Game
 
     /// <summary>Reset the fixed-update accumulator. Call when entering play mode to prevent a burst.</summary>
     protected void ResetFixedTimeAccumulator() => fixedTimeAccumulator = 0f;
+
 
     public static void Quit()
     {
