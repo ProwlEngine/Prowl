@@ -133,4 +133,14 @@ public static class Selection
 
     /// <summary>Number of selected objects.</summary>
     public static int Count => _selected.Count;
+
+    /// <summary>Fires when an asset should be focused/revealed in the Project panel.</summary>
+    public static event Action<Guid>? OnFocusAsset;
+
+    /// <summary>Request that the Project panel navigate to and highlight an asset by GUID.</summary>
+    public static void FocusAsset(Guid guid)
+    {
+        if (guid != Guid.Empty)
+            OnFocusAsset?.Invoke(guid);
+    }
 }
