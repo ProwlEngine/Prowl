@@ -211,10 +211,14 @@ public static class EditorGUI
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.Neutral200)
+
                 .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .BorderWidth(1)
+                
+                .BackgroundColor(EditorTheme.Neutral200)
+                .BorderColor(EditorTheme.Neutral100)
                 .Focused.BorderColor(EditorTheme.Accent).End()
+
                 .TabIndex(0)
                 .Enter())
             {
@@ -259,10 +263,14 @@ public static class EditorGUI
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.Neutral200)
+
                 .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .BorderWidth(1)
+                
+                .BackgroundColor(EditorTheme.Neutral200)
+                .BorderColor(EditorTheme.Neutral100)
                 .Focused.BorderColor(EditorTheme.Accent).End()
+
                 .TabIndex(0)
                 .Enter())
             {
@@ -274,6 +282,7 @@ public static class EditorGUI
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .TextField(textVal, settings,
                         onChange: v =>
                         {
@@ -310,10 +319,14 @@ public static class EditorGUI
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.Neutral200)
+
                 .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .BorderWidth(1)
+                
+                .BackgroundColor(EditorTheme.Neutral200)
+                .BorderColor(EditorTheme.Neutral100)
                 .Focused.BorderColor(EditorTheme.Accent).End()
+                
                 .TabIndex(0)
                 .Enter())
             {
@@ -325,6 +338,7 @@ public static class EditorGUI
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .TextField(textVal, settings,
                         onChange: v =>
                         {
@@ -643,10 +657,14 @@ public static class EditorGUI
 
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
-            .BackgroundColor(EditorTheme.Neutral200)
+        
             .Rounded(3)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BorderWidth(1)
+            
+            .BackgroundColor(EditorTheme.Neutral200)
+            .BorderColor(EditorTheme.Neutral100)
             .Focused.BorderColor(EditorTheme.Accent).End()
+            
             .ChildLeft(6).ChildRight(4)
             .RowBetween(4)
             .TabIndex(0)
@@ -664,6 +682,7 @@ public static class EditorGUI
                 .HookToParent()
                 .IsNotInteractable()
                 .FontSize(FontSz)
+                .Alignment(PaperUI.TextAlignment.MiddleLeft)
                 .TextField(value, Font,
                     onChange: v => userCallback?.Invoke(v),
                     textColor: EditorTheme.Text,
