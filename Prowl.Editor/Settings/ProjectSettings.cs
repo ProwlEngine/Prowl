@@ -63,6 +63,8 @@ public static class ProjectSettingsRegistry
 
     public static IReadOnlyList<SettingsEntry> Entries => _entries;
 
+    public static void Reinitialize() { _initialized = false; _entries.Clear(); Initialize(); }
+
     public static void Initialize()
     {
         if (_initialized) return;

@@ -831,6 +831,10 @@ public class EditorAssetDatabase : IAssetDatabase
                             try { File.Delete(cachePath); } catch { }
 
                         deleted.Add(relativePath);
+
+                        // Script deleted — trigger recompile
+                        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                            Scripting.ScriptAssemblyManager.RequestRecompile();
                     }
                     break;
                 }

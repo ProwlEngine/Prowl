@@ -7,7 +7,9 @@ namespace Prowl.Editor;
 
 /// <summary>
 /// Input handler for play mode that only forwards keyboard/mouse input
-/// when the Game View panel is hovered. Gamepads always pass through.
+/// when the Game View panel is hovered AND gameplay code is executing.
+/// Editor code (camera, gizmos, UI) always gets full input.
+/// Gamepads always pass through.
 /// Wraps the real DefaultInputHandler underneath.
 /// </summary>
 public class GameViewInputHandler : IInputHandler
@@ -19,6 +21,8 @@ public class GameViewInputHandler : IInputHandler
     /// Reset to false at the start of each frame.
     /// </summary>
     public static bool IsGameViewFocused { get; set; }
+
+    private bool ShouldFilter => Runtime.Application.IsGameplayExecuting && !IsGameViewFocused;
 
     public GameViewInputHandler(IInputHandler realHandler)
     {
@@ -32,25 +36,25 @@ public class GameViewInputHandler : IInputHandler
         set => _real.Clipboard = value;
     }
 
-    // Keyboard — only when Game View focused
-    public bool IsAnyKeyDown => IsGameViewFocused && _real.IsAnyKeyDown;
-    public char? GetPressedChar() => IsGameViewFocused ? _real.GetPressedChar() : null;
-    public bool GetKey(KeyCode key) => IsGameViewFocused && _real.GetKey(key);
-    public bool GetKeyDown(KeyCode key) => IsGameViewFocused && _real.GetKeyDown(key);
-    public bool GetKeyUp(KeyCode key) => IsGameViewFocused && _real.GetKeyUp(key);
+    // Keyboard — filtered only during gameplay execution outside game view
+    public bool IsAnyKeyDown => ShouldFilter ? false : _real.IsAnyKeyDown;
+    public char? GetPressedChar() => ShouldFilter ? null : _real.GetPressedChar();
+    public bool GetKey(KeyCode key) => ShouldFilter ? false : _real.GetKey(key);
+    public bool GetKeyDown(KeyCode key) => ShouldFilter ? false : _real.GetKeyDown(key);
+    public bool GetKeyUp(KeyCode key) => ShouldFilter ? false : _real.GetKeyUp(key);
 
-    // Mouse — only when Game View focused
+    // Mouse — filtered only during gameplay execution outside game view
     public Int2 PrevMousePosition => _real.PrevMousePosition;
     public Int2 MousePosition
     {
         get => _real.MousePosition;
         set => _real.MousePosition = value;
     }
-    public Float2 MouseDelta => IsGameViewFocused ? _real.MouseDelta : Float2.Zero;
-    public float MouseWheelDelta => IsGameViewFocused ? _real.MouseWheelDelta : 0f;
-    public bool GetMouseButton(int button) => IsGameViewFocused && _real.GetMouseButton(button);
-    public bool GetMouseButtonDown(int button) => IsGameViewFocused && _real.GetMouseButtonDown(button);
-    public bool GetMouseButtonUp(int button) => IsGameViewFocused && _real.GetMouseButtonUp(button);
+    public Float2 MouseDelta => ShouldFilter ? Float2.Zero : _real.MouseDelta;
+    public float MouseWheelDelta => ShouldFilter ? 0f : _real.MouseWheelDelta;
+    public bool GetMouseButton(int button) => ShouldFilter ? false : _real.GetMouseButton(button);
+    public bool GetMouseButtonDown(int button) => ShouldFilter ? false : _real.GetMouseButtonDown(button);
+    public bool GetMouseButtonUp(int button) => ShouldFilter ? false : _real.GetMouseButtonUp(button);
     public void SetCursorVisible(bool visible, int miceIndex = 0) => _real.SetCursorVisible(visible, miceIndex);
 
     // Events — always forward (editor needs these for its own input processing)

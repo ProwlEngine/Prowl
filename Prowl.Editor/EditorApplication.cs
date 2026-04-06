@@ -70,17 +70,72 @@ public class EditorApplication : Game
 
         _dockSpace = new DockSpace(CreateDefaultLayout());
 
+        // If launched with --project arg, open the project and load assemblies
+        // BEFORE registries scan — so user types are visible to all registries
+        bool projectAlreadyInitialized = false;
+        if (Program.StartupProjectPath != null)
+        {
+            try
+            {
+                var project = Project.Open(Program.StartupProjectPath);
+                project.SetActive();
+
+                // Load user script assemblies before registry scanning
+                Scripting.ScriptAssemblyManager.LoadAssemblies(project);
+
+                projectAlreadyInitialized = true;
+                Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogError($"Failed to open project from --project arg: {ex.Message}");
+            }
+        }
+
         ScanAndRegisterPanels();
         RegisterMenus();
 
-        // Initialize editor registries
+        // Initialize editor registries (now sees user types if assemblies loaded above)
         Inspector.PropertyEditorRegistry.Initialize();
         Inspector.ComponentEditorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
 
-        // Start with the project launcher
-        ProjectLauncher.Initialize();
+        if (projectAlreadyInitialized)
+        {
+            // Initialize asset database for the already-opened project
+            var db = new EditorAssetDatabase(Project.Current!);
+            db.Initialize();
+
+            // Load project settings
+            ProjectSettingsRegistry.OnProjectOpened();
+
+            // Restore layout
+            var savedLayout = Docking.LayoutSerializer.Load(_dockSpace);
+            if (savedLayout != null)
+                _dockSpace.Root = savedLayout;
+
+            // Restore scene (from --restore-scene or last saved)
+            if (Program.RestoreScenePath != null && System.IO.File.Exists(Program.RestoreScenePath))
+            {
+                RestoreAutoSavedScene(Program.RestoreScenePath);
+            }
+            else
+            {
+                EditorSceneManager.EnsureSceneLoaded();
+            }
+
+            // Skip launcher and intro animation entirely
+            ProjectLauncher.Close();
+            _launcherWasOpen = false;
+            _introClosing = false;
+            _introTime = IntroDuration + 1; // past the end — no animation
+        }
+        else
+        {
+            // Start with the project launcher
+            ProjectLauncher.Initialize();
+        }
 
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
@@ -126,6 +181,10 @@ public class EditorApplication : Game
                 var db = new EditorAssetDatabase(Project.Current);
                 db.Initialize();
 
+                // Load user script assemblies and re-register all types
+                Scripting.ScriptAssemblyManager.LoadAssemblies(Project.Current);
+                ReinitializeRegistries();
+
                 // Load project settings
                 ProjectSettingsRegistry.OnProjectOpened();
 
@@ -146,6 +205,9 @@ public class EditorApplication : Game
         if (canProcessAssets)
         {
             EditorAssetDatabase.Instance?.ProcessFileChanges();
+
+            // Check for script recompilation
+            Scripting.ScriptAssemblyManager.Update();
 
             // Lazy thumbnail generation — one per frame
             ThumbnailGenerator.ProcessOne();
@@ -702,6 +764,54 @@ public class EditorApplication : Game
     }
 
     // ================================================================
+    //  Script Compilation
+    // ================================================================
+
+    private void ReinitializeRegistries()
+    {
+        _registeredPanels.Clear();
+        ScanAndRegisterPanels();
+        Inspector.PropertyEditorRegistry.Reinitialize();
+        Inspector.ComponentEditorRegistry.Reinitialize();
+        Inspector.AssetImporterEditorRegistry.Reinitialize();
+        Inspector.AddComponentPopup.Reinitialize();
+        Importers.ImporterRegistry.Reinitialize();
+        ProjectSettingsRegistry.Reinitialize();
+
+        // Re-register Window menu items for any new panels from user assemblies
+        foreach (var (type, path) in _registeredPanels)
+        {
+            var capturedType = type;
+            MenuRegistry.Register($"Window/{path}", () => OpenPanel(capturedType),
+                isChecked: () => IsPanelOpen(capturedType));
+        }
+    }
+
+    private void RestoreAutoSavedScene(string path)
+    {
+        try
+        {
+            string text = System.IO.File.ReadAllText(path);
+            var echo = Echo.EchoObject.ReadFromString(text);
+            var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
+            var scene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(echo, ctx);
+            if (scene != null)
+            {
+                Runtime.Resources.Scene.LoadWithoutEnable(scene);
+                Runtime.Debug.Log("Restored auto-saved scene.");
+            }
+
+            // Clean up the temp file
+            try { System.IO.File.Delete(path); } catch { }
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to restore auto-saved scene: {ex.Message}");
+            EditorSceneManager.EnsureSceneLoaded();
+        }
+    }
+
+    // ================================================================
     //  Project Switching
     // ================================================================
 
@@ -933,7 +1043,11 @@ public class EditorApplication : Game
     {
         // Only run scene Update when gameplay should execute
         if (Application.ShouldRunGameplay)
+        {
+            Application.IsGameplayExecuting = true;
             scene?.Update();
+            Application.IsGameplayExecuting = false;
+        }
 
         // Always allow gizmos in editor (even when not playing)
         if (scene != null)

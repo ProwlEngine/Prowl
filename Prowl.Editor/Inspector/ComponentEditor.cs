@@ -48,6 +48,8 @@ public static class ComponentEditorRegistry
     private static readonly Dictionary<Type, ComponentEditor> _editorCache = new();
     private static bool _initialized;
 
+    public static void Reinitialize() { _initialized = false; Initialize(); }
+
     public static void Initialize()
     {
         if (_initialized) return;

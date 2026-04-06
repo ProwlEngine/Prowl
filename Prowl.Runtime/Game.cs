@@ -85,12 +85,14 @@ public abstract class Game
                 fixedTimeAccumulator += delta;
                 if (Application.ShouldRunGameplay)
                 {
+                    Application.IsGameplayExecuting = true;
                     int count = 0;
                     while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < 10)
                     {
                         currentScene?.FixedUpdate();
                         fixedTimeAccumulator -= Time.FixedDeltaTime;
                     }
+                    Application.IsGameplayExecuting = false;
                 }
                 else
                 {

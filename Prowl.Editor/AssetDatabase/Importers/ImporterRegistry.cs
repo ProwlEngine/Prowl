@@ -15,6 +15,8 @@ public static class ImporterRegistry
     private static readonly Dictionary<string, Type> _nameToImporter = new(StringComparer.OrdinalIgnoreCase);
     private static bool _initialized;
 
+    public static void Reinitialize() { _initialized = false; Initialize(); }
+
     public static void Initialize()
     {
         if (_initialized) return;

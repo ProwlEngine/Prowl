@@ -28,6 +28,14 @@ public class Project
     public string MetadataDbPath => Path.Combine(LibraryPath, "metadata.db");
     public string EditorStatePath => Path.Combine(LibraryPath, "EditorState.json");
 
+    // Script compilation
+    public string ScriptAssemblyPath => Path.Combine(LibraryPath, "ScriptAssemblies");
+    public string GameAssemblyPath => Path.Combine(ScriptAssemblyPath, $"{Name}.Game.dll");
+    public string EditorAssemblyPath => Path.Combine(ScriptAssemblyPath, $"{Name}.Editor.dll");
+    public string GameCsprojPath => Path.Combine(RootPath, $"{Name}.Game.csproj");
+    public string EditorCsprojPath => Path.Combine(RootPath, $"{Name}.Editor.csproj");
+    public string AutoSaveScenePath => Path.Combine(LibraryPath, "~autosave.scene");
+
     private Project(string rootPath, string name)
     {
         RootPath = Path.GetFullPath(rootPath);
@@ -140,6 +148,7 @@ public class Project
         Directory.CreateDirectory(PackagesPath);
         Directory.CreateDirectory(TempPath);
         Directory.CreateDirectory(LogsPath);
+        Directory.CreateDirectory(ScriptAssemblyPath);
     }
 
     private void WriteProwlFile()

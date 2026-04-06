@@ -32,6 +32,9 @@ public static class AddComponentPopup
         public Type Type;
     }
 
+    /// <summary>Clear cached component list so it re-scans assemblies on next Open.</summary>
+    public static void Reinitialize() => _cachedComponents = null;
+
     public static bool IsOpen => _isOpen;
 
     public static void Open(GameObject target)
