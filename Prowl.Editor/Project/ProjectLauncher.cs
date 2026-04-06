@@ -147,12 +147,12 @@ public static class ProjectLauncher
                 {
                     EditorGUI.Button(paper, "yt_link", "YouTube").OnValueChanged((_) =>
                     {
-                      WebService.OpenUrl("https://youtube.com/@prowlengine");
+                        WebService.OpenUrl("https://youtube.com/@prowlengine");
                     });
 
                     EditorGUI.Button(paper, "gh_link", "GitHub").OnValueChanged((_) =>
                     {
-                      WebService.OpenUrl("https://github.com/ProwlEngine/Prowl");
+                        WebService.OpenUrl("https://github.com/ProwlEngine/Prowl");
                     });
                 }
             }
@@ -161,14 +161,14 @@ public static class ProjectLauncher
                 .Size(w - sidebarW, h)
                 .Enter())
             {
-                // Toolbar: New / Open buttons
-                using (paper.Row("pl_toolbar")
+                // New / Open buttons
+                using (paper.Row("toolbar")
                     .Height(40)
-                    .Margin(10, 10, 16, 0)
+                    .Margin(10, 10, 32, 0)
                     .RowBetween(8)
                     .Enter())
                 {
-                    paper.Box("pl_recent_label")
+                    paper.Box("tl_label")
                         .Width(UnitValue.Auto)
                         .Height(EditorTheme.RowHeight)
                         .Text("Projects", boldFont)
@@ -177,24 +177,39 @@ public static class ProjectLauncher
                         .Alignment(TextAlignment.MiddleLeft);
 
                     // Spacer
-                    paper.Box("pl_tb_spacer");
+                    paper.Box("tl_tb_spacer");
 
                     // Spacer
                     EditorGUI.SearchBar(paper, "search", "", "Search");
-                    
-                    EditorGUI.Button(paper, "pl_btn_open", $"{EditorIcons.FolderOpen}  Open Project")
+
+                    EditorGUI.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", 130)
                         .OnValueChanged(_ =>
                         {
                             FileDialog.Open(FileDialogMode.SelectFolder, path =>
                             {
-                                        if (path == null) return;
-                                        TryOpenProject(path);
-                                    });
+                                if (path == null) return;
+                                TryOpenProject(path);
+                            });
                         });
 
-                    EditorGUI.Button(paper, "pl_btn_new", $"{EditorIcons.Plus}  New Project")
-                        .OnValueChanged(_ => _showNewProject = !_showNewProject);
-
+                    using (paper.Box("tl_btn_new")
+                        .Height(EditorTheme.RowHeight)
+                        .Width(120)
+                        .BackgroundColor(EditorTheme.Blue300)
+                        .Hovered.BackgroundColor(EditorTheme.Blue400).End()
+                        .Rounded(3)
+                        .BorderColor(EditorTheme.Blue400)
+                        .BorderWidth(1)
+                        .OnClick((_) => _showNewProject = !_showNewProject)
+                        .Enter()) {
+                        paper.Box($"label")
+                            .Height(EditorTheme.RowHeight)
+                            .Margin(EditorTheme.RowHeight / 4, 0)
+                            .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                            .Text($" {EditorIcons.Plus}  New Project", EditorTheme.DefaultFont)
+                            .TextColor(EditorTheme.Ink500)
+                            .FontSize(EditorTheme.FontSize);
+                    }
                 }
 
                 // New project panel (collapsible)
@@ -262,8 +277,8 @@ public static class ProjectLauncher
                     {
                         FileDialog.Open(FileDialogMode.SelectFolder, path =>
                         {
-                                  if (path != null) _newProjectPath = path;
-                              }, _newProjectPath);
+                            if (path != null) _newProjectPath = path;
+                        }, _newProjectPath);
                     });
 
                 EditorGUI.Button(paper, "pl_np_create", "Create", width: 70)
