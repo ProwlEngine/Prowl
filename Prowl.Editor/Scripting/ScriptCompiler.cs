@@ -105,11 +105,24 @@ public static class ScriptCompiler
         return (game, editor);
     }
 
+    private static string GetVersionDefine()
+    {
+        var version = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.1";
+        int plus = version.IndexOf('+');
+        if (plus >= 0) version = version[..plus];
+        // Convert "0.0.1" to "PROWL_0_0_1"
+        return "PROWL_" + version.Replace('.', '_');
+    }
+
     private static void GenerateGameCsproj(Project project, List<string> scripts)
     {
         string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         string runtimeDll = Path.Combine(engineDir, "Prowl.Runtime.dll");
+        string editorDll = Path.Combine(engineDir, "Prowl.Editor.dll");
         string outputDir = Path.GetRelativePath(project.RootPath, project.ScriptAssemblyPath);
+        string versionDefine = GetVersionDefine();
 
         var sb = new StringBuilder();
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
@@ -122,12 +135,16 @@ public static class ScriptCompiler
         sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
         sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");
         sb.AppendLine($"    <AssemblyName>{project.Name}.Game</AssemblyName>");
+        sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{versionDefine}</DefineConstants>");
         sb.AppendLine("  </PropertyGroup>");
 
-        // References
+        // References — Game assembly can reference Editor when compiling in-editor (PROWL_EDITOR)
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");
         sb.AppendLine($"      <HintPath>{runtimeDll}</HintPath>");
+        sb.AppendLine("    </Reference>");
+        sb.AppendLine($"    <Reference Include=\"Prowl.Editor\">");
+        sb.AppendLine($"      <HintPath>{editorDll}</HintPath>");
         sb.AppendLine("    </Reference>");
 
         // Add transitive dependencies from Prowl.Runtime
@@ -179,6 +196,7 @@ public static class ScriptCompiler
         sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
         sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");
         sb.AppendLine($"    <AssemblyName>{project.Name}.Editor</AssemblyName>");
+        sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{GetVersionDefine()}</DefineConstants>");
         sb.AppendLine("  </PropertyGroup>");
 
         // References
