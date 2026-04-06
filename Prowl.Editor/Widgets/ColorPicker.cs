@@ -271,7 +271,7 @@ public static class ColorPicker
         {
             if (font != null) paper.Box($"{id}_l").Width(14).IsNotInteractable().Text(label, font).TextColor(labelColor).FontSize(fontSize);
             paper.Box($"{id}_t").Height(SliderHeight).Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.InputBackground).Rounded(2)
+                .BackgroundColor(EditorTheme.Neutral300).Rounded(2)
                 .OnClick(e => onChange(Math.Clamp((float)e.NormalizedPosition.X, 0, 1)))
                 .OnDragging(e => onChange(Math.Clamp((float)e.NormalizedPosition.X, 0, 1)))
                 .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>

@@ -330,7 +330,7 @@ public class WidgetPlaygroundPanel : DockPanel
 
             using (paper.Box("ctx_demo_area")
                 .Height(60)
-                .BackgroundColor(EditorTheme.InputBackground)
+                .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(6)
                 .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .ChildLeft(16).ChildTop(8)

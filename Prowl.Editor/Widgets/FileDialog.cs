@@ -304,7 +304,7 @@ public static class FileDialog
             // Breadcrumb path
             paper.Box("fd_path")
                 .Height(ToolbarHeight)
-                .BackgroundColor(EditorTheme.InputBackground)
+                .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(4)
                 .ChildLeft(8)
                 .Text(_currentPath, font).TextColor(EditorTheme.Text)

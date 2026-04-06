@@ -37,7 +37,7 @@ public static class CurveEditor
 
             using (paper.Box($"{id}_preview")
                 .Height(40).Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.InputBackground)
+                .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Hovered.BorderColor(EditorTheme.Accent).End()
                 .Enter())
@@ -382,7 +382,7 @@ public static class CurveEditor
 
                         using (paper.Box($"{id}_p{idx}")
                             .Size(presetW, presetH)
-                            .BackgroundColor(EditorTheme.InputBackground)
+                            .BackgroundColor(EditorTheme.Neutral300)
                             .Rounded(3)
                             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                             .Hovered.BorderColor(EditorTheme.Accent).End()

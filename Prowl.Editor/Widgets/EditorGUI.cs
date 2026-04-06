@@ -164,7 +164,7 @@ public static class EditorGUI
         {
             var box = paper.Box($"{id}_box")
                 .Size(16, 16)
-                .BackgroundColor(value ? EditorTheme.Accent : EditorTheme.InputBackground)
+                .BackgroundColor(value ? EditorTheme.Accent : EditorTheme.Neutral300)
                 .Hovered.BackgroundColor(value ? EditorTheme.AccentDim : EditorTheme.ButtonHovered).End()
                 .Rounded(3)
                 .Alignment(PaperUI.TextAlignment.MiddleCenter)

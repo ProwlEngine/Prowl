@@ -54,7 +54,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
             // Object field row
             var fieldEl = paper.Row($"{id}_field")
                 .Height(EditorTheme.RowHeight)
-                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Accent) : EditorTheme.InputBackground)
+                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Accent) : EditorTheme.Neutral300)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
                 .BorderColor(isDragTarget ? EditorTheme.Accent : EditorTheme.Ink200).BorderWidth(1)
