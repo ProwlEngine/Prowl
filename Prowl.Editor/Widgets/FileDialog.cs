@@ -254,8 +254,8 @@ public static class FileDialog
         using (paper.Column("fd_window")
             .Size(DialogWidth, DialogHeight)
             .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Normal)
-            .BorderColor(EditorTheme.Bright).BorderWidth(1).Rounded(8)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
             .Layer(Layer.Overlay)
             .Enter())
         {
@@ -269,7 +269,7 @@ public static class FileDialog
     {
         using (paper.Row("fd_toolbar")
             .Height(ToolbarHeight)
-            .BackgroundColor(EditorTheme.Darkest)
+            .BackgroundColor(EditorTheme.Neutral200)
             .ChildLeft(6).ChildRight(6).RowBetween(4)
             .Enter())
         {
@@ -347,7 +347,7 @@ public static class FileDialog
     {
         using (paper.Column("fd_sidebar")
             .Width(SidebarWidth)
-            .BackgroundColor(EditorTheme.Darkest)
+            .BackgroundColor(EditorTheme.Neutral200)
             .ChildTop(8).ChildLeft(4).ChildRight(4).ColBetween(2)
             .Enter())
         {
@@ -373,7 +373,7 @@ public static class FileDialog
 
             // Separator
             paper.Box("fd_qa_sep").Height(1).Margin(4, 8, 4, 8)
-                .BackgroundColor(EditorTheme.Border);
+                .BackgroundColor(EditorTheme.Ink200);
 
             // Drives
             paper.Box("fd_drv_label").Height(20)
@@ -406,7 +406,7 @@ public static class FileDialog
     {
         using (paper.Row("fd_headers")
             .Height(HeaderHeight)
-            .BackgroundColor(EditorTheme.Darkest)
+            .BackgroundColor(EditorTheme.Neutral200)
             .ChildLeft(4).RowBetween(0)
             .Enter())
         {
@@ -548,7 +548,7 @@ public static class FileDialog
     {
         using (paper.Column("fd_bottom")
             .Height(BottomBarHeight)
-            .BackgroundColor(EditorTheme.Darkest)
+            .BackgroundColor(EditorTheme.Neutral200)
             .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6).ColBetween(6)
             .Enter())
         {

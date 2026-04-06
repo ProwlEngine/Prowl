@@ -39,7 +39,7 @@ public class ProjectSettingsPanel : DockPanel
             float sidebarW = 180f;
             using (paper.Column("ps_sidebar")
                 .Width(sidebarW).Height(height)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("ps_sidebar_header")
@@ -69,7 +69,7 @@ public class ProjectSettingsPanel : DockPanel
             }
 
             // Separator
-            paper.Box("ps_divider").Width(1).Height(height).BackgroundColor(EditorTheme.Border);
+            paper.Box("ps_divider").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
             // Right content — selected settings
             float contentW = width - sidebarW - 1;

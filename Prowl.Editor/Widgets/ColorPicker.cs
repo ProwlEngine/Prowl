@@ -26,8 +26,8 @@ public static class ColorPicker
         using (paper.Column(id)
             .Width(280)
             .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .Rounded(6)
             .ChildLeft(8).ChildRight(8).ChildTop(8).ChildBottom(8)
             .RowBetween(6)
@@ -58,10 +58,10 @@ public static class ColorPicker
             // === Preview ===
             using (paper.Row($"{id}_prev").Height(24).RowBetween(6).Enter())
             {
-                paper.Box($"{id}_old").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Border).BorderWidth(1)
+                paper.Box($"{id}_old").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
                     .BackgroundColor(SysColor.FromArgb((int)(value.A*255),(int)(value.R*255),(int)(value.G*255),(int)(value.B*255)));
                 var nc = HSVToColor(h, s, v, a);
-                paper.Box($"{id}_new").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Border).BorderWidth(1)
+                paper.Box($"{id}_new").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
                     .BackgroundColor(SysColor.FromArgb((int)(nc.A*255),(int)(nc.R*255),(int)(nc.G*255),(int)(nc.B*255)));
                 if (font != null)
                 {
@@ -95,7 +95,7 @@ public static class ColorPicker
         if (palette == null || palette.Count == 0) return;
 
         // Separator
-        paper.Box($"{id}_sep").Height(1).BackgroundColor(EditorTheme.Border);
+        paper.Box($"{id}_sep").Height(1).BackgroundColor(EditorTheme.Ink200);
 
         // Palette grid — laid out as rows of swatches
         const float swatchSize = 16f;
@@ -124,7 +124,7 @@ public static class ColorPicker
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(sc)
                             .Rounded(2)
-                            .BorderColor(EditorTheme.Border).BorderWidth(1)
+                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                             .Hovered.BorderColor(EditorTheme.Accent).End()
                             .OnClick(idx, (ci, _) =>
                             {
@@ -146,7 +146,7 @@ public static class ColorPicker
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(EditorTheme.ButtonNormal)
                             .Rounded(2)
-                            .BorderColor(EditorTheme.Border).BorderWidth(1)
+                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                             {

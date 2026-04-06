@@ -108,7 +108,7 @@ public static class EditorGUI
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true));
 
         if (width > 0) el.Width(width);
@@ -140,7 +140,7 @@ public static class EditorGUI
             .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(true));
 
         return new WidgetResult<bool>(cb => userCallback = cb);
@@ -168,7 +168,7 @@ public static class EditorGUI
                 .Hovered.BackgroundColor(value ? EditorTheme.AccentDim : EditorTheme.ButtonHovered).End()
                 .Rounded(3)
                 .Alignment(PaperUI.TextAlignment.MiddleCenter)
-                .BorderColor(EditorTheme.Border).BorderWidth(1);
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1);
 
             if (value && Font != null)
                 box.Text(EditorIcons.Check, Font).TextColor(EditorTheme.Text).FontSize(12f);
@@ -510,7 +510,7 @@ public static class EditorGUI
                 .Width(UnitValue.Stretch())
                 .BackgroundColor(EditorTheme.Neutral200)
                 .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Hovered.BorderColor(EditorTheme.Accent).End()
                 .ChildLeft(6).ChildRight(6)
                 .OnClick(e =>
@@ -572,8 +572,8 @@ public static class EditorGUI
                         .Position(0, EditorTheme.RowHeight - 1)
                         .Width(UnitValue.Stretch())
                         .Height(UnitValue.Auto)
-                        .BackgroundColor(EditorTheme.PanelBackground)
-                        .BorderColor(EditorTheme.Border).BorderWidth(1)
+                        .BackgroundColor(EditorTheme.Neutral300)
+                        .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                         .Rounded(4)
                         .ChildTop(2).ChildBottom(2).ChildLeft(2).ChildRight(2)
                         .HookToParent()
@@ -625,7 +625,7 @@ public static class EditorGUI
             .Hovered.BackgroundColor(value ? EditorTheme.AccentDim : EditorTheme.ButtonHovered).End()
             .Active.BackgroundColor(EditorTheme.ButtonActive).End()
             .Rounded(3)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(!value)).Enter())
         {
             if (Font != null)
@@ -869,7 +869,7 @@ public static class EditorGUI
                     (int)(value.G * 255),
                     (int)(value.B * 255)))
                 .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Hovered.BorderColor(EditorTheme.Accent).End()
                 .Enter())
             {

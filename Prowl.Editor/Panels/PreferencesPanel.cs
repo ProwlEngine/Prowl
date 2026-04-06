@@ -31,7 +31,7 @@ public class PreferencesPanel : DockPanel
             float sideW = 160f;
             using (paper.Column("pref_sidebar")
                 .Width(sideW).Height(height)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("pref_sidebar_hdr")
@@ -45,7 +45,7 @@ public class PreferencesPanel : DockPanel
                 DrawTabBtn(paper, font, "Theme", EditorIcons.Palette, Tab.Theme);
             }
 
-            paper.Box("pref_div").Width(1).Height(height).BackgroundColor(EditorTheme.Border);
+            paper.Box("pref_div").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
             float contentW = width - sideW - 1;
             using (ScrollView.Begin(paper, "pref_content", contentW, height))

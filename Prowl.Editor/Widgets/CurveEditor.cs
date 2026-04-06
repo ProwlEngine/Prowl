@@ -38,7 +38,7 @@ public static class CurveEditor
             using (paper.Box($"{id}_preview")
                 .Height(40).Width(UnitValue.Stretch())
                 .BackgroundColor(EditorTheme.InputBackground)
-                .Rounded(3).BorderColor(EditorTheme.Border).BorderWidth(1)
+                .Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Hovered.BorderColor(EditorTheme.Accent).End()
                 .Enter())
             {
@@ -105,8 +105,8 @@ public static class CurveEditor
 
         using (paper.Column(id)
             .Size(editorW, editorH)
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1).Rounded(6)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(6)
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .Enter())
@@ -384,7 +384,7 @@ public static class CurveEditor
                             .Size(presetW, presetH)
                             .BackgroundColor(EditorTheme.InputBackground)
                             .Rounded(3)
-                            .BorderColor(EditorTheme.Border).BorderWidth(1)
+                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                             .Hovered.BorderColor(EditorTheme.Accent).End()
                             .Tooltip(preset.Name)
                             .OnClick(idx, (ci, _) =>

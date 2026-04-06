@@ -57,7 +57,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Accent) : EditorTheme.InputBackground)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
-                .BorderColor(isDragTarget ? EditorTheme.Accent : EditorTheme.Border).BorderWidth(1)
+                .BorderColor(isDragTarget ? EditorTheme.Accent : EditorTheme.Ink200).BorderWidth(1)
                 .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
 
             using (fieldEl.Enter())
@@ -149,15 +149,15 @@ public class EngineObjectPropertyEditor : PropertyEditor
         using (paper.Column("eo_sel_modal")
             .Size(350, 400)
             .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Normal)
-            .BorderColor(EditorTheme.Bright).BorderWidth(1).Rounded(8)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
             .Layer(Layer.Overlay)
             .Enter())
         {
             // Header
             using (paper.Row("eo_sel_header")
                 .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("eo_sel_title").Height(32)
@@ -215,7 +215,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 if (projectItems.Count > 0)
                 {
                     if (builtInItems.Count > 0)
-                        paper.Box("eo_sel_sep2").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Border);
+                        paper.Box("eo_sel_sep2").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Ink200);
 
                     paper.Box("eo_sel_proj_hdr").Height(EditorTheme.RowHeight).ChildLeft(6)
                         .Text($"{EditorIcons.FolderOpen}  Project", font)

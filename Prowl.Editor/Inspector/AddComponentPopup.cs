@@ -66,15 +66,15 @@ public static class AddComponentPopup
         using (paper.Column("acp_modal")
             .Size(320, 450)
             .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Normal)
-            .BorderColor(EditorTheme.Bright).BorderWidth(1).Rounded(8)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
             .Layer(Layer.Overlay)
             .Enter())
         {
             // Header
             using (paper.Row("acp_header")
                 .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("acp_title").Height(32)
@@ -157,7 +157,7 @@ public static class AddComponentPopup
                         // Small separator
                         paper.Box($"acp_sep_{category.GetHashCode()}")
                             .Height(1).Margin(8, 3, 8, 3)
-                            .BackgroundColor(EditorTheme.Border);
+                            .BackgroundColor(EditorTheme.Ink200);
                     }
                 }
             }

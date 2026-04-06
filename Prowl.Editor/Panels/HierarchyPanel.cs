@@ -74,7 +74,7 @@ public class HierarchyPanel : DockPanel
             // Scene name header
             paper.Box("hier_scene_name")
                 .Height(22).ChildLeft(8)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Text($"{EditorIcons.Film}  {scene.Name}", font)
                 .TextColor(EditorTheme.Text)
                 .FontSize(EditorTheme.FontSize - 1)

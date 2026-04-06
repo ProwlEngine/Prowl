@@ -289,7 +289,7 @@ public class EditorApplication : Game
                 float bl = cx - botW / 2f;
                 float br = cx + botW / 2f;
 
-                var nc = EditorTheme.Normal;
+                var nc = EditorTheme.Neutral300;
                 var flapColor = Prowl.Vector.Color32.FromArgb(nc.A, nc.R, nc.G, nc.B);
 
                 float r = rad;
@@ -314,7 +314,7 @@ public class EditorApplication : Game
                 canvas.FillComplexAA();
 
                 // Outline (sides + bottom only)
-                var bc = EditorTheme.Bright;
+                var bc = EditorTheme.Ink200;
                 canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(bc.A, bc.R, bc.G, bc.B));
                 canvas.SetStrokeWidth(1f);
                 canvas.BeginPath();
@@ -351,7 +351,7 @@ public class EditorApplication : Game
             .PositionType(PositionType.SelfDirected)
             .Position(bx, flapContentY + 4).Size(1, EditorTheme.MenuBarHeight - 8)
             .IsNotInteractable()
-            .BackgroundColor(EditorTheme.Border);
+            .BackgroundColor(EditorTheme.Ink200);
 
         bx += 10f;
 
@@ -397,7 +397,7 @@ public class EditorApplication : Game
             .PositionType(PositionType.SelfDirected)
             .Position(bx, flapContentY + 4).Size(1, EditorTheme.MenuBarHeight - 8)
             .IsNotInteractable()
-            .BackgroundColor(EditorTheme.Border);
+            .BackgroundColor(EditorTheme.Ink200);
 
         bx += 10f;
 

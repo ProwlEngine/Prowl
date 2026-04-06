@@ -91,7 +91,7 @@ public class SceneViewPanel : DockPanel
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
 
-            paper.Box("sv_sep_1").Width(1).Height(18).BackgroundColor(EditorTheme.Border);
+            paper.Box("sv_sep_1").Width(1).Height(18).BackgroundColor(EditorTheme.Ink200);
 
             // Grid toggle
             bool showGrid = _editorCamera?.ShowGrid ?? true;

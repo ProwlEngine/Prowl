@@ -332,7 +332,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 .Height(60)
                 .BackgroundColor(EditorTheme.InputBackground)
                 .Rounded(6)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .ChildLeft(16).ChildTop(8)
                 .Enter())
             {
@@ -403,7 +403,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 .BackgroundColor(EditorTheme.ButtonNormal)
                 .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
                 .Rounded(3)
-                .BorderColor(EditorTheme.Border).BorderWidth(1)
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Tooltip("This is a tooltip! It appears after a short hover delay.");
             if (EditorTheme.DefaultFont != null)
                 tooltipBtn.Text("Hover me for tooltip", EditorTheme.DefaultFont)

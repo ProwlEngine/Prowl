@@ -21,7 +21,7 @@ public static class MainMenuBar
             .PositionType(PositionType.SelfDirected)
             .Position(0, 0)
             .Size(paper.Percent(100), EditorTheme.MenuBarHeight)
-            .BackgroundColor(EditorTheme.MenuBarBackground)
+            .BackgroundColor(EditorTheme.Neutral200)
             .ChildLeft(10)
             .RowBetween(10)
             .Enter())
@@ -62,8 +62,8 @@ public static class MainMenuBar
             .Position(x, y)
             .Width(DropdownWidth)
             .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200)
             .BorderWidth(1)
             .Rounded(4)
             .ChildTop(2).ChildBottom(2)
@@ -81,7 +81,7 @@ public static class MainMenuBar
                     paper.Box($"{id}_sep_{index}")
                         .Height(1)
                         .Margin(4, 4, 4, 4)
-                        .BackgroundColor(EditorTheme.Border);
+                        .BackgroundColor(EditorTheme.Ink200);
                     continue;
                 }
 

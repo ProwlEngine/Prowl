@@ -112,8 +112,8 @@ public static class ModalDialog
             dialogBuilder.Height(UnitValue.Auto);
 
         using (dialogBuilder
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .Rounded(8)
             .BoxShadow(0, 4, 20, 0, Color.FromArgb(80, 0, 0, 0))
             .Layer(Layer.Overlay)
