@@ -70,7 +70,7 @@ public class InspectorPanel : DockPanel
                     var obj = Selection.Selected[i];
                     string name = obj switch
                     {
-                        ContentItem ci => $"{GetTypeIcon(ci)} {ci.Name}",
+                        ContentItem ci => $"{(ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant()))} {ci.Name}",
                         EngineObject eo => $"{EditorIcons.Cube} {eo.Name}",
                         _ => obj.ToString() ?? "Unknown"
                     };
@@ -108,7 +108,7 @@ public class InspectorPanel : DockPanel
 
         if (active is ContentItem ci)
         {
-            icon = GetTypeIcon(ci);
+            icon = ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant());
             name = ci.Name;
             typeName = ci.IsFolder ? "Folder" : ci.TypeLabel;
         }
@@ -211,11 +211,11 @@ public class InspectorPanel : DockPanel
             if (entry.Dependencies.Length > 0)
             {
                 EditorGUI.Separator(paper, "insp_sep_deps");
-                EditorGUI.Header(paper, "insp_h_deps", "Dependencies");
+                EditorGUI.Header(paper, "insp_h_deps", $"Dependencies ({entry.Dependencies.Length})");
                 for (int i = 0; i < entry.Dependencies.Length && i < 20; i++)
                 {
-                    string depPath = db.GuidToPath(entry.Dependencies[i]) ?? entry.Dependencies[i].ToString();
-                    EditorGUI.Label(paper, $"insp_dep_{i}", $"  {depPath}");
+                    var depGuid = entry.Dependencies[i];
+                    DrawAssetLink(paper, font, $"insp_dep_{i}", depGuid, db);
                 }
             }
 
@@ -224,13 +224,12 @@ public class InspectorPanel : DockPanel
             if (dependents.Count > 0)
             {
                 EditorGUI.Separator(paper, "insp_sep_refs");
-                EditorGUI.Header(paper, "insp_h_refs", "Used By");
+                EditorGUI.Header(paper, "insp_h_refs", $"Used By ({dependents.Count})");
                 int count = 0;
                 foreach (var depGuid in dependents)
                 {
                     if (count >= 20) break;
-                    string depPath = db.GuidToPath(depGuid) ?? depGuid.ToString();
-                    EditorGUI.Label(paper, $"insp_ref_{count}", $"  {depPath}");
+                    DrawAssetLink(paper, font, $"insp_ref_{count}", depGuid, db);
                     count++;
                 }
             }
@@ -444,19 +443,48 @@ public class InspectorPanel : DockPanel
         PropertyGrid.Draw(paper, "insp_gpg", obj);
     }
 
-    private static string GetTypeIcon(ContentItem ci)
+    private static string GetExtensionIcon(string ext) => ext switch
     {
-        if (ci.IsFolder) return EditorIcons.Folder;
-        string ext = Path.GetExtension(ci.Name).ToLowerInvariant();
-        return ext switch
+        ".cs" => EditorIcons.FileCode,
+        ".shader" => EditorIcons.WandMagicSparkles,
+        ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" => EditorIcons.FileImage,
+        ".scene" => EditorIcons.Cubes,
+        ".mat" => EditorIcons.Palette,
+        ".fbx" or ".obj" or ".gltf" or ".glb" => EditorIcons.VectorSquare,
+        _ => EditorIcons.File,
+    };
+
+    private static void DrawAssetLink(Paper paper, Prowl.Scribe.FontFile font, string id, Guid guid, EditorAssetDatabase db)
+    {
+        string? path = db.GuidToPath(guid);
+        bool isBuiltIn = Runtime.BuiltInAssets.IsBuiltIn(guid);
+        string displayName;
+        string icon;
+
+        if (isBuiltIn)
         {
-            ".cs" => EditorIcons.FileCode,
-            ".shader" => EditorIcons.WandMagicSparkles,
-            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" => EditorIcons.FileImage,
-            ".scene" => EditorIcons.Cubes,
-            ".mat" => EditorIcons.Palette,
-            ".fbx" or ".obj" or ".gltf" or ".glb" => EditorIcons.VectorSquare,
-            _ => EditorIcons.File,
-        };
+            var entries = Runtime.BuiltInAssets.Entries;
+            displayName = entries.TryGetValue(guid, out var bi) ? bi.Name : guid.ToString()[..8];
+            icon = EditorIcons.Star;
+        }
+        else if (path != null)
+        {
+            displayName = System.IO.Path.GetFileName(path);
+            icon = GetExtensionIcon(System.IO.Path.GetExtension(path).ToLowerInvariant());
+        }
+        else
+        {
+            displayName = guid.ToString()[..8] + "...";
+            icon = EditorIcons.CircleQuestion;
+        }
+
+        paper.Box(id)
+            .Height(EditorTheme.RowHeight).ChildLeft(8).Rounded(3)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text($"{icon}  {displayName}", font)
+            .TextColor(EditorTheme.Ink500)
+            .FontSize(EditorTheme.FontSize - 1)
+            .Alignment(PaperUI.TextAlignment.MiddleLeft)
+            .OnClick(guid, (g, _) => Selection.FocusAsset(g));
     }
 }
