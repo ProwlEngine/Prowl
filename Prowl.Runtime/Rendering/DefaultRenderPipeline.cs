@@ -385,8 +385,9 @@ public class DefaultRenderPipeline : RenderPipeline
         }
 
         // =======================================================
-        // 12. Render Gizmos
-        RenderGizmos(css);
+        // 12. Render Gizmos (only when enabled — editor scene view, not previews)
+        if (data.DisplayGizmo)
+            RenderGizmos(css);
 
         // =======================================================
         // 13. Blit Result to target, If target is null Blit will go to the Screen/Window
