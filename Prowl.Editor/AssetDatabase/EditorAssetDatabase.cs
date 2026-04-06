@@ -726,11 +726,26 @@ public class EditorAssetDatabase : IAssetDatabase
     /// <summary>
     /// Force reimport a specific asset.
     /// </summary>
+    /// <summary>Dispose and remove a cached asset. Triggers AssetRef re-resolve on next access.</summary>
+    private void DisposeAndRemove(Guid guid)
+    {
+        if (_loadedAssets.TryGetValue(guid, out var old))
+        {
+            try { old?.Dispose(); } catch { }
+            _loadedAssets.Remove(guid);
+        }
+    }
+
     public void Reimport(Guid guid)
     {
         if (_guidToEntry.TryGetValue(guid, out var entry))
         {
-            _loadedAssets.Remove(guid);
+            // Dispose and remove the old cached instance — this causes any AssetRef
+            // holding it to detect IsNotValid and re-resolve via AssetDatabase.Get()
+            DisposeAndRemove(guid);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                    DisposeAndRemove(sub.Guid);
 
             // Clear old thumbnails and invalidate UI cache
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
@@ -738,7 +753,6 @@ public class EditorAssetDatabase : IAssetDatabase
             if (entry.SubAssets != null)
                 foreach (var sub in entry.SubAssets)
                 {
-                    _loadedAssets.Remove(sub.Guid);
                     ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
                     Panels.ProjectPanel.InvalidateThumbnail(sub.Guid);
                 }
@@ -748,14 +762,6 @@ public class EditorAssetDatabase : IAssetDatabase
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
             OnAssetsImported?.Invoke(new[] { entry.Path });
 
-            // Invalidate cached versions of all assets that depend on this one
-            // so they pick up the new version on next Get()
-            var dependents = _dependencies.GetDependents(guid);
-            foreach (var depGuid in dependents)
-            {
-                _loadedAssets.Remove(depGuid);
-                Panels.ProjectPanel.InvalidateThumbnail(depGuid);
-            }
 
             // Reload the asset and enqueue thumbnail regeneration
             var reloaded = Get(guid);
