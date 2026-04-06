@@ -61,45 +61,45 @@ public class SceneViewPanel : DockPanel
 
             paper.Box("sv_move_btn")
                 .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isTranslate ? EditorTheme.Accent : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Text)
+                .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Translate));
 
             paper.Box("sv_rotate_btn")
                 .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isRotate ? EditorTheme.Accent : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Text)
+                .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Rotate));
 
             paper.Box("sv_scale_btn")
                 .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isScale ? EditorTheme.Accent : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Text)
+                .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll));
 
             paper.Box("sv_universal_btn")
                 .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isUniversal ? EditorTheme.Accent : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Text)
+                .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
 
-            paper.Box("sv_sep_1").Width(1).Height(18).BackgroundColor(EditorTheme.Border);
+            paper.Box("sv_sep_1").Width(1).Height(18).BackgroundColor(EditorTheme.Ink200);
 
             // Grid toggle
             bool showGrid = _editorCamera?.ShowGrid ?? true;
             paper.Box("sv_grid_btn")
                 .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(showGrid ? EditorTheme.Accent : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                .Text(EditorIcons.TableCellsLarge, font).TextColor(EditorTheme.Text)
+                .BackgroundColor(showGrid ? EditorTheme.Purple400 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.TableCellsLarge, font).TextColor(EditorTheme.Ink500)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; });
 
@@ -114,7 +114,7 @@ public class SceneViewPanel : DockPanel
             //    paper.Box("sv_cam_info")
             //        .Width(UnitValue.Auto).Height(24)
             //        .ChildLeft(4).ChildRight(4)
-            //        .Text(info, font).TextColor(EditorTheme.TextDim)
+            //        .Text(info, font).TextColor(EditorTheme.Ink400)
             //        .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
             //}
         }
@@ -144,7 +144,7 @@ public class SceneViewPanel : DockPanel
                 paper.Box("sv_no_scene_text")
                     .Height(30)
                     .Text("No Scene Loaded", font)
-                    .TextColor(EditorTheme.TextDisabled)
+                    .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
@@ -237,7 +237,7 @@ public class SceneViewPanel : DockPanel
                     .BackgroundColor(Color.FromArgb(150, 30, 30, 35))
                     .IsNotInteractable()
                     .Text($"{EditorIcons.ArrowDown}  Drop to spawn in scene", font)
-                    .TextColor(EditorTheme.Accent)
+                    .TextColor(EditorTheme.Purple400)
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleCenter);
             }

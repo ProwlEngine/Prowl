@@ -17,6 +17,7 @@ public class ConsolePanel : DockPanel
     public override string Title => "Console";
     public override string Icon => EditorIcons.Terminal;
 
+    private const float ToolbarHeight = 26f;
     private const int MaxMessages = 500;
     private const float RowHeight = 20f;
     private static readonly List<LogEntry> _messages = new();
@@ -29,7 +30,6 @@ public class ConsolePanel : DockPanel
     private bool _autoScroll = true;
     private string _searchText = "";
 
-    private const float ToolbarHeight = 30f;
 
     private struct LogEntry
     {
@@ -88,7 +88,7 @@ public class ConsolePanel : DockPanel
         using (paper.Column("con_root").Size(width, height).Enter())
         {
             DrawToolbar(paper, font, width);
-            DrawMessages(paper, font, width, height - 26);
+            DrawMessages(paper, font, width, height - 33);
         }
     }
 
@@ -96,11 +96,8 @@ public class ConsolePanel : DockPanel
     {
         using (paper.Row("con_toolbar")
             .Height(ToolbarHeight)
-            .ChildLeft(4)
-            .ChildRight(4)
+            .Margin(4, 4, 4, 0)
             .RowBetween(4)
-            .ChildTop(4)
-            .ChildBottom(0)
             .Enter())
         {
             // Clear

@@ -25,7 +25,7 @@ public class ProjectSettingsPanel : DockPanel
         {
             paper.Box("ps_empty").Size(width, height)
                 .Text("No settings registered", font)
-                .TextColor(EditorTheme.TextDisabled)
+                .TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSize)
                 .Alignment(TextAlignment.MiddleCenter);
             return;
@@ -39,12 +39,12 @@ public class ProjectSettingsPanel : DockPanel
             float sidebarW = 180f;
             using (paper.Column("ps_sidebar")
                 .Width(sidebarW).Height(height)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("ps_sidebar_header")
                     .Height(28).ChildLeft(8)
-                    .Text("Settings", font).TextColor(EditorTheme.Text)
+                    .Text("Settings", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 EditorGUI.Separator(paper, "ps_sidebar_sep");
@@ -58,10 +58,10 @@ public class ProjectSettingsPanel : DockPanel
 
                     paper.Box($"ps_cat_{i}")
                         .Height(26).ChildLeft(8).Rounded(3)
-                        .BackgroundColor(isSelected ? EditorTheme.Accent : Color.Transparent)
-                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+                        .BackgroundColor(isSelected ? EditorTheme.Purple400 : Color.Transparent)
+                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
                         .Text($"{icon}  {entry.Name}", font)
-                        .TextColor(isSelected ? EditorTheme.Text : EditorTheme.TextDim)
+                        .TextColor(isSelected ? EditorTheme.Ink500 : EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 1)
                         .Alignment(TextAlignment.MiddleLeft)
                         .OnClick(idx, (id, _) => _selectedIndex = id);
@@ -69,7 +69,7 @@ public class ProjectSettingsPanel : DockPanel
             }
 
             // Separator
-            paper.Box("ps_divider").Width(1).Height(height).BackgroundColor(EditorTheme.Border);
+            paper.Box("ps_divider").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
             // Right content — selected settings
             float contentW = width - sidebarW - 1;

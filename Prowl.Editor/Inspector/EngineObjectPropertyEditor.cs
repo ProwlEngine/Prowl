@@ -44,7 +44,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
             if (!string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
                     .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, font).TextColor(EditorTheme.Text)
+                    .Text(label, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
             // Check if a compatible asset is being dragged over this field
@@ -54,10 +54,10 @@ public class EngineObjectPropertyEditor : PropertyEditor
             // Object field row
             var fieldEl = paper.Row($"{id}_field")
                 .Height(EditorTheme.RowHeight)
-                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Accent) : EditorTheme.InputBackground)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
-                .BorderColor(isDragTarget ? EditorTheme.Accent : EditorTheme.Border).BorderWidth(1)
+                .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
                 .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
 
             using (fieldEl.Enter())
@@ -86,7 +86,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Width(16).Height(EditorTheme.RowHeight)
                     .IsNotInteractable()
                     .Text(icon, font)
-                    .TextColor(eo != null ? EditorTheme.Accent : EditorTheme.TextDisabled)
+                    .TextColor(eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
                 // Name
@@ -94,15 +94,15 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Height(EditorTheme.RowHeight).Clip()
                     .IsNotInteractable()
                     .Text(displayName, font)
-                    .TextColor(eo != null ? EditorTheme.Text : EditorTheme.TextDisabled)
+                    .TextColor(eo != null ? EditorTheme.Ink500 : EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
 
                 // Picker circle button
                 paper.Box($"{id}_pick")
                     .Width(20).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.TextDim)
+                    .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.Ink400)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .Rounded(3)
                     .OnClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
             }
@@ -149,20 +149,20 @@ public class EngineObjectPropertyEditor : PropertyEditor
         using (paper.Column("eo_sel_modal")
             .Size(350, 400)
             .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Normal)
-            .BorderColor(EditorTheme.Bright).BorderWidth(1).Rounded(8)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
             .Layer(Layer.Overlay)
             .Enter())
         {
             // Header
             using (paper.Row("eo_sel_header")
                 .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("eo_sel_title").Height(32)
                     .Text($"Select {_selectorType.Name}", font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("eo_sel_spacer");
@@ -170,7 +170,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 paper.Box("eo_sel_close")
                     .Width(24).Height(24).Rounded(4)
                     .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
-                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.TextDim)
+                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(0, (_, _) => _selectorOpen = false);
             }
@@ -181,10 +181,10 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 // None option
                 paper.Box("eo_sel_none")
                     .Height(EditorTheme.RowHeight).ChildLeft(8)
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .Rounded(3)
                     .Text("None", font)
-                    .TextColor(EditorTheme.TextDim)
+                    .TextColor(EditorTheme.Ink400)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft)
                     .OnClick(0, (_, _) =>
                     {
@@ -201,7 +201,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 {
                     paper.Box("eo_sel_bi_hdr").Height(EditorTheme.RowHeight).ChildLeft(6)
                         .Text($"{EditorIcons.Cube}  Built-In", font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
 
                     for (int i = 0; i < builtInItems.Count; i++)
@@ -215,11 +215,11 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 if (projectItems.Count > 0)
                 {
                     if (builtInItems.Count > 0)
-                        paper.Box("eo_sel_sep2").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Border);
+                        paper.Box("eo_sel_sep2").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Ink200);
 
                     paper.Box("eo_sel_proj_hdr").Height(EditorTheme.RowHeight).ChildLeft(6)
                         .Text($"{EditorIcons.FolderOpen}  Project", font)
-                        .TextColor(EditorTheme.TextDim)
+                        .TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
 
                     for (int i = 0; i < projectItems.Count; i++)
@@ -234,7 +234,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 {
                     paper.Box("eo_sel_empty").Height(40)
                         .Text("No assets of this type found", font)
-                        .TextColor(EditorTheme.TextDisabled)
+                        .TextColor(EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
                 }
             }
@@ -245,7 +245,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
     {
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight).ChildLeft(12).RowBetween(4)
-            .Hovered.BackgroundColor(EditorTheme.Accent).End()
+            .Hovered.BackgroundColor(EditorTheme.Purple400).End()
             .Rounded(3)
             .OnClick(guid, (g, _) =>
             {
@@ -257,17 +257,17 @@ public class EngineObjectPropertyEditor : PropertyEditor
         {
             paper.Box($"{id}_ico")
                 .Width(14).Height(EditorTheme.RowHeight)
-                .Text(icon, font).TextColor(EditorTheme.TextDim)
+                .Text(icon, font).TextColor(EditorTheme.Ink400)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
 
             paper.Box($"{id}_name")
                 .Height(EditorTheme.RowHeight).Clip()
-                .Text(name, font).TextColor(EditorTheme.Text)
+                .Text(name, font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_path")
                 .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
-                .Text($"({pathLabel})", font).TextColor(EditorTheme.TextDisabled)
+                .Text($"({pathLabel})", font).TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
         }
     }

@@ -66,20 +66,20 @@ public static class AddComponentPopup
         using (paper.Column("acp_modal")
             .Size(320, 450)
             .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Normal)
-            .BorderColor(EditorTheme.Bright).BorderWidth(1).Rounded(8)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
             .Layer(Layer.Overlay)
             .Enter())
         {
             // Header
             using (paper.Row("acp_header")
                 .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("acp_title").Height(32)
                     .Text("Add Component", font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("acp_spacer");
@@ -87,7 +87,7 @@ public static class AddComponentPopup
                 paper.Box("acp_close")
                     .Width(24).Height(24).Rounded(4)
                     .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
-                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.TextDim)
+                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(0, (_, _) => Close());
             }
@@ -120,7 +120,7 @@ public static class AddComponentPopup
                     {
                         paper.Box("acp_empty").Height(40)
                             .Text("No matching components", font)
-                            .TextColor(EditorTheme.TextDisabled)
+                            .TextColor(EditorTheme.Ink300)
                             .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
                     }
 
@@ -146,7 +146,7 @@ public static class AddComponentPopup
                         paper.Box($"acp_cat_{category.GetHashCode()}")
                             .Height(20).ChildLeft(8)
                             .Text(category, font)
-                            .TextColor(EditorTheme.TextDim)
+                            .TextColor(EditorTheme.Ink400)
                             .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleLeft);
 
                         foreach (var comp in group.OrderBy(c => c.Name))
@@ -157,7 +157,7 @@ public static class AddComponentPopup
                         // Small separator
                         paper.Box($"acp_sep_{category.GetHashCode()}")
                             .Height(1).Margin(8, 3, 8, 3)
-                            .BackgroundColor(EditorTheme.Border);
+                            .BackgroundColor(EditorTheme.Ink200);
                     }
                 }
             }
@@ -168,7 +168,7 @@ public static class AddComponentPopup
     {
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
-            .Hovered.BackgroundColor(EditorTheme.Accent).End()
+            .Hovered.BackgroundColor(EditorTheme.Purple400).End()
             .Rounded(3).ChildLeft(8).RowBetween(6)
             .OnClick(comp.Type, (type, _) =>
             {
@@ -183,13 +183,13 @@ public static class AddComponentPopup
             // Icon
             paper.Box($"{id}_ico")
                 .Width(16).Height(EditorTheme.RowHeight)
-                .Text(comp.Icon, font).TextColor(EditorTheme.TextDim)
+                .Text(comp.Icon, font).TextColor(EditorTheme.Ink400)
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
 
             // Name
             paper.Box($"{id}_name")
                 .Height(EditorTheme.RowHeight)
-                .Text(comp.Name, font).TextColor(EditorTheme.Text)
+                .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
         }
     }

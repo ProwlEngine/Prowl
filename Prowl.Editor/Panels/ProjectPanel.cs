@@ -33,7 +33,7 @@ public class ProjectPanel : DockPanel
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
 
-    private const float ToolbarHeight = 30f;
+    private const float ToolbarHeight = 30;
     private const float FolderTreeWidth = 180f;
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -194,8 +194,8 @@ public class ProjectPanel : DockPanel
 
         using (paper.Row($"proj_fn_{relativePath.GetHashCode()}")
             .Height(22)
-            .BackgroundColor(isSelected ? EditorTheme.Neutral400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Neutral500).End()
+            .BackgroundColor(isSelected ? EditorTheme.Ink100 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
             .ChildLeft(indent + 4)
             .OnClick(relativePath, (path, _) => _currentFolder = path)
@@ -295,7 +295,7 @@ public class ProjectPanel : DockPanel
             // Breadcrumb
             DrawBreadcrumb(paper, font, width, 20);
 
-            using (ScrollView.Begin(paper, "proj_content", width, height - 20))
+            using (ScrollView.Begin(paper, "proj_content", width, height - 31))
             {
                 using (paper.Column("proj_content_inner")
                     .Margin(6, 0, 0, 6)

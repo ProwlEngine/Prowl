@@ -61,14 +61,14 @@ public static class GameObjectInspector
             .Enter())
         {
             paper.Box("gi_tag_lbl").Width(30).Height(22)
-                .Text("Tag", font).TextColor(EditorTheme.TextDim)
+                .Text("Tag", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
 
             EditorGUI.TextField(paper, "gi_tag", "", go.Tag)
                 .OnValueChanged(v => go.Tag = v);
 
             paper.Box("gi_layer_lbl").Width(36).Height(22)
-                .Text("Layer", font).TextColor(EditorTheme.TextDim)
+                .Text("Layer", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
 
             EditorGUI.TextField(paper, "gi_layer", "", go.Layer)
@@ -136,7 +136,7 @@ public static class GameObjectInspector
             // Component foldout header
             using (paper.Row($"{compId}_header")
                 .Height(24)
-                .BackgroundColor(EditorTheme.HeaderBackground)
+                .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(3)
                 .ChildLeft(4)
                 .RowBetween(4)
@@ -150,7 +150,7 @@ public static class GameObjectInspector
                 paper.Box($"{compId}_label")
                     .Height(24)
                     .Text($"{icon}  {compName}", font)
-                    .TextColor(comp.Enabled ? EditorTheme.Text : EditorTheme.TextDisabled)
+                    .TextColor(comp.Enabled ? EditorTheme.Ink500 : EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 // Spacer
@@ -159,8 +159,8 @@ public static class GameObjectInspector
                 // Context menu button
                 using (paper.Box($"{compId}_gear")
                     .Width(20).Height(24).Rounded(3)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
-                    .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.TextDim)
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                    .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.Ink400)
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                     .Enter())
                 {
@@ -249,10 +249,10 @@ public static class GameObjectInspector
         {
             paper.Box("gi_add_comp")
                 .Height(28).Rounded(4)
-                .BackgroundColor(EditorTheme.ButtonNormal)
-                .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                .BackgroundColor(EditorTheme.Ink100)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text($"{EditorIcons.Plus}  Add Component", font)
-                .TextColor(EditorTheme.Text)
+                .TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(go, (g, _) => AddComponentPopup.Open(g));
         }

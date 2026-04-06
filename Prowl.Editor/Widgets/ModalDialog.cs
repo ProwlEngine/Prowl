@@ -112,8 +112,8 @@ public static class ModalDialog
             dialogBuilder.Height(UnitValue.Auto);
 
         using (dialogBuilder
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .Rounded(8)
             .BoxShadow(0, 4, 20, 0, Color.FromArgb(80, 0, 0, 0))
             .Layer(Layer.Overlay)
@@ -124,11 +124,11 @@ public static class ModalDialog
             {
                 paper.Box("modal_title")
                     .Height(32)
-                    .BackgroundColor(EditorTheme.HeaderBackground)
+                    .BackgroundColor(EditorTheme.Neutral300)
                     .Rounded(8)
                     .ChildLeft(12)
                     .Text(modal.Title, font)
-                    .TextColor(EditorTheme.Text)
+                    .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize + 1);
             }
 

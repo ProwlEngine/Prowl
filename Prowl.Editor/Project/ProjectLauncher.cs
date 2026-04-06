@@ -52,119 +52,175 @@ public static class ProjectLauncher
         int h = Window.InternalWindow.Size.Y;
 
         // Full background
-        paper.Box("pl_bg")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, 0).Size(w, h)
-            .BackgroundColor(EditorTheme.Neutral100)
-            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-            {
-                float cx = w / 2f;
-                float cy = h / 2f;
-                float radius = Math.Max(cx, cy) * 1.2f;
-                float t = _animTime * 0.05f;
-                var transparent = Prowl.Vector.Color32.FromArgb(0, 0, 0, 0);
+        // paper.Box("pl_bg")
+        //     .PositionType(PositionType.SelfDirected)
+        //     .Position(0, 0)
+        //     .Size(w, h)
+        //     .BackgroundColor(EditorTheme.Neutral100)
+        //     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+        //     {
+        //         float cx = w / 2f;
+        //         float cy = h / 2f;
+        //         float radius = Math.Max(cx, cy) * 1.2f;
+        //         float t = _animTime * 0.05f;
+        //         var transparent = Prowl.Vector.Color32.FromArgb(0, 0, 0, 0);
 
-                // Subtle background gradients (same as editor but dimmer)
-                float px = cx + (float)Math.Sin(t) * cx * 0.6f;
-                float py = cy + (float)Math.Sin(t * 2) * cy * 0.3f;
-                var purple = Prowl.Vector.Color32.FromArgb(25, 140, 60, 200);
-                canvas.SetRadialBrush(px, py, 0, radius, purple, transparent);
-                canvas.BeginPath();
-                canvas.Rect(0, 0, w, h);
-                canvas.Fill();
+        //         // Subtle background gradients (same as editor but dimmer)
+        //         float px = cx + (float)Math.Sin(t) * cx * 0.6f;
+        //         float py = cy + (float)Math.Sin(t * 2) * cy * 0.3f;
+        //         var purple = Prowl.Vector.Color32.FromArgb(25, 140, 60, 200);
+        //         canvas.SetRadialBrush(px, py, 0, radius, purple, transparent);
+        //         canvas.BeginPath();
+        //         canvas.Rect(0, 0, w, h);
+        //         canvas.Fill();
 
-                float bx = cx - (float)Math.Sin(t) * cx * 0.6f;
-                float by = cy - (float)Math.Sin(t * 2) * cy * 0.3f;
-                var blue = Prowl.Vector.Color32.FromArgb(25, 60, 140, 220);
-                canvas.SetRadialBrush(bx, by, 0, radius, blue, transparent);
-                canvas.BeginPath();
-                canvas.Rect(0, 0, w, h);
-                canvas.Fill();
-            }));
+        //         float bx = cx - (float)Math.Sin(t) * cx * 0.6f;
+        //         float by = cy - (float)Math.Sin(t * 2) * cy * 0.3f;
+        //         var blue = Prowl.Vector.Color32.FromArgb(25, 60, 140, 220);
+        //         canvas.SetRadialBrush(bx, by, 0, radius, blue, transparent);
+        //         canvas.BeginPath();
+        //         canvas.Rect(0, 0, w, h);
+        //         canvas.Fill();
+        //     }));
 
         // Center card
-        float cardW = 600f;
-        float cardH = 500f;
+        // float cardW = 600f;
+        // float cardH = 500f;
 
-        using (paper.Column("pl_card")
-            .Size(cardW, cardH)
-            .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Neutral300)
-            .BorderColor(EditorTheme.Ink200)
+        float sidebarW = 200f;
+
+        using (paper.Row("root")
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, 0)
+            .Size(w, h)
+            .BorderColor(EditorTheme.Ink100)
             .BorderWidth(1)
-            .Rounded(EditorTheme.Roundness)
+            .BackgroundColor(EditorTheme.Neutral300)
             .Enter())
         {
-            // Header
-            using (paper.Row("pl_header")
-                .Height(60)
-                .BackgroundColor(EditorTheme.Neutral200)
-                .RoundedTop(EditorTheme.Roundness)
-                .ChildLeft(24)
-                .ChildRight(24)
-                .RowBetween(12)
+            using (paper.Column("sidebar")
+                .BackgroundColor(EditorTheme.Neutral400)
+                .Size(sidebarW, h)
+                .BorderColor(EditorTheme.Ink100)
+                .BorderWidth(1)
                 .Enter())
             {
-                paper.Box("pl_title")
+
+                // Prowl Emblem
+                using (paper.Row("pl_header")
                     .Height(60)
-                    .Text("PROWL", boldFont)
-                    .TextColor(EditorTheme.Ink500)
-                    .FontSize(28f)
-                    .Alignment(TextAlignment.MiddleLeft);
+                    .RowBetween(12)
+                    .BackgroundColor(EditorTheme.Neutral300)
+                    .BorderColor(EditorTheme.Ink100)
+                    .BorderWidth(1)
+                    .Enter())
+                {
+                    paper.Box("pl_title")
+                        .Height(60)
+                        .Margin(16, 16, 0, 8)
+                        .Text("PROWL", boldFont)
+                        .TextColor(EditorTheme.Ink500)
+                        .FontSize(28f)
+                        .Alignment(TextAlignment.MiddleLeft);
 
-                // Spacer
-                paper.Box("pl_spacer");
+                    // Spacer
+                    paper.Box("pl_spacer");
 
-                paper.Box("pl_version")
-                    .Height(60).Width(80)
-                    .Text("v0.0.1", font)
-                    .TextColor(EditorTheme.Ink400)
-                    .FontSize(12f)
-                    .Alignment(TextAlignment.MiddleRight);
-            }
+                    paper.Box("pl_version")
+                        .Height(60)
+                        .Width(80)
+                        .Margin(16, 16, 12, 8)
+                        .Text("v0.0.1", font)
+                        .TextColor(EditorTheme.Ink400)
+                        .FontSize(12f)
+                        .Alignment(TextAlignment.MiddleRight);
+                }
 
-            // Toolbar: New / Open buttons
-            using (paper.Row("pl_toolbar")
-                .Height(40)
-                .ChildLeft(10)
-                .ChildRight(10)
-                .ChildTop(8)
-                .RowBetween(8)
-                .Enter())
-            {
-                EditorGUI.Button(paper, "pl_btn_new", $"{EditorIcons.Plus}  New Project")
-                    .OnValueChanged(_ => _showNewProject = !_showNewProject);
+                paper.Box("spacer").Height(UnitValue.Stretch());
 
-                EditorGUI.Button(paper, "pl_btn_open", $"{EditorIcons.FolderOpen}  Open Project")
-                    .OnValueChanged(_ =>
+                // Links
+                using (paper.Column("pl_header")
+                    .Height(60)
+                    .ColBetween(12)
+                    .Margin(16, 12)
+                    .Enter())
+                {
+                    EditorGUI.Button(paper, "yt_link", "YouTube").OnValueChanged((_) =>
                     {
-                        FileDialog.Open(FileDialogMode.SelectFolder, path =>
-                        {
-                            if (path == null) return;
-                            TryOpenProject(path);
-                        });
+                        WebService.OpenUrl("https://youtube.com/@prowlengine");
                     });
 
-                // Spacer
-                paper.Box("pl_tb_spacer");
-
-                paper.Box("pl_recent_label")
-                    .Width(UnitValue.Auto)
-                    .Height(EditorTheme.RowHeight)
-                    .Text("Recent Projects", font)
-                    .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 2)
-                    .Alignment(TextAlignment.MiddleRight);
+                    EditorGUI.Button(paper, "gh_link", "GitHub").OnValueChanged((_) =>
+                    {
+                        WebService.OpenUrl("https://github.com/ProwlEngine/Prowl");
+                    });
+                }
             }
 
-            // New project panel (collapsible)
-            if (_showNewProject)
+            using (paper.Column("content")
+                .Size(w - sidebarW, h)
+                .Enter())
             {
-                DrawNewProjectPanel(paper, font);
-            }
+                // New / Open buttons
+                using (paper.Row("toolbar")
+                    .Height(40)
+                    .Margin(10, 10, 32, 0)
+                    .RowBetween(8)
+                    .Enter())
+                {
+                    paper.Box("tl_label")
+                        .Width(UnitValue.Auto)
+                        .Height(EditorTheme.RowHeight)
+                        .Text("Projects", boldFont)
+                        .TextColor(EditorTheme.Ink500)
+                        .FontSize(EditorTheme.FontSize + 8)
+                        .Alignment(TextAlignment.MiddleLeft);
 
-            // Recent projects list
-            DrawRecentProjects(paper, font, cardW, cardH - 60 - 40 - (_showNewProject ? 80 : 0));
+                    // Spacer
+                    paper.Box("tl_tb_spacer");
+
+                    // Spacer
+                    EditorGUI.SearchBar(paper, "search", "", "Search");
+
+                    EditorGUI.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", 130)
+                        .OnValueChanged(_ =>
+                        {
+                            FileDialog.Open(FileDialogMode.SelectFolder, path =>
+                            {
+                                if (path == null) return;
+                                TryOpenProject(path);
+                            });
+                        });
+
+                    using (paper.Box("tl_btn_new")
+                        .Height(EditorTheme.RowHeight)
+                        .Width(120)
+                        .BackgroundColor(EditorTheme.Blue300)
+                        .Hovered.BackgroundColor(EditorTheme.Blue400).End()
+                        .Rounded(3)
+                        .BorderColor(EditorTheme.Blue400)
+                        .BorderWidth(1)
+                        .OnClick((_) => _showNewProject = !_showNewProject)
+                        .Enter()) {
+                        paper.Box($"label")
+                            .Height(EditorTheme.RowHeight)
+                            .Margin(EditorTheme.RowHeight / 4, 0)
+                            .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                            .Text($" {EditorIcons.Plus}  New Project", EditorTheme.DefaultFont)
+                            .TextColor(EditorTheme.Ink500)
+                            .FontSize(EditorTheme.FontSize);
+                    }
+                }
+
+                // New project panel (collapsible)
+                if (_showNewProject)
+                {
+                    DrawNewProjectPanel(paper, font);
+                }
+
+                // Recent projects list
+                DrawRecentProjects(paper, font, w - sidebarW, h - 60 - 40 - (_showNewProject ? 80 : 0));
+            }
         }
     }
 

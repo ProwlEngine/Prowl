@@ -21,7 +21,7 @@ public static class MainMenuBar
             .PositionType(PositionType.SelfDirected)
             .Position(0, 0)
             .Size(paper.Percent(100), EditorTheme.MenuBarHeight)
-            .BackgroundColor(EditorTheme.MenuBarBackground)
+            .BackgroundColor(EditorTheme.Neutral200)
             .ChildLeft(10)
             .RowBetween(10)
             .Enter())
@@ -36,9 +36,9 @@ public static class MainMenuBar
                 using (paper.Box($"menu_{index}")
                     .Height(EditorTheme.MenuBarHeight)
                     .Width(UnitValue.Auto)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(item.Label, font)
-                        .TextColor(EditorTheme.Text)
+                        .TextColor(EditorTheme.Ink500)
                         .Alignment(TextAlignment.MiddleCenter)
                         .FontSize(EditorTheme.FontSize)
                     .Enter())
@@ -62,8 +62,8 @@ public static class MainMenuBar
             .Position(x, y)
             .Width(DropdownWidth)
             .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200)
             .BorderWidth(1)
             .Rounded(4)
             .ChildTop(2).ChildBottom(2)
@@ -81,18 +81,18 @@ public static class MainMenuBar
                     paper.Box($"{id}_sep_{index}")
                         .Height(1)
                         .Margin(4, 4, 4, 4)
-                        .BackgroundColor(EditorTheme.Border);
+                        .BackgroundColor(EditorTheme.Ink200);
                     continue;
                 }
 
-                var textColor = item.IsEnabled ? EditorTheme.Text : EditorTheme.TextDisabled;
+                var textColor = item.IsEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
                 // Menu item row — submenu is a child so IsParentHovered keeps it open
                 using (paper.Row($"{id}_i_{index}")
                     .Height(ItemHeight)
                     .BackgroundColor(Color.Transparent)
                     .Rounded(3)
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .OnClick(item, (captured, e) =>
                     {
                         if (captured.IsEnabled && captured.OnClick != null)

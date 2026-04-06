@@ -33,13 +33,13 @@ public static class CurveEditor
                     .Width(EditorTheme.LabelWidth).Height(40).ChildLeft(4)
                     .IsNotInteractable()
                     .Text(label, EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize);
+                    .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
 
             using (paper.Box($"{id}_preview")
                 .Height(40).Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.InputBackground)
-                .Rounded(3).BorderColor(EditorTheme.Border).BorderWidth(1)
-                .Hovered.BorderColor(EditorTheme.Accent).End()
+                .BackgroundColor(EditorTheme.Neutral300)
+                .Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                .Hovered.BorderColor(EditorTheme.Purple400).End()
                 .Enter())
             {
                 bool isOpen = paper.IsParentFocusWithin;
@@ -105,8 +105,8 @@ public static class CurveEditor
 
         using (paper.Column(id)
             .Size(editorW, editorH)
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1).Rounded(6)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(6)
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .Enter())
@@ -252,7 +252,7 @@ public static class CurveEditor
                     .PositionType(PositionType.SelfDirected)
                     .Position(kx - 5, ky - 5).Size(10, 10)
                     .BackgroundColor(isSelected ? Color.FromArgb(255, 255, 200, 50) : Color.FromArgb(255, 255, 255, 255))
-                    .Hovered.BackgroundColor(EditorTheme.Accent).End()
+                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .Rounded(5)
                     .StopEventPropagation()
                     .Tooltip($"({key.Position:F2}, {key.Value:F2})")
@@ -294,8 +294,8 @@ public static class CurveEditor
             {
                 var fitBtn = paper.Box($"{id}_fit")
                     .Height(22).ChildLeft(6).ChildRight(6)
-                    .BackgroundColor(EditorTheme.ButtonNormal)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .BackgroundColor(EditorTheme.Ink100)
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Rounded(3)
                     .OnClick(e =>
                     {
@@ -307,13 +307,13 @@ public static class CurveEditor
                     });
                 if (EditorTheme.DefaultFont != null)
                     fitBtn.Text("Fit", EditorTheme.DefaultFont)
-                        .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize - 2);
+                        .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2);
 
                 // Save current curve to palette
                 var saveBtn = paper.Box($"{id}_save_preset")
                     .Height(22).ChildLeft(6).ChildRight(6)
-                    .BackgroundColor(EditorTheme.ButtonNormal)
-                    .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                    .BackgroundColor(EditorTheme.Ink100)
+                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Rounded(3)
                     .OnClick(e =>
                     {
@@ -332,7 +332,7 @@ public static class CurveEditor
                     });
                 if (EditorTheme.DefaultFont != null)
                     saveBtn.Text($"{EditorIcons.Plus} Save", EditorTheme.DefaultFont)
-                        .TextColor(EditorTheme.Text).FontSize(EditorTheme.FontSize - 2);
+                        .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2);
             }
 
             // Curve palette row
@@ -382,10 +382,10 @@ public static class CurveEditor
 
                         using (paper.Box($"{id}_p{idx}")
                             .Size(presetW, presetH)
-                            .BackgroundColor(EditorTheme.InputBackground)
+                            .BackgroundColor(EditorTheme.Neutral300)
                             .Rounded(3)
-                            .BorderColor(EditorTheme.Border).BorderWidth(1)
-                            .Hovered.BorderColor(EditorTheme.Accent).End()
+                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                            .Hovered.BorderColor(EditorTheme.Purple400).End()
                             .Tooltip(preset.Name)
                             .OnClick(idx, (ci, _) =>
                             {

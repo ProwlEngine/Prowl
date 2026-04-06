@@ -26,8 +26,8 @@ public static class ColorPicker
         using (paper.Column(id)
             .Width(280)
             .Height(UnitValue.Auto)
-            .BackgroundColor(EditorTheme.PanelBackground)
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .Rounded(6)
             .ChildLeft(8).ChildRight(8).ChildTop(8).ChildBottom(8)
             .RowBetween(6)
@@ -58,16 +58,16 @@ public static class ColorPicker
             // === Preview ===
             using (paper.Row($"{id}_prev").Height(24).RowBetween(6).Enter())
             {
-                paper.Box($"{id}_old").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Border).BorderWidth(1)
+                paper.Box($"{id}_old").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
                     .BackgroundColor(SysColor.FromArgb((int)(value.A*255),(int)(value.R*255),(int)(value.G*255),(int)(value.B*255)));
                 var nc = HSVToColor(h, s, v, a);
-                paper.Box($"{id}_new").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Border).BorderWidth(1)
+                paper.Box($"{id}_new").Size(40, 24).Rounded(3).BorderColor(EditorTheme.Ink200).BorderWidth(1)
                     .BackgroundColor(SysColor.FromArgb((int)(nc.A*255),(int)(nc.R*255),(int)(nc.G*255),(int)(nc.B*255)));
                 if (font != null)
                 {
                     int ri=(int)(nc.R*255), gi=(int)(nc.G*255), bi=(int)(nc.B*255);
                     paper.Box($"{id}_hex").Width(UnitValue.Stretch()).Height(24).ChildLeft(4).IsNotInteractable()
-                        .Text($"#{ri:X2}{gi:X2}{bi:X2}{(int)(a*255):X2}", font).TextColor(EditorTheme.Text).FontSize(fontSize);
+                        .Text($"#{ri:X2}{gi:X2}{bi:X2}{(int)(a*255):X2}", font).TextColor(EditorTheme.Ink500).FontSize(fontSize);
                 }
             }
 
@@ -79,7 +79,7 @@ public static class ColorPicker
             { var nc2 = new Prowl.Vector.Color(c.R,ng,c.B,c.A); SyncHSV(paper,el,nc2); onChange(nc2); });
             ChannelSlider(paper, $"{id}_b", "B", c.B, SysColor.FromArgb(255,60,60,200), font, fontSize, nb =>
             { var nc2 = new Prowl.Vector.Color(c.R,c.G,nb,c.A); SyncHSV(paper,el,nc2); onChange(nc2); });
-            ChannelSlider(paper, $"{id}_a2", "A", a, EditorTheme.Text, font, fontSize, na =>
+            ChannelSlider(paper, $"{id}_a2", "A", a, EditorTheme.Ink500, font, fontSize, na =>
             { paper.SetElementStorage(el,"a",na); onChange(HSVToColor(paper.GetElementStorage(el,"h",h),paper.GetElementStorage(el,"s",s),paper.GetElementStorage(el,"v",v),na)); });
 
             // === Color Palette ===
@@ -95,7 +95,7 @@ public static class ColorPicker
         if (palette == null || palette.Count == 0) return;
 
         // Separator
-        paper.Box($"{id}_sep").Height(1).BackgroundColor(EditorTheme.Border);
+        paper.Box($"{id}_sep").Height(1).BackgroundColor(EditorTheme.Ink200);
 
         // Palette grid — laid out as rows of swatches
         const float swatchSize = 16f;
@@ -124,8 +124,8 @@ public static class ColorPicker
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(sc)
                             .Rounded(2)
-                            .BorderColor(EditorTheme.Border).BorderWidth(1)
-                            .Hovered.BorderColor(EditorTheme.Accent).End()
+                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                            .Hovered.BorderColor(EditorTheme.Purple400).End()
                             .OnClick(idx, (ci, _) =>
                             {
                                 var c = ColorRamp.ParseHex(palette[ci]);
@@ -144,10 +144,10 @@ public static class ColorPicker
                         // Add button
                         paper.Box($"{id}_add")
                             .Size(swatchSize, swatchSize)
-                            .BackgroundColor(EditorTheme.ButtonNormal)
+                            .BackgroundColor(EditorTheme.Ink100)
                             .Rounded(2)
-                            .BorderColor(EditorTheme.Border).BorderWidth(1)
-                            .Hovered.BackgroundColor(EditorTheme.ButtonHovered).End()
+                            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
+                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                             {
                                 float cx = (float)r.Min.X + (float)r.Size.X / 2f;
@@ -271,7 +271,7 @@ public static class ColorPicker
         {
             if (font != null) paper.Box($"{id}_l").Width(14).IsNotInteractable().Text(label, font).TextColor(labelColor).FontSize(fontSize);
             paper.Box($"{id}_t").Height(SliderHeight).Width(UnitValue.Stretch())
-                .BackgroundColor(EditorTheme.InputBackground).Rounded(2)
+                .BackgroundColor(EditorTheme.Neutral300).Rounded(2)
                 .OnClick(e => onChange(Math.Clamp((float)e.NormalizedPosition.X, 0, 1)))
                 .OnDragging(e => onChange(Math.Clamp((float)e.NormalizedPosition.X, 0, 1)))
                 .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
@@ -281,7 +281,7 @@ public static class ColorPicker
                         canvas.RoundedRectFilled((float)r.Min.X,(float)r.Min.Y,fillW,(float)r.Size.Y,2,0,0,2,
                             new Prowl.Vector.Color(labelColor.R/255f,labelColor.G/255f,labelColor.B/255f,0.7f));
                 }));
-            if (font != null) paper.Box($"{id}_v").Width(28).IsNotInteractable().Text($"{(int)(value*255)}", font).TextColor(EditorTheme.Text).FontSize(fontSize);
+            if (font != null) paper.Box($"{id}_v").Width(28).IsNotInteractable().Text($"{(int)(value*255)}", font).TextColor(EditorTheme.Ink500).FontSize(fontSize);
         }
     }
 

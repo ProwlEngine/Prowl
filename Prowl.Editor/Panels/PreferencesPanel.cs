@@ -31,12 +31,12 @@ public class PreferencesPanel : DockPanel
             float sideW = 160f;
             using (paper.Column("pref_sidebar")
                 .Width(sideW).Height(height)
-                .BackgroundColor(EditorTheme.Darkest)
+                .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("pref_sidebar_hdr")
                     .Height(28).ChildLeft(8)
-                    .Text("Preferences", font).TextColor(EditorTheme.Text)
+                    .Text("Preferences", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 EditorGUI.Separator(paper, "pref_sidebar_sep");
@@ -45,7 +45,7 @@ public class PreferencesPanel : DockPanel
                 DrawTabBtn(paper, font, "Theme", EditorIcons.Palette, Tab.Theme);
             }
 
-            paper.Box("pref_div").Width(1).Height(height).BackgroundColor(EditorTheme.Border);
+            paper.Box("pref_div").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
             float contentW = width - sideW - 1;
             using (ScrollView.Begin(paper, "pref_content", contentW, height))
@@ -66,10 +66,10 @@ public class PreferencesPanel : DockPanel
         bool sel = _tab == tab;
         paper.Box($"pref_tab_{tab}")
             .Height(26).ChildLeft(8).Rounded(3)
-            .BackgroundColor(sel ? EditorTheme.Accent : Color.Transparent)
-            .Hovered.BackgroundColor(sel ? EditorTheme.Accent : EditorTheme.ButtonHovered).End()
+            .BackgroundColor(sel ? EditorTheme.Purple400 : Color.Transparent)
+            .Hovered.BackgroundColor(sel ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Text($"{icon}  {label}", font)
-            .TextColor(sel ? EditorTheme.Text : EditorTheme.TextDim)
+            .TextColor(sel ? EditorTheme.Ink500 : EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize - 1)
             .Alignment(TextAlignment.MiddleLeft)
             .OnClick(tab, (t, _) => _tab = t);

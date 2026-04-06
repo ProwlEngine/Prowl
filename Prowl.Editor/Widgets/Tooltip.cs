@@ -67,13 +67,13 @@ public static class Tooltip
             .Height(UnitValue.Auto)
             .Width(UnitValue.Auto)
             .BackgroundColor(Color.FromArgb(230, 40, 40, 43))
-            .BorderColor(EditorTheme.Border).BorderWidth(1)
+            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .Rounded(4)
             .ChildLeft(8).ChildRight(8).ChildTop(4).ChildBottom(4)
             .Layer(Layer.Topmost)
             .IsNotInteractable()
             .Text(_pendingText, font)
-            .TextColor(EditorTheme.Text)
+            .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize - 1);
 
         _pendingText = null;
