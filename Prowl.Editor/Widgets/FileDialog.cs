@@ -244,7 +244,8 @@ public static class FileDialog
 
         // Fullscreen blocker
         paper.Box("fd_overlay")
-            .PositionType(PositionType.SelfDirected).Position(0, 0)
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, 0)
             .Size(UnitValue.Stretch(), UnitValue.Stretch())
             .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
             .Layer(Layer.Overlay)

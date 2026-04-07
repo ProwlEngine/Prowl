@@ -64,7 +64,7 @@ public class Project
         if (!File.Exists(gitignore))
         {
             File.WriteAllText(gitignore,
-                "Library/\nTemp/\nLogs/\n*.csproj\n*.sln\n.vs/\nbin/\nobj/\n");
+                "Library/\nTemp/\nLogs/\n*.csproj\n*.sln\n.vs/\nbin/\nobj/\n# MacOS/\n.DS_Store/\n");
         }
 
         return project;
