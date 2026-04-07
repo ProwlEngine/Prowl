@@ -887,13 +887,7 @@ public class EditorApplication : Game
             return;
         }
 
-        // Load with full lifecycle (Enable → OnEnable/Start will fire)
-        Runtime.Resources.Scene.Load(playScene);
-
-        // Apply physics settings to the new scene
-        try { ProjectSettingsRegistry.Get<PhysicsSettings>().Apply(); } catch { }
-
-        // Set play mode flags
+        // Set play mode flags BEFORE loading so OnEnable/Start gates pass
         Application.IsPlaying = true;
         Application.IsPaused = false;
         Application.StepRequested = false;
@@ -906,6 +900,12 @@ public class EditorApplication : Game
 
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
+
+        // Load with full lifecycle (Enable → OnEnable/Start will fire)
+        Runtime.Resources.Scene.Load(playScene);
+
+        // Apply physics settings to the new scene
+        try { ProjectSettingsRegistry.Get<PhysicsSettings>().Apply(); } catch { }
 
         // Focus the Game View tab
         FocusPanel(typeof(Panels.GameViewPanel));
