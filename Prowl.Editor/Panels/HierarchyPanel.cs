@@ -7,6 +7,7 @@ using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
+using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -575,6 +576,12 @@ public class HierarchyPanel : DockPanel
             var go = CreateGameObject("Camera", parent);
             go.AddComponent<Camera>();
         }, icon: EditorIcons.Camera);
+        builder.Item("Particle System", () =>
+        {
+            var go = CreateGameObject("Particle System", parent);
+            var ps = go.AddComponent<ParticleSystemComponent>();
+            ps.Material = new Material(Shader.LoadDefault(DefaultShader.Particle));
+        }, icon: EditorIcons.SprayCanSparkles);
     }
 
     private GameObject CreateGameObject(string name, GameObject? parent)
