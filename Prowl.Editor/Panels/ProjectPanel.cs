@@ -189,8 +189,13 @@ public class ProjectPanel : DockPanel
         using (paper.Box("proj_tree_bg")
             .Size(FolderTreeWidth, height)
             .BackgroundColor(EditorTheme.Neutral400)
+            .OnClick(0, (_, _) => Selection.Clear())
+            .OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
+            // Right-click background — show create/explorer menu
+            BuildBackgroundContextMenu(paper, "proj_tree_bg_ctx");
+
             using (ScrollView.Begin(paper, "proj_tree", FolderTreeWidth, height, 4, 4, 4, 4))
             {
                 // Root "Assets" node
@@ -231,6 +236,7 @@ public class ProjectPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
             .ChildLeft(indent + 4)
+            .StopEventPropagation()
             .OnClick(relativePath, (path, _) => _currentFolder = path)
             .OnDoubleClick(stateKey, (key, _) =>
             {
@@ -323,8 +329,13 @@ public class ProjectPanel : DockPanel
         using (paper.Box("proj_content_bg")
             .Size(width, height)
             .BackgroundColor(EditorTheme.Neutral300)
+            .OnClick(0, (_, _) => Selection.Clear())
+            .OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
+            // Right-click background — show create/explorer menu
+            BuildBackgroundContextMenu(paper, "proj_content_bg_ctx");
+
             // Breadcrumb
             DrawBreadcrumb(paper, font, width, 20);
 
@@ -433,6 +444,7 @@ public class ProjectPanel : DockPanel
                 .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : EditorTheme.Neutral500).End()
                 .Rounded(3)
                 .RowBetween(4)
+                .StopEventPropagation()
                 .OnClick((item, idx, itemObjects), (cap, e) =>
                 {
                     bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
@@ -631,6 +643,23 @@ public class ProjectPanel : DockPanel
         BuildItemContextMenu(paper, id, item, inTree: true);
     }
 
+    private void BuildBackgroundContextMenu(Paper paper, string id)
+    {
+        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        {
+            string folder = _currentFolder;
+
+            builder.Submenu("Create", sub => AssetCreateMenu.Build(sub, folder, OnCreated), icon: EditorIcons.FileCirclePlus);
+            builder.Separator();
+
+            builder.Item("Show in Explorer", () =>
+            {
+                string absPath = Path.Combine(Project.Current!.AssetsPath, folder);
+                ReferenceOpenerService.OpenFileSystemPath(absPath);
+            }, icon: EditorIcons.FolderOpen);
+        });
+    }
+
     private void OnCreated(string relativePath)
     {
         // Select the newly created item and enter rename
@@ -735,6 +764,7 @@ public class ProjectPanel : DockPanel
                         .BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.Transparent)
                         .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.FromArgb(30, 255, 255, 255)).End()
                         .Rounded(4)
+                        .StopEventPropagation()
                         .OnClick((item, idx, itemObjects), (cap, e) =>
                         {
                             bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;

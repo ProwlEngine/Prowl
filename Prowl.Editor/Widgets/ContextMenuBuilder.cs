@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
@@ -36,7 +37,7 @@ public class ContextMenuBuilder
         return this;
     }
 
-    public void Render(Paper paper, string id, float x, float y)
+    public void Render(Paper paper, string id, float x, float y, bool isSubmenu = false)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -118,7 +119,7 @@ public class ContextMenuBuilder
                                 .Text(EditorIcons.ChevronRight, font).TextColor(EditorTheme.Ink400).FontSize(10f).Alignment(TextAlignment.MiddleLeft);
 
                             if (paper.IsParentHovered)
-                                item.SubMenu.Render(paper, $"{id}_s_{i}", 190, 0);
+                                item.SubMenu.Render(paper, $"{id}_s_{i}", 190, 0, isSubmenu: true);
                         }
                     }
                 }
@@ -139,10 +140,16 @@ public class ContextMenuBuilder
 
 /// <summary>
 /// Shows a context menu on right-click of the current parent element.
-/// Call inside an Enter() block. Uses FocusWithin to stay open.
+/// Only one context menu can be open per frame. Uses a fullscreen backdrop to close on outside click.
 /// </summary>
 public static class ContextMenuHelper
 {
+    // Prevent multiple menus opening on the same frame from event bubbling
+    private static long _openedOnFrame = -1;
+
+    // Track the currently open menu so we can close it
+    private static Action? _closeCurrentMenu;
+
     public static bool RightClickMenu(Paper paper, string id, Action<ContextMenuBuilder> build)
     {
         var parentEl = paper.CurrentParent;
@@ -150,33 +157,50 @@ public static class ContextMenuHelper
         float menuX = paper.GetElementStorage(parentEl, $"{id}_x", 0f);
         float menuY = paper.GetElementStorage(parentEl, $"{id}_y", 0f);
 
-        // Right-click opens at cursor position and focuses the parent
+        // Right-click opens at cursor position — only if no other menu opened this frame
         parentEl.Data.OnRightClick += e =>
         {
+            long frame = Time.FrameCount;
+            if (_openedOnFrame == frame) return; // Another menu already opened this frame
+            _openedOnFrame = frame;
+
+            // Close any previously open menu
+            _closeCurrentMenu?.Invoke();
+
             paper.SetElementStorage(parentEl, $"{id}_open", true);
             paper.SetElementStorage(parentEl, $"{id}_x", (float)e.RelativePosition.X);
             paper.SetElementStorage(parentEl, $"{id}_y", (float)e.RelativePosition.Y);
-            paper.SetFocus(parentEl);
         };
 
         if (isOpen)
         {
+            Action close = () => paper.SetElementStorage(parentEl, $"{id}_open", false);
+            _closeCurrentMenu = close;
+
             var builder = new ContextMenuBuilder();
-            builder.SetCloseAction(() => paper.SetElementStorage(parentEl, $"{id}_open", false));
+            builder.SetCloseAction(close);
             build(builder);
+
+            // Fullscreen backdrop — click to close
+            paper.Box($"{id}_backdrop")
+                .PositionType(PositionType.SelfDirected)
+                .Position(-9999, -9999)
+                .Size(99999, 99999)
+                .BackgroundColor(Color.FromArgb(85, 0, 0, 0))
+                .Layer(Layer.Topmost)
+                .StopEventPropagation()
+                .OnClick(0, (_, _) => close())
+                .OnRightClick(0, (_, _) => close());
 
             using (paper.Box($"{id}_anchor")
                 .PositionType(PositionType.SelfDirected)
                 .Position(menuX, menuY)
                 .Width(UnitValue.Auto).Height(UnitValue.Auto)
+                .StopEventPropagation()
                 .Enter())
             {
                 builder.Render(paper, $"{id}_ctx", 0, 0);
             }
-
-            // Close when focus leaves the parent subtree (clicked elsewhere)
-            if (!paper.IsParentFocusWithin)
-                paper.SetElementStorage(parentEl, $"{id}_open", false);
         }
 
         return isOpen;

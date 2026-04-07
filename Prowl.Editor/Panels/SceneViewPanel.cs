@@ -22,6 +22,9 @@ public class SceneViewPanel : DockPanel
     private EditorCamera? _editorCamera;
     private Gizmo.TransformGizmo? _transformGizmo;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;
+
+    /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
+    public static EditorCamera? ActiveCamera { get; private set; }
     private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
     private const float ToolbarHeight = 28f;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
@@ -33,6 +36,7 @@ public class SceneViewPanel : DockPanel
         if (font == null) return;
 
         _editorCamera ??= new EditorCamera();
+        ActiveCamera = _editorCamera;
 
         using (paper.Box("sv_root").Size(width, height).Enter())
         {

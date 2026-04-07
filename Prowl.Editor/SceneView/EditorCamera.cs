@@ -30,6 +30,16 @@ public class EditorCamera
     public Camera Camera => _camera;
     public RenderTexture? RenderTarget => _renderTarget;
     public Float3 Position => _position;
+    public float Yaw => _yaw;
+    public float Pitch => _pitch;
+    public Float3 Forward => _cameraObject.Transform.Forward;
+
+    /// <summary>Set the camera position directly.</summary>
+    public void SetPosition(Float3 position)
+    {
+        _position = position;
+        UpdateTransform();
+    }
 
     public EditorCamera()
     {

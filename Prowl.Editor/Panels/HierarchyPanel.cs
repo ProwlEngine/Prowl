@@ -54,7 +54,7 @@ public class HierarchyPanel : DockPanel
         else if (!DragDrop.IsDragging && DragDrop.Payload is not GameObjectDragPayload)
             _dropTargetId = null;
 
-        using (paper.Column("hier_root").Size(width, height).Enter())
+        using (paper.Column("hier_root").Size(width, height).OnClick(0, (_, _) => Selection.Clear()).OnRightClick(0, (_, _) => Selection.Clear()).Enter())
         {
             // Toolbar
             DrawToolbar(paper, font, width);
@@ -89,122 +89,67 @@ public class HierarchyPanel : DockPanel
                     .Alignment(TextAlignment.MiddleLeft);
             }
 
-            // Tree view
-            using (ScrollView.Begin(paper, "hier_scroll", width, height - EditorTheme.RowHeight - 22))
+            using (paper.Box("hier_bg").Enter())
             {
-                var roots = GetDisplayRoots(scene);
+                // Background right-click — create menu only
+                BuildBackgroundContextMenu(paper);
 
-                if (roots.Count == 0)
+                // Tree view
+                using (ScrollView.Begin(paper, "hier_scroll", width, height - EditorTheme.RowHeight - 22))
                 {
-                    paper.Box("hier_empty_scene").Height(40)
-                        .Text("Scene is empty", font)
-                        .TextColor(EditorTheme.Ink300)
-                        .FontSize(EditorTheme.FontSize - 2)
-                        .Alignment(TextAlignment.MiddleCenter);
-                }
+                    var roots = GetDisplayRoots(scene);
 
-                // Build flat list for shift-select support
-                var flatList = new List<GameObject>();
-                foreach (var root in roots)
-                    FlattenVisible(root, flatList);
-                var flatObjects = flatList.Select(g => (object)g).ToList();
-
-                int drawIndex = 0;
-                foreach (var root in roots)
-                {
-                    DrawGameObjectNode(paper, font, root, 0, flatObjects, ref drawIndex);
-                }
-
-                // Single right-click menu — selection-aware
-                ContextMenuHelper.RightClickMenu(paper, "hier_ctx", builder =>
-                {
-                    var selectedGOs = Selection.GetSelected<GameObject>().ToList();
-                    var firstSelected = selectedGOs.FirstOrDefault();
-                    bool multiSelect = selectedGOs.Count > 1;
-
-                    // Create submenu — parent to first selected (or root)
-                    BuildCreateMenu(builder, firstSelected);
-
-                    if (selectedGOs.Count > 0)
+                    if (roots.Count == 0)
                     {
-                        builder.Separator();
+                        paper.Box("hier_empty_scene").Height(40)
+                            .Text("Scene is empty", font)
+                            .TextColor(EditorTheme.Ink300)
+                            .FontSize(EditorTheme.FontSize - 2)
+                            .Alignment(TextAlignment.MiddleCenter);
+                    }
 
-                        if (multiSelect)
+                    // Build flat list for shift-select support
+                    var flatList = new List<GameObject>();
+                    foreach (var root in roots)
+                        FlattenVisible(root, flatList);
+                    var flatObjects = flatList.Select(g => (object)g).ToList();
+
+                    int drawIndex = 0;
+                    foreach (var root in roots)
+                    {
+                        DrawGameObjectNode(paper, font, root, 0, flatObjects, ref drawIndex);
+                    }
+
+                    // Accept asset drops — spawn at root
+                    if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
+                    {
+                        paper.Box("hier_drop_zone").Height(24)
+                            .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                            .Rounded(3)
+                            .Text("Drop to spawn here", font)
+                            .TextColor(EditorTheme.Purple400)
+                            .FontSize(EditorTheme.FontSize - 2)
+                            .Alignment(TextAlignment.MiddleCenter);
+                    }
+
+                    if (!DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop && paper.IsParentHovered)
+                    {
+                        if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
                         {
-                            builder.Item($"Duplicate ({selectedGOs.Count})", () =>
-                            {
-                                foreach (var go in selectedGOs) DuplicateGameObject(go);
-                            }, icon: EditorIcons.Copy);
-
-                            builder.Item($"Rename ({selectedGOs.Count})", () =>
-                            {
-                                _renamingIds.Clear();
-                                foreach (var go in selectedGOs)
-                                    _renamingIds.Add(go.Identifier.ToString());
-                                _renameText = firstSelected!.Name;
-                            }, icon: EditorIcons.PenToSquare);
-
-                            builder.Item($"Delete ({selectedGOs.Count})", () =>
-                            {
-                                foreach (var go in selectedGOs.ToList()) DeleteGameObject(go);
-                            }, icon: EditorIcons.Trash);
-
-                            builder.Separator();
-
-                            bool anyEnabled = selectedGOs.Any(g => g.Enabled);
-                            builder.Item(anyEnabled ? "Disable All" : "Enable All", () =>
-                            {
-                                bool newState = !anyEnabled;
-                                foreach (var go in selectedGOs) go.Enabled = newState;
-                            }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                            var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
+                            if (entry != null)
+                                EditorSceneManager.OpenScene(entry.Path);
                         }
                         else
                         {
-                            var go = firstSelected!;
-                            builder.Item("Duplicate", () => DuplicateGameObject(go), icon: EditorIcons.Copy);
-                            builder.Item("Rename", () =>
-                            {
-                                _renamingIds.Clear();
-                                _renamingIds.Add(go.Identifier.ToString());
-                                _renameText = go.Name;
-                            }, icon: EditorIcons.PenToSquare);
-                            builder.Item("Delete", () => DeleteGameObject(go), icon: EditorIcons.Trash);
-                            builder.Separator();
-                            builder.Item(go.Enabled ? "Disable" : "Enable", () => go.Enabled = !go.Enabled,
-                                icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                            SpawnAssetInScene(assetDrop, null, Float3.Zero);
                         }
+                        DragDrop.EndDrag();
                     }
-                });
 
-                // Accept asset drops — spawn at root
-                if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
-                {
-                    paper.Box("hier_drop_zone").Height(24)
-                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                        .Rounded(3)
-                        .Text("Drop to spawn here", font)
-                        .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 2)
-                        .Alignment(TextAlignment.MiddleCenter);
+                    // Handle GO drag drop
+                    HandleGODragDrop(scene);
                 }
-
-                if (!DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop && paper.IsParentHovered)
-                {
-                    if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
-                    {
-                        var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
-                        if (entry != null)
-                            EditorSceneManager.OpenScene(entry.Path);
-                    }
-                    else
-                    {
-                        SpawnAssetInScene(assetDrop, null, Float3.Zero);
-                    }
-                    DragDrop.EndDrag();
-                }
-
-                // Handle GO drag drop
-                HandleGODragDrop(scene);
             }
         }
     }
@@ -285,6 +230,7 @@ public class HierarchyPanel : DockPanel
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Rounded(4)
             .Margin(indent + 8, 0, 0, 0)
+            .StopEventPropagation()
             .OnClick((go, currentIndex, flatList), (cap, e) =>
             {
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
@@ -376,6 +322,9 @@ public class HierarchyPanel : DockPanel
 
             // Handle drop target detection
             HandleDropTarget(paper, go, goId);
+
+            // Per-GameObject right-click menu
+            BuildGameObjectContextMenu(paper, $"hier_go_ctx_{goId}");
         }
 
         // Drop indicator below
@@ -527,6 +476,102 @@ public class HierarchyPanel : DockPanel
             current = current.Parent;
         }
         return false;
+    }
+
+    // ================================================================
+    //  Context Menus
+    // ================================================================
+
+    private void BuildBackgroundContextMenu(Paper paper)
+    {
+        ContextMenuHelper.RightClickMenu(paper, "hier_bg_ctx", builder =>
+        {
+            BuildCreateMenu(builder, null);
+        });
+    }
+
+    private void BuildGameObjectContextMenu(Paper paper, string id)
+    {
+        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        {
+            var selectedGOs = Selection.GetSelected<GameObject>().ToList();
+            var firstSelected = selectedGOs.FirstOrDefault();
+            if (selectedGOs.Count == 0) return;
+
+            bool multiSelect = selectedGOs.Count > 1;
+
+            // Move to View / Move View To
+            var cam = SceneViewPanel.ActiveCamera;
+            if (cam != null)
+            {
+                builder.Item("Move to View", () =>
+                {
+                    foreach (var go in selectedGOs)
+                    {
+                        go.Transform.Position = cam.Position;
+                        go.Transform.LocalEulerAngles = new Float3(cam.Pitch, cam.Yaw, 0);
+                    }
+                    EditorSceneManager.IsDirty = true;
+                }, icon: EditorIcons.ArrowRight);
+
+                builder.Item("Move View To", () =>
+                {
+                    cam.SetPosition(firstSelected!.Transform.Position);
+                    cam.SetOrientation((float)firstSelected!.Transform.LocalEulerAngles.Y, (float)firstSelected!.Transform.LocalEulerAngles.X);
+                }, icon: EditorIcons.Eye);
+
+                builder.Separator();
+            }
+
+            // Create — parent to first selected
+            BuildCreateMenu(builder, firstSelected);
+            builder.Separator();
+
+            if (multiSelect)
+            {
+                builder.Item($"Duplicate ({selectedGOs.Count})", () =>
+                {
+                    foreach (var go in selectedGOs) DuplicateGameObject(go);
+                }, icon: EditorIcons.Copy);
+
+                builder.Item($"Rename ({selectedGOs.Count})", () =>
+                {
+                    _renamingIds.Clear();
+                    foreach (var go in selectedGOs)
+                        _renamingIds.Add(go.Identifier.ToString());
+                    _renameText = firstSelected!.Name;
+                }, icon: EditorIcons.PenToSquare);
+
+                builder.Item($"Delete ({selectedGOs.Count})", () =>
+                {
+                    foreach (var go in selectedGOs.ToList()) DeleteGameObject(go);
+                }, icon: EditorIcons.Trash);
+
+                builder.Separator();
+
+                bool anyEnabled = selectedGOs.Any(g => g.Enabled);
+                builder.Item(anyEnabled ? "Disable All" : "Enable All", () =>
+                {
+                    bool newState = !anyEnabled;
+                    foreach (var go in selectedGOs) go.Enabled = newState;
+                }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+            }
+            else
+            {
+                var go = firstSelected!;
+                builder.Item("Duplicate", () => DuplicateGameObject(go), icon: EditorIcons.Copy);
+                builder.Item("Rename", () =>
+                {
+                    _renamingIds.Clear();
+                    _renamingIds.Add(go.Identifier.ToString());
+                    _renameText = go.Name;
+                }, icon: EditorIcons.PenToSquare);
+                builder.Item("Delete", () => DeleteGameObject(go), icon: EditorIcons.Trash);
+                builder.Separator();
+                builder.Item(go.Enabled ? "Disable" : "Enable", () => go.Enabled = !go.Enabled,
+                    icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+            }
+        });
     }
 
     // ================================================================

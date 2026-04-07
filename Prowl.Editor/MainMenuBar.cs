@@ -12,6 +12,8 @@ public static class MainMenuBar
     private const float DropdownWidth = 200f;
     private const float ItemHeight = 24f;
 
+    private static int _openMenuIndex = -1;
+
     public static void Draw(Paper paper)
     {
         var font = EditorTheme.DefaultFont;
@@ -31,24 +33,48 @@ public static class MainMenuBar
                 int index = i;
                 var item = items[i];
 
-                // Each top-level menu item — the dropdown is a child so IsParentHovered
-                // covers both the label and the dropdown area
                 using (paper.Box($"menu_{index}")
                     .Height(EditorTheme.MenuBarHeight)
                     .Width(UnitValue.Auto)
+                    .BackgroundColor(_openMenuIndex == index ? EditorTheme.Ink200 : Color.Transparent)
                     .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(item.Label, font)
                         .TextColor(EditorTheme.Ink500)
                         .Alignment(TextAlignment.MiddleCenter)
                         .FontSize(EditorTheme.FontSize)
+                    .OnClick(index, (idx, _) =>
+                    {
+                        _openMenuIndex = _openMenuIndex == idx ? -1 : idx;
+                    })
                     .Enter())
                 {
-                    if (paper.IsParentHovered && item.HasSubItems)
-                    {
-                        // Position dropdown flush with the bottom of the menu bar, slight overlap
-                        RenderDropdown(paper, $"dd_{index}", item.SubItems, 0, EditorTheme.MenuBarHeight - 2);
-                    }
+                    // If hovering a different menu while one is open, switch to it
+                    if (_openMenuIndex >= 0 && _openMenuIndex != index && paper.IsParentHovered)
+                        _openMenuIndex = index;
                 }
+            }
+        }
+
+        // Render the open dropdown outside the menubar row (so backdrop covers everything)
+        if (_openMenuIndex >= 0 && _openMenuIndex < items.Count)
+        {
+            var openItem = items[_openMenuIndex];
+            if (openItem.HasSubItems)
+            {
+                // Backdrop — click anywhere outside to close
+                paper.Box("menubar_backdrop")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(0, EditorTheme.MenuBarHeight)
+                    .Size(99999, 99999)
+                    .BackgroundColor(Color.FromArgb(20, 0, 0, 0))
+                    .Layer(Layer.Topmost)
+                    .OnClick(0, (_, _) => _openMenuIndex = -1);
+
+                // Calculate X position: 10px left margin + sum of previous menu widths + gaps
+                // We approximate since we don't have exact layout data
+                float xPos = 10f + _openMenuIndex * 60f; // rough estimate
+
+                RenderDropdown(paper, $"dd_{_openMenuIndex}", openItem.SubItems, xPos, EditorTheme.MenuBarHeight - 2);
             }
         }
     }
@@ -69,6 +95,7 @@ public static class MainMenuBar
             .ChildTop(2).ChildBottom(2)
             .ChildLeft(2).ChildRight(2)
             .Layer(Layer.Topmost)
+            .ClampToScreen()
             .Enter())
         {
             for (int i = 0; i < items.Count; i++)
@@ -87,7 +114,6 @@ public static class MainMenuBar
 
                 var textColor = item.IsEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
-                // Menu item row — submenu is a child so IsParentHovered keeps it open
                 using (paper.Row($"{id}_i_{index}")
                     .Height(ItemHeight)
                     .BackgroundColor(Color.Transparent)
@@ -96,11 +122,13 @@ public static class MainMenuBar
                     .OnClick(item, (captured, e) =>
                     {
                         if (captured.IsEnabled && captured.OnClick != null)
+                        {
                             captured.OnClick();
+                            _openMenuIndex = -1;
+                        }
                     })
                     .Enter())
                 {
-                    // Checkmark / spacer
                     if (font != null)
                     {
                         paper.Box($"{id}_chk_{index}")
@@ -108,11 +136,7 @@ public static class MainMenuBar
                             .Text(item.IsChecked ? "\u2713" : "", font)
                             .TextColor(textColor)
                             .FontSize(EditorTheme.FontSize);
-                    }
 
-                    // Label
-                    if (font != null)
-                    {
                         paper.Box($"{id}_lbl_{index}")
                             .Text(item.Label, font)
                             .TextColor(textColor)
@@ -133,10 +157,7 @@ public static class MainMenuBar
                         }
 
                         if (paper.IsParentHovered)
-                        {
-                            // Overlap by 5px so mouse can travel to submenu without gap
                             RenderDropdown(paper, $"{id}_s_{index}", item.SubItems, DropdownWidth - 5, 0);
-                        }
                     }
                 }
             }
