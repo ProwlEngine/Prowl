@@ -479,6 +479,11 @@ public class GameObject : EngineObject, ISerializable
 
         SortComponents();
 
+        // Trigger OnEnable if the GameObject is in an active scene and enabled
+        Scene? scene = Scene;
+        if (scene.IsValid() && scene.IsActive && newComponent.EnabledInHierarchy)
+            newComponent.InternalOnEnable();
+
         return newComponent;
     }
 
@@ -513,6 +518,11 @@ public class GameObject : EngineObject, ISerializable
         _componentCache.Add(comp.GetType(), comp);
 
         SortComponents();
+
+        // Trigger OnEnable if the GameObject is in an active scene and enabled
+        Scene? scene = Scene;
+        if (scene.IsValid() && scene.IsActive && comp.EnabledInHierarchy)
+            comp.InternalOnEnable();
     }
 
     /// <summary>
