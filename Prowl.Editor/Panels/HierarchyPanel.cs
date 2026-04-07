@@ -22,8 +22,7 @@ public class HierarchyPanel : DockPanel
 
     private string _searchText = "";
     private Paper? _paper;
-    private HashSet<string> _renamingIds = new(); // GOs currently being renamed
-    private string _renameText = "";
+    // Rename state is managed by RenameOverlay
 
     private const float ToolbarHeight = 30f;
     private const float IndentSize = 16f;
@@ -275,31 +274,9 @@ public class HierarchyPanel : DockPanel
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
 
             // Name or rename field
-            if (_renamingIds.Contains(goId))
+            if (RenameOverlay.IsRenaming(goId))
             {
-                EditorGUI.TextField(paper, $"hier_rename_{goId}", "", _renameText)
-                    .OnValueChanged(v => _renameText = v);
-
-                bool confirm = _paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true;
-                bool cancel = _paper?.IsKeyDown(PaperKey.Escape) == true;
-
-                if (confirm)
-                {
-                    if (!string.IsNullOrWhiteSpace(_renameText))
-                    {
-                        // Apply to all renaming objects
-                        foreach (var rid in _renamingIds)
-                        {
-                            var rgo = FindGOByIdentifier(rid);
-                            if (rgo != null) rgo.Name = _renameText;
-                        }
-                    }
-                    _renamingIds.Clear();
-                }
-                else if (cancel)
-                {
-                    _renamingIds.Clear();
-                }
+                RenameOverlay.Draw(paper, $"hier_rename_{goId}");
             }
             else
             {
@@ -536,10 +513,7 @@ public class HierarchyPanel : DockPanel
 
                 builder.Item($"Rename ({selectedGOs.Count})", () =>
                 {
-                    _renamingIds.Clear();
-                    foreach (var go in selectedGOs)
-                        _renamingIds.Add(go.Identifier.ToString());
-                    _renameText = firstSelected!.Name;
+                    StartRenameGO(firstSelected!, selectedGOs);
                 }, icon: EditorIcons.PenToSquare);
 
                 builder.Item($"Delete ({selectedGOs.Count})", () =>
@@ -562,9 +536,7 @@ public class HierarchyPanel : DockPanel
                 builder.Item("Duplicate", () => DuplicateGameObject(go), icon: EditorIcons.Copy);
                 builder.Item("Rename", () =>
                 {
-                    _renamingIds.Clear();
-                    _renamingIds.Add(go.Identifier.ToString());
-                    _renameText = go.Name;
+                    StartRenameGO(go, [go]);
                 }, icon: EditorIcons.PenToSquare);
                 builder.Item("Delete", () => DeleteGameObject(go), icon: EditorIcons.Trash);
                 builder.Separator();
@@ -617,10 +589,20 @@ public class HierarchyPanel : DockPanel
         Selection.Select(go);
 
         // Enter rename
-        _renamingIds.Clear();
-        _renamingIds.Add(go.Identifier.ToString());
-        _renameText = go.Name;
+        StartRenameGO(go, [go]);
         return go;
+    }
+
+    private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
+    {
+        var targets = allTargets.ToList();
+        string goId = primary.Identifier.ToString();
+        RenameOverlay.Begin(goId, primary.Name, newName =>
+        {
+            foreach (var go in targets)
+                go.Name = newName;
+            EditorSceneManager.IsDirty = true;
+        });
     }
 
     private void CreatePrimitive(string name, DefaultModel model, GameObject? parent)

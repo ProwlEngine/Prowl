@@ -25,10 +25,7 @@ public class ProjectPanel : DockPanel
     private string _searchText = "";
     private float _thumbnailSize = 64f;
     private Paper? _paper; // Cached for modifier key checks in callbacks
-    private string? _renamingPath; // Relative path of item being renamed, null if not renaming
-    private string _renameText = "";
-    private bool _renameInTree; // true = renaming in folder tree, false = in content view
-    private int _lastSelectionCount; // track selection changes to cancel rename
+    // Rename state is managed by RenameOverlay
     private static readonly HashSet<Guid> _expandedAssets = new(); // files with sub-assets expanded
     private static readonly Dictionary<Guid, Prowl.Runtime.Resources.Texture2D?> _thumbnailCache = new();
     private static Guid _pendingFocusGuid; // Asset to focus/reveal on next frame
@@ -74,18 +71,6 @@ public class ProjectPanel : DockPanel
                 }
             }
         }
-
-        // Cancel rename if selection changed
-        if (_renamingPath != null)
-        {
-            int currentCount = Selection.Count;
-            var active = Selection.ActiveObject;
-            bool selChanged = currentCount != _lastSelectionCount
-                || (active is ContentItem ci && ci.RelativePath != _renamingPath)
-                || (active is not ContentItem && active != null);
-            if (selChanged) _renamingPath = null;
-        }
-        _lastSelectionCount = Selection.Count;
 
         using (paper.Column("proj_root").Size(width, height).Enter())
         {
@@ -273,18 +258,10 @@ public class ProjectPanel : DockPanel
                 .TextColor(Color.FromArgb(255, 220, 180, 80))
                 .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
-            // Name (inline rename in tree or label)
-            if (_renamingPath == relativePath && _renameInTree)
+            // Name (inline rename or label)
+            if (RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
             {
-                EditorGUI.TextField(paper, $"proj_ft_rename_{relativePath.GetHashCode()}", "", _renameText)
-                    .OnValueChanged(v => _renameText = v);
-                if (_paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true)
-                {
-                    var renameItem = new ContentItem { Name = displayName, RelativePath = relativePath, IsFolder = true };
-                    CommitRename(renameItem);
-                }
-                else if (_paper?.IsKeyDown(PaperKey.Escape) == true)
-                    _renamingPath = null;
+                RenameOverlay.Draw(paper, $"proj_ft_rename_{relativePath.GetHashCode()}");
             }
             else
             {
@@ -512,15 +489,9 @@ public class ProjectPanel : DockPanel
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
                 // Name (inline rename or label)
-                if (_renamingPath == item.RelativePath && !_renameInTree)
+                if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
                 {
-                    EditorGUI.TextField(paper, $"proj_li_rename_{i}", "", _renameText)
-                        .OnValueChanged(v => _renameText = v);
-                    // Enter to confirm, Escape to cancel
-                    if (_paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true)
-                        CommitRename(item);
-                    else if (_paper?.IsKeyDown(PaperKey.Escape) == true)
-                        _renamingPath = null;
+                    RenameOverlay.Draw(paper, $"proj_li_rename_{i}");
                 }
                 else
                 {
@@ -676,44 +647,38 @@ public class ProjectPanel : DockPanel
 
     private void StartRename(ContentItem item, bool inTree = false)
     {
-        _renamingPath = item.RelativePath;
-        _renameText = item.IsFolder ? item.Name : Path.GetFileNameWithoutExtension(item.Name);
-        _renameInTree = inTree;
-    }
+        string id = inTree ? $"proj_folder_{item.RelativePath}" : $"proj_asset_{item.RelativePath}";
+        string editName = item.IsFolder ? item.Name : Path.GetFileNameWithoutExtension(item.Name);
 
-    private void CommitRename(ContentItem item)
-    {
-        if (_renamingPath == null) return;
-        string ext = item.IsFolder ? "" : Path.GetExtension(item.Name);
-        string newName = _renameText + ext;
-        if (newName == item.Name || string.IsNullOrWhiteSpace(_renameText))
+        RenameOverlay.Begin(id, editName, newText =>
         {
-            _renamingPath = null;
-            return;
-        }
+            string ext = item.IsFolder ? "" : Path.GetExtension(item.Name);
+            string newName = newText + ext;
+            if (newName == item.Name || string.IsNullOrWhiteSpace(newText))
+                return;
 
-        string parentFolder = Path.GetDirectoryName(item.RelativePath)?.Replace('\\', '/') ?? "";
-        string newRelPath = string.IsNullOrEmpty(parentFolder) ? newName : parentFolder + "/" + newName;
+            string parentFolder = Path.GetDirectoryName(item.RelativePath)?.Replace('\\', '/') ?? "";
+            string newRelPath = string.IsNullOrEmpty(parentFolder) ? newName : parentFolder + "/" + newName;
 
-        if (item.IsFolder)
-        {
-            string oldAbs = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-            string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
-            if (Directory.Exists(oldAbs) && !Directory.Exists(newAbs))
+            if (item.IsFolder)
             {
-                Directory.Move(oldAbs, newAbs);
-                string oldMeta = MetaFile.GetMetaPath(oldAbs);
-                string newMeta = MetaFile.GetMetaPath(newAbs);
-                if (File.Exists(oldMeta)) File.Move(oldMeta, newMeta);
-                if (_currentFolder == item.RelativePath)
-                    _currentFolder = newRelPath;
+                string oldAbs = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
+                string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
+                if (Directory.Exists(oldAbs) && !Directory.Exists(newAbs))
+                {
+                    Directory.Move(oldAbs, newAbs);
+                    string oldMeta = MetaFile.GetMetaPath(oldAbs);
+                    string newMeta = MetaFile.GetMetaPath(newAbs);
+                    if (File.Exists(oldMeta)) File.Move(oldMeta, newMeta);
+                    if (_currentFolder == item.RelativePath)
+                        _currentFolder = newRelPath;
+                }
             }
-        }
-        else
-        {
-            EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath);
-        }
-        _renamingPath = null;
+            else
+            {
+                EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath);
+            }
+        });
     }
 
     private static void OpenWithSystem(ContentItem item)
@@ -817,14 +782,9 @@ public class ProjectPanel : DockPanel
                         }
 
                         // Label (inline rename or text)
-                        if (_renamingPath == item.RelativePath && !_renameInTree)
+                        if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
                         {
-                            EditorGUI.TextField(paper, $"proj_gl_rename_{idx}", "", _renameText)
-                                .OnValueChanged(v => _renameText = v);
-                            if (_paper?.IsKeyDown(PaperKey.Enter) == true || _paper?.IsKeyDown(PaperKey.KeypadEnter) == true)
-                                CommitRename(item);
-                            else if (_paper?.IsKeyDown(PaperKey.Escape) == true)
-                                _renamingPath = null;
+                            RenameOverlay.Draw(paper, $"proj_gl_rename_{idx}");
                         }
                         else
                         {
