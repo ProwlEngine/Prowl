@@ -1149,6 +1149,9 @@ namespace Prowl.PaperUI
             /// </summary>
             public Func<char, string, bool> CharFilter;
 
+            /// <summary>When true, all text is selected when the field gains focus.</summary>
+            public bool SelectAllOnFocus;
+
             /// <summary>Creates default text input settings</summary>
             public static TextInputSettings Default => new TextInputSettings
             {
@@ -1158,7 +1161,8 @@ namespace Prowl.PaperUI
                 PlaceholderColor = Color32.FromArgb(160, 200, 200, 200),
                 ReadOnly = false,
                 MaxLength = 0,
-                DoWrap = true
+                DoWrap = true,
+                SelectAllOnFocus = false
             };
         }
 
@@ -1766,8 +1770,17 @@ namespace Prowl.PaperUI
 
                 if (e.IsFocused)
                 {
-                    currentState.CursorPosition = currentState.Value.Length;
-                    currentState.ClearSelection();
+                    if (settings.SelectAllOnFocus && currentState.Value.Length > 0)
+                    {
+                        currentState.SelectionStart = 0;
+                        currentState.SelectionEnd = currentState.Value.Length;
+                        currentState.CursorPosition = currentState.Value.Length;
+                    }
+                    else
+                    {
+                        currentState.CursorPosition = currentState.Value.Length;
+                        currentState.ClearSelection();
+                    }
                     EnsureCursorVisible(ref currentState, settings, isMultiLine);
                 }
 
