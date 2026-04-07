@@ -214,19 +214,12 @@ public class PlayerAssetDatabase : IAssetDatabase
                     ResourcesMap[kvp.Key] = guid;
     }
 
-    /// <summary>Read Echo binary from byte array via temp file.</summary>
+    /// <summary>Read Echo binary from byte array.</summary>
     private static EchoObject? ReadEchoBinary(byte[] data)
     {
-        string tempPath = Path.GetTempFileName();
-        try
-        {
-            File.WriteAllBytes(tempPath, data);
-            return EchoObject.ReadFromBinary(new FileInfo(tempPath));
-        }
-        finally
-        {
-            try { File.Delete(tempPath); } catch { }
-        }
+        using var ms = new MemoryStream(data);
+        using var reader = new BinaryReader(ms);
+        return EchoObject.ReadFromBinary(reader);
     }
 
     public void Dispose()
