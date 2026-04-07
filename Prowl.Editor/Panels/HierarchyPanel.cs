@@ -26,7 +26,6 @@ public class HierarchyPanel : DockPanel
     private string _renameText = "";
 
     private const float ToolbarHeight = 30f;
-    // private const float RowHeight = 30f;
     private const float IndentSize = 16f;
 
     // Drag state

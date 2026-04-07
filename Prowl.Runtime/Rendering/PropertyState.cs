@@ -27,8 +27,6 @@ public partial class PropertyState
     [SerializeField] private Dictionary<string, GraphicsBuffer> _buffers = [];
     [SerializeField] private Dictionary<string, uint> _bufferBindings = [];
 
-    //private Dictionary<string, int> textureSlots = new();
-
     public PropertyState() { }
 
     public PropertyState(PropertyState clone)
@@ -41,9 +39,10 @@ public partial class PropertyState
         _ints = new(clone._ints);
         _matrices = new(clone._matrices);
         _matrixArr = new(clone._matrixArr);
-        _textures = new(clone._textures); // AssetRef is a struct, shallow copy is fine
+        _textures = new(clone._textures);
         _textures3D = new(clone._textures3D);
         _buffers = new(clone._buffers);
+        _bufferBindings = new(clone._bufferBindings);
     }
 
     public bool IsEmpty => _colors.Count == 0 && _vectors4.Count == 0 && _vectors3.Count == 0 && _vectors2.Count == 0 && _floats.Count == 0 && _ints.Count == 0 && _matrices.Count == 0 && _textures.Count == 0 && _textures3D.Count == 0;

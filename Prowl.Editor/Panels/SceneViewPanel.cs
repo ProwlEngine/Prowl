@@ -46,7 +46,6 @@ public class SceneViewPanel : DockPanel
         using (paper.Row("sv_toolbar")
             .PositionType(PositionType.SelfDirected)
             .Position(4, 4).Size(width - 8, ToolbarHeight)
-            //.BackgroundColor(Color.FromArgb(180, 30, 30, 33))
             .Rounded(6)
             .IsNotInteractable()
             .ChildLeft(4).ChildRight(4).RowBetween(4)
@@ -105,18 +104,6 @@ public class SceneViewPanel : DockPanel
 
             // Spacer
             paper.Box("sv_spacer");
-
-            // Camera info
-            //if (_editorCamera != null)
-            //{
-            //    var pos = _editorCamera.Position;
-            //    string info = $"({pos.X:F1}, {pos.Y:F1}, {pos.Z:F1})";
-            //    paper.Box("sv_cam_info")
-            //        .Width(UnitValue.Auto).Height(24)
-            //        .ChildLeft(4).ChildRight(4)
-            //        .Text(info, font).TextColor(EditorTheme.Ink400)
-            //        .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
-            //}
         }
     }
 
@@ -194,7 +181,6 @@ public class SceneViewPanel : DockPanel
                     canvas.SetBrushTextureTransform(
                         Transform2D.CreateTranslation(rx, ry + rh) *
                         Transform2D.CreateScale(rw, -rh));
-                    //canvas.RectFilled(rx, ry, rw, rh, Color.White);
                     canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
                     canvas.ClearBrushTexture();
                     });
