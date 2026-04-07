@@ -281,7 +281,10 @@ public class ParticleSystemComponent : MonoBehaviour
         // Transform to world space if needed
         if (SimulationSpace == SimulationSpace.World)
         {
-            particle.Position = (Float3)Transform.Position + particle.Position;
+            // Apply the GameObject's rotation to position offset and velocity direction
+            var rotation = Transform.Rotation;
+            particle.Position = (Float3)Transform.Position + (rotation * particle.Position);
+            particle.Velocity = rotation * particle.Velocity;
         }
 
         _particles.Add(particle);
