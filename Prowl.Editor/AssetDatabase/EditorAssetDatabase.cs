@@ -515,7 +515,8 @@ public class EditorAssetDatabase : IAssetDatabase
             var savedId = obj.AssetID;
             obj.AssetID = Guid.Empty;
 
-            var echo = Serializer.Serialize(obj);
+            // Force serialize with Base Type info, Required for Builds since they dont know the Type of the Asset
+            var echo = Serializer.Serialize(typeof(object), obj);
             obj.AssetID = savedId;
 
             if (echo != null)
