@@ -615,8 +615,8 @@ public class EditorAssetDatabase : IAssetDatabase
         string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 
-        // Serialize to the file
-        var echo = Serializer.Serialize(obj);
+        // Serialize to the file (typeof(object) forces $type inclusion)
+        var echo = Serializer.Serialize(typeof(object), obj);
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 
@@ -656,7 +656,7 @@ public class EditorAssetDatabase : IAssetDatabase
         }
 
         string absolutePath = Path.Combine(_project.AssetsPath, obj.AssetPath);
-        var echo = Serializer.Serialize(obj);
+        var echo = Serializer.Serialize(typeof(object), obj);
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 

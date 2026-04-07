@@ -1,0 +1,65 @@
+{
+  "$id": 1,
+  "$type": "Prowl.Runtime.Resources.Material, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+  "_shader": {
+    "AssetID": "87bedf66-4e8b-0056-bc2e-4f8c7fc22a5a"
+  },
+  "_properties": {
+    "$id": 2,
+    "_colors": {
+      "_MainColor": {
+        "R": 1F,
+        "G": 1F,
+        "B": 1F,
+        "A": 1F
+      }
+    },
+    "_vectors2": {
+
+    },
+    "_vectors3": {
+
+    },
+    "_vectors4": {
+
+    },
+    "_floats": {
+      "_EmissionIntensity": 1F
+    },
+    "_ints": {
+
+    },
+    "_matrices": {
+
+    },
+    "_matrixArr": {
+
+    },
+    "_textures": {
+      "_MainTex": {
+        "AssetID": "a673d9fc-afa8-6953-a6e5-0d7b5fd42789"
+      },
+      "_NormalTex": {
+        "AssetID": "0c9986f4-620f-3053-acf5-aaa504c7e31c"
+      },
+      "_SurfaceTex": {
+        "AssetID": "96be834e-eb6c-fe51-a195-30e5cd7e9bed"
+      },
+      "_EmissionTex": {
+        "AssetID": "4ad67725-8cd3-f45c-a783-5e565ac55462"
+      }
+    },
+    "_textures3D": {
+
+    },
+    "_buffers": {
+
+    },
+    "_bufferBindings": {
+
+    }
+  },
+  "AssetPath": "Standard.mat",
+  "AssetID": "00000000-0000-0000-0000-000000000000",
+  "Name": "New Material"
+}

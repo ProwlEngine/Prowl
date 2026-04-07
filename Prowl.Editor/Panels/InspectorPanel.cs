@@ -395,7 +395,7 @@ public class InspectorPanel : DockPanel
             var originalId = asset.AssetID;
             asset.AssetID = Guid.Empty;
 
-            var echo = Echo.Serializer.Serialize(asset);
+            var echo = Echo.Serializer.Serialize(typeof(object), asset);
             asset.AssetID = originalId; // Restore
 
             if (echo != null)

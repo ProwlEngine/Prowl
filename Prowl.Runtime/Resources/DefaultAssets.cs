@@ -48,6 +48,14 @@ public enum DefaultModel
 }
 
 /// <summary>
+/// Default materials embedded in the runtime
+/// </summary>
+public enum DefaultMaterial
+{
+    Standard,
+}
+
+/// <summary>
 /// Default textures embedded in the runtime
 /// </summary>
 public enum DefaultTexture

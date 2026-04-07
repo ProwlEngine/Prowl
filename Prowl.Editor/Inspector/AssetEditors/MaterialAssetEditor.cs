@@ -176,7 +176,7 @@ public class MaterialAssetEditor : AssetImporterEditor
             var savedId = material.AssetID;
             material.AssetID = Guid.Empty;
 
-            var echo = Serializer.Serialize(material);
+            var echo = Serializer.Serialize(typeof(object), material);
             material.AssetID = savedId;
 
             if (echo != null)

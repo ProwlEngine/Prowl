@@ -105,7 +105,7 @@ public static class AssetCreateMenu
         string filePath = Path.Combine(absFolder, name);
 
         var scene = new Runtime.Resources.Scene();
-        var echo = Serializer.Serialize(scene);
+        var echo = Serializer.Serialize(typeof(object), scene);
         if (echo != null)
             File.WriteAllText(filePath, echo.WriteToString());
 
@@ -121,8 +121,8 @@ public static class AssetCreateMenu
         string name = FindUniqueName(absFolder, "New Material", ".mat");
         string filePath = Path.Combine(absFolder, name);
 
-        var echo = EchoObject.NewCompound();
-        echo["$type"] = new EchoObject(typeof(Runtime.Resources.Material).AssemblyQualifiedName);
+        var mat = new Runtime.Resources.Material();
+        var echo = Serializer.Serialize(typeof(object), mat);
         File.WriteAllText(filePath, echo.WriteToString());
 
         Debug.Log($"Created material: {name}");

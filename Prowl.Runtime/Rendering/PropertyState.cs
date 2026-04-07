@@ -22,8 +22,8 @@ public partial class PropertyState
     [SerializeField] private Dictionary<string, int> _ints = [];
     [SerializeField] private Dictionary<string, Float4x4> _matrices = [];
     [SerializeField] private Dictionary<string, Float4x4[]> _matrixArr = [];
-    [SerializeField] private Dictionary<string, Texture2D> _textures = [];
-    [SerializeField] private Dictionary<string, Texture3D> _textures3D = [];
+    [SerializeField] private Dictionary<string, AssetRef<Texture2D>> _textures = [];
+    [SerializeField] private Dictionary<string, AssetRef<Texture3D>> _textures3D = [];
     [SerializeField] private Dictionary<string, GraphicsBuffer> _buffers = [];
     [SerializeField] private Dictionary<string, uint> _bufferBindings = [];
 
@@ -41,7 +41,7 @@ public partial class PropertyState
         _ints = new(clone._ints);
         _matrices = new(clone._matrices);
         _matrixArr = new(clone._matrixArr);
-        _textures = new(clone._textures);
+        _textures = new(clone._textures); // AssetRef is a struct, shallow copy is fine
         _textures3D = new(clone._textures3D);
         _buffers = new(clone._buffers);
     }
@@ -94,8 +94,10 @@ public partial class PropertyState
     public void SetInt(string name, int value) => _ints[name] = value;
     public void SetMatrix(string name, Float4x4 value) => _matrices[name] = (Float4x4)value;
     public void SetMatrices(string name, Float4x4[] value) => _matrixArr[name] = [.. value.Select(x => (Float4x4)x)];
-    public void SetTexture(string name, Texture2D value) => _textures[name] = value;
-    public void SetTexture3D(string name, Texture3D value) => _textures3D[name] = value;
+    public void SetTexture(string name, Texture2D value) => _textures[name] = new AssetRef<Texture2D>(value);
+    public void SetTexture(string name, AssetRef<Texture2D> value) => _textures[name] = value;
+    public void SetTexture3D(string name, Texture3D value) => _textures3D[name] = new AssetRef<Texture3D>(value);
+    public void SetTexture3D(string name, AssetRef<Texture3D> value) => _textures3D[name] = value;
     public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
         _buffers[name] = value;
@@ -110,8 +112,10 @@ public partial class PropertyState
     public float GetFloat(string name) => _floats.TryGetValue(name, out float value) ? value : 0;
     public int GetInt(string name) => _ints.TryGetValue(name, out int value) ? value : 0;
     public Float4x4 GetMatrix(string name) => _matrices.TryGetValue(name, out Float4x4 value) ? (Float4x4)value : Float4x4.Identity;
-    public Texture2D? GetTexture(string name) => _textures.TryGetValue(name, out Texture2D value) ? value : null;
-    public Texture3D? GetTexture3D(string name) => _textures3D.TryGetValue(name, out Texture3D value) ? value : null;
+    public Texture2D? GetTexture(string name) => _textures.TryGetValue(name, out var value) ? value.Res : null;
+    public AssetRef<Texture2D> GetTextureRef(string name) => _textures.TryGetValue(name, out var value) ? value : default;
+    public Texture3D? GetTexture3D(string name) => _textures3D.TryGetValue(name, out var value) ? value.Res : null;
+    public AssetRef<Texture3D> GetTexture3DRef(string name) => _textures3D.TryGetValue(name, out var value) ? value : default;
     public GraphicsBuffer GetBuffer(string name) => _buffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
     public uint GetBufferBinding(string name) => _bufferBindings.TryGetValue(name, out uint value) ? value : 0;
 
@@ -150,9 +154,9 @@ public partial class PropertyState
             _matrices[item.Key] = item.Value;
         foreach (KeyValuePair<string, Float4x4[]> item in properties._matrixArr)
             _matrixArr[item.Key] = item.Value;
-        foreach (KeyValuePair<string, Texture2D> item in properties._textures)
+        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in properties._textures)
             _textures[item.Key] = item.Value;
-        foreach (KeyValuePair<string, Texture3D> item in properties._textures3D)
+        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in properties._textures3D)
             _textures3D[item.Key] = item.Value;
         foreach (KeyValuePair<string, GraphicsBuffer> item in properties._buffers)
             _buffers[item.Key] = item.Value;
@@ -254,9 +258,9 @@ public partial class PropertyState
             }
         }
 
-        foreach (KeyValuePair<string, Texture2D> item in materialProperties._textures)
+        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in materialProperties._textures)
         {
-            Texture2D tex = item.Value;
+            Texture2D? tex = item.Value.Res;
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
@@ -265,9 +269,9 @@ public partial class PropertyState
             }
         }
 
-        foreach (KeyValuePair<string, Texture3D> item in materialProperties._textures3D)
+        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in materialProperties._textures3D)
         {
-            Texture3D tex = item.Value;
+            Texture3D? tex = item.Value.Res;
             if (tex.IsValid())
             {
                 // Always set textures - slot assignment must be consistent
@@ -371,23 +375,21 @@ public partial class PropertyState
             }
         }
 
-        foreach (KeyValuePair<string, Texture2D> item in instanceProperties._textures)
+        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in instanceProperties._textures)
         {
-            Texture2D tex = item.Value;
+            Texture2D? tex = item.Value.Res;
             if (tex.IsValid())
             {
-                // Always set textures - slot assignment must be consistent
                 Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
         }
 
-        foreach (KeyValuePair<string, Texture3D> item in instanceProperties._textures3D)
+        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in instanceProperties._textures3D)
         {
-            Texture3D tex = item.Value;
+            Texture3D? tex = item.Value.Res;
             if (tex.IsValid())
             {
-                // Always set textures - slot assignment must be consistent
                 Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
@@ -489,12 +491,11 @@ public partial class PropertyState
         }
 
         List<string> toRemove = [];
-        foreach (KeyValuePair<string, Texture2D> item in mpb._textures)
+        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in mpb._textures)
         {
-            Texture2D tex = item.Value;
+            Texture2D? tex = item.Value.Res;
             if (tex.IsValid())
             {
-                // Always set textures - slot assignment must be consistent
                 Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
@@ -504,19 +505,15 @@ public partial class PropertyState
             }
         }
 
-        // Clean up invalid textures
         foreach (string key in toRemove)
-        {
             mpb._textures.Remove(key);
-        }
 
         List<string> toRemove3D = [];
-        foreach (KeyValuePair<string, Texture3D> item in mpb._textures3D)
+        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in mpb._textures3D)
         {
-            Texture3D tex = item.Value;
+            Texture3D? tex = item.Value.Res;
             if (tex.IsValid())
             {
-                // Always set textures - slot assignment must be consistent
                 Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
@@ -526,11 +523,8 @@ public partial class PropertyState
             }
         }
 
-        // Clean up invalid textures
         foreach (string key in toRemove3D)
-        {
             mpb._textures3D.Remove(key);
-        }
     }
 
     internal static void ApplyGlobals(GraphicsProgram shader, GraphicsProgram.UniformCache cache, ref int texSlot)
@@ -623,7 +617,6 @@ public partial class PropertyState
             Texture2D tex = item.Value;
             if (tex.IsValid())
             {
-                // Always set textures - slot assignment must be consistent
                 Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
@@ -633,11 +626,8 @@ public partial class PropertyState
             }
         }
 
-        // Clean up invalid textures
         foreach (string key in toRemove)
-        {
             s_globalTextures.Remove(key);
-        }
 
         List<string> toRemove3D = [];
         foreach (KeyValuePair<string, Texture3D> item in s_globalTextures3D)
@@ -645,7 +635,6 @@ public partial class PropertyState
             Texture3D tex = item.Value;
             if (tex.IsValid())
             {
-                // Always set textures - slot assignment must be consistent
                 Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
                 texSlot++;
             }
@@ -655,11 +644,8 @@ public partial class PropertyState
             }
         }
 
-        // Clean up invalid textures
         foreach (string key in toRemove3D)
-        {
             s_globalTextures3D.Remove(key);
-        }
     }
 }
 

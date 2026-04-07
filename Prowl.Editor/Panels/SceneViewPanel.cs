@@ -363,9 +363,11 @@ public class SceneViewPanel : DockPanel
         var scene = new Scene();
         scene.Name = "Untitled Scene";
 
-        var defaultMat = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        var defaultMat = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
+        var cubeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Cube));
+        var planeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Plane));
 
-        // Main Camera — matches sample setup
+        // Main Camera
         var camGo = new GameObject("Main Camera");
         camGo.Tag = "Main Camera";
         camGo.Transform.Position = new Float3(0, 5, -15);
@@ -375,7 +377,7 @@ public class SceneViewPanel : DockPanel
         cam.HDR = true;
         scene.Add(camGo);
 
-        // Directional Light — matches sample setup
+        // Directional Light
         var lightGo = new GameObject("Directional Light");
         lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
         var light = lightGo.AddComponent<DirectionalLight>();
@@ -387,7 +389,7 @@ public class SceneViewPanel : DockPanel
         floorGo.Transform.Position = new Float3(0, -0.05f, 0);
         floorGo.Transform.LocalScale = new Float3(10, 0.1f, 10);
         var floorRenderer = floorGo.AddComponent<MeshRenderer>();
-        floorRenderer.Mesh = Mesh.CreateCube(Float3.One);
+        floorRenderer.Mesh = planeMesh;
         floorRenderer.Material = defaultMat;
         scene.Add(floorGo);
 
@@ -395,7 +397,7 @@ public class SceneViewPanel : DockPanel
         var cube1 = new GameObject("Cube");
         cube1.Transform.Position = new Float3(0, 0.5f, 0);
         var cube1Renderer = cube1.AddComponent<MeshRenderer>();
-        cube1Renderer.Mesh = Mesh.CreateCube(Float3.One);
+        cube1Renderer.Mesh = cubeMesh;
         cube1Renderer.Material = defaultMat;
         scene.Add(cube1);
 
@@ -403,7 +405,7 @@ public class SceneViewPanel : DockPanel
         var cube2 = new GameObject("Cube (1)");
         cube2.Transform.Position = new Float3(2, 0.5f, 1);
         var cube2Renderer = cube2.AddComponent<MeshRenderer>();
-        cube2Renderer.Mesh = Mesh.CreateCube(Float3.One);
+        cube2Renderer.Mesh = cubeMesh;
         cube2Renderer.Material = defaultMat;
         scene.Add(cube2);
 

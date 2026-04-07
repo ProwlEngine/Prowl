@@ -58,12 +58,40 @@ public static class BuiltInAssets
                 () => Shader.LoadDefault(shader));
         }
 
-        // Models
+        // Models and their sub-meshes
         foreach (DefaultModel m in Enum.GetValues<DefaultModel>())
         {
             var model = m;
             Register($"$Default:Model/{model}", model.ToString(), typeof(Model),
-                () => Model.LoadDefault(model));
+                () =>
+                {
+                    var loaded = Model.LoadDefault(model);
+                    // Assign deterministic GUIDs to sub-meshes
+                    for (int i = 0; i < loaded.Meshes.Count; i++)
+                    {
+                        var mesh = loaded.Meshes[i].Mesh.Res;
+                        if (mesh != null)
+                        {
+                            var meshGuid = DeterministicGuid($"$Default:Model/{model}/Mesh/{i}");
+                            mesh.AssetID = meshGuid;
+                            mesh.Name = $"{model}_Mesh{i}";
+                            _cache[meshGuid] = mesh;
+                        }
+                    }
+                    return loaded;
+                });
+
+            // Register mesh entries so they can be resolved by GUID
+            // We need the entries to exist even before the model is loaded
+            RegisterMeshEntries(model);
+        }
+
+        // Materials
+        foreach (DefaultMaterial m in Enum.GetValues<DefaultMaterial>())
+        {
+            var mat = m;
+            Register($"$Default:Material/{mat}", mat.ToString(), typeof(Material),
+                () => Material.LoadDefault(mat));
         }
 
         // Textures
@@ -73,6 +101,28 @@ public static class BuiltInAssets
             Register($"$Default:Texture/{tex}", tex.ToString(), typeof(Texture2D),
                 () => Texture2D.LoadDefault(tex));
         }
+    }
+
+    private static void RegisterMeshEntries(DefaultModel model)
+    {
+        // Register mesh entry that triggers parent model load to populate the cache
+        var meshGuid = DeterministicGuid($"$Default:Model/{model}/Mesh/0");
+        var modelEnum = model;
+        _entries[meshGuid] = new BuiltInEntry
+        {
+            Guid = meshGuid,
+            Name = $"{model}_Mesh0",
+            Path = $"$Default:Model/{model}/Mesh/0",
+            AssetType = typeof(Mesh),
+            Loader = () =>
+            {
+                // Loading the parent model will cache all its sub-meshes
+                var parentGuid = GuidFor(modelEnum);
+                Get(parentGuid);
+                // Now the mesh should be in the cache
+                return _cache.TryGetValue(meshGuid, out var cached) ? cached : null!;
+            }
+        };
     }
 
     private static void Register(string path, string name, Type type, Func<EngineObject> loader)
@@ -147,5 +197,12 @@ public static class BuiltInAssets
     /// <summary>
     /// Get the deterministic GUID for a specific default texture.
     /// </summary>
+    public static Guid GuidFor(DefaultMaterial material) => DeterministicGuid($"$Default:Material/{material}");
+
     public static Guid GuidFor(DefaultTexture tex) => DeterministicGuid($"$Default:Texture/{tex}");
+
+    /// <summary>
+    /// Get the deterministic GUID for a default model's first mesh.
+    /// </summary>
+    public static Guid GuidForMesh(DefaultModel model, int meshIndex = 0) => DeterministicGuid($"$Default:Model/{model}/Mesh/{meshIndex}");
 }

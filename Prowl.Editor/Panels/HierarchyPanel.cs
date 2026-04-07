@@ -582,8 +582,9 @@ public class HierarchyPanel : DockPanel
     private void CreatePrimitive(string name, DefaultModel model, GameObject? parent)
     {
         var go = CreateGameObject(name, parent);
-        var renderer = go.AddComponent<ModelRenderer>();
-        renderer.Model = new AssetRef<Model>(BuiltInAssets.GuidFor(model));
+        var renderer = go.AddComponent<MeshRenderer>();
+        renderer.Mesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(model));
+        renderer.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
     }
 
     private void DuplicateGameObject(GameObject source)

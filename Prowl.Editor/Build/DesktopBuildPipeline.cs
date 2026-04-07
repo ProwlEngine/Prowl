@@ -61,18 +61,15 @@ public class DesktopBuildPipeline : BuildPipeline
             if (Directory.Exists(contentDir))
                 try { Directory.Delete(contentDir, true); } catch { }
 
-            // 1b. Ensure current scene is saved (build uses the cache which comes from the .scene file)
-            if (EditorSceneManager.IsDirty || EditorSceneManager.CurrentScenePath == null)
+            // 1b. Always save current scene before building (build uses the cache which comes from the .scene file)
+            if (EditorSceneManager.CurrentScenePath != null)
             {
-                if (EditorSceneManager.CurrentScenePath != null)
-                {
-                    EditorSceneManager.Save();
-                    log.AppendLine("Auto-saved current scene.");
-                }
-                else
-                {
-                    Runtime.Debug.LogWarning("[Build] Current scene has no save path. Save it first for accurate build.");
-                }
+                EditorSceneManager.Save();
+                log.AppendLine("Auto-saved current scene.");
+            }
+            else
+            {
+                Runtime.Debug.LogWarning("[Build] Current scene has no save path. Save it first for accurate build.");
             }
 
             // 1c. Reimport all build scenes to ensure caches are fresh

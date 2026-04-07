@@ -154,7 +154,7 @@ public static class EditorSceneManager
 
         try
         {
-            var echo = Serializer.Serialize(Scene.Current);
+            var echo = Serializer.Serialize(typeof(object), Scene.Current);
             if (echo == null)
             {
                 Debug.LogError("Failed to serialize scene.");

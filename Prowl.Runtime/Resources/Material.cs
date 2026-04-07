@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
@@ -30,12 +31,33 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         } 
     }
 
-    [SerializeField]
-    private Shader _shader;
-
-    public Shader Shader
+    /// <summary>
+    /// Loads a default embedded material.
+    /// </summary>
+    public static Material LoadDefault(DefaultMaterial material)
     {
-        get => _shader;
+        string fileName = material switch
+        {
+            Prowl.Runtime.Resources.DefaultMaterial.Standard => "Standard.mat",
+            _ => throw new ArgumentException($"Unknown default material: {material}")
+        };
+
+        string resourcePath = $"Assets/Defaults/{fileName}";
+        using Stream stream = EmbeddedResources.GetStream(resourcePath);
+        using var reader = new StreamReader(stream);
+        string text = reader.ReadToEnd();
+        var echo = EchoObject.ReadFromString(text);
+        var mat = Serializer.Deserialize<Material>(echo);
+        mat.Name = material.ToString();
+        return mat;
+    }
+
+    [SerializeField]
+    private AssetRef<Shader> _shader;
+
+    public Shader? Shader
+    {
+        get => _shader.Res;
         set => SetShader(value);
     }
 
@@ -142,14 +164,14 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
 
-    internal void SetShader(Shader shader)
+    internal void SetShader(Shader? shader)
     {
         ArgumentNullException.ThrowIfNull(shader);
 
-        if (shader == _shader)
+        if (shader == _shader.Res)
             return;
 
-        _shader = shader;
+        _shader = new AssetRef<Shader>(shader);
         foreach (ShaderProperty prop in shader.Properties)
             UpdatePropertyState(prop);
 
