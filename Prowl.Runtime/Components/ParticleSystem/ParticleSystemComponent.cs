@@ -50,6 +50,7 @@ public class ParticleSystemComponent : MonoBehaviour
     private Random _random = new();
     private float _time = 0;
     private bool _isPlaying = false;
+    private SimulationSpace _prevSimulationSpace = SimulationSpace.Local;
     private PropertyState _properties = new();
 
     // GPU instancing data - separate arrays for clean API
@@ -81,6 +82,13 @@ public class ParticleSystemComponent : MonoBehaviour
 
     public override void Update()
     {
+        // Migrate particles when simulation space changes
+        if (_prevSimulationSpace != SimulationSpace)
+        {
+            MigrateParticleSpace(_prevSimulationSpace, SimulationSpace);
+            _prevSimulationSpace = SimulationSpace;
+        }
+
         if (!_isPlaying)
             return;
 
@@ -206,6 +214,28 @@ public class ParticleSystemComponent : MonoBehaviour
     public void Clear()
     {
         _particles.Clear();
+    }
+
+    private void MigrateParticleSpace(SimulationSpace from, SimulationSpace to)
+    {
+        for (int i = 0; i < _particles.Count; i++)
+        {
+            var p = _particles[i];
+
+            if (from == SimulationSpace.Local && to == SimulationSpace.World)
+            {
+                p.Position = (Float3)Transform.Position + (Transform.Rotation * p.Position);
+                p.Velocity = Transform.Rotation * p.Velocity;
+            }
+            else if (from == SimulationSpace.World && to == SimulationSpace.Local)
+            {
+                var invRot = Quaternion.Inverse(Transform.Rotation);
+                p.Position = invRot * (p.Position - (Float3)Transform.Position);
+                p.Velocity = invRot * p.Velocity;
+            }
+
+            _particles[i] = p;
+        }
     }
 
     public bool IsPlaying => _isPlaying;
