@@ -136,31 +136,32 @@ public class ParticleSystemComponent : MonoBehaviour
         {
             Collision.UpdateCollisions(_particles, GameObject.Scene?.Physics, deltaTime, Transform, SimulationSpace);
         }
+    }
 
-        // Render particles using Graphics.DrawMeshInstanced
-        if (_particles.Count > 0 && Material.Res != null && _quadMesh != null)
-        {
-            // Update instance data from particles
-            UpdateInstanceData();
+    public override void OnRenderCollect()
+    {
+        if (_particles.Count <= 0 || Material.Res == null || _quadMesh == null) return;
 
-            // Setup per-object properties
-            _properties.Clear();
-            _properties.SetInt("_ObjectID", InstanceID);
+        // Update instance data from particles
+        UpdateInstanceData();
 
-            // Draw instanced particles with separate arrays (automatically batched for >1023 particles)
-            Graphics.DrawMeshInstanced(
-                GameObject.Scene,
-                _quadMesh,
-                _transforms,
-                Material.Res,
-                Transform.Position, // Use particle system's transform position for stable depth sorting (prevents flickering)
-                _colors,
-                _customData,
-                GameObject.LayerIndex,
-                _properties,
-                _bounds // Pass computed bounds for efficient culling
-            );
-        }
+        // Setup per-object properties
+        _properties.Clear();
+        _properties.SetInt("_ObjectID", InstanceID);
+
+        // Draw instanced particles
+        Graphics.DrawMeshInstanced(
+            GameObject.Scene,
+            _quadMesh,
+            _transforms,
+            Material.Res,
+            Transform.Position,
+            _colors,
+            _customData,
+            GameObject.LayerIndex,
+            _properties,
+            _bounds
+        );
     }
 
     public override void OnDisable()

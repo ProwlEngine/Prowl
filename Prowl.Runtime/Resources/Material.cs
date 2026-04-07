@@ -39,6 +39,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         string fileName = material switch
         {
             Prowl.Runtime.Resources.DefaultMaterial.Standard => "Standard.mat",
+            Prowl.Runtime.Resources.DefaultMaterial.Particle => "Particle.mat",
             _ => throw new ArgumentException($"Unknown default material: {material}")
         };
 

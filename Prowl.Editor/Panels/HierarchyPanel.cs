@@ -8,6 +8,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
+using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -580,7 +581,14 @@ public class HierarchyPanel : DockPanel
         {
             var go = CreateGameObject("Particle System", parent);
             var ps = go.AddComponent<ParticleSystemComponent>();
-            ps.Material = new Material(Shader.LoadDefault(DefaultShader.Particle));
+            ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
+            ps.Emission.Enabled = true;
+            ps.Emission.RateOverTime = new MinMaxCurve(10f);
+            ps.Emission.Shape = EmissionShape.Cone;
+            ps.Initial.Enabled = true;
+            ps.Initial.StartLifetime = new MinMaxCurve(2f);
+            ps.Initial.StartSpeed = new MinMaxCurve(3f);
+            ps.Initial.StartSize = new MinMaxCurve(0.2f);
         }, icon: EditorIcons.SprayCanSparkles);
     }
 

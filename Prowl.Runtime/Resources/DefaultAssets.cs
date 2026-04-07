@@ -53,6 +53,7 @@ public enum DefaultModel
 public enum DefaultMaterial
 {
     Standard,
+    Particle,
 }
 
 /// <summary>
