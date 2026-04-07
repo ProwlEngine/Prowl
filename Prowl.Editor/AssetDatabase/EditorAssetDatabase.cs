@@ -77,6 +77,37 @@ public class EditorAssetDatabase : IAssetDatabase
         Runtime.AssetDatabase.Current = this;
 
         Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
+
+        // Initialize GameResources mapping for editor play mode
+        RefreshResourcesMap();
+    }
+
+    /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>
+    public void RefreshResourcesMap()
+    {
+        var map = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in _guidToEntry.Values)
+        {
+            string path = entry.Path.Replace('\\', '/');
+            int idx = path.LastIndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0 && path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
+                idx = -1; // handle root Resources/ folder
+
+            if (idx >= 0 || path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
+            {
+                string afterResources = idx >= 0
+                    ? path[(idx + "/Resources/".Length)..]
+                    : path["Resources/".Length..];
+
+                // Remove extension
+                int dotIdx = afterResources.LastIndexOf('.');
+                if (dotIdx >= 0) afterResources = afterResources[..dotIdx];
+
+                if (!string.IsNullOrEmpty(afterResources))
+                    map[afterResources] = entry.Guid;
+            }
+        }
+        Runtime.GameResources.Initialize(map);
     }
 
     // ================================================================
@@ -140,12 +171,10 @@ public class EditorAssetDatabase : IAssetDatabase
             try
             {
                 var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
-                var ctx = new SerializationContext();
-                Runtime.AssetDatabase.ConfigureContext(ctx);
 
                 var targetType = entry?.MainAssetType ?? typeof(EngineObject);
 
-                var obj = Serializer.Deserialize(echo, targetType, ctx) as EngineObject;
+                var obj = Serializer.Deserialize(echo, targetType) as EngineObject;
                 if (obj != null)
                 {
                     obj.AssetID = assetId;
@@ -192,9 +221,8 @@ public class EditorAssetDatabase : IAssetDatabase
             {
                 var echo = EchoObject.ReadFromBinary(new FileInfo(subCachePath));
                 var ctx = new SerializationContext();
-                Runtime.AssetDatabase.ConfigureContext(ctx);
                 var subType = sub.Type ?? typeof(EngineObject);
-                var obj = Serializer.Deserialize(echo, subType, ctx) as EngineObject;
+                var obj = Serializer.Deserialize(echo, subType) as EngineObject;
                 if (obj != null)
                 {
                     obj.AssetID = sub.Guid;
@@ -482,10 +510,14 @@ public class EditorAssetDatabase : IAssetDatabase
 
         try
         {
-            var ctx = new SerializationContext();
-            Runtime.AssetDatabase.ConfigureContext(ctx);
+            // Temporarily clear AssetID so the serializer writes the full object
+            // instead of short-circuiting to a $assetId reference
+            var savedId = obj.AssetID;
+            obj.AssetID = Guid.Empty;
 
-            var echo = Serializer.Serialize(obj, ctx);
+            var echo = Serializer.Serialize(obj);
+            obj.AssetID = savedId;
+
             if (echo != null)
                 echo.WriteToBinary(new FileInfo(cachePath));
         }
@@ -583,9 +615,7 @@ public class EditorAssetDatabase : IAssetDatabase
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 
         // Serialize to the file
-        var ctx = new SerializationContext();
-        Runtime.AssetDatabase.ConfigureContext(ctx);
-        var echo = Serializer.Serialize(obj, ctx);
+        var echo = Serializer.Serialize(obj);
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 
@@ -625,9 +655,7 @@ public class EditorAssetDatabase : IAssetDatabase
         }
 
         string absolutePath = Path.Combine(_project.AssetsPath, obj.AssetPath);
-        var ctx = new SerializationContext();
-        Runtime.AssetDatabase.ConfigureContext(ctx);
-        var echo = Serializer.Serialize(obj, ctx);
+        var echo = Serializer.Serialize(obj);
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 
@@ -894,6 +922,11 @@ public class EditorAssetDatabase : IAssetDatabase
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
             if (imported.Count > 0) OnAssetsImported?.Invoke(imported.ToArray());
             if (deleted.Count > 0) OnAssetsDeleted?.Invoke(deleted.ToArray());
+
+            // Refresh resources map if any changes involved Resources/ folders
+            if (imported.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/"))
+                || deleted.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/")))
+                RefreshResourcesMap();
         }
     }
 

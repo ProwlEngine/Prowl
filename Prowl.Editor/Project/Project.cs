@@ -28,6 +28,9 @@ public class Project
     public string MetadataDbPath => Path.Combine(LibraryPath, "metadata.db");
     public string EditorStatePath => Path.Combine(LibraryPath, "EditorState.json");
 
+    // Build
+    public string BuildTempPath => Path.Combine(TempPath, "PlayerBuild");
+
     // Script compilation
     public string ScriptAssemblyPath => Path.Combine(LibraryPath, "ScriptAssemblies");
     public string GameAssemblyPath => Path.Combine(ScriptAssemblyPath, $"{Name}.Game.dll");

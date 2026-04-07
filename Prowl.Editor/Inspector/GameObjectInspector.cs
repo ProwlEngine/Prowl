@@ -217,13 +217,20 @@ public static class GameObjectInspector
         {
             comp.SetSiblingIndex(index + 1);
         }, icon: EditorIcons.ArrowDown);
+
+        builder.Separator();
+
+        builder.Item("Pop Out", () =>
+        {
+            Panels.ComponentPopoutPanel.PopOut(go, comp);
+        }, icon: EditorIcons.ArrowUpRightFromSquare);
     }
 
     // ================================================================
     //  [Button] Methods
     // ================================================================
 
-    private static void DrawButtonMethods(Paper paper, string id, MonoBehaviour comp)
+    public static void DrawButtonMethods(Paper paper, string id, MonoBehaviour comp)
     {
         var methods = comp.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         int btnIdx = 0;

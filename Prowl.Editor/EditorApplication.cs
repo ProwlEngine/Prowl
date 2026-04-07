@@ -669,18 +669,22 @@ public class EditorApplication : Game
         var existing = FindOpenPanel(panelType);
         if (existing != null)
         {
-            // TODO: focus the tab (select it as active)
+            FocusPanel(panelType);
             return;
         }
 
         // Create new instance
         if (Activator.CreateInstance(panelType) is not DockPanel panel) return;
+        OpenPanelInstance(panel);
+    }
 
-        // Add as a floating window
+    /// <summary>Open a pre-created panel instance as a floating window.</summary>
+    public void OpenPanelInstance(DockPanel panel, float width = 400, float height = 300)
+    {
         var node = DockNode.Leaf(panel);
         _dockSpace.FloatingWindows.Add(new FloatingWindow(node,
             new Prowl.Vector.Float2(200, 200),
-            new Prowl.Vector.Float2(400, 300)));
+            new Prowl.Vector.Float2(width, height)));
     }
 
     /// <summary>
@@ -740,6 +744,8 @@ public class EditorApplication : Game
         });
         MenuRegistry.RegisterSeparator("File");
         MenuRegistry.Register("File/Open Project...", () => ReturnToLauncher());
+        MenuRegistry.RegisterSeparator("File");
+        MenuRegistry.Register("File/Build Settings...", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
         MenuRegistry.RegisterSeparator("File");
         MenuRegistry.Register("File/Exit", () => Game.Quit());
 
@@ -859,9 +865,7 @@ public class EditorApplication : Game
         SaveActiveTab();
 
         // Serialize the current editor scene
-        var ctx = new Echo.SerializationContext();
-        Runtime.AssetDatabase.ConfigureContext(ctx);
-        _savedEditorScene = Echo.Serializer.Serialize(scene, ctx);
+        _savedEditorScene = Echo.Serializer.Serialize(scene);
         if (_savedEditorScene == null)
         {
             Runtime.Debug.LogError("Failed to serialize scene for play mode.");

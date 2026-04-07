@@ -45,33 +45,4 @@ public static class AssetDatabase
 
         return Current?.Get(assetId);
     }
-
-    /// <summary>
-    /// Configures the given <see cref="SerializationContext"/> with OnSerialize/OnDeserialize
-    /// callbacks that handle asset references via <c>$assetId</c> tags.
-    /// </summary>
-    public static void ConfigureContext(SerializationContext ctx)
-    {
-        ctx.OnSerialize = (obj, c) =>
-        {
-            if (obj is EngineObject eo && eo.AssetID != Guid.Empty)
-            {
-                var compound = EchoObject.NewCompound();
-                compound["$assetId"] = new EchoObject(eo.AssetID.ToString());
-                return compound; // serialize as just a reference
-            }
-            return null; // normal serialization
-        };
-
-        ctx.OnDeserialize = (data, type, c) =>
-        {
-            if (typeof(EngineObject).IsAssignableFrom(type)
-                && data.TryGet("$assetId", out var assetIdTag))
-            {
-                var assetId = Guid.Parse(assetIdTag.StringValue);
-                return (true, Get(assetId)); // resolve from DB, may return null
-            }
-            return (false, null); // normal deserialization
-        };
-    }
 }

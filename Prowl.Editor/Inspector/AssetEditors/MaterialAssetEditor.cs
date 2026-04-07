@@ -176,10 +176,7 @@ public class MaterialAssetEditor : AssetImporterEditor
             var savedId = material.AssetID;
             material.AssetID = Guid.Empty;
 
-            var ctx = new SerializationContext();
-            Runtime.AssetDatabase.ConfigureContext(ctx);
-
-            var echo = Serializer.Serialize(material, ctx);
+            var echo = Serializer.Serialize(material);
             material.AssetID = savedId;
 
             if (echo != null)

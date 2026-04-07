@@ -19,12 +19,15 @@ public class ProjectSettingsAttribute : Attribute
     public string Name { get; }
     public string Icon { get; }
     public int Order { get; }
+    /// <summary>Whether this setting is exported to standalone builds.</summary>
+    public bool ExportToBuild { get; }
 
-    public ProjectSettingsAttribute(string name, string icon = "", int order = 100)
+    public ProjectSettingsAttribute(string name, string icon = "", int order = 100, bool exportToBuild = true)
     {
         Name = name;
         Icon = icon;
         Order = order;
+        ExportToBuild = exportToBuild;
     }
 }
 
@@ -58,6 +61,7 @@ public static class ProjectSettingsRegistry
         public string Name;
         public string Icon;
         public int Order;
+        public bool ExportToBuild;
         public ProjectSettingsBase Instance;
     }
 
@@ -88,6 +92,7 @@ public static class ProjectSettingsRegistry
                     Name = attr.Name,
                     Icon = attr.Icon,
                     Order = attr.Order,
+                    ExportToBuild = attr.ExportToBuild,
                     Instance = instance,
                 });
             }

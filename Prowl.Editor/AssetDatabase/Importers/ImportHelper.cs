@@ -18,29 +18,8 @@ public static class ImportHelper
     /// </summary>
     public static SerializationContext CreateTrackingContext(out HashSet<Guid> discoveredDependencies)
     {
-        var deps = new HashSet<Guid>();
-        discoveredDependencies = deps;
-
-        var ctx = new SerializationContext();
-
-        // Get the default OnDeserialize from AssetDatabase.ConfigureContext
-        AssetDatabase.ConfigureContext(ctx);
-        var originalDeserialize = ctx.OnDeserialize;
-
-        // Wrap it to also track the GUIDs
-        ctx.OnDeserialize = (data, type, c) =>
-        {
-            if (typeof(EngineObject).IsAssignableFrom(type)
-                && data.TryGet("$assetId", out var assetIdTag))
-            {
-                if (Guid.TryParse(assetIdTag.StringValue, out var assetId) && assetId != Guid.Empty)
-                    deps.Add(assetId);
-            }
-
-            // Call the original handler to actually resolve the reference
-            return originalDeserialize?.Invoke(data, type, c) ?? (false, null);
-        };
-
+        var ctx = new DependencySerializationContext();
+        discoveredDependencies = ctx.Dependencies;
         return ctx;
     }
 }

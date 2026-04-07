@@ -10,7 +10,7 @@ namespace Prowl.Editor;
 /// <summary>
 /// Stores color and curve palettes per-project.
 /// </summary>
-[ProjectSettings("Editor", EditorIcons.Palette, order: 5)]
+[ProjectSettings("Editor", EditorIcons.Palette, order: 5, exportToBuild: false)]
 public class ProjectsEditorSettings : ProjectSettingsBase
 {
     public List<string> ColorPalette { get; set; } = DefaultColorPalette();

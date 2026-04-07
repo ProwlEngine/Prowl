@@ -46,7 +46,7 @@ public static class ScriptCompiler
         if (gameScripts.Count > 0)
         {
             Runtime.Debug.Log($"[ScriptCompiler] Compiling {project.Name}.Game ({gameScripts.Count} scripts)...");
-            var gameResult = RunDotnetBuild(project.GameCsprojPath);
+            var gameResult = RunDotnetCommand($"build \"{project.GameCsprojPath}\" --configuration Release", project.RootPath);
             output.AppendLine(gameResult.stdout);
             if (!string.IsNullOrEmpty(gameResult.stderr))
                 errors.AppendLine(gameResult.stderr);
@@ -64,7 +64,7 @@ public static class ScriptCompiler
         if (editorScripts.Count > 0)
         {
             Runtime.Debug.Log($"[ScriptCompiler] Compiling {project.Name}.Editor ({editorScripts.Count} scripts)...");
-            var editorResult = RunDotnetBuild(project.EditorCsprojPath);
+            var editorResult = RunDotnetCommand($"build \"{project.EditorCsprojPath}\" --configuration Release", project.RootPath);
             output.AppendLine(editorResult.stdout);
             if (!string.IsNullOrEmpty(editorResult.stderr))
                 errors.AppendLine(editorResult.stderr);
@@ -82,7 +82,7 @@ public static class ScriptCompiler
     }
 
     /// <summary>Classify .cs files into game scripts and editor scripts.</summary>
-    private static (List<string> game, List<string> editor) ClassifyScripts(Project project)
+    internal static (List<string> game, List<string> editor) ClassifyScripts(Project project)
     {
         var game = new List<string>();
         var editor = new List<string>();
@@ -105,7 +105,7 @@ public static class ScriptCompiler
         return (game, editor);
     }
 
-    private static string GetVersionDefine()
+    internal static string GetVersionDefine()
     {
         var version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
@@ -239,25 +239,22 @@ public static class ScriptCompiler
         File.WriteAllText(project.EditorCsprojPath, sb.ToString());
     }
 
-    private static void AppendNuGetPackages(StringBuilder sb, Project project)
+    internal static void AppendNuGetPackages(StringBuilder sb, Project project)
     {
-        string packagesJson = Path.Combine(project.ProjectSettingsPath, "Packages.json");
-        if (!File.Exists(packagesJson)) return;
-
+        // Read packages from the PackageSettings (via ProjectSettingsRegistry)
         try
         {
-            string json = File.ReadAllText(packagesJson);
-            var packages = JsonSerializer.Deserialize<List<PackageRef>>(json);
-            if (packages == null || packages.Count == 0) return;
+            var pkgSettings = ProjectSettingsRegistry.Get<PackageSettings>();
+            if (pkgSettings.Packages.Count == 0) return;
 
             sb.AppendLine("  <ItemGroup>");
-            foreach (var pkg in packages)
+            foreach (var pkg in pkgSettings.Packages)
                 sb.AppendLine($"    <PackageReference Include=\"{pkg.Name}\" Version=\"{pkg.Version}\" />");
             sb.AppendLine("  </ItemGroup>");
         }
-        catch (Exception ex)
+        catch
         {
-            Runtime.Debug.LogWarning($"[ScriptCompiler] Failed to read Packages.json: {ex.Message}");
+            // Fallback: no packages
         }
     }
 
@@ -267,17 +264,17 @@ public static class ScriptCompiler
         public string Version { get; set; } = "";
     }
 
-    private static (int exitCode, string stdout, string stderr) RunDotnetBuild(string csprojPath)
+    internal static (int exitCode, string stdout, string stderr) RunDotnetCommand(string args, string workingDir)
     {
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"build \"{csprojPath}\" --configuration Release",
+            Arguments = args,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(csprojPath)!,
+            WorkingDirectory = workingDir,
         };
 
         try
@@ -297,7 +294,7 @@ public static class ScriptCompiler
         }
     }
 
-    private static void LogBuildOutput(string stdout, string stderr)
+    internal static void LogBuildOutput(string stdout, string stderr)
     {
         foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {

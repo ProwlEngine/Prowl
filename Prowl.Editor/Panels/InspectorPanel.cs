@@ -391,14 +391,11 @@ public class InspectorPanel : DockPanel
         // Serialize the asset to the file
         try
         {
-            var ctx = new Echo.SerializationContext();
-            Runtime.AssetDatabase.ConfigureContext(ctx);
-
             // Clear the sub-asset's AssetID so it serializes as a full object, not a reference
             var originalId = asset.AssetID;
             asset.AssetID = Guid.Empty;
 
-            var echo = Echo.Serializer.Serialize(asset, ctx);
+            var echo = Echo.Serializer.Serialize(asset);
             asset.AssetID = originalId; // Restore
 
             if (echo != null)

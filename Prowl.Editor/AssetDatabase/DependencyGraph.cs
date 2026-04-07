@@ -78,6 +78,21 @@ public class DependencyGraph
         return visited;
     }
 
+    /// <summary>Get all assets that the given roots transitively depend on (forward walk).</summary>
+    public HashSet<Guid> GetTransitiveDependencies(IEnumerable<Guid> roots)
+    {
+        var visited = new HashSet<Guid>();
+        var queue = new Queue<Guid>(roots);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (!visited.Add(current)) continue;
+            foreach (var dep in GetDependencies(current))
+                queue.Enqueue(dep);
+        }
+        return visited;
+    }
+
     public void Clear()
     {
         _forward.Clear();

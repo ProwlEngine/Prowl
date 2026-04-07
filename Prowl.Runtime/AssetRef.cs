@@ -2,10 +2,16 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Echo;
 
 namespace Prowl.Runtime;
+
+internal sealed class DependencySerializationContext : SerializationContext
+{
+    public HashSet<Guid> Dependencies = new HashSet<Guid>();
+}
 
 /// <summary>
 /// A serializable reference to an asset. Stores a GUID for persistent identification
@@ -105,6 +111,11 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     {
         compound.Add("AssetID", new EchoObject(assetID.ToString()));
 
+        if (assetID != Guid.Empty && ctx is DependencySerializationContext tracker)
+        {
+            tracker.Dependencies.Add(assetID);
+        }
+
         // Only serialize the instance inline if it's a runtime resource (no asset ID)
         if (assetID == Guid.Empty && instance != null)
             compound.Add("Instance", Echo.Serializer.Serialize(typeof(T), instance, ctx));
@@ -116,6 +127,11 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
             assetID = Guid.Parse(idTag.StringValue);
         else
             assetID = Guid.Empty;
+
+        if (assetID != Guid.Empty && ctx is DependencySerializationContext tracker)
+        {
+            tracker.Dependencies.Add(assetID);
+        }
 
         // If no asset ID, try to deserialize an inline instance
         if (assetID == Guid.Empty && value.TryGet("Instance", out EchoObject instTag))

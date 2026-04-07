@@ -105,9 +105,7 @@ public static class AssetCreateMenu
         string filePath = Path.Combine(absFolder, name);
 
         var scene = new Runtime.Resources.Scene();
-        var ctx = new SerializationContext();
-        Runtime.AssetDatabase.ConfigureContext(ctx);
-        var echo = Serializer.Serialize(scene, ctx);
+        var echo = Serializer.Serialize(scene);
         if (echo != null)
             File.WriteAllText(filePath, echo.WriteToString());
 

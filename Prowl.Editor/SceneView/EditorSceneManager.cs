@@ -154,10 +154,7 @@ public static class EditorSceneManager
 
         try
         {
-            var ctx = new SerializationContext();
-            Runtime.AssetDatabase.ConfigureContext(ctx);
-
-            var echo = Serializer.Serialize(Scene.Current, ctx);
+            var echo = Serializer.Serialize(Scene.Current);
             if (echo == null)
             {
                 Debug.LogError("Failed to serialize scene.");

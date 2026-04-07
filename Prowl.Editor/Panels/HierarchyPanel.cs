@@ -540,9 +540,10 @@ public class HierarchyPanel : DockPanel
         builder.Separator();
         builder.Submenu("3D Object", sub =>
         {
-            sub.Item("Cube", () => CreatePrimitive("Cube", Float3.One, parent), icon: EditorIcons.Cube);
-            sub.Item("Sphere", () => CreatePrimitive("Sphere", Float3.One, parent), icon: EditorIcons.CircleDot);
-            sub.Item("Plane", () => CreatePrimitive("Plane", new Float3(10, 1, 10), parent), icon: EditorIcons.Square);
+            sub.Item("Cube", () => CreatePrimitive("Cube", DefaultModel.Cube, parent), icon: EditorIcons.Cube);
+            sub.Item("Sphere", () => CreatePrimitive("Sphere", DefaultModel.Sphere, parent), icon: EditorIcons.CircleDot);
+            sub.Item("Cylinder", () => CreatePrimitive("Cylinder", DefaultModel.Cylinder, parent), icon: EditorIcons.Circle);
+            sub.Item("Plane", () => CreatePrimitive("Plane", DefaultModel.Plane, parent), icon: EditorIcons.Square);
         }, icon: EditorIcons.Cubes);
         builder.Submenu("Light", sub =>
         {
@@ -578,12 +579,11 @@ public class HierarchyPanel : DockPanel
         return go;
     }
 
-    private void CreatePrimitive(string name, Float3 size, GameObject? parent)
+    private void CreatePrimitive(string name, DefaultModel model, GameObject? parent)
     {
         var go = CreateGameObject(name, parent);
-        var renderer = go.AddComponent<MeshRenderer>();
-        renderer.Mesh = Mesh.CreateCube(size);
-        renderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        var renderer = go.AddComponent<ModelRenderer>();
+        renderer.Model = new AssetRef<Model>(BuiltInAssets.GuidFor(model));
     }
 
     private void DuplicateGameObject(GameObject source)

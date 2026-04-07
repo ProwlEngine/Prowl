@@ -13,7 +13,7 @@ namespace Prowl.Editor;
 /// Manages NuGet package references for user scripts.
 /// Reads/writes ProjectSettings/Packages.json which is consumed by ScriptCompiler.
 /// </summary>
-[ProjectSettings("Packages", EditorIcons.Cubes, order: 30)]
+[ProjectSettings("Packages", EditorIcons.Cubes, order: 30, exportToBuild: false)]
 public class PackageSettings : ProjectSettingsBase
 {
     public List<PackageEntry> Packages { get; set; } = new();
@@ -27,11 +27,7 @@ public class PackageSettings : ProjectSettingsBase
     private string _newName = "";
     private string _newVersion = "";
 
-    public override void Apply()
-    {
-        // Write Packages.json for ScriptCompiler to consume
-        SavePackagesJson();
-    }
+    public override void Apply() { }
 
     public override void ResetToDefaults()
     {
@@ -124,19 +120,4 @@ public class PackageSettings : ProjectSettingsBase
             .OnValueChanged(_ => ScriptAssemblyManager.RequestRecompile());
     }
 
-    private void SavePackagesJson()
-    {
-        var project = Project.Current;
-        if (project == null) return;
-
-        string path = Path.Combine(project.ProjectSettingsPath, "Packages.json");
-
-        // Convert to the format ScriptCompiler expects
-        var list = new List<object>();
-        foreach (var pkg in Packages)
-            list.Add(new { Name = pkg.Name, Version = pkg.Version });
-
-        string json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(path, json);
-    }
 }

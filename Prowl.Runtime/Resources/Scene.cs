@@ -24,17 +24,18 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static Scene? Current { get; private set; }
 
+    /// <summary>Fires after a scene is loaded via Load() or LoadWithoutEnable().</summary>
+    public static event Action? OnSceneLoaded;
+
     /// <summary>
     /// Loads a scene as the current active scene, replacing any previously loaded scene.
     /// The previous scene will be disabled and disposed.
     /// </summary>
-    /// <param name="scene">The scene to load as the current scene.</param>
     public static void Load(Scene scene)
     {
         if (scene == null)
             throw new ArgumentNullException(nameof(scene));
 
-        // Disable and dispose the current scene if one exists
         if (Current != null)
         {
             if (Current.IsActive)
@@ -44,6 +45,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         Current = scene;
         Current.Enable();
+        OnSceneLoaded?.Invoke();
     }
 
     /// <summary>
@@ -69,6 +71,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         Current = scene;
         // Deliberately NOT calling Enable() — no OnEnable/Start callbacks.
+        OnSceneLoaded?.Invoke();
     }
 
     public static void Unload()

@@ -176,14 +176,11 @@ public static class ScriptAssemblyManager
 
         try
         {
-            var ctx = new SerializationContext();
-            Runtime.AssetDatabase.ConfigureContext(ctx);
-
             // Temporarily clear AssetID on scene so it serializes fully
             var savedId = scene.AssetID;
             scene.AssetID = Guid.Empty;
 
-            var echo = Serializer.Serialize(scene, ctx);
+            var echo = Serializer.Serialize(scene);
             scene.AssetID = savedId;
 
             if (echo != null)
