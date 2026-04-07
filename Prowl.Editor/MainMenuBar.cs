@@ -13,6 +13,7 @@ public static class MainMenuBar
     private const float ItemHeight = 24f;
 
     private static int _openMenuIndex = -1;
+    private static float _xPos = -1;
 
     public static void Draw(Paper paper)
     {
@@ -42,9 +43,10 @@ public static class MainMenuBar
                         .TextColor(EditorTheme.Ink500)
                         .Alignment(TextAlignment.MiddleCenter)
                         .FontSize(EditorTheme.FontSize)
-                    .OnClick(index, (idx, _) =>
+                    .OnClick(index, (idx, e) =>
                     {
                         _openMenuIndex = _openMenuIndex == idx ? -1 : idx;
+                        _xPos = e.ElementRect.Min.X;
                     })
                     .Enter())
                 {
@@ -64,17 +66,13 @@ public static class MainMenuBar
                 // Backdrop — click anywhere outside to close
                 paper.Box("menubar_backdrop")
                     .PositionType(PositionType.SelfDirected)
-                    .Position(0, EditorTheme.MenuBarHeight)
+                    .Position(0, 0)
                     .Size(99999, 99999)
-                    .BackgroundColor(Color.FromArgb(20, 0, 0, 0))
+                    .BackgroundColor(Color.FromArgb(85, 0, 0, 0))
                     .Layer(Layer.Topmost)
                     .OnClick(0, (_, _) => _openMenuIndex = -1);
 
-                // Calculate X position: 10px left margin + sum of previous menu widths + gaps
-                // We approximate since we don't have exact layout data
-                float xPos = 10f + _openMenuIndex * 60f; // rough estimate
-
-                RenderDropdown(paper, $"dd_{_openMenuIndex}", openItem.SubItems, xPos, EditorTheme.MenuBarHeight - 2);
+                RenderDropdown(paper, $"dd_{_openMenuIndex}", openItem.SubItems, _xPos, EditorTheme.MenuBarHeight - 2);
             }
         }
     }
