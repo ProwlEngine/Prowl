@@ -84,7 +84,7 @@ public sealed class MyGame : Game
         MeshRenderer mr = cubeGO.AddComponent<MeshRenderer>();
         mr.Mesh = Mesh.CreateCube(Float3.One);
         mr.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
-        mr.Material.SetColor("_BaseColor", new Color(0.8f, 0.3f, 0.3f, 1.0f));
+        mr.Material.Res?.SetColor("_BaseColor", new Color(0.8f, 0.3f, 0.3f, 1.0f));
         cubeGO.Transform.Position = new(0, 1, 0);
         scene.Add(cubeGO);
 

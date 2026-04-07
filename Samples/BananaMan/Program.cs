@@ -77,7 +77,7 @@ public sealed class MyGame : Game
         MeshRenderer mr = groundGO.AddComponent<MeshRenderer>();
         mr.Mesh = Mesh.CreateCube(Float3.One);
         mr.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
-        mr.Material.SetColor("_MainColor", new Color(0.5f, 0.5f, 0.5f, 1.0f));
+        mr.Material.Res?.SetColor("_MainColor", new Color(0.5f, 0.5f, 0.5f, 1.0f));
         groundGO.Transform.Position = new(0, -1, 0);
         groundGO.Transform.LocalScale = new(20, 0.1f, 20);
         scene.Add(groundGO);
