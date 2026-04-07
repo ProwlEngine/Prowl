@@ -19,6 +19,9 @@ public class InputAction
     private InputActionPhase _phase = InputActionPhase.Disabled;
     private float _startTime;
     private List<InputCompositeBinding> _composites = [];
+
+    /// <summary>The composite bindings for this action (read-only).</summary>
+    public IReadOnlyList<InputCompositeBinding> CompositeBindings => _composites;
     private Dictionary<InputBinding, InteractionState> _interactionStates = [];
 
     /// <summary>
@@ -167,6 +170,9 @@ public class InputAction
         _composites.Add(composite);
         return this;
     }
+
+    /// <summary>Removes a composite binding by index.</summary>
+    public void RemoveCompositeAt(int index) => _composites.RemoveAt(index);
 
     /// <summary>
     /// Reads the current value of this action.

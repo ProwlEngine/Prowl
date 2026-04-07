@@ -24,6 +24,7 @@ public static class AssetCreateMenu
         builder.Item($"{EditorIcons.Cubes}  Scene", () => { var p = CreateScene(currentFolder); if (p != null) onCreated?.Invoke(p); });
         builder.Item($"{EditorIcons.Palette}  Material", () => { var p = CreateMaterial(currentFolder); if (p != null) onCreated?.Invoke(p); });
         builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => { var p = CreateShader(currentFolder); if (p != null) onCreated?.Invoke(p); });
+        builder.Item($"{EditorIcons.Gamepad}  Input Actions", () => { var p = CreateInputActions(currentFolder); if (p != null) onCreated?.Invoke(p); });
         builder.Separator();
         builder.Item($"{EditorIcons.FileCode}  C# Script", () => { var p = CreateScript(currentFolder); if (p != null) onCreated?.Invoke(p); });
     }
@@ -126,6 +127,22 @@ public static class AssetCreateMenu
         File.WriteAllText(filePath, echo.WriteToString());
 
         Debug.Log($"Created material: {name}");
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+    }
+
+    public static string? CreateInputActions(string relativeFolder)
+    {
+        string absFolder = GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        string name = FindUniqueName(absFolder, "New InputActions", ".inputactions");
+        string filePath = Path.Combine(absFolder, name);
+
+        var map = new InputActionMap("Player");
+        var echo = Serializer.Serialize(typeof(object), map);
+        File.WriteAllText(filePath, echo.WriteToString());
+
+        Debug.Log($"Created input actions: {name}");
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
