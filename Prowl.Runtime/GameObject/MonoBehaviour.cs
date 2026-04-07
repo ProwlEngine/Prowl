@@ -234,7 +234,7 @@ public abstract class MonoBehaviour : EngineObject
                 if (newState)
                     InternalOnEnable();
                 else
-                    OnDisable();
+                    InternalOnDisable();
             }
         }
     }
@@ -318,10 +318,7 @@ public abstract class MonoBehaviour : EngineObject
     /// <param name="paper"></param>
     public virtual void OnGui(Paper paper) { }
 
-    /// <summary>
-    /// Internal method to handle the Start lifecycle event.
-    /// Gated by ShouldExecuteGameplay — only runs in play mode or with [ExecuteAlways].
-    /// </summary>
+    /// <summary>Gated Start — only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalStart()
     {
         if (HasStarted) return;
@@ -351,14 +348,19 @@ public abstract class MonoBehaviour : EngineObject
             FixedUpdate();
     }
 
-    /// <summary>
-    /// Internal method to handle the OnEnable lifecycle event.
-    /// Always runs — structural lifecycle, not gated by play mode.
-    /// </summary>
+    /// <summary>Gated OnEnable — only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnEnable()
     {
         _hasBeenEnabled = true;
-        OnEnable();
+        if (ShouldExecuteGameplay)
+            OnEnable();
+    }
+
+    /// <summary>Gated OnDisable — only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalOnDisable()
+    {
+        if (ShouldExecuteGameplay)
+            OnDisable();
     }
 
     /// <summary>

@@ -529,7 +529,7 @@ public class GameObject : EngineObject, ISerializable
             // OnDisable is only called if OnEnable was previously called
             foreach (MonoBehaviour c in componentList)
                 if (c.HasBeenEnabled && c.EnabledInHierarchy)
-                    c.OnDisable();
+                    c.InternalOnDisable();
 
             foreach (MonoBehaviour c in componentList)
             {
@@ -558,7 +558,7 @@ public class GameObject : EngineObject, ISerializable
         // OnDisable and OnDispose are only called if OnEnable was previously called
         if (component.HasBeenEnabled)
         {
-            if (component.EnabledInHierarchy) component.OnDisable();
+            if (component.EnabledInHierarchy) component.InternalOnDisable();
             component.Dispose();
         }
     }
@@ -578,7 +578,7 @@ public class GameObject : EngineObject, ISerializable
             // OnDisable and OnDispose are only called if OnEnable was previously called
             if (component.HasBeenEnabled)
             {
-                if (component.EnabledInHierarchy) component.OnDisable();
+                if (component.EnabledInHierarchy) component.InternalOnDisable();
                 component.Dispose();
             }
         }
@@ -905,7 +905,7 @@ public class GameObject : EngineObject, ISerializable
                 // This prevents calling OnDisable twice when disposing after scene deactivation
                 Scene? scene = Scene;
                 if (component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
-                    component.OnDisable();
+                    component.InternalOnDisable();
 
                 component.Dispose();
             }
