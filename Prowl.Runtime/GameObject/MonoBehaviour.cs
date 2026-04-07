@@ -40,6 +40,22 @@ public abstract class MonoBehaviour : EngineObject
     [SerializeIgnore]
     private bool _hasBeenEnabled = false;
 
+    [SerializeIgnore]
+    private bool? _executeAlwaysCached;
+
+    /// <summary>
+    /// Whether this component's gameplay methods should execute.
+    /// True when in play mode, or when the component has [ExecuteAlways].
+    /// </summary>
+    internal bool ShouldExecuteGameplay
+    {
+        get
+        {
+            _executeAlwaysCached ??= GetType().IsDefined(typeof(ExecuteAlwaysAttribute), true);
+            return Application.IsPlaying || _executeAlwaysCached.Value;
+        }
+    }
+
     /// <summary>
     /// Gets the identifier for this MonoBehaviour.
     /// Generally shouldnt be set manually
@@ -304,17 +320,40 @@ public abstract class MonoBehaviour : EngineObject
 
     /// <summary>
     /// Internal method to handle the Start lifecycle event.
+    /// Gated by ShouldExecuteGameplay — only runs in play mode or with [ExecuteAlways].
     /// </summary>
     internal void InternalStart()
     {
         if (HasStarted) return;
+        if (!ShouldExecuteGameplay) return;
         HasStarted = true;
         Start();
     }
 
+    /// <summary>Gated Update — only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalUpdate()
+    {
+        if (ShouldExecuteGameplay)
+            Update();
+    }
+
+    /// <summary>Gated LateUpdate — only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalLateUpdate()
+    {
+        if (ShouldExecuteGameplay)
+            LateUpdate();
+    }
+
+    /// <summary>Gated FixedUpdate — only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalFixedUpdate()
+    {
+        if (ShouldExecuteGameplay)
+            FixedUpdate();
+    }
+
     /// <summary>
     /// Internal method to handle the OnEnable lifecycle event.
-    /// Sets HasBeenEnabled flag before calling the virtual OnEnable method.
+    /// Always runs — structural lifecycle, not gated by play mode.
     /// </summary>
     internal void InternalOnEnable()
     {

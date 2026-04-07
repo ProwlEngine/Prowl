@@ -16,6 +16,7 @@ namespace Prowl.Runtime.ParticleSystem;
 /// Particles are rendered using instanced rendering for optimal performance.
 /// </summary>
 [AddComponentMenu("Effects/Particle System")]
+[ExecuteAlways]
 public class ParticleSystemComponent : MonoBehaviour
 {
     #region Configuration

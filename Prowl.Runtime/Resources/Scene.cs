@@ -24,7 +24,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public static Scene? Current { get; private set; }
 
-    /// <summary>Fires after a scene is loaded via Load() or LoadWithoutEnable().</summary>
+    /// <summary>Fires after a scene is loaded via Load().</summary>
     public static event Action? OnSceneLoaded;
 
     /// <summary>
@@ -54,25 +54,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     /// <summary>
     /// Loads a scene as Current without calling Enable().
-    /// Used by the editor to restore scenes without triggering OnEnable/Start.
-    /// RenderCollect and DrawGizmos still work (they check EnabledInHierarchy, not IsActive).
+    /// Kept for backward compatibility — now just calls Load() since lifecycle gating
+    /// is handled per-component via ShouldExecuteGameplay.
     /// </summary>
-    public static void LoadWithoutEnable(Scene scene)
-    {
-        if (scene == null)
-            throw new ArgumentNullException(nameof(scene));
-
-        if (Current != null)
-        {
-            if (Current.IsActive)
-                Current.Disable();
-            Current.Dispose();
-        }
-
-        Current = scene;
-        // Deliberately NOT calling Enable() — no OnEnable/Start callbacks.
-        OnSceneLoaded?.Invoke();
-    }
+    [Obsolete("Use Scene.Load() instead. Lifecycle gating is now per-component via [ExecuteAlways].")]
+    public static void LoadWithoutEnable(Scene scene) => Load(scene);
 
     public static void Unload()
     {
@@ -474,7 +460,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     /// <summary>
     /// Updates all active GameObjects and their components in this scene.
-    /// Calls PreUpdate, Update, and LateUpdate.
+    /// PreUpdate handles Start (gated by ShouldExecuteGameplay).
+    /// Update and LateUpdate are gated internally by each component's ShouldExecuteGameplay.
     /// </summary>
     public void Update()
     {
@@ -482,23 +469,23 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         foreach (GameObject go in activeGOs)
             go.PreUpdate();
 
-        ForeachComponent(activeGOs, (x) => x.Update());
+        ForeachComponent(activeGOs, (x) => x.InternalUpdate());
 
-        ForeachComponent(activeGOs, (x) => x.LateUpdate());
+        ForeachComponent(activeGOs, (x) => x.InternalLateUpdate());
 
         Flush();
     }
 
     /// <summary>
     /// Executes physics update on all active GameObjects and their components.
-    /// Calls Physics.Update and FixedUpdate.
+    /// FixedUpdate is gated internally by each component's ShouldExecuteGameplay.
     /// </summary>
     public void FixedUpdate()
     {
         Physics.Update();
 
         List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) => x.FixedUpdate());
+        ForeachComponent(activeGOs, (x) => x.InternalFixedUpdate());
 
         Flush();
     }

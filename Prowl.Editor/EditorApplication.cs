@@ -804,7 +804,7 @@ public class EditorApplication : Game
             var scene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(echo, ctx);
             if (scene != null)
             {
-                Runtime.Resources.Scene.LoadWithoutEnable(scene);
+                Runtime.Resources.Scene.Load(scene);
                 Runtime.Debug.Log("Restored auto-saved scene.");
             }
 
@@ -934,7 +934,7 @@ public class EditorApplication : Game
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
             if (restoredScene != null)
-                Runtime.Resources.Scene.LoadWithoutEnable(restoredScene);
+                Runtime.Resources.Scene.Load(restoredScene);
             _savedEditorScene = null;
         }
 
@@ -1046,13 +1046,14 @@ public class EditorApplication : Game
     /// </summary>
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
-        // Only run scene Update when gameplay should execute
+        // Always update — lifecycle gating is per-component via ShouldExecuteGameplay.
+        // Components only run Start/Update/LateUpdate if IsPlaying or [ExecuteAlways].
         if (Application.ShouldRunGameplay)
-        {
             Application.IsGameplayExecuting = true;
-            scene?.Update();
-            Application.IsGameplayExecuting = false;
-        }
+
+        scene?.Update();
+
+        Application.IsGameplayExecuting = false;
 
         // Always allow gizmos in editor (even when not playing)
         if (scene != null)

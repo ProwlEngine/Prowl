@@ -62,7 +62,7 @@ public static class EditorSceneManager
             }
 
             scene.Name = Path.GetFileNameWithoutExtension(relativePath);
-            Scene.LoadWithoutEnable(scene); // Editor: no OnEnable/Start
+            Scene.Load(scene);
             CurrentScenePath = relativePath;
             IsDirty = false;
 
