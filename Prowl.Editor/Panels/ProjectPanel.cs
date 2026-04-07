@@ -574,29 +574,39 @@ public class ProjectPanel : DockPanel
 
             builder.Item($"Delete", () =>
             {
-                var db = EditorAssetDatabase.Instance;
-                if (db == null) return;
-                foreach (var sel in Selection.GetSelected<ContentItem>().ToList())
+                var selected = Selection.GetSelected<ContentItem>().ToList();
+                if (selected.Count == 0) return;
+
+                string names = selected.Count == 1
+                    ? selected[0].Name
+                    : $"{selected.Count} items";
+
+                ModalDialog.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
                 {
-                    if (string.IsNullOrEmpty(sel.RelativePath)) continue; // Can't delete root
-                    if (sel.IsFolder)
+                    var db = EditorAssetDatabase.Instance;
+                    if (db == null) return;
+                    foreach (var sel in selected)
                     {
-                        string absPath = Path.Combine(Project.Current!.AssetsPath, sel.RelativePath);
-                        if (Directory.Exists(absPath))
+                        if (string.IsNullOrEmpty(sel.RelativePath)) continue;
+                        if (sel.IsFolder)
                         {
-                            Directory.Delete(absPath, true);
-                            string metaPath = MetaFile.GetMetaPath(absPath);
-                            if (File.Exists(metaPath)) File.Delete(metaPath);
+                            string absPath = Path.Combine(Project.Current!.AssetsPath, sel.RelativePath);
+                            if (Directory.Exists(absPath))
+                            {
+                                Directory.Delete(absPath, true);
+                                string metaPath = MetaFile.GetMetaPath(absPath);
+                                if (File.Exists(metaPath)) File.Delete(metaPath);
+                            }
+                            if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
+                                _currentFolder = "";
                         }
-                        if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
-                            _currentFolder = "";
+                        else
+                        {
+                            db.DeleteAsset(sel.RelativePath);
+                        }
                     }
-                    else
-                    {
-                        db.DeleteAsset(sel.RelativePath);
-                    }
-                }
-                Selection.Clear();
+                    Selection.Clear();
+                });
             }, enabled: !isRoot, icon: EditorIcons.Trash);
         });
     }
