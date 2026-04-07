@@ -242,7 +242,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
     private void GeneratePlayerSource(Project project, BuildSettings settings, Guid defaultSceneGuid, string outputDir)
     {
-        string productName = "Prowl Game"; // TODO: read from GeneralSettings
+        string productName = "Prowl Game";
         try { productName = ProjectSettingsRegistry.Get<GeneralSettings>().ProductName; } catch { }
 
         // Program.cs
