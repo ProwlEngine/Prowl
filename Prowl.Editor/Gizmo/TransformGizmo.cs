@@ -78,6 +78,7 @@ public class TransformGizmo
     public Float3 ViewForward;
     public Float3 ViewUp;
     public Float3 ViewRight;
+    public Float3 ViewPosition;
     public Float4x4 ViewMatrix;
     public Float4x4 ProjectionMatrix;
 
@@ -117,12 +118,13 @@ public class TransformGizmo
     }
 
     public void UpdateCamera(Rect viewport, Float4x4 viewMatrix, Float4x4 projectionMatrix,
-        Float3 up, Float3 forward, Float3 right)
+        Float3 up, Float3 forward, Float3 right, Float3 position)
     {
         Viewport = viewport;
         ViewUp = up;
         ViewForward = forward;
         ViewRight = right;
+        ViewPosition = position;
         ViewMatrix = viewMatrix;
         ProjectionMatrix = projectionMatrix;
         ViewProjection = projectionMatrix * viewMatrix;

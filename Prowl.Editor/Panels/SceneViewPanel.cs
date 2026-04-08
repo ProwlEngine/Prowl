@@ -534,7 +534,7 @@ public class SceneViewPanel : DockPanel
         var camGo = cam.GameObject;
 
         _transformGizmo.UpdateCamera(_viewportAbsoluteRect, cam.ViewMatrix, cam.ProjectionMatrix,
-            camGo.Transform.Up, camGo.Transform.Forward, camGo.Transform.Right);
+            camGo.Transform.Up, camGo.Transform.Forward, camGo.Transform.Right, camGo.Transform.Position);
         _transformGizmo.SetTransform(center, rotation, scale);
 
         // Mouse position is in absolute screen coords — matches the absolute viewport

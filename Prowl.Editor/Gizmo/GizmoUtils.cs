@@ -131,7 +131,8 @@ public static class GizmoUtils
     {
         if (direction == GizmoDirection.View) return 1f;
         var worldAxis = GizmoNormal(gizmo, direction);
-        return Float3.Dot(-gizmo.ViewForward, worldAxis) >= 0 ? 1f : -1f;
+        var toCamera = gizmo.ViewPosition - gizmo.Translation;
+        return Float3.Dot(toCamera, worldAxis) >= 0 ? 1f : -1f;
     }
 
     public static Float3 PlaneGlobalOrigin(TransformGizmo gizmo, GizmoDirection direction)
