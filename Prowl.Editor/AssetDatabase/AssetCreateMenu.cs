@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Panels;
@@ -49,6 +50,14 @@ public static class AssetCreateMenu
                 var db = new EditorAssetDatabase(Project.Current);
                 db.Initialize();
             }
+        });
+        MenuRegistry.Register("Assets/Reimport All", () =>
+        {
+            var db = EditorAssetDatabase.Instance;
+            if (db == null) return;
+            foreach (var entry in db.GetAllEntries().ToList())
+                db.Reimport(entry.Guid);
+            Runtime.Debug.Log("[AssetDatabase] Reimported all assets.");
         });
     }
 
