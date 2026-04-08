@@ -52,6 +52,8 @@ public class InspectorPanel : DockPanel
 
                 if (active is ContentItem contentItem)
                     DrawAssetInspector(paper, font, contentItem);
+                else if (active is ConsoleLogSelection logEntry)
+                    DrawConsoleLogInspector(paper, font, logEntry);
                 else if (active is EngineObject engineObj)
                     DrawEngineObjectInspector(paper, font, engineObj);
                 else
@@ -428,6 +430,73 @@ public class InspectorPanel : DockPanel
         EditorGUI.Separator(paper, "insp_sep_props");
         EditorGUI.Header(paper, "insp_h_props", "Properties");
         PropertyGrid.Draw(paper, "insp_pg", obj);
+    }
+
+    private void DrawConsoleLogInspector(Paper paper, Prowl.Scribe.FontFile font, ConsoleLogSelection log)
+    {
+        float fs = EditorTheme.FontSize;
+
+        // Severity icon + label
+        string icon = log.Severity switch
+        {
+            LogSeverity.Warning => EditorIcons.TriangleExclamation,
+            LogSeverity.Error or LogSeverity.Exception => EditorIcons.CircleExclamation,
+            LogSeverity.Success => EditorIcons.CircleCheck,
+            _ => EditorIcons.CircleInfo
+        };
+        var textColor = log.Severity switch
+        {
+            LogSeverity.Warning => System.Drawing.Color.FromArgb(255, 230, 200, 80),
+            LogSeverity.Error or LogSeverity.Exception => System.Drawing.Color.FromArgb(255, 230, 80, 80),
+            LogSeverity.Success => System.Drawing.Color.FromArgb(255, 80, 200, 80),
+            _ => EditorTheme.Ink500
+        };
+
+        EditorGUI.Header(paper, "log_hdr", $"{icon}  {log.Severity}");
+
+        // Time + count
+        using (paper.Row("log_meta").Height(EditorTheme.RowHeight).RowBetween(8).Enter())
+        {
+            EditorGUI.Label(paper, "log_time", $"Time: {log.Time}");
+            if (log.Count > 1)
+                EditorGUI.Label(paper, "log_count", $"Count: {log.Count}");
+        }
+
+        EditorGUI.Separator(paper, "log_sep1");
+
+        // Full message (word-wrapped)
+        EditorGUI.Header(paper, "log_msg_hdr", "Message");
+        paper.Box("log_msg")
+            .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(40)
+            .BackgroundColor(EditorTheme.Neutral400).Rounded(3)
+            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
+            .Text(log.Message, font).TextColor(textColor)
+            .FontSize(fs - 1);
+
+        // Stack trace
+        if (log.StackTrace != null && log.StackTrace.StackFrames.Length > 0)
+        {
+            paper.Box("log_sp").Height(8);
+            EditorGUI.Separator(paper, "log_sep2");
+            EditorGUI.Header(paper, "log_st_hdr", "Stack Trace");
+
+            for (int i = 0; i < log.StackTrace.StackFrames.Length; i++)
+            {
+                var frame = log.StackTrace.StackFrames[i];
+                string frameText = frame.ToString();
+
+                var frameBg = i % 2 == 0
+                    ? System.Drawing.Color.FromArgb(8, 255, 255, 255)
+                    : System.Drawing.Color.Transparent;
+
+                paper.Box($"log_frame_{i}")
+                    .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(18)
+                    .BackgroundColor(frameBg).Rounded(2)
+                    .ChildLeft(8).ChildTop(2).ChildBottom(2)
+                    .Text(frameText, font).TextColor(EditorTheme.Ink400)
+                    .FontSize(fs - 2);
+            }
+        }
     }
 
     private void DrawGenericInspector(Paper paper, Prowl.Scribe.FontFile font, object obj)

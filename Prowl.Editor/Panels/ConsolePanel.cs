@@ -42,12 +42,23 @@ public class ConsolePanel : DockPanel
     private static int _lastFilterHash;
     private static readonly List<int> _filteredIndices = new();
 
-    private struct LogEntry
+
+    // Selected entry for inspector display
+    private static int _selectedFilteredIndex = -1;
+
+    internal struct LogEntry
     {
         public string Message;
         public LogSeverity Severity;
         public string TimeString; // cached formatted time
         public int Count;
+        public DebugStackTrace? StackTrace;
+
+        // Cached text layouts (created on first draw)
+        public Prowl.Scribe.TextLayout? IconLayout;
+        public Prowl.Scribe.TextLayout? TimeLayout;
+        public Prowl.Scribe.TextLayout? MessageLayout;
+        public Prowl.Scribe.TextLayout? CountLayout;
     }
 
     public ConsolePanel()
@@ -72,8 +83,13 @@ public class ConsolePanel : DockPanel
                     Message = last.Message,
                     Severity = last.Severity,
                     TimeString = DateTime.Now.ToString("HH:mm:ss"),
-                    Count = last.Count + 1
+                    Count = last.Count + 1,
+                    StackTrace = stackTrace ?? last.StackTrace
                 };
+                // Invalidate count layout since count changed
+                var updated = _messages[^1];
+                updated.CountLayout = null;
+                _messages[^1] = updated;
                 return;
             }
         }
@@ -83,7 +99,8 @@ public class ConsolePanel : DockPanel
             Message = message,
             Severity = severity,
             TimeString = DateTime.Now.ToString("HH:mm:ss"),
-            Count = 1
+            Count = 1,
+            StackTrace = stackTrace
         });
 
         while (_messages.Count > MaxMessages)
@@ -158,6 +175,28 @@ public class ConsolePanel : DockPanel
             paper.Box("con_content")
                 .Width(width)
                 .Height(totalContentHeight)
+                .OnClick(0, (_, e) =>
+                {
+                    // Determine clicked row from mouse Y relative to content
+                    float relY = (float)e.RelativePosition.Y;
+                    int clickedRow = (int)(relY / RowHeight);
+                    if (clickedRow >= 0 && clickedRow < _filteredIndices.Count)
+                    {
+                        _selectedFilteredIndex = (_selectedFilteredIndex == clickedRow) ? -1 : clickedRow;
+
+                        // Select the log entry for inspector display
+                        if (_selectedFilteredIndex >= 0)
+                        {
+                            int msgIdx = _filteredIndices[_selectedFilteredIndex];
+                            if (msgIdx < _messages.Count)
+                                Selection.Select(new ConsoleLogSelection(_messages[msgIdx]));
+                        }
+                        else
+                        {
+                            Selection.Clear();
+                        }
+                    }
+                })
                 .OnPostLayout((handle, contentRect) =>
                 {
                     // Get the parent (scroll view clip) rect
@@ -172,11 +211,12 @@ public class ConsolePanel : DockPanel
                     int firstVisible = Math.Max(0, (int)((clipTop - contentTop) / RowHeight));
                     int lastVisible = Math.Min(visibleCount - 1, (int)((clipBottom - contentTop) / RowHeight));
 
-                    // Draw all visible rows in one draw call
+                    // Draw all visible rows in one draw call using cached TextLayouts
                     paper.Draw(ref handle, (canvas, r) =>
                     {
                         float startX = (float)r.Min.X;
                         float startY = (float)r.Min.Y;
+                        float size = FontSize * 1.5f;
 
                         for (int vi = firstVisible; vi <= lastVisible; vi++)
                         {
@@ -186,39 +226,40 @@ public class ConsolePanel : DockPanel
 
                             var msg = _messages[msgIdx];
                             float rowY = startY + vi * RowHeight;
+                            float textY = rowY + RowHeight * 0.5f - size * 0.5f;
 
                             GetEntryStyle(msg.Severity, vi, out string icon, out Color textColor, out Color bgColor);
 
-                            // Background stripe
-                            if (bgColor != Color.Transparent)
+                            // Selection highlight
+                            if (vi == _selectedFilteredIndex)
+                                canvas.RectFilled(startX, rowY, (float)r.Size.X, RowHeight, Color.FromArgb(60, EditorTheme.Purple400));
+                            else if (bgColor != Color.Transparent)
                                 canvas.RectFilled(startX, rowY, (float)r.Size.X, RowHeight, bgColor);
 
-                            float size = FontSize * 1.5f;
+                            // Create layouts lazily
+                            msg.IconLayout ??= canvas.CreateLayout(icon, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
+                            msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
+                            msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
 
-                            // Icon
-                            canvas.DrawText(icon, startX + 4, rowY + RowHeight * 0.5f - size * 0.5f,
-                                textColor, size, font);
-
-                            // Time
-                            canvas.DrawText(msg.TimeString, startX + IconWidth + 8, rowY + RowHeight * 0.5f - size * 0.5f,
-                                EditorTheme.Ink200, size, font);
-
-                            // Message
-                            canvas.DrawText(msg.Message, startX + IconWidth + TimeWidth + 12, rowY + RowHeight * 0.5f - size * 0.5f,
-                                textColor, size, font);
+                            // Draw using cached layouts
+                            canvas.DrawLayout(msg.IconLayout, startX + 4, textY, textColor);
+                            canvas.DrawLayout(msg.TimeLayout, startX + IconWidth + 8, textY, EditorTheme.Ink200);
+                            canvas.DrawLayout(msg.MessageLayout, startX + IconWidth + TimeWidth + 12, textY, textColor);
 
                             // Count badge
                             if (msg.Count > 1)
                             {
-                                string countStr = msg.Count.ToString();
-                                var countSize = canvas.MeasureText(countStr, size, font);
-                                float badgeW = countSize.X + 8;
+                                msg.CountLayout ??= canvas.CreateLayout(msg.Count.ToString(), new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
+                                float badgeW = msg.CountLayout.Size.X / 2f + 8; // Size is in scaled pixels
                                 float badgeX = startX + (float)r.Size.X - badgeW - 6;
                                 float badgeY = rowY + (RowHeight - 14) * 0.5f;
 
                                 canvas.RoundedRectFilled(badgeX, badgeY, badgeW, 14, 7, Color.FromArgb(120, 80, 80, 85));
-                                canvas.DrawText(countStr, badgeX + 4, badgeY + 1, EditorTheme.Ink300, size, font);
+                                canvas.DrawLayout(msg.CountLayout, badgeX + 4, badgeY + 1, EditorTheme.Ink300);
                             }
+
+                            // Write back the cached layouts (struct copy)
+                            _messages[msgIdx] = msg;
                         }
                     });
                 });
@@ -274,4 +315,25 @@ public class ConsolePanel : DockPanel
         LogSeverity.Error or LogSeverity.Exception => _showErrors,
         _ => true
     };
+}
+
+/// <summary>
+/// Wrapper for a console log entry so it can be selected and shown in the inspector.
+/// </summary>
+public class ConsoleLogSelection
+{
+    public string Message { get; }
+    public LogSeverity Severity { get; }
+    public string Time { get; }
+    public int Count { get; }
+    public DebugStackTrace? StackTrace { get; }
+
+    internal ConsoleLogSelection(ConsolePanel.LogEntry entry)
+    {
+        Message = entry.Message;
+        Severity = entry.Severity;
+        Time = entry.TimeString;
+        Count = entry.Count;
+        StackTrace = entry.StackTrace;
+    }
 }
