@@ -539,7 +539,7 @@ public static class EditorGUI
     //  Dropdown
     // ================================================================
 
-    public static WidgetResult<int> Dropdown(Paper paper, string id, string label, int selectedIndex, string[] options)
+    public static WidgetResult<int> Dropdown(Paper paper, string id, string label, int selectedIndex, string[] options, bool autoLabelWidth = false)
     {
         Action<int>? userCallback = null;
         string displayText = (selectedIndex >= 0 && selectedIndex < options.Length) ? options[selectedIndex] : "\u2014";
@@ -551,7 +551,7 @@ public static class EditorGUI
         {
             if (Font != null && !string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
+                    .Width(autoLabelWidth ? UnitValue.Auto : LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             PaperUI.LayoutEngine.ElementHandle btnHandle = default;
