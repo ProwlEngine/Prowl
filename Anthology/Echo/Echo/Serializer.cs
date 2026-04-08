@@ -99,6 +99,9 @@ public static class Serializer
     {
         if (value == null) return new EchoObject(EchoType.Null, null);
 
+        // EchoObject fields are already serialized data — embed as-is
+        if (value is EchoObject echo) return echo;
+
         // Fast path: primitives, string, enum — skip entire pipeline
         if (targetType != null)
         {
