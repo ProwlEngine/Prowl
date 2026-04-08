@@ -405,7 +405,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         var importer = ImporterRegistry.CreateByTypeName(entry.ImporterType) ?? new DefaultImporter();
 
-        // Read settings from .meta
+        // Read settings from .meta, merge with importer defaults for any missing keys
         EchoObject? settings = null;
         string metaPath = MetaFile.GetMetaPath(absolutePath);
         if (File.Exists(metaPath))
@@ -416,6 +416,21 @@ public class EditorAssetDatabase : IAssetDatabase
                 settings = meta.Settings;
             }
             catch { }
+        }
+
+        var defaults = importer.DefaultSettings();
+        if (defaults != null)
+        {
+            if (settings == null)
+            {
+                settings = defaults.Clone();
+            }
+            else
+            {
+                foreach (var kvp in defaults.Tags)
+                    if (!settings.TryGet(kvp.Key, out _))
+                        settings[kvp.Key] = kvp.Value.Clone();
+            }
         }
 
         try
