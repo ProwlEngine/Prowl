@@ -398,7 +398,18 @@ public class HierarchyPanel : DockPanel
         if (!DragDrop.IsDraggingType<GameObjectDragPayload>()) return;
         if (!paper.IsParentHovered) return;
 
-        // Determine drop position based on mouse Y within the row
+        _dropTargetId = goId;
+
+        bool targetIsRoot = go.Parent == null || !go.Parent.IsValid();
+
+        // Root objects can't be reordered (Scene uses HashSet), so always show "Into"
+        if (targetIsRoot)
+        {
+            _dropPos = DropPosition.Into;
+            return;
+        }
+
+        // For non-root objects: top 25% = above, bottom 25% = below, middle = into
         var parentData = paper.CurrentParent.Data;
         float rowY = parentData.Y;
         float mouseY = Input.MousePosition.Y;
@@ -408,20 +419,11 @@ public class HierarchyPanel : DockPanel
         float bottomZone = EditorTheme.RowHeight * 0.75f;
 
         if (relY < topZone)
-        {
-            _dropTargetId = goId;
             _dropPos = DropPosition.Above;
-        }
         else if (relY > bottomZone)
-        {
-            _dropTargetId = goId;
             _dropPos = DropPosition.Below;
-        }
         else
-        {
-            _dropTargetId = goId;
             _dropPos = DropPosition.Into;
-        }
     }
 
     private void HandleGODragDrop(Scene scene)
@@ -442,13 +444,6 @@ public class HierarchyPanel : DockPanel
             if (dragged == target || IsDescendantOf(target, dragged))
                 continue;
 
-            // Block reparenting into prefab instances (structure is fixed)
-            if (_dropPos == DropPosition.Into && target.IsPrefabInstance && target.PrefabChildCount >= 0)
-            {
-                Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
-                continue;
-            }
-
             // Block moving a prefab child out of its parent
             if (dragged.Parent != null && dragged.Parent.IsPrefabInstance && dragged.Parent.PrefabChildCount >= 0)
             {
@@ -460,35 +455,39 @@ public class HierarchyPanel : DockPanel
                 }
             }
 
-            switch (_dropPos)
+            var dropPos = _dropPos;
+            var targetParent = target.Parent;
+            bool targetIsRoot = targetParent == null || !targetParent.IsValid();
+
+            // For Above/Below on root objects, there's no sibling ordering
+            // (Scene uses a HashSet), so treat as Into (make child of target)
+            if (targetIsRoot && dropPos != DropPosition.Into)
+                dropPos = DropPosition.Into;
+
+            switch (dropPos)
             {
                 case DropPosition.Into:
+                    // Block reparenting into prefab instances (structure is fixed)
+                    if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
+                    {
+                        Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                        continue;
+                    }
                     dragged.SetParent(target);
                     _expandedState[_dropTargetId!] = true;
                     break;
 
                 case DropPosition.Above:
                 case DropPosition.Below:
-                    var targetParent = target.Parent;
-                    if (targetParent != null && targetParent.IsValid())
-                    {
-                        if (dragged.Parent != targetParent)
-                            dragged.SetParent(targetParent);
+                    // Reparent to target's parent, then reorder as sibling
+                    if (dragged.Parent != targetParent)
+                        dragged.SetParent(targetParent!);
 
-                        // Reorder: place before/after target
-                        int targetIdx = target.GetSiblingIndex() ?? 0;
-                        if (_dropPos == DropPosition.Below) targetIdx++;
-                        // If dragged was before target in same parent, adjust index
-                        int dragIdx = dragged.GetSiblingIndex() ?? 0;
-                        if (dragIdx < targetIdx) targetIdx--;
-                        dragged.SetSiblingIndex(Math.Max(0, targetIdx));
-                    }
-                    else
-                    {
-                        // Target is a root object — make dragged a root too
-                        if (dragged.Parent != null && dragged.Parent.IsValid())
-                            dragged.SetParent(default);
-                    }
+                    int targetIdx = target.GetSiblingIndex() ?? 0;
+                    if (dropPos == DropPosition.Below) targetIdx++;
+                    int dragIdx = dragged.GetSiblingIndex() ?? 0;
+                    if (dragIdx < targetIdx) targetIdx--;
+                    dragged.SetSiblingIndex(Math.Max(0, targetIdx));
                     break;
             }
         }
