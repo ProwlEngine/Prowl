@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Prowl.Vector;
 
-namespace Prowl.Runtime.ParticleSystem;
+namespace Prowl.Runtime;
 
 /// <summary>
 /// Represents a color key in a gradient.

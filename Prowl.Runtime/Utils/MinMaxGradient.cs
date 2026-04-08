@@ -4,7 +4,7 @@
 using System;
 using Prowl.Vector;
 
-namespace Prowl.Runtime.ParticleSystem;
+namespace Prowl.Runtime;
 
 /// <summary>
 /// Mode for MinMaxGradient evaluation.

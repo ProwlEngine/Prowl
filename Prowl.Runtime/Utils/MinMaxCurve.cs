@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Prowl.Runtime.ParticleSystem;
+namespace Prowl.Runtime;
 
 /// <summary>
 /// Mode for MinMaxCurve evaluation.

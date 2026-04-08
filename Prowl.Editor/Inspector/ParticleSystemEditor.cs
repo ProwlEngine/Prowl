@@ -11,95 +11,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
-using Gradient = Prowl.Runtime.ParticleSystem.Gradient;
+using Gradient = Prowl.Runtime.Gradient;
 
 namespace Prowl.Editor.Inspector;
-
-// ================================================================
-//  MinMaxCurve Property Editor
-// ================================================================
-
-[CustomPropertyEditor(typeof(MinMaxCurve))]
-public class MinMaxCurvePropertyEditor : PropertyEditor
-{
-    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
-    {
-        var curve = value as MinMaxCurve ?? new MinMaxCurve();
-
-        using (paper.Column(id).Height(UnitValue.Auto).Enter())
-        {
-            // Mode selector + label on one row
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", label, curve.Mode)
-                .OnValueChanged(v => { curve.Mode = v; onChange(curve); });
-
-            switch (curve.Mode)
-            {
-                case MinMaxCurveMode.Constant:
-                    EditorGUI.FloatField(paper, $"{id}_val", curve.ConstantValue, "Value")
-                        .OnValueChanged(v => { curve.ConstantValue = v; onChange(curve); });
-                    break;
-
-                case MinMaxCurveMode.Curve:
-                    CurveEditor.CurveField(paper, $"{id}_curve", "Curve", curve.Curve)
-                        .OnValueChanged(v => { curve.Curve = v; onChange(curve); });
-                    break;
-
-                case MinMaxCurveMode.Random:
-                    EditorGUI.FloatField(paper, $"{id}_min", curve.MinValue, "Min")
-                        .OnValueChanged(v => { curve.MinValue = v; onChange(curve); });
-                    EditorGUI.FloatField(paper, $"{id}_max", curve.MaxValue, "Max")
-                        .OnValueChanged(v => { curve.MaxValue = v; onChange(curve); });
-                    break;
-            }
-        }
-    }
-}
-
-// ================================================================
-//  MinMaxGradient Property Editor
-// ================================================================
-
-[CustomPropertyEditor(typeof(MinMaxGradient))]
-public class MinMaxGradientPropertyEditor : PropertyEditor
-{
-    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
-    {
-        var gradient = value as MinMaxGradient ?? new MinMaxGradient();
-
-        using (paper.Column(id).Height(UnitValue.Auto).Enter())
-        {
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", label, gradient.Mode)
-                .OnValueChanged(v => { gradient.Mode = v; onChange(gradient); });
-
-            switch (gradient.Mode)
-            {
-                case MinMaxGradientMode.Color:
-                    EditorGUI.ColorField(paper, $"{id}_color", "Color", gradient.ConstantColor)
-                        .OnValueChanged(v => { gradient.ConstantColor = v; onChange(gradient); });
-                    break;
-
-                case MinMaxGradientMode.Gradient:
-                    PropertyGrid.DrawField(paper, $"{id}_grad", "Gradient", typeof(Gradient), gradient.Gradient,
-                        v => { gradient.Gradient = v as Gradient ?? new Gradient(); onChange(gradient); }, 1);
-                    break;
-
-                case MinMaxGradientMode.RandomBetweenTwoColors:
-                    EditorGUI.ColorField(paper, $"{id}_minc", "Min Color", gradient.MinColor)
-                        .OnValueChanged(v => { gradient.MinColor = v; onChange(gradient); });
-                    EditorGUI.ColorField(paper, $"{id}_maxc", "Max Color", gradient.MaxColor)
-                        .OnValueChanged(v => { gradient.MaxColor = v; onChange(gradient); });
-                    break;
-
-                case MinMaxGradientMode.RandomBetweenTwoGradients:
-                    PropertyGrid.DrawField(paper, $"{id}_ming", "Min Gradient", typeof(Gradient), gradient.MinGradient,
-                        v => { gradient.MinGradient = v as Gradient ?? new Gradient(); onChange(gradient); }, 1);
-                    PropertyGrid.DrawField(paper, $"{id}_maxg", "Max Gradient", typeof(Gradient), gradient.MaxGradient,
-                        v => { gradient.MaxGradient = v as Gradient ?? new Gradient(); onChange(gradient); }, 1);
-                    break;
-            }
-        }
-    }
-}
 
 // ================================================================
 //  Particle System Component Editor
