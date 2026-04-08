@@ -13,12 +13,11 @@ namespace Prowl.Editor.Inspector;
 
 /// <summary>
 /// PropertyEditor for AssetRef&lt;T&gt; fields (via the IAssetRef interface).
-/// Shows an asset reference field with name, drag-drop, and asset selector modal.
+/// Supports asset references, runtime instances, drag-drop from project/hierarchy/inspector.
 /// </summary>
 [CustomPropertyEditor(typeof(IAssetRef))]
 public class AssetRefPropertyEditor : PropertyEditor
 {
-    // Static state for the asset selector modal
     private static bool _selectorOpen;
     private static Type? _selectorType;
     private static Action<object?>? _selectorCallback;
@@ -35,9 +34,11 @@ public class AssetRefPropertyEditor : PropertyEditor
         var instance = assetRef.GetInstance() as EngineObject;
 
         bool isAsset = instance != null && instance.AssetID != Guid.Empty;
-        string suffix = instance != null ? (isAsset ? instance.GetType().Name : "Instance") : fieldType.Name;
+        bool isInstance = instance != null && instance.AssetID == Guid.Empty;
+        string suffix = isAsset ? instance!.GetType().Name : isInstance ? "Instance" : fieldType.Name;
         string displayName = instance != null ? $"{instance.Name} ({suffix})" : $"None ({fieldType.Name})";
-        string icon = instance != null ? EditorIcons.Cube : EditorIcons.Circle;
+        string icon = isAsset ? EditorIcons.Cube : isInstance ? EditorIcons.CircleDot : EditorIcons.Circle;
+        var iconColor = isAsset ? EditorTheme.Purple400 : isInstance ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
         using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
         {
@@ -48,9 +49,19 @@ public class AssetRefPropertyEditor : PropertyEditor
                     .Text(label, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-            // Drag target detection
-            bool isDragTarget = DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload adp
-                && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType);
+            // Check for compatible drags
+            bool isDragTarget = false;
+            if (DragDrop.IsDragging)
+            {
+                if (DragDrop.Payload is AssetDragPayload adp && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType))
+                    isDragTarget = true;
+                else if (DragDrop.Payload is GameObjectDragPayload && typeof(GameObject).IsAssignableFrom(fieldType))
+                    isDragTarget = true;
+                else if (DragDrop.Payload is GameObjectDragPayload && typeof(MonoBehaviour).IsAssignableFrom(fieldType))
+                    isDragTarget = true; // Will search GO for matching component
+                else if (DragDrop.Payload is ComponentDragPayload cdp && fieldType.IsAssignableFrom(cdp.Component.GetType()))
+                    isDragTarget = true;
+            }
 
             var fieldEl = paper.Row($"{id}_field")
                 .Height(EditorTheme.RowHeight)
@@ -58,54 +69,110 @@ public class AssetRefPropertyEditor : PropertyEditor
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
-                .OnDoubleClick((fieldType, assetRef, onChange), (cap, _) =>
-                    OpenSelector(cap.Item1, asset => { cap.Item2.SetInstance(asset); cap.Item3(cap.Item2); }));
+                .OnDoubleClick((fieldType, assetRef, onChange, instance, isAsset, isInstance), (cap, _) =>
+                {
+                    if (cap.isAsset)
+                    {
+                        // Asset → focus in project
+                        Selection.FocusAsset(cap.instance!.AssetID);
+                    }
+                    else if (cap.isInstance)
+                    {
+                        // Instance → select it in inspector
+                        Selection.Select(cap.instance!);
+                    }
+                    else
+                    {
+                        // None → open selector
+                        OpenSelector(cap.fieldType, asset => { cap.assetRef.SetInstance(asset); cap.onChange(cap.assetRef); });
+                    }
+                });
 
             using (fieldEl.Enter())
             {
-                // Accept asset drop
-                var drop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
-                    dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));
-                if (drop != null)
-                {
-                    var droppedAsset = Runtime.AssetDatabase.Get(drop.AssetGuid);
-                    if (droppedAsset != null)
-                    {
-                        assetRef.SetInstance(droppedAsset);
-                        onChange(assetRef);
-                    }
-                }
+                // Accept drops
+                HandleDrops(paper, assetRef, fieldType, onChange);
 
                 // Icon
                 paper.Box($"{id}_ico")
                     .Width(16).Height(EditorTheme.RowHeight)
                     .IsNotInteractable()
-                    .Text(icon, font)
-                    .TextColor(instance != null ? EditorTheme.Purple400 : EditorTheme.Ink300)
+                    .Text(icon, font).TextColor(iconColor)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-                // Name — click to focus/reveal the asset in the Project panel
+                // Name
                 paper.Box($"{id}_name")
                     .Height(EditorTheme.RowHeight).Clip()
+                    .IsNotInteractable()
                     .Text(displayName, font)
                     .TextColor(instance != null ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft)
-                    .OnClick(assetRef.AssetID, (g, _) =>
-                    {
-                        if (g != Guid.Empty)
-                            Selection.FocusAsset(g);
-                    });
+                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
 
-                // Picker button
+                // Picker button (circle)
                 paper.Box($"{id}_pick")
                     .Width(20).Height(EditorTheme.RowHeight)
                     .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.Ink400)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                     .Hovered.BackgroundColor(EditorTheme.Purple400).End()
                     .Rounded(3)
-                    .OnClick((fieldType, assetRef, onChange), (cap, _) =>
-                        OpenSelector(cap.Item1, asset => { cap.Item2.SetInstance(asset); cap.Item3(cap.Item2); }));
+                    .OnClick((fieldType, assetRef, onChange), (cap, e) =>
+                    {
+                        e.StopPropagation();
+                        OpenSelector(cap.Item1, asset => { cap.Item2.SetInstance(asset); cap.Item3(cap.Item2); });
+                    });
             }
+        }
+    }
+
+    private static void HandleDrops(Paper paper, IAssetRef assetRef, Type fieldType, Action<object?> onChange)
+    {
+        if (!paper.IsParentHovered || DragDrop.IsDragging) return;
+
+        // Asset drop
+        if (DragDrop.Payload is AssetDragPayload adp && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType))
+        {
+            var droppedAsset = Runtime.AssetDatabase.Get(adp.AssetGuid);
+            if (droppedAsset != null)
+            {
+                assetRef.SetInstance(droppedAsset);
+                onChange(assetRef);
+            }
+            DragDrop.EndDrag();
+            return;
+        }
+
+        // GameObject drop
+        if (DragDrop.Payload is GameObjectDragPayload goDrop && goDrop.GameObjects.Length > 0)
+        {
+            var go = goDrop.GameObjects[0];
+
+            if (typeof(GameObject).IsAssignableFrom(fieldType))
+            {
+                // Direct GO reference
+                assetRef.SetInstance(go);
+                onChange(assetRef);
+            }
+            else if (typeof(MonoBehaviour).IsAssignableFrom(fieldType))
+            {
+                // Search GO for matching component
+                var comp = go.GetComponent(fieldType);
+                if (comp != null)
+                {
+                    assetRef.SetInstance(comp);
+                    onChange(assetRef);
+                }
+            }
+            DragDrop.EndDrag();
+            return;
+        }
+
+        // Component drop
+        if (DragDrop.Payload is ComponentDragPayload cdp && fieldType.IsAssignableFrom(cdp.Component.GetType()))
+        {
+            assetRef.SetInstance(cdp.Component);
+            onChange(assetRef);
+            DragDrop.EndDrag();
+            return;
         }
     }
 
@@ -130,7 +197,6 @@ public class AssetRefPropertyEditor : PropertyEditor
         var matchingItems = db?.FindAllOfType(_selectorType).Take(100).ToList()
             ?? new System.Collections.Generic.List<(Guid guid, string name, string parentPath, Type assetType)>();
 
-        // Fullscreen blocker
         paper.Box("ar_sel_overlay")
             .PositionType(PositionType.SelfDirected).Position(0, 0)
             .Size(UnitValue.Stretch(), UnitValue.Stretch())
@@ -138,7 +204,6 @@ public class AssetRefPropertyEditor : PropertyEditor
             .Layer(Layer.Overlay)
             .OnClick(0, (_, _) => _selectorOpen = false);
 
-        // Modal
         using (paper.Column("ar_sel_modal")
             .Size(350, 400)
             .Margin(UnitValue.StretchOne)
@@ -147,7 +212,6 @@ public class AssetRefPropertyEditor : PropertyEditor
             .Layer(Layer.Overlay)
             .Enter())
         {
-            // Header
             using (paper.Row("ar_sel_header")
                 .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
                 .BackgroundColor(EditorTheme.Neutral200)
@@ -168,10 +232,8 @@ public class AssetRefPropertyEditor : PropertyEditor
                     .OnClick(0, (_, _) => _selectorOpen = false);
             }
 
-            // List
             using (ScrollView.Begin(paper, "ar_sel_scroll", 350, 360, paddingLeft: 4, paddingRight: 4, paddingTop: 4))
             {
-                // None option
                 paper.Box("ar_sel_none")
                     .Height(EditorTheme.RowHeight).ChildLeft(8)
                     .Hovered.BackgroundColor(EditorTheme.Purple400).End()

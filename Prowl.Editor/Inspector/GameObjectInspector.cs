@@ -148,13 +148,17 @@ public static class GameObjectInspector
             string compName = comp.GetType().Name;
             string icon = GetComponentIcon(comp);
 
-            // Component foldout header
+            // Component foldout header — draggable for component references
             using (paper.Row($"{compId}_header")
                 .Height(24)
                 .BackgroundColor(EditorTheme.Neutral300)
                 .Rounded(3)
                 .ChildLeft(4)
                 .RowBetween(4)
+                .OnDragStart((go, comp), (cap, _) =>
+                {
+                    DragDrop.StartDrag(new ComponentDragPayload(cap.Item1, cap.Item2));
+                })
                 .Enter())
             {
                 // Enabled toggle

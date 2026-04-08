@@ -48,11 +48,16 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
             // Check if a compatible payload is being dragged over this field
-            bool isAssetDragTarget = DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload adp
-                && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType);
-            bool isGODragTarget = DragDrop.IsDragging && DragDrop.Payload is GameObjectDragPayload
-                && fieldType.IsAssignableFrom(typeof(GameObject));
-            bool isDragTarget = isAssetDragTarget || isGODragTarget;
+            bool isDragTarget = false;
+            if (DragDrop.IsDragging)
+            {
+                if (DragDrop.Payload is AssetDragPayload adp2 && adp2.AssetType != null && fieldType.IsAssignableFrom(adp2.AssetType))
+                    isDragTarget = true;
+                else if (DragDrop.Payload is GameObjectDragPayload && (typeof(GameObject).IsAssignableFrom(fieldType) || typeof(MonoBehaviour).IsAssignableFrom(fieldType)))
+                    isDragTarget = true;
+                else if (DragDrop.Payload is ComponentDragPayload cdp2 && fieldType.IsAssignableFrom(cdp2.Component.GetType()))
+                    isDragTarget = true;
+            }
 
             // Object field row
             var fieldEl = paper.Row($"{id}_field")
@@ -61,7 +66,15 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
-                .OnDoubleClick((fieldType, onChange), (cap, _) => OpenSelector(cap.Item1, cap.Item2));
+                .OnDoubleClick((fieldType, onChange, eo, isAsset), (cap, _) =>
+                {
+                    if (cap.isAsset && cap.eo != null)
+                        Selection.FocusAsset(cap.eo.AssetID);
+                    else if (cap.eo != null)
+                        Selection.Select(cap.eo);
+                    else
+                        OpenSelector(cap.fieldType, cap.onChange);
+                });
 
             using (fieldEl.Enter())
             {
@@ -75,12 +88,32 @@ public class EngineObjectPropertyEditor : PropertyEditor
                         onChange(droppedAsset);
                 }
 
-                // Accept GameObject drop (drag from Hierarchy into Inspector)
-                if (fieldType.IsAssignableFrom(typeof(GameObject)))
+                // Accept GameObject drop
+                if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
                 {
-                    var goDrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
-                    if (goDrop != null && goDrop.GameObjects.Length > 0)
-                        onChange(goDrop.GameObjects[0]);
+                    var go = goDrop.GameObjects.Length > 0 ? goDrop.GameObjects[0] : null;
+                    if (go != null)
+                    {
+                        if (typeof(GameObject).IsAssignableFrom(fieldType))
+                        {
+                            onChange(go);
+                        }
+                        else if (typeof(MonoBehaviour).IsAssignableFrom(fieldType))
+                        {
+                            // Search GO for matching component
+                            var comp = go.GetComponent(fieldType);
+                            if (comp != null) onChange(comp);
+                        }
+                    }
+                    DragDrop.EndDrag();
+                }
+
+                // Accept Component drop
+                if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is ComponentDragPayload compDrop)
+                {
+                    if (fieldType.IsAssignableFrom(compDrop.Component.GetType()))
+                        onChange(compDrop.Component);
+                    DragDrop.EndDrag();
                 }
 
                 // Icon

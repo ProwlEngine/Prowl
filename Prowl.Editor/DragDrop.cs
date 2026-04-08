@@ -48,6 +48,22 @@ public class GameObjectDragPayload : DragPayload
     public GameObjectDragPayload(GameObject[] gos) => GameObjects = gos;
 }
 
+/// <summary>Payload for dragging a component from the inspector.</summary>
+public class ComponentDragPayload : DragPayload
+{
+    public GameObject GameObject { get; }
+    public MonoBehaviour Component { get; }
+
+    public override string DisplayName => Component.GetType().Name;
+    public override string Icon => EditorIcons.PuzzlePiece;
+
+    public ComponentDragPayload(GameObject go, MonoBehaviour comp)
+    {
+        GameObject = go;
+        Component = comp;
+    }
+}
+
 /// <summary>
 /// Global drag & drop system for the editor.
 /// Start a drag from any panel, drop in any panel that accepts the payload type.
