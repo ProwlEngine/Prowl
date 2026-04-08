@@ -262,11 +262,9 @@ namespace Prowl.PaperUI
                 if (hoveredElement.IsValid)
                 {
                     ref ElementData data = ref hoveredElement.Data;
-                    data.OnScroll?.Invoke(new ScrollEvent(hoveredElement, data.LayoutRect, PointerPos, PointerWheel));
-                    BubbleEventToParents(hoveredElement, parent => {
-                        ref ElementData parentData = ref parent.Data;
-                        parentData.OnScroll?.Invoke(new ScrollEvent(parent, parentData.LayoutRect, PointerPos, PointerWheel));
-                    });
+                    var scrollEvt = new ScrollEvent(hoveredElement, data.LayoutRect, PointerPos, PointerWheel);
+                    data.OnScroll?.Invoke(scrollEvt);
+                    BubbleEventToParents(hoveredElement, scrollEvt);
                 }
             }
 
@@ -497,43 +495,84 @@ namespace Prowl.PaperUI
         #region Event Propagation
 
         /// <summary>
-        /// Builds the bubble path from an element to the root.
+        /// Builds the hover path from an element all the way to the root.
+        /// This always walks to root so that IsElementHovered works for all ancestors.
+        /// StopPropagation only affects event dispatch (BubbleEventToParents), not hover state.
         /// </summary>
         private void BuildBubblePath(in ElementHandle handle)
         {
-            ref ElementData data = ref handle.Data;
-            if (data.StopPropagation)
-                return;
-
             ElementHandle current = handle;
             while (current.IsValid)
             {
-                data = ref current.Data;
-
+                ref ElementData data = ref current.Data;
                 _elementsInBubblePath.Add(data.ID);
-                if (data.StopPropagation)
-                    break;
                 current = current.GetParentHandle();
             }
         }
 
         /// <summary>
         /// Propagates an event up the element hierarchy.
+        /// Stops if the source element has StopPropagation set, if the event's
+        /// StopPropagation() was called, or if a parent element has StopPropagation set.
         /// </summary>
-        private void BubbleEventToParents(in ElementHandle element, Action<ElementHandle> eventHandler)
+        private void BubbleEventToParents(in ElementHandle element, ElementEvent evt)
         {
             ref ElementData data = ref element.Data;
-            if (data.StopPropagation)
+            if (data.StopPropagation || evt.IsPropagationStopped)
                 return;
 
             ElementHandle current = element.GetParentHandle();
             while (current.IsValid)
             {
-                eventHandler(current);
                 data = ref current.Data;
-                if (data.StopPropagation)
+
+                // Retarget event to current parent and invoke its handler
+                evt.Retarget(current, data.LayoutRect);
+                InvokeHandler(data, evt);
+
+                if (data.StopPropagation || evt.IsPropagationStopped)
                     break;
                 current = current.GetParentHandle();
+            }
+        }
+
+        /// <summary>
+        /// Invokes the appropriate event handler on the element based on the event type.
+        /// </summary>
+        private static void InvokeHandler(in ElementData data, ElementEvent evt)
+        {
+            switch (evt)
+            {
+                case DragEvent drag:
+                    // Determine which drag handler to invoke based on context.
+                    // The caller tags the event so we know which phase we're in.
+                    if (drag.Phase == DragPhase.Start)
+                        data.OnDragStart?.Invoke(drag);
+                    else if (drag.Phase == DragPhase.Dragging)
+                        data.OnDragging?.Invoke(drag);
+                    else if (drag.Phase == DragPhase.End)
+                        data.OnDragEnd?.Invoke(drag);
+                    break;
+                case ScrollEvent scroll:
+                    data.OnScroll?.Invoke(scroll);
+                    break;
+                case ClickEvent click:
+                    if (click.Phase == ClickPhase.Click)
+                        data.OnClick?.Invoke(click);
+                    else if (click.Phase == ClickPhase.Press)
+                        data.OnPress?.Invoke(click);
+                    else if (click.Phase == ClickPhase.Release)
+                        data.OnRelease?.Invoke(click);
+                    else if (click.Phase == ClickPhase.DoubleClick)
+                        data.OnDoubleClick?.Invoke(click);
+                    else if (click.Phase == ClickPhase.RightClick)
+                        data.OnRightClick?.Invoke(click);
+                    else if (click.Phase == ClickPhase.Held)
+                        data.OnHeld?.Invoke(click);
+                    break;
+                default:
+                    // ElementEvent base (hover/enter/leave) — handled separately
+                    break;
             }
         }
 
@@ -650,20 +689,11 @@ namespace Prowl.PaperUI
                     if (activeElement.IsValid)
                     {
                         ref ElementData data = ref activeElement.Data;
-                        // Direct event
-                        data.OnPress?.Invoke(new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
-                        // Propagate to hooked children
-                        PropagateEventToHookedChildren(activeElement, child => {
-                            ref ElementData childData = ref child.Data;
-                            childData.OnPress?.Invoke(new ClickEvent(child, childData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                        });
-
-                        // Bubble event
-                        BubbleEventToParents(activeElement, parent => {
-                            ref ElementData parentData = ref parent.Data;
-                            parentData.OnPress?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                        });
+                        var pressEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Press);
+                        data.OnPress?.Invoke(pressEvt);
+                        PropagateClickToHookedChildren(activeElement, ClickPhase.Press);
+                        BubbleEventToParents(activeElement, pressEvt);
 
                         // Update focus state
                         if (data.IsFocusable)
@@ -671,8 +701,6 @@ namespace Prowl.PaperUI
                             if (_focusedElementId != _activeElementId)
                             {
                                 data.OnFocusChange?.Invoke(new FocusEvent(activeElement, true));
-
-                                // Propagate focus gain to hooked children
                                 PropagateEventToHookedChildren(activeElement, child => {
                                     ref ElementData childData = ref child.Data;
                                     childData.OnFocusChange?.Invoke(new FocusEvent(child, true));
@@ -685,8 +713,6 @@ namespace Prowl.PaperUI
                                     {
                                         ref ElementData oldData = ref oldFocusedElement.Data;
                                         oldData.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
-
-                                        // Propagate focus loss to hooked children
                                         PropagateEventToHookedChildren(oldFocusedElement, child => {
                                             ref ElementData childData = ref child.Data;
                                             childData.OnFocusChange?.Invoke(new FocusEvent(child, false));
@@ -694,7 +720,6 @@ namespace Prowl.PaperUI
                                     }
                                 }
 
-                                // Update focused element ID
                                 _focusedElementId = _activeElementId;
                             }
                         }
@@ -721,17 +746,10 @@ namespace Prowl.PaperUI
                             Float2 endPos = PointerPos;
                             Float2 delta = endPos - startPos;
 
-                            // Direct event
-                            data.OnDragEnd?.Invoke(new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, delta));
-
-                            // Propagate drag end to hooked children
-                            PropagateEventToHookedChildren(activeElement, child => {
-                                ref ElementData childData = ref child.Data;
-                                childData.OnDragEnd?.Invoke(new DragEvent(child, childData.LayoutRect, PointerPos, startPos, PointerDelta, delta));
-                            });
-
-                            // Bubble event
-                            BubbleEventToParents(activeElement, parent => parent.Data.OnDragEnd?.Invoke(new DragEvent(parent, parent.Data.LayoutRect, PointerPos, startPos, PointerDelta, delta)));
+                            var dragEndEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, delta, DragPhase.End);
+                            data.OnDragEnd?.Invoke(dragEndEvt);
+                            PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, delta, DragPhase.End);
+                            BubbleEventToParents(activeElement, dragEndEvt);
 
                             _isDragging[_activeElementId] = false;
                         }
@@ -739,30 +757,17 @@ namespace Prowl.PaperUI
                         // If released over the same element that was pressed AND not dragging, it's a click
                         if (_theHoveredElementId == _activeElementId && !wasDragging)
                         {
-                            // Direct click
-                            data.OnClick?.Invoke(new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
-
-                            // Propagate click to hooked children
-                            PropagateEventToHookedChildren(activeElement, child => {
-                                ref ElementData childData = ref child.Data;
-                                childData.OnClick?.Invoke(new ClickEvent(child, childData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                            });
-
-                            // Bubble click event
-                            BubbleEventToParents(activeElement, parent => parent.Data.OnClick?.Invoke(new ClickEvent(parent, parent.Data.LayoutRect, PointerPos, PaperMouseBtn.Left)));
+                            var clickEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Click);
+                            data.OnClick?.Invoke(clickEvt);
+                            PropagateClickToHookedChildren(activeElement, ClickPhase.Click);
+                            BubbleEventToParents(activeElement, clickEvt);
                         }
 
-                        // Direct release event
-                        data.OnRelease?.Invoke(new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
-
-                        // Propagate release to hooked children
-                        PropagateEventToHookedChildren(activeElement, child => {
-                            ref ElementData childData = ref child.Data;
-                            childData.OnRelease?.Invoke(new ClickEvent(child, childData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                        });
-
-                        // Bubble release event
-                        BubbleEventToParents(activeElement, parent => parent.Data.OnRelease?.Invoke(new ClickEvent(parent, parent.Data.LayoutRect, PointerPos, PaperMouseBtn.Left)));
+                        // Release event
+                        var releaseEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Release);
+                        data.OnRelease?.Invoke(releaseEvt);
+                        PropagateClickToHookedChildren(activeElement, ClickPhase.Release);
+                        BubbleEventToParents(activeElement, releaseEvt);
                     }
 
                     _activeElementId = 0;
@@ -777,25 +782,16 @@ namespace Prowl.PaperUI
                     if (hoveredElement.IsValid)
                     {
                         ref ElementData data = ref hoveredElement.Data;
-                        // Direct event
-                        data.OnRightClick?.Invoke(new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Right));
 
-                        // Propagate right-click to hooked children
-                        PropagateEventToHookedChildren(hoveredElement, child => {
-                            ref ElementData childData = ref child.Data;
-                            childData.OnRightClick?.Invoke(new ClickEvent(child, childData.LayoutRect, PointerPos, PaperMouseBtn.Right));
-                        });
-
-                        // Bubble event
-                        BubbleEventToParents(hoveredElement, parent => {
-                            ref ElementData parentData = ref parent.Data;
-                            parentData.OnRightClick?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Right));
-                        });
+                        var rightClickEvt = new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Right, ClickPhase.RightClick);
+                        data.OnRightClick?.Invoke(rightClickEvt);
+                        PropagateClickToHookedChildren(hoveredElement, ClickPhase.RightClick, PaperMouseBtn.Right);
+                        BubbleEventToParents(hoveredElement, rightClickEvt);
                     }
                 }
             }
 
-            // Handle float-click
+            // Handle double-click
             if (IsPointerDoubleClick(PaperMouseBtn.Left))
             {
                 if (_theHoveredElementId != 0)
@@ -804,25 +800,16 @@ namespace Prowl.PaperUI
                     if (hoveredElement.IsValid)
                     {
                         ref ElementData data = ref hoveredElement.Data;
-                        // Direct event
-                        data.OnDoubleClick?.Invoke(new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
 
-                        // Propagate float-click to hooked children
-                        PropagateEventToHookedChildren(hoveredElement, child => {
-                            ref ElementData childData = ref child.Data;
-                            childData.OnDoubleClick?.Invoke(new ClickEvent(child, childData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                        });
-
-                        // Bubble event
-                        BubbleEventToParents(hoveredElement, parent => {
-                            ref ElementData parentData = ref parent.Data;
-                            parentData.OnDoubleClick?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                        });
+                        var dblClickEvt = new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.DoubleClick);
+                        data.OnDoubleClick?.Invoke(dblClickEvt);
+                        PropagateClickToHookedChildren(hoveredElement, ClickPhase.DoubleClick);
+                        BubbleEventToParents(hoveredElement, dblClickEvt);
                     }
                 }
             }
 
-            // Handle dragging
+            // Handle held + dragging
             if (IsPointerDown(PaperMouseBtn.Left) && _activeElementId != 0)
             {
                 ElementHandle activeElement = FindElementByID(_activeElementId);
@@ -830,20 +817,10 @@ namespace Prowl.PaperUI
                 {
                     ref ElementData data = ref activeElement.Data;
 
-                    // Direct event
-                    data.OnHeld?.Invoke(new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left));
-
-                    // Propagate held to hooked children
-                    PropagateEventToHookedChildren(activeElement, child => {
-                        ref ElementData childData = ref child.Data;
-                        childData.OnHeld?.Invoke(new ClickEvent(child, childData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                    });
-
-                    // Bubble event
-                    BubbleEventToParents(activeElement, parent => {
-                        ref ElementData parentData = ref parent.Data;
-                        parentData.OnHeld?.Invoke(new ClickEvent(parent, parentData.LayoutRect, PointerPos, PaperMouseBtn.Left));
-                    });
+                    var heldEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Held);
+                    data.OnHeld?.Invoke(heldEvt);
+                    PropagateClickToHookedChildren(activeElement, ClickPhase.Held);
+                    BubbleEventToParents(activeElement, heldEvt);
 
                     if (IsPointerMoving)
                     {
@@ -851,43 +828,50 @@ namespace Prowl.PaperUI
                         Float2 startPos = _dragStartPos[_activeElementId];
                         Float2 currentPos = PointerPos;
                         float distanceMoved = Float2.Length(currentPos - startPos);
-                        Rect layoutRect = data.LayoutRect;
 
                         // Only start dragging if we've moved beyond the threshold
                         if (!wasDragging && distanceMoved >= DRAG_THRESHOLD)
                         {
-                            data.OnDragStart?.Invoke(new DragEvent(activeElement, layoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-
-                            // Propagate drag start to hooked children
-                            PropagateEventToHookedChildren(activeElement, child => {
-                                ref ElementData childData = ref child.Data;
-                                childData.OnDragStart?.Invoke(new DragEvent(child, childData.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-                            });
-
-                            BubbleEventToParents(activeElement, parent => {
-                                ref ElementData parentData = ref parent.Data;
-                                parentData.OnDragStart?.Invoke(new DragEvent(parent, parentData.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-                            });
+                            var dragStartEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            data.OnDragStart?.Invoke(dragStartEvt);
+                            PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            BubbleEventToParents(activeElement, dragStartEvt);
 
                             _isDragging[_activeElementId] = true;
                         }
 
                         // Handle continuous dragging
-                        data.OnDragging?.Invoke(new DragEvent(activeElement, layoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-
-                        // Propagate dragging to hooked children
-                        PropagateEventToHookedChildren(activeElement, child => {
-                            ref ElementData childData = ref child.Data;
-                            childData.OnDragging?.Invoke(new DragEvent(child, childData.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-                        });
-
-                        BubbleEventToParents(activeElement, parent => {
-                            ref ElementData parentData = ref parent.Data;
-                            parentData.OnDragging?.Invoke(new DragEvent(parent, parentData.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta));
-                        });
+                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        data.OnDragging?.Invoke(draggingEvt);
+                        PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        BubbleEventToParents(activeElement, draggingEvt);
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Propagates a click event to hooked children of an element.
+        /// </summary>
+        private void PropagateClickToHookedChildren(in ElementHandle element, ClickPhase phase, PaperMouseBtn button = PaperMouseBtn.Left)
+        {
+            PropagateEventToHookedChildren(element, child => {
+                ref ElementData childData = ref child.Data;
+                var evt = new ClickEvent(child, childData.LayoutRect, PointerPos, button, phase);
+                InvokeHandler(childData, evt);
+            });
+        }
+
+        /// <summary>
+        /// Propagates a drag event to hooked children of an element.
+        /// </summary>
+        private void PropagateDragToHookedChildren(in ElementHandle element, Float2 startPos, Float2 delta, Float2 totalDelta, DragPhase phase)
+        {
+            PropagateEventToHookedChildren(element, child => {
+                ref ElementData childData = ref child.Data;
+                var evt = new DragEvent(child, childData.LayoutRect, PointerPos, startPos, delta, totalDelta, phase);
+                InvokeHandler(childData, evt);
+            });
         }
 
         /// <summary>
