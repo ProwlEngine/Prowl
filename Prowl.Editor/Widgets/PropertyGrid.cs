@@ -6,6 +6,8 @@ using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.Inspector;
+
+using Color = System.Drawing.Color;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -20,6 +22,13 @@ namespace Prowl.Editor.Widgets;
 /// </summary>
 public static class PropertyGrid
 {
+    /// <summary>
+    /// Set of overridden field names for the current component being drawn.
+    /// Set by the inspector before drawing a prefab instance's component.
+    /// Field names match the PropertyOverride path suffix (e.g., "AnimationSpeed", "_enabled").
+    /// </summary>
+    [ThreadStatic]
+    public static HashSet<string>? OverriddenFields;
     /// <summary>
     /// Draw the property grid for an object.
     /// </summary>
@@ -78,12 +87,38 @@ public static class PropertyGrid
                     continue;
                 }
 
-                // Default: dispatch to DrawField
-                DrawField(paper, fieldId, label, fieldType, value, newVal =>
+                // Check if this field is overridden on a prefab instance
+                bool isOverridden = OverriddenFields != null && OverriddenFields.Contains(field.Name);
+
+                if (isOverridden)
                 {
-                    field.SetValue(target, newVal);
-                    onChanged?.Invoke(target);
-                }, depth);
+                    using (paper.Row($"{fieldId}_ov").Height(UnitValue.Auto)
+                        .BackgroundColor(Color.FromArgb(25, EditorTheme.Purple400))
+                        .Rounded(3)
+                        .Enter())
+                    {
+                        paper.Box($"{fieldId}_ov_bar")
+                            .Width(3).Height(UnitValue.Stretch())
+                            .BackgroundColor(EditorTheme.Purple400).Rounded(1);
+
+                        using (paper.Column($"{fieldId}_ov_c").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
+                        {
+                            DrawField(paper, fieldId, label, fieldType, value, newVal =>
+                            {
+                                field.SetValue(target, newVal);
+                                onChanged?.Invoke(target);
+                            }, depth);
+                        }
+                    }
+                }
+                else
+                {
+                    DrawField(paper, fieldId, label, fieldType, value, newVal =>
+                    {
+                        field.SetValue(target, newVal);
+                        onChanged?.Invoke(target);
+                    }, depth);
+                }
             }
 
             // [Button] methods

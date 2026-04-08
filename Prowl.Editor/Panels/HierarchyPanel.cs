@@ -32,6 +32,8 @@ public class HierarchyPanel : DockPanel
     // Drag state
     private bool _dragInitiated;
     private Float2 _dragStartPos;
+    private GameObject? _dragSourceGO;
+    private bool _assetDropTarget; // True if hierarchy was hovered during asset drag
     private const float DragThreshold = 5f;
     private string? _dropTargetId; // GO identifier for the current drop target
     private enum DropPosition { Into, Above, Below }
@@ -57,6 +59,58 @@ public class HierarchyPanel : DockPanel
 
         using (paper.Column("hier_root").Size(width, height).OnClick(0, (_, _) => Selection.Clear()).OnRightClick(0, (_, _) => Selection.Clear()).Enter())
         {
+            // Prefab editing breadcrumb
+            if (Prefabs.PrefabEditingMode.IsEditing)
+            {
+                using (paper.Row("hier_prefab_breadcrumb")
+                    .Height(24)
+                    .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                    .Rounded(3).Margin(4, 4, 4, 0)
+                    .ChildLeft(6).RowBetween(4)
+                    .Enter())
+                {
+                    paper.Box("hier_prefab_back")
+                        .Width(UnitValue.Auto).Height(24)
+                        .Text($"{EditorIcons.ArrowLeft}  Back", font)
+                        .TextColor(EditorTheme.Purple400)
+                        .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft)
+                        .Hovered.TextColor(EditorTheme.Ink500).End()
+                        .OnClick(0, (_, _) => Prefabs.PrefabEditingMode.Exit());
+
+                    paper.Box("hier_prefab_sep_arrow")
+                        .Width(UnitValue.Auto).Height(24)
+                        .Text(EditorIcons.ChevronRight, font)
+                        .TextColor(EditorTheme.Ink400)
+                        .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
+
+                    string sceneName = Prefabs.PrefabEditingMode.OriginalSceneName ?? "Scene";
+                    paper.Box("hier_prefab_scene")
+                        .Width(UnitValue.Auto).Height(24)
+                        .Text(sceneName, font)
+                        .TextColor(EditorTheme.Ink400)
+                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+
+                    paper.Box("hier_prefab_sep_arrow2")
+                        .Width(UnitValue.Auto).Height(24)
+                        .Text(EditorIcons.ChevronRight, font)
+                        .TextColor(EditorTheme.Ink400)
+                        .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
+
+                    string prefabName = System.IO.Path.GetFileNameWithoutExtension(
+                        Prefabs.PrefabEditingMode.EditingPrefabPath ?? "Prefab");
+                    paper.Box("hier_prefab_name")
+                        .Width(UnitValue.Auto).Height(24)
+                        .Text(prefabName, font)
+                        .TextColor(EditorTheme.Purple400)
+                        .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+
+                    paper.Box("hier_prefab_spacer");
+
+                    EditorGUI.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  Save & Exit", width: 100)
+                        .OnValueChanged(_ => Prefabs.PrefabEditingMode.SaveAndExit());
+                }
+            }
+
             // Toolbar
             DrawToolbar(paper, font, width);
 
@@ -122,8 +176,10 @@ public class HierarchyPanel : DockPanel
                     }
 
                     // Accept asset drops — spawn at root
+                    // Track hover during drag so we know the hierarchy was the target on release
                     if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
                     {
+                        _assetDropTarget = true;
                         paper.Box("hier_drop_zone").Height(24)
                             .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                             .Rounded(3)
@@ -132,8 +188,12 @@ public class HierarchyPanel : DockPanel
                             .FontSize(EditorTheme.FontSize - 2)
                             .Alignment(TextAlignment.MiddleCenter);
                     }
+                    else if (DragDrop.IsDraggingType<AssetDragPayload>() && !paper.IsParentHovered)
+                    {
+                        _assetDropTarget = false; // Moved away during drag
+                    }
 
-                    if (!DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop && paper.IsParentHovered)
+                    if (!DragDrop.IsDragging && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
                     {
                         if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
                         {
@@ -146,6 +206,7 @@ public class HierarchyPanel : DockPanel
                             SpawnAssetInScene(assetDrop, null, Float3.Zero);
                         }
                         DragDrop.EndDrag();
+                        _assetDropTarget = false;
                     }
 
                     // Handle GO drag drop
@@ -285,7 +346,7 @@ public class HierarchyPanel : DockPanel
                 paper.Box($"hier_name_{goId}")
                     .Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(go.Name, font)
-                    .TextColor(go.EnabledInHierarchy ? EditorTheme.Ink500 : EditorTheme.Ink300)
+                    .TextColor(GetPrefabTextColor(go))
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
             }
@@ -330,32 +391,38 @@ public class HierarchyPanel : DockPanel
     {
         if (DragDrop.IsDragging) return;
 
-        // Start tracking on mouse down
+        // Start tracking on mouse down — record WHICH GO was pressed
         if (Input.GetMouseButtonDown(0) && paper.IsParentHovered)
         {
             _dragInitiated = true;
             _dragStartPos = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
+            _dragSourceGO = go;
         }
 
-        // Check threshold
-        if (_dragInitiated && Input.GetMouseButton(0))
+        // Only the GO that initiated the drag checks the threshold
+        if (_dragInitiated && _dragSourceGO == go && Input.GetMouseButton(0))
         {
             var mousePos = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
             if (Float2.Distance(mousePos, _dragStartPos) > DragThreshold)
             {
                 _dragInitiated = false;
 
-                // Drag all selected objects (if this GO is selected), otherwise just this one
+                // Drag all selected objects (if the source GO is selected), otherwise just the source
                 var selected = Selection.GetSelected<GameObject>().ToArray();
-                if (selected.Length > 0 && Selection.IsSelected(go))
+                if (selected.Length > 0 && Selection.IsSelected(_dragSourceGO))
                     DragDrop.StartDrag(new GameObjectDragPayload(selected));
                 else
-                    DragDrop.StartDrag(new GameObjectDragPayload(go));
+                    DragDrop.StartDrag(new GameObjectDragPayload(_dragSourceGO));
+
+                _dragSourceGO = null;
             }
         }
 
         if (Input.GetMouseButtonUp(0))
+        {
             _dragInitiated = false;
+            _dragSourceGO = null;
+        }
     }
 
     private void HandleDropTarget(Paper paper, GameObject go, string goId)
@@ -498,6 +565,36 @@ public class HierarchyPanel : DockPanel
                     cam.SetPosition(firstSelected!.Transform.Position);
                     cam.SetOrientation((float)firstSelected!.Transform.LocalEulerAngles.Y, (float)firstSelected!.Transform.LocalEulerAngles.X);
                 }, icon: EditorIcons.Eye);
+
+                builder.Separator();
+            }
+
+            // Prefab operations
+            if (!multiSelect && firstSelected!.IsPrefabInstance)
+            {
+                builder.Item("Select Prefab Asset", () =>
+                {
+                    Selection.FocusAsset(firstSelected.PrefabAssetId);
+                }, icon: EditorIcons.Cubes);
+
+                bool hasOverrides = Prefabs.PrefabUtility.HasAnyOverrides(firstSelected);
+
+                builder.Item("Apply Prefab Overrides", () =>
+                {
+                    var root = Prefabs.PrefabUtility.GetPrefabInstanceRoot(firstSelected);
+                    if (root != null) Prefabs.PrefabUtility.ApplyOverrides(root);
+                }, enabled: hasOverrides, icon: EditorIcons.Check);
+
+                builder.Item("Revert to Prefab", () =>
+                {
+                    var root = Prefabs.PrefabUtility.GetPrefabInstanceRoot(firstSelected);
+                    if (root != null) Prefabs.PrefabUtility.RevertOverrides(root);
+                }, enabled: hasOverrides, icon: EditorIcons.ArrowsRotate);
+
+                builder.Item("Break Prefab Instance", () =>
+                {
+                    Prefabs.PrefabUtility.BreakPrefabInstance(firstSelected);
+                }, icon: EditorIcons.LinkSlash);
 
                 builder.Separator();
             }
@@ -686,6 +783,25 @@ public class HierarchyPanel : DockPanel
         }
     }
 
+    private static Color GetPrefabTextColor(GameObject go)
+    {
+        if (!go.IsPrefabInstance)
+            return go.EnabledInHierarchy ? EditorTheme.Ink500 : EditorTheme.Ink300;
+
+        // Check if the prefab asset still exists
+        var entry = EditorAssetDatabase.Instance?.GetEntry(go.PrefabAssetId);
+        if (entry == null)
+        {
+            // Broken prefab link — red text
+            return go.EnabledInHierarchy
+                ? Color.FromArgb(255, 220, 80, 80)
+                : Color.FromArgb(255, 160, 60, 60);
+        }
+
+        // Valid prefab — purple text
+        return go.EnabledInHierarchy ? EditorTheme.Purple400 : EditorTheme.Purple300;
+    }
+
     private static string GetGameObjectIcon(GameObject go)
     {
         if (go.GetComponent<Camera>() != null) return EditorIcons.Camera;
@@ -736,6 +852,17 @@ public class HierarchyPanel : DockPanel
             scene.Add(go);
             if (parent != null) go.SetParent(parent);
             Selection.Select(go);
+        }
+        else if (asset is PrefabAsset)
+        {
+            var instance = Prefabs.PrefabUtility.InstantiatePrefab(payload.AssetGuid);
+            if (instance != null)
+            {
+                instance.Transform.Position = position;
+                scene.Add(instance);
+                if (parent != null) instance.SetParent(parent);
+                Selection.Select(instance);
+            }
         }
         else
         {

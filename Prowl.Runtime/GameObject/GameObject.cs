@@ -44,6 +44,8 @@ public class GameObject : EngineObject, ISerializable
     // Prefab instance data (inert when _prefabAssetId == Guid.Empty)
     private Guid _prefabAssetId = Guid.Empty;
     private List<PropertyOverride>? _prefabOverrides;
+    private int _prefabComponentCount = -1; // Number of components in prefab source (-1 = not prefab)
+    private int _prefabChildCount = -1;     // Number of children in prefab source (-1 = not prefab)
 
     #endregion
 
@@ -92,6 +94,9 @@ public class GameObject : EngineObject, ISerializable
     /// <summary> The Identifier of this GameObject </summary>
     public Guid Identifier => _identifier;
 
+    /// <summary>Set the identifier. Used by Scene to restore stable identities after deserialization.</summary>
+    internal void SetIdentifier(Guid id) => _identifier = id;
+
     /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? Parent => _parent;
 
@@ -127,6 +132,37 @@ public class GameObject : EngineObject, ISerializable
     {
         get => _prefabOverrides ??= new();
         set => _prefabOverrides = value;
+    }
+
+    /// <summary>Number of components in the prefab source. Used for structure enforcement.</summary>
+    public int PrefabComponentCount
+    {
+        get => _prefabComponentCount;
+        set => _prefabComponentCount = value;
+    }
+
+    /// <summary>Number of children in the prefab source. Used for structure enforcement.</summary>
+    public int PrefabChildCount
+    {
+        get => _prefabChildCount;
+        set => _prefabChildCount = value;
+    }
+
+    /// <summary>Clear all prefab tracking data on this GameObject.</summary>
+    public void ClearPrefabData()
+    {
+        _prefabAssetId = Guid.Empty;
+        _prefabOverrides = null;
+        _prefabComponentCount = -1;
+        _prefabChildCount = -1;
+    }
+
+    /// <summary>Clear all prefab data on this GameObject and all descendants.</summary>
+    public void ClearPrefabDataRecursive()
+    {
+        ClearPrefabData();
+        foreach (var child in Children)
+            child.ClearPrefabDataRecursive();
     }
 
     #endregion
@@ -189,6 +225,24 @@ public class GameObject : EngineObject, ISerializable
     {
         if (NewParent == _parent)
             return true;
+
+        // Block reparenting into prefab instances in editor (structure is fixed)
+        if (!Application.IsPlaying && NewParent.IsValid() && NewParent.IsPrefabInstance && NewParent.PrefabChildCount >= 0)
+        {
+            Debug.LogWarning($"Cannot add children to prefab instance '{NewParent.Name}'. Break the prefab first.");
+            return false;
+        }
+
+        // Also block moving a prefab child OUT of its parent (that would break structure)
+        if (!Application.IsPlaying && _parent.IsValid() && _parent.IsPrefabInstance && _parent.PrefabChildCount >= 0)
+        {
+            int myIndex = _parent.Children.IndexOf(this);
+            if (myIndex >= 0 && myIndex < _parent.PrefabChildCount)
+            {
+                Debug.LogWarning($"Cannot move prefab child '{Name}' out of prefab '{_parent.Name}'. Break the prefab first.");
+                return false;
+            }
+        }
 
         // Make sure that the new father is not a child of this transform.
         if (IsChildOrSameTransform(NewParent, this))
@@ -453,6 +507,13 @@ public class GameObject : EngineObject, ISerializable
     {
         if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
 
+        // Block adding components to prefab instances in editor (structure is fixed)
+        if (!Application.IsPlaying && IsPrefabInstance && _prefabComponentCount >= 0)
+        {
+            Debug.LogWarning($"Cannot add component to prefab instance '{Name}'. Break the prefab first.");
+            return null;
+        }
+
         RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
         {
@@ -579,6 +640,17 @@ public class GameObject : EngineObject, ISerializable
     /// <param name="component">The component instance to remove.</param>
     public void RemoveComponent(MonoBehaviour component)
     {
+        // Block removing prefab components in editor
+        if (!Application.IsPlaying && IsPrefabInstance && _prefabComponentCount >= 0)
+        {
+            int compIdx = _components.IndexOf(component);
+            if (compIdx >= 0 && compIdx < _prefabComponentCount)
+            {
+                Debug.LogWarning($"Cannot remove prefab component '{component.GetType().Name}' from '{Name}'. Break the prefab first.");
+                return;
+            }
+        }
+
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))
@@ -1049,7 +1121,7 @@ public class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new EchoObject((int)HideFlags));
 
-        compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
+        compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
         EchoObject components = EchoObject.NewList();
         foreach (MonoBehaviour comp in _components)
@@ -1066,7 +1138,11 @@ public class GameObject : EngineObject, ISerializable
         {
             compoundTag.Add("PrefabAssetId", new EchoObject(_prefabAssetId.ToString()));
             if (_prefabOverrides is { Count: > 0 })
-                compoundTag.Add("PrefabOverrides", Serializer.Serialize(_prefabOverrides, ctx));
+                compoundTag.Add("PrefabOverrides", Serializer.Serialize(typeof(object), _prefabOverrides, ctx));
+            if (_prefabComponentCount >= 0)
+                compoundTag.Add("PrefabComponentCount", new EchoObject(_prefabComponentCount));
+            if (_prefabChildCount >= 0)
+                compoundTag.Add("PrefabChildCount", new EchoObject(_prefabChildCount));
         }
     }
 
@@ -1079,8 +1155,8 @@ public class GameObject : EngineObject, ISerializable
     {
         DeserializeHeader(value);
 
-        if (Guid.TryParse(value["Identifier"]?.StringValue ?? "", out Guid identifier))
-            _identifier = identifier;
+        // Always generate fresh identifier — Scene restores them after deserialization
+        _identifier = Guid.NewGuid();
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;
@@ -1093,6 +1169,10 @@ public class GameObject : EngineObject, ISerializable
             _prefabAssetId = prefabId;
         if (value.TryGet("PrefabOverrides", out var overridesTag))
             _prefabOverrides = Serializer.Deserialize<List<PropertyOverride>>(overridesTag, ctx);
+        if (value.TryGet("PrefabComponentCount", out var compCount))
+            _prefabComponentCount = compCount.IntValue;
+        if (value.TryGet("PrefabChildCount", out var childCount))
+            _prefabChildCount = childCount.IntValue;
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.GameObject = this;

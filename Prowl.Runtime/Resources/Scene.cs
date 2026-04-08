@@ -76,6 +76,22 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeField]
     private GameObject[] serializeObj = null;
 
+    /// <summary>
+    /// Parallel to serializeObj — stores the original identifier for each GO.
+    /// </summary>
+    [SerializeField]
+    private Guid[] _goIdentifiers = null;
+
+    /// <summary>
+    /// Flat array of component identifiers. _compIdOffsets[i] is the index into this
+    /// array for GO i's first component. Component count = offset[i+1] - offset[i].
+    /// </summary>
+    [SerializeField]
+    private Guid[] _compIdentifiers = null;
+
+    [SerializeField]
+    private int[] _compIdOffsets = null;
+
     [SerializeIgnore]
     private HashSet<GameObject> _allObj = new(ReferenceEqualityComparer.Instance);
 
@@ -449,13 +465,52 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void OnBeforeSerialize()
     {
         serializeObj = [.. AllObjects];
+
+        // Capture identifiers so they can be restored after deserialization
+        _goIdentifiers = new Guid[serializeObj.Length];
+        var compIds = new List<Guid>();
+        _compIdOffsets = new int[serializeObj.Length + 1];
+
+        for (int i = 0; i < serializeObj.Length; i++)
+        {
+            _goIdentifiers[i] = serializeObj[i].Identifier;
+            _compIdOffsets[i] = compIds.Count;
+            foreach (var comp in serializeObj[i].GetComponents<MonoBehaviour>())
+                compIds.Add(comp.Identifier);
+        }
+        _compIdOffsets[serializeObj.Length] = compIds.Count;
+        _compIdentifiers = compIds.ToArray();
     }
 
     public void OnAfterDeserialize()
     {
-        if (serializeObj != null)
-            foreach (GameObject obj in serializeObj)
-                Add(obj);
+        if (serializeObj == null) return;
+
+        // Restore identifiers — GOs and components got fresh IDs during deserialization
+        if (_goIdentifiers != null && _goIdentifiers.Length == serializeObj.Length)
+        {
+            for (int i = 0; i < serializeObj.Length; i++)
+            {
+                serializeObj[i].SetIdentifier(_goIdentifiers[i]);
+
+                if (_compIdentifiers != null && _compIdOffsets != null)
+                {
+                    int start = _compIdOffsets[i];
+                    int end = _compIdOffsets[i + 1];
+                    var comps = serializeObj[i].GetComponents<MonoBehaviour>().ToList();
+                    for (int c = 0; c < comps.Count && start + c < end; c++)
+                        comps[c].Identifier = _compIdentifiers[start + c];
+                }
+            }
+        }
+
+        // Clear temp data
+        _goIdentifiers = null;
+        _compIdentifiers = null;
+        _compIdOffsets = null;
+
+        foreach (GameObject obj in serializeObj)
+            Add(obj);
     }
 
     /// <summary>

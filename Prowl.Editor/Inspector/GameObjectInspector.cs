@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Editor.Prefabs;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -20,12 +21,24 @@ public static class GameObjectInspector
 {
     public static void Draw(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
+        // Prefab header bar (if this GO is a prefab instance)
+        if (go.IsPrefabInstance)
+            DrawPrefabHeader(paper, font, go);
+
         DrawHeader(paper, font, go);
         EditorGUI.Separator(paper, "gi_sep_header");
         DrawTransform(paper, font, go);
         EditorGUI.Separator(paper, "gi_sep_transform");
         DrawComponents(paper, font, go);
-        DrawAddComponentButton(paper, font, go);
+
+        // Only show Add Component if not a prefab instance (structure is fixed)
+        if (!go.IsPrefabInstance || Application.IsPlaying)
+            DrawAddComponentButton(paper, font, go);
+
+        // Detect GO-level overrides (Name, Tag, Transform, etc.)
+        if (go.IsPrefabInstance)
+            PrefabUtility.DetectGOOverrides(go);
+
         paper.Box("gi_bottom_pad").Height(20);
     }
 
@@ -94,7 +107,7 @@ public static class GameObjectInspector
     private static void DrawTransform(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
         var t = go.Transform;
-        
+
         paper.Box("gi_transform_header").Height(22).ChildLeft(8)
             .Text($"{EditorIcons.ArrowsUpDownLeftRight}  Transform", font)
             .TextColor(EditorTheme.Ink500)
@@ -173,6 +186,25 @@ public static class GameObjectInspector
                 }
             }
 
+            // Set overridden field names for PropertyGrid highlighting
+            if (go.IsPrefabInstance)
+            {
+                string goPath = PrefabUtility.BuildGOPath(go);
+                var allComps = go.GetComponents<MonoBehaviour>().ToList();
+                int compIdx = allComps.IndexOf(comp);
+                string pathPrefix = string.IsNullOrEmpty(goPath)
+                    ? $"c{compIdx}."
+                    : $"{goPath}.c{compIdx}.";
+
+                var overridden = new HashSet<string>();
+                foreach (var ov in go.PrefabOverrides)
+                {
+                    if (ov.Path.StartsWith(pathPrefix))
+                        overridden.Add(ov.Path[pathPrefix.Length..].Split('.')[0]);
+                }
+                PropertyGrid.OverriddenFields = overridden.Count > 0 ? overridden : null;
+            }
+
             // Component body — use custom editor or default PropertyGrid
             var customEditor = ComponentEditorRegistry.GetEditor(comp.GetType());
             if (customEditor != null)
@@ -183,6 +215,12 @@ public static class GameObjectInspector
             {
                 PropertyGrid.Draw(paper, compId, comp);
             }
+
+            PropertyGrid.OverriddenFields = null;
+
+            // Auto-detect overrides by comparing against prefab source (index-based)
+            if (go.IsPrefabInstance)
+                PrefabUtility.DetectComponentOverrides(go, comp);
 
             // Draw [Button] attributed methods
             DrawButtonMethods(paper, $"{compId}_btns", comp);
@@ -325,6 +363,138 @@ public static class GameObjectInspector
                 foreach (var (name, icon, type) in items)
                     sub.Item(name, () => go.AddComponent(type), icon: icon);
             });
+        }
+    }
+
+    // ================================================================
+    //  Prefab Header
+    // ================================================================
+
+    private static void DrawPrefabHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
+    {
+        var root = PrefabUtility.GetPrefabInstanceRoot(go);
+        bool isRoot = PrefabUtility.IsInstanceRoot(go);
+        bool isNested = PrefabUtility.IsNestedPrefabRoot(go);
+        bool hasOverrides = PrefabUtility.HasAnyOverrides(go);
+
+        var entry = EditorAssetDatabase.Instance?.GetEntry(go.PrefabAssetId);
+        bool isMissing = entry == null;
+        string prefabName = isMissing ? "Missing" : System.IO.Path.GetFileNameWithoutExtension(entry!.Path);
+
+        string label = isMissing ? "Missing Prefab!"
+            : isNested ? $"Nested Prefab: {prefabName}"
+            : $"Prefab: {prefabName}";
+
+        var barColor = isMissing ? Color.FromArgb(40, 220, 80, 80) : Color.FromArgb(40, EditorTheme.Purple400);
+        var borderColor = isMissing ? Color.FromArgb(255, 220, 80, 80) : EditorTheme.Purple300;
+        var textColor = isMissing ? Color.FromArgb(255, 220, 80, 80) : EditorTheme.Purple400;
+
+        // Entire prefab section in a purple-tinted container
+        using (paper.Column("gi_prefab_section")
+            .Height(UnitValue.Auto)
+            .BackgroundColor(barColor)
+            .BorderColor(borderColor).BorderWidth(1)
+            .Rounded(4).Margin(0, 4, 0, 4)
+            .ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4)
+            .Enter())
+        {
+            // Top row: label + buttons
+            using (paper.Row("gi_prefab_bar")
+                .Height(24).RowBetween(4)
+                .Enter())
+            {
+                paper.Box("gi_prefab_icon")
+                    .Width(UnitValue.Stretch()).Height(24)
+                    .Text($"{EditorIcons.Cubes}  {label}", font)
+                    .TextColor(textColor)
+                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+
+                if (!isMissing)
+                {
+                    EditorGUI.Button(paper, "gi_prefab_select", "Select", width: 55)
+                        .OnValueChanged(_ => Selection.FocusAsset(go.PrefabAssetId));
+
+                    if (isRoot && hasOverrides)
+                    {
+                        EditorGUI.Button(paper, "gi_prefab_revert", "Revert", width: 55)
+                            .OnValueChanged(_ => { if (root != null) PrefabUtility.RevertOverrides(root); });
+
+                        EditorGUI.Button(paper, "gi_prefab_apply", "Apply", width: 50)
+                            .OnValueChanged(_ => { if (root != null) PrefabUtility.ApplyOverrides(root); });
+                    }
+                }
+            }
+
+            // Overrides list inline
+            if (hasOverrides)
+            {
+                paper.Box("gi_prefab_ov_sep").Height(1)
+                    .BackgroundColor(borderColor).Margin(0, 2, 0, 2);
+
+                DrawOverridesContent(paper, font, go);
+            }
+        }
+    }
+
+    private static void DrawOverridesContent(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
+    {
+        float fs = EditorTheme.FontSize;
+        var overrides = go.PrefabOverrides;
+
+        using (paper.Column("gi_prefab_ov_list")
+            .Height(UnitValue.Auto)
+            .Margin(8, 0, 4, 4)
+            .Enter())
+        {
+            for (int i = 0; i < overrides.Count; i++)
+            {
+                int idx = i;
+                var ov = overrides[i];
+
+                using (paper.Row($"gi_ov_{i}")
+                    .Height(EditorTheme.RowHeight)
+                    .BackgroundColor(EditorTheme.Neutral300)
+                    .Rounded(3).Margin(0, 0, 0, 1)
+                    .ChildLeft(6).RowBetween(4)
+                    .Enter())
+                {
+                    // Override path
+                    paper.Box($"gi_ov_path_{i}")
+                        .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                        .Text(ov.Path, font).TextColor(EditorTheme.Purple400)
+                        .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
+
+                    // Revert single
+                    paper.Box($"gi_ov_revert_{i}")
+                        .Width(50).Height(EditorTheme.RowHeight).Rounded(3)
+                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                        .Text("Revert", font).TextColor(EditorTheme.Ink400)
+                        .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
+                        .OnClick((go, idx), (cap, _) =>
+                        {
+                            if (cap.idx < cap.go.PrefabOverrides.Count)
+                            {
+                                var overridePath = cap.go.PrefabOverrides[cap.idx].Path;
+                                PrefabUtility.RevertSingleOverride(cap.go, overridePath);
+                            }
+                        });
+
+                    // Apply single
+                    paper.Box($"gi_ov_apply_{i}")
+                        .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
+                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                        .Text("Apply", font).TextColor(EditorTheme.Ink400)
+                        .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
+                        .OnClick((go, idx), (cap, _) =>
+                        {
+                            if (cap.idx < cap.go.PrefabOverrides.Count)
+                            {
+                                var singleOv = cap.go.PrefabOverrides[cap.idx];
+                                PrefabUtility.ApplySingleOverride(cap.go, singleOv);
+                            }
+                        });
+                }
+            }
         }
     }
 

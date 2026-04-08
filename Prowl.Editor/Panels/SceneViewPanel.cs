@@ -214,7 +214,7 @@ public class SceneViewPanel : DockPanel
                 (float)Time.UnscaledDeltaTime,
                 isHovered,
                 paper.PointerPos,
-                Float2.Zero,
+                new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y),
                 new Float2(width, height));
 
             // Accept asset drops — only for spawnable types (Model, Mesh) and special types (Scene, Material)
@@ -224,6 +224,7 @@ public class SceneViewPanel : DockPanel
                 bool isSpawnable = dragPayload.AssetType == typeof(Model)
                     || dragPayload.AssetType == typeof(Mesh)
                     || dragPayload.AssetType == typeof(Scene)
+                    || dragPayload.AssetType == typeof(PrefabAsset)
                     || typeof(Material).IsAssignableFrom(dragPayload.AssetType ?? typeof(object));
 
                 if (isSpawnable)
@@ -279,7 +280,8 @@ public class SceneViewPanel : DockPanel
                     }
                     handled = true;
                 }
-                else if (assetDrop.AssetType == typeof(Model) || assetDrop.AssetType == typeof(Mesh))
+                else if (assetDrop.AssetType == typeof(Model) || assetDrop.AssetType == typeof(Mesh)
+                    || assetDrop.AssetType == typeof(PrefabAsset))
                 {
                     Float2 mouseLocal = paper.PointerPos - new Float2(
                         paper.CurrentParent.Data.X, paper.CurrentParent.Data.Y);

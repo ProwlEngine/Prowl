@@ -1,0 +1,769 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+using Prowl.Echo;
+using Prowl.Editor.Widgets;
+using Prowl.Runtime;
+using Prowl.Runtime.Resources;
+
+namespace Prowl.Editor.Prefabs;
+
+/// <summary>
+/// Editor-side prefab operations: create, instantiate, break, apply, revert.
+/// </summary>
+public static class PrefabUtility
+{
+    // ================================================================
+    //  Creation
+    // ================================================================
+
+    /// <summary>
+    /// Save a GameObject hierarchy as a new .prefab file and convert the source to a prefab instance.
+    /// </summary>
+    /// <param name="source">The GameObject to save as a prefab.</param>
+    /// <param name="relativeSavePath">Path relative to the Assets folder (e.g., "Prefabs/Enemy.prefab").</param>
+    /// <returns>True if successful.</returns>
+    public static bool CreatePrefab(GameObject source, string relativeSavePath)
+    {
+        if (source == null || Project.Current == null) return false;
+
+        // Clear any existing prefab data so we serialize a clean prefab source
+        source.ClearPrefabDataRecursive();
+
+        // Serialize the GO tree
+        var savedId = source.AssetID;
+        source.AssetID = Guid.Empty;
+        var echo = Serializer.Serialize(typeof(object), source);
+        source.AssetID = savedId;
+
+        if (echo == null) return false;
+
+        // Write the .prefab file
+        string absolutePath = Path.Combine(Project.Current.AssetsPath, relativeSavePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+        File.WriteAllText(absolutePath, echo.WriteToString());
+
+        // Ensure meta file exists so asset DB picks it up with a stable GUID
+        var meta = MetaFile.EnsureMeta(absolutePath, typeof(Importers.PrefabImporter).FullName!);
+        if (meta.Guid == Guid.Empty) return false;
+
+        // Stamp the source GO as a prefab instance
+        StampAsPrefabInstance(source, meta.Guid);
+
+        EditorSceneManager.IsDirty = true;
+        Runtime.Debug.Log($"[Prefab] Created prefab: {relativeSavePath}");
+
+        return true;
+    }
+
+    // ================================================================
+    //  Instantiation
+    // ================================================================
+
+    /// <summary>
+    /// Instantiate a prefab from its asset GUID.
+    /// Returns a GameObject ready to be added to a scene.
+    /// </summary>
+    public static GameObject? InstantiatePrefab(Guid prefabGuid)
+    {
+        var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
+        if (prefab == null)
+        {
+            Runtime.Debug.LogWarning($"[Prefab] Failed to load prefab asset {prefabGuid}");
+            return null;
+        }
+        return prefab.Instantiate();
+    }
+
+    // ================================================================
+    //  Break
+    // ================================================================
+
+    /// <summary>
+    /// Break a prefab instance — removes all prefab tracking data.
+    /// The GameObject becomes a plain non-prefab object.
+    /// </summary>
+    public static void BreakPrefabInstance(GameObject go)
+    {
+        go.ClearPrefabDataRecursive();
+        EditorSceneManager.IsDirty = true;
+    }
+
+    // ================================================================
+    //  Apply / Revert
+    // ================================================================
+
+    /// <summary>
+    /// Apply all overrides from this instance back to its prefab asset.
+    /// Only operates within the nesting boundary of this GO's PrefabAssetId.
+    /// </summary>
+    public static void ApplyOverrides(GameObject instanceRoot)
+    {
+        if (!instanceRoot.IsPrefabInstance) return;
+
+        var db = EditorAssetDatabase.Instance;
+        if (db == null || Project.Current == null) return;
+
+        var entry = db.GetEntry(instanceRoot.PrefabAssetId);
+        if (entry == null)
+        {
+            Runtime.Debug.LogWarning("[Prefab] Cannot apply — prefab asset not found.");
+            return;
+        }
+
+        // Serialize the instance tree with prefab data stripped
+        var cleanCopy = CloneWithoutPrefabData(instanceRoot);
+        if (cleanCopy == null) return;
+
+        var echo = Serializer.Serialize(typeof(object), cleanCopy);
+        if (echo == null) return;
+
+        // Write to the .prefab file
+        string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        File.WriteAllText(absolutePath, echo.WriteToString());
+
+        // Clear overrides on this instance
+        ClearOverridesWithinBoundary(instanceRoot, instanceRoot.PrefabAssetId);
+
+        // Reimport and refresh — invalidate source cache first
+        _sourceCache.Remove(instanceRoot.PrefabAssetId);
+        db.Reimport(entry.Guid);
+        RefreshAllInstances(instanceRoot.PrefabAssetId);
+
+        EditorSceneManager.IsDirty = true;
+        Runtime.Debug.Log($"[Prefab] Applied overrides to {entry.Path}");
+    }
+
+    /// <summary>
+    /// Revert all overrides on this instance, restoring it to match the prefab source.
+    /// </summary>
+    public static void RevertOverrides(GameObject instanceRoot)
+    {
+        if (!instanceRoot.IsPrefabInstance) return;
+
+        var prefab = AssetDatabase.Get(instanceRoot.PrefabAssetId) as PrefabAsset;
+        if (prefab == null)
+        {
+            Runtime.Debug.LogWarning("[Prefab] Cannot revert — prefab asset not found.");
+            return;
+        }
+
+        // Instantiate fresh from prefab
+        var fresh = prefab.Instantiate();
+        if (fresh == null) return;
+
+        // Preserve world transform, name, and parent
+        fresh.Transform.Position = instanceRoot.Transform.Position;
+        fresh.Transform.Rotation = instanceRoot.Transform.Rotation;
+        fresh.Transform.LocalScale = instanceRoot.Transform.LocalScale;
+        fresh.Name = instanceRoot.Name;
+
+        var scene = instanceRoot.Scene;
+        var parent = instanceRoot.Parent;
+
+        // Temporarily allow reparenting for swap
+        bool wasPlaying = Application.IsPlaying;
+        Application.IsPlaying = true;
+        try
+        {
+            if (scene != null)
+            {
+                scene.Remove(instanceRoot);
+                scene.Add(fresh);
+                if (parent != null)
+                    fresh.SetParent(parent);
+            }
+        }
+        finally
+        {
+            Application.IsPlaying = wasPlaying;
+        }
+
+        Selection.Select(fresh);
+        EditorSceneManager.IsDirty = true;
+    }
+
+    // ================================================================
+    //  Override Detection
+    // ================================================================
+
+    /// <summary>
+    /// Apply a single override from an instance to the prefab source.
+    /// </summary>
+    public static void ApplySingleOverride(GameObject instanceGO, PropertyOverride ov)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+
+        var db = EditorAssetDatabase.Instance;
+        if (db == null || Project.Current == null) return;
+
+        var entry = db.GetEntry(instanceGO.PrefabAssetId);
+        if (entry == null) return;
+
+        // Load the prefab source, apply the single field, save back
+        var prefab = Runtime.AssetDatabase.Get(instanceGO.PrefabAssetId) as PrefabAsset;
+        if (prefab?.GameObjectData == null) return;
+
+        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData);
+        if (source == null) return;
+
+        // Apply the override value to the source
+        ParseOverridePath(source, ov.Path, out var target, out string fieldPath);
+        if (target != null && !string.IsNullOrEmpty(fieldPath))
+            ApplyFieldValue(target, fieldPath, ov.Value);
+
+        // Save back to the .prefab file
+        var echo = Serializer.Serialize(typeof(object), source);
+        if (echo != null)
+        {
+            string absolutePath = System.IO.Path.Combine(Project.Current.AssetsPath, entry.Path);
+            System.IO.File.WriteAllText(absolutePath, echo.WriteToString());
+            _sourceCache.Remove(instanceGO.PrefabAssetId);
+            db.Reimport(entry.Guid);
+        }
+
+        // Remove this override from the instance
+        instanceGO.PrefabOverrides.Remove(ov);
+
+        // Refresh other instances to pick up the change
+        RefreshAllInstances(instanceGO.PrefabAssetId);
+
+        EditorSceneManager.IsDirty = true;
+    }
+
+    /// <summary>
+    /// Revert a single override — load the source value and write it back to the instance field.
+    /// </summary>
+    public static void RevertSingleOverride(GameObject instanceGO, string overridePath)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+
+        var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
+        if (source == null) return;
+
+        // Find the source value via the path
+        ParseOverridePath(source, overridePath, out var sourceTarget, out string sourceFieldPath);
+        if (sourceTarget == null || string.IsNullOrEmpty(sourceFieldPath)) return;
+
+        // Read the source value
+        var sourceField = GetFieldByPath(sourceTarget, sourceFieldPath);
+        if (sourceField == null) return;
+
+        // Find the instance target
+        ParseOverridePath(instanceGO, overridePath, out var instanceTarget, out string instanceFieldPath);
+        if (instanceTarget == null) return;
+
+        // Copy source value to instance
+        var sourceValue = GetFieldValue(sourceTarget, sourceFieldPath);
+        SetFieldValue(instanceTarget, instanceFieldPath, sourceValue);
+
+        // Remove the override entry
+        instanceGO.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
+        EditorSceneManager.IsDirty = true;
+    }
+
+    private static System.Reflection.FieldInfo? GetFieldByPath(object target, string fieldPath)
+    {
+        string[] parts = fieldPath.Split('.');
+        object current = target;
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            var field = current.GetType().GetField(parts[i],
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (field == null) return null;
+            current = field.GetValue(current)!;
+            if (current == null) return null;
+        }
+        return current.GetType().GetField(parts[^1],
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    }
+
+    private static object? GetFieldValue(object target, string fieldPath)
+    {
+        string[] parts = fieldPath.Split('.');
+        object current = target;
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var field = current.GetType().GetField(parts[i],
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (field == null) return null;
+            current = field.GetValue(current)!;
+            if (current == null && i < parts.Length - 1) return null;
+        }
+        return current;
+    }
+
+    private static void SetFieldValue(object target, string fieldPath, object? value)
+    {
+        string[] parts = fieldPath.Split('.');
+        object current = target;
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            var field = current.GetType().GetField(parts[i],
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (field == null) return;
+            current = field.GetValue(current)!;
+            if (current == null) return;
+        }
+        var finalField = current.GetType().GetField(parts[^1],
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        finalField?.SetValue(current, value);
+    }
+
+    /// <summary>Check if a specific property path is overridden on a GameObject.</summary>
+    public static bool IsPropertyOverridden(GameObject go, string path)
+    {
+        if (!go.IsPrefabInstance) return false;
+        return go.PrefabOverrides.Any(o => o.Path == path);
+    }
+
+    /// <summary>Check if a GameObject has any overrides at all.</summary>
+    public static bool HasAnyOverrides(GameObject go)
+    {
+        if (!go.IsPrefabInstance) return false;
+        return go.PrefabOverrides.Count > 0;
+    }
+
+    // ================================================================
+    //  Instance Refresh
+    // ================================================================
+
+    /// <summary>
+    /// Refresh all instances of a prefab in the current scene after the prefab asset changes.
+    /// Re-instantiates from the updated source and re-applies each instance's overrides.
+    /// </summary>
+    public static void RefreshAllInstances(Guid prefabGuid)
+    {
+        var scene = Scene.Current;
+        if (scene == null) return;
+
+        // Find all instance roots for this prefab
+        var roots = scene.AllObjects
+            .Where(go => go.PrefabAssetId == prefabGuid && IsInstanceRoot(go))
+            .ToList();
+
+        var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
+        if (prefab == null) return;
+
+        // Temporarily allow reparenting/removal for refresh
+        bool wasPlaying = Application.IsPlaying;
+        Application.IsPlaying = true;
+
+        try
+        {
+            var selectedGO = Selection.GetSelected<GameObject>().FirstOrDefault();
+            GameObject? newSelection = null;
+
+            foreach (var root in roots)
+            {
+                // Save current overrides and name
+                var savedOverrides = root.PrefabOverrides.ToList();
+                var savedName = root.Name;
+
+                // Preserve transform
+                var pos = root.Transform.Position;
+                var rot = root.Transform.Rotation;
+                var scale = root.Transform.LocalScale;
+                var parent = root.Parent;
+
+                // Clear prefab data before removing to avoid enforcement issues during cleanup
+                root.ClearPrefabDataRecursive();
+
+                // Fresh instance from updated prefab
+                var fresh = prefab.Instantiate();
+                if (fresh == null) continue;
+
+                // Restore per-instance data
+                fresh.PrefabOverrides = savedOverrides;
+                fresh.Name = savedName;
+
+                // Re-apply property overrides to the fresh instance's fields
+                ApplyPropertyOverridesToInstance(fresh, savedOverrides);
+
+                // Restore transform
+                fresh.Transform.Position = pos;
+                fresh.Transform.Rotation = rot;
+                fresh.Transform.LocalScale = scale;
+
+                // Swap in scene
+                scene.Remove(root);
+                scene.Add(fresh);
+                if (parent != null)
+                    fresh.SetParent(parent);
+
+                // Track if this was the selected GO
+                if (selectedGO == root)
+                    newSelection = fresh;
+            }
+
+            // Update selection to the fresh replacement
+            if (newSelection != null)
+                Selection.Select(newSelection);
+        }
+        finally
+        {
+            Application.IsPlaying = wasPlaying;
+        }
+    }
+
+    // ================================================================
+    //  Nesting Helpers
+    // ================================================================
+
+    /// <summary>
+    /// Find the prefab instance root by walking up the parent chain.
+    /// The root is the highest ancestor with the same PrefabAssetId.
+    /// </summary>
+    public static GameObject? GetPrefabInstanceRoot(GameObject go)
+    {
+        if (!go.IsPrefabInstance) return null;
+
+        Guid prefabId = go.PrefabAssetId;
+        GameObject root = go;
+
+        while (root.Parent != null && root.Parent.IsValid() && root.Parent.PrefabAssetId == prefabId)
+            root = root.Parent;
+
+        return root;
+    }
+
+    /// <summary>True if this GO is a prefab instance root (not just a child within a prefab).</summary>
+    public static bool IsInstanceRoot(GameObject go)
+    {
+        if (!go.IsPrefabInstance) return false;
+        // Root if parent is null, or parent has a different PrefabAssetId
+        return go.Parent == null || !go.Parent.IsValid() || go.Parent.PrefabAssetId != go.PrefabAssetId;
+    }
+
+    /// <summary>True if this GO is a nested prefab root (different PrefabAssetId from parent).</summary>
+    public static bool IsNestedPrefabRoot(GameObject go)
+    {
+        if (!go.IsPrefabInstance) return false;
+        return go.Parent != null && go.Parent.IsValid() && go.Parent.IsPrefabInstance
+            && go.Parent.PrefabAssetId != go.PrefabAssetId;
+    }
+
+    // ================================================================
+    //  Internal Helpers
+    // ================================================================
+
+    /// <summary>
+    /// Re-applies stored property overrides to a freshly instantiated GO tree.
+    /// Parses index-based paths to find target GO/component/field.
+    /// </summary>
+    private static void ApplyPropertyOverridesToInstance(GameObject root, List<PropertyOverride> overrides)
+    {
+        foreach (var ov in overrides)
+        {
+            try
+            {
+                // Parse the path to find the target
+                ParseOverridePath(root, ov.Path, out var targetObj, out string fieldPath);
+                if (targetObj == null || string.IsNullOrEmpty(fieldPath)) continue;
+
+                ApplyFieldValue(targetObj, fieldPath, ov.Value);
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogWarning($"[Prefab] Failed to apply override '{ov.Path}': {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>Parse an index-based override path into a target object and remaining field path.</summary>
+    private static void ParseOverridePath(GameObject root, string path, out object? target, out string fieldPath)
+    {
+        target = null;
+        fieldPath = "";
+
+        var parts = path.Split('.');
+        GameObject currentGO = root;
+        int i = 0;
+
+        // Walk GO path (g0, g1, etc.)
+        while (i < parts.Length && parts[i].StartsWith('g'))
+        {
+            if (!int.TryParse(parts[i].AsSpan(1), out int childIdx) || childIdx >= currentGO.Children.Count)
+                return;
+            currentGO = currentGO.Children[childIdx];
+            i++;
+        }
+
+        if (i >= parts.Length) return;
+
+        if (parts[i] == "$")
+        {
+            // GO-level field
+            target = currentGO;
+            fieldPath = string.Join(".", parts.Skip(i + 1));
+        }
+        else if (parts[i].StartsWith('c'))
+        {
+            // Component field
+            if (!int.TryParse(parts[i].AsSpan(1), out int compIdx)) return;
+            var comps = currentGO.GetComponents<MonoBehaviour>().ToList();
+            if (compIdx >= comps.Count) return;
+            target = comps[compIdx];
+            fieldPath = string.Join(".", parts.Skip(i + 1));
+        }
+    }
+
+    private static void ApplyFieldValue(object target, string fieldPath, EchoObject value)
+    {
+        string[] parts = fieldPath.Split('.');
+        object current = target;
+
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            var field = current.GetType().GetField(parts[i],
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (field == null) return;
+            current = field.GetValue(current)!;
+            if (current == null) return;
+        }
+
+        string finalField = parts[^1];
+        var finalFieldInfo = current.GetType().GetField(finalField,
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (finalFieldInfo == null) return;
+
+        var deserialized = Serializer.Deserialize(value, finalFieldInfo.FieldType);
+        if (deserialized != null)
+            finalFieldInfo.SetValue(current, deserialized);
+    }
+
+    // ================================================================
+    //  Automatic Override Detection (comparison-based)
+    // ================================================================
+
+    /// <summary>
+    /// Compare a component's current state against its prefab source and update overrides.
+    /// Uses index-based paths. Called after each component is drawn in the inspector.
+    /// </summary>
+    public static void DetectComponentOverrides(GameObject instanceGO, MonoBehaviour instanceComp)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+
+        var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
+        if (source == null) return;
+
+        // Build the GO path from instance root
+        string goPath = BuildGOPath(instanceGO);
+
+        // Find the matching source GO by index path
+        var sourceGO = ResolveGOPath(source, goPath);
+        if (sourceGO == null) return;
+
+        // Find matching component by index (all components, not just same type)
+        var instanceComps = instanceGO.GetComponents<MonoBehaviour>().ToList();
+        int compIndex = instanceComps.IndexOf(instanceComp);
+        if (compIndex < 0) return;
+
+        var sourceComps = sourceGO.GetComponents<MonoBehaviour>().ToList();
+        if (compIndex >= sourceComps.Count) return;
+
+        var sourceComp = sourceComps[compIndex];
+        if (sourceComp.GetType() != instanceComp.GetType()) return; // Type mismatch — structure broken
+
+        // Build path prefix
+        string pathPrefix = string.IsNullOrEmpty(goPath)
+            ? $"c{compIndex}"
+            : $"{goPath}.c{compIndex}";
+
+        // Compare fields
+        CompareFields(instanceComp, sourceComp, pathPrefix, instanceGO.PrefabOverrides);
+    }
+
+    /// <summary>
+    /// Detect GO-level overrides (Name, Tag, Layer, Enabled, Transform).
+    /// </summary>
+    public static void DetectGOOverrides(GameObject instanceGO)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+
+        var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
+        if (source == null) return;
+
+        string goPath = BuildGOPath(instanceGO);
+        var sourceGO = ResolveGOPath(source, goPath);
+        if (sourceGO == null) return;
+
+        string pathPrefix = string.IsNullOrEmpty(goPath) ? "$" : $"{goPath}.$";
+        var overrides = instanceGO.PrefabOverrides;
+
+        // Compare GO-level fields (excluding Name and Transform — those are per-instance)
+        CompareField(pathPrefix, "TagIndex", instanceGO.TagIndex, sourceGO.TagIndex, overrides);
+        CompareField(pathPrefix, "LayerIndex", instanceGO.LayerIndex, sourceGO.LayerIndex, overrides);
+        CompareField(pathPrefix, "Enabled", instanceGO.Enabled, sourceGO.Enabled, overrides);
+        // Name and Transform (Position/Rotation/Scale) are intentionally NOT tracked —
+        // they are per-instance values that don't constitute overrides.
+    }
+
+    // Fields that should never be compared for prefab overrides
+    private static readonly HashSet<string> _skipFields = new()
+    {
+        "_identifier", "_enabledInHierarchy", "_go",
+        "_hasStarted", "_hasBeenEnabled", "_executeAlwaysCached",
+        "HideFlags"
+    };
+
+    private static void CompareFields(object instance, object source, string pathPrefix, List<PropertyOverride> overrides)
+    {
+        var fields = PropertyGrid.GetSerializableFields(instance.GetType());
+        foreach (var field in fields)
+        {
+            if (_skipFields.Contains(field.Name)) continue;
+
+            var instanceVal = field.GetValue(instance);
+            var sourceVal = field.GetValue(source);
+            string path = $"{pathPrefix}.{field.Name}";
+
+            var instanceEcho = Serializer.Serialize(field.FieldType, instanceVal);
+            var sourceEcho = Serializer.Serialize(field.FieldType, sourceVal);
+
+            bool areSame = (instanceEcho?.WriteToString() ?? "") == (sourceEcho?.WriteToString() ?? "");
+
+            var existing = overrides.FirstOrDefault(o => o.Path == path);
+            if (!areSame)
+            {
+                if (existing != null)
+                    existing.Value = instanceEcho!;
+                else if (instanceEcho != null)
+                    overrides.Add(new PropertyOverride { Path = path, Value = instanceEcho });
+            }
+            else if (existing != null)
+            {
+                overrides.Remove(existing);
+            }
+        }
+    }
+
+    private static void CompareField<T>(string pathPrefix, string fieldName, T instanceVal, T sourceVal, List<PropertyOverride> overrides)
+    {
+        string path = $"{pathPrefix}.{fieldName}";
+        bool areSame = EqualityComparer<T>.Default.Equals(instanceVal, sourceVal);
+
+        var existing = overrides.FirstOrDefault(o => o.Path == path);
+        if (!areSame)
+        {
+            var serialized = Serializer.Serialize(typeof(T), instanceVal);
+            if (existing != null)
+                existing.Value = serialized!;
+            else if (serialized != null)
+                overrides.Add(new PropertyOverride { Path = path, Value = serialized });
+        }
+        else if (existing != null)
+        {
+            overrides.Remove(existing);
+        }
+    }
+
+    // ================================================================
+    //  GO Path Helpers
+    // ================================================================
+
+    /// <summary>Build index path from prefab instance root to this GO. Empty string = root.</summary>
+    public static string BuildGOPath(GameObject go)
+    {
+        var root = GetPrefabInstanceRoot(go);
+        if (root == null || root == go) return "";
+
+        var parts = new List<string>();
+        var current = go;
+        while (current != root && current.Parent != null)
+        {
+            int idx = current.Parent.Children.IndexOf(current);
+            parts.Insert(0, $"g{idx}");
+            current = current.Parent;
+        }
+        return string.Join(".", parts);
+    }
+
+    /// <summary>Resolve an index path like "g0.g2" to a GO in the source tree.</summary>
+    public static GameObject? ResolveGOPath(GameObject root, string path)
+    {
+        if (string.IsNullOrEmpty(path)) return root;
+        var current = root;
+        foreach (var part in path.Split('.'))
+        {
+            if (!part.StartsWith('g') || !int.TryParse(part.AsSpan(1), out int idx))
+                return null;
+            if (idx < 0 || idx >= current.Children.Count) return null;
+            current = current.Children[idx];
+        }
+        return current;
+    }
+
+    // Cache the deserialized prefab source for comparison (per prefab GUID)
+    private static readonly Dictionary<Guid, (GameObject go, long frame)> _sourceCache = new();
+
+    private static GameObject? GetCachedPrefabSource(Guid prefabGuid)
+    {
+        long frame = Runtime.Time.FrameCount;
+
+        if (_sourceCache.TryGetValue(prefabGuid, out var cached) && cached.frame == frame)
+            return cached.go;
+
+        var prefab = Runtime.AssetDatabase.Get(prefabGuid) as PrefabAsset;
+        if (prefab?.GameObjectData == null) return null;
+
+        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData);
+        if (source != null)
+            _sourceCache[prefabGuid] = (source, frame);
+
+        return source;
+    }
+
+    private static void StampAsPrefabInstance(GameObject go, Guid prefabGuid)
+    {
+        go.PrefabAssetId = prefabGuid;
+        foreach (var child in go.Children)
+        {
+            // Don't overwrite nested prefab instances
+            if (child.IsPrefabInstance && child.PrefabAssetId != prefabGuid)
+                continue;
+            StampAsPrefabInstance(child, prefabGuid);
+        }
+    }
+
+    private static GameObject? CloneWithoutPrefabData(GameObject source)
+    {
+        // Serialize the source
+        var savedId = source.AssetID;
+        source.AssetID = Guid.Empty;
+        var echo = Serializer.Serialize(typeof(object), source);
+        source.AssetID = savedId;
+        if (echo == null) return null;
+
+        // Deserialize a clean copy
+        var clone = Serializer.Deserialize<GameObject>(echo);
+        if (clone == null) return null;
+
+        // Strip prefab data from the clone
+        StripPrefabDataWithinBoundary(clone, source.PrefabAssetId);
+        return clone;
+    }
+
+    private static void StripPrefabDataWithinBoundary(GameObject go, Guid boundaryPrefabId)
+    {
+        if (go.PrefabAssetId == boundaryPrefabId)
+        {
+            go.ClearPrefabData();
+            foreach (var child in go.Children)
+                StripPrefabDataWithinBoundary(child, boundaryPrefabId);
+        }
+        // Nested prefab children keep their own prefab data
+    }
+
+    private static void ClearOverridesWithinBoundary(GameObject go, Guid boundaryPrefabId)
+    {
+        if (go.PrefabAssetId == boundaryPrefabId)
+        {
+            go.PrefabOverrides.Clear();
+            foreach (var child in go.Children)
+                ClearOverridesWithinBoundary(child, boundaryPrefabId);
+        }
+    }
+}

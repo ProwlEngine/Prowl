@@ -313,6 +313,32 @@ public class ProjectPanel : DockPanel
             // Right-click background — show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_content_bg_ctx");
 
+            // Accept GameObjectDragPayload to create prefabs
+            if (DragDrop.IsDraggingType<GameObjectDragPayload>() && paper.IsParentHovered)
+            {
+                paper.Box("proj_prefab_drop")
+                    .Height(24)
+                    .BackgroundColor(System.Drawing.Color.FromArgb(40, EditorTheme.Purple400))
+                    .Rounded(3)
+                    .Text("Drop to create Prefab", EditorTheme.DefaultFont)
+                    .TextColor(EditorTheme.Purple400)
+                    .FontSize(EditorTheme.FontSize - 2)
+                    .Alignment(TextAlignment.MiddleCenter);
+            }
+
+            if (!DragDrop.IsDragging && DragDrop.Payload is GameObjectDragPayload goDrop && paper.IsParentHovered)
+            {
+                var go = goDrop.GameObjects.FirstOrDefault();
+                if (go != null)
+                {
+                    string folder = _currentFolder;
+                    string name = go.Name + ".prefab";
+                    string relPath = string.IsNullOrEmpty(folder) ? name : folder + "/" + name;
+                    Prefabs.PrefabUtility.CreatePrefab(go, relPath);
+                }
+                DragDrop.EndDrag();
+            }
+
             // Breadcrumb
             DrawBreadcrumb(paper, font, width, 20);
 

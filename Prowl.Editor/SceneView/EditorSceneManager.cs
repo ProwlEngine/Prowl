@@ -15,7 +15,7 @@ namespace Prowl.Editor;
 public static class EditorSceneManager
 {
     /// <summary>Path to the currently open scene file (relative to Assets/). Null for unsaved scenes.</summary>
-    public static string? CurrentScenePath { get; private set; }
+    public static string? CurrentScenePath { get; internal set; }
 
     /// <summary>Whether the current scene has unsaved changes.</summary>
     public static bool IsDirty { get; set; }
@@ -140,6 +140,9 @@ public static class EditorSceneManager
         {
             case ".scene":
                 return OpenScene(relativePath);
+            case ".prefab":
+                Prefabs.PrefabEditingMode.Enter(guid);
+                return true;
             default:
                 return false;
         }

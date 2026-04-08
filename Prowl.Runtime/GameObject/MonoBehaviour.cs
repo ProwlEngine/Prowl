@@ -16,7 +16,7 @@ namespace Prowl.Runtime;
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
 /// MonoBehaviour provides lifecycle methods for game object behaviors.
 /// </summary>
-public abstract class MonoBehaviour : EngineObject
+public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
     private Guid _identifier = Guid.NewGuid();
@@ -361,6 +361,14 @@ public abstract class MonoBehaviour : EngineObject
     {
         if (ShouldExecuteGameplay)
             OnDisable();
+    }
+
+    public void OnBeforeSerialize() { }
+
+    public void OnAfterDeserialize()
+    {
+        // Always generate fresh identifier — Scene restores them after deserialization
+        _identifier = Guid.NewGuid();
     }
 
     /// <summary>
