@@ -8,169 +8,115 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
-using Color = System.Drawing.Color;
-
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Texture2D))]
 public class TextureAssetEditor : AssetImporterEditor
 {
-    // Cached settings from meta file for Apply/Revert
-    private bool _generateMipmaps = true;
-    private bool _sRGB = true;
-    private int _filterModeIndex; // 0=Nearest, 1=Linear, 2=NearestMipLinear, 3=LinearMipLinear
-    private int _wrapModeIndex;   // 0=Repeat, 1=Clamp, 2=Mirror
-    private bool _settingsLoaded;
-    private bool _settingsDirty;
-
-    private static readonly string[] FilterModeNames = { "Nearest", "Linear", "Nearest Mipmap Linear", "Linear Mipmap Linear" };
-    private static readonly string[] WrapModeNames = { "Repeat", "Clamp to Edge", "Mirrored Repeat" };
+    // Cache settings across frames so changes stick until Save
+    private EchoObject? _cachedSettings;
+    private Guid _cachedForGuid;
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
-        var tex = asset as Texture2D;
+        var texture = asset as Texture2D;
 
-        // Load settings from meta on first draw
-        if (!_settingsLoaded)
+        EditorGUI.Header(paper, $"{id}_hdr", $"{EditorIcons.Image}  Texture");
+
+        if (texture != null)
         {
-            LoadSettingsFromMeta(entry);
-            _settingsLoaded = true;
+            EditorGUI.Label(paper, $"{id}_size", $"Size: {texture.Width} x {texture.Height}");
+            EditorGUI.Label(paper, $"{id}_format", $"Format: {texture.ImageFormat}");
+            EditorGUI.Label(paper, $"{id}_mip", $"Mipmaps: {(texture.IsMipmapped ? "Yes" : "No")}");
+
+            paper.Box($"{id}_sp1").Height(8);
+
+            // Texture preview
+            paper.Box($"{id}_preview")
+                .Width(UnitValue.Stretch()).Height(200)
+                .Rounded(4)
+                .BackgroundColor(System.Drawing.Color.FromArgb(255, 40, 40, 40))
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                {
+                    float maxW = (float)r.Size.X - 8;
+                    float maxH = (float)r.Size.Y - 8;
+                    float aspect = (float)texture.Width / Math.Max(1, (float)texture.Height);
+                    float drawW = maxW;
+                    float drawH = drawW / aspect;
+                    if (drawH > maxH) { drawH = maxH; drawW = drawH * aspect; }
+                    float drawX = (float)r.Min.X + ((float)r.Size.X - drawW) / 2;
+                    float drawY = (float)r.Min.Y + ((float)r.Size.Y - drawH) / 2;
+                    canvas.DrawImage(texture, drawX, drawY, drawW, drawH);
+                }));
         }
 
-        // Texture preview
-        if (tex != null)
-        {
-            float previewSize = 200f;
-            float aspect = tex.Width / (float)Math.Max(1, tex.Height);
-            float pw = aspect >= 1 ? previewSize : previewSize * aspect;
-            float ph = aspect >= 1 ? previewSize / aspect : previewSize;
-
-            using (paper.Row($"{id}_preview_row").Height(ph + 8).Enter())
-            {
-                paper.Box($"{id}_preview_spacer");
-                paper.Box($"{id}_preview")
-                    .Size(pw, ph)
-                    .BackgroundColor(Color.FromArgb(255, 20, 20, 22))
-                    .Rounded(4)
-                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        float rx = (float)r.Min.X;
-                        float ry = (float)r.Min.Y;
-                        float rw = (float)r.Size.X;
-                        float rh = (float)r.Size.Y;
-
-                        // Flip Y — OpenGL texture has Y=0 at bottom
-                        canvas.SetBrushTexture(tex);
-                        canvas.SetBrushTextureTransform(
-                            Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
-                            Prowl.Vector.Spatial.Transform2D.CreateScale(rw, -rh));
-                        canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4,
-                            new Prowl.Vector.Color32(255, 255, 255, 255));
-                        canvas.ClearBrushTexture();
-                    }));
-                paper.Box($"{id}_preview_spacer2");
-            }
-        }
-
-        EditorGUI.Separator(paper, $"{id}_sep_info");
-
-        // Info
-        EditorGUI.Header(paper, $"{id}_h_info", "Texture Info");
-        if (tex != null)
-        {
-            EditorGUI.Label(paper, $"{id}_size", $"Size: {tex.Width} x {tex.Height}");
-            EditorGUI.Label(paper, $"{id}_format", $"Format: {tex.ImageFormat}");
-            EditorGUI.Label(paper, $"{id}_mips", $"Mipmapped: {tex.IsMipmapped}");
-        }
-        EditorGUI.Label(paper, $"{id}_path", $"Path: {entry.Path}");
-        EditorGUI.Label(paper, $"{id}_guid", $"GUID: {entry.Guid}");
-
-        EditorGUI.Separator(paper, $"{id}_sep_settings");
-
-        // Import Settings
-        EditorGUI.Header(paper, $"{id}_h_settings", "Import Settings");
-
-        EditorGUI.Toggle(paper, $"{id}_mipmaps", "Generate Mipmaps", _generateMipmaps)
-            .OnValueChanged(v => { _generateMipmaps = v; _settingsDirty = true; });
-
-        EditorGUI.Toggle(paper, $"{id}_srgb", "sRGB", _sRGB)
-            .OnValueChanged(v => { _sRGB = v; _settingsDirty = true; });
-
-        EditorGUI.Dropdown(paper, $"{id}_filter", "Filter Mode", _filterModeIndex, FilterModeNames)
-            .OnValueChanged(v => { _filterModeIndex = v; _settingsDirty = true; });
-
-        EditorGUI.Dropdown(paper, $"{id}_wrap", "Wrap Mode", _wrapModeIndex, WrapModeNames)
-            .OnValueChanged(v => { _wrapModeIndex = v; _settingsDirty = true; });
-
-        EditorGUI.Separator(paper, $"{id}_sep_actions");
-
-        // Apply / Revert buttons
-        if (_settingsDirty)
-        {
-            using (paper.Row($"{id}_btn_row").Height(28).RowBetween(8).ChildLeft(8).ChildRight(8).Enter())
-            {
-                paper.Box($"{id}_btn_spacer");
-
-                EditorGUI.Button(paper, $"{id}_revert", "Revert", width: 80)
-                    .OnValueChanged(_ =>
-                    {
-                        LoadSettingsFromMeta(entry);
-                        _settingsDirty = false;
-                    });
-
-                EditorGUI.Button(paper, $"{id}_apply", "Apply", width: 80)
-                    .OnValueChanged(_ =>
-                    {
-                        SaveSettingsToMeta(entry);
-                        _settingsDirty = false;
-
-                        // Reimport
-                        EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-                    });
-            }
-        }
-    }
-
-    private void LoadSettingsFromMeta(AssetEntry entry)
-    {
         if (Project.Current == null) return;
         string absPath = Path.Combine(Project.Current.AssetsPath, entry.Path);
         string metaPath = MetaFile.GetMetaPath(absPath);
         if (!File.Exists(metaPath)) return;
 
-        try
+        // Load and cache settings (only reload when asset changes)
+        if (_cachedSettings == null || _cachedForGuid != entry.Guid)
         {
             var meta = MetaFile.Read(metaPath);
-            var s = meta.Settings;
-            if (s == null) return;
+            _cachedSettings = meta.Settings ?? EchoObject.NewCompound();
 
-            _generateMipmaps = s.TryGet("generateMipmaps", out var mip) && mip.BoolValue;
-            _sRGB = s.TryGet("sRGB", out var srgb) && srgb.BoolValue;
-            _filterModeIndex = s.TryGet("filterMode", out var fm) ? fm.IntValue : 0;
-            _wrapModeIndex = s.TryGet("wrapMode", out var wm) ? wm.IntValue : 0;
+            // Merge in defaults for any missing keys
+            var defaults = new Importers.TextureImporter().DefaultSettings();
+            if (defaults != null)
+            {
+                foreach (var kvp in defaults.Tags)
+                {
+                    if (!_cachedSettings.TryGet(kvp.Key, out _))
+                        _cachedSettings[kvp.Key] = kvp.Value.Clone();
+                }
+            }
+
+            _cachedForGuid = entry.Guid;
         }
-        catch { }
-    }
 
-    private void SaveSettingsToMeta(AssetEntry entry)
-    {
-        if (Project.Current == null) return;
-        string absPath = Path.Combine(Project.Current.AssetsPath, entry.Path);
-        string metaPath = MetaFile.GetMetaPath(absPath);
+        var settings = _cachedSettings;
 
-        MetaFileData meta;
-        try { meta = File.Exists(metaPath) ? MetaFile.Read(metaPath) : MetaFile.CreateNew(entry.ImporterType); }
-        catch { meta = MetaFile.CreateNew(entry.ImporterType); }
+        paper.Box($"{id}_sp2").Height(8);
+        EditorGUI.Separator(paper, $"{id}_sep");
+        EditorGUI.Header(paper, $"{id}_settings_hdr", $"{EditorIcons.Gear}  Import Settings");
 
-        var s = EchoObject.NewCompound();
-        s["generateMipmaps"] = new EchoObject(_generateMipmaps);
-        s["sRGB"] = new EchoObject(_sRGB);
-        s["filterMode"] = new EchoObject(_filterModeIndex);
-        s["wrapMode"] = new EchoObject(_wrapModeIndex);
-        meta.Settings = s;
+        bool genMips = settings.TryGet("generateMipmaps", out var mipTag) && mipTag.BoolValue;
+        EditorGUI.Toggle(paper, $"{id}_mips", "Generate Mipmaps", genMips)
+            .OnValueChanged(v => settings["generateMipmaps"] = new EchoObject(v));
 
-        MetaFile.Write(metaPath, meta);
+        bool srgb = settings.TryGet("sRGB", out var srgbTag) && srgbTag.BoolValue;
+        EditorGUI.Toggle(paper, $"{id}_srgb", "sRGB", srgb)
+            .OnValueChanged(v => settings["sRGB"] = new EchoObject(v));
+
+        var currentMin = settings.TryGet("minFilter", out var minTag)
+            ? (TextureMin)minTag.IntValue : TextureMin.LinearMipmapLinear;
+        EditorGUI.EnumDropdown(paper, $"{id}_min", "Min Filter", currentMin)
+            .OnValueChanged(v => settings["minFilter"] = new EchoObject((int)v));
+
+        var currentMag = settings.TryGet("magFilter", out var magTag)
+            ? (TextureMag)magTag.IntValue : TextureMag.Linear;
+        EditorGUI.EnumDropdown(paper, $"{id}_mag", "Mag Filter", currentMag)
+            .OnValueChanged(v => settings["magFilter"] = new EchoObject((int)v));
+
+        var currentWrap = settings.TryGet("wrapMode", out var wrapTag)
+            ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
+        EditorGUI.EnumDropdown(paper, $"{id}_wrap", "Wrap Mode", currentWrap)
+            .OnValueChanged(v => settings["wrapMode"] = new EchoObject((int)v));
+
+        paper.Box($"{id}_sp3").Height(8);
+
+        EditorGUI.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", width: 150)
+            .OnValueChanged(_ =>
+            {
+                // Write settings to meta and reimport
+                var meta = MetaFile.Read(metaPath);
+                meta.Settings = settings;
+                MetaFile.Write(metaPath, meta);
+                _cachedSettings = null; // Force reload after reimport
+                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+            });
     }
 }
