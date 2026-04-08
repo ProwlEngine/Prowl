@@ -333,8 +333,11 @@ public class ProjectPanel : DockPanel
                 if (go != null)
                 {
                     string folder = _currentFolder;
-                    string name = go.Name + ".prefab";
-                    string relPath = string.IsNullOrEmpty(folder) ? name : folder + "/" + name;
+                    string absFolder = string.IsNullOrEmpty(folder)
+                        ? Project.Current!.AssetsPath
+                        : Path.Combine(Project.Current!.AssetsPath, folder);
+                    string uniqueName = AssetCreateMenu.FindUniqueName(absFolder, go.Name, ".prefab");
+                    string relPath = string.IsNullOrEmpty(folder) ? uniqueName : folder + "/" + uniqueName;
                     Prefabs.PrefabUtility.CreatePrefab(go, relPath);
                 }
             }
@@ -711,7 +714,11 @@ public class ProjectPanel : DockPanel
             {
                 string oldAbs = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
                 string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
-                if (Directory.Exists(oldAbs) && !Directory.Exists(newAbs))
+                if (Directory.Exists(newAbs) || File.Exists(newAbs))
+                {
+                    Widgets.Toasts.Show("Rename Failed", $"A file or folder named '{newName}' already exists.", Widgets.ToastType.Warning, 3f);
+                }
+                else if (Directory.Exists(oldAbs))
                 {
                     Directory.Move(oldAbs, newAbs);
                     string oldMeta = MetaFile.GetMetaPath(oldAbs);
@@ -723,7 +730,9 @@ public class ProjectPanel : DockPanel
             }
             else
             {
-                EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath);
+                bool success = EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath) ?? false;
+                if (!success)
+                    Widgets.Toasts.Show("Rename Failed", $"A file named '{newName}' already exists.", Widgets.ToastType.Warning, 3f);
             }
         });
     }
