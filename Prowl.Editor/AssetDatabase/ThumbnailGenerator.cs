@@ -57,14 +57,7 @@ public static class ThumbnailGenerator
         byte[]? pixels = null;
         try
         {
-            pixels = job.Asset switch
-            {
-                Texture2D => GenerateForTextureFile(job.SourceFilePath),
-                Model model => GenerateFor3D(p => p.SetupForModel(model)),
-                Material mat => GenerateFor3D(p => p.SetupForMaterial(mat)),
-                Mesh mesh => GenerateFor3D(p => p.SetupForMesh(mesh)),
-                _ => null
-            };
+            ThumbnailGeneratorRegistry.TryGenerate(job.Asset, job.SourceFilePath, out pixels);
         }
         catch (Exception ex)
         {
@@ -150,7 +143,7 @@ public static class ThumbnailGenerator
     //  Generators — all produce ThumbnailSize x ThumbnailSize RGBA, top-down
     // ================================================================
 
-    private static byte[]? GenerateForTextureFile(string? filePath)
+    internal static byte[]? GenerateForTextureFile(string? filePath)
     {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return null;
 
@@ -178,7 +171,7 @@ public static class ThumbnailGenerator
         catch { return null; }
     }
 
-    private static byte[]? GenerateFor3D(Action<PreviewRenderer> setup)
+    internal static byte[]? GenerateFor3D(Action<PreviewRenderer> setup)
     {
         try
         {
@@ -203,7 +196,7 @@ public static class ThumbnailGenerator
     }
 
     /// <summary>Flip RGBA pixel data vertically in-place.</summary>
-    private static void FlipVertical(byte[] pixels, int width, int height)
+    internal static void FlipVertical(byte[] pixels, int width, int height)
     {
         int stride = width * 4;
         byte[] row = new byte[stride];

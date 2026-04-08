@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// A collection of related input actions that can be enabled/disabled as a group.
 /// Extends EngineObject so it can be saved as an asset (.inputactions).
 /// </summary>
+[CreateAssetMenu("Input Actions", Extension = ".inputactions", Order = 2)]
 public class InputActionMap : EngineObject, ISerializable
 {
     private readonly Dictionary<string, InputAction> _actions = [];

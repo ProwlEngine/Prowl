@@ -92,15 +92,20 @@ public class EditorApplication : Game
             }
         }
 
-        ScanAndRegisterPanels();
-        RegisterMenus();
-
         // Initialize editor registries (now sees user types if assemblies loaded above)
         InitializeOnLoadRegistry.Initialize();
         Inspector.PropertyEditorRegistry.Initialize();
         Inspector.ComponentEditorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
+        CreateAssetMenuRegistry.Initialize();
+        ThumbnailGeneratorRegistry.Initialize();
+        SceneDropHandlerRegistry.Initialize();
+        CreateGameObjectMenuRegistry.Initialize();
+
+        // Menus depend on registries above, so register after initialization
+        ScanAndRegisterPanels();
+        RegisterMenus();
 
         if (projectAlreadyInitialized)
         {
@@ -768,6 +773,9 @@ public class EditorApplication : Game
         // Assets menu
         AssetCreateMenu.RegisterMenus();
 
+        // GameObject menu — auto-populated from [CreateGameObjectMenu] attributes
+        CreateGameObjectMenuRegistry.RegisterMenuBarItems();
+
         // Window menu — auto-populated from [EditorWindow] attributes
         foreach (var (type, path) in _registeredPanels)
         {
@@ -792,6 +800,10 @@ public class EditorApplication : Game
         Inspector.AddComponentPopup.Reinitialize();
         Importers.ImporterRegistry.Reinitialize();
         ProjectSettingsRegistry.Reinitialize();
+        CreateAssetMenuRegistry.Reinitialize();
+        ThumbnailGeneratorRegistry.Reinitialize();
+        SceneDropHandlerRegistry.Reinitialize();
+        CreateGameObjectMenuRegistry.Reinitialize();
 
         // Re-register Window menu items for any new panels from user assemblies
         foreach (var (type, path) in _registeredPanels)
@@ -800,6 +812,9 @@ public class EditorApplication : Game
             MenuRegistry.Register($"Window/{path}", () => OpenPanel(capturedType),
                 isChecked: () => IsPanelOpen(capturedType));
         }
+
+        // Re-register GameObject menu items for any new creators from user assemblies
+        CreateGameObjectMenuRegistry.RegisterMenuBarItems();
     }
 
     private void RestoreAutoSavedScene(string path)

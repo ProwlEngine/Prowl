@@ -643,45 +643,10 @@ public class HierarchyPanel : DockPanel
 
     private void BuildCreateMenu(ContextMenuBuilder builder, GameObject? parent)
     {
-        builder.Item("Empty Object", () => CreateGameObject("GameObject", parent), icon: EditorIcons.Cube);
-        builder.Separator();
-        builder.Submenu("3D Object", sub =>
-        {
-            sub.Item("Cube", () => CreatePrimitive("Cube", DefaultModel.Cube, parent), icon: EditorIcons.Cube);
-            sub.Item("Sphere", () => CreatePrimitive("Sphere", DefaultModel.Sphere, parent), icon: EditorIcons.CircleDot);
-            sub.Item("Cylinder", () => CreatePrimitive("Cylinder", DefaultModel.Cylinder, parent), icon: EditorIcons.Circle);
-            sub.Item("Plane", () => CreatePrimitive("Plane", DefaultModel.Plane, parent), icon: EditorIcons.Square);
-        }, icon: EditorIcons.Cubes);
-        builder.Submenu("Light", sub =>
-        {
-            sub.Item("Directional Light", () =>
-            {
-                var go = CreateGameObject("Directional Light", parent);
-                go.Transform.Rotation = Quaternion.FromEuler(new Float3(50, 30, 0));
-                go.AddComponent<DirectionalLight>();
-            }, icon: EditorIcons.Sun);
-        }, icon: EditorIcons.Lightbulb);
-        builder.Item("Camera", () =>
-        {
-            var go = CreateGameObject("Camera", parent);
-            go.AddComponent<Camera>();
-        }, icon: EditorIcons.Camera);
-        builder.Item("Particle System", () =>
-        {
-            var go = CreateGameObject("Particle System", parent);
-            var ps = go.AddComponent<ParticleSystemComponent>();
-            ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
-            ps.Emission.Enabled = true;
-            ps.Emission.RateOverTime = new MinMaxCurve(10f);
-            ps.Emission.Shape = EmissionShape.Cone;
-            ps.Initial.Enabled = true;
-            ps.Initial.StartLifetime = new MinMaxCurve(2f);
-            ps.Initial.StartSpeed = new MinMaxCurve(3f);
-            ps.Initial.StartSize = new MinMaxCurve(0.2f);
-        }, icon: EditorIcons.SprayCanSparkles);
+        CreateGameObjectMenuRegistry.BuildMenu(builder, parent);
     }
 
-    private GameObject CreateGameObject(string name, GameObject? parent)
+    internal static GameObject CreateGameObject(string name, GameObject? parent)
     {
         var scene = Scene.Current;
         if (scene == null) return new GameObject(name);
@@ -692,8 +657,14 @@ public class HierarchyPanel : DockPanel
             go.SetParent(parent);
         Selection.Select(go);
 
-        // Enter rename
-        StartRenameGO(go, [go]);
+        // Enter rename via global overlay
+        string goId = go.Identifier.ToString();
+        RenameOverlay.Begin(goId, go.Name, newName =>
+        {
+            go.Name = newName;
+            EditorSceneManager.IsDirty = true;
+        });
+
         return go;
     }
 
@@ -707,14 +678,6 @@ public class HierarchyPanel : DockPanel
                 go.Name = newName;
             EditorSceneManager.IsDirty = true;
         });
-    }
-
-    private void CreatePrimitive(string name, DefaultModel model, GameObject? parent)
-    {
-        var go = CreateGameObject(name, parent);
-        var renderer = go.AddComponent<MeshRenderer>();
-        renderer.Mesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(model));
-        renderer.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
     }
 
     private void DuplicateGameObject(GameObject source)

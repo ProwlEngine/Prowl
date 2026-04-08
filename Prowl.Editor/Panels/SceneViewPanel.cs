@@ -217,28 +217,20 @@ public class SceneViewPanel : DockPanel
                 new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y),
                 new Float2(width, height));
 
-            // Accept asset drops — only for spawnable types (Model, Mesh) and special types (Scene, Material)
+            // Accept asset drops via registry-discovered handlers
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
                 var dragPayload = (AssetDragPayload)DragDrop.Payload!;
-                bool isSpawnable = dragPayload.AssetType == typeof(Model)
-                    || dragPayload.AssetType == typeof(Mesh)
-                    || dragPayload.AssetType == typeof(Scene)
-                    || dragPayload.AssetType == typeof(PrefabAsset)
-                    || typeof(Material).IsAssignableFrom(dragPayload.AssetType ?? typeof(object));
+                var handler = SceneDropHandlerRegistry.FindHandler(dragPayload.AssetType);
 
-                if (isSpawnable)
+                if (handler != null)
                 {
-                    string hint = typeof(Material).IsAssignableFrom(dragPayload.AssetType ?? typeof(object))
-                        ? $"{EditorIcons.ArrowDown}  Drop on object to assign material"
-                        : $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
-
                     paper.Box("sv_drop_indicator")
                         .PositionType(PositionType.SelfDirected)
                         .Position(0, height - 24).Size(width, 24)
                         .BackgroundColor(Color.FromArgb(150, 30, 30, 35))
                         .IsNotInteractable()
-                        .Text(hint, font)
+                        .Text(handler.DropHint, font)
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSize - 2)
                         .Alignment(TextAlignment.MiddleCenter);
@@ -247,52 +239,21 @@ public class SceneViewPanel : DockPanel
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
             {
-                bool handled = false;
-
-                if (assetDrop.AssetType == typeof(Scene))
+                var handler = SceneDropHandlerRegistry.FindHandler(assetDrop.AssetType);
+                if (handler != null)
                 {
-                    var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
-                    if (entry != null)
-                        EditorSceneManager.OpenScene(entry.Path);
-                    handled = true;
-                }
-                else if (typeof(Material).IsAssignableFrom(assetDrop.AssetType ?? typeof(object)))
-                {
-                    // Material drop — raycast to find the object and assign material
                     Float2 mouseLocal = paper.PointerPos - new Float2(
                         paper.CurrentParent.Data.X, paper.CurrentParent.Data.Y);
-                    Float2 panelSize = new Float2(width, height);
-                    var hitGO = PickObjectAt(scene, mouseLocal, panelSize);
-                    if (hitGO != null)
+
+                    handler.Handle(assetDrop, new SceneDropContext
                     {
-                        var mat = Runtime.AssetDatabase.Get(assetDrop.AssetGuid) as Material;
-                        if (mat != null)
-                        {
-                            var meshRenderer = hitGO.GetComponent<MeshRenderer>();
-                            if (meshRenderer != null)
-                            {
-                                meshRenderer.Material = mat;
-                                EditorSceneManager.IsDirty = true;
-                            }
-                            var modelRenderer = hitGO.GetComponent<ModelRenderer>();
-                            // TODO: assign to model renderer materials
-                        }
-                    }
-                    handled = true;
-                }
-                else if (assetDrop.AssetType == typeof(Model) || assetDrop.AssetType == typeof(Mesh)
-                    || assetDrop.AssetType == typeof(PrefabAsset))
-                {
-                    Float2 mouseLocal = paper.PointerPos - new Float2(
-                        paper.CurrentParent.Data.X, paper.CurrentParent.Data.Y);
-                    Float2 panelSize = new Float2(width, height);
-                    Float3 dropPos = GetDropPosition(scene, mouseLocal, panelSize);
-                    HierarchyPanel.SpawnAssetInScene(assetDrop, null, dropPos);
-                    handled = true;
-                }
-
-                if (handled)
+                        Scene = scene,
+                        Camera = _editorCamera!,
+                        MouseLocal = mouseLocal,
+                        PanelSize = new Float2(width, height),
+                    });
                     DragDrop.EndDrag();
+                }
             }
 
             // View manipulator (orientation cube) — drawn as 2D overlay on top-right
@@ -300,11 +261,9 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    private GameObject? PickObjectAt(Scene scene, Float2 screenPos, Float2 panelSize)
+    internal static GameObject? PickObjectAt(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
-        if (_editorCamera == null) return null;
-
-        var ray = _editorCamera.ScreenPointToRay(screenPos, panelSize);
+        var ray = camera.ScreenPointToRay(screenPos, panelSize);
 
         GameObject? bestHit = null;
         float bestDist = float.MaxValue;
@@ -332,7 +291,7 @@ public class SceneViewPanel : DockPanel
 
     private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)
     {
-        var bestHit = PickObjectAt(scene, screenPos, panelSize);
+        var bestHit = PickObjectAt(scene, _editorCamera!, screenPos, panelSize);
 
         if (bestHit != null)
         {
@@ -408,11 +367,9 @@ public class SceneViewPanel : DockPanel
     /// <summary>
     /// Raycast into the scene to find a drop position. Falls back to the XZ plane at Y=0.
     /// </summary>
-    private Float3 GetDropPosition(Scene scene, Float2 screenPos, Float2 panelSize)
+    internal static Float3 GetDropPosition(Scene scene, EditorCamera camera, Float2 screenPos, Float2 panelSize)
     {
-        if (_editorCamera == null) return Float3.Zero;
-
-        var ray = _editorCamera.ScreenPointToRay(screenPos, panelSize);
+        var ray = camera.ScreenPointToRay(screenPos, panelSize);
 
         // Try raycasting against scene objects first
         float bestDist = float.MaxValue;

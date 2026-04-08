@@ -12,6 +12,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
 
+[CreateAssetMenu("Scene", Extension = ".scene", Order = 0)]
 public class Scene : EngineObject, ISerializationCallbackReceiver
 {
     #region Scene Manager

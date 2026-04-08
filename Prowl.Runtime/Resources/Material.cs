@@ -12,6 +12,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.Resources;
 
+[CreateAssetMenu("Material", Extension = ".mat", Order = 1)]
 public sealed class Material : EngineObject, ISerializationCallbackReceiver
 {
     private static Shader s_defaultShader;

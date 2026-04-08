@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 
-using Prowl.Echo;
 using Prowl.Editor.Panels;
 using Prowl.Editor.Widgets;
 using Prowl.Runtime;
@@ -22,10 +21,11 @@ public static class AssetCreateMenu
     {
         builder.Item($"{EditorIcons.Folder}  Folder", () => { var p = CreateFolder(currentFolder); if (p != null) onCreated?.Invoke(p); });
         builder.Separator();
-        builder.Item($"{EditorIcons.Cubes}  Scene", () => { var p = CreateScene(currentFolder); if (p != null) onCreated?.Invoke(p); });
-        builder.Item($"{EditorIcons.Palette}  Material", () => { var p = CreateMaterial(currentFolder); if (p != null) onCreated?.Invoke(p); });
+
+        // Registry-discovered asset types (Scene, Material, InputActions, user-defined, etc.)
+        CreateAssetMenuRegistry.BuildMenu(builder, currentFolder, onCreated);
+
         builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => { var p = CreateShader(currentFolder); if (p != null) onCreated?.Invoke(p); });
-        builder.Item($"{EditorIcons.Gamepad}  Input Actions", () => { var p = CreateInputActions(currentFolder); if (p != null) onCreated?.Invoke(p); });
         builder.Separator();
         builder.Item($"{EditorIcons.FileCode}  C# Script", () => { var p = CreateScript(currentFolder); if (p != null) onCreated?.Invoke(p); });
     }
@@ -37,8 +37,10 @@ public static class AssetCreateMenu
     {
         MenuRegistry.Register("Assets/Create Folder", () => CreateFolder(GetCurrentFolder()));
         MenuRegistry.RegisterSeparator("Assets");
-        MenuRegistry.Register("Assets/Create Scene", () => CreateScene(GetCurrentFolder()));
-        MenuRegistry.Register("Assets/Create Material", () => CreateMaterial(GetCurrentFolder()));
+
+        // Registry-discovered asset types
+        CreateAssetMenuRegistry.RegisterMenuBarItems();
+
         MenuRegistry.Register("Assets/Create Shader", () => CreateShader(GetCurrentFolder()));
         MenuRegistry.RegisterSeparator("Assets");
         MenuRegistry.Register("Assets/Create C# Script", () => CreateScript(GetCurrentFolder()));
@@ -104,55 +106,6 @@ public static class AssetCreateMenu
         Debug.Log($"Created folder: {name}");
         string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
         return relPath;
-    }
-
-    public static string? CreateScene(string relativeFolder)
-    {
-        string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
-
-        string name = FindUniqueName(absFolder, "New Scene", ".scene");
-        string filePath = Path.Combine(absFolder, name);
-
-        var scene = new Runtime.Resources.Scene();
-        var echo = Serializer.Serialize(typeof(object), scene);
-        if (echo != null)
-            File.WriteAllText(filePath, echo.WriteToString());
-
-        Debug.Log($"Created scene: {name}");
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
-    }
-
-    public static string? CreateMaterial(string relativeFolder)
-    {
-        string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
-
-        string name = FindUniqueName(absFolder, "New Material", ".mat");
-        string filePath = Path.Combine(absFolder, name);
-
-        var mat = new Runtime.Resources.Material();
-        var echo = Serializer.Serialize(typeof(object), mat);
-        File.WriteAllText(filePath, echo.WriteToString());
-
-        Debug.Log($"Created material: {name}");
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
-    }
-
-    public static string? CreateInputActions(string relativeFolder)
-    {
-        string absFolder = GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
-
-        string name = FindUniqueName(absFolder, "New InputActions", ".inputactions");
-        string filePath = Path.Combine(absFolder, name);
-
-        var map = new InputActionMap("Player");
-        var echo = Serializer.Serialize(typeof(object), map);
-        File.WriteAllText(filePath, echo.WriteToString());
-
-        Debug.Log($"Created input actions: {name}");
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
     public static string? CreateShader(string relativeFolder)
