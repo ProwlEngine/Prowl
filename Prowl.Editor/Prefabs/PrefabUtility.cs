@@ -154,7 +154,6 @@ public static class PrefabUtility
         var fresh = prefab.Instantiate();
         if (fresh == null) return;
 
-        // Preserve world transform, name, and parent
         fresh.Transform.Position = instanceRoot.Transform.Position;
         fresh.Transform.Rotation = instanceRoot.Transform.Rotation;
         fresh.Transform.LocalScale = instanceRoot.Transform.LocalScale;
@@ -163,22 +162,12 @@ public static class PrefabUtility
         var scene = instanceRoot.Scene;
         var parent = instanceRoot.Parent;
 
-        // Temporarily allow reparenting for swap
-        bool wasPlaying = Application.IsPlaying;
-        Application.IsPlaying = true;
-        try
+        if (scene != null)
         {
-            if (scene != null)
-            {
-                scene.Remove(instanceRoot);
-                scene.Add(fresh);
-                if (parent != null)
-                    fresh.SetParent(parent);
-            }
-        }
-        finally
-        {
-            Application.IsPlaying = wasPlaying;
+            scene.Remove(instanceRoot);
+            scene.Add(fresh);
+            if (parent != null)
+                fresh.SetParent(parent);
         }
 
         Selection.Select(fresh);
@@ -347,65 +336,39 @@ public static class PrefabUtility
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab == null) return;
 
-        // Temporarily allow reparenting/removal for refresh
-        bool wasPlaying = Application.IsPlaying;
-        Application.IsPlaying = true;
+        var selectedGO = Selection.GetSelected<GameObject>().FirstOrDefault();
+        GameObject? newSelection = null;
 
-        try
+        foreach (var root in roots)
         {
-            var selectedGO = Selection.GetSelected<GameObject>().FirstOrDefault();
-            GameObject? newSelection = null;
+            var savedOverrides = root.PrefabOverrides.ToList();
+            var savedName = root.Name;
+            var pos = root.Transform.Position;
+            var rot = root.Transform.Rotation;
+            var scale = root.Transform.LocalScale;
+            var parent = root.Parent;
 
-            foreach (var root in roots)
-            {
-                // Save current overrides and name
-                var savedOverrides = root.PrefabOverrides.ToList();
-                var savedName = root.Name;
+            var fresh = prefab.Instantiate();
+            if (fresh == null) continue;
 
-                // Preserve transform
-                var pos = root.Transform.Position;
-                var rot = root.Transform.Rotation;
-                var scale = root.Transform.LocalScale;
-                var parent = root.Parent;
+            fresh.PrefabOverrides = savedOverrides;
+            fresh.Name = savedName;
+            ApplyPropertyOverridesToInstance(fresh, savedOverrides);
+            fresh.Transform.Position = pos;
+            fresh.Transform.Rotation = rot;
+            fresh.Transform.LocalScale = scale;
 
-                // Clear prefab data before removing to avoid enforcement issues during cleanup
-                root.ClearPrefabDataRecursive();
+            scene.Remove(root);
+            scene.Add(fresh);
+            if (parent != null)
+                fresh.SetParent(parent);
 
-                // Fresh instance from updated prefab
-                var fresh = prefab.Instantiate();
-                if (fresh == null) continue;
-
-                // Restore per-instance data
-                fresh.PrefabOverrides = savedOverrides;
-                fresh.Name = savedName;
-
-                // Re-apply property overrides to the fresh instance's fields
-                ApplyPropertyOverridesToInstance(fresh, savedOverrides);
-
-                // Restore transform
-                fresh.Transform.Position = pos;
-                fresh.Transform.Rotation = rot;
-                fresh.Transform.LocalScale = scale;
-
-                // Swap in scene
-                scene.Remove(root);
-                scene.Add(fresh);
-                if (parent != null)
-                    fresh.SetParent(parent);
-
-                // Track if this was the selected GO
-                if (selectedGO == root)
-                    newSelection = fresh;
-            }
-
-            // Update selection to the fresh replacement
-            if (newSelection != null)
-                Selection.Select(newSelection);
+            if (selectedGO == root)
+                newSelection = fresh;
         }
-        finally
-        {
-            Application.IsPlaying = wasPlaying;
-        }
+
+        if (newSelection != null)
+            Selection.Select(newSelection);
     }
 
     // ================================================================

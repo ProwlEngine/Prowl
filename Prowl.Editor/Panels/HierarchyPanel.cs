@@ -472,6 +472,24 @@ public class HierarchyPanel : DockPanel
                     if (dragged == target || IsDescendantOf(target, dragged))
                         continue;
 
+                    // Block reparenting into prefab instances (structure is fixed)
+                    if (_dropPos == DropPosition.Into && target.IsPrefabInstance && target.PrefabChildCount >= 0)
+                    {
+                        Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                        continue;
+                    }
+
+                    // Block moving a prefab child out of its parent
+                    if (dragged.Parent != null && dragged.Parent.IsPrefabInstance && dragged.Parent.PrefabChildCount >= 0)
+                    {
+                        int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
+                        if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
+                        {
+                            Widgets.Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                            continue;
+                        }
+                    }
+
                     switch (_dropPos)
                     {
                         case DropPosition.Into:
@@ -742,6 +760,17 @@ public class HierarchyPanel : DockPanel
 
     private void DeleteGameObject(GameObject go)
     {
+        // Block deleting prefab children that are part of the prefab structure
+        if (go.Parent != null && go.Parent.IsPrefabInstance && go.Parent.PrefabChildCount >= 0)
+        {
+            int childIdx = go.Parent.Children.IndexOf(go);
+            if (childIdx >= 0 && childIdx < go.Parent.PrefabChildCount)
+            {
+                Widgets.Toasts.Show("Prefab Structure", "Cannot delete a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                return;
+            }
+        }
+
         var scene = Scene.Current;
         if (scene == null) return;
 

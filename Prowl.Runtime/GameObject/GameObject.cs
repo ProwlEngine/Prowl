@@ -226,24 +226,6 @@ public class GameObject : EngineObject, ISerializable
         if (NewParent == _parent)
             return true;
 
-        // Block reparenting into prefab instances in editor (structure is fixed)
-        if (!Application.IsPlaying && NewParent.IsValid() && NewParent.IsPrefabInstance && NewParent.PrefabChildCount >= 0)
-        {
-            Debug.LogWarning($"Cannot add children to prefab instance '{NewParent.Name}'. Break the prefab first.");
-            return false;
-        }
-
-        // Also block moving a prefab child OUT of its parent (that would break structure)
-        if (!Application.IsPlaying && _parent.IsValid() && _parent.IsPrefabInstance && _parent.PrefabChildCount >= 0)
-        {
-            int myIndex = _parent.Children.IndexOf(this);
-            if (myIndex >= 0 && myIndex < _parent.PrefabChildCount)
-            {
-                Debug.LogWarning($"Cannot move prefab child '{Name}' out of prefab '{_parent.Name}'. Break the prefab first.");
-                return false;
-            }
-        }
-
         // Make sure that the new father is not a child of this transform.
         if (IsChildOrSameTransform(NewParent, this))
             return false;
@@ -507,13 +489,6 @@ public class GameObject : EngineObject, ISerializable
     {
         if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
 
-        // Block adding components to prefab instances in editor (structure is fixed)
-        if (!Application.IsPlaying && IsPrefabInstance && _prefabComponentCount >= 0)
-        {
-            Debug.LogWarning($"Cannot add component to prefab instance '{Name}'. Break the prefab first.");
-            return null;
-        }
-
         RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
         {
@@ -640,17 +615,6 @@ public class GameObject : EngineObject, ISerializable
     /// <param name="component">The component instance to remove.</param>
     public void RemoveComponent(MonoBehaviour component)
     {
-        // Block removing prefab components in editor
-        if (!Application.IsPlaying && IsPrefabInstance && _prefabComponentCount >= 0)
-        {
-            int compIdx = _components.IndexOf(component);
-            if (compIdx >= 0 && compIdx < _prefabComponentCount)
-            {
-                Debug.LogWarning($"Cannot remove prefab component '{component.GetType().Name}' from '{Name}'. Break the prefab first.");
-                return;
-            }
-        }
-
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))

@@ -239,10 +239,18 @@ public static class GameObjectInspector
 
         builder.Separator();
 
+        bool canRemove = comp.CanDestroy();
+        // Block removing prefab components in editor
+        if (go.IsPrefabInstance && go.PrefabComponentCount >= 0)
+        {
+            int compIdx = go._components.IndexOf(comp);
+            if (compIdx >= 0 && compIdx < go.PrefabComponentCount)
+                canRemove = false;
+        }
         builder.Item("Remove Component", () =>
         {
             go.RemoveComponent(comp);
-        }, icon: EditorIcons.Trash, enabled: comp.CanDestroy());
+        }, icon: EditorIcons.Trash, enabled: canRemove);
 
         builder.Separator();
 
