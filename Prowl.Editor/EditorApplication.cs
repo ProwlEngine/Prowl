@@ -96,6 +96,7 @@ public class EditorApplication : Game
         RegisterMenus();
 
         // Initialize editor registries (now sees user types if assemblies loaded above)
+        InitializeOnLoadRegistry.Initialize();
         Inspector.PropertyEditorRegistry.Initialize();
         Inspector.ComponentEditorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
@@ -784,6 +785,7 @@ public class EditorApplication : Game
     {
         _registeredPanels.Clear();
         ScanAndRegisterPanels();
+        InitializeOnLoadRegistry.Reinitialize();
         Inspector.PropertyEditorRegistry.Reinitialize();
         Inspector.ComponentEditorRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
