@@ -734,83 +734,127 @@ public class ProjectPanel : DockPanel
                     var item = entries[idx];
                     bool isSelected = Selection.IsSelected(item);
 
-                    using (paper.Column($"proj_gc_{idx}")
-                        .Width(cellSize).Height(totalCellH)
-                        .BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.Transparent)
-                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.FromArgb(30, 255, 255, 255)).End()
-                        .Rounded(4)
-                        .StopEventPropagation()
-                        .OnClick((item, idx, itemObjects), (cap, e) =>
-                        {
-                            bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
-                            bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
-                            Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
-                        })
-                        .OnDoubleClick(item, (it, _) =>
-                        {
-                            if (it.IsFolder)
-                                _currentFolder = it.RelativePath;
-                            else
-                                EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
-                        })
-                        .OnDragStart(item, (it, _) =>
-                        {
-                            if (!it.IsFolder && it.Guid != Guid.Empty)
-                            {
-                                var entry = EditorAssetDatabase.Instance?.GetEntry(it.RelativePath);
-                                DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, entry?.MainAssetType));
-                            }
-                        })
-                        .Tooltip(item.Name)
-                        .Enter())
-                    {
-                        // Thumbnail area — use cached thumbnail if available
-                        var thumbTex = GetThumbnailTexture(item.Guid);
-                        if (thumbTex != null)
-                        {
-                            paper.Box($"proj_gt_{idx}")
-                                .Width(cellSize - 4).Height(cellSize - 4)
-                                .Margin(2, 2, 2, 0)
-                                .Rounded(4)
-                                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                                {
-                                    canvas.DrawImage(thumbTex,
-                                        (float)r.Min.X, (float)r.Min.Y,
-                                        (float)r.Size.X, (float)r.Size.Y);
-                                }));
-                        }
-                        else
-                        {
-                            paper.Box($"proj_gt_{idx}")
-                                .Width(cellSize - 4).Height(cellSize - 4)
-                                .Margin(2, 2, 2, 0)
-                                .Rounded(4)
-                                .Text(item.Icon, font)
-                                .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : EditorTheme.Ink400)
-                                .FontSize(_thumbnailSize * 0.6f)
-                                .Alignment(TextAlignment.MiddleCenter);
-                        }
-
-                        // Label (inline rename or text)
-                        if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
-                        {
-                            RenameOverlay.Draw(paper, $"proj_gl_rename_{idx}");
-                        }
-                        else
-                        {
-                            paper.Box($"proj_gl_{idx}")
-                                .Width(cellSize).Height(labelH)
-                                .Clip()
-                                .Text(item.Name, font)
-                                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
-                        }
-
-                        // Right-click context menu
-                        BuildItemContextMenu(paper, $"proj_gc_ctx_{idx}", item);
-                    }
+                    DrawGridItem(paper, font, $"proj_gc_{idx}", item, idx, itemObjects, cellSize, labelH, totalCellH);
                 }
             }
             row++;
+        }
+    }
+
+    private void DrawGridItem(Paper paper, Prowl.Scribe.FontFile font, string id, ContentItem item,
+        int idx, List<object> itemObjects, float cellSize, float labelH, float totalCellH)
+    {
+        bool isSelected = Selection.IsSelected(item);
+        bool isSubAsset = item.IsSubAsset;
+
+        using (paper.Column(id)
+            .Width(cellSize).Height(totalCellH)
+            .BackgroundColor(isSelected ? EditorTheme.Purple300 : (isSubAsset ? Color.FromArgb(20, EditorTheme.Purple400) : Color.Transparent))
+            .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.FromArgb(30, 255, 255, 255)).End()
+            .Rounded(4)
+            .StopEventPropagation()
+            .OnClick((item, idx, itemObjects), (cap, e) =>
+            {
+                bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
+                bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
+                Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
+            })
+            .OnDoubleClick(item, (it, _) =>
+            {
+                if (it.IsFolder)
+                    _currentFolder = it.RelativePath;
+                else if (it.HasSubAssets)
+                {
+                    if (_expandedAssets.Contains(it.Guid)) _expandedAssets.Remove(it.Guid);
+                    else _expandedAssets.Add(it.Guid);
+                }
+                else
+                    EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
+            })
+            .OnDragStart(item, (it, _) =>
+            {
+                if (!it.IsFolder && it.Guid != Guid.Empty)
+                {
+                    var entry = EditorAssetDatabase.Instance?.GetEntry(it.RelativePath);
+                    Type? assetType = entry?.MainAssetType;
+                    if (it.IsSubAsset)
+                    {
+                        var db = EditorAssetDatabase.Instance;
+                        if (db != null)
+                        {
+                            var subs = db.GetSubAssets(it.ParentGuid);
+                            var sub = subs.FirstOrDefault(s => s.Guid == it.Guid);
+                            assetType = sub?.Type;
+                        }
+                    }
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, assetType));
+                }
+            })
+            .Tooltip(item.Name)
+            .Enter())
+        {
+            // Thumbnail area
+            var thumbTex = GetThumbnailTexture(item.Guid);
+            if (thumbTex != null)
+            {
+                paper.Box($"{id}_t")
+                    .Width(cellSize - 4).Height(cellSize - 4)
+                    .Margin(2, 2, 2, 0)
+                    .Rounded(4)
+                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                    {
+                        canvas.DrawImage(thumbTex,
+                            (float)r.Min.X, (float)r.Min.Y,
+                            (float)r.Size.X, (float)r.Size.Y);
+                    }));
+            }
+            else
+            {
+                paper.Box($"{id}_t")
+                    .Width(cellSize - 4).Height(cellSize - 4)
+                    .Margin(2, 2, 2, 0)
+                    .Rounded(4)
+                    .Text(item.Icon, font)
+                    .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : (isSubAsset ? EditorTheme.Purple300 : EditorTheme.Ink400))
+                    .FontSize(_thumbnailSize * 0.6f)
+                    .Alignment(TextAlignment.MiddleCenter);
+            }
+
+            // Expand indicator for items with sub-assets
+            if (item.HasSubAssets)
+            {
+                bool expanded = _expandedAssets.Contains(item.Guid);
+                paper.Box($"{id}_exp")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(2, 2)
+                    .Size(16, 16).Rounded(3)
+                    .BackgroundColor(Color.FromArgb(160, 30, 30, 30))
+                    .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(8f).Alignment(TextAlignment.MiddleCenter)
+                    .OnClick(item.Guid, (guid, _) =>
+                    {
+                        if (_expandedAssets.Contains(guid)) _expandedAssets.Remove(guid);
+                        else _expandedAssets.Add(guid);
+                    });
+            }
+
+            // Label
+            if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
+            {
+                RenameOverlay.Draw(paper, $"{id}_rename");
+            }
+            else
+            {
+                paper.Box($"{id}_l")
+                    .Width(cellSize).Height(labelH)
+                    .Clip()
+                    .Text(item.Name, font)
+                    .TextColor(isSubAsset ? EditorTheme.Purple300 : EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+            }
+
+            BuildItemContextMenu(paper, $"{id}_ctx", item);
         }
     }
 
