@@ -237,6 +237,71 @@ public class InspectorPanel : DockPanel
             }
         }
 
+        // Import Settings
+        if (entry != null && Project.Current != null)
+        {
+            string absPath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+            string metaPath = MetaFile.GetMetaPath(absPath);
+
+            if (File.Exists(metaPath))
+            {
+                var meta = MetaFile.Read(metaPath);
+                var importer = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType);
+
+                if (importer != null)
+                {
+                    // Ensure settings exist (use defaults if missing)
+                    var settings = meta.Settings ?? importer.DefaultSettings();
+                    if (settings != null && settings.TagType == Echo.EchoType.Compound)
+                    {
+                        EditorGUI.Separator(paper, "insp_sep_settings");
+                        EditorGUI.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  Import Settings");
+
+                        bool changed = false;
+
+                        foreach (var kvp in settings.Tags.ToList())
+                        {
+                            string key = kvp.Key;
+                            var val = kvp.Value;
+
+                            switch (val.TagType)
+                            {
+                                case Echo.EchoType.Bool:
+                                    EditorGUI.Toggle(paper, $"insp_set_{key}", NicifySettingName(key), val.BoolValue)
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                    break;
+
+                                case Echo.EchoType.Int:
+                                    EditorGUI.IntField(paper, $"insp_set_{key}", val.IntValue, NicifySettingName(key))
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                    break;
+
+                                case Echo.EchoType.Float:
+                                    EditorGUI.FloatField(paper, $"insp_set_{key}", val.FloatValue, NicifySettingName(key))
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                    break;
+
+                                case Echo.EchoType.String:
+                                    EditorGUI.TextField(paper, $"insp_set_{key}", NicifySettingName(key), val.StringValue)
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                    break;
+                            }
+                        }
+
+                        // Save & Reimport button
+                        paper.Box("insp_set_sp").Height(4);
+                        EditorGUI.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", width: 150)
+                            .OnValueChanged(_ =>
+                            {
+                                meta.Settings = settings;
+                                MetaFile.Write(metaPath, meta);
+                                db.Reimport(entry.Guid);
+                            });
+                    }
+                }
+            }
+        }
+
         // Reimport button
         EditorGUI.Separator(paper, "insp_sep_actions");
         if (entry != null)
@@ -244,6 +309,21 @@ public class InspectorPanel : DockPanel
             EditorGUI.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  Reimport")
                 .OnValueChanged(_ => db.Reimport(entry.Guid));
         }
+    }
+
+    private static string NicifySettingName(string name)
+    {
+        // "generateMipmaps" -> "Generate Mipmaps"
+        if (string.IsNullOrEmpty(name)) return name;
+        var sb = new System.Text.StringBuilder();
+        sb.Append(char.ToUpper(name[0]));
+        for (int i = 1; i < name.Length; i++)
+        {
+            if (char.IsUpper(name[i]) && !char.IsUpper(name[i - 1]))
+                sb.Append(' ');
+            sb.Append(name[i]);
+        }
+        return sb.ToString();
     }
 
     private void DrawFolderInfo(Paper paper, Prowl.Scribe.FontFile font, ContentItem item)
