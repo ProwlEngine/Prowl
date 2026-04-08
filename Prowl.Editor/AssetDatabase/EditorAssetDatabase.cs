@@ -267,8 +267,12 @@ public class EditorAssetDatabase : IAssetDatabase
             string ext = Path.GetExtension(file);
             string importerName = ImporterRegistry.GetImporterTypeName(ext);
 
-            // Ensure .meta exists
-            var meta = MetaFile.EnsureMeta(file, importerName);
+            // Get default settings from the importer (for new meta files)
+            var importer = ImporterRegistry.CreateByTypeName(importerName);
+            var defaultSettings = importer?.DefaultSettings();
+
+            // Ensure .meta exists (with default settings if creating new)
+            var meta = MetaFile.EnsureMeta(file, importerName, importer?.Version ?? 1, defaultSettings);
 
             if (_pathToGuid.TryGetValue(relativePath, out var existingGuid))
             {
