@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
@@ -216,6 +217,45 @@ public class SceneViewPanel : DockPanel
                 paper.PointerPos,
                 new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y),
                 new Float2(width, height));
+
+            // Scene view keyboard shortcuts (only when hovered and not right-click flying)
+            if (isHovered && !ShortcutManager.IsRebinding && !Input.GetMouseButton(1))
+            {
+                if (ShortcutManager.IsPressed("Scene/Delete"))
+                {
+                    foreach (var go in Selection.GetSelected<GameObject>().ToList())
+                    {
+                        scene.Remove(go);
+                        go.Dispose();
+                    }
+                    Selection.Clear();
+                    EditorSceneManager.IsDirty = true;
+                }
+                else if (ShortcutManager.IsPressed("Scene/Duplicate"))
+                {
+                    var selected = Selection.GetSelected<GameObject>().ToList();
+                    foreach (var go in selected)
+                    {
+                        var copy = new GameObject(go.Name + " (Copy)");
+                        copy.Transform.Position = go.Transform.Position;
+                        copy.Transform.Rotation = go.Transform.Rotation;
+                        copy.Transform.LocalScale = go.Transform.LocalScale;
+                        Scene.Current?.Add(copy);
+                        if (go.Parent != null) copy.SetParent(go.Parent);
+                    }
+                    EditorSceneManager.IsDirty = true;
+                }
+
+                // Gizmo tool switching
+                if (ShortcutManager.IsPressed("Scene/ToolTranslate"))
+                    _gizmoMode = Gizmo.TransformGizmoMode.Translate;
+                else if (ShortcutManager.IsPressed("Scene/ToolRotate"))
+                    _gizmoMode = Gizmo.TransformGizmoMode.Rotate;
+                else if (ShortcutManager.IsPressed("Scene/ToolScale"))
+                    _gizmoMode = Gizmo.TransformGizmoMode.ScaleAll;
+                else if (ShortcutManager.IsPressed("Scene/ToolUniversal"))
+                    _gizmoMode = Gizmo.TransformGizmoMode.Universal;
+            }
 
             // Accept asset drops via registry-discovered handlers
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())

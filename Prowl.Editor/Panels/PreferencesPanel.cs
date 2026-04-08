@@ -4,6 +4,7 @@ using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
@@ -16,8 +17,10 @@ public class PreferencesPanel : DockPanel
     public override string Title => "Preferences";
     public override string Icon => EditorIcons.Sliders;
 
-    private enum Tab { General, Theme }
+    private enum Tab { General, Theme, Shortcuts }
     private Tab _tab = Tab.General;
+    private string _shortcutSearch = "";
+    private string? _rebindingId;
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -43,6 +46,7 @@ public class PreferencesPanel : DockPanel
 
                 DrawTabBtn(paper, font, "General", EditorIcons.Gear, Tab.General);
                 DrawTabBtn(paper, font, "Theme", EditorIcons.Palette, Tab.Theme);
+                DrawTabBtn(paper, font, "Shortcuts", EditorIcons.Keyboard, Tab.Shortcuts);
             }
 
             paper.Box("pref_div").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
@@ -55,6 +59,7 @@ public class PreferencesPanel : DockPanel
                 {
                     case Tab.General: DrawGeneral(paper, settings); break;
                     case Tab.Theme: DrawTheme(paper, font, settings, contentW); break;
+                    case Tab.Shortcuts: DrawShortcuts(paper, font, contentW); break;
                 }
                 paper.Box("pref_pad2").Height(16);
             }
@@ -253,6 +258,134 @@ public class PreferencesPanel : DockPanel
                 s.ApplyTheme();
                 s.Save();
             });
+    }
+
+    // ================================================================
+    //  Shortcuts
+    // ================================================================
+
+    private void DrawShortcuts(Paper paper, Prowl.Scribe.FontFile font, float w)
+    {
+        // Handle rebinding input each frame
+        if (_rebindingId != null)
+        {
+            ShortcutManager.IsRebinding = true;
+
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                _rebindingId = null;
+                ShortcutManager.IsRebinding = false;
+            }
+            else
+            {
+                // Check for any non-modifier key press
+                foreach (KeyCode key in Enum.GetValues<KeyCode>())
+                {
+                    if (key == KeyCode.Unknown || key == KeyCode.Escape) continue;
+                    // Skip modifier keys themselves — they're captured via flags
+                    if (key is KeyCode.ShiftLeft or KeyCode.ShiftRight
+                        or KeyCode.ControlLeft or KeyCode.ControlRight
+                        or KeyCode.AltLeft or KeyCode.AltRight
+                        or KeyCode.SuperLeft or KeyCode.SuperRight) continue;
+
+                    if (Input.GetKeyDown(key))
+                    {
+                        var binding = new ShortcutBinding(key, Input.IsCtrlPressed, Input.IsShiftPressed, Input.IsAltPressed);
+                        ShortcutManager.SetOverride(_rebindingId, binding);
+                        _rebindingId = null;
+                        ShortcutManager.IsRebinding = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        EditorGUI.Header(paper, "pref_sc_hdr", $"{EditorIcons.Keyboard}  Shortcuts");
+        EditorGUI.Separator(paper, "pref_sc_sep");
+
+        // Search bar
+        EditorGUI.SearchBar(paper, "pref_sc_search", _shortcutSearch, "Search shortcuts...")
+            .OnValueChanged(v => _shortcutSearch = v);
+
+        paper.Box("pref_sc_sp1").Height(4);
+
+        // Reset All button
+        using (paper.Row("pref_sc_actions").Height(28).ChildLeft(4).Enter())
+        {
+            EditorGUI.Button(paper, "pref_sc_reset_all", $"{EditorIcons.RotateLeft}  Reset All to Defaults", width: 200)
+                .OnValueChanged(_ => ShortcutManager.ClearAllOverrides());
+        }
+
+        paper.Box("pref_sc_sp2").Height(8);
+
+        // Group by category
+        string? lastCategory = null;
+        foreach (var shortcut in ShortcutManager.GetAllShortcuts())
+        {
+            // Filter by search
+            if (!string.IsNullOrEmpty(_shortcutSearch) &&
+                !shortcut.DisplayName.Contains(_shortcutSearch, StringComparison.OrdinalIgnoreCase) &&
+                !shortcut.Id.Contains(_shortcutSearch, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Category header
+            if (shortcut.Category != lastCategory)
+            {
+                lastCategory = shortcut.Category;
+                paper.Box($"pref_sc_sp_{lastCategory}").Height(4);
+                EditorGUI.Header(paper, $"pref_sc_cat_{lastCategory}", lastCategory);
+                EditorGUI.Separator(paper, $"pref_sc_catsep_{lastCategory}");
+            }
+
+            bool isRebinding = _rebindingId == shortcut.Id;
+            bool isOverridden = shortcut.Override != null;
+            string bindDisplay = isRebinding
+                ? "Press key...  (Esc to cancel)"
+                : ShortcutManager.GetDisplayString(shortcut.Binding);
+
+            using (paper.Row($"pref_sc_{shortcut.Id}")
+                .Height(EditorTheme.RowHeight)
+                .ChildLeft(8).RowBetween(4)
+                .Enter())
+            {
+                // Display name
+                paper.Box($"pref_sc_name_{shortcut.Id}")
+                    .Width(w * 0.4f).Height(EditorTheme.RowHeight)
+                    .Text(shortcut.DisplayName, font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSize - 1)
+                    .Alignment(TextAlignment.MiddleLeft);
+
+                // Binding button
+                paper.Box($"pref_sc_bind_{shortcut.Id}")
+                    .Width(160).Height(EditorTheme.RowHeight - 4).Rounded(3)
+                    .BackgroundColor(isRebinding ? EditorTheme.Purple300 : EditorTheme.Neutral200)
+                    .Hovered.BackgroundColor(isRebinding ? EditorTheme.Purple300 : EditorTheme.Ink200).End()
+                    .Text(bindDisplay, font)
+                    .TextColor(isRebinding ? EditorTheme.Ink500 : (isOverridden ? EditorTheme.Purple500 : EditorTheme.Ink400))
+                    .FontSize(EditorTheme.FontSize - 1)
+                    .Alignment(TextAlignment.MiddleCenter)
+                    .OnClick(shortcut.Id, (id, _) =>
+                    {
+                        _rebindingId = _rebindingId == id ? null : id;
+                        ShortcutManager.IsRebinding = _rebindingId != null;
+                    });
+
+                // Reset button (only if overridden)
+                if (isOverridden)
+                {
+                    paper.Box($"pref_sc_rst_{shortcut.Id}")
+                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(3)
+                        .BackgroundColor(EditorTheme.Neutral200)
+                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                        .Text("Reset", font)
+                        .TextColor(EditorTheme.Ink400)
+                        .FontSize(EditorTheme.FontSize - 2)
+                        .Alignment(TextAlignment.MiddleCenter)
+                        .OnClick(shortcut.Id, (id, _) => ShortcutManager.ClearOverride(id));
+                }
+            }
+        }
     }
 
     // ================================================================

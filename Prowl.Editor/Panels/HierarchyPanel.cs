@@ -145,6 +145,27 @@ public class HierarchyPanel : DockPanel
                 // Track if the background (hier_bg) is hovered for drop-on-empty-space
                 bool bgHovered = paper.IsParentHovered;
 
+                // Hierarchy keyboard shortcuts
+                if (bgHovered && !ShortcutManager.IsRebinding)
+                {
+                    if (ShortcutManager.IsPressed("Hierarchy/Delete"))
+                    {
+                        foreach (var go in Selection.GetSelected<GameObject>().ToList())
+                            DeleteGameObject(go);
+                    }
+                    else if (ShortcutManager.IsPressed("Hierarchy/Duplicate"))
+                    {
+                        foreach (var go in Selection.GetSelected<GameObject>().ToList())
+                            DuplicateGameObject(go);
+                    }
+                    else if (ShortcutManager.IsPressed("Hierarchy/Rename"))
+                    {
+                        var first = Selection.GetSelected<GameObject>().FirstOrDefault();
+                        if (first != null)
+                            StartRenameGO(first, Selection.GetSelected<GameObject>());
+                    }
+                }
+
                 // Tree view
                 using (ScrollView.Begin(paper, "hier_scroll", width, height - EditorTheme.RowHeight - 22))
                 {

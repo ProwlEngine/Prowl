@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text.Json;
@@ -26,6 +27,9 @@ public class EditorSettings
     public bool AutoSaveLayout { get; set; } = true;
     public bool ReimportOnFocusOnly { get; set; } = true;
     public int ThumbnailSize { get; set; } = 32;
+
+    // Shortcuts — only user-overridden bindings are stored
+    public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();
 
     // Theme
     public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();

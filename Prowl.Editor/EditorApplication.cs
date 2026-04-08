@@ -171,6 +171,24 @@ public class EditorApplication : Game
             Input.UnlockCursor();
         }
 
+        // Global keyboard shortcuts
+        if (!ShortcutManager.IsRebinding)
+        {
+            if (ShortcutManager.IsPressed("Global/Save"))
+            {
+                if (!EditorSceneManager.Save())
+                    PromptSaveAs();
+            }
+            else if (ShortcutManager.IsPressed("Global/SaveAs"))
+            {
+                PromptSaveAs();
+            }
+            else if (ShortcutManager.IsPressed("Global/NewScene"))
+            {
+                EditorSceneManager.NewScene();
+            }
+        }
+
         // Reset per-frame state
         GameViewInputHandler.IsGameViewFocused = false;
 
@@ -703,6 +721,20 @@ public class EditorApplication : Game
     /// Check if a panel of the given type is currently open.
     /// </summary>
     public bool IsPanelOpen(Type panelType) => FindOpenPanel(panelType) != null;
+
+    private void PromptSaveAs()
+    {
+        if (Project.Current == null) return;
+        Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+        {
+            if (path == null || Project.Current == null) return;
+            string rel = EditorAssetDatabase.NormalizePath(
+                System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
+            if (!rel.EndsWith(".scene")) rel += ".scene";
+            EditorSceneManager.SaveAs(rel);
+        }, Project.Current.AssetsPath,
+           new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+    }
 
     // ================================================================
     //  Menu Registration

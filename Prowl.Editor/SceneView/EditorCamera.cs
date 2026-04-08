@@ -205,7 +205,7 @@ public class EditorCamera
         }
 
         // F = focus on selection
-        if (Input.GetKeyDown(KeyCode.F))
+        if (ShortcutManager.IsPressed("Scene/Focus"))
         {
             FocusSelection();
             consumed = true;

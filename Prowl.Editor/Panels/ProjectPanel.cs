@@ -313,6 +313,18 @@ public class ProjectPanel : DockPanel
             // Right-click background — show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_content_bg_ctx");
 
+            // Project keyboard shortcuts
+            if (paper.IsParentHovered && !ShortcutManager.IsRebinding)
+            {
+                if (ShortcutManager.IsPressed("Project/Delete"))
+                    DeleteSelectedItems();
+                else if (ShortcutManager.IsPressed("Project/Rename"))
+                {
+                    var first = Selection.GetSelected<ContentItem>().FirstOrDefault();
+                    if (first != null) StartRename(first);
+                }
+            }
+
             // Accept GameObjectDragPayload to create prefabs
             if (DragDrop.IsDraggingType<GameObjectDragPayload>() && paper.IsParentHovered)
             {
@@ -601,42 +613,7 @@ public class ProjectPanel : DockPanel
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
             builder.Item($"Rename", () => StartRename(item, inTree), enabled: !isMulti && !isRoot, icon: EditorIcons.PenToSquare);
 
-            builder.Item($"Delete", () =>
-            {
-                var selected = Selection.GetSelected<ContentItem>().ToList();
-                if (selected.Count == 0) return;
-
-                string names = selected.Count == 1
-                    ? selected[0].Name
-                    : $"{selected.Count} items";
-
-                ModalDialog.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
-                {
-                    var db = EditorAssetDatabase.Instance;
-                    if (db == null) return;
-                    foreach (var sel in selected)
-                    {
-                        if (string.IsNullOrEmpty(sel.RelativePath)) continue;
-                        if (sel.IsFolder)
-                        {
-                            string absPath = Path.Combine(Project.Current!.AssetsPath, sel.RelativePath);
-                            if (Directory.Exists(absPath))
-                            {
-                                Directory.Delete(absPath, true);
-                                string metaPath = MetaFile.GetMetaPath(absPath);
-                                if (File.Exists(metaPath)) File.Delete(metaPath);
-                            }
-                            if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
-                                _currentFolder = "";
-                        }
-                        else
-                        {
-                            db.DeleteAsset(sel.RelativePath);
-                        }
-                    }
-                    Selection.Clear();
-                });
-            }, enabled: !isRoot, icon: EditorIcons.Trash);
+            builder.Item($"Delete", () => DeleteSelectedItems(), enabled: !isRoot, icon: EditorIcons.Trash);
         });
     }
 
@@ -693,6 +670,41 @@ public class ProjectPanel : DockPanel
         };
         Selection.Select(newItem);
         StartRename(newItem);
+    }
+
+    private void DeleteSelectedItems()
+    {
+        var selected = Selection.GetSelected<ContentItem>().ToList();
+        if (selected.Count == 0) return;
+
+        string names = selected.Count == 1 ? selected[0].Name : $"{selected.Count} items";
+
+        ModalDialog.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
+        {
+            var db = EditorAssetDatabase.Instance;
+            if (db == null) return;
+            foreach (var sel in selected)
+            {
+                if (string.IsNullOrEmpty(sel.RelativePath)) continue;
+                if (sel.IsFolder)
+                {
+                    string absPath = Path.Combine(Project.Current!.AssetsPath, sel.RelativePath);
+                    if (Directory.Exists(absPath))
+                    {
+                        Directory.Delete(absPath, true);
+                        string metaPath = MetaFile.GetMetaPath(absPath);
+                        if (File.Exists(metaPath)) File.Delete(metaPath);
+                    }
+                    if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
+                        _currentFolder = "";
+                }
+                else
+                {
+                    db.DeleteAsset(sel.RelativePath);
+                }
+            }
+            Selection.Clear();
+        });
     }
 
     private void StartRename(ContentItem item, bool inTree = false)
