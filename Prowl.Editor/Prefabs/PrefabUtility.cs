@@ -262,7 +262,7 @@ public static class PrefabUtility
             var field = current.GetType().GetField(parts[i],
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (field == null) return null;
-            current = field.GetValue(current)!;
+            current = field.GetValue(current);
             if (current == null) return null;
         }
         return current.GetType().GetField(parts[^1],
@@ -278,7 +278,7 @@ public static class PrefabUtility
             var field = current.GetType().GetField(parts[i],
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (field == null) return null;
-            current = field.GetValue(current)!;
+            current = field.GetValue(current);
             if (current == null && i < parts.Length - 1) return null;
         }
         return current;
@@ -293,7 +293,7 @@ public static class PrefabUtility
             var field = current.GetType().GetField(parts[i],
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (field == null) return;
-            current = field.GetValue(current)!;
+            current = field.GetValue(current);
             if (current == null) return;
         }
         var finalField = current.GetType().GetField(parts[^1],
@@ -448,7 +448,7 @@ public static class PrefabUtility
         // Walk GO path (g0, g1, etc.)
         while (i < parts.Length && parts[i].StartsWith('g'))
         {
-            if (!int.TryParse(parts[i].AsSpan(1), out int childIdx) || childIdx >= currentGO.Children.Count)
+            if (!int.TryParse(parts[i].AsSpan(1), out int childIdx) || childIdx < 0 || childIdx >= currentGO.Children.Count)
                 return;
             currentGO = currentGO.Children[childIdx];
             i++;
@@ -483,7 +483,7 @@ public static class PrefabUtility
             var field = current.GetType().GetField(parts[i],
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (field == null) return;
-            current = field.GetValue(current)!;
+            current = field.GetValue(current);
             if (current == null) return;
         }
 
@@ -528,7 +528,11 @@ public static class PrefabUtility
         if (compIndex >= sourceComps.Count) return;
 
         var sourceComp = sourceComps[compIndex];
-        if (sourceComp.GetType() != instanceComp.GetType()) return; // Type mismatch — structure broken
+        if (sourceComp.GetType() != instanceComp.GetType())
+        {
+            Runtime.Debug.LogWarning($"[Prefab] Component type mismatch at index {compIndex}: instance={instanceComp.GetType().Name}, source={sourceComp.GetType().Name}");
+            return;
+        }
 
         // Build path prefix
         string pathPrefix = string.IsNullOrEmpty(goPath)
