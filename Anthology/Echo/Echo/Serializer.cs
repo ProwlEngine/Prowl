@@ -83,7 +83,17 @@ public static class Serializer
         => Serialize(targetType, value, new SerializationContext(typeMode));
 
     public static EchoObject Serialize(object? value, SerializationContext context)
-        => Serialize(value?.GetType(), value, context);
+    {
+        var result = Serialize(value?.GetType(), value, context);
+
+        // No targetType was provided by the caller — in Auto mode, ensure the
+        // root object includes its type so deserialization can work without
+        // the caller needing to know the type upfront.
+        if (value != null && context.TypeMode == TypeMode.Auto)
+            result = WrapWithTypeEnvelope(result, value.GetType(), context);
+
+        return result;
+    }
 
     public static EchoObject Serialize(Type? targetType, object? value, SerializationContext context)
     {
@@ -293,11 +303,8 @@ public static class Serializer
             if (value.TryGet("$value", out var dataValue))
                 return new TypeEnvelope { ActualType = type, Data = dataValue };
 
-            //// Otherwise, the compound itself is the data (minus type info)
-            //var dataCompound = EchoObject.NewCompound();
-            //foreach (var kvp in value.Tags.Where(k => !k.Key.StartsWith("$")))
-            //    dataCompound[kvp.Key] = kvp.Value;
-            // We dont actually have to minus the type info, since it is prefixed with $, formatters should ignore it.
+            // Remove $type from the data so formatters don't see it as a data entry
+            value.Tags.Remove("$type");
 
             return new TypeEnvelope { ActualType = type, Data = value };
         }

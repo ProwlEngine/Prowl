@@ -15,7 +15,7 @@ public class FixedStructureTests
     {
         var original = new Vector3 { X = 1.5f, Y = 2.5f, Z = 3.5f };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(Vector3), original);
 
         // Verify it's serialized as a List, not a Compound
         Assert.Equal(EchoType.List, serialized.TagType);
@@ -32,7 +32,7 @@ public class FixedStructureTests
     {
         var original = new Quaternion { X = 0.0f, Y = 0.0f, Z = 0.0f, W = 1.0f };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(Quaternion), original);
         Assert.Equal(EchoType.List, serialized.TagType);
 
         var result = RoundTrip(original);
@@ -48,7 +48,7 @@ public class FixedStructureTests
     {
         var original = new Color { R = 255, G = 128, B = 64, A = 255 };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(Color), original);
         Assert.Equal(EchoType.List, serialized.TagType);
 
         var result = RoundTrip(original);
@@ -69,7 +69,7 @@ public class FixedStructureTests
             Data = new byte[] { 1, 2, 3, 4, 5 }
         };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(NetworkPacket), original);
         // For classes with FixedEchoStructure, the implementation uses a list
         Assert.Equal(EchoType.List, serialized.TagType);
 
@@ -91,7 +91,7 @@ public class FixedStructureTests
             Scale = new Vector3 { X = 1, Y = 1, Z = 1 }
         };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(Transform), original);
         Assert.Equal(EchoType.List, serialized.TagType);
 
         var result = RoundTrip(original);
@@ -138,7 +138,7 @@ public class FixedStructureTests
     {
         var original = new Point2D { X = 100, Y = 200 };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(Point2D), original);
         Assert.Equal(EchoType.List, serialized.TagType);
 
         var result = RoundTrip(original);
@@ -156,7 +156,7 @@ public class FixedStructureTests
             BottomRight = new Point2D { X = 100, Y = 100 }
         };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(Rectangle), original);
         Assert.Equal(EchoType.List, serialized.TagType);
 
         var result = RoundTrip(original);
@@ -178,7 +178,7 @@ public class FixedStructureTests
             Payload = "Hello, World!"
         };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(FixedNetworkMessage), original);
         Assert.Equal(EchoType.List, serialized.TagType);
 
         // Verify it's more compact than compound (no field names stored)
@@ -236,7 +236,7 @@ public class FixedStructureTests
     {
         var original = new Color { R = 10, G = 20, B = 30, A = 40 };
 
-        var serialized = Serializer.Serialize(original);
+        var serialized = Serializer.Serialize(typeof(Color), original);
         var list = (List<EchoObject>)serialized.Value!;
 
         // Fields should be in declaration order
@@ -251,7 +251,7 @@ public class FixedStructureTests
     {
         // Create both fixed and non-fixed versions to compare
         var fixedStruct = new Vector3 { X = 1, Y = 2, Z = 3 };
-        var fixedSerialized = Serializer.Serialize(fixedStruct);
+        var fixedSerialized = Serializer.Serialize(typeof(Vector3), fixedStruct);
 
         // Fixed structure should use List (ordinal-based)
         Assert.Equal(EchoType.List, fixedSerialized.TagType);

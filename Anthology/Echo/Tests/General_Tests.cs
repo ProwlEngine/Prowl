@@ -643,12 +643,16 @@ public class General_Tests
             Values = new Dictionary<string, float> { { "test", 1.0f } }
         };
 
-        // Act
+        // Act - using Serialize(object) which always includes root type in Auto mode
         var result = Serializer.Serialize(complex, TypeMode.Auto);
 
         // Assert
-        Assert.False(result.TryGet("$type", out _)); // Base type matches
+        Assert.True(result.TryGet("$type", out _)); // Root always includes type in Auto mode
         Assert.False(result.Get("Object").TryGet("$type", out _)); // Nested object type matches
+
+        // Act - with explicit targetType, root type is omitted when it matches
+        var resultExplicit = Serializer.Serialize(typeof(ComplexObject), complex, TypeMode.Auto);
+        Assert.False(resultExplicit.TryGet("$type", out _)); // Explicit target matches, no type needed
 
         // Arrange
         var complex2 = new ComplexObject {
@@ -661,7 +665,7 @@ public class General_Tests
         var result2 = Serializer.Serialize(complex2, TypeMode.Auto);
 
         // Assert
-        Assert.False(result2.TryGet("$type", out _)); // Base type matches
+        Assert.True(result2.TryGet("$type", out _)); // Root always includes type in Auto mode
         Assert.True(result2.Get("Object").TryGet("$type", out var objectType)); // Nested object type does not match
     }
 
