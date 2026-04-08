@@ -306,9 +306,6 @@ public static class Serializer
             if (value.TryGet("$value", out var dataValue))
                 return new TypeEnvelope { ActualType = type, Data = dataValue };
 
-            // Remove $type from the data so formatters don't see it as a data entry
-            value.Tags.Remove("$type");
-
             return new TypeEnvelope { ActualType = type, Data = value };
         }
 

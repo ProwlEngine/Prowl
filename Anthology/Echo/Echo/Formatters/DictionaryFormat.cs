@@ -66,9 +66,10 @@ internal sealed class DictionaryFormat : ISerializationFormat
 
         if (keyType == typeof(string))
         {
-            // string-key behavior
+            // string-key behavior (skip $-prefixed keys like $type, $id)
             foreach (KeyValuePair<string, EchoObject> tag in value.Tags)
-                dict.Add(tag.Key, Serializer.Deserialize(tag.Value, valueType, context));
+                if (!tag.Key.StartsWith('$'))
+                    dict.Add(tag.Key, Serializer.Deserialize(tag.Value, valueType, context));
         }
         else
         {

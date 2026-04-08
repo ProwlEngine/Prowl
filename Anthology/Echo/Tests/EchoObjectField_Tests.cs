@@ -378,4 +378,55 @@ public class EchoObjectField_Tests
         Assert.False(restored.IsActive);
         Assert.Equal("npc", restored.Tags["type"]);
     }
+
+    [Fact]
+    public void Deserialization_DoesNotMutateSourceEchoObject()
+    {
+        var gameObj = new FakeGameObject
+        {
+            Name = "Player",
+            IsActive = true,
+            Components = new List<FakeComponent>
+            {
+                new() { Name = "Health", Priority = 1, Speed = 0f },
+            }
+        };
+
+        // Serialize with type info at root (no targetType = Auto includes $type)
+        var serialized = Serializer.Serialize(gameObj);
+
+        // Snapshot the keys before deserialization
+        var keysBefore = serialized.Tags.Keys.ToHashSet();
+        Assert.Contains("$type", keysBefore);
+
+        // Deserialize
+        var deserialized = Serializer.Deserialize<FakeGameObject>(serialized);
+        Assert.Equal("Player", deserialized.Name);
+
+        // The source EchoObject must NOT have been mutated
+        var keysAfter = serialized.Tags.Keys.ToHashSet();
+        Assert.Equal(keysBefore, keysAfter);
+        Assert.Contains("$type", keysAfter);
+    }
+
+    [Fact]
+    public void Deserialization_SameEchoObject_CanBeDeserializedMultipleTimes()
+    {
+        var gameObj = new FakeGameObject
+        {
+            Name = "Enemy",
+            IsActive = false,
+        };
+
+        var serialized = Serializer.Serialize(gameObj);
+
+        // Deserialize the same EchoObject multiple times — should all succeed
+        for (int i = 0; i < 3; i++)
+        {
+            var result = Serializer.Deserialize<FakeGameObject>(serialized);
+            Assert.NotNull(result);
+            Assert.Equal("Enemy", result.Name);
+            Assert.False(result.IsActive);
+        }
+    }
 }
