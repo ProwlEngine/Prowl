@@ -63,18 +63,16 @@ public class AssetRefPropertyEditor : PropertyEditor
 
             using (fieldEl.Enter())
             {
-                // Accept drop
-                if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is AssetDragPayload dropPayload)
+                // Accept asset drop
+                var drop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
+                    dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));
+                if (drop != null)
                 {
-                    if (dropPayload.AssetType != null && fieldType.IsAssignableFrom(dropPayload.AssetType))
+                    var droppedAsset = Runtime.AssetDatabase.Get(drop.AssetGuid);
+                    if (droppedAsset != null)
                     {
-                        var droppedAsset = Runtime.AssetDatabase.Get(dropPayload.AssetGuid);
-                        if (droppedAsset != null)
-                        {
-                            assetRef.SetInstance(droppedAsset);
-                            onChange(assetRef);
-                        }
-                        DragDrop.EndDrag();
+                        assetRef.SetInstance(droppedAsset);
+                        onChange(assetRef);
                     }
                 }
 

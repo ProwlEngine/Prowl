@@ -58,6 +58,9 @@ public static class DragDrop
     public static DragPayload? Payload { get; private set; }
     public static Float2 DragPosition { get; private set; }
 
+    /// <summary>True on the frame the mouse was released after a drag (payload still available).</summary>
+    public static bool IsDropFrame => !IsDragging && Payload != null;
+
     public static void StartDrag(DragPayload payload)
     {
         IsDragging = true;
@@ -102,22 +105,47 @@ public static class DragDrop
     }
 
     /// <summary>
-    /// Check if a specific payload type is being dragged.
+    /// Check if a specific payload type is being dragged (actively, mouse still held).
     /// </summary>
     public static bool IsDraggingType<T>() where T : DragPayload
         => IsDragging && Payload is T;
 
     /// <summary>
+    /// Check if a specific payload type is being dragged OR is on the drop frame
+    /// (mouse just released, payload still available). Useful for visual feedback
+    /// that should persist through the drop frame.
+    /// </summary>
+    public static bool HasPayloadType<T>() where T : DragPayload
+        => Payload is T;
+
+    /// <summary>
     /// Try to accept a drop of a specific payload type. Returns the payload if
-    /// the mouse was released this frame over the element, null otherwise.
-    /// Call this inside an element's scope.
+    /// the mouse was released this frame over the hovered element, null otherwise.
+    /// Consumes the payload so no other drop target can accept it.
     /// </summary>
     public static T? AcceptDrop<T>(bool isHovered) where T : DragPayload
     {
         if (!isHovered || Payload is not T typed) return null;
 
-        // Mouse just released = drop
-        if (!IsDragging && Payload != null)
+        // Mouse just released = drop frame
+        if (IsDropFrame)
+        {
+            Payload = null;
+            return typed;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Try to accept a drop with an additional validation predicate.
+    /// Only consumes the payload if the predicate returns true.
+    /// </summary>
+    public static T? AcceptDrop<T>(bool isHovered, Func<T, bool> validate) where T : DragPayload
+    {
+        if (!isHovered || Payload is not T typed) return null;
+
+        if (IsDropFrame && validate(typed))
         {
             Payload = null;
             return typed;

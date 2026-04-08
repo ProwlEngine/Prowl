@@ -47,9 +47,12 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Text(label, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-            // Check if a compatible asset is being dragged over this field
-            bool isDragTarget = DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload adp
+            // Check if a compatible payload is being dragged over this field
+            bool isAssetDragTarget = DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload adp
                 && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType);
+            bool isGODragTarget = DragDrop.IsDragging && DragDrop.Payload is GameObjectDragPayload
+                && fieldType.IsAssignableFrom(typeof(GameObject));
+            bool isDragTarget = isAssetDragTarget || isGODragTarget;
 
             // Object field row
             var fieldEl = paper.Row($"{id}_field")
@@ -62,23 +65,22 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
             using (fieldEl.Enter())
             {
-                // Accept drop
-                if (isDragTarget && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload dropPayload)
+                // Accept asset drop
+                var assetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
+                    dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));
+                if (assetDrop != null)
                 {
-                    var droppedAsset = Runtime.AssetDatabase.Get(dropPayload.AssetGuid);
-                    if (droppedAsset != null && fieldType.IsAssignableFrom(droppedAsset.GetType()))
+                    var droppedAsset = Runtime.AssetDatabase.Get(assetDrop.AssetGuid);
+                    if (droppedAsset != null)
                         onChange(droppedAsset);
-                    DragDrop.EndDrag();
                 }
-                else if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is AssetDragPayload hoveredDrop)
+
+                // Accept GameObject drop (drag from Hierarchy into Inspector)
+                if (fieldType.IsAssignableFrom(typeof(GameObject)))
                 {
-                    if (hoveredDrop.AssetType != null && fieldType.IsAssignableFrom(hoveredDrop.AssetType))
-                    {
-                        var droppedAsset = Runtime.AssetDatabase.Get(hoveredDrop.AssetGuid);
-                        if (droppedAsset != null)
-                            onChange(droppedAsset);
-                        DragDrop.EndDrag();
-                    }
+                    var goDrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
+                    if (goDrop != null && goDrop.GameObjects.Length > 0)
+                        onChange(goDrop.GameObjects[0]);
                 }
 
                 // Icon

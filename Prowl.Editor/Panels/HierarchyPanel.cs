@@ -29,15 +29,11 @@ public class HierarchyPanel : DockPanel
     private const float ToolbarHeight = 30f;
     private const float IndentSize = 16f;
 
-    // Drag state
-    private bool _dragInitiated;
-    private Float2 _dragStartPos;
-    private GameObject? _dragSourceGO;
-    private bool _assetDropTarget; // True if hierarchy was hovered during asset drag
-    private const float DragThreshold = 5f;
+    // Drag-drop state
     private string? _dropTargetId; // GO identifier for the current drop target
     private enum DropPosition { Into, Above, Below }
     private DropPosition _dropPos;
+    private bool _assetDropTarget; // True if hierarchy was hovered during asset drag
 
     // Track expanded state per GO identifier
     private static readonly Dictionary<string, bool> _expandedState = new();
@@ -50,11 +46,11 @@ public class HierarchyPanel : DockPanel
 
         var scene = Scene.Current;
 
-        // Reset drop target each frame — but only if still actively dragging GOs
-        // (on release frame, we need the last target to process the drop)
+        // Reset drop target each frame while actively dragging GOs.
+        // On the drop frame (IsDropFrame), preserve _dropTargetId so HandleGODragDrop can read it.
         if (DragDrop.IsDraggingType<GameObjectDragPayload>())
             _dropTargetId = null;
-        else if (!DragDrop.IsDragging && DragDrop.Payload is not GameObjectDragPayload)
+        else if (!DragDrop.HasPayloadType<GameObjectDragPayload>())
             _dropTargetId = null;
 
         using (paper.Column("hier_root").Size(width, height).OnClick(0, (_, _) => Selection.Clear()).OnRightClick(0, (_, _) => Selection.Clear()).Enter())
@@ -176,7 +172,6 @@ public class HierarchyPanel : DockPanel
                     }
 
                     // Accept asset drops — spawn at root
-                    // Track hover during drag so we know the hierarchy was the target on release
                     if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
                     {
                         _assetDropTarget = true;
@@ -188,12 +183,12 @@ public class HierarchyPanel : DockPanel
                             .FontSize(EditorTheme.FontSize - 2)
                             .Alignment(TextAlignment.MiddleCenter);
                     }
-                    else if (DragDrop.IsDraggingType<AssetDragPayload>() && !paper.IsParentHovered)
+                    else if (DragDrop.IsDraggingType<AssetDragPayload>())
                     {
-                        _assetDropTarget = false; // Moved away during drag
+                        _assetDropTarget = false;
                     }
 
-                    if (!DragDrop.IsDragging && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
+                    if (DragDrop.IsDropFrame && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
                     {
                         if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
                         {
@@ -283,18 +278,21 @@ public class HierarchyPanel : DockPanel
                 .BackgroundColor(EditorTheme.Purple400);
         }
 
+        bool isDropInto = _dropTargetId == goId && _dropPos == DropPosition.Into;
+
         using (paper
             .Row($"hier_go_{goId}")
             .Height(EditorTheme.RowHeight)
             .BackgroundColor(isSelected ? EditorTheme.Purple400 :
-                (_dropTargetId == goId && _dropPos == DropPosition.Into)
-                    ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
+                isDropInto ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Rounded(4)
             .Margin(indent + 8, 0, 0, 0)
             .StopEventPropagation()
             .OnClick((go, currentIndex, flatList), (cap, e) =>
             {
+                // Don't select on click if we just finished a drag
+                if (DragDrop.IsDragging || DragDrop.IsDropFrame) return;
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
                 bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
                 Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
@@ -304,10 +302,18 @@ public class HierarchyPanel : DockPanel
                 _expandedState[id] = !_expandedState.GetValueOrDefault(id, true);
             })
             .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.Select(g); })
+            .OnDragStart(go, (dragGO, _) =>
+            {
+                if (DragDrop.IsDragging) return;
+                // Drag all selected objects if the source is selected, otherwise just the source
+                var selected = Selection.GetSelected<GameObject>().ToArray();
+                if (selected.Length > 0 && Selection.IsSelected(dragGO))
+                    DragDrop.StartDrag(new GameObjectDragPayload(selected));
+                else
+                    DragDrop.StartDrag(new GameObjectDragPayload(dragGO));
+            })
             .Enter())
         {
-            // Initiate drag on mouse down + movement
-            HandleDragStart(paper, go);
 
             // Expand arrow
             if (hasChildren)
@@ -387,44 +393,6 @@ public class HierarchyPanel : DockPanel
     //  Drag & Drop for reparenting/reordering
     // ================================================================
 
-    private void HandleDragStart(Paper paper, GameObject go)
-    {
-        if (DragDrop.IsDragging) return;
-
-        // Start tracking on mouse down — record WHICH GO was pressed
-        if (Input.GetMouseButtonDown(0) && paper.IsParentHovered)
-        {
-            _dragInitiated = true;
-            _dragStartPos = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
-            _dragSourceGO = go;
-        }
-
-        // Only the GO that initiated the drag checks the threshold
-        if (_dragInitiated && _dragSourceGO == go && Input.GetMouseButton(0))
-        {
-            var mousePos = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
-            if (Float2.Distance(mousePos, _dragStartPos) > DragThreshold)
-            {
-                _dragInitiated = false;
-
-                // Drag all selected objects (if the source GO is selected), otherwise just the source
-                var selected = Selection.GetSelected<GameObject>().ToArray();
-                if (selected.Length > 0 && Selection.IsSelected(_dragSourceGO))
-                    DragDrop.StartDrag(new GameObjectDragPayload(selected));
-                else
-                    DragDrop.StartDrag(new GameObjectDragPayload(_dragSourceGO));
-
-                _dragSourceGO = null;
-            }
-        }
-
-        if (Input.GetMouseButtonUp(0))
-        {
-            _dragInitiated = false;
-            _dragSourceGO = null;
-        }
-    }
-
     private void HandleDropTarget(Paper paper, GameObject go, string goId)
     {
         if (!DragDrop.IsDraggingType<GameObjectDragPayload>()) return;
@@ -458,77 +426,75 @@ public class HierarchyPanel : DockPanel
 
     private void HandleGODragDrop(Scene scene)
     {
-        // Process drop when mouse released
-        if (!DragDrop.IsDragging && DragDrop.Payload is GameObjectDragPayload goDrop && _dropTargetId != null)
+        if (!DragDrop.IsDropFrame || DragDrop.Payload is not GameObjectDragPayload goDrop || _dropTargetId == null)
+            return;
+
+        var target = FindGOByIdentifier(_dropTargetId);
+        if (target == null)
         {
-            var target = FindGOByIdentifier(_dropTargetId);
-            if (target != null)
+            DragDrop.EndDrag();
+            return;
+        }
+
+        foreach (var dragged in goDrop.GameObjects)
+        {
+            // Can't drop onto self or own descendant
+            if (dragged == target || IsDescendantOf(target, dragged))
+                continue;
+
+            // Block reparenting into prefab instances (structure is fixed)
+            if (_dropPos == DropPosition.Into && target.IsPrefabInstance && target.PrefabChildCount >= 0)
             {
-                var draggedObjects = goDrop.GameObjects;
-
-                foreach (var dragged in draggedObjects)
-                {
-                    // Can't drop onto self or own descendant
-                    if (dragged == target || IsDescendantOf(target, dragged))
-                        continue;
-
-                    // Block reparenting into prefab instances (structure is fixed)
-                    if (_dropPos == DropPosition.Into && target.IsPrefabInstance && target.PrefabChildCount >= 0)
-                    {
-                        Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
-                        continue;
-                    }
-
-                    // Block moving a prefab child out of its parent
-                    if (dragged.Parent != null && dragged.Parent.IsPrefabInstance && dragged.Parent.PrefabChildCount >= 0)
-                    {
-                        int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
-                        if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
-                        {
-                            Widgets.Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
-                            continue;
-                        }
-                    }
-
-                    switch (_dropPos)
-                    {
-                        case DropPosition.Into:
-                            dragged.SetParent(target);
-                            _expandedState[_dropTargetId!] = true;
-                            break;
-
-                        case DropPosition.Above:
-                        case DropPosition.Below:
-                            // Reparent to same parent as target
-                            var targetParent = target.Parent;
-                            if (targetParent != null && targetParent.IsValid())
-                            {
-                                if (dragged.Parent != targetParent)
-                                    dragged.SetParent(targetParent);
-
-                                // Reorder: place before/after target
-                                int targetIdx = target.GetSiblingIndex() ?? 0;
-                                if (_dropPos == DropPosition.Below) targetIdx++;
-                                // If dragged was before target in same parent, adjust index
-                                int dragIdx = dragged.GetSiblingIndex() ?? 0;
-                                if (dragIdx < targetIdx) targetIdx--;
-                                dragged.SetSiblingIndex(Math.Max(0, targetIdx));
-                            }
-                            else
-                            {
-                                // Target is a root object — unparent dragged to become root too
-                                if (dragged.Parent != null && dragged.Parent.IsValid())
-                                    dragged.SetParent(default); // null parent = root
-                            }
-                            break;
-                    }
-                }
-
-                EditorSceneManager.IsDirty = true;
+                Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                continue;
             }
 
-            DragDrop.EndDrag();
+            // Block moving a prefab child out of its parent
+            if (dragged.Parent != null && dragged.Parent.IsPrefabInstance && dragged.Parent.PrefabChildCount >= 0)
+            {
+                int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
+                if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
+                {
+                    Widgets.Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                    continue;
+                }
+            }
+
+            switch (_dropPos)
+            {
+                case DropPosition.Into:
+                    dragged.SetParent(target);
+                    _expandedState[_dropTargetId!] = true;
+                    break;
+
+                case DropPosition.Above:
+                case DropPosition.Below:
+                    var targetParent = target.Parent;
+                    if (targetParent != null && targetParent.IsValid())
+                    {
+                        if (dragged.Parent != targetParent)
+                            dragged.SetParent(targetParent);
+
+                        // Reorder: place before/after target
+                        int targetIdx = target.GetSiblingIndex() ?? 0;
+                        if (_dropPos == DropPosition.Below) targetIdx++;
+                        // If dragged was before target in same parent, adjust index
+                        int dragIdx = dragged.GetSiblingIndex() ?? 0;
+                        if (dragIdx < targetIdx) targetIdx--;
+                        dragged.SetSiblingIndex(Math.Max(0, targetIdx));
+                    }
+                    else
+                    {
+                        // Target is a root object — make dragged a root too
+                        if (dragged.Parent != null && dragged.Parent.IsValid())
+                            dragged.SetParent(default);
+                    }
+                    break;
+            }
         }
+
+        EditorSceneManager.IsDirty = true;
+        DragDrop.EndDrag();
     }
 
     private static bool IsDescendantOf(GameObject potentialChild, GameObject potentialParent)

@@ -326,7 +326,8 @@ public class ProjectPanel : DockPanel
                     .Alignment(TextAlignment.MiddleCenter);
             }
 
-            if (!DragDrop.IsDragging && DragDrop.Payload is GameObjectDragPayload goDrop && paper.IsParentHovered)
+            var goDrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
+            if (goDrop != null)
             {
                 var go = goDrop.GameObjects.FirstOrDefault();
                 if (go != null)
@@ -336,7 +337,6 @@ public class ProjectPanel : DockPanel
                     string relPath = string.IsNullOrEmpty(folder) ? name : folder + "/" + name;
                     Prefabs.PrefabUtility.CreatePrefab(go, relPath);
                 }
-                DragDrop.EndDrag();
             }
 
             // Breadcrumb
