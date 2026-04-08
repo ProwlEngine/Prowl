@@ -307,8 +307,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                .StopEventPropagation()
-                .OnClick(0, (_, _) => onRemove());
+                .OnClick(0, (_, e) => { e.StopPropagation(); onRemove(); });
         }
     }
 
@@ -346,8 +345,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                .StopEventPropagation()
-                .OnClick(0, (_, _) => onRemove());
+                .OnClick(0, (_, e) => { e.StopPropagation(); onRemove(); });
         }
     }
 
