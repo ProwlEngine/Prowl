@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.AssetImporting;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
@@ -16,7 +19,7 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".fbx", ".obj", ".gltf", ".glb", ".dae")]
 public class EditorModelImporter : AssetImporter
 {
-    public override int Version => 1;
+    public override int Version => 2; // Bumped: textures now resolved via asset database
 
     public override ImportResult Import(string absolutePath, EchoObject? settings)
     {
@@ -77,12 +80,81 @@ public class EditorModelImporter : AssetImporter
             }
 
             result.SubAssets = subAssets.ToArray();
+
+            // Post-process: replace inline textures with asset database references
+            ResolveTextureReferences(model, absolutePath, result);
         }
         catch (Exception ex)
         {
             Debug.LogError($"Failed to import model: {absolutePath}\n{ex.Message}");
         }
         return result;
+    }
+
+    /// <summary>
+    /// Walk all materials in the model and replace inline-loaded textures
+    /// with AssetRef references to the texture assets in the project.
+    /// This ensures texture import settings (filter, wrap, mipmaps) are respected.
+    /// </summary>
+    private static void ResolveTextureReferences(Model model, string modelAbsPath, ImportResult result)
+    {
+        var db = EditorAssetDatabase.Instance;
+        if (db == null) return;
+
+        string modelDir = Path.GetDirectoryName(modelAbsPath) ?? "";
+        string assetsRoot = Project.Current?.AssetsPath ?? "";
+        if (string.IsNullOrEmpty(assetsRoot)) return;
+
+        foreach (var matRef in model.Materials)
+        {
+            var mat = matRef.Res;
+            if (mat == null) continue;
+
+            // Get the _textures dictionary from PropertyState via the public getter
+            // Check each texture slot and try to resolve to an asset
+            ResolveTextureSlot(mat, "_MainTex", modelDir, assetsRoot, db, result);
+            ResolveTextureSlot(mat, "_NormalTex", modelDir, assetsRoot, db, result);
+            ResolveTextureSlot(mat, "_SurfaceTex", modelDir, assetsRoot, db, result);
+            ResolveTextureSlot(mat, "_EmissionTex", modelDir, assetsRoot, db, result);
+        }
+    }
+
+    private static void ResolveTextureSlot(Material mat, string slotName, string modelDir, string assetsRoot, EditorAssetDatabase db, ImportResult result)
+    {
+        var tex = mat._properties.GetTexture(slotName);
+        if (tex == null || tex.IsDisposed) return;
+
+        // The texture was loaded from a file path — try to find it in the asset database
+        string? texPath = tex.AssetPath;
+        if (string.IsNullOrEmpty(texPath)) return;
+
+        // Convert absolute path to relative path within the Assets folder
+        string relativePath = null;
+        if (Path.IsPathRooted(texPath))
+        {
+            if (texPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
+                relativePath = Path.GetRelativePath(assetsRoot, texPath).Replace('\\', '/');
+        }
+        else
+        {
+            // Relative to model directory — resolve to absolute then to relative
+            string absTexPath = Path.GetFullPath(Path.Combine(modelDir, texPath));
+            if (absTexPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
+                relativePath = Path.GetRelativePath(assetsRoot, absTexPath).Replace('\\', '/');
+        }
+
+        if (relativePath == null) return;
+
+        var entry = db.GetEntry(relativePath);
+        if (entry == null) return;
+
+        // Load the texture from the asset database instead of using the inline one
+        var dbTexture = Runtime.AssetDatabase.Get(entry.Guid) as Texture2D;
+        if (dbTexture != null)
+        {
+            mat.SetTexture(slotName, dbTexture);
+            result.Dependencies.Add(entry.Guid);
+        }
     }
 
     public override EchoObject? DefaultSettings()
