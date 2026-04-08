@@ -68,7 +68,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer floorRenderer = floor.AddComponent<MeshRenderer>();
         floorRenderer.Mesh = Mesh.CreateCube(new Float3(20, 1, 20));
         floorRenderer.Material = standardMaterial;
-        floorRenderer.MainColor = new Color(0.8f, 0.8f, 0.8f, 1.0f);
         floor.Transform.Position = new Float3(0, -0.5f, 0);
 
         // Add static rigidbody for floor
@@ -228,7 +227,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer anchorRenderer = anchor.AddComponent<MeshRenderer>();
         anchorRenderer.Mesh = Mesh.CreateSphere(0.2f, 8, 8);
         anchorRenderer.Material = standardMaterial;
-        anchorRenderer.MainColor = color;
         scene.Add(anchor);
 
         GameObject previousLink = anchor;
@@ -239,7 +237,6 @@ public sealed class PhysicsDemo : Game
             MeshRenderer linkRenderer = link.AddComponent<MeshRenderer>();
             linkRenderer.Mesh = Mesh.CreateCube(new Float3(0.5f, 1, 0.5f));
             linkRenderer.Material = standardMaterial;
-            linkRenderer.MainColor = color;
 
             Rigidbody3D linkRb = link.AddComponent<Rigidbody3D>();
             linkRb.Mass = 1.0f;
@@ -269,7 +266,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer frameRenderer = frame.AddComponent<MeshRenderer>();
         frameRenderer.Mesh = Mesh.CreateCube(new Float3(0.2f, 3, 0.2f));
         frameRenderer.Material = standardMaterial;
-        frameRenderer.MainColor = color;
         scene.Add(frame);
 
         // Door (dynamic)
@@ -278,7 +274,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer doorRenderer = door.AddComponent<MeshRenderer>();
         doorRenderer.Mesh = Mesh.CreateCube(new Float3(3, 2.8f, 0.1f));
         doorRenderer.Material = standardMaterial;
-        doorRenderer.MainColor = color;
 
         Rigidbody3D doorRb = door.AddComponent<Rigidbody3D>();
         doorRb.Mass = 2.0f;
@@ -309,7 +304,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer railRenderer = rail.AddComponent<MeshRenderer>();
         railRenderer.Mesh = Mesh.CreateCube(new Float3(0.1f, 4, 0.1f));
         railRenderer.Material = standardMaterial;
-        railRenderer.MainColor = color;
         scene.Add(rail);
 
         // Slider (dynamic)
@@ -318,7 +312,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer sliderRenderer = slider.AddComponent<MeshRenderer>();
         sliderRenderer.Mesh = Mesh.CreateCube(new Float3(1, 0.5f, 1));
         sliderRenderer.Material = standardMaterial;
-        sliderRenderer.MainColor = color;
 
         Rigidbody3D sliderRb = slider.AddComponent<Rigidbody3D>();
         sliderRb.Mass = 1.5f;
@@ -346,7 +339,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer torsoRenderer = torso.AddComponent<MeshRenderer>();
         torsoRenderer.Mesh = Mesh.CreateCube(new Float3(1, 1.5f, 0.5f));
         torsoRenderer.Material = standardMaterial;
-        torsoRenderer.MainColor = color;
 
         Rigidbody3D torsoRb = torso.AddComponent<Rigidbody3D>();
         torsoRb.Mass = 2.0f;
@@ -362,7 +354,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer armRenderer = leftArm.AddComponent<MeshRenderer>();
         armRenderer.Mesh = Mesh.CreateCube(new Float3(1, 0.3f, 0.3f));
         armRenderer.Material = standardMaterial;
-        armRenderer.MainColor = color;
 
         Rigidbody3D armRb = leftArm.AddComponent<Rigidbody3D>();
         armRb.Mass = 0.5f;
@@ -397,7 +388,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer baseRenderer = motorBase.AddComponent<MeshRenderer>();
         baseRenderer.Mesh = Mesh.CreateCube(new Float3(0.5f, 0.5f, 0.5f));
         baseRenderer.Material = standardMaterial;
-        baseRenderer.MainColor = color;
         scene.Add(motorBase);
 
         // Spinning platform
@@ -406,7 +396,6 @@ public sealed class PhysicsDemo : Game
         MeshRenderer platformRenderer = platform.AddComponent<MeshRenderer>();
         platformRenderer.Mesh = Mesh.CreateCube(new Float3(2, 0.2f, 2));
         platformRenderer.Material = standardMaterial;
-        platformRenderer.MainColor = color;
 
         Rigidbody3D platformRb = platform.AddComponent<Rigidbody3D>();
         platformRb.Mass = 1.0f;
@@ -638,7 +627,6 @@ public sealed class PhysicsDemo : Game
         cubeShootMesh = cubeShootMesh.IsNotValid() ? Mesh.CreateCube(new Float3(0.5f, 0.5f, 0.5f)) : cubeShootMesh;
         cubeRenderer.Mesh = cubeShootMesh;
         cubeRenderer.Material = standardMaterial;
-        cubeRenderer.MainColor = new Color(1.0f, 0.3f, 0.3f, 1.0f);
 
         Rigidbody3D cubeRb = cube.AddComponent<Rigidbody3D>();
         cubeRb.Mass = selectedCubeMass;
