@@ -239,11 +239,11 @@ public class ProjectPanel : DockPanel
                     .Text(isOpen ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(stateKey, (key, _) =>
+                    .OnClick(stateKey, (key, e) =>
                     {
+                        e.StopPropagation();
                         _folderOpenState[key] = !_folderOpenState.GetValueOrDefault(key, depth < 2);
-                    })
-                    .StopEventPropagation();
+                    });
             }
             else
             {
@@ -447,9 +447,9 @@ public class ProjectPanel : DockPanel
                 .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : EditorTheme.Neutral500).End()
                 .Rounded(3)
                 .RowBetween(4)
-                .StopEventPropagation()
                 .OnClick((item, idx, itemObjects), (cap, e) =>
                 {
+                    e.StopPropagation();
                     bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
                     bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
                     Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
@@ -664,6 +664,17 @@ public class ProjectPanel : DockPanel
                 string absPath = Path.Combine(Project.Current!.AssetsPath, folder);
                 ReferenceOpenerService.OpenFileSystemPath(absPath);
             }, icon: EditorIcons.FolderOpen);
+
+            builder.Separator();
+
+            builder.Item("Reimport All", () =>
+            {
+                var db = EditorAssetDatabase.Instance;
+                if (db == null) return;
+                foreach (var e in db.GetAllEntries().ToList())
+                    db.Reimport(e.Guid);
+                Runtime.Debug.Log("[AssetDatabase] Reimported all assets.");
+            }, icon: EditorIcons.ArrowsRotate);
         });
     }
 
@@ -778,9 +789,9 @@ public class ProjectPanel : DockPanel
             .BackgroundColor(isSelected ? EditorTheme.Purple300 : (isSubAsset ? Color.FromArgb(20, EditorTheme.Purple400) : Color.Transparent))
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : Color.FromArgb(30, 255, 255, 255)).End()
             .Rounded(4)
-            .StopEventPropagation()
             .OnClick((item, idx, itemObjects), (cap, e) =>
             {
+                e.StopPropagation();
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
                 bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
                 Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
