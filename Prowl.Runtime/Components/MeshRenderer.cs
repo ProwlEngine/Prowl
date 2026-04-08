@@ -12,7 +12,6 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 {
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
-    public Color MainColor = Color.White;
 
     private PropertyState _properties = new();
 
@@ -22,9 +21,6 @@ public class MeshRenderer : MonoBehaviour, IRenderable
         {
             _properties.Clear();
             _properties.SetInt("_ObjectID", InstanceID);
-            // Only override material's _MainColor if the per-instance tint is non-default
-            if (MainColor != Color.White)
-                _properties.SetColor("_MainColor", MainColor);
             GameObject.Scene.PushRenderable(this);
         }
     }
