@@ -48,7 +48,7 @@ public static class GameObjectInspector
 
     private static void DrawHeader(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
-        // Enabled toggle + Name
+        // Enabled toggle + Name + Static
         using (paper.Row("gi_header")
             .Height(EditorTheme.RowHeight)
             .Margin(0, 6)
@@ -57,46 +57,48 @@ public static class GameObjectInspector
         {
             paper.Box("gi_icon").Margin(6, 6, 0, 6).FontSize(EditorTheme.FontSize * 1.5f).Width(UnitValue.Auto).Text(EditorIcons.Cube, font);
 
-            // Enabled checkbox
             EditorGUI.Toggle(paper, "gi_enabled", "", go.Enabled)
                 .OnValueChanged(v => go.Enabled = v);
 
-            // Name
             EditorGUI.TextField(paper, "gi_name", "", go.Name)
                 .OnValueChanged(v => { if (!string.IsNullOrWhiteSpace(v)) go.Name = v; });
+
+            EditorGUI.Toggle(paper, "gi_static", "Static", go.IsStatic)
+                .OnValueChanged(v => go.IsStatic = v);
         }
 
-        // Tag + Layer row
+        // Tag + Layer row (dropdowns)
         using (paper.Row("gi_tag_layer")
             .Height(22)
             .RowBetween(6)
-            .RowBetween(6)
             .Enter())
         {
-            paper.Box("gi_tag_lbl").Width(30).Height(22)
-                .Text("Tag", font).TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+            // Tag dropdown
+            var tagNames = TagLayerManager.tags.ToArray();
+            int tagIdx = TagLayerManager.tags.IndexOf(go.Tag);
+            if (tagIdx < 0) tagIdx = 0;
 
-            EditorGUI.TextField(paper, "gi_tag", "", go.Tag)
-                .OnValueChanged(v => go.Tag = v);
+            EditorGUI.Dropdown(paper, "gi_tag", "Tag", tagIdx, tagNames, autoLabelWidth: true)
+                .OnValueChanged(v => { if (v >= 0 && v < tagNames.Length) go.Tag = tagNames[v]; });
 
-            paper.Box("gi_layer_lbl").Width(36).Height(22)
-                .Text("Layer", font).TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+            // Layer dropdown (filter out empty entries)
+            var allLayers = TagLayerManager.layers;
+            var layerNames = new List<string>();
+            var layerIndices = new List<int>();
+            for (int i = 0; i < allLayers.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(allLayers[i]))
+                {
+                    layerNames.Add(allLayers[i]);
+                    layerIndices.Add(i);
+                }
+            }
 
-            EditorGUI.TextField(paper, "gi_layer", "", go.Layer)
-                .OnValueChanged(v => go.Layer = v);
-        }
+            int selectedLayerIdx = layerIndices.IndexOf(go.LayerIndex);
+            if (selectedLayerIdx < 0) selectedLayerIdx = 0;
 
-        // Static toggle
-        using (paper.Row("gi_static_row")
-            .Height(20)
-            .RowBetween(6)
-            .RowBetween(4)
-            .Enter())
-        {
-            EditorGUI.Toggle(paper, "gi_static", "Static", go.IsStatic)
-                .OnValueChanged(v => go.IsStatic = v);
+            EditorGUI.Dropdown(paper, "gi_layer", "Layer", selectedLayerIdx, layerNames.ToArray(), autoLabelWidth: true)
+                .OnValueChanged(v => { if (v >= 0 && v < layerIndices.Count) go.LayerIndex = layerIndices[v]; });
         }
     }
 
