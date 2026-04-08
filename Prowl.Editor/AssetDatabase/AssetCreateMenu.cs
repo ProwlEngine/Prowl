@@ -61,7 +61,7 @@ public static class AssetCreateMenu
         });
     }
 
-    private static string GetCurrentFolder()
+    public static string GetCurrentFolder()
     {
         // Try to get the current folder from the active selection
         var selected = Selection.GetActiveAs<ContentItem>();
@@ -70,7 +70,7 @@ public static class AssetCreateMenu
         return "";
     }
 
-    private static string GetAbsoluteFolder(string relativeFolder)
+    public static string GetAbsoluteFolder(string relativeFolder)
     {
         if (Project.Current == null) return "";
         return string.IsNullOrEmpty(relativeFolder)
@@ -78,7 +78,7 @@ public static class AssetCreateMenu
             : Path.Combine(Project.Current.AssetsPath, relativeFolder);
     }
 
-    private static string FindUniqueName(string folder, string baseName, string ext)
+    public static string FindUniqueName(string folder, string baseName, string ext)
     {
         string path = Path.Combine(folder, baseName + ext);
         if (!File.Exists(path) && !Directory.Exists(path)) return baseName + ext;
