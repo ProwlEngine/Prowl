@@ -314,14 +314,14 @@ public class SceneViewPanel : DockPanel
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
             var meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer != null && meshRenderer.Raycast(ray, out float dist))
+            if (meshRenderer != null && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist))
             {
                 if (dist < bestDist) { bestDist = dist; bestHit = go; }
                 continue;
             }
 
             var modelRenderer = go.GetComponent<ModelRenderer>();
-            if (modelRenderer != null && modelRenderer.Raycast(ray, out dist))
+            if (modelRenderer != null && modelRenderer.EnabledInHierarchy && modelRenderer.Raycast(ray, out dist))
             {
                 if (dist < bestDist) { bestDist = dist; bestHit = go; }
             }
