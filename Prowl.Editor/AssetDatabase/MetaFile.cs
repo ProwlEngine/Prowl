@@ -56,7 +56,7 @@ public static class MetaFile
         echo["importerVersion"] = new EchoObject(data.ImporterVersion);
 
         if (data.Settings != null)
-            echo["settings"] = data.Settings;
+            echo["settings"] = data.Settings.Clone();
 
         File.WriteAllText(metaFilePath, echo.WriteToString());
     }
