@@ -722,12 +722,18 @@ public class EditorAssetDatabase : IAssetDatabase
     /// <summary>
     /// Move/rename an asset. The GUID stays the same.
     /// </summary>
-    public void MoveAsset(string oldRelativePath, string newRelativePath)
+    public bool MoveAsset(string oldRelativePath, string newRelativePath)
     {
         string oldAbsolute = Path.Combine(_project.AssetsPath, oldRelativePath);
         string newAbsolute = Path.Combine(_project.AssetsPath, newRelativePath);
 
-        if (!File.Exists(oldAbsolute)) return;
+        if (!File.Exists(oldAbsolute)) return false;
+
+        if (File.Exists(newAbsolute))
+        {
+            Runtime.Debug.LogWarning($"Cannot rename: a file already exists at '{newRelativePath}'.");
+            return false;
+        }
 
         Directory.CreateDirectory(Path.GetDirectoryName(newAbsolute)!);
 
@@ -753,7 +759,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 catch { /* best effort rollback */ }
             }
             Runtime.Debug.LogError($"Failed to move asset '{oldRelativePath}' → '{newRelativePath}': {ex.Message}");
-            return;
+            return false;
         }
 
         // Update index
@@ -769,6 +775,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
+        return true;
     }
 
     /// <summary>
