@@ -30,10 +30,14 @@ public class HierarchyPanel : DockPanel
     private const float IndentSize = 16f;
 
     // Drag-drop state
-    private string? _dropTargetId; // GO identifier for the current drop target
+    private bool _assetDropTarget;
     private enum DropPosition { Into, Above, Below }
-    private DropPosition _dropPos;
-    private bool _assetDropTarget; // True if hierarchy was hovered during asset drag
+    private GameObject? _dragHoverTarget;
+    private string? _dragHoverTargetId;
+    private float _dragHoverNormalizedY;
+
+    // Root display order — Scene uses HashSet so we track ordering ourselves
+    private readonly List<string> _rootDisplayOrder = new();
 
     // Track expanded state per GO identifier
     private static readonly Dictionary<string, bool> _expandedState = new();
@@ -45,13 +49,6 @@ public class HierarchyPanel : DockPanel
         if (font == null) return;
 
         var scene = Scene.Current;
-
-        // Reset drop target each frame while actively dragging GOs.
-        // On the drop frame (IsDropFrame), preserve _dropTargetId so HandleGODragDrop can read it.
-        if (DragDrop.IsDraggingType<GameObjectDragPayload>())
-            _dropTargetId = null;
-        else if (!DragDrop.HasPayloadType<GameObjectDragPayload>())
-            _dropTargetId = null;
 
         using (paper.Column("hier_root").Size(width, height).OnClick(0, (_, _) => Selection.Clear()).OnRightClick(0, (_, _) => Selection.Clear()).Enter())
         {
@@ -145,6 +142,9 @@ public class HierarchyPanel : DockPanel
                 // Background right-click — create menu only
                 BuildBackgroundContextMenu(paper);
 
+                // Track if the background (hier_bg) is hovered for drop-on-empty-space
+                bool bgHovered = paper.IsParentHovered;
+
                 // Tree view
                 using (ScrollView.Begin(paper, "hier_scroll", width, height - EditorTheme.RowHeight - 22))
                 {
@@ -170,42 +170,73 @@ public class HierarchyPanel : DockPanel
                     {
                         DrawGameObjectNode(paper, font, root, 0, flatObjects, ref drawIndex);
                     }
+                }
 
-                    // Accept asset drops — spawn at root
-                    if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered)
-                    {
-                        _assetDropTarget = true;
-                        paper.Box("hier_drop_zone").Height(24)
-                            .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                            .Rounded(3)
-                            .Text("Drop to spawn here", font)
-                            .TextColor(EditorTheme.Purple400)
-                            .FontSize(EditorTheme.FontSize - 2)
-                            .Alignment(TextAlignment.MiddleCenter);
-                    }
-                    else if (DragDrop.IsDraggingType<AssetDragPayload>())
-                    {
-                        _assetDropTarget = false;
-                    }
+                // --- All drop handling uses hier_bg (the stable outer background) ---
 
-                    if (DragDrop.IsDropFrame && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
+                // Asset drops — show visual indicator and spawn at root
+                if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered)
+                {
+                    _assetDropTarget = true;
+                    paper.Box("hier_drop_zone").Height(24)
+                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                        .Rounded(3)
+                        .Text("Drop to spawn here", font)
+                        .TextColor(EditorTheme.Purple400)
+                        .FontSize(EditorTheme.FontSize - 2)
+                        .Alignment(TextAlignment.MiddleCenter);
+                }
+                else if (DragDrop.IsDraggingType<AssetDragPayload>())
+                {
+                    _assetDropTarget = false;
+                }
+
+                if (DragDrop.IsDropFrame && _assetDropTarget && DragDrop.Payload is AssetDragPayload assetDrop)
+                {
+                    if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
                     {
-                        if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
-                        {
-                            var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
-                            if (entry != null)
-                                EditorSceneManager.OpenScene(entry.Path);
-                        }
+                        var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
+                        if (entry != null)
+                            EditorSceneManager.OpenScene(entry.Path);
+                    }
+                    else
+                    {
+                        SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                    }
+                    DragDrop.EndDrag();
+                    _assetDropTarget = false;
+                }
+
+                // GO drop — process using hover target tracked by OnHover callback
+                if (DragDrop.IsDropFrame && DragDrop.Payload is GameObjectDragPayload goDrop)
+                {
+                    if (_dragHoverTarget != null && _dragHoverTargetId != null)
+                    {
+                        // Dropped on a GO row — use normalized Y to determine Above/Into/Below
+                        DropPosition dropPos;
+                        if (_dragHoverNormalizedY < 0.25f)
+                            dropPos = DropPosition.Above;
+                        else if (_dragHoverNormalizedY > 0.75f)
+                            dropPos = DropPosition.Below;
                         else
+                            dropPos = DropPosition.Into;
+
+                        ProcessGODrop(goDrop, _dragHoverTarget, _dragHoverTargetId, dropPos);
+                    }
+                    else if (bgHovered)
+                    {
+                        // Dropped on empty background — unparent to root
+                        foreach (var dragged in goDrop.GameObjects)
                         {
-                            SpawnAssetInScene(assetDrop, null, Float3.Zero);
+                            if (dragged.Parent != null && dragged.Parent.IsValid())
+                                dragged.SetParent(default);
                         }
+                        EditorSceneManager.IsDirty = true;
                         DragDrop.EndDrag();
-                        _assetDropTarget = false;
                     }
 
-                    // Handle GO drag drop
-                    HandleGODragDrop(scene);
+                    _dragHoverTarget = null;
+                    _dragHoverTargetId = null;
                 }
             }
         }
@@ -270,15 +301,25 @@ public class HierarchyPanel : DockPanel
 
         string icon = GetGameObjectIcon(go);
 
+        // Determine drop visual for this node during drag
+        bool isDragTarget = DragDrop.IsDragging && _dragHoverTargetId == goId;
+        DropPosition? dragDropPos = null;
+        if (isDragTarget)
+        {
+            if (_dragHoverNormalizedY < 0.25f) dragDropPos = DropPosition.Above;
+            else if (_dragHoverNormalizedY > 0.75f) dragDropPos = DropPosition.Below;
+            else dragDropPos = DropPosition.Into;
+        }
+
         // Drop indicator above
-        if (_dropTargetId == goId && _dropPos == DropPosition.Above)
+        if (dragDropPos == DropPosition.Above)
         {
             paper.Box($"hier_drop_above_{goId}")
-                .Height(2).ChildLeft(indent)
+                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
                 .BackgroundColor(EditorTheme.Purple400);
         }
 
-        bool isDropInto = _dropTargetId == goId && _dropPos == DropPosition.Into;
+        bool isDropInto = dragDropPos == DropPosition.Into;
 
         using (paper
             .Row($"hier_go_{goId}")
@@ -291,7 +332,6 @@ public class HierarchyPanel : DockPanel
             .StopEventPropagation()
             .OnClick((go, currentIndex, flatList), (cap, e) =>
             {
-                // Don't select on click if we just finished a drag
                 if (DragDrop.IsDragging || DragDrop.IsDropFrame) return;
                 bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
                 bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
@@ -305,16 +345,21 @@ public class HierarchyPanel : DockPanel
             .OnDragStart(go, (dragGO, _) =>
             {
                 if (DragDrop.IsDragging) return;
-                // Drag all selected objects if the source is selected, otherwise just the source
                 var selected = Selection.GetSelected<GameObject>().ToArray();
                 if (selected.Length > 0 && Selection.IsSelected(dragGO))
                     DragDrop.StartDrag(new GameObjectDragPayload(selected));
                 else
                     DragDrop.StartDrag(new GameObjectDragPayload(dragGO));
             })
+            .OnHover(go, (g, e) =>
+            {
+                if (!DragDrop.IsDragging || DragDrop.Payload is not GameObjectDragPayload) return;
+                _dragHoverTarget = g;
+                _dragHoverTargetId = g.Identifier.ToString();
+                _dragHoverNormalizedY = (float)e.NormalizedPosition.Y;
+            })
             .Enter())
         {
-
             // Expand arrow
             if (hasChildren)
             {
@@ -366,18 +411,16 @@ public class HierarchyPanel : DockPanel
                 .StopEventPropagation()
                 .OnClick(go, (g, _) => g.Enabled = !g.Enabled);
 
-            // Handle drop target detection
-            HandleDropTarget(paper, go, goId);
 
             // Per-GameObject right-click menu
             BuildGameObjectContextMenu(paper, $"hier_go_ctx_{goId}");
         }
 
         // Drop indicator below
-        if (_dropTargetId == goId && _dropPos == DropPosition.Below)
+        if (dragDropPos == DropPosition.Below)
         {
             paper.Box($"hier_drop_below_{goId}")
-                .Height(2).ChildLeft(indent)
+                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
                 .BackgroundColor(EditorTheme.Purple400);
         }
 
@@ -393,54 +436,13 @@ public class HierarchyPanel : DockPanel
     //  Drag & Drop for reparenting/reordering
     // ================================================================
 
-    private void HandleDropTarget(Paper paper, GameObject go, string goId)
+    private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos)
     {
-        if (!DragDrop.IsDraggingType<GameObjectDragPayload>()) return;
-        if (!paper.IsParentHovered) return;
-
-        _dropTargetId = goId;
-
-        bool targetIsRoot = go.Parent == null || !go.Parent.IsValid();
-
-        // Root objects can't be reordered (Scene uses HashSet), so always show "Into"
-        if (targetIsRoot)
-        {
-            _dropPos = DropPosition.Into;
-            return;
-        }
-
-        // For non-root objects: top 25% = above, bottom 25% = below, middle = into
-        var parentData = paper.CurrentParent.Data;
-        float rowY = parentData.Y;
-        float mouseY = Input.MousePosition.Y;
-        float relY = mouseY - rowY;
-
-        float topZone = EditorTheme.RowHeight * 0.25f;
-        float bottomZone = EditorTheme.RowHeight * 0.75f;
-
-        if (relY < topZone)
-            _dropPos = DropPosition.Above;
-        else if (relY > bottomZone)
-            _dropPos = DropPosition.Below;
-        else
-            _dropPos = DropPosition.Into;
-    }
-
-    private void HandleGODragDrop(Scene scene)
-    {
-        if (!DragDrop.IsDropFrame || DragDrop.Payload is not GameObjectDragPayload goDrop || _dropTargetId == null)
-            return;
-
-        var target = FindGOByIdentifier(_dropTargetId);
-        if (target == null)
-        {
-            DragDrop.EndDrag();
-            return;
-        }
+        var targetParent = target.Parent;
+        bool targetIsRoot = targetParent == null || !targetParent.IsValid();
 
         foreach (var dragged in goDrop.GameObjects)
         {
-            // Can't drop onto self or own descendant
             if (dragged == target || IsDescendantOf(target, dragged))
                 continue;
 
@@ -455,39 +457,46 @@ public class HierarchyPanel : DockPanel
                 }
             }
 
-            var dropPos = _dropPos;
-            var targetParent = target.Parent;
-            bool targetIsRoot = targetParent == null || !targetParent.IsValid();
-
-            // For Above/Below on root objects, there's no sibling ordering
-            // (Scene uses a HashSet), so treat as Into (make child of target)
-            if (targetIsRoot && dropPos != DropPosition.Into)
-                dropPos = DropPosition.Into;
-
             switch (dropPos)
             {
                 case DropPosition.Into:
-                    // Block reparenting into prefab instances (structure is fixed)
                     if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
                     {
                         Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
                         continue;
                     }
                     dragged.SetParent(target);
-                    _expandedState[_dropTargetId!] = true;
+                    _expandedState[targetId] = true;
                     break;
 
                 case DropPosition.Above:
                 case DropPosition.Below:
-                    // Reparent to target's parent, then reorder as sibling
-                    if (dragged.Parent != targetParent)
-                        dragged.SetParent(targetParent!);
+                    if (targetIsRoot)
+                    {
+                        // Root reorder — unparent if needed, then reorder in display list
+                        if (dragged.Parent != null && dragged.Parent.IsValid())
+                            dragged.SetParent(default);
 
-                    int targetIdx = target.GetSiblingIndex() ?? 0;
-                    if (dropPos == DropPosition.Below) targetIdx++;
-                    int dragIdx = dragged.GetSiblingIndex() ?? 0;
-                    if (dragIdx < targetIdx) targetIdx--;
-                    dragged.SetSiblingIndex(Math.Max(0, targetIdx));
+                        string dragId = dragged.Identifier.ToString();
+                        _rootDisplayOrder.Remove(dragId);
+                        int insertIdx = _rootDisplayOrder.IndexOf(targetId);
+                        if (insertIdx < 0) insertIdx = _rootDisplayOrder.Count;
+                        if (dropPos == DropPosition.Below) insertIdx++;
+                        insertIdx = Math.Min(insertIdx, _rootDisplayOrder.Count);
+                        _rootDisplayOrder.Insert(insertIdx, dragId);
+                    }
+                    else
+                    {
+                        // Child reorder — reparent to target's parent, then set sibling index
+                        if (dragged.Parent != targetParent)
+                            dragged.SetParent(targetParent!);
+
+                        int targetIdx = target.GetSiblingIndex() ?? 0;
+                        if (dropPos == DropPosition.Below) targetIdx++;
+                        int dragIdx = dragged.GetSiblingIndex() ?? 0;
+                        if (dragIdx < targetIdx) targetIdx--;
+                        dragged.SetSiblingIndex(Math.Max(0, targetIdx));
+                    }
                     break;
             }
         }
@@ -755,10 +764,30 @@ public class HierarchyPanel : DockPanel
 
     private List<GameObject> GetDisplayRoots(Scene scene)
     {
-        return scene.RootObjects
+        var roots = scene.RootObjects
             .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
                       && !go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
             .ToList();
+
+        // Sync display order: remove stale entries, add new ones at end
+        var rootIds = new HashSet<string>(roots.Select(r => r.Identifier.ToString()));
+        _rootDisplayOrder.RemoveAll(id => !rootIds.Contains(id));
+        foreach (var root in roots)
+        {
+            string id = root.Identifier.ToString();
+            if (!_rootDisplayOrder.Contains(id))
+                _rootDisplayOrder.Add(id);
+        }
+
+        // Return roots in display order
+        var lookup = roots.ToDictionary(r => r.Identifier.ToString());
+        var ordered = new List<GameObject>();
+        foreach (var id in _rootDisplayOrder)
+        {
+            if (lookup.TryGetValue(id, out var go))
+                ordered.Add(go);
+        }
+        return ordered;
     }
 
     private void FlattenVisible(GameObject go, List<GameObject> list)
