@@ -159,6 +159,12 @@ public class EditorApplication : Game
 
     public override void BeginGui(Paper paper)
     {
+        // Escape always unlocks cursor in editor
+        if (Input.GetKeyDown(KeyCode.Escape) && Input.CursorLocked)
+        {
+            Input.UnlockCursor();
+        }
+
         // Reset per-frame state
         GameViewInputHandler.IsGameViewFocused = false;
 

@@ -55,7 +55,14 @@ public class GameViewInputHandler : IInputHandler
     public bool GetMouseButton(int button) => ShouldFilter ? false : _real.GetMouseButton(button);
     public bool GetMouseButtonDown(int button) => ShouldFilter ? false : _real.GetMouseButtonDown(button);
     public bool GetMouseButtonUp(int button) => ShouldFilter ? false : _real.GetMouseButtonUp(button);
-    public void SetCursorVisible(bool visible, int miceIndex = 0) => _real.SetCursorVisible(visible, miceIndex);
+    public void SetCursorVisible(bool visible, int miceIndex = 0)
+    {
+        // Show toast when game code locks the cursor (not editor scene view)
+        if (!visible && Input.CursorLocked && Runtime.Application.IsGameplayExecuting)
+            Widgets.Toasts.Show("Cursor Locked", "Press Escape to release.", Widgets.ToastType.Info, 3f);
+
+        _real.SetCursorVisible(visible, miceIndex);
+    }
 
     // Events — always forward (editor needs these for its own input processing)
     public event Action<KeyCode, bool> OnKeyEvent

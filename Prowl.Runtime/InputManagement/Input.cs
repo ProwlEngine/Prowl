@@ -49,10 +49,10 @@ public static class Input
     }
 
     // Mouse
-    public static Int2 PrevMousePosition => Current.PrevMousePosition;
+    public static Int2 PrevMousePosition => CursorLocked ? CursorLockCenter : Current.PrevMousePosition;
     public static Int2 MousePosition
     {
-        get => Current.MousePosition;
+        get => CursorLocked ? CursorLockCenter : Current.MousePosition;
         set => Current.MousePosition = value;
     }
     public static Float2 MouseDelta => Current.MouseDelta;
@@ -69,6 +69,41 @@ public static class Input
     public static bool GetMouseButtonDown(int button) => Current.GetMouseButtonDown(button);
     public static bool GetMouseButtonUp(int button) => Current.GetMouseButtonUp(button);
     public static void SetCursorVisible(bool visible, int miceIndex = 0) => Current.SetCursorVisible(visible, miceIndex);
+
+    /// <summary>
+    /// Whether the cursor is currently locked (hidden + recentered each frame).
+    /// In the editor, Escape always unlocks.
+    /// </summary>
+    public static bool CursorLocked { get; private set; }
+
+    /// <summary>
+    /// The screen-space center point where the cursor is locked to.
+    /// Updated by the viewport that initiated the lock (scene view, game view, or full window).
+    /// </summary>
+    public static Int2 CursorLockCenter { get; set; }
+
+    /// <summary>Lock the cursor to a viewport center — hides it and recenters each frame.</summary>
+    public static void LockCursor(Int2 center)
+    {
+        CursorLocked = true;
+        CursorLockCenter = center;
+        SetCursorVisible(false);
+    }
+
+    /// <summary>Lock the cursor to the window center.</summary>
+    public static void LockCursor()
+    {
+        var size = Window.InternalWindow.Size;
+        LockCursor(new Int2(size.X / 2, size.Y / 2));
+    }
+
+    /// <summary>Unlock the cursor — shows it and stops recentering.</summary>
+    public static void UnlockCursor()
+    {
+        if (!CursorLocked) return;
+        CursorLocked = false;
+        SetCursorVisible(true);
+    }
 
     // Gamepad
     public static int GetGamepadCount() => Current.GetGamepadCount();

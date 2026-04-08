@@ -139,12 +139,15 @@ public static class ScriptCompiler
         sb.AppendLine("  </PropertyGroup>");
 
         // References — Game assembly can reference Editor when compiling in-editor (PROWL_EDITOR)
+        // Private=true forces MSBuild to use HintPath instead of probing local directories
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");
         sb.AppendLine($"      <HintPath>{runtimeDll}</HintPath>");
+        sb.AppendLine("      <Private>true</Private>");
         sb.AppendLine("    </Reference>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Editor\">");
         sb.AppendLine($"      <HintPath>{editorDll}</HintPath>");
+        sb.AppendLine("      <Private>true</Private>");
         sb.AppendLine("    </Reference>");
 
         // Add transitive dependencies from Prowl.Runtime
@@ -154,6 +157,7 @@ public static class ScriptCompiler
             if (name == "Prowl.Runtime" || name == "Prowl.Editor" || name.StartsWith(project.Name)) continue;
             sb.AppendLine($"    <Reference Include=\"{name}\">");
             sb.AppendLine($"      <HintPath>{dll}</HintPath>");
+            sb.AppendLine("      <Private>true</Private>");
             sb.AppendLine("    </Reference>");
         }
         sb.AppendLine("  </ItemGroup>");
@@ -203,12 +207,15 @@ public static class ScriptCompiler
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");
         sb.AppendLine($"      <HintPath>{runtimeDll}</HintPath>");
+        sb.AppendLine("      <Private>true</Private>");
         sb.AppendLine("    </Reference>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Editor\">");
         sb.AppendLine($"      <HintPath>{editorDll}</HintPath>");
+        sb.AppendLine("      <Private>true</Private>");
         sb.AppendLine("    </Reference>");
         sb.AppendLine($"    <Reference Include=\"{project.Name}.Game\">");
         sb.AppendLine($"      <HintPath>{gameAssembly}</HintPath>");
+        sb.AppendLine("      <Private>true</Private>");
         sb.AppendLine("    </Reference>");
 
         // Transitive dependencies
@@ -218,6 +225,7 @@ public static class ScriptCompiler
             if (name == "Prowl.Runtime" || name == "Prowl.Editor" || name.StartsWith(project.Name)) continue;
             sb.AppendLine($"    <Reference Include=\"{name}\">");
             sb.AppendLine($"      <HintPath>{dll}</HintPath>");
+            sb.AppendLine("      <Private>true</Private>");
             sb.AppendLine("    </Reference>");
         }
         sb.AppendLine("  </ItemGroup>");

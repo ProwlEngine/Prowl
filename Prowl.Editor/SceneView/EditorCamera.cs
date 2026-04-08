@@ -151,7 +151,13 @@ public class EditorCamera
             consumed = true;
         }
 
-        // Right mouse = look + WASD
+        // Right mouse = look + WASD (with cursor lock)
+        if (Input.GetMouseButtonDown(1))
+        {
+            var center = new Int2((int)(panelOrigin.X + panelSize.X / 2), (int)(panelOrigin.Y + panelSize.Y / 2));
+            Input.LockCursor(center);
+        }
+
         if (Input.GetMouseButton(1))
         {
             Float2 delta = Input.MouseDelta;
@@ -191,6 +197,11 @@ public class EditorCamera
 
             UpdateTransform();
             consumed = true;
+        }
+
+        if (Input.GetMouseButtonUp(1))
+        {
+            Input.UnlockCursor();
         }
 
         // F = focus on selection
