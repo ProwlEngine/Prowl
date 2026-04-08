@@ -395,7 +395,14 @@ public static class ProjectLauncher
     {
         if (string.IsNullOrWhiteSpace(_newProjectName))
         {
-            Runtime.Debug.LogWarning("Project name cannot be empty.");
+            Widgets.Toasts.Show("Invalid Name", "Project name cannot be empty.", Widgets.ToastType.Warning, 3f);
+            return;
+        }
+
+        string targetPath = Path.Combine(_newProjectPath, _newProjectName);
+        if (Directory.Exists(targetPath) && Directory.GetFileSystemEntries(targetPath).Length > 0)
+        {
+            Widgets.Toasts.Show("Folder Exists", $"'{_newProjectName}' already exists and is not empty. Choose a different name or location.", Widgets.ToastType.Error, 5f);
             return;
         }
 
@@ -407,7 +414,7 @@ public static class ProjectLauncher
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Failed to create project: {ex.Message}");
+            Widgets.Toasts.Show("Create Failed", ex.Message, Widgets.ToastType.Error, 5f);
         }
     }
 
