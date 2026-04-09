@@ -1268,6 +1268,21 @@ namespace Prowl.PaperUI
             var state = _paper.GetElementStorage(_handle, "TextInputState", defaultState);
             state.IsFocused = _paper.IsElementFocused(_handle.Data.ID);
             state.IsMultiLine = isMultiLine; // Ensure consistency
+
+            // When not focused, sync to the external value so that changes
+            // from code (e.g. gizmos, undo, clamping) are reflected immediately.
+            if (!state.IsFocused)
+            {
+                string expected = initialValue ?? "";
+                if (state.Value != expected)
+                {
+                    state.Value = expected;
+                    state.CursorPosition = expected.Length;
+                    state.SelectionStart = -1;
+                    state.SelectionEnd = -1;
+                }
+            }
+
             state.ClampValues();
             return state;
         }
