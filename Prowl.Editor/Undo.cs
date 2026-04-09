@@ -111,12 +111,15 @@ public static class Undo
         public List<UndoRecord> Records;
         /// <summary>True if this step contains ONLY PropertyRecords and can be coalesced with the next.</summary>
         public bool IsCoalescable;
+        /// <summary>When this step was created/last coalesced (milliseconds).</summary>
+        public long Timestamp;
 
         public UndoStep(string description, List<UndoRecord> records, bool isCoalescable = false)
         {
             Description = description;
             Records = records;
             IsCoalescable = isCoalescable;
+            Timestamp = Environment.TickCount64;
         }
     }
 
@@ -127,8 +130,8 @@ public static class Undo
     private static readonly List<UndoStep> _undoStack = new();
     private static readonly List<UndoStep> _redoStack = new();
 
-    // Per-frame pending snapshots: target → (beforeState, description)
-    private static readonly Dictionary<object, (EchoObject before, string description)> _pendingSnapshots = new();
+    // Per-frame pending snapshots: target → beforeState (captured at start of draw, before any mutations)
+    private static readonly Dictionary<object, EchoObject> _pendingSnapshots = new();
 
     // Immediate action records accumulated this frame (RegisterAction calls)
     private static readonly List<(string description, UndoRecord record)> _pendingActions = new();
@@ -175,20 +178,21 @@ public static class Undo
     // ================================================================
 
     /// <summary>
-    /// Snapshot an object before mutation. No-op if already recorded this frame for same target.
-    /// Only use for objects serialized via Echo reflection (MonoBehaviour, plain objects).
-    /// DO NOT use for GameObject (use RegisterAction for GO header fields).
+    /// Snapshot an object's current state for undo. Call at the TOP of PropertyGrid.Draw()
+    /// or custom editor OnGUI(), BEFORE any widgets draw — this captures the state before
+    /// any in-place mutations (nested objects, collections, curves, etc.).
+    /// No-op if already snapshotted this frame for the same target.
     /// </summary>
-    public static void RecordObject(object target, string description)
+    public static void Snapshot(object target)
     {
         if (Application.IsPlaying) return;
         if (target == null) return;
-        if (_isContinuous) return; // Don't record during continuous operations
+        if (_isContinuous) return;
 
         if (!_pendingSnapshots.ContainsKey(target))
         {
             var before = Serializer.Serialize(target.GetType(), target);
-            _pendingSnapshots[target] = (before, description);
+            _pendingSnapshots[target] = before;
         }
     }
 
@@ -561,85 +565,60 @@ public static class Undo
         }
         _pendingStructural.Clear();
 
+        // Flush action records FIRST as separate steps (never merge with property changes)
+        // Each action is its own undo step (Add Component, Toggle Enabled, Reparent, etc.)
+        foreach (var (desc, record) in _pendingActions)
+            PushStep(new UndoStep(desc, [record], isCoalescable: false));
+        _pendingActions.Clear();
+
         // Build property records from snapshots
         var propertyRecords = new List<PropertyRecord>();
-        string? propertyDescription = null;
 
-        foreach (var (target, (before, desc)) in _pendingSnapshots)
+        foreach (var (target, before) in _pendingSnapshots)
         {
             if (target is EngineObject eo && eo.IsDisposed) continue;
 
             var after = Serializer.Serialize(target.GetType(), target);
 
             if (!before.Equals(after))
-            {
-                propertyRecords.Add(new PropertyRecord(target, before, after, desc));
-                propertyDescription ??= desc;
-            }
+                propertyRecords.Add(new PropertyRecord(target, before, after));
         }
         _pendingSnapshots.Clear();
 
-        // Try to coalesce property records with the previous step
-        // Coalesce if: previous step is coalescable AND has the same targets AND
-        // the previous "after" matches our "before" (continuous edit, no gap)
-        if (propertyRecords.Count > 0 && _pendingActions.Count == 0 && TryCoalesce(propertyRecords))
+        // Push property records as a coalescable step (separate from actions)
+        if (propertyRecords.Count > 0 && TryCoalesce(propertyRecords))
         {
-            // Successfully coalesced — don't push a new step
-            // But still need to clear redo stack since state changed
             _redoStack.Clear();
         }
-        else if (propertyRecords.Count > 0 && _pendingActions.Count == 0)
+        else if (propertyRecords.Count > 0)
         {
-            // Pure property step — mark as coalescable for future merging
-            PushStep(new UndoStep(propertyDescription ?? "Modify", propertyRecords.Cast<UndoRecord>().ToList(), isCoalescable: true));
+            PushStep(new UndoStep("Modify Properties", propertyRecords.Cast<UndoRecord>().ToList(), isCoalescable: true));
         }
-        else
-        {
-            // Mixed step (has action records) — not coalescable
-            var allRecords = new List<UndoRecord>();
-            string? description = null;
-
-            foreach (var pr in propertyRecords)
-            {
-                allRecords.Add(pr);
-                description ??= propertyDescription;
-            }
-
-            foreach (var (desc, record) in _pendingActions)
-            {
-                allRecords.Add(record);
-                description ??= desc;
-            }
-
-            if (allRecords.Count > 0 && description != null)
-                PushStep(new UndoStep(description, allRecords, isCoalescable: false));
-        }
-
-        _pendingActions.Clear();
     }
 
     /// <summary>
     /// Try to merge new property records into the previous undo step.
-    /// Returns true if coalesced, false if a new step should be pushed.
+    /// Uses time-based coalescing: merges if same targets, continuous edit chain,
+    /// and the previous step was created/updated within 300ms.
     /// </summary>
+    private const long CoalesceWindowMs = 300;
+
     private static bool TryCoalesce(List<PropertyRecord> newRecords)
     {
         if (_undoStack.Count == 0) return false;
 
         var prev = _undoStack[^1];
         if (!prev.IsCoalescable) return false;
-
-        // Must have same number of records
         if (prev.Records.Count != newRecords.Count) return false;
+
+        // Time-based: only coalesce within the time window
+        long now = Environment.TickCount64;
+        if (now - prev.Timestamp > CoalesceWindowMs) return false;
 
         for (int i = 0; i < newRecords.Count; i++)
         {
             if (prev.Records[i] is not PropertyRecord prevPR) return false;
-
             var newPR = newRecords[i];
-
-            // Same field? Description must match (e.g. both "Speed" or both "Max Particles")
-            if (prevPR.Description != newPR.Description) return false;
 
             // Same target? Compare by identifier for MonoBehaviour, by fallback ref for others
             if (prevPR.ComponentIdentifier != Guid.Empty || newPR.ComponentIdentifier != Guid.Empty)
@@ -653,16 +632,14 @@ public static class Undo
                 if (prevTarget == null || newTarget == null || !ReferenceEquals(prevTarget, newTarget)) return false;
             }
 
-            // Continuous edit? Previous "after" should match new "before"
+            // Continuous edit chain: previous "after" must match new "before"
             if (!prevPR.AfterState.Equals(newPR.BeforeState)) return false;
         }
 
-        // Coalesce: update the "after" state of each previous record
+        // Coalesce: update AfterState and refresh timestamp
         for (int i = 0; i < newRecords.Count; i++)
-        {
             ((PropertyRecord)prev.Records[i]).AfterState = newRecords[i].AfterState;
-        }
-
+        prev.Timestamp = now;
         return true;
     }
 

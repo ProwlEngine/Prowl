@@ -40,6 +40,11 @@ public static class PropertyGrid
             if (target == null) return;
             if (depth > 10) { EditorGUI.Label(paper, $"{id}_deep", "(max depth)", EditorTheme.Ink400); return; }
 
+            // Pre-snapshot at top level: captures state BEFORE any widgets mutate
+            // nested objects, collections, curves, etc. in-place
+            if (depth == 0)
+                Undo.Snapshot(target);
+
             var type = target.GetType();
             var fields = GetSerializableFields(type);
 
@@ -80,10 +85,10 @@ public static class PropertyGrid
                 {
                     if (fieldType == typeof(float))
                         EditorGUI.Slider(paper, fieldId, label, (float)(value ?? 0f), range.Min, range.Max)
-                            .OnValueChanged(v => { Undo.RecordObject(target, label); field.SetValue(target, v); onChanged?.Invoke(target); });
+                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
                     else
                         EditorGUI.IntSlider(paper, fieldId, label, (int)(value ?? 0), (int)range.Min, (int)range.Max)
-                            .OnValueChanged(v => { Undo.RecordObject(target, label); field.SetValue(target, v); onChanged?.Invoke(target); });
+                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
                     continue;
                 }
 
@@ -105,7 +110,6 @@ public static class PropertyGrid
                         {
                             DrawField(paper, fieldId, label, fieldType, value, newVal =>
                             {
-                                Undo.RecordObject(target, label);
                                 field.SetValue(target, newVal);
                                 onChanged?.Invoke(target);
                             }, depth);
@@ -116,7 +120,6 @@ public static class PropertyGrid
                 {
                     DrawField(paper, fieldId, label, fieldType, value, newVal =>
                     {
-                        Undo.RecordObject(target, label);
                         field.SetValue(target, newVal);
                         onChanged?.Invoke(target);
                     }, depth);

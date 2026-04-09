@@ -165,6 +165,11 @@ public class EditorApplication : Game
 
     public override void BeginGui(Paper paper)
     {
+        // Flush undo system FIRST — Paper callbacks fired in the previous frame's EndFrame(),
+        // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
+        // (taken last frame) against the current state to detect changes.
+        Undo.FlushFrame();
+
         // Escape always unlocks cursor in editor
         if (Input.GetKeyDown(KeyCode.Escape) && Input.CursorLocked)
         {
@@ -541,8 +546,6 @@ public class EditorApplication : Game
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);
 
-        // Flush undo system (after all UI mutations, before frame end)
-        Undo.FlushFrame();
 
         // Intro animation overlay
         if (_introTime < IntroDuration)

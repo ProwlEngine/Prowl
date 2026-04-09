@@ -166,7 +166,7 @@ public static class GameObjectInspector
             {
                 // Enabled toggle
                 EditorGUI.Toggle(paper, $"{compId}_en", "", comp.Enabled)
-                    .OnValueChanged(v => { Undo.RecordObject(comp, "Toggle Component"); comp.Enabled = v; });
+                    .OnValueChanged(v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = old; }, () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = v; }); comp.Enabled = v; });
 
                 // Icon + Name (click to fold)
                 paper.Box($"{compId}_label")
