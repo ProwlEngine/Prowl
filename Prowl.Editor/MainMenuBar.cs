@@ -110,13 +110,15 @@ public static class MainMenuBar
                     continue;
                 }
 
-                var textColor = item.IsEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300;
+                bool itemEnabled = item.IsEnabled;
+                var textColor = itemEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300;
+                string displayLabel = item.DisplayLabel;
 
                 using (paper.Row($"{id}_i_{index}")
                     .Height(ItemHeight)
                     .BackgroundColor(Color.Transparent)
                     .Rounded(3)
-                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
+                    .Hovered.BackgroundColor(itemEnabled ? EditorTheme.Purple400 : Color.Transparent).End()
                     .OnClick(item, (captured, e) =>
                     {
                         if (captured.IsEnabled && captured.OnClick != null)
@@ -136,7 +138,7 @@ public static class MainMenuBar
                             .FontSize(EditorTheme.FontSize);
 
                         paper.Box($"{id}_lbl_{index}")
-                            .Text(item.Label, font)
+                            .Text(displayLabel, font)
                             .TextColor(textColor)
                             .FontSize(EditorTheme.FontSize);
                     }

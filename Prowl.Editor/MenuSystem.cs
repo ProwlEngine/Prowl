@@ -10,8 +10,22 @@ public class MenuItem
     public Action? OnClick;
     public List<MenuItem> SubItems = new();
     public bool IsSeparator;
-    public bool IsEnabled = true;
     public Func<bool>? IsCheckedFunc;
+
+    // Static enabled (set once at registration)
+    private bool _enabled = true;
+
+    // Dynamic overrides — checked every frame if set
+    public Func<bool>? IsEnabledFunc;
+    public Func<string>? DynamicLabelFunc;
+
+    public bool IsEnabled
+    {
+        get => IsEnabledFunc?.Invoke() ?? _enabled;
+        set => _enabled = value;
+    }
+
+    public string DisplayLabel => DynamicLabelFunc?.Invoke() ?? Label;
 
     public bool IsChecked => IsCheckedFunc?.Invoke() ?? false;
     public bool HasSubItems => SubItems.Count > 0;
@@ -39,7 +53,8 @@ public static class MenuRegistry
     /// Register a menu item at the given path.
     /// Path segments are separated by "/", e.g. "File/Save Scene" or "Window/General/Scene".
     /// </summary>
-    public static void Register(string path, Action onClick, bool enabled = true, Func<bool>? isChecked = null)
+    public static void Register(string path, Action onClick, bool enabled = true, Func<bool>? isChecked = null,
+        Func<bool>? isEnabled = null, Func<string>? dynamicLabel = null)
     {
         var segments = path.Split('/');
         var current = _rootMenus;
@@ -58,10 +73,18 @@ public static class MenuRegistry
                     existing.OnClick = onClick;
                     existing.IsEnabled = enabled;
                     existing.IsCheckedFunc = isChecked;
+                    existing.IsEnabledFunc = isEnabled;
+                    existing.DynamicLabelFunc = dynamicLabel;
                 }
                 else
                 {
-                    current.Add(new MenuItem(seg, onClick) { IsEnabled = enabled, IsCheckedFunc = isChecked });
+                    current.Add(new MenuItem(seg, onClick)
+                    {
+                        IsEnabled = enabled,
+                        IsCheckedFunc = isChecked,
+                        IsEnabledFunc = isEnabled,
+                        DynamicLabelFunc = dynamicLabel,
+                    });
                 }
             }
             else
