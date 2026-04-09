@@ -233,17 +233,15 @@ public class SceneViewPanel : DockPanel
                 }
                 else if (ShortcutManager.IsPressed("Scene/Duplicate"))
                 {
-                    var selected = Selection.GetSelected<GameObject>().ToList();
-                    foreach (var go in selected)
-                    {
-                        var copy = new GameObject(go.Name + " (Copy)");
-                        copy.Transform.Position = go.Transform.Position;
-                        copy.Transform.Rotation = go.Transform.Rotation;
-                        copy.Transform.LocalScale = go.Transform.LocalScale;
-                        Scene.Current?.Add(copy);
-                        if (go.Parent != null) copy.SetParent(go.Parent);
-                    }
-                    EditorSceneManager.IsDirty = true;
+                    GameObjectClipboard.Duplicate(Selection.GetSelected<GameObject>().ToList());
+                }
+                else if (ShortcutManager.IsPressed("Scene/Copy"))
+                {
+                    GameObjectClipboard.Copy(Selection.GetSelected<GameObject>().ToList());
+                }
+                else if (ShortcutManager.IsPressed("Scene/Paste"))
+                {
+                    GameObjectClipboard.Paste();
                 }
 
                 // Gizmo tool switching

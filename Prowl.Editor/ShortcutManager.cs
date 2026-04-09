@@ -272,6 +272,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/Focus", "Focus Selection", KeyCode.F);
         ShortcutManager.Register("Scene/Delete", "Delete Selected", KeyCode.Delete);
         ShortcutManager.Register("Scene/Duplicate", "Duplicate Selected", KeyCode.D, ctrl: true);
+        ShortcutManager.Register("Scene/Copy", "Copy Selected", KeyCode.C, ctrl: true);
+        ShortcutManager.Register("Scene/Paste", "Paste", KeyCode.V, ctrl: true);
         ShortcutManager.Register("Scene/ToolTranslate", "Translate Tool", KeyCode.W);
         ShortcutManager.Register("Scene/ToolRotate", "Rotate Tool", KeyCode.E);
         ShortcutManager.Register("Scene/ToolScale", "Scale Tool", KeyCode.R);
@@ -280,6 +282,8 @@ internal static class BuiltInShortcuts
         // Hierarchy
         ShortcutManager.Register("Hierarchy/Delete", "Delete Selected", KeyCode.Delete);
         ShortcutManager.Register("Hierarchy/Duplicate", "Duplicate Selected", KeyCode.D, ctrl: true);
+        ShortcutManager.Register("Hierarchy/Copy", "Copy Selected", KeyCode.C, ctrl: true);
+        ShortcutManager.Register("Hierarchy/Paste", "Paste", KeyCode.V, ctrl: true);
         ShortcutManager.Register("Hierarchy/Rename", "Rename Selected", KeyCode.F2);
 
         // Project

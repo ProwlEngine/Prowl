@@ -155,8 +155,17 @@ public class HierarchyPanel : DockPanel
                     }
                     else if (ShortcutManager.IsPressed("Hierarchy/Duplicate"))
                     {
-                        foreach (var go in Selection.GetSelected<GameObject>().ToList())
-                            DuplicateGameObject(go);
+                        GameObjectClipboard.Duplicate(Selection.GetSelected<GameObject>().ToList());
+                    }
+                    else if (ShortcutManager.IsPressed("Hierarchy/Copy"))
+                    {
+                        GameObjectClipboard.Copy(Selection.GetSelected<GameObject>().ToList());
+                    }
+                    else if (ShortcutManager.IsPressed("Hierarchy/Paste"))
+                    {
+                        // Paste as children of first selected, or at root
+                        var parent = Selection.GetSelected<GameObject>().FirstOrDefault();
+                        GameObjectClipboard.Paste(parent);
                     }
                     else if (ShortcutManager.IsPressed("Hierarchy/Rename"))
                     {
@@ -620,7 +629,7 @@ public class HierarchyPanel : DockPanel
             {
                 builder.Item($"Duplicate ({selectedGOs.Count})", () =>
                 {
-                    foreach (var go in selectedGOs) DuplicateGameObject(go);
+                    GameObjectClipboard.Duplicate(selectedGOs);
                 }, icon: EditorIcons.Copy);
 
                 builder.Item($"Rename ({selectedGOs.Count})", () =>
@@ -645,7 +654,7 @@ public class HierarchyPanel : DockPanel
             else
             {
                 var go = firstSelected!;
-                builder.Item("Duplicate", () => DuplicateGameObject(go), icon: EditorIcons.Copy);
+                builder.Item("Duplicate", () => GameObjectClipboard.Duplicate([go]), icon: EditorIcons.Copy);
                 builder.Item("Rename", () =>
                 {
                     StartRenameGO(go, [go]);
@@ -699,21 +708,6 @@ public class HierarchyPanel : DockPanel
                 go.Name = newName;
             EditorSceneManager.IsDirty = true;
         });
-    }
-
-    private void DuplicateGameObject(GameObject source)
-    {
-        var scene = Scene.Current;
-        if (scene == null) return;
-
-        var go = new GameObject(source.Name + " (Copy)");
-        go.Transform.Position = source.Transform.Position;
-        go.Transform.Rotation = source.Transform.Rotation;
-        go.Transform.LocalScale = source.Transform.LocalScale;
-        scene.Add(go);
-        if (source.Parent != null)
-            go.SetParent(source.Parent);
-        Selection.Select(go);
     }
 
     private void DeleteGameObject(GameObject go)
