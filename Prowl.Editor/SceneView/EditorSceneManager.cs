@@ -29,6 +29,7 @@ public static class EditorSceneManager
         SceneViewPanel.CreateAndLoadDefaultScene();
         CurrentScenePath = null;
         IsDirty = false;
+        Undo.Clear();
         SaveLastScenePath(null);
     }
 
@@ -65,6 +66,7 @@ public static class EditorSceneManager
             Scene.Load(scene);
             CurrentScenePath = relativePath;
             IsDirty = false;
+            Undo.Clear();
 
             SaveLastScenePath(relativePath);
             Debug.Log($"Opened scene: {relativePath}");

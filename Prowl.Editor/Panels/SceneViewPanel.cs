@@ -22,6 +22,7 @@ public class SceneViewPanel : DockPanel
 
     private EditorCamera? _editorCamera;
     private Gizmo.TransformGizmo? _transformGizmo;
+    private bool _wasGizmoActive;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;
 
     /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
@@ -225,6 +226,7 @@ public class SceneViewPanel : DockPanel
                 {
                     foreach (var go in Selection.GetSelected<GameObject>().ToList())
                     {
+                        Undo.RegisterDestroyObject(go, "Delete GameObject");
                         scene.Remove(go);
                         go.Dispose();
                     }
@@ -233,7 +235,8 @@ public class SceneViewPanel : DockPanel
                 }
                 else if (ShortcutManager.IsPressed("Scene/Duplicate"))
                 {
-                    GameObjectClipboard.Duplicate(Selection.GetSelected<GameObject>().ToList());
+                    var dupes = GameObjectClipboard.Duplicate(Selection.GetSelected<GameObject>().ToList());
+                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
                 }
                 else if (ShortcutManager.IsPressed("Scene/Copy"))
                 {
@@ -241,7 +244,8 @@ public class SceneViewPanel : DockPanel
                 }
                 else if (ShortcutManager.IsPressed("Scene/Paste"))
                 {
-                    GameObjectClipboard.Paste();
+                    var pasted = GameObjectClipboard.Paste();
+                    foreach (var p in pasted) Undo.RegisterCreatedObject(p, "Paste");
                 }
 
                 // Gizmo tool switching
@@ -399,6 +403,7 @@ public class SceneViewPanel : DockPanel
         scene.Add(cube2);
 
         Scene.Load(scene);
+        Undo.Clear();
         Runtime.Debug.Log("Created default scene.");
     }
 
@@ -543,6 +548,14 @@ public class SceneViewPanel : DockPanel
         var result = _transformGizmo.Update(ray, mouseAbs, blockPicking);
 
         // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
+
+        // Continuous undo: track gizmo drag start/end
+        bool gizmoActive = result.HasValue;
+        if (gizmoActive && !_wasGizmoActive)
+            Undo.BeginContinuous(Selection.GetSelected<GameObject>().ToArray(), "Transform");
+        if (!gizmoActive && _wasGizmoActive)
+            Undo.EndContinuous();
+        _wasGizmoActive = gizmoActive;
 
         if (result.HasValue)
         {

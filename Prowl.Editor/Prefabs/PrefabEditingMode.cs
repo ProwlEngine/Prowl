@@ -65,6 +65,7 @@ public static class PrefabEditingMode
 
         editScene.Add(go);
         Scene.Load(editScene);
+        Undo.Clear();
 
         EditingPrefabGuid = prefabGuid;
         IsEditing = true;
@@ -145,6 +146,7 @@ public static class PrefabEditingMode
             if (restoredScene != null)
             {
                 Scene.Load(restoredScene);
+                Undo.Clear();
                 EditorSceneManager.CurrentScenePath = _savedScenePath;
             }
             else

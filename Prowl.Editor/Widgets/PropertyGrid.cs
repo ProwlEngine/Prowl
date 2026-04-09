@@ -80,10 +80,10 @@ public static class PropertyGrid
                 {
                     if (fieldType == typeof(float))
                         EditorGUI.Slider(paper, fieldId, label, (float)(value ?? 0f), range.Min, range.Max)
-                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                            .OnValueChanged(v => { Undo.RecordObject(target, label); field.SetValue(target, v); onChanged?.Invoke(target); });
                     else
                         EditorGUI.IntSlider(paper, fieldId, label, (int)(value ?? 0), (int)range.Min, (int)range.Max)
-                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                            .OnValueChanged(v => { Undo.RecordObject(target, label); field.SetValue(target, v); onChanged?.Invoke(target); });
                     continue;
                 }
 
@@ -105,6 +105,7 @@ public static class PropertyGrid
                         {
                             DrawField(paper, fieldId, label, fieldType, value, newVal =>
                             {
+                                Undo.RecordObject(target, label);
                                 field.SetValue(target, newVal);
                                 onChanged?.Invoke(target);
                             }, depth);
@@ -115,6 +116,7 @@ public static class PropertyGrid
                 {
                     DrawField(paper, fieldId, label, fieldType, value, newVal =>
                     {
+                        Undo.RecordObject(target, label);
                         field.SetValue(target, newVal);
                         onChanged?.Invoke(target);
                     }, depth);

@@ -87,6 +87,24 @@ public static class PrefabUtility
     /// </summary>
     public static void BreakPrefabInstance(GameObject go)
     {
+        // Capture prefab state for undo
+        var prefabId = go.PrefabAssetId;
+        var overrides = go.PrefabOverrides.ToList();
+        var compCount = go.PrefabComponentCount;
+        var childCount = go.PrefabChildCount;
+        var goRef = go;
+
+        Undo.RegisterAction("Break Prefab Instance",
+            undo: () =>
+            {
+                // Re-stamp as prefab instance
+                StampAsPrefabInstance(goRef, prefabId);
+                goRef.PrefabOverrides = overrides;
+                goRef.PrefabComponentCount = compCount;
+                goRef.PrefabChildCount = childCount;
+            },
+            redo: () => goRef.ClearPrefabDataRecursive());
+
         go.ClearPrefabDataRecursive();
         EditorSceneManager.IsDirty = true;
     }
@@ -113,6 +131,13 @@ public static class PrefabUtility
             return;
         }
 
+        // Capture old prefab file for undo
+        string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        string? oldFileContent = File.Exists(absolutePath) ? File.ReadAllText(absolutePath) : null;
+        var oldOverrides = instanceRoot.PrefabOverrides.ToList();
+        var prefabGuid = instanceRoot.PrefabAssetId;
+        var goRef = instanceRoot;
+
         // Serialize the instance tree with prefab data stripped
         var cleanCopy = CloneWithoutPrefabData(instanceRoot);
         if (cleanCopy == null) return;
@@ -121,7 +146,6 @@ public static class PrefabUtility
         if (echo == null) return;
 
         // Write to the .prefab file
-        string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
         File.WriteAllText(absolutePath, echo.WriteToString());
 
         // Clear overrides on this instance
@@ -131,6 +155,19 @@ public static class PrefabUtility
         _sourceCache.Remove(instanceRoot.PrefabAssetId);
         db.Reimport(entry.Guid);
         RefreshAllInstances(instanceRoot.PrefabAssetId);
+
+        Undo.RegisterAction("Apply Prefab Overrides",
+            undo: () =>
+            {
+                // Restore old prefab file
+                if (oldFileContent != null) File.WriteAllText(absolutePath, oldFileContent);
+                _sourceCache.Remove(prefabGuid);
+                db.Reimport(entry.Guid);
+                // Restore overrides on instance
+                goRef.PrefabOverrides = oldOverrides;
+                RefreshAllInstances(prefabGuid);
+            },
+            redo: () => ApplyOverrides(goRef));
 
         EditorSceneManager.IsDirty = true;
         Runtime.Debug.Log($"[Prefab] Applied overrides to {entry.Path}");
@@ -149,6 +186,12 @@ public static class PrefabUtility
             Runtime.Debug.LogWarning("[Prefab] Cannot revert — prefab asset not found.");
             return;
         }
+
+        // Capture old state for undo
+        var oldSerialized = Serializer.Serialize(typeof(object), instanceRoot);
+        var parentId = instanceRoot.Parent?.Identifier ?? Guid.Empty;
+        var siblingIdx = instanceRoot.Parent != null ? instanceRoot.Parent.Children.IndexOf(instanceRoot) : -1;
+        var prefabGuid = instanceRoot.PrefabAssetId;
 
         // Instantiate fresh from prefab
         var fresh = prefab.Instantiate();
@@ -170,8 +213,65 @@ public static class PrefabUtility
                 fresh.SetParent(parent);
         }
 
+        // Register undo that swaps fresh back to old
+        var freshId = fresh.Identifier;
+        Undo.RegisterAction("Revert Prefab Overrides",
+            undo: () =>
+            {
+                var s = Scene.Current;
+                if (s == null) return;
+                var current = FindByIdentifier(s, freshId);
+                if (current == null) return;
+
+                var restored = Serializer.Deserialize<GameObject>(oldSerialized);
+                if (restored == null) return;
+                Undo.RestoreIdentifiers(restored, oldSerialized);
+
+                var p = current.Parent;
+                s.Remove(current);
+                current.Dispose();
+                s.Add(restored);
+                if (p != null) restored.SetParent(p);
+                Selection.Select(restored);
+            },
+            redo: () =>
+            {
+                var s = Scene.Current;
+                if (s == null) return;
+                // Re-revert: find by old identifier, replace with fresh prefab
+                var pf = AssetDatabase.Get(prefabGuid) as PrefabAsset;
+                if (pf == null) return;
+                // Find the old-state GO by its identifier
+                var oldGo = FindByIdentifier(s, oldSerialized.Get("Identifier")?.StringValue != null
+                    && Guid.TryParse(oldSerialized.Get("Identifier")?.StringValue, out var oid) ? oid : Guid.Empty);
+                if (oldGo == null) return;
+
+                var f2 = pf.Instantiate();
+                if (f2 == null) return;
+                f2.Transform.Position = oldGo.Transform.Position;
+                f2.Transform.Rotation = oldGo.Transform.Rotation;
+                f2.Transform.LocalScale = oldGo.Transform.LocalScale;
+                f2.Name = oldGo.Name;
+                var p2 = oldGo.Parent;
+                s.Remove(oldGo);
+                oldGo.Dispose();
+                s.Add(f2);
+                if (p2 != null) f2.SetParent(p2);
+                Selection.Select(f2);
+            });
+
         Selection.Select(fresh);
         EditorSceneManager.IsDirty = true;
+    }
+
+    private static GameObject? FindByIdentifier(Scene scene, Guid id)
+    {
+        foreach (var root in scene.RootObjects)
+        {
+            var found = root.FindChildByIdentifier(id);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     // ================================================================
@@ -195,6 +295,14 @@ public static class PrefabUtility
         var prefab = Runtime.AssetDatabase.Get(instanceGO.PrefabAssetId) as PrefabAsset;
         if (prefab?.GameObjectData == null) return;
 
+        // Capture old prefab file content for undo
+        string absolutePath = System.IO.Path.Combine(Project.Current.AssetsPath, entry.Path);
+        string? oldFileContent = System.IO.File.Exists(absolutePath) ? System.IO.File.ReadAllText(absolutePath) : null;
+        var ovPath = ov.Path;
+        var ovValue = ov.Value;
+        var prefabGuid = instanceGO.PrefabAssetId;
+        var goRef = instanceGO;
+
         var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData);
         if (source == null) return;
 
@@ -207,7 +315,6 @@ public static class PrefabUtility
         var echo = Serializer.Serialize(typeof(object), source);
         if (echo != null)
         {
-            string absolutePath = System.IO.Path.Combine(Project.Current.AssetsPath, entry.Path);
             System.IO.File.WriteAllText(absolutePath, echo.WriteToString());
             _sourceCache.Remove(instanceGO.PrefabAssetId);
             db.Reimport(entry.Guid);
@@ -215,6 +322,23 @@ public static class PrefabUtility
 
         // Remove this override from the instance
         instanceGO.PrefabOverrides.Remove(ov);
+
+        Undo.RegisterAction("Apply Single Override",
+            undo: () =>
+            {
+                // Restore old prefab file
+                if (oldFileContent != null) System.IO.File.WriteAllText(absolutePath, oldFileContent);
+                _sourceCache.Remove(prefabGuid);
+                db.Reimport(entry.Guid);
+                // Re-add the override to the instance
+                goRef.PrefabOverrides.Add(new PropertyOverride { Path = ovPath, Value = ovValue });
+                RefreshAllInstances(prefabGuid);
+            },
+            redo: () =>
+            {
+                // Re-apply
+                ApplySingleOverride(goRef, new PropertyOverride { Path = ovPath, Value = ovValue });
+            });
 
         // Refresh other instances to pick up the change
         RefreshAllInstances(instanceGO.PrefabAssetId);
@@ -244,12 +368,35 @@ public static class PrefabUtility
         ParseOverridePath(instanceGO, overridePath, out var instanceTarget, out string instanceFieldPath);
         if (instanceTarget == null) return;
 
+        // Capture old instance value for undo
+        var oldInstanceValue = GetFieldValue(instanceTarget, instanceFieldPath);
+        var oldInstanceEcho = Serializer.Serialize(sourceField.FieldType, oldInstanceValue);
+        var removedOverrides = instanceGO.PrefabOverrides.Where(o => o.Path == overridePath).ToList();
+        var goRef = instanceGO;
+        var path = overridePath;
+
         // Copy source value to instance
         var sourceValue = GetFieldValue(sourceTarget, sourceFieldPath);
         SetFieldValue(instanceTarget, instanceFieldPath, sourceValue);
 
         // Remove the override entry
         instanceGO.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
+
+        Undo.RegisterAction("Revert Single Override",
+            undo: () =>
+            {
+                // Restore old instance value
+                ParseOverridePath(goRef, path, out var undoTarget, out string undoFieldPath);
+                if (undoTarget != null && oldInstanceEcho != null)
+                    ApplyFieldValue(undoTarget, undoFieldPath, oldInstanceEcho);
+                // Re-add removed overrides
+                goRef.PrefabOverrides.AddRange(removedOverrides);
+            },
+            redo: () =>
+            {
+                RevertSingleOverride(goRef, path);
+            });
+
         EditorSceneManager.IsDirty = true;
     }
 

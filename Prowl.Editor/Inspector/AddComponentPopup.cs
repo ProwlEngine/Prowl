@@ -177,7 +177,17 @@ public static class AddComponentPopup
             {
                 if (_targetGo != null)
                 {
-                    _targetGo.AddComponent(type);
+                    var addedComp = _targetGo.AddComponent(type);
+                    if (addedComp != null)
+                    {
+                        var compId = addedComp.Identifier;
+                        var goId = _targetGo.Identifier;
+                        var serialized = Echo.Serializer.Serialize(addedComp.GetType(), addedComp);
+                        var compType = addedComp.GetType();
+                        Undo.RegisterAction("Add Component",
+                            undo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = g.GetComponentByIdentifier(compId); if (c != null) g.RemoveComponent(c); },
+                            redo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour; if (c != null) { c.Identifier = compId; g.AddComponent(c); } });
+                    }
                     Close();
                 }
             })

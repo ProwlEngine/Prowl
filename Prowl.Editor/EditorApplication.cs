@@ -187,6 +187,14 @@ public class EditorApplication : Game
             {
                 EditorSceneManager.NewScene();
             }
+            else if (ShortcutManager.IsPressed("Global/Undo"))
+            {
+                Undo.PerformUndo();
+            }
+            else if (ShortcutManager.IsPressed("Global/Redo"))
+            {
+                Undo.PerformRedo();
+            }
         }
 
         // Reset per-frame state
@@ -533,6 +541,9 @@ public class EditorApplication : Game
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);
 
+        // Flush undo system (after all UI mutations, before frame end)
+        Undo.FlushFrame();
+
         // Intro animation overlay
         if (_introTime < IntroDuration)
         {
@@ -794,8 +805,12 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/Exit", () => Game.Quit());
 
         // Edit menu
-        MenuRegistry.Register("Edit/Undo", () => { /* TODO */ }, enabled: false);
-        MenuRegistry.Register("Edit/Redo", () => { /* TODO */ }, enabled: false);
+        MenuRegistry.Register("Edit/Undo", () => Undo.PerformUndo(),
+            isEnabled: () => Undo.CanUndo,
+            dynamicLabel: () => Undo.UndoDescription);
+        MenuRegistry.Register("Edit/Redo", () => Undo.PerformRedo(),
+            isEnabled: () => Undo.CanRedo,
+            dynamicLabel: () => Undo.RedoDescription);
         MenuRegistry.RegisterSeparator("Edit");
         MenuRegistry.Register("Edit/Project Settings...", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
         MenuRegistry.Register("Edit/Save Layout", () => SaveProjectState());
@@ -860,6 +875,7 @@ public class EditorApplication : Game
             if (scene != null)
             {
                 Runtime.Resources.Scene.Load(scene);
+                Undo.Clear();
                 Runtime.Debug.Log("Restored auto-saved scene.");
             }
 
@@ -958,6 +974,7 @@ public class EditorApplication : Game
 
         // Load with full lifecycle (Enable → OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
+        Undo.Clear();
 
         // Apply physics settings to the new scene
         try { ProjectSettingsRegistry.Get<PhysicsSettings>().Apply(); } catch { }
@@ -990,6 +1007,7 @@ public class EditorApplication : Game
             var restoredScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, ctx);
             if (restoredScene != null)
                 Runtime.Resources.Scene.Load(restoredScene);
+            Undo.Clear();
             _savedEditorScene = null;
         }
 

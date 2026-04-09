@@ -22,9 +22,18 @@ namespace Prowl.Editor.Inspector;
 [CustomComponentEditor(typeof(ParticleSystemComponent))]
 public class ParticleSystemComponentEditor : ComponentEditor
 {
+    // Undo helper — records the component before mutation
+    private static ParticleSystemComponent? _undoTarget;
+    private static void Rec(string label) { if (_undoTarget != null) Undo.RecordObject(_undoTarget, label); }
+    private static Action<object?> WrapOnChange(string label, Action<object?> onChange)
+    {
+        return v => { Rec(label); onChange(v); };
+    }
+
     public override void OnGUI(Paper paper, string id, MonoBehaviour component)
     {
         var ps = (ParticleSystemComponent)component;
+        _undoTarget = ps;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
@@ -37,20 +46,20 @@ public class ParticleSystemComponentEditor : ComponentEditor
         DrawModuleHeader(paper, $"{id}_main_h", "Particle System", null, font, true);
 
         PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), ps.Material,
-            v => ps.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
+            WrapOnChange("Material", v => ps.Material = (AssetRef<Runtime.Resources.Material>)v!), 0);
 
         EditorGUI.IntField(paper, $"{id}_maxp", ps.MaxParticles, "Max Particles")
-            .OnValueChanged(v => ps.MaxParticles = Math.Max(1, v));
+            .OnValueChanged(v => { Rec("Max Particles"); ps.MaxParticles = Math.Max(1, v); });
         EditorGUI.FloatField(paper, $"{id}_dur", ps.Duration, "Duration")
-            .OnValueChanged(v => ps.Duration = MathF.Max(0.1f, v));
+            .OnValueChanged(v => { Rec("Duration"); ps.Duration = MathF.Max(0.1f, v); });
         EditorGUI.Toggle(paper, $"{id}_loop", "Looping", ps.Looping)
-            .OnValueChanged(v => ps.Looping = v);
+            .OnValueChanged(v => { Rec("Looping"); ps.Looping = v; });
         EditorGUI.Toggle(paper, $"{id}_poe", "Play On Enable", ps.PlayOnEnable)
-            .OnValueChanged(v => ps.PlayOnEnable = v);
+            .OnValueChanged(v => { Rec("Play On Enable"); ps.PlayOnEnable = v; });
         EditorGUI.Toggle(paper, $"{id}_pw", "Prewarm", ps.Prewarm)
-            .OnValueChanged(v => ps.Prewarm = v);
+            .OnValueChanged(v => { Rec("Prewarm"); ps.Prewarm = v; });
         EditorGUI.EnumDropdown(paper, $"{id}_sim", "Simulation Space", ps.SimulationSpace)
-            .OnValueChanged(v => ps.SimulationSpace = v);
+            .OnValueChanged(v => { Rec("Simulation Space"); ps.SimulationSpace = v; });
 
         paper.Box($"{id}_sp1").Height(6);
 
@@ -58,61 +67,61 @@ public class ParticleSystemComponentEditor : ComponentEditor
         DrawModule(paper, $"{id}_init", "Initial", EditorIcons.Star, ps.Initial, font, () =>
         {
             PropertyGrid.DrawField(paper, $"{id}_init_lt", "Start Lifetime", typeof(MinMaxCurve), ps.Initial.StartLifetime,
-                v => ps.Initial.StartLifetime = v as MinMaxCurve ?? new MinMaxCurve(5f), 0);
+                WrapOnChange("Start Lifetime", v => ps.Initial.StartLifetime = v as MinMaxCurve ?? new MinMaxCurve(5f)), 0);
             PropertyGrid.DrawField(paper, $"{id}_init_sp", "Start Speed", typeof(MinMaxCurve), ps.Initial.StartSpeed,
-                v => ps.Initial.StartSpeed = v as MinMaxCurve ?? new MinMaxCurve(5f), 0);
+                WrapOnChange("Start Speed", v => ps.Initial.StartSpeed = v as MinMaxCurve ?? new MinMaxCurve(5f)), 0);
             PropertyGrid.DrawField(paper, $"{id}_init_sz", "Start Size", typeof(MinMaxCurve), ps.Initial.StartSize,
-                v => ps.Initial.StartSize = v as MinMaxCurve ?? new MinMaxCurve(1f), 0);
+                WrapOnChange("Start Size", v => ps.Initial.StartSize = v as MinMaxCurve ?? new MinMaxCurve(1f)), 0);
             PropertyGrid.DrawField(paper, $"{id}_init_rot", "Start Rotation", typeof(MinMaxCurve), ps.Initial.StartRotation,
-                v => ps.Initial.StartRotation = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                WrapOnChange("Start Rotation", v => ps.Initial.StartRotation = v as MinMaxCurve ?? new MinMaxCurve(0f)), 0);
             PropertyGrid.DrawField(paper, $"{id}_init_col", "Start Color", typeof(MinMaxGradient), ps.Initial.StartColor,
-                v => ps.Initial.StartColor = v as MinMaxGradient ?? new MinMaxGradient(VColor.White), 0);
+                WrapOnChange("Start Color", v => ps.Initial.StartColor = v as MinMaxGradient ?? new MinMaxGradient(VColor.White)), 0);
             EditorGUI.FloatField(paper, $"{id}_init_grav", ps.Initial.GravityModifier, "Gravity")
-                .OnValueChanged(v => ps.Initial.GravityModifier = v);
+                .OnValueChanged(v => { Rec("Gravity"); ps.Initial.GravityModifier = v; });
         });
 
         // Emission Module
         DrawModule(paper, $"{id}_emit", "Emission", EditorIcons.Burst, ps.Emission, font, () =>
         {
             PropertyGrid.DrawField(paper, $"{id}_emit_rot", "Rate Over Time", typeof(MinMaxCurve), ps.Emission.RateOverTime,
-                v => ps.Emission.RateOverTime = v as MinMaxCurve ?? new MinMaxCurve(10f), 0);
+                WrapOnChange("Rate Over Time", v => ps.Emission.RateOverTime = v as MinMaxCurve ?? new MinMaxCurve(10f)), 0);
 
             paper.Box($"{id}_emit_sp").Height(4);
 
             // Shape
             EditorGUI.EnumDropdown(paper, $"{id}_emit_shape", "Shape", ps.Emission.Shape)
-                .OnValueChanged(v => ps.Emission.Shape = v);
+                .OnValueChanged(v => { Rec("Shape"); ps.Emission.Shape = v; });
 
             EditorGUI.Vector3Field(paper, $"{id}_emit_pos", "Position", ps.Emission.ShapePosition)
-                .OnValueChanged(v => ps.Emission.ShapePosition = v);
+                .OnValueChanged(v => { Rec("Position"); ps.Emission.ShapePosition = v; });
             EditorGUI.Vector3Field(paper, $"{id}_emit_rot2", "Rotation", ps.Emission.ShapeRotation)
-                .OnValueChanged(v => ps.Emission.ShapeRotation = v);
+                .OnValueChanged(v => { Rec("Rotation"); ps.Emission.ShapeRotation = v; });
             EditorGUI.Vector3Field(paper, $"{id}_emit_scl", "Scale", ps.Emission.ShapeScale)
-                .OnValueChanged(v => ps.Emission.ShapeScale = v);
+                .OnValueChanged(v => { Rec("Scale"); ps.Emission.ShapeScale = v; });
 
             // Shape-specific fields
             switch (ps.Emission.Shape)
             {
                 case EmissionShape.LineSegment:
                     EditorGUI.FloatField(paper, $"{id}_emit_ll", ps.Emission.LineLength, "Line Length")
-                        .OnValueChanged(v => ps.Emission.LineLength = MathF.Max(0f, v));
+                        .OnValueChanged(v => { Rec("Line Length"); ps.Emission.LineLength = MathF.Max(0f, v); });
                     break;
                 case EmissionShape.Circle:
                 case EmissionShape.Sphere:
                     EditorGUI.FloatField(paper, $"{id}_emit_rad", ps.Emission.Radius, "Radius")
-                        .OnValueChanged(v => ps.Emission.Radius = MathF.Max(0.01f, v));
+                        .OnValueChanged(v => { Rec("Radius"); ps.Emission.Radius = MathF.Max(0.01f, v); });
                     EditorGUI.Toggle(paper, $"{id}_emit_shell", "Emit From Shell", ps.Emission.EmitFromShell)
-                        .OnValueChanged(v => ps.Emission.EmitFromShell = v);
+                        .OnValueChanged(v => { Rec("Emit From Shell"); ps.Emission.EmitFromShell = v; });
                     break;
                 case EmissionShape.Box:
                     EditorGUI.Vector3Field(paper, $"{id}_emit_box", "Box Size", ps.Emission.BoxSize)
-                        .OnValueChanged(v => ps.Emission.BoxSize = v);
+                        .OnValueChanged(v => { Rec("Box Size"); ps.Emission.BoxSize = v; });
                     break;
                 case EmissionShape.Cone:
                     EditorGUI.FloatField(paper, $"{id}_emit_rad2", ps.Emission.Radius, "Radius")
-                        .OnValueChanged(v => ps.Emission.Radius = MathF.Max(0.01f, v));
+                        .OnValueChanged(v => { Rec("Radius"); ps.Emission.Radius = MathF.Max(0.01f, v); });
                     EditorGUI.FloatField(paper, $"{id}_emit_angle", ps.Emission.ConeAngle, "Angle")
-                        .OnValueChanged(v => ps.Emission.ConeAngle = MathF.Max(0f, MathF.Min(90f, v)));
+                        .OnValueChanged(v => { Rec("Angle"); ps.Emission.ConeAngle = MathF.Max(0f, MathF.Min(90f, v)); });
                     break;
             }
 
@@ -126,61 +135,61 @@ public class ParticleSystemComponentEditor : ComponentEditor
         DrawModule(paper, $"{id}_sol", "Size over Lifetime", EditorIcons.ArrowsLeftRight, ps.SizeOverLifetime, font, () =>
         {
             PropertyGrid.DrawField(paper, $"{id}_sol_c", "Size", typeof(MinMaxCurve), ps.SizeOverLifetime.SizeCurve,
-                v => ps.SizeOverLifetime.SizeCurve = v as MinMaxCurve ?? new MinMaxCurve(1f), 0);
+                WrapOnChange("Size", v => ps.SizeOverLifetime.SizeCurve = v as MinMaxCurve ?? new MinMaxCurve(1f)), 0);
         });
 
         // Color Over Lifetime
         DrawModule(paper, $"{id}_col", "Color over Lifetime", EditorIcons.Palette, ps.ColorOverLifetime, font, () =>
         {
             PropertyGrid.DrawField(paper, $"{id}_col_g", "Color", typeof(MinMaxGradient), ps.ColorOverLifetime.ColorGradient,
-                v => ps.ColorOverLifetime.ColorGradient = v as MinMaxGradient ?? new MinMaxGradient(), 0);
+                WrapOnChange("Color", v => ps.ColorOverLifetime.ColorGradient = v as MinMaxGradient ?? new MinMaxGradient()), 0);
         });
 
         // Rotation Over Lifetime
         DrawModule(paper, $"{id}_rol", "Rotation over Lifetime", EditorIcons.ArrowsSpin, ps.RotationOverLifetime, font, () =>
         {
             PropertyGrid.DrawField(paper, $"{id}_rol_av", "Angular Velocity", typeof(MinMaxCurve), ps.RotationOverLifetime.AngularVelocity,
-                v => ps.RotationOverLifetime.AngularVelocity = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                WrapOnChange("Angular Velocity", v => ps.RotationOverLifetime.AngularVelocity = v as MinMaxCurve ?? new MinMaxCurve(0f)), 0);
         });
 
         // Velocity Over Lifetime
         DrawModule(paper, $"{id}_vol", "Velocity over Lifetime", EditorIcons.Gauge, ps.VelocityOverLifetime, font, () =>
         {
             PropertyGrid.DrawField(paper, $"{id}_vol_x", "Velocity X", typeof(MinMaxCurve), ps.VelocityOverLifetime.VelocityX,
-                v => ps.VelocityOverLifetime.VelocityX = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                WrapOnChange("Velocity X", v => ps.VelocityOverLifetime.VelocityX = v as MinMaxCurve ?? new MinMaxCurve(0f)), 0);
             PropertyGrid.DrawField(paper, $"{id}_vol_y", "Velocity Y", typeof(MinMaxCurve), ps.VelocityOverLifetime.VelocityY,
-                v => ps.VelocityOverLifetime.VelocityY = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                WrapOnChange("Velocity Y", v => ps.VelocityOverLifetime.VelocityY = v as MinMaxCurve ?? new MinMaxCurve(0f)), 0);
             PropertyGrid.DrawField(paper, $"{id}_vol_z", "Velocity Z", typeof(MinMaxCurve), ps.VelocityOverLifetime.VelocityZ,
-                v => ps.VelocityOverLifetime.VelocityZ = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                WrapOnChange("Velocity Z", v => ps.VelocityOverLifetime.VelocityZ = v as MinMaxCurve ?? new MinMaxCurve(0f)), 0);
         });
 
         // Collision
         DrawModule(paper, $"{id}_coll", "Collision", EditorIcons.Explosion, ps.Collision, font, () =>
         {
             EditorGUI.EnumDropdown(paper, $"{id}_coll_mode", "Mode", ps.Collision.Mode)
-                .OnValueChanged(v => ps.Collision.Mode = v);
+                .OnValueChanged(v => { Rec("Mode"); ps.Collision.Mode = v; });
             EditorGUI.EnumDropdown(paper, $"{id}_coll_qual", "Quality", ps.Collision.Quality)
-                .OnValueChanged(v => ps.Collision.Quality = v);
+                .OnValueChanged(v => { Rec("Quality"); ps.Collision.Quality = v; });
             EditorGUI.FloatField(paper, $"{id}_coll_damp", ps.Collision.Dampen, "Dampen")
-                .OnValueChanged(v => ps.Collision.Dampen = MathF.Max(0f, MathF.Min(1f, v)));
+                .OnValueChanged(v => { Rec("Dampen"); ps.Collision.Dampen = MathF.Max(0f, MathF.Min(1f, v)); });
             EditorGUI.FloatField(paper, $"{id}_coll_bounce", ps.Collision.Bounce, "Bounce")
-                .OnValueChanged(v => ps.Collision.Bounce = MathF.Max(0f, MathF.Min(1f, v)));
+                .OnValueChanged(v => { Rec("Bounce"); ps.Collision.Bounce = MathF.Max(0f, MathF.Min(1f, v)); });
             EditorGUI.FloatField(paper, $"{id}_coll_ll", ps.Collision.LifetimeLoss, "Lifetime Loss")
-                .OnValueChanged(v => ps.Collision.LifetimeLoss = MathF.Max(0f, v));
+                .OnValueChanged(v => { Rec("Lifetime Loss"); ps.Collision.LifetimeLoss = MathF.Max(0f, v); });
             EditorGUI.FloatField(paper, $"{id}_coll_mks", ps.Collision.MinKillSpeed, "Min Kill Speed")
-                .OnValueChanged(v => ps.Collision.MinKillSpeed = MathF.Max(0f, v));
+                .OnValueChanged(v => { Rec("Min Kill Speed"); ps.Collision.MinKillSpeed = MathF.Max(0f, v); });
             EditorGUI.FloatField(paper, $"{id}_coll_rad", ps.Collision.ParticleRadius, "Particle Radius")
-                .OnValueChanged(v => ps.Collision.ParticleRadius = MathF.Max(0.001f, v));
+                .OnValueChanged(v => { Rec("Particle Radius"); ps.Collision.ParticleRadius = MathF.Max(0.001f, v); });
             EditorGUI.FloatField(paper, $"{id}_coll_dist", ps.Collision.MaxCollisionDistance, "Max Distance")
-                .OnValueChanged(v => ps.Collision.MaxCollisionDistance = MathF.Max(0.01f, v));
+                .OnValueChanged(v => { Rec("Max Distance"); ps.Collision.MaxCollisionDistance = MathF.Max(0.01f, v); });
 
             PropertyGrid.DrawField(paper, $"{id}_coll_lm", "Collides With", typeof(LayerMask), ps.Collision.CollidesWith,
-                v => ps.Collision.CollidesWith = (LayerMask)v!, 0);
+                WrapOnChange("Collides With", v => ps.Collision.CollidesWith = (LayerMask)v!), 0);
 
             if (ps.Collision.Mode == CollisionMode.World)
             {
                 EditorGUI.FloatField(paper, $"{id}_coll_vox", ps.Collision.VoxelSize, "Voxel Size")
-                    .OnValueChanged(v => ps.Collision.VoxelSize = MathF.Max(0.1f, v));
+                    .OnValueChanged(v => { Rec("Voxel Size"); ps.Collision.VoxelSize = MathF.Max(0.1f, v); });
             }
         });
 
@@ -188,35 +197,35 @@ public class ParticleSystemComponentEditor : ComponentEditor
         DrawModule(paper, $"{id}_uv", "UV Animation", EditorIcons.Film, ps.UV, font, () =>
         {
             EditorGUI.EnumDropdown(paper, $"{id}_uv_mode", "Mode", ps.UV.Mode)
-                .OnValueChanged(v => ps.UV.Mode = v);
+                .OnValueChanged(v => { Rec("UV Mode"); ps.UV.Mode = v; });
 
             if (ps.UV.Mode == UVAnimationMode.GridAnimation)
             {
                 EditorGUI.IntField(paper, $"{id}_uv_tx", ps.UV.TilesX, "Tiles X")
-                    .OnValueChanged(v => ps.UV.TilesX = Math.Max(1, v));
+                    .OnValueChanged(v => { Rec("Tiles X"); ps.UV.TilesX = Math.Max(1, v); });
                 EditorGUI.IntField(paper, $"{id}_uv_ty", ps.UV.TilesY, "Tiles Y")
-                    .OnValueChanged(v => ps.UV.TilesY = Math.Max(1, v));
+                    .OnValueChanged(v => { Rec("Tiles Y"); ps.UV.TilesY = Math.Max(1, v); });
                 EditorGUI.IntField(paper, $"{id}_uv_cc", ps.UV.CycleCount, "Cycle Count")
-                    .OnValueChanged(v => ps.UV.CycleCount = Math.Max(1, v));
+                    .OnValueChanged(v => { Rec("Cycle Count"); ps.UV.CycleCount = Math.Max(1, v); });
                 EditorGUI.FloatField(paper, $"{id}_uv_fot", ps.UV.FrameOverTime, "Frame Over Time")
-                    .OnValueChanged(v => ps.UV.FrameOverTime = MathF.Max(0f, v));
+                    .OnValueChanged(v => { Rec("Frame Over Time"); ps.UV.FrameOverTime = MathF.Max(0f, v); });
                 EditorGUI.Toggle(paper, $"{id}_uv_rsf", "Random Start Frame", ps.UV.RandomStartFrame)
-                    .OnValueChanged(v => ps.UV.RandomStartFrame = v);
+                    .OnValueChanged(v => { Rec("Random Start Frame"); ps.UV.RandomStartFrame = v; });
             }
             else
             {
                 PropertyGrid.DrawField(paper, $"{id}_uv_uo", "U Offset", typeof(MinMaxCurve), ps.UV.UOffsetCurve,
-                    v => ps.UV.UOffsetCurve = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                    WrapOnChange("U Offset", v => ps.UV.UOffsetCurve = v as MinMaxCurve ?? new MinMaxCurve(0f)), 0);
                 PropertyGrid.DrawField(paper, $"{id}_uv_vo", "V Offset", typeof(MinMaxCurve), ps.UV.VOffsetCurve,
-                    v => ps.UV.VOffsetCurve = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                    WrapOnChange("V Offset", v => ps.UV.VOffsetCurve = v as MinMaxCurve ?? new MinMaxCurve(0f)), 0);
                 EditorGUI.Vector2Field(paper, $"{id}_uv_ss", "Scroll Speed", ps.UV.ScrollSpeed)
-                    .OnValueChanged(v => ps.UV.ScrollSpeed = v);
+                    .OnValueChanged(v => { Rec("Scroll Speed"); ps.UV.ScrollSpeed = v; });
             }
 
             EditorGUI.Toggle(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU)
-                .OnValueChanged(v => ps.UV.FlipU = v);
+                .OnValueChanged(v => { Rec("Flip U"); ps.UV.FlipU = v; });
             EditorGUI.Toggle(paper, $"{id}_uv_fv", "Flip V", ps.UV.FlipV)
-                .OnValueChanged(v => ps.UV.FlipV = v);
+                .OnValueChanged(v => { Rec("Flip V"); ps.UV.FlipV = v; });
         });
     }
 
@@ -285,7 +294,7 @@ public class ParticleSystemComponentEditor : ComponentEditor
             if (module != null && !forceEnabled)
             {
                 EditorGUI.Toggle(paper, $"{id}_en", "", module.Enabled)
-                    .OnValueChanged(v => module.Enabled = v);
+                    .OnValueChanged(v => { Rec("Module Enabled"); module.Enabled = v; });
             }
 
             // Label
@@ -355,15 +364,15 @@ public class ParticleSystemComponentEditor : ComponentEditor
                 }
 
                 EditorGUI.FloatField(paper, $"{id}_bt{i}", burst.Time, "Time")
-                    .OnValueChanged(v => { burst.Time = MathF.Max(0f, v); bursts[idx] = burst; });
+                    .OnValueChanged(v => { Rec("Burst Time"); burst.Time = MathF.Max(0f, v); bursts[idx] = burst; });
                 EditorGUI.IntField(paper, $"{id}_bmn{i}", burst.MinCount, "Min Count")
-                    .OnValueChanged(v => { burst.MinCount = Math.Max(0, v); bursts[idx] = burst; });
+                    .OnValueChanged(v => { Rec("Burst Min Count"); burst.MinCount = Math.Max(0, v); bursts[idx] = burst; });
                 EditorGUI.IntField(paper, $"{id}_bmx{i}", burst.MaxCount, "Max Count")
-                    .OnValueChanged(v => { burst.MaxCount = Math.Max(burst.MinCount, v); bursts[idx] = burst; });
+                    .OnValueChanged(v => { Rec("Burst Max Count"); burst.MaxCount = Math.Max(burst.MinCount, v); bursts[idx] = burst; });
                 EditorGUI.IntField(paper, $"{id}_bcc{i}", burst.CycleCount, "Cycles")
-                    .OnValueChanged(v => { burst.CycleCount = Math.Max(0, v); bursts[idx] = burst; });
+                    .OnValueChanged(v => { Rec("Burst Cycles"); burst.CycleCount = Math.Max(0, v); bursts[idx] = burst; });
                 EditorGUI.FloatField(paper, $"{id}_bri{i}", burst.RepeatInterval, "Repeat Interval")
-                    .OnValueChanged(v => { burst.RepeatInterval = MathF.Max(0f, v); bursts[idx] = burst; });
+                    .OnValueChanged(v => { Rec("Burst Repeat Interval"); burst.RepeatInterval = MathF.Max(0f, v); bursts[idx] = burst; });
             }
         }
 
