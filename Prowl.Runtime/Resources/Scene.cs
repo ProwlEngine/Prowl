@@ -94,7 +94,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     private int[] _compIdOffsets = null;
 
     [SerializeIgnore]
-    private HashSet<GameObject> _allObj = new(ReferenceEqualityComparer.Instance);
+    private List<GameObject> _allObj = new();
+    [SerializeIgnore]
+    private HashSet<GameObject> _allObjSet = new(ReferenceEqualityComparer.Instance);
 
     private PhysicsWorld _physics = new();
 
@@ -295,6 +297,43 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
+    /// Move a root-level GameObject to a specific index within the root object list.
+    /// Only works for root objects (no parent). Index is clamped to valid range.
+    /// </summary>
+    public void SetRootIndex(GameObject obj, int index)
+    {
+        if (obj.Scene != this || obj.Parent.IsValid()) return;
+        int current = _allObj.IndexOf(obj);
+        if (current < 0) return;
+        _allObj.RemoveAt(current);
+        // Collect root indices to map root-order index to list index
+        var rootIndices = new List<int>();
+        for (int i = 0; i < _allObj.Count; i++)
+            if (!_allObj[i].IsDisposed && _allObj[i].Transform.Parent == null)
+                rootIndices.Add(i);
+        index = Math.Max(0, Math.Min(index, rootIndices.Count));
+        int insertAt = index < rootIndices.Count ? rootIndices[index] : _allObj.Count;
+        _allObj.Insert(insertAt, obj);
+    }
+
+    /// <summary>
+    /// Get the index of a root-level GameObject among other root objects.
+    /// Returns -1 if not a root or not in this scene.
+    /// </summary>
+    public int GetRootIndex(GameObject obj)
+    {
+        if (obj.Scene != this || obj.Parent.IsValid()) return -1;
+        int rootIdx = 0;
+        foreach (var go in _allObj)
+        {
+            if (go.IsDisposed || go.Transform.Parent != null) continue;
+            if (go == obj) return rootIdx;
+            rootIdx++;
+        }
+        return -1;
+    }
+
+    /// <summary>
     /// Unregisters a GameObject and all of its children
     /// </summary>
     public void Remove(GameObject obj)
@@ -309,8 +348,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private void AddObject(GameObject obj)
     {
-        if (_allObj.Add(obj))
+        if (_allObjSet.Add(obj))
         {
+            _allObj.Add(obj);
             obj.Scene = this;
 
             // Create a copy of components to avoid modification during enumeration
@@ -348,8 +388,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         foreach (GameObject child in children)
             RemoveObject(child);
 
-        if (_allObj.Remove(obj))
+        if (_allObjSet.Remove(obj))
         {
+            _allObj.Remove(obj);
             // Create a copy of components to avoid modification during enumeration
             MonoBehaviour[] components = [.. obj.GetComponents<MonoBehaviour>()];
 
@@ -437,7 +478,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 removed.Add(obj);
         }
 
-        _allObj.RemoveWhere(obj => obj.IsDisposed);
+        _allObj.RemoveAll(obj => obj.IsDisposed);
+        _allObjSet.RemoveWhere(obj => obj.IsDisposed);
 
         foreach (GameObject obj in removed)
             obj.Scene = null;
@@ -461,6 +503,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         // Clear any remaining references
         _allObj.Clear();
+        _allObjSet.Clear();
     }
 
     public void OnBeforeSerialize()
