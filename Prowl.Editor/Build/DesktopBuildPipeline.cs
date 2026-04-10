@@ -345,7 +345,6 @@ public class DesktopBuildPipeline : BuildPipeline
         // NuGet packages — must use PackageReference for native deps (Silk.NET GLFW, OpenAL, etc.)
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine("    <PackageReference Include=\"Silk.NET\" Version=\"2.22.0\" />");
-        sb.AppendLine("    <PackageReference Include=\"Silk.NET.Assimp\" Version=\"2.22.0\" />");
         sb.AppendLine("    <PackageReference Include=\"Silk.NET.OpenAL.Soft.Native\" Version=\"1.23.1\" />");
         sb.AppendLine("    <PackageReference Include=\"Jitter2\" Version=\"2.7.3\" />");
         sb.AppendLine("    <PackageReference Include=\"Magick.NET-Q16-AnyCPU\" Version=\"14.9.1\" />");

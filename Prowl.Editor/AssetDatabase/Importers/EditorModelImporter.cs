@@ -16,10 +16,10 @@ namespace Prowl.Editor.Importers;
 /// Imports 3D model files using the runtime's ModelImporter.
 /// Produces a Model with sub-assets (meshes, materials, animations).
 /// </summary>
-[ImporterFor(".fbx", ".obj", ".gltf", ".glb", ".dae")]
+[ImporterFor(".gltf", ".glb")]
 public class EditorModelImporter : AssetImporter
 {
-    public override int Version => 2; // Bumped: textures now resolved via asset database
+    public override int Version => 3; // GLTF-only importer, dropped Assimp
 
     public override ImportResult Import(string absolutePath, EchoObject? settings)
     {
@@ -31,11 +31,10 @@ public class EditorModelImporter : AssetImporter
             {
                 importSettings = new ModelImporterSettings
                 {
-                    GenerateNormals = settings.TryGet("generateNormals", out var gn) && gn.BoolValue,
+                    GenerateNormals = !settings.TryGet("generateNormals", out var gn) || gn.BoolValue,
                     GenerateSmoothNormals = settings.TryGet("generateSmoothNormals", out var gsn) && gsn.BoolValue,
-                    CalculateTangentSpace = settings.TryGet("calculateTangents", out var ct) && ct.BoolValue,
-                    FlipUVs = settings.TryGet("flipUVs", out var fu) && fu.BoolValue,
-                    GlobalScale = settings.TryGet("globalScale", out var gs) && gs.BoolValue,
+                    CalculateTangentSpace = !settings.TryGet("calculateTangents", out var ct) || ct.BoolValue,
+                    FlipUVs = !settings.TryGet("flipUVs", out var fu) || fu.BoolValue,
                     UnitScale = settings.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f,
                 };
             }
@@ -163,8 +162,7 @@ public class EditorModelImporter : AssetImporter
         s["generateNormals"] = new EchoObject(true);
         s["generateSmoothNormals"] = new EchoObject(false);
         s["calculateTangents"] = new EchoObject(true);
-        s["flipUVs"] = new EchoObject(false);
-        s["globalScale"] = new EchoObject(false);
+        s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);
         return s;
     }

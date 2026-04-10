@@ -1,0 +1,1190 @@
+glTF 2.0 API Reference Guide 
+Page 1
+glTF was designed and specified by the Khronos 
+Group, for the efficient transfer of 3D content 
+over networks.
+glTF and the glTF logo 
+are trademarks of the 
+Khronos Group Inc.
+Further resources
+The Khronos glTF landing page:    
+    https://www.khronos.org/gltf 
+ 
+The Khronos glTF GitHub repository:
+    https://github.com/KhronosGroup/glTF
+ 
+glTF - what the      ?
+An overview of the basics of 
+the GL Transmission Format
+The core of glTF is a JSON file that describes the 
+structure and composition of a scene containing
+3D models. The top-level elements of this file are:
+These elements are contained in arrays. References
+between the objects are established by using their 
+indices to look up              the objects in the arrays.
+©2016-2022 Marco Hutter
+    www.marco-hutter.de
+        Feedback:
+gltf@marco-hutter.de
+   Version 2.0d
+ glTF version 2.0
+For glTF 
+  2.0!
+This overview is 
+non-normative!
+ 
+It is also possible to store the whole asset in a single
+binary glTF file. In this case, the JSON data is stored
+as a string, followed by the binary data of buffers
+or images. 
+ 
+scenes, nodes
+ Basic structure of the scene
+meshes
+ Geometry of 3D objects
+materials
+ Definitions of how objects should be rendered
+skins 
+ Information for vertex skinning
+animations
+ Changes of properties over time
+cameras
+ View configurations for the scene
+textures, images, samplers
+ Surface appearance of objects
+buffers, bufferViews, accessors
+ Data references and data layout descriptions
+bufferView
+buffer
+accessor
+mesh
+node
+scene
+skin camera
+animation material
+texture
+sampler image
+Concepts
+Binary data references
+The images and buffers of a glTF asset may refer to 
+external files that contain the data that are required
+for rendering the 3D content: 
+ 
+The data is referred to via URIs, but can also be 
+included directly in the JSON using data URIs. The 
+data URI defines the MIME type, and contains the 
+data as a base64 encoded string:
+ 
+"buffers": [
+ {
+  "uri": "buffer01.bin"
+  "byteLength": 102040,
+ }
+],
+"images": [
+  {
+    "uri": "image01.png"
+  }
+],
+ 
+"data:application/gltf-buffer;base64,AAABAAIAAgA..."
+"data:image/png;base64,iVBORw0K..."
+Buffer data:
+Image data (PNG):
+The buffers refer to binary
+files (.BIN) that contain 
+geometry- or animation 
+data.
+ 
+Theimages refer to image
+files (PNG, JPG...) that 
+contain texture data for 
+the models.
+The conceptual relationships between thetop-level
+elements of a glTF asset are shown here:
+Rev. 0922
+www.khronos.org/gltf
+glTF 2.0 API Reference Guide  
+Page 2 
+meshes
+"meshes": [
+ {
+  "primitives": [
+   {
+    "mode": 4,
+    "indices": 0,
+    "attributes": {
+     "POSITION": 1,
+     "NORMAL": 2
+    },
+    "material": 2
+   }
+  ]
+ }
+],
+ 
+The meshes may contain multiple mesh primitives. 
+These refer to the geometry data that is required 
+for renderingthe mesh.
+ 
+ 
+ 
+ 
+Each mesh primitive has a 
+rendering mode, which is
+a constant indicating whether
+it should be rendered as
+POINTS, LINES, or TRIANGLES.
+The primitive also refers to 
+indices and the attributes 
+of the vertices, using the 
+indices of the accessors for 
+this data. The material that 
+should be used for rendering
+is also given, by the index of 
+the material.
+{
+ "primitives": [
+  {
+   ...
+   "targets": [
+    {
+     "POSITION": 11,
+     "NORMAL": 13
+    },
+    {
+     "POSITION": 21,
+     "NORMAL": 23
+    }
+   ]
+  }
+ ],
+ "weights": [0, 0.5]
+}
+A mesh may define multiple morph targets. Such 
+a morph target describes a deformation of the 
+original mesh.
+To define a mesh with morph 
+targets, each mesh primitive 
+can contain an array of 
+targets. These are dictionaries
+that map names of attributes 
+to the indices of accessors that 
+contain the displacements of
+the geometry for the target. 
+The mesh may also contain an
+array of weights that define
+the contribution of each morph
+target to the final, rendered
+state of the mesh. 
+Combining multiple morph targets with different 
+weights allows, for example, modeling different
+facial expressions of a character: The weights can 
+be modified with an animation, to interpolate 
+between different states of the geometry.
+Position:
+Normal:
+(1.2, -2.6, 4.3)
+(0.0,  1.0, 0.0)
+(2,7,  -1.8,  6.2)
+(0.71,  0.71, 0.0)
+(... )
+(... )
+ 2.7-1.8 6.2 ...
+ 0.71 0.71 0.0 ...
+POSITION 1.2-2.6 4.3
+ 0.0 1.0 0.0 NORMAL
+Each attribute is definedby mapping the attribute
+name to the index of the accessor that contains the 
+attribute data. This data will be used as the vertex 
+attributes when rendering the mesh. The attributes
+may, for example, define the POSITION and the
+NORMAL of the vertices:
+A node may contain a local 
+transform. This can be given as 
+a column-major matrix array, 
+or with separate translation,
+rotation and scale properties,
+where the rotation is given as a 
+quaternion. The local transform
+matrix is then computed as
+     M = T * R * S
+where T, R and S are the matrices
+that are created from the 
+translation, rotation and scale. 
+The global transform of a node 
+is given by the product of all local
+transforms on the path from the
+root to the respective node.
+scene 0
+node 0 node 1 node 2
+node 3 node 4
+"nodes": [
+ {
+  "matrix": [
+   1,0,0,0,
+   0,1,0,0,
+   0,0,1,0,
+   5,6,7,1
+  ],
+  ...
+ },
+ {
+  "translation": 
+    [ 0,0,0 ],
+  "rotation": 
+    [ 0,0,0,1 ],
+  "scale": 
+    [ 1,1,1 ]
+  ...
+ },
+]
+ 
+Each of the nodes can 
+contain an array of indices 
+of its children. This allows 
+modeling a simple scene 
+hierarchy:
+scenes, nodes
+"scene": 0,
+"scenes": [
+  {
+    "nodes": [ 0, 1, 2 ]
+  }
+],
+"nodes": [
+  {
+    "children": [ 3, 4 ],
+    ...
+  },
+  {  ...  },
+  {  ...  },
+  {  ...  },
+  {  ...  },
+  ...
+],
+ 
+Each node may refer to a mesh or 
+a camera, using indices that point
+into the meshes and cameras arrays.
+These elements are then attached 
+to these nodes. During rendering,
+instances of these elements are 
+created and transformed with the 
+global transform of the node.
+The glTF JSON may contain scenes (with an optional
+default scene). Each scene can contain an array of
+indices of nodes. 
+"nodes": [
+ {
+  "mesh": 4,
+  ...
+ },
+ {
+  "camera": 2,
+  ...
+ },
+]
+ 
+Nodes are also used in vertex skinning: A node 
+hierarchy can define the skeleton of an animated 
+character. The node then refers to a mesh and to
+a skin. The skin contains further information about
+how the mesh is deformed based on the current
+skeleton pose. 
+ 
+The translation, rotation and scale properties of a 
+node may also be the target of an animation: The 
+animation then describes how one property 
+changes over time. The attached objects will move
+accordingly, allowing to model moving objects or
+camera flights.
+Rev. 0922
+www.khronos.org/gltf
+glTF 2.0 API Reference Guide 
+Page 3
+buffers, bufferViews,accessors
+"buffers": [
+ {
+  "byteLength": 35,
+  "uri": "buffer01.bin"
+ }
+],
+ 
+Each of the buffers refers 
+to a binary data file, using 
+a URI. It is the source of 
+one block of raw data with
+the given byteLength. 
+"bufferViews": [
+ {
+  "buffer": 0,
+  "byteOffset": 4,
+  "byteLength": 28,
+  "byteStride": 12,
+  "target": 34963
+ }
+],
+ 
+Each of the bufferViews
+refers to one buffer. It
+has a byteOffset and a
+byteLength, defining the
+part of the buffer that 
+belongs to the bufferView, 
+and an optional OpenGL 
+buffer target. 
+ "accessors": [
+ {
+  "bufferView": 0,
+  "byteOffset": 4,
+  "type": "VEC2",
+  "componentType": 5126,
+  "count": 2,
+  "min" : [0.1, 0.2]
+  "max" : [0.9, 0.8]
+ }
+]
+ 
+The accessors define how 
+the data of a bufferView is 
+interpreted. They may 
+define an additional 
+byteOffset referring to the
+start of the bufferView,
+and contain information
+about the type and layout
+of the bufferView data:
+buffer
+    byteLength = 35
+bufferView 
+    byteOffset = 4
+    byteLength = 28
+ 
+0 4 8 16 12 20 24 28 32
+accessor 
+    byteOffset = 4
+The buffer data is read from a file:
+The bufferView defines a segment of the buffer data:
+The accessor defines an additional offset:
+The bufferView defines a stride between the elements:
+The accessor defines that the elements are 2D float vectors:
+This data may, for example, 
+be used by a mesh primitive, 
+to access 2D texture 
+coordinates: The data of the
+bufferView may be bound 
+as an OpenGL buffer, using
+glBindBuffer. Then, the 
+properties of the  accessor
+may be used to define this 
+buffer as vertex attribute 
+data, by passing them to 
+glVertexAttribPointer
+when the bufferView buffer 
+is bound.
+    byteStride = 12
+ 
+ 
+    type = "VEC2"
+    componentType = GL_FLOAT
+x0 y0 x1 y1
+4 8 16 12 20 24 28 32
+8 16 12 20 24 28 32
+8 16 12 20 24 28
+The buffers contain the data that is used for the
+geometry of 3D models, animations, and skinning.
+The bufferViews add structural information to this
+data. The accessors define the exact type and 
+layout of the data.
+ 
+The data may, for example, be defined as 2D vectors 
+of floating point values when the type is "VEC2"
+and the componentType is GL_FLOAT (5126). The 
+range of all values is stored in the minand max
+property.
+The data of multiple accessors may be interleaved 
+inside a bufferView. In this case, the bufferView will
+have a byteStride property that says how many 
+bytes are between the start of one element of an
+accessor, and the start of the next.
+Sparse accessors
+ 
+"accessors": [
+ {
+  "type": "SCALAR",
+  "componentType": 5126,
+  "count": 10,
+ 
+  "sparse": {
+   "count": 4,
+ 
+   "values": {
+     "bufferView": 2,
+   },
+ 
+   "indices": {
+    "bufferView": 1,
+    "componentType": 5123
+   }
+  }
+ }
+]
+ 
+When only few elements of an accessor differ from
+a default value (which is often the case for morph
+targets), then the data can be given in a very 
+compact form using a sparse data description:
+The sparse data block 
+contains the count of 
+sparse data elements.
+The accessor defines the
+type of the data (here,
+scalar float values), and
+the total element count.
+The values refer to the
+bufferView that contains
+the sparse data values.
+The target indices for 
+the sparse data values
+are defined with a 
+reference to a 
+bufferView and the
+componentType. 
+0.0 0.0 0.0 0.0 0.0 0.0
+ 1 4 5 7
+4.3 9.1 5.2 2.7
+0 1 2 3 4 5 6 7 8 9
+4.3 9.1 5.2 2.7
+values
+indices
+sparse  (count=4)
+Final accessor data with 10 float values
+The values are written into the final accessor data,
+at the positions that are given by the indices
+Rev. 0922
+www.khronos.org/gltf
+glTF 2.0 API Reference Guide  
+Page 4 
+materials
+1.0
+0.75
+0.5
+0.25
+0.0
+0.0 0.25 0.5 0.75 1.0
+Metal
+Roughness
+Each mesh primitive may refer to one of the materials that are 
+contained in a glTF asset. The materials describe how an object 
+should be rendered, based on physical material properties. This 
+allows to apply Physically Based Rendering (PBR) techniques, 
+to make sure that the appearance of the rendered object is 
+consistent among all renderers.
+The default material model is the  Metallic-Roughness-Model. 
+Values between 0.0 and 1.0 are used to describe how much the 
+material characteristics resemble that of a metal, and how rough 
+the surface of the object is. These properties may either be 
+given as individual values that apply to the whole object, or be
+read from textures. 
+In addition to the properties that are defined via the Metallic-Roughness
+Model, the material may contain other properties that affect the object 
+appearance:
+"materials": [
+ ...
+ {
+   "name": "brushed gold",
+   "pbrMetallicRoughness": {
+     "baseColorFactor": 
+       [1,1,1,1],
+     "baseColorTexture": {
+       "index" : 1,
+       "texCoord" : 1
+     },
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0
+   }
+ }
+],
+The texture references in a material always
+contain the index of the texture. They may 
+also contain the texCoordset index. This 
+is the number that determines the
+TEXCOORD_<n> attribute of the rendered 
+mesh primitive that contains the texture 
+coordinates for this texture, with 0 being 
+the default. 
+"meshes": [
+  {
+    "primitives": [
+      {
+        "material": 2,
+        "attributes": {
+          "NORMAL": 3,
+          "POSITION": 1,
+          "TEXCOORD_0": 2,
+          "TEXCOORD_1": 5
+        },
+      }
+    ]
+  }
+],
+ 
+"textures": [
+  ...
+  {
+    "source": 4,
+    "sampler": 2
+  }
+],
+ 
+Material properties in textures
+The normalTexture refers to a texture that contains tangent-space 
+normal information, and a scale factor that will be applied to these 
+normals.
+ The occlusionTexture refers to a texture that defines areas of the 
+surface that are occluded from light, and thus rendered darker. This
+information is contained in the "red" channel of the texture. The 
+occlusion strength is a scaling factor to be applied to these values.
+The emissiveTexture refers to a texture that may be used to 
+illuminate parts of the object surface: It defines the color of the
+light that is emitted from the surface. The emissiveFactor contains 
+scaling factors for the red, green and blue components of this texture. 
+"materials": [
+ {
+   "pbrMetallicRoughness": {
+     "baseColorTexture": {
+       "index": 1,
+       "texCoord": 1
+     },
+     "baseColorFactor": 
+       [ 1.0, 0.75, 0.35, 1.0 ],
+     "metallicRoughnessTexture": {
+       "index": 5,
+       "texCoord": 1
+     },
+     "metallicFactor": 1.0,
+     "roughnessFactor": 0.0,
+   }
+   "normalTexture": {
+     "scale": 0.8,
+     "index": 2,
+     "texCoord": 1
+   },
+   "occlusionTexture": {
+     "strength": 0.9,
+     "index": 4,
+     "texCoord": 1
+   },
+   "emissiveTexture": {
+     "index": 3,
+     "texCoord": 1
+   },
+   "emissiveFactor": 
+     [0.4, 0.8, 0.6]
+ }
+],
+The baseColorTexture is the main texture that will be applied to the 
+object. The baseColorFactor contains scaling factors for the red, green, 
+blue and alpha componentof the color. If no texture is used, these 
+values will define the color of the whole object.
+The metallicRoughnessTexture contains the metalness value in
+the "blue" color channel, and the roughness value in the "green" color
+channel. The metallicFactor and roughnessFactor are multiplied
+with these values. If no texture is given, then these factors define 
+the reflection characteristics for the whole object.
+ 
+The properties that define a material in the Metallic-Roughness-Model 
+are summarized in the pbrMetallicRoughness object:
+Rev. 0922
+www.khronos.org/gltf
+glTF 2.0 API Reference Guide 
+Page 5
+cameras
+"cameras": [
+  {
+    "type": "perspective",
+    "perspective": {
+      "aspectRatio": 1.5,
+      "yfov": 0.65,
+      "zfar": 100,
+      "znear": 0.01
+    }
+  },
+  {
+    "type": "orthographic",
+    "orthographic": {
+      "xmag": 1.0,
+      "ymag": 1.0,
+      "zfar": 100,
+      "znear": 0.01
+    }
+  }
+]
+ 
+Each of the nodes may refer to one of the cameras
+that are defined in the glTF asset. 
+There are two types of 
+cameras: perspective
+and orthographic
+ones, and they define 
+the projection matrix. 
+ 
+The value for the far 
+clipping plane distance
+of a perspective camera,
+zfar, is optional. When 
+it is omitted, the camera 
+uses a special projection
+matrix for infinite
+projections.
+textures, images, samplers
+The texture consists of a 
+reference to the source of 
+the texture, which is one of 
+the images of the asset, and 
+a reference to a sampler.
+ 
+"textures": [
+  {
+    "source": 4,
+    "sampler": 2
+  }
+  ...
+],
+ 
+"images": [
+ ...
+ {
+  "uri": "file01.png"
+ }
+ {
+  "bufferView": 3,
+  "mimeType" : 
+    "image/jpeg"
+ }
+],
+ 
+The images define the image 
+data used for the texture. 
+This data can be given via 
+a URI that is the location of 
+an image file, or by a 
+reference to a bufferView
+and a MIME type that 
+defines the type of the image 
+data that is stored in the 
+buffer view. 
+"samplers": [
+  ...
+  {
+    "magFilter": 9729,
+    "minFilter": 9987,
+    "wrapS": 10497,
+    "wrapT": 10497
+  }
+},
+ 
+The samplers describe the 
+wrapping and scaling of 
+textures. (The constant 
+values correspond to 
+OpenGL constants that 
+can directly be passed to
+glTexParameter). 
+The textures contain information about textures
+that may be applied to rendered objects: Textures
+are referred to by materials to define the basic
+color of the objects, as well as physical properties
+that affect the object appearance.
+skins
+A glTF asset may contain the information that is 
+necessary to perform vertex skinning. With vertex
+skinning, it is possible to let the vertices of a mesh
+be influenced by the bones of a skeleton, based on
+its current pose.
+"nodes": [
+ {
+  "name" : 
+   "Skinned mesh node",
+  "mesh": 0
+  "skin": 0,
+ },
+ ...
+ {
+  "name": "Torso",
+  "children": 
+   [ 2, 3, 4, 5, 6 ]
+  "rotation": [...],
+  "scale": [ ...],
+  "translation": [...]
+ },
+ ...
+ {
+  "name": "LegL",
+  "children": [ 7 ],
+  ...
+ },
+ ...
+ {
+  "name": "FootL",
+  ...
+ },
+ ... 
+],
+"skins": [
+ {
+  "inverseBindMatrices": 12,
+  "joints": [ 1, 2, 3 ... ]
+ }
+],
+ 
+"meshes": [
+ {
+  "primitives": [
+   {
+   "attributes": {
+    "POSITION": 0,
+    "JOINTS_0": 1,
+    "WEIGHTS_0": 2
+    ...
+   },
+  ]
+ }
+],
+ 
+Head
+LegR LegL
+ArmR ArmL
+FootR FootL
+Torso
+The mesh primitives of a 
+skinned mesh contain the
+POSITION attribute that 
+refers to the accessor for the 
+vertex positions, and two 
+special attributes that are 
+required for skinning: 
+A JOINTS_0 and a WEIGHTS_0 
+attribute, each referring to 
+an accessor. 
+ The JOINTS_0 attribute data 
+contains the indices of the 
+joints that should affect the 
+vertex. 
+ The WEIGHTS_0 attribute data 
+defines the weights indicating
+how strongly the joint should 
+influence the vertex. 
+The skins contain an array
+of joints, which are the 
+indices of nodes that define
+the skeleton hierarchy, and 
+the inverseBindMatrices,
+which is a a reference to an 
+accessor that contains one
+matrix for each joint.
+ 
+ 
+A node that refers to a mesh
+may also refer to a skin.
+The skeleton hierarchy is
+modeled with nodes, just
+like the scene structure: 
+Each joint node may have a 
+local transform and an array 
+of children, and the "bones" 
+of the skeleton are given 
+implicitly, as the connections
+between the joints.
+ 
+From this information, the 
+skinning matrix can be 
+computed. 
+ 
+This is explained in detail in
+"Computing the skinning
+matrix".
+When one of the nodes refers to a camera, then 
+an instance of this camera is created. The camera 
+matrix of this instance is given by the global 
+Rev. 0922
+www.khronos.org/gltf
+glTF 2.0 API Reference Guide  
+Page 6 
+ 
+ 
+ 
+ 
+Wiki page about skinning in COLLADA:      https://www.khronos.org/collada/wiki/Skinning
+Section 4-7 in the COLLADA specification: https://www.khronos.org/files/collada_spec_1_5.pdf
+Computing the skinning matrix
+The skinning matrix describes how the vertices of a mesh are transformed based on the current pose of a 
+skeleton. The skinning matrix is a weighted combination of joint matrices.
+ 
+For each node whose index appears in the joints of 
+the skin, a global transform matrix can be computed. 
+It transforms the mesh from the local space of the 
+joint, based on the current global transform of the
+joint, and is called globalJointTransform.
+ 
+ 
+ 
+ jointMatrix[j] = 
+ inverse(globalTransform) *
+ globalJointTransform[j] *
+ inverseBindMatrix[j];
+ 
+From these matrices, a jointMatrix may be 
+computed for each joint: 
+ 
+Any global transform of the node that contains
+the mesh and the skin is cancelled out by 
+pre-multiplying the joint matrix with the inverse 
+of this transform.
+ 
+The skin refers to the inverseBindMatrices. This
+is an accessor which contains one inverse bind 
+matrix for each joint. Each of these matrices 
+transforms the mesh into the local space of the
+joint. 
+ inverseBindMatrix[1]
+ joint2
+ 
+joint1
+ 
+joint0
+ 
+globalJointTransform[1]
+ 
+joint2
+ 
+joint1
+ 
+joint0
+ 
+Computing the joint matrices
+For implementations based on OpenGL or WebGL,
+the jointMatrix array will be passed to the 
+vertex shader as a uniform. 
+ 
+The primitives of a skinned mesh contain the POSITION, 
+JOINT and WEIGHT attributes, referring to  accessors. 
+These accessors contain one element for each vertex:
+ 
+ 
+Combining the joint matrices to create the skinning matrix
+Vertex Shader
+uniform mat4 u_jointMatrix[12];
+attribute vec4 a_position;
+attribute vec4 a_joint;
+attribute vec4 a_weight;
+...
+void main(void) {
+    ...
+ mat4 skinMatrix = 
+  a_weight.x * u_jointMatrix[int(a_joint.x)] +
+  a_weight.y * u_jointMatrix[int(a_joint.y)] +
+  a_weight.z * u_jointMatrix[int(a_joint.z)] +
+  a_weight.w * u_jointMatrix[int(a_joint.w)];
+ gl_Position = 
+   modelViewProjection * skinMatrix * position;
+}
+a_weight.x
+ a_joint.x
+ 
+a_joint.y
+ 
+joint1
+joint2
+joint0
+a_weight.y
+ 
+skinMatrix = 1.0  * jointMatrix[1] + 0.0  * jointMatrix[0] +...
+ 
+skinMatrix = 0.75 * jointMatrix[1] + 0.25 * jointMatrix[0] +...
+ 
+skinMatrix = 0.5  * jointMatrix[1] + 0.5  * jointMatrix[0] +...
+ 
+skinMatrix = 0.25 * jointMatrix[1] + 0.75 * jointMatrix[0] +...
+ 
+skinMatrix = 0.0  * jointMatrix[1] + 1.0  * jointMatrix[0] +...
+ 
+The data of these accessors is passed as attributes to 
+the vertex shader, together with the jointMatrix array. 
+ 
+ 
+The skinMatrix
+transforms the 
+vertices based on 
+the skeleton pose, 
+before they are 
+transformed with 
+the model-view
+perspective matrix.
+ 
+ 
+In the vertex shader, the skinMatrix is computed. It is 
+a linear combination of the joint matrices whose indices 
+are contained in the JOINTS_0 attribute, weighted with 
+the WEIGHTS_0 values:
+ 
+ 
+(The vertex skinning in COLLADA 
+is similar to that in glTF)
+px py pz j0 j1 j2 j3 w0 w1 w2 w3
+POSITION JOINTS_0 WEIGHTS_0
+vertex 0:
+px py pz j0 j1 j2 j3 w0 w1 w2 w3 vertex n:
+...
+...
+...
+...
+pw
+p
+Rev. 0922
+www.khronos.org/gltf
+glTF 2.0 API Reference Guide 
+Page 7
+ 
+animations
+"animations": [
+  {
+    "channels": [
+      {
+        "target": {
+          "node": 1,
+          "path": "translation"
+        },
+        "sampler": 0
+      }
+    ],
+    "samplers": [
+      {
+        "input": 4,
+        "interpolation": "LINEAR",
+        "output": 5
+      }
+    ]
+  }
+]
+A glTF asset can contain animations. An animation can be applied to the properties of a node that define
+the local transform of the node, or to the weights for the morph targets.
+The sampler looks up the key frames for 
+the current time, in the input data.
+0       1       2      3      4       5       6
+Global time:
+Each channel defines the target of the animation. This target usually 
+refers to a node, using the index of this node, and to a path, which 
+is the name of the animated property. The path may be "translation",
+"rotation" or "scale", affecting the local transform of the node, or
+"weights", in order to animate the weights of the morph targets of
+the meshes that are referred to by the node. The channel also refers
+to a sampler, which summarizes the actual animation data.
+ 
+The data of the input accessor
+of the animation sampler, 
+containing the key frame times
+ 
+During the animation, a "global" animation time (in seconds) is advanced. 
+ 
+Each animation consists of two elements: An array of channels and an
+array of samplers.
+A sampler refers to the input and output data, using the indices of
+accessors that provide the data. The input refers to an accessor with
+scalar floating-point values, which are the times of the key frames of
+the animation. The output refers to an accessor that contains the 
+values for the animated property at the respective key frames. The 
+sampler also defines an interpolation mode for the animation, which
+may be "LINEAR", "STEP", or "CUBICSPLINE".
+ 
+The data of the output accessor
+of the animation sampler, 
+containing the key frame values 
+for the animated property
+ 
+10.0
+ 5.0-5.0
+14.0
+ 3.0-2.0
+18.0
+ 1.0
+ 1.0
+24.0-1.0
+ 4.0
+31.0-3.0
+ 7.0
+ 0.0 0.8 1.6 2.4 3.2
+Current time: 1.2
+ 16.0 
+  2.0 
+ -0.5
+The corresponding values of the output
+data are read, and interpolated based on
+the interpolation mode of the sampler.
+The interpolated value is forwarded 
+to the animation channel target.
+Animation samplers
+Displacement for
+"POSITION" from
+morph target 1:
+   Original mesh
+primitive attribute
+  "POSITION"
+weights=
+ [0.5,0.0]
+Displacement for
+"POSITION" from
+morph target 0:
+weights=
+  [0.0,0.5]
+Rendering
+Animation channel targets
+The interpolated value that is provided by an 
+animation sampler may be applied to different
+animation channel targets.
+translation=[2, 0, 0] translation=[3, 2, 0]
+Animating the translation of a node:
+rotation=
+ [0.0, 0.0, 0.0, 1.0]
+rotation=
+ [0.0, 0.0, 0.38, 0.92]
+Animating the rotation of a skeleton node of a skin:
+Animating the weights for the morph targets that
+are defined for the primitives of a mesh that is
+Rev. 0922
+www.khronos.org/gltf
+glTF 2.0 API Reference Guide  
+Page 8 
+ 
+chunkLength
+uint32
+12-byte header
+ 
+ chunkType
+uint32
+chunkData
+uchar[]
+length
+uint32
+version
+uint32
+magic
+uint32
+chunkLength
+uint32
+chunkType
+uint32
+chunkData
+uchar[]
+chunk 0 (JSON)
+ 
+ 
+chunk 1 (Binary Buffer)
+ 
+ ...
+The length is the total length of the file, in bytes
+ 
+The magic entry has the value 0x46546C67, 
+which is the ASCII string "glTF".This is used 
+to identify the data as a binary glTF
+ 
+The version defines the file format version. 
+The version described here is version 2
+ 
+ 
+The chunkData contains the actual data of the chunk. This may be 
+the ASCII representation of the JSON data, or binary buffer data. 
+ 
+The chunkType value defines what type of data is contained in the chunkData. 
+It may be 0x4E4F534A, which is the ASCII string "JSON", for JSON data, or 
+0x004E4942, which is the ASCII string "BIN", for binary data. 
+ 
+ 
+The chunkLength is the length of the chunkData, in bytes
+ 
+In the standard glTF format, there are two options 
+for including external binary resources like buffer 
+data and textures: Theymay be referenced via 
+URIs, or embedded inthe JSON part of the glTF 
+using data URIs. When they are referenced via URIs, 
+then each external resource implies a new 
+download request. When theyare embedded as 
+data URIs, the base 64 encoding of the binary data 
+will increase the file size considerably. 
+To overcome these drawbacks, there is the option 
+to combine the glTF JSON and the binary data into 
+a single binary glTF file. This is a little-endian file, 
+with the extension ".glb". It contains a header, 
+which gives basic information about the version 
+and structure of the data, and one or more
+chunks that contain the actual data. The first 
+chunk always contains the JSON data. The 
+remaining chunks contain the binary data. 
+ 
+ 
+ 
+Binary glTF files
+Extensions
+When an extension is used
+in a glTF asset, it has to be
+listed in the top-level
+extensionsUsed property. 
+The extensionsRequired 
+property lists the extensions
+that are strictly required to
+properly load the asset.
+ 
+ 
+"extensionsUsed" : [
+  "KHR_lights_common",
+  "CUSTOM_EXTENSION"
+]
+ 
+"extensionsRequired" : [
+  "KHR_lights_common"
+]
+"textures" : [
+ {
+  ...
+  "extensions" : {
+   "KHR_lights_common" : {
+    "lightSource" : true,
+   },
+   "CUSTOM_EXTENSION" : {
+    "customProperty" : 
+      "customValue"
+   }
+  }
+ }
+]
+Extensions allow adding 
+arbitrary objects in the
+extensions property of 
+other objects. 
+The name of such an 
+object is the same as the 
+name of the extension, 
+and it may contain 
+further, extension-specific 
+properties.
+ 
+The glTF format allows extensions to add new 
+functionality, or to simplify the definition of 
+commonly used properties.
+Existing extensions
+• KHR_draco_mesh_compression: glTF geometry can be compressed with the Draco library.
+• KHR_lights_punctual: Adds support for point lights, spot lights, and directional lights.
+• KHR_materials_clearcoat: Allows adding a clear coating layer to existing glTF PBR materials.
+• KHR_materials_ior: Transparent materials can be extended with an index of refraction.
+• KHR_materials_iridescence: Models thin-film effects where the hue depends on the viewing angle.
+• KHR_materials_sheen: Adds a color parameter for the backscattering caused by cloth fibers.
+• KHR_materials_specular: Allows defining the strength and color of specular reflections.
+• KHR_materials_transmission: More realistic modeling of reflection, refraction, and opacity.
+• KHR_materials_unlit: Allows defining materials that are not part of physically based rendering.
+• KHR_materials_variants: Multiple materials on the same geometry, to be selected at runtime.
+• KHR_materials_volume: Detailed modeling of the thickness and attenuation of volumetric objects.
+• KHR_mesh_quantization: More compact representation of vertex attributes with smaller data types.
+• KHR_mesh_basisu: Adds support for KTX v2 images with Basis Universal supercompression.
+• KHR_texture_transform: Support offset, rotation, and scaling for textures, to create texture atlases.
+• KHR_xmp_json_ld: Adds support for XMP metadata on scenes, nodes, meshes, and other glTF objects.
