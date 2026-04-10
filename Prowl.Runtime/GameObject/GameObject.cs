@@ -238,16 +238,16 @@ public class GameObject : EngineObject, ISerializable
             newScene?.Add(this);
         }
 
-        // Save the old position in worldspace
+        // Save world-space transform before reparenting
         Float3 worldPosition = new();
         Quaternion worldRotation = new();
-        Float4x4 worldScale = new();
+        Float3 worldLossyScale = new();
 
         if (worldPositionStays)
         {
             worldPosition = Transform.Position;
             worldRotation = Transform.Rotation;
-            worldScale = Transform.GetWorldRotationAndScale();
+            worldLossyScale = Transform.LossyScale;
         }
 
         if (NewParent != _parent)
@@ -268,16 +268,21 @@ public class GameObject : EngineObject, ISerializable
             {
                 Transform.LocalPosition = _parent.Transform.InverseTransformPoint(worldPosition);
                 Transform.LocalRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.Transform.Rotation) * worldRotation);
+
+                // Preserve world scale: localScale = worldScale / parentWorldScale (component-wise)
+                Float3 parentScale = _parent.Transform.LossyScale;
+                Transform.LocalScale = new Float3(
+                    Maths.Abs(parentScale.X) > float.Epsilon ? worldLossyScale.X / parentScale.X : worldLossyScale.X,
+                    Maths.Abs(parentScale.Y) > float.Epsilon ? worldLossyScale.Y / parentScale.Y : worldLossyScale.Y,
+                    Maths.Abs(parentScale.Z) > float.Epsilon ? worldLossyScale.Z / parentScale.Z : worldLossyScale.Z);
             }
             else
             {
                 Transform.LocalPosition = worldPosition;
                 Transform.LocalRotation = Quaternion.NormalizeSafe(worldRotation);
+                // No parent — local scale = world scale
+                Transform.LocalScale = worldLossyScale;
             }
-
-            Transform.LocalScale = Float3.One;
-            Float4x4 inverseRS = Transform.GetWorldRotationAndScale().Invert() * worldScale;
-            Transform.LocalScale = new Float3(inverseRS[0, 0], inverseRS[1, 1], inverseRS[2, 2]);
         }
 
         HierarchyStateChanged();
