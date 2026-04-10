@@ -202,7 +202,6 @@ public static class Undo
 
     /// <summary>
     /// Register an undoable action with explicit undo/redo lambdas.
-    /// Pushed immediately (not deferred to FlushFrame).
     /// </summary>
     public static void RegisterAction(string description, Action undo, Action redo)
     {
@@ -567,9 +566,19 @@ public static class Undo
 
         // Flush action records FIRST as separate steps (never merge with property changes)
         // Each action is its own undo step (Add Component, Toggle Enabled, Reparent, etc.)
+        bool hasActions = _pendingActions.Count > 0;
         foreach (var (desc, record) in _pendingActions)
             PushStep(new UndoStep(desc, [record], isCoalescable: false));
         _pendingActions.Clear();
+
+        // If explicit actions were registered this frame, discard property snapshots.
+        // The actions already handle their changes — the Snapshot diff would create duplicates
+        // (e.g., Component Enabled toggle: RegisterAction changes _enabled, Snapshot also detects it).
+        if (hasActions)
+        {
+            _pendingSnapshots.Clear();
+            return;
+        }
 
         // Build property records from snapshots
         var propertyRecords = new List<PropertyRecord>();
