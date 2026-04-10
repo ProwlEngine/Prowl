@@ -344,6 +344,7 @@ public class AnimationCurve : ISerializable
         PreLoop = (CurveLoopType)value.Get("PreLoop").IntValue;
         PostLoop = (CurveLoopType)value.Get("PostLoop").IntValue;
 
+        Keys.Clear();
         List<EchoObject> keyList = value.Get("Keys").List;
         foreach (EchoObject key in keyList)
         {
