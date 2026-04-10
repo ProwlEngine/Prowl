@@ -63,7 +63,7 @@ public static class GameObjectInspector
                 .OnValueChanged(v => { var old = go.Enabled; Undo.RegisterAction("Toggle Enabled", () => { var g = Undo.FindGO(goId); if (g != null) g.Enabled = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Enabled = v; }); go.Enabled = v; });
 
             EditorGUI.TextField(paper, "gi_name", "", go.Name)
-                .OnValueChanged(v => { if (!string.IsNullOrWhiteSpace(v)) { var old = go.Name; Undo.RegisterAction("Change Name", () => { var g = Undo.FindGO(goId); if (g != null) g.Name = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Name = v; }); go.Name = v; } });
+                .OnValueChanged(v => { if (!string.IsNullOrWhiteSpace(v)) { var old = go.Name; Undo.RegisterCoalescableAction("Change Name", () => { var g = Undo.FindGO(goId); if (g != null) g.Name = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Name = v; }); go.Name = v; } });
 
             EditorGUI.Toggle(paper, "gi_static", "Static", go.IsStatic)
                 .OnValueChanged(v => { var old = go.IsStatic; Undo.RegisterAction("Toggle Static", () => { var g = Undo.FindGO(goId); if (g != null) g.IsStatic = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.IsStatic = v; }); go.IsStatic = v; });
@@ -121,17 +121,17 @@ public static class GameObjectInspector
         // Position
         var pos = t.LocalPosition;
         EditorGUI.Vector3Field(paper, "gi_pos", "Position", pos)
-            .OnValueChanged(v => { var old = t.LocalPosition; Undo.RegisterAction("Change Position", () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalPosition = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalPosition = v; }); t.LocalPosition = v; });
+            .OnValueChanged(v => { var old = t.LocalPosition; Undo.RegisterCoalescableAction("Change Position", () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalPosition = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalPosition = v; }); t.LocalPosition = v; });
 
         // Rotation (as euler)
         var euler = t.LocalEulerAngles;
         EditorGUI.Vector3Field(paper, "gi_rot", "Rotation", euler)
-            .OnValueChanged(v => { var old = t.LocalEulerAngles; Undo.RegisterAction("Change Rotation", () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalEulerAngles = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalEulerAngles = v; }); t.LocalEulerAngles = v; });
+            .OnValueChanged(v => { var old = t.LocalEulerAngles; Undo.RegisterCoalescableAction("Change Rotation", () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalEulerAngles = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalEulerAngles = v; }); t.LocalEulerAngles = v; });
 
         // Scale
         var scale = t.LocalScale;
         EditorGUI.Vector3Field(paper, "gi_scale", "Scale", scale)
-            .OnValueChanged(v => { var old = t.LocalScale; Undo.RegisterAction("Change Scale", () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalScale = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalScale = v; }); t.LocalScale = v; });
+            .OnValueChanged(v => { var old = t.LocalScale; Undo.RegisterCoalescableAction("Change Scale", () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalScale = old; }, () => { var g = Undo.FindGO(goId); if (g != null) g.Transform.LocalScale = v; }); t.LocalScale = v; });
     }
 
     // ================================================================

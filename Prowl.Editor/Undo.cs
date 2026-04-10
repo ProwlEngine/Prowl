@@ -210,6 +210,36 @@ public static class Undo
         _pendingActions.Add((description, new ActionRecord(undo, redo)));
     }
 
+    /// <summary>
+    /// Register an undoable action that coalesces with the previous action if it has the
+    /// same description and is within the time window. Use for continuous text input (Name fields, etc.).
+    /// The undo lambda is kept from the FIRST action; the redo lambda is updated to the LATEST.
+    /// </summary>
+    public static void RegisterCoalescableAction(string description, Action undo, Action redo)
+    {
+        if (Application.IsPlaying) return;
+
+        // Check if we can coalesce with the top of the undo stack
+        if (_pendingActions.Count == 0 && _undoStack.Count > 0)
+        {
+            var prev = _undoStack[^1];
+            if (prev.Description == description
+                && prev.Records.Count == 1
+                && prev.Records[0] is ActionRecord
+                && Environment.TickCount64 - prev.Timestamp <= CoalesceWindowMs)
+            {
+                // Update redo to latest value, keep original undo
+                prev.Records[0] = new ActionRecord(((ActionRecord)prev.Records[0]).UndoAction, redo);
+                prev.Timestamp = Environment.TickCount64;
+                _redoStack.Clear();
+                return;
+            }
+        }
+
+        // Can't coalesce — push as normal action but mark as coalescable
+        _pendingActions.Add((description, new ActionRecord(undo, redo)));
+    }
+
     // ================================================================
     //  Structural Operations
     // ================================================================
