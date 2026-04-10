@@ -182,6 +182,14 @@ public class PreferencesPanel : DockPanel
 
         paper.Box("pref_theme_sp3").Height(12);
 
+        // ── Font ──
+        EditorGUI.Foldout(paper, "pref_ft_general", "Font", () =>
+        {
+            PrefTextField(paper, s, "Font", theme.DefaultFontName, v => theme.DefaultFontName = v);
+            PrefTextField(paper, s, "Bold Font", theme.DefaultBoldFontName, v => theme.DefaultBoldFontName = v);
+        });
+
+
         // ── Sizing ──
         EditorGUI.Foldout(paper, "pref_sz_general", "General Sizing", () =>
         {
@@ -248,6 +256,20 @@ public class PreferencesPanel : DockPanel
             }
         });
     }
+
+
+    private void PrefTextField(Paper paper, EditorSettings s, string label, string value, Action<string> set)
+    {
+
+        EditorGUI.TextField(paper, $"pref_ft_{label.Replace(" ", "_")}", label, value)
+            .OnValueChanged(v =>
+            {
+                set(v);
+                //s.ApplyTheme();
+                s.Save();
+            });
+    }
+
 
     private void SzSlider(Paper paper, EditorSettings s, string label, float value, float min, float max, Action<float> set)
     {

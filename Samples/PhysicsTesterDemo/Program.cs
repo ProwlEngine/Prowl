@@ -100,7 +100,7 @@ public sealed class PhysicsTesterDemo : Game
         MeshRenderer floorRenderer = floor.AddComponent<MeshRenderer>();
         floorRenderer.Mesh = Mesh.CreateCube(new Float3(40, 1, 40));
         floorRenderer.Material = standardMaterial;
-        floorRenderer.MainColor = new Color(0.7f, 0.7f, 0.7f, 1.0f);
+        //floorRenderer.MainColor = new Color(0.7f, 0.7f, 0.7f, 1.0f);
         floor.Transform.Position = new Float3(0, -0.5f, 0);
 
         // Just add a collider - NO Rigidbody3D
@@ -136,7 +136,7 @@ public sealed class PhysicsTesterDemo : Game
         MeshRenderer wallRenderer = wall.AddComponent<MeshRenderer>();
         wallRenderer.Mesh = Mesh.CreateCube(size);
         wallRenderer.Material = standardMaterial;
-        wallRenderer.MainColor = color;
+        //wallRenderer.MainColor = color;
         wall.Transform.Position = position;
 
         // Just add a collider - NO Rigidbody3D
@@ -154,7 +154,7 @@ public sealed class PhysicsTesterDemo : Game
         MeshRenderer cubeRenderer = cube.AddComponent<MeshRenderer>();
         cubeRenderer.Mesh = Mesh.CreateCube(new Float3(2, 2, 2));
         cubeRenderer.Material = standardMaterial;
-        cubeRenderer.MainColor = new Color(1.0f, 0.5f, 0.5f, 1.0f);
+        //cubeRenderer.MainColor = new Color(1.0f, 0.5f, 0.5f, 1.0f);
         cube.Transform.Position = new Float3(-10, 10, 0);
 
         // Add Rigidbody3D FIRST
@@ -177,7 +177,7 @@ public sealed class PhysicsTesterDemo : Game
         MeshRenderer cubeRenderer = cube.AddComponent<MeshRenderer>();
         cubeRenderer.Mesh = Mesh.CreateCube(new Float3(2, 2, 2));
         cubeRenderer.Material = standardMaterial;
-        cubeRenderer.MainColor = new Color(0.5f, 1.0f, 0.5f, 1.0f);
+        //cubeRenderer.MainColor = new Color(0.5f, 1.0f, 0.5f, 1.0f);
         cube.Transform.Position = new Float3(-5, 10, 0);
 
         // Add Collider FIRST (will attach to static rigidbody)
@@ -201,7 +201,7 @@ public sealed class PhysicsTesterDemo : Game
         MeshRenderer parentRenderer = parent.AddComponent<MeshRenderer>();
         parentRenderer.Mesh = Mesh.CreateCube(new Float3(3, 1, 3));
         parentRenderer.Material = standardMaterial;
-        parentRenderer.MainColor = new Color(0.5f, 0.5f, 1.0f, 1.0f);
+        //parentRenderer.MainColor = new Color(0.5f, 0.5f, 1.0f, 1.0f);
         parent.Transform.Position = new Float3(5, 10, 0);
 
         // Add Rigidbody3D to parent
@@ -219,7 +219,7 @@ public sealed class PhysicsTesterDemo : Game
         MeshRenderer childRenderer = child.AddComponent<MeshRenderer>();
         childRenderer.Mesh = Mesh.CreateCube(new Float3(1, 1, 1));
         childRenderer.Material = standardMaterial;
-        childRenderer.MainColor = new Color(1.0f, 1.0f, 0.5f, 1.0f);
+        //childRenderer.MainColor = new Color(1.0f, 1.0f, 0.5f, 1.0f);
         child.Transform.Parent = parent.Transform;
         child.Transform.LocalPosition = new Float3(0, 2, 0);
 

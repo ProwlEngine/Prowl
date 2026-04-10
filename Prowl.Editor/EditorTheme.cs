@@ -9,6 +9,9 @@ public static class EditorTheme
     public static FontFile? DefaultFont;
     public static FontFile? DefaultBoldFont;
 
+    public static string DefaultFontName = "bahnschrift";
+    public static string DefaultBoldFontName = "bahnschrift";
+
     // Sizing — mutable so themes can override
     public static float MenuBarHeight = 26f;
     public static float StatusBarHeight = 22f;
@@ -23,6 +26,9 @@ public static class EditorTheme
     public static float IndicatorGap = 4f;
     public static float SplitterSize = 14f;
     public static float DockPadding = 14f;
+
+    public static float SidePixelPadding = 10f;
+    public static float VerticalNavbarSpacing = 4f;
 
     public static float TabBarHeight = 26f;
     public static float TabPadding = 12f;

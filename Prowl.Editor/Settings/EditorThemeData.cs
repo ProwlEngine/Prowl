@@ -90,6 +90,11 @@ public class EditorThemeData
     public ColorRamp Red { get; set; } = new() { Primary = "#CB594F" };
     public ColorRamp Ink { get; set; } = new() { Primary = "#6C6A7A" };
 
+    // Font
+    public string DefaultFontName { get; set; } = "bahnschrift";
+
+    public string DefaultBoldFontName { get; set; } = "bahnschrift";
+
     // Sizing
     public float MenuBarHeight { get; set; } = 26f;
     public float RowHeight { get; set; } = 22f;

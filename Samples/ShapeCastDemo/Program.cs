@@ -88,7 +88,7 @@ public sealed class ShapeCastDemoGame : Game
         MeshRenderer floorRenderer = floor.AddComponent<MeshRenderer>();
         floorRenderer.Mesh = Mesh.CreateCube(new Float3(40, 1, 40));
         floorRenderer.Material = standardMaterial;
-        floorRenderer.MainColor = new Color(0.7f, 0.7f, 0.7f, 1.0f);
+        //floorRenderer.MainColor = new Color(0.7f, 0.7f, 0.7f, 1.0f);
         floor.Transform.Position = new Float3(0, -0.5f, 0);
 
         Rigidbody3D floorRigidbody = floor.AddComponent<Rigidbody3D>();
@@ -112,7 +112,7 @@ public sealed class ShapeCastDemoGame : Game
             MeshRenderer stepRenderer = step.AddComponent<MeshRenderer>();
             stepRenderer.Mesh = Mesh.CreateCube(new Float3(stepWidth, stepHeight, stepDepth));
             stepRenderer.Material = standardMaterial;
-            stepRenderer.MainColor = new Color(0.6f, 0.6f, 0.8f, 1.0f);
+            //stepRenderer.MainColor = new Color(0.6f, 0.6f, 0.8f, 1.0f);
 
             step.Transform.Position = new Float3(
                 -10,
@@ -135,7 +135,7 @@ public sealed class ShapeCastDemoGame : Game
         MeshRenderer slopeRenderer = slope.AddComponent<MeshRenderer>();
         slopeRenderer.Mesh = Mesh.CreateCube(new Float3(width, 0.5f, length));
         slopeRenderer.Material = standardMaterial;
-        slopeRenderer.MainColor = new Color(0.8f, 0.6f, 0.6f, 1.0f);
+        //slopeRenderer.MainColor = new Color(0.8f, 0.6f, 0.6f, 1.0f);
 
         slope.Transform.Position = position;
         slope.Transform.LocalEulerAngles = new Float3(angleDegrees, 0, 0);
@@ -158,7 +158,7 @@ public sealed class ShapeCastDemoGame : Game
             float height = 0.5f + i * 0.5f;
             boxRenderer.Mesh = Mesh.CreateCube(new Float3(1, height, 1));
             boxRenderer.Material = standardMaterial;
-            boxRenderer.MainColor = new Color(0.9f, 0.5f, 0.3f, 1.0f);
+            //boxRenderer.MainColor = new Color(0.9f, 0.5f, 0.3f, 1.0f);
 
             box.Transform.Position = new Float3(
                 i * 3 - 6,

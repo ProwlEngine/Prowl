@@ -15,6 +15,7 @@ public class ProjectSettingsPanel : DockPanel
 
     private int _selectedIndex;
 
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
@@ -36,8 +37,9 @@ public class ProjectSettingsPanel : DockPanel
         using (paper.Row("ps_root").Size(width, height).Enter())
         {
             // Left sidebar — category list
-            float sidebarW = 180f;
+            float sidebarW = 220f;
             using (paper.Column("ps_sidebar")
+                .Border(new UnitValue(Units.Pixels, EditorTheme.SidePixelPadding))
                 .Width(sidebarW).Height(height)
                 .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
@@ -57,10 +59,10 @@ public class ProjectSettingsPanel : DockPanel
                     string icon = string.IsNullOrEmpty(entry.Icon) ? EditorIcons.Gear : entry.Icon;
 
                     paper.Box($"ps_cat_{i}")
-                        .Height(26).ChildLeft(8).Rounded(3)
+                        .Height(30).ChildLeft(8).Rounded(3).Margin(0,0,0,new UnitValue(Units.Pixels, EditorTheme.VerticalNavbarSpacing))
                         .BackgroundColor(isSelected ? EditorTheme.Purple400 : Color.Transparent)
                         .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-                        .Text($"{icon}  {entry.Name}", font)
+                        .Text($" {icon}  {entry.Name}", font)
                         .TextColor(isSelected ? EditorTheme.Ink500 : EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 1)
                         .Alignment(TextAlignment.MiddleLeft)
@@ -73,7 +75,8 @@ public class ProjectSettingsPanel : DockPanel
 
             // Right content — selected settings
             float contentW = width - sidebarW - 1;
-            using (ScrollView.Begin(paper, "ps_content", contentW, height))
+            using (ScrollView.Begin(paper, "ps_content", contentW, height,
+                EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding))
             {
                 paper.Box("ps_content_pad").Height(8);
                 entries[_selectedIndex].Instance.OnGUI(paper, contentW - 16);

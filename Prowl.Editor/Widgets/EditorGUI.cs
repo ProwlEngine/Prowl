@@ -5,6 +5,9 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
 
+using static System.Net.Mime.MediaTypeNames;
+using static Prowl.PaperUI.ElementBuilder;
+
 using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.Widgets;
@@ -275,15 +278,15 @@ public static class EditorGUI
                     .Margin(4, yOffset)
                     .HookToParent()
                     .IsNotInteractable()
+
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)
-                    .TextField(value, Font!,
+                    .TextField(value, settings,
                         onChange: v => userCallback?.Invoke(v),
-                        textColor: EditorTheme.Ink500,
-                        placeholder: "",
-                        placeholderColor: EditorTheme.Ink300,
-                        intID: id.GetHashCode());
+                        intID: id.GetHashCode())
+
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft);
             }
         }
 
@@ -376,7 +379,6 @@ public static class EditorGUI
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)
-                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .TextField(textVal, settings,
                         onChange: v =>
                         {
