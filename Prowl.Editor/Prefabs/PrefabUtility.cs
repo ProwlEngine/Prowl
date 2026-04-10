@@ -197,6 +197,9 @@ public static class PrefabUtility
         var fresh = prefab.Instantiate();
         if (fresh == null) return;
 
+        // Preserve identifiers so undo records stay valid
+        CopyIdentifiers(instanceRoot, fresh);
+
         fresh.Transform.Position = instanceRoot.Transform.Position;
         fresh.Transform.Rotation = instanceRoot.Transform.Rotation;
         fresh.Transform.LocalScale = instanceRoot.Transform.LocalScale;
@@ -497,6 +500,9 @@ public static class PrefabUtility
 
             var fresh = prefab.Instantiate();
             if (fresh == null) continue;
+
+            // Preserve identifiers from the old instance so undo records stay valid
+            CopyIdentifiers(root, fresh);
 
             fresh.PrefabOverrides = savedOverrides;
             fresh.Name = savedName;
@@ -828,6 +834,23 @@ public static class PrefabUtility
             _sourceCache[prefabGuid] = (source, frame);
 
         return source;
+    }
+
+    /// <summary>
+    /// Copy identifiers from an old GO tree to a fresh one (matched by structure index).
+    /// Preserves GO and component identifiers so undo records, selection, etc. stay valid.
+    /// </summary>
+    private static void CopyIdentifiers(GameObject oldGO, GameObject freshGO)
+    {
+        freshGO.SetIdentifier(oldGO.Identifier);
+
+        var oldComps = oldGO.GetComponents().ToArray();
+        var freshComps = freshGO.GetComponents().ToArray();
+        for (int i = 0; i < Math.Min(oldComps.Length, freshComps.Length); i++)
+            freshComps[i].Identifier = oldComps[i].Identifier;
+
+        for (int i = 0; i < Math.Min(oldGO.Children.Count, freshGO.Children.Count); i++)
+            CopyIdentifiers(oldGO.Children[i], freshGO.Children[i]);
     }
 
     private static void StampAsPrefabInstance(GameObject go, Guid prefabGuid)
