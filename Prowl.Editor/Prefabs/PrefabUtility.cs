@@ -207,13 +207,21 @@ public static class PrefabUtility
 
         var scene = instanceRoot.Scene;
         var parent = instanceRoot.Parent;
+        var rootIdx = parent == null && scene != null ? scene.GetRootIndex(instanceRoot) : -1;
 
         if (scene != null)
         {
             scene.Remove(instanceRoot);
             scene.Add(fresh);
             if (parent != null)
+            {
                 fresh.SetParent(parent);
+                if (siblingIdx >= 0) fresh.SetSiblingIndex(siblingIdx);
+            }
+            else if (rootIdx >= 0)
+            {
+                scene.SetRootIndex(fresh, rootIdx);
+            }
         }
 
         // Register undo that swaps fresh back to old
@@ -497,6 +505,8 @@ public static class PrefabUtility
             var rot = root.Transform.Rotation;
             var scale = root.Transform.LocalScale;
             var parent = root.Parent;
+            var siblingIdx = root.GetSiblingIndex() ?? -1;
+            var rootIdx = parent == null ? scene.GetRootIndex(root) : -1;
 
             var fresh = prefab.Instantiate();
             if (fresh == null) continue;
@@ -514,7 +524,14 @@ public static class PrefabUtility
             scene.Remove(root);
             scene.Add(fresh);
             if (parent != null)
+            {
                 fresh.SetParent(parent);
+                if (siblingIdx >= 0) fresh.SetSiblingIndex(siblingIdx);
+            }
+            else if (rootIdx >= 0)
+            {
+                scene.SetRootIndex(fresh, rootIdx);
+            }
 
             if (selectedGO == root)
                 newSelection = fresh;
