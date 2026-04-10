@@ -103,6 +103,8 @@ public sealed class AnimationClip : EngineObject, ISerializable
     {
         foreach (AnimBone bone in Bones)
         {
+            if (bone.RotX == null || bone.RotX.Keys.Count < 2) continue;
+
             // Store the previous quaternion value
             Quaternion prev = new(
                 bone.RotX.Keys[0].Value,
@@ -234,12 +236,15 @@ public sealed class AnimationClip : EngineObject, ISerializable
         public AnimationCurve ScaleX, ScaleY, ScaleZ;
 
         public Float3 EvaluatePositionAt(float time)
-            => new(PosX.Evaluate(time), PosY.Evaluate(time), PosZ.Evaluate(time));
+        {
+            if (PosX == null || PosY == null || PosZ == null) return Float3.Zero;
+            return new(PosX.Evaluate(time), PosY.Evaluate(time), PosZ.Evaluate(time));
+        }
 
         public Quaternion EvaluateRotationAt(float time)
         {
             // Use SLERP for smooth quaternion interpolation
-            if (RotX.Keys.Count == 0)
+            if (RotX == null || RotX.Keys.Count == 0)
                 return Quaternion.Identity;
 
             if (RotX.Keys.Count == 1)
@@ -312,7 +317,10 @@ public sealed class AnimationClip : EngineObject, ISerializable
         }
 
         public Float3 EvaluateScaleAt(float time)
-            => new(ScaleX.Evaluate(time), ScaleY.Evaluate(time), ScaleZ.Evaluate(time));
+        {
+            if (ScaleX == null || ScaleY == null || ScaleZ == null) return Float3.One;
+            return new(ScaleX.Evaluate(time), ScaleY.Evaluate(time), ScaleZ.Evaluate(time));
+        }
 
         /// <summary>
         /// Normalize a quaternion

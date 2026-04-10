@@ -35,12 +35,12 @@ namespace Prowl.Runtime.AssetImporting.Gltf
         public static GltfFile Load(Stream stream, string basePath, bool isGlb)
         {
             if (isGlb)
-                return LoadGlb(stream);
+                return LoadGlb(stream, basePath);
             else
                 return LoadGltf(stream, basePath);
         }
 
-        private static GltfFile LoadGlb(Stream stream)
+        private static GltfFile LoadGlb(Stream stream, string basePath)
         {
             using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
 
@@ -88,7 +88,7 @@ namespace Prowl.Runtime.AssetImporting.Gltf
                 }
                 else if (root.Buffers[i].Uri != null)
                 {
-                    buffers[i] = ResolveBufferUri(root.Buffers[i].Uri!, ".");
+                    buffers[i] = ResolveBufferUri(root.Buffers[i].Uri!, basePath);
                 }
                 else
                 {

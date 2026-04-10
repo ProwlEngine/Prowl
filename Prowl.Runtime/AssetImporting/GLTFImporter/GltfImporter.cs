@@ -111,7 +111,7 @@ public class GltfImporter
         var skeleton = BuildSkeleton(gltf, root, meshMapping, scale);
 
         // Populate bind poses on skinned meshes
-        PopulateBindPoses(gltf, root, skeleton, allMeshes);
+        PopulateBindPoses(gltf, root, skeleton, allMeshes, meshMapping);
 
         // Load animations
         var animations = LoadAnimations(gltf, root, scale);
@@ -570,34 +570,26 @@ public class GltfImporter
         return skeleton;
     }
 
-    private void PopulateBindPoses(GltfFile gltf, GltfRoot root, Skeleton skeleton, List<ModelMesh> allMeshes)
+    private void PopulateBindPoses(GltfFile gltf, GltfRoot root, Skeleton skeleton,
+        List<ModelMesh> allMeshes, Dictionary<int, List<int>> meshMapping)
     {
-        if (root.Skins == null || skeleton == null) return;
+        if (root.Skins == null || skeleton == null || root.Nodes == null || root.Meshes == null) return;
 
         // For each skin, populate bindPoses and boneNames on the meshes that use it
         for (int si = 0; si < root.Skins.Count; si++)
         {
             var skin = root.Skins[si];
 
-            // Find which meshes use this skin (nodes with skin == si)
-            if (root.Nodes == null) continue;
-
             for (int ni = 0; ni < root.Nodes.Count; ni++)
             {
                 var node = root.Nodes[ni];
                 if (node.Skin != si || !node.Mesh.HasValue) continue;
 
-                // This node's mesh uses this skin
-                var gmesh = root.Meshes[node.Mesh.Value];
-                int primBase = 0;
+                // Use meshMapping to find the correct Prowl mesh indices
+                if (!meshMapping.TryGetValue(node.Mesh.Value, out var prowlMeshIds)) continue;
 
-                // Find prowl meshes for this gltf mesh
-                for (int gmi = 0; gmi < node.Mesh.Value; gmi++)
-                    primBase += root.Meshes[gmi].Primitives.Count;
-
-                for (int pi = 0; pi < gmesh.Primitives.Count; pi++)
+                foreach (int prowlIdx in prowlMeshIds)
                 {
-                    int prowlIdx = primBase + pi;
                     if (prowlIdx >= allMeshes.Count) continue;
 
                     var modelMesh = allMeshes[prowlIdx];
@@ -664,9 +656,9 @@ public class GltfImporter
                     case "translation":
                     {
                         var values = GltfDataReader.ReadVec3(gltf, sampler.Output);
-                        animBone.PosX ??= new AnimationCurve([]);
-                        animBone.PosY ??= new AnimationCurve([]);
-                        animBone.PosZ ??= new AnimationCurve([]);
+                        animBone.PosX ??= new AnimationCurve(new List<KeyFrame>());
+                        animBone.PosY ??= new AnimationCurve(new List<KeyFrame>());
+                        animBone.PosZ ??= new AnimationCurve(new List<KeyFrame>());
                         for (int i = 0; i < Math.Min(times.Length, values.Length); i++)
                         {
                             var v = ConvertPos(values[i]) * scale;
@@ -679,10 +671,10 @@ public class GltfImporter
                     case "rotation":
                     {
                         var values = GltfDataReader.ReadVec4(gltf, sampler.Output);
-                        animBone.RotX ??= new AnimationCurve([]);
-                        animBone.RotY ??= new AnimationCurve([]);
-                        animBone.RotZ ??= new AnimationCurve([]);
-                        animBone.RotW ??= new AnimationCurve([]);
+                        animBone.RotX ??= new AnimationCurve(new List<KeyFrame>());
+                        animBone.RotY ??= new AnimationCurve(new List<KeyFrame>());
+                        animBone.RotZ ??= new AnimationCurve(new List<KeyFrame>());
+                        animBone.RotW ??= new AnimationCurve(new List<KeyFrame>());
                         for (int i = 0; i < Math.Min(times.Length, values.Length); i++)
                         {
                             // GLTF quaternion: [x, y, z, w]
@@ -697,9 +689,9 @@ public class GltfImporter
                     case "scale":
                     {
                         var values = GltfDataReader.ReadVec3(gltf, sampler.Output);
-                        animBone.ScaleX ??= new AnimationCurve([]);
-                        animBone.ScaleY ??= new AnimationCurve([]);
-                        animBone.ScaleZ ??= new AnimationCurve([]);
+                        animBone.ScaleX ??= new AnimationCurve(new List<KeyFrame>());
+                        animBone.ScaleY ??= new AnimationCurve(new List<KeyFrame>());
+                        animBone.ScaleZ ??= new AnimationCurve(new List<KeyFrame>());
                         for (int i = 0; i < Math.Min(times.Length, values.Length); i++)
                         {
                             // Scale is unchanged for handedness conversion
