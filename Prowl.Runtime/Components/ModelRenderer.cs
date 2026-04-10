@@ -148,9 +148,9 @@ public class ModelRenderer : MonoBehaviour
 
         // Calculate skinning matrices using mesh-specific offset matrices
         var mesh = modelMesh.Mesh.Res;
-        if (mesh != null && mesh.boneNames != null && mesh.bindPoses != null)
+        if (mesh != null && mesh.BoneNames != null && mesh.BindPoses != null)
         {
-            return Model.Res.Skeleton.CalculateSkinningMatrices(boneWorldTransforms, mesh.boneNames, mesh.bindPoses);
+            return Model.Res.Skeleton.CalculateSkinningMatrices(boneWorldTransforms, mesh.BoneNames, mesh.BindPoses);
         }
 
         return null;

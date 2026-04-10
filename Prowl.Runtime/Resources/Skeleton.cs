@@ -150,19 +150,34 @@ public sealed class Skeleton : EngineObject, ISerializable
 
         Float4x4[] skinningMatrices = new Float4x4[boneNames.Length];
 
+        bool logged = false;
         for (int i = 0; i < boneNames.Length; i++)
         {
             // Find the bone index in the skeleton
             int boneIndex = GetBoneIndex(boneNames[i]);
             if (boneIndex < 0 || boneIndex >= worldTransforms.Length)
             {
-                // Bone not found, use identity matrix
+                if (!logged)
+                {
+                    Debug.LogWarning($"[Skinning] Bone '{boneNames[i]}' (joint {i}) not found in skeleton! Using identity. Total joints={boneNames.Length}, skeleton bones={Bones.Count}");
+                    logged = true;
+                }
                 skinningMatrices[i] = Float4x4.Identity;
                 continue;
             }
 
             // Final matrix = world transform * mesh-specific offset matrix
             skinningMatrices[i] = worldTransforms[boneIndex] * meshOffsetMatrices[i];
+
+            // Debug: check if the resulting matrix is near-identity (expected in bind pose)
+            // or degenerate (translation component is huge or NaN)
+            var t = skinningMatrices[i].Translation;
+            if (!logged && (float.IsNaN(t.X) || float.IsNaN(t.Y) || float.IsNaN(t.Z) ||
+                MathF.Abs(t.X) > 10000 || MathF.Abs(t.Y) > 10000 || MathF.Abs(t.Z) > 10000))
+            {
+                Debug.LogWarning($"[Skinning] Bone '{boneNames[i]}' (joint {i}, skeletonIdx {boneIndex}) has degenerate skinning matrix! Translation=({t.X},{t.Y},{t.Z})");
+                logged = true;
+            }
         }
 
         return skinningMatrices;

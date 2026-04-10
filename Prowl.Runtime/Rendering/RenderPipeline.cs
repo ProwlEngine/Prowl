@@ -34,6 +34,11 @@ public interface IRenderable
     public Float3 GetPosition();
 
     /// <summary>
+    /// Gets the submesh index to draw. -1 means draw the entire index buffer (no submeshes).
+    /// </summary>
+    public int GetSubMeshIndex() => -1;
+
+    /// <summary>
     /// Gets the rendering data for this renderable.
     /// </summary>
     /// <param name="viewer">Camera viewing data for culling/LOD</param>
@@ -627,7 +632,19 @@ public abstract class RenderPipeline : EngineObject
                 unsafe
                 {
                     Graphics.BindVertexArray(mesh.VertexArrayObject);
-                    Graphics.DrawIndexed(mesh.MeshTopology, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
+
+                    int subIdx = renderable.GetSubMeshIndex();
+                    if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
+                    {
+                        var sub = mesh.GetSubMesh(subIdx);
+                        int indexSize = mesh.IndexFormat == IndexFormat.UInt32 ? 4 : 2;
+                        Graphics.DrawIndexed(sub.Topology, (uint)sub.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, (void*)(sub.IndexStart * indexSize));
+                    }
+                    else
+                    {
+                        Graphics.DrawIndexed(mesh.MeshTopology, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
+                    }
+
                     Graphics.BindVertexArray(null);
                 }
             }

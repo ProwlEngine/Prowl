@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Rendering;
@@ -14,14 +14,16 @@ public class MeshRenderable : IRenderable
     private Float4x4 _transform;
     private int _layerIndex;
     private PropertyState _properties;
+    private int _subMeshIndex;
 
-    public MeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, PropertyState? propertyBlock = null)
+    public MeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, PropertyState? propertyBlock = null, int subMeshIndex = -1)
     {
         _mesh = mesh;
         _material = material;
         _transform = matrix;
         _layerIndex = layerIndex;
         _properties = propertyBlock ?? new();
+        _subMeshIndex = subMeshIndex;
     }
 
     public Material GetMaterial() => _material;
@@ -38,13 +40,17 @@ public class MeshRenderable : IRenderable
         mesh = _mesh;
         properties = _properties;
         model = _transform;
-        instanceData = null; // Single instance rendering
+        instanceData = null;
     }
+
+    /// <summary>
+    /// Get the submesh index for this renderable. -1 means draw the entire mesh (legacy/no submeshes).
+    /// </summary>
+    public int GetSubMeshIndex() => _subMeshIndex;
 
     public void GetCullingData(out bool isRenderable, out AABB bounds)
     {
         isRenderable = true;
-        //bounds = Bounds.CreateFromMinMax(new Vector3(999999), new Vector3(999999));
         bounds = _mesh.bounds.TransformBy(_transform);
     }
 }

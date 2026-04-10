@@ -18,6 +18,21 @@ public enum IndexFormat : byte
     UInt32 = 1
 }
 
+/// <summary>Defines a portion of a Mesh's index buffer as a submesh.</summary>
+public struct SubMeshDescriptor
+{
+    public int IndexStart;
+    public int IndexCount;
+    public Topology Topology;
+
+    public SubMeshDescriptor(int indexStart, int indexCount, Topology topology = Topology.Triangles)
+    {
+        IndexStart = indexStart;
+        IndexCount = indexCount;
+        Topology = topology;
+    }
+}
+
 public class Mesh : EngineObject, ISerializable
 {
     /// <summary> Whether this mesh is readable by the CPU </summary>
@@ -176,8 +191,38 @@ public class Mesh : EngineObject, ISerializable
     public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
     public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
 
-    public Float4x4[]? bindPoses;
-    public string[]? boneNames;
+    public Float4x4[]? BindPoses;
+    public string[]? BoneNames;
+
+    // Submesh support: each submesh defines a range within the shared index buffer
+    private List<SubMeshDescriptor> _subMeshes = new();
+
+    /// <summary>Number of submeshes. Returns 1 if no submeshes defined (entire mesh is one submesh).</summary>
+    public int SubMeshCount => _subMeshes.Count > 0 ? _subMeshes.Count : 1;
+
+    /// <summary>Get a submesh descriptor. If no submeshes defined, index 0 returns the full mesh range.</summary>
+    public SubMeshDescriptor GetSubMesh(int index)
+    {
+        if (_subMeshes.Count == 0)
+            return new SubMeshDescriptor(0, indices?.Length ?? 0, meshTopology);
+        return _subMeshes[index];
+    }
+
+    /// <summary>Set the number of submeshes.</summary>
+    public void SetSubMeshCount(int count)
+    {
+        while (_subMeshes.Count < count) _subMeshes.Add(default);
+        while (_subMeshes.Count > count) _subMeshes.RemoveAt(_subMeshes.Count - 1);
+        changed = true;
+    }
+
+    /// <summary>Set a submesh descriptor at the given index.</summary>
+    public void SetSubMesh(int index, SubMeshDescriptor desc)
+    {
+        if (index >= _subMeshes.Count) SetSubMeshCount(index + 1);
+        _subMeshes[index] = desc;
+        changed = true;
+    }
 
     bool changed = true;
     Float3[]? vertices;
@@ -1343,10 +1388,10 @@ public class Mesh : EngineObject, ISerializable
                 }
             }
 
-            writer.Write(bindPoses?.Length ?? 0);
-            if (bindPoses != null)
+            writer.Write(BindPoses?.Length ?? 0);
+            if (BindPoses != null)
             {
-                foreach (Float4x4 bindPose in bindPoses)
+                foreach (Float4x4 bindPose in BindPoses)
                 {
                     writer.Write(bindPose[0, 0]);
                     writer.Write(bindPose[0, 1]);
@@ -1370,13 +1415,21 @@ public class Mesh : EngineObject, ISerializable
                 }
             }
 
-            writer.Write(boneNames?.Length ?? 0);
-            if (boneNames != null)
+            writer.Write(BoneNames?.Length ?? 0);
+            if (BoneNames != null)
             {
-                foreach (string boneName in boneNames)
+                foreach (string boneName in BoneNames)
                     writer.Write(boneName);
             }
 
+            // Submeshes
+            writer.Write(_subMeshes.Count);
+            foreach (var sub in _subMeshes)
+            {
+                writer.Write(sub.IndexStart);
+                writer.Write(sub.IndexCount);
+                writer.Write((int)sub.Topology);
+            }
 
             compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
             compoundTag.Add("MeshType", new EchoObject((int)meshTopology));
@@ -1485,11 +1538,11 @@ public class Mesh : EngineObject, ISerializable
                     boneWeights[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
             }
 
-            int bindPosesCount = reader.ReadInt32();
-            if (bindPosesCount > 0)
+            int BindPosesCount = reader.ReadInt32();
+            if (BindPosesCount > 0)
             {
-                bindPoses = new Float4x4[bindPosesCount];
-                for (int i = 0; i < bindPosesCount; i++)
+                BindPoses = new Float4x4[BindPosesCount];
+                for (int i = 0; i < BindPosesCount; i++)
                 {
                     var val = new Float4x4();
 
@@ -1513,17 +1566,35 @@ public class Mesh : EngineObject, ISerializable
                     val[3, 2] = reader.ReadSingle();
                     val[3, 3] = reader.ReadSingle();
 
-                    bindPoses[i] = val;
+                    BindPoses[i] = val;
                 }
             }
 
             // Try to read bone names
-            int boneNamesCount = reader.ReadInt32();
-            if (boneNamesCount > 0)
+            int BoneNamesCount = reader.ReadInt32();
+            if (BoneNamesCount > 0)
             {
-                boneNames = new string[boneNamesCount];
-                for (int i = 0; i < boneNamesCount; i++)
-                    boneNames[i] = reader.ReadString();
+                BoneNames = new string[BoneNamesCount];
+                for (int i = 0; i < BoneNamesCount; i++)
+                    BoneNames[i] = reader.ReadString();
+            }
+
+            // Try to read submeshes (may not exist in older mesh data)
+            _subMeshes.Clear();
+            if (reader.BaseStream.Position < reader.BaseStream.Length)
+            {
+                try
+                {
+                    int subMeshCount = reader.ReadInt32();
+                    for (int i = 0; i < subMeshCount; i++)
+                    {
+                        int start = reader.ReadInt32();
+                        int count = reader.ReadInt32();
+                        var topo = (Topology)reader.ReadInt32();
+                        _subMeshes.Add(new SubMeshDescriptor(start, count, topo));
+                    }
+                }
+                catch { /* Old format without submeshes — ignore */ }
             }
 
             changed = true;
