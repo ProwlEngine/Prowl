@@ -36,8 +36,6 @@ public class HierarchyPanel : DockPanel
     private string? _dragHoverTargetId;
     private float _dragHoverNormalizedY;
 
-    // Root display order — Scene uses HashSet so we track ordering ourselves
-    private readonly List<string> _rootDisplayOrder = new();
 
     // Track expanded state per GO identifier
     private static readonly Dictionary<string, bool> _expandedState = new();
@@ -497,9 +495,10 @@ public class HierarchyPanel : DockPanel
                 }
             }
 
-            // Capture state for undo
+            // Capture state for undo (BEFORE the move)
             var oldParentId = dragged.Parent?.Identifier ?? Guid.Empty;
             var oldSiblingIdx = dragged.GetSiblingIndex() ?? -1;
+            var oldRootIdx = oldParentId == Guid.Empty ? (Scene.Current?.GetRootIndex(dragged) ?? -1) : -1;
             var draggedId = dragged.Identifier;
 
             switch (dropPos)
@@ -518,17 +517,19 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Below:
                     if (targetIsRoot)
                     {
-                        // Root reorder — unparent if needed, then reorder in display list
+                        var scene = Scene.Current;
+                        if (scene == null) break;
+
+                        // Unparent if needed
                         if (dragged.Parent != null && dragged.Parent.IsValid())
                             dragged.SetParent(default);
 
-                        string dragId = dragged.Identifier.ToString();
-                        _rootDisplayOrder.Remove(dragId);
-                        int insertIdx = _rootDisplayOrder.IndexOf(targetId);
-                        if (insertIdx < 0) insertIdx = _rootDisplayOrder.Count;
-                        if (dropPos == DropPosition.Below) insertIdx++;
-                        insertIdx = Math.Min(insertIdx, _rootDisplayOrder.Count);
-                        _rootDisplayOrder.Insert(insertIdx, dragId);
+                        // Root reorder via Scene list
+                        int targetRootIdx = scene.GetRootIndex(target);
+                        if (dropPos == DropPosition.Below) targetRootIdx++;
+                        int dragRootIdx = scene.GetRootIndex(dragged);
+                        if (dragRootIdx >= 0 && dragRootIdx < targetRootIdx) targetRootIdx--;
+                        scene.SetRootIndex(dragged, Math.Max(0, targetRootIdx));
                     }
                     else
                     {
@@ -548,7 +549,12 @@ public class HierarchyPanel : DockPanel
             // Register undo for reparent/reorder
             var newParentId = dragged.Parent?.Identifier ?? Guid.Empty;
             var newSiblingIdx = dragged.GetSiblingIndex() ?? -1;
-            if (oldParentId != newParentId || oldSiblingIdx != newSiblingIdx)
+            var newRootIdx = newParentId == Guid.Empty ? (Scene.Current?.GetRootIndex(dragged) ?? -1) : -1;
+
+            bool changed = oldParentId != newParentId || oldSiblingIdx != newSiblingIdx
+                || (oldParentId == Guid.Empty && newParentId == Guid.Empty && oldRootIdx != newRootIdx);
+
+            if (changed)
             {
                 Undo.RegisterAction("Reparent",
                     undo: () =>
@@ -557,9 +563,16 @@ public class HierarchyPanel : DockPanel
                         if (scene == null) return;
                         var d = FindGOById(scene, draggedId);
                         if (d == null) return;
-                        if (oldParentId == Guid.Empty) { d.SetParent(default); }
-                        else { var p = FindGOById(scene, oldParentId); if (p != null) d.SetParent(p); }
-                        if (oldSiblingIdx >= 0) d.SetSiblingIndex(oldSiblingIdx);
+                        if (oldParentId == Guid.Empty)
+                        {
+                            d.SetParent(default);
+                            if (oldRootIdx >= 0) scene.SetRootIndex(d, oldRootIdx);
+                        }
+                        else
+                        {
+                            var p = FindGOById(scene, oldParentId);
+                            if (p != null) { d.SetParent(p); if (oldSiblingIdx >= 0) d.SetSiblingIndex(oldSiblingIdx); }
+                        }
                     },
                     redo: () =>
                     {
@@ -567,9 +580,16 @@ public class HierarchyPanel : DockPanel
                         if (scene == null) return;
                         var d = FindGOById(scene, draggedId);
                         if (d == null) return;
-                        if (newParentId == Guid.Empty) { d.SetParent(default); }
-                        else { var p = FindGOById(scene, newParentId); if (p != null) d.SetParent(p); }
-                        if (newSiblingIdx >= 0) d.SetSiblingIndex(newSiblingIdx);
+                        if (newParentId == Guid.Empty)
+                        {
+                            d.SetParent(default);
+                            if (newRootIdx >= 0) scene.SetRootIndex(d, newRootIdx);
+                        }
+                        else
+                        {
+                            var p = FindGOById(scene, newParentId);
+                            if (p != null) { d.SetParent(p); if (newSiblingIdx >= 0) d.SetSiblingIndex(newSiblingIdx); }
+                        }
                     });
             }
         }
@@ -821,30 +841,10 @@ public class HierarchyPanel : DockPanel
 
     private List<GameObject> GetDisplayRoots(Scene scene)
     {
-        var roots = scene.RootObjects
+        return scene.RootObjects
             .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
                       && !go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
             .ToList();
-
-        // Sync display order: remove stale entries, add new ones at end
-        var rootIds = new HashSet<string>(roots.Select(r => r.Identifier.ToString()));
-        _rootDisplayOrder.RemoveAll(id => !rootIds.Contains(id));
-        foreach (var root in roots)
-        {
-            string id = root.Identifier.ToString();
-            if (!_rootDisplayOrder.Contains(id))
-                _rootDisplayOrder.Add(id);
-        }
-
-        // Return roots in display order
-        var lookup = roots.ToDictionary(r => r.Identifier.ToString());
-        var ordered = new List<GameObject>();
-        foreach (var id in _rootDisplayOrder)
-        {
-            if (lookup.TryGetValue(id, out var go))
-                ordered.Add(go);
-        }
-        return ordered;
     }
 
     private void FlattenVisible(GameObject go, List<GameObject> list)
