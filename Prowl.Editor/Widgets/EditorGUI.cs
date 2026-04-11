@@ -63,6 +63,7 @@ public static class EditorGUI
             .ChildLeft(4)
             .Text(text, Font)
             .TextColor(color ?? EditorTheme.Ink500)
+            .Alignment(PaperUI.TextAlignment.MiddleLeft)
             .FontSize(FontSz);
     }
 
