@@ -5,6 +5,9 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
 
+using static System.Net.Mime.MediaTypeNames;
+using static Prowl.PaperUI.ElementBuilder;
+
 using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.Widgets;
@@ -275,6 +278,7 @@ public static class EditorGUI
                     .Margin(4, yOffset)
                     .HookToParent()
                     .IsNotInteractable()
+
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)

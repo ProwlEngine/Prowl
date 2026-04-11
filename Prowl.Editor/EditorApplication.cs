@@ -40,25 +40,8 @@ public class EditorApplication : Game
         Application.IsEditor = true;
         Application.IsPlaying = false;
 
-        // Pick a good system font — prefer Bahnschrift then, Segoe UI (Windows), then Arial, then any Regular font
-        EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
-        EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+        InitializeFont();
+
         PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
 
         // Load Font Awesome as fallback fonts for icons
@@ -149,6 +132,33 @@ public class EditorApplication : Game
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
+
+    public void InitializeFont()
+    {
+        // Pick a good system font — prefer Bahnschrift then, Segoe UI (Windows), then Arial, then any Regular font
+        EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultFontName && f.Style == Prowl.Scribe.FontStyle.Regular)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Regular)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Regular)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Regular)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
+            ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+        EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultBoldFontName && f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts()
+            .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Bold)
+            ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+    }
 
     private void ApplyDarkTitleBar()
     {

@@ -77,6 +77,11 @@ public class EditorSettings
         EditorTheme.Ink400 = t.Ink.GetStop(3);
         EditorTheme.Ink500 = t.Ink.GetStop(4);
 
+        EditorTheme.DefaultFontName = t.DefaultFontName;
+        EditorTheme.DefaultBoldFontName = t.DefaultBoldFontName;
+                
+        EditorApplication.Instance?.InitializeFont();
+
         // Sizing
         EditorTheme.MenuBarHeight = t.MenuBarHeight;
         EditorTheme.RowHeight = t.RowHeight;
