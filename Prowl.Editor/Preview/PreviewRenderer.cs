@@ -84,7 +84,7 @@ public class PreviewRenderer : IDisposable
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
 
         // Scale to fit in a ~1 unit cube centered at origin
-        var bounds = EstimateModelBounds(model);
+        var bounds = ComputeHierarchyBounds(_subjectGo);
         float maxExtent = MathF.Max(MathF.Max(bounds.Size.X, bounds.Size.Y), bounds.Size.Z);
         if (maxExtent > 0.001f)
         {
@@ -263,10 +263,55 @@ public class PreviewRenderer : IDisposable
         _camera.Target = _rt;
     }
 
-    private static AABB EstimateModelBounds(Model model)
+    /// <summary>
+    /// Compute bounds by walking the GO hierarchy for all MeshRenderer and SkinnedMeshRenderer components.
+    /// </summary>
+    private static AABB ComputeHierarchyBounds(GameObject root)
     {
-        // TODO: walk instantiated GO hierarchy for real bounds
-        return AABB.FromCenterAndSize(Float3.Zero, Float3.One);
+        Float3 min = new Float3(float.MaxValue);
+        Float3 max = new Float3(float.MinValue);
+        bool found = false;
+
+        CollectBoundsRecursive(root, ref min, ref max, ref found);
+
+        if (!found)
+            return AABB.FromCenterAndSize(Float3.Zero, Float3.One);
+
+        return new AABB(min, max);
+    }
+
+    private static void CollectBoundsRecursive(GameObject go, ref Float3 min, ref Float3 max, ref bool found)
+    {
+        // Check MeshRenderer
+        var mr = go.GetComponent<MeshRenderer>();
+        if (mr != null)
+        {
+            var mesh = mr.Mesh.Res;
+            if (mesh != null)
+            {
+                var worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
+                min = new Float3(MathF.Min(min.X, worldBounds.Min.X), MathF.Min(min.Y, worldBounds.Min.Y), MathF.Min(min.Z, worldBounds.Min.Z));
+                max = new Float3(MathF.Max(max.X, worldBounds.Max.X), MathF.Max(max.Y, worldBounds.Max.Y), MathF.Max(max.Z, worldBounds.Max.Z));
+                found = true;
+            }
+        }
+
+        // Check SkinnedMeshRenderer
+        var smr = go.GetComponent<SkinnedMeshRenderer>();
+        if (smr != null)
+        {
+            var mesh = smr.SharedMesh.Res;
+            if (mesh != null)
+            {
+                var worldBounds = mesh.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
+                min = new Float3(MathF.Min(min.X, worldBounds.Min.X), MathF.Min(min.Y, worldBounds.Min.Y), MathF.Min(min.Z, worldBounds.Min.Z));
+                max = new Float3(MathF.Max(max.X, worldBounds.Max.X), MathF.Max(max.Y, worldBounds.Max.Y), MathF.Max(max.Z, worldBounds.Max.Z));
+                found = true;
+            }
+        }
+
+        foreach (var child in go.Children)
+            CollectBoundsRecursive(child, ref min, ref max, ref found);
     }
 
     public void Dispose()
