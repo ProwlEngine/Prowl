@@ -19,8 +19,6 @@ public static class ProjectLauncher
 {
     public static bool IsOpen { get; private set; } = true;
 
-    private static float _scrollY;
-    private static int _hoveredIndex = -1;
     private static string _newProjectName = "MyGame";
     private static string _newProjectPath = "";
     private static bool _showNewProject;

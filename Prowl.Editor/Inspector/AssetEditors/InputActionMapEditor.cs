@@ -19,11 +19,9 @@ public class InputActionMapEditor : AssetImporterEditor
     private string? _selectedAction;
     private int _selectedBindingIdx = -1; // -1 = none, 0..N-1 = binding, N..N+M-1 = composite
     private bool _dirty;
-    private string _bindingSearch = "";
 
     // Listening state — which binding slot we're listening for
     private bool _listeningForBinding;
-    private int _listenTargetIdx = -1;
     private string? _listenCompositePartName;
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)

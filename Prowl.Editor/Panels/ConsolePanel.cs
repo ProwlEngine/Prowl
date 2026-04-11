@@ -34,7 +34,6 @@ public class ConsolePanel : DockPanel
     private bool _showInfo = true;
     private bool _showWarnings = true;
     private bool _showErrors = true;
-    private bool _autoScroll = true;
     private string _searchText = "";
 
     // Cached filtered list (rebuilt when messages or filters change)

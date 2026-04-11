@@ -37,13 +37,11 @@ public static class FileDialog
     private static List<FileDialogEntry> _entries = new();
     private static List<string> _pathHistory = new();
     private static int _historyIndex = -1;
-    private static float _scrollY;
     private static int _sortColumn; // 0=name, 1=size, 2=date
     private static bool _sortAscending = true;
-    private static bool _showHidden;
-    private static string? _renameTarget;
     private static string _newFolderName = "";
     private static bool _creatingFolder;
+    private static bool _showHidden;
 
     // Quick access locations
     private static readonly (string label, string icon, Func<string> path)[] QuickAccess =
@@ -66,7 +64,6 @@ public static class FileDialog
         _selectedPath = "";
         _fileName = "";
         _searchFilter = "";
-        _scrollY = 0;
         _creatingFolder = false;
         _sortColumn = 0;
         _sortAscending = true;
@@ -101,7 +98,6 @@ public static class FileDialog
         _currentPath = Path.GetFullPath(path);
         _selectedIndex = -1;
         _selectedPath = "";
-        _scrollY = 0;
 
         // Manage history
         if (_historyIndex < _pathHistory.Count - 1)
@@ -119,7 +115,6 @@ public static class FileDialog
             _historyIndex--;
             _currentPath = _pathHistory[_historyIndex];
             _selectedIndex = -1;
-            _scrollY = 0;
             RefreshEntries();
         }
     }
@@ -131,7 +126,6 @@ public static class FileDialog
             _historyIndex++;
             _currentPath = _pathHistory[_historyIndex];
             _selectedIndex = -1;
-            _scrollY = 0;
             RefreshEntries();
         }
     }
