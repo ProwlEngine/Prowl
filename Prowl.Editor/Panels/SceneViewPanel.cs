@@ -250,13 +250,13 @@ public class SceneViewPanel : DockPanel
 
                 // Gizmo tool switching
                 if (ShortcutManager.IsPressed("Scene/ToolTranslate"))
-                    _gizmoMode = Gizmo.TransformGizmoMode.Translate;
+                    SetGizmoMode(Gizmo.TransformGizmoMode.Translate);
                 else if (ShortcutManager.IsPressed("Scene/ToolRotate"))
-                    _gizmoMode = Gizmo.TransformGizmoMode.Rotate;
+                    SetGizmoMode(Gizmo.TransformGizmoMode.Rotate);
                 else if (ShortcutManager.IsPressed("Scene/ToolScale"))
-                    _gizmoMode = Gizmo.TransformGizmoMode.ScaleAll;
+                    SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll);
                 else if (ShortcutManager.IsPressed("Scene/ToolUniversal"))
-                    _gizmoMode = Gizmo.TransformGizmoMode.Universal;
+                    SetGizmoMode(Gizmo.TransformGizmoMode.Universal);
             }
 
             // Accept asset drops via registry-discovered handlers
