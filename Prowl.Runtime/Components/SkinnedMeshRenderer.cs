@@ -122,6 +122,34 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _resolved = false; // Force re-resolve on enable
     }
 
+    /// <summary>
+    /// Compute world-space AABB from bone positions, padded by the mesh's max vertex extent.
+    /// Much cheaper than transforming every vertex, and correct for frustum culling.
+    /// </summary>
+    private AABB ComputeSkinnedBounds(Mesh mesh)
+    {
+        if (_bones == null || _bones.Length == 0)
+            return mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+
+        // Find the max distance any vertex can be from its bone (approximated from bind-pose bounds)
+        float padding = MathF.Max(MathF.Max(mesh.bounds.Size.X, mesh.bounds.Size.Y), mesh.bounds.Size.Z) * 0.5f;
+
+        Float3 min = new Float3(float.MaxValue);
+        Float3 max = new Float3(float.MinValue);
+
+        for (int i = 0; i < _bones.Length; i++)
+        {
+            if (_bones[i] == null) continue;
+            Float3 boneWorldPos = _bones[i].Position;
+            min = new Float3(MathF.Min(min.X, boneWorldPos.X), MathF.Min(min.Y, boneWorldPos.Y), MathF.Min(min.Z, boneWorldPos.Z));
+            max = new Float3(MathF.Max(max.X, boneWorldPos.X), MathF.Max(max.Y, boneWorldPos.Y), MathF.Max(max.Z, boneWorldPos.Z));
+        }
+
+        // Pad by mesh extent so vertices attached to edge bones aren't clipped
+        Float3 pad = new Float3(padding);
+        return new AABB(min - pad, max + pad);
+    }
+
     public override void OnDisable()
     {
         _boneTexture?.Dispose();
@@ -194,6 +222,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
             UploadBoneTexture(_skinMatrices);
         }
 
+        // Compute world-space bounds from bone positions (cheap, avoids culling issues)
+        AABB worldBounds = ComputeSkinnedBounds(mesh);
+
         // Render each submesh with its material
         int subCount = mesh.SubMeshCount;
         for (int s = 0; s < subCount; s++)
@@ -215,9 +246,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
                 props.SetInt("boneCount", _skinMatrices?.Length ?? 0);
             }
 
-            GameObject.Scene.PushRenderable(new MeshRenderable(
+            GameObject.Scene.PushRenderable(new SkinnedMeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,
-                GameObject.LayerIndex, props, subMeshIndex: s));
+                GameObject.LayerIndex, worldBounds, props, subMeshIndex: s));
         }
     }
 }
