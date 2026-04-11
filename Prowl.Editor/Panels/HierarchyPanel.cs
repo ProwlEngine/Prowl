@@ -333,7 +333,7 @@ public class HierarchyPanel : DockPanel
         bool isSelected = Selection.IsSelected(go);
         bool hasChildren = go.Children.Count > 0
             && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
-        bool isExpanded = _expandedState.GetValueOrDefault(goId, true);
+        bool isExpanded = _expandedState.GetValueOrDefault(goId, false);
         float indent = depth * IndentSize;
         int currentIndex = drawIndex++;
 
@@ -377,7 +377,7 @@ public class HierarchyPanel : DockPanel
             })
             .OnDoubleClick(goId, (id, _) =>
             {
-                _expandedState[id] = !_expandedState.GetValueOrDefault(id, true);
+                _expandedState[id] = !_expandedState.GetValueOrDefault(id, false);
             })
             .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.Select(g); })
             .OnDragStart(go, (dragGO, _) =>
@@ -409,7 +409,7 @@ public class HierarchyPanel : DockPanel
                     .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(goId, (id, _) =>
                     {
-                        _expandedState[id] = !_expandedState.GetValueOrDefault(id, true);
+                        _expandedState[id] = !_expandedState.GetValueOrDefault(id, false);
                     })
                     .StopEventPropagation();
             }
@@ -855,7 +855,7 @@ public class HierarchyPanel : DockPanel
         list.Add(go);
 
         string goId = go.Identifier.ToString();
-        bool isExpanded = _expandedState.GetValueOrDefault(goId, true);
+        bool isExpanded = _expandedState.GetValueOrDefault(goId, false);
         if (isExpanded)
         {
             foreach (var child in go.Children)
@@ -887,7 +887,7 @@ public class HierarchyPanel : DockPanel
         if (go.GetComponent<Camera>() != null) return EditorIcons.Camera;
         if (go.GetComponent<Light>() != null) return EditorIcons.Sun;
         if (go.GetComponent<MeshRenderer>() != null) return EditorIcons.Cube;
-        if (go.GetComponent<ModelRenderer>() != null) return EditorIcons.Cubes;
+        if (go.GetComponent<SkinnedMeshRenderer>() != null) return EditorIcons.Cubes;
         return EditorIcons.Circle;
     }
 
@@ -914,10 +914,10 @@ public class HierarchyPanel : DockPanel
 
         if (asset is Model model)
         {
-            var go = new GameObject(name);
+            var go = model.Instantiate();
+            if (go == null) { Debug.LogWarning("Failed to instantiate model."); return; }
+            go.Name = name;
             go.Transform.Position = position;
-            var renderer = go.AddComponent<ModelRenderer>();
-            renderer.Model = model;
             scene.Add(go);
             if (parent != null) go.SetParent(parent);
             Selection.Select(go);
