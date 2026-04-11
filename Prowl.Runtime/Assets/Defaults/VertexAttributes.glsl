@@ -1,4 +1,4 @@
-﻿﻿#ifndef SHADER_VERTEXATTRIBUTES
+﻿#ifndef SHADER_VERTEXATTRIBUTES
 #define SHADER_VERTEXATTRIBUTES
 		layout (location = 0) in vec3 vertexPosition;
 
@@ -46,8 +46,23 @@
 	#endif
 
 		const int MAX_BONE_INFLUENCE = 4;
-		const int MAX_BONES = 150;
-		uniform mat4 boneTransforms[MAX_BONES];
+
+		// Bone matrices stored in a RGBA32F texture - no uniform array size limit.
+		// Layout: each bone = 4 consecutive texels (one per column of mat4).
+		// Texel at x = boneIndex*4+col contains column `col` of that bone's matrix.
+		uniform sampler2D boneMatrixTexture;
+		uniform int boneCount;
+
+		// Fetch a bone matrix from the texture
+		mat4 GetBoneMatrix(int boneIndex)
+		{
+			int texOffset = boneIndex * 4;
+			vec4 col0 = texelFetch(boneMatrixTexture, ivec2(texOffset + 0, 0), 0);
+			vec4 col1 = texelFetch(boneMatrixTexture, ivec2(texOffset + 1, 0), 0);
+			vec4 col2 = texelFetch(boneMatrixTexture, ivec2(texOffset + 2, 0), 0);
+			vec4 col3 = texelFetch(boneMatrixTexture, ivec2(texOffset + 3, 0), 0);
+			return mat4(col0, col1, col2, col3);
+		}
 
 		// Skinning helper function
 		vec4 GetSkinnedPosition(vec3 position)
@@ -62,10 +77,10 @@
 				float weight = vertexBoneWeights[i];
 
 				// Skip if no bone assigned (index 0) or no weight
-				if (boneIndex > 0 && weight > 0.0 && boneIndex <= MAX_BONES)
+				if (boneIndex > 0 && weight > 0.0 && boneIndex <= boneCount)
 				{
-					// Bone indices are 1-based, convert to 0-based for array access
-					mat4 boneTransform = boneTransforms[boneIndex - 1];
+					// Bone indices are 1-based, convert to 0-based for texture fetch
+					mat4 boneTransform = GetBoneMatrix(boneIndex - 1);
 					skinnedPos += (boneTransform * vec4(position, 1.0)) * weight;
 				}
 			}
@@ -88,9 +103,9 @@
 				int boneIndex = int(vertexBoneIndices[i]);
 				float weight = vertexBoneWeights[i];
 
-				if (boneIndex > 0 && weight > 0.0 && boneIndex <= MAX_BONES)
+				if (boneIndex > 0 && weight > 0.0 && boneIndex <= boneCount)
 				{
-					mat4 boneTransform = boneTransforms[boneIndex - 1];
+					mat4 boneTransform = GetBoneMatrix(boneIndex - 1);
 					// Use mat3 to remove translation component
 					skinnedNormal += (mat3(boneTransform) * normal) * weight;
 				}

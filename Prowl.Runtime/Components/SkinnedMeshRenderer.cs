@@ -16,6 +16,7 @@ namespace Prowl.Runtime;
 /// Bones are referenced by path (relative to this GO's root), matching Unity's convention.
 /// Paths like "Armature/Hips/Spine" are resolved via Transform.Find().
 /// Supports multiple materials via submeshes.
+/// Bone matrices are uploaded via a float texture (no uniform array size limit).
 /// </summary>
 [AddComponentMenu("Rendering/Skinned Mesh Renderer")]
 public class SkinnedMeshRenderer : MonoBehaviour
@@ -44,6 +45,10 @@ public class SkinnedMeshRenderer : MonoBehaviour
     [System.NonSerialized] private Transform?[]? _bones;
     [System.NonSerialized] private Float4x4[]? _skinMatrices;
     [System.NonSerialized] private bool _resolved;
+
+    // Bone matrix texture — each bone is 4 RGBA32F texels (one per matrix row)
+    [System.NonSerialized] private Texture2D? _boneTexture;
+    [System.NonSerialized] private int _boneTextureSize; // number of bones the texture was allocated for
 
     /// <summary>Get the resolved root bone Transform.</summary>
     public Transform? RootBone
@@ -117,6 +122,52 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _resolved = false; // Force re-resolve on enable
     }
 
+    public override void OnDisable()
+    {
+        _boneTexture?.Dispose();
+        _boneTexture = null;
+        _boneTextureSize = 0;
+    }
+
+    /// <summary>
+    /// Ensures the bone matrix texture exists and is large enough for the given bone count.
+    /// Each bone occupies 4 texels (one per matrix row) in a single-row RGBA32F texture.
+    /// </summary>
+    private void EnsureBoneTexture(int boneCount)
+    {
+        if (_boneTexture != null && _boneTextureSize >= boneCount)
+            return;
+
+        _boneTexture?.Dispose();
+
+        // Width = boneCount * 4 (4 texels per mat4), Height = 1
+        uint width = (uint)(boneCount * 4);
+        _boneTexture = new Texture2D(width, 1, false, TextureImageFormat.Float4);
+        _boneTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
+        Graphics.SetWrapS(_boneTexture.Handle, TextureWrap.ClampToEdge);
+        Graphics.SetWrapT(_boneTexture.Handle, TextureWrap.ClampToEdge);
+        _boneTextureSize = boneCount;
+    }
+
+    /// <summary>
+    /// Uploads bone matrices to the texture. Each mat4 is stored as 4 consecutive RGBA32F texels.
+    /// Layout: texel[bone*4+0] = row0, texel[bone*4+1] = row1, texel[bone*4+2] = row2, texel[bone*4+3] = row3
+    /// </summary>
+    private unsafe void UploadBoneTexture(Float4x4[] matrices)
+    {
+        int boneCount = matrices.Length;
+        EnsureBoneTexture(boneCount);
+
+        // Float4x4 is column-major (c0,c1,c2,c3). We store columns as texels.
+        // Shader reconstructs: mat4(col0, col1, col2, col3)
+        // Each Float4x4 is 4 Float4 columns laid out contiguously in memory (c0, c1, c2, c3)
+        // So we can upload the whole array directly — 4 texels per matrix, boneCount*4 texels total
+        fixed (Float4x4* ptr = matrices)
+        {
+            _boneTexture!.SetDataPtr(ptr, 0, 0, (uint)(boneCount * 4), 1);
+        }
+    }
+
     public override void OnRenderCollect()
     {
         var mesh = SharedMesh.Res;
@@ -138,6 +189,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
                 else
                     _skinMatrices[i] = Float4x4.Identity;
             }
+
+            // Upload to bone texture
+            UploadBoneTexture(_skinMatrices);
         }
 
         // Render each submesh with its material
@@ -155,8 +209,11 @@ public class SkinnedMeshRenderer : MonoBehaviour
             PropertyState props = new();
             props.SetInt("_ObjectID", InstanceID);
             props.SetColor("_MainColor", MainColor);
-            if (_skinMatrices != null)
-                props.SetMatrices("boneTransforms", _skinMatrices);
+            if (_boneTexture != null)
+            {
+                props.SetTexture("boneMatrixTexture", _boneTexture);
+                props.SetInt("boneCount", _skinMatrices?.Length ?? 0);
+            }
 
             GameObject.Scene.PushRenderable(new MeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,
