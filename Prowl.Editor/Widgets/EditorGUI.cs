@@ -289,9 +289,35 @@ public static class EditorGUI
         return new WidgetResult<string>(cb => userCallback = cb);
     }
 
+    public static Color LerpRGB(Color a, Color b, float t)
+    {
+        return Color.FromArgb(
+            (int)(a.A + (b.A - a.A) * t),
+            (int)(a.R + (b.R - a.R) * t),
+            (int)(a.G + (b.G - a.G) * t),
+            (int)(a.B + (b.B - a.B) * t)
+        );
+    }
+
+
     // ================================================================
     //  FloatField
     // ================================================================
+
+    private static bool s_floatDragging = false;
+    private static float s_floatDragValue;
+
+    public static float ProcessFloatDrag(PaperUI.Events.DragEvent dragEvent)
+    {
+        float multiplier = 0.1f;
+        if (Runtime.Input.IsCtrlPressed)
+            multiplier *= 10f;
+        else if (Runtime.Input.IsShiftPressed)
+            multiplier *= 0.01f;
+        float finalValue = s_floatDragValue + dragEvent.TotalDelta.X * multiplier;
+        s_floatDragValue = finalValue;
+        return finalValue;
+    }
 
     public static WidgetResult<float> FloatField(Paper paper, string id, float value, string label = "", Vector.Color? textColor = null)
     {
@@ -308,7 +334,21 @@ public static class EditorGUI
                 paper.Box($"{id}_lbl")
                     .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Ink500).FontSize(FontSz);
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Ink500).FontSize(FontSz)
+                    .OnDragStart((dragEvent) =>
+                    {
+                        s_floatDragValue = value;
+                        s_floatDragging = true;
+                    })
+                    .OnDragging((dragEvent) =>
+                    {
+                        if (!s_floatDragging) return;
+                        userCallback?.Invoke(ProcessFloatDrag(dragEvent));
+                    })
+                    .OnDragEnd((dragEvent) =>
+                    {
+                        s_floatDragging = false;
+                    });
 
             using (paper.Box($"{id}_input")
                 .Height(EditorTheme.RowHeight)
@@ -349,9 +389,110 @@ public static class EditorGUI
         return new WidgetResult<float>(cb => userCallback = cb);
     }
 
+    public static WidgetResult<float> FloatFieldWithInternalLabel(Paper paper, string id, float value, string label = "", Vector.Color? textColor = null)
+    {
+        Action<float>? userCallback = null;
+        string textVal = value.ToString("G", CultureInfo.InvariantCulture);
+
+        using (paper.Row(id)
+            .Height(EditorTheme.RowHeight)
+            .RowBetween(6)
+            .Margin(UnitValue.Auto, EditorTheme.Spacing)
+            .Enter())
+        {
+
+            using (paper.Box($"{id}_input")
+                .Height(EditorTheme.RowHeight)
+                .Width(UnitValue.Stretch())
+
+                .Rounded(3)
+                .BorderWidth(1)
+
+                .BackgroundColor(EditorTheme.Neutral200)
+                .BorderColor(EditorTheme.Neutral100)
+                .Focused.BorderColor(EditorTheme.Purple400).End()
+
+                .TabIndex(0)
+                .Enter())
+            {
+
+                using (paper.Row(id)
+                    .Height(EditorTheme.RowHeight)
+                    .RowBetween(6)
+                    .Margin(UnitValue.Auto)
+                    .Enter())
+                {
+
+                    if (Font != null && !string.IsNullOrEmpty(label))
+                    {
+                        paper.Box($"{id}_lbl")
+                            .Height(EditorTheme.RowHeight - 2)
+                            .Width(EditorTheme.RowHeight - 2)
+                            .Margin(1, UnitValue.Auto, 1, UnitValue.Auto)
+                            .ChildLeft(4)
+                            .Alignment(PaperUI.TextAlignment.MiddleCenter)
+                            .Rounded(5)
+                            .BackgroundColor(textColor.HasValue ? LerpRGB(EditorTheme.Neutral300, textColor.Value, 0.05f) : EditorTheme.Neutral400)
+                            .Text(label, Font)
+                            .TextColor(textColor ?? EditorTheme.Ink500).FontSize(FontSz)
+                            .OnDragStart((dragEvent) =>
+                            {
+                                s_floatDragValue = value;
+                                s_floatDragging = true;
+                            })
+                            .OnDragging((dragEvent)=>
+                            {
+                                if (!s_floatDragging) return;
+                                userCallback?.Invoke(ProcessFloatDrag(dragEvent));
+                            })
+                            .OnDragEnd((dragEvent)=>
+                            {
+                                s_floatDragging = false;
+                            });
+                    }
+
+                    var yOffset = (EditorTheme.RowHeight - FontSz) / 2.0f;
+
+                    var settings = MakeNumericSettings(FloatFilter);
+                    paper.Box($"{id}_tf")
+                        .Margin(4, yOffset)
+                        .HookToParent()
+                        .IsNotInteractable()
+                        .Width(UnitValue.Stretch())
+                        .Height(EditorTheme.RowHeight)
+                        .FontSize(FontSz)
+                        .TextField(textVal, settings,
+                            onChange: v =>
+                            {
+                                if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+                                    userCallback?.Invoke(parsed);
+                            },
+                            intID: id.GetHashCode());
+                }
+            }
+        }
+
+        return new WidgetResult<float>(cb => userCallback = cb);
+    }
+
     // ================================================================
     //  IntField
     // ================================================================
+
+    private static bool s_intDragging = false;
+    private static int s_intDragValue;
+
+    public static int ProcessIntDrag(PaperUI.Events.DragEvent dragEvent)
+    {
+        int multiplier = 1;
+        if (Runtime.Input.IsCtrlPressed)
+            multiplier *= 10;
+        else if (Runtime.Input.IsShiftPressed)
+            multiplier *= 100;
+        int finalValue = s_intDragValue + (int)(dragEvent.TotalDelta.X * multiplier);
+        s_intDragValue = finalValue;
+        return finalValue;
+    }
 
     public static WidgetResult<int> IntField(Paper paper, string id, int value, string label, Vector.Color? textColor = null)
     {
@@ -368,7 +509,21 @@ public static class EditorGUI
                 paper.Box($"{id}_lbl")
                     .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Ink500).FontSize(FontSz);
+                    .Text(label, Font).TextColor(textColor ?? EditorTheme.Ink500).FontSize(FontSz)
+                    .OnDragStart((dragEvent) =>
+                    {
+                        s_intDragValue = value;
+                        s_intDragging = true;
+                    })
+                    .OnDragging((dragEvent) =>
+                    {
+                        if (!s_intDragging) return;
+                        userCallback?.Invoke(ProcessIntDrag(dragEvent));
+                    })
+                    .OnDragEnd((dragEvent) =>
+                    {
+                        s_intDragging = false;
+                    });
 
 
             using (paper.Box($"{id}_input")
@@ -837,11 +992,11 @@ public static class EditorGUI
                     .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             // X
-            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
+            FloatFieldWithInternalLabel(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
 
             // Y
-            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
+            FloatFieldWithInternalLabel(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
                 .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
         }
 
@@ -870,15 +1025,15 @@ public static class EditorGUI
                     .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             // X
-            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
+            FloatFieldWithInternalLabel(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
 
             // Y
-            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
+            FloatFieldWithInternalLabel(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
                 .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
 
             // Z
-            FloatField(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
+            FloatFieldWithInternalLabel(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
                 .OnValueChanged(v => { current.Z = v; userCallback?.Invoke(current); });
         }
 
@@ -907,19 +1062,19 @@ public static class EditorGUI
                     .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
 
             // X
-            FloatField(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
+            FloatFieldWithInternalLabel(paper, $"{id}_x", (float)current.X, "X", Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v => { current.X = v; userCallback?.Invoke(current); });
 
             // Y
-            FloatField(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
+            FloatFieldWithInternalLabel(paper, $"{id}_y", (float)current.Y, "Y", Color.FromArgb(255, 80, 200, 80))
                 .OnValueChanged(v => { current.Y = v; userCallback?.Invoke(current); });
 
             // Z
-            FloatField(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
+            FloatFieldWithInternalLabel(paper, $"{id}_z", (float)current.Z, "Z", Color.FromArgb(255, 80, 80, 200))
                 .OnValueChanged(v => { current.Z = v; userCallback?.Invoke(current); });
 
             // W
-            FloatField(paper, $"{id}_w", (float)current.W, "W")
+            FloatFieldWithInternalLabel(paper, $"{id}_w", (float)current.W, "W")
                 .OnValueChanged(v => { current.W = v; userCallback?.Invoke(current); });
         }
 
