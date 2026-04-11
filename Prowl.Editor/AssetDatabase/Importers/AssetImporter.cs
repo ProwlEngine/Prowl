@@ -16,7 +16,7 @@ public class ImporterForAttribute : Attribute
 
 /// <summary>
 /// Base class for all asset importers. Each importer handles specific file types
-/// and converts raw files into runtime EngineObjects.
+/// and converts raw files into runtime EngineObjects via the ImportContext.
 /// </summary>
 public abstract class AssetImporter
 {
@@ -24,12 +24,10 @@ public abstract class AssetImporter
     public abstract int Version { get; }
 
     /// <summary>
-    /// Import a raw asset file and produce runtime objects.
+    /// Import a raw asset file. Push results into ctx via SetMainAsset/AddSubAsset.
     /// </summary>
-    /// <param name="absolutePath">Full path to the source file.</param>
-    /// <param name="settings">Importer-specific settings from the .meta file (may be null).</param>
-    /// <returns>Import result with main asset and optional sub-assets.</returns>
-    public abstract ImportResult Import(string absolutePath, EchoObject? settings);
+    /// <returns>True if import succeeded.</returns>
+    public abstract bool Import(ImportContext ctx);
 
     /// <summary>
     /// Returns default settings for this importer type. Override to provide defaults.

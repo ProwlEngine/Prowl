@@ -16,34 +16,35 @@ public class SceneImporter : AssetImporter
 {
     public override int Version => 2; // Bumped: now tracks PrefabAssetId deps
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
-        var result = new ImportResult();
         try
         {
-            string text = File.ReadAllText(absolutePath);
+            string text = File.ReadAllText(ctx.AbsolutePath);
             var echo = EchoObject.ReadFromString(text);
 
-            var ctx = ImportHelper.CreateTrackingContext(out var dependencies);
+            var serCtx = ImportHelper.CreateTrackingContext(out var dependencies);
 
-            var scene = Serializer.Deserialize<Scene>(echo, ctx);
+            var scene = Serializer.Deserialize<Scene>(echo, serCtx);
             if (scene != null)
             {
-                scene.Name = Path.GetFileNameWithoutExtension(absolutePath);
-                result.MainAsset = scene;
+                scene.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+                ctx.SetMainAsset(scene);
 
                 // Also walk the raw echo for PrefabAssetId references
                 // (these are plain Guid strings, not $assetId, so not auto-tracked)
                 CollectPrefabDependencies(echo, dependencies);
 
-                result.Dependencies = dependencies;
+                foreach (var dep in dependencies)
+                    ctx.AddDependency(dep);
             }
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to import scene: {absolutePath}\n{ex.Message}");
+            Debug.LogError($"Failed to import scene: {ctx.AbsolutePath}\n{ex.Message}");
+            return false;
         }
-        return result;
+        return true;
     }
 
     /// <summary>Walk EchoObject tree for PrefabAssetId Guid strings.</summary>

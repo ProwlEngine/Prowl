@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
@@ -12,84 +12,56 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu("Physics/Colliders/Model Collider")]
+/// <summary>
+/// Creates a triangle mesh collider from a Mesh asset.
+/// </summary>
+[AddComponentMenu("Physics/Colliders/Mesh Collider")]
 public sealed class ModelCollider : Collider
 {
-    [SerializeField] private Model model;
+    [SerializeField] private AssetRef<Mesh> mesh;
 
-    public Model Model
+    public AssetRef<Mesh> Mesh
     {
-        get => model;
-        set
-        {
-            model = value;
-            OnValidate();
-        }
+        get => mesh;
+        set { mesh = value; OnValidate(); }
     }
 
     public override RigidBodyShape[] CreateShapes()
     {
-        if (model.IsNotValid())
+        var m = mesh.Res;
+        if (m == null)
         {
-            OnEnable(); // Trigger OnEnable to grab the Model from a renderer
-            if (model.IsNotValid())
-                Debug.LogError("Model is null");
+            // Try to grab from a MeshRenderer on this GO
+            var mr = GetComponent<MeshRenderer>();
+            if (mr != null) m = mr.Mesh.Res;
+        }
+
+        if (m == null)
+        {
+            Debug.LogError("ModelCollider: no mesh assigned.");
             return null;
         }
 
-        List<JTriangle> triangles = ToTriangleList(model);
-        TriangleMesh triangleMesh = new(triangles, true);
+        var triangles = new List<JTriangle>();
+        var vertices = m.Vertices;
+        var indices = m.Indices;
 
-        List<TriangleShape> triangleShapes = new();
-        int count = 0;
-        foreach (var triangle in triangleMesh.Indices)
+        for (int i = 0; i + 2 < indices.Length; i += 3)
         {
-            triangleShapes.Add(new TriangleShape(triangleMesh, count));
-            count++;
+            var v0 = vertices[indices[i]];
+            var v1 = vertices[indices[i + 1]];
+            var v2 = vertices[indices[i + 2]];
+            triangles.Add(new JTriangle(
+                new JVector(v0.X, v0.Y, v0.Z),
+                new JVector(v1.X, v1.Y, v1.Z),
+                new JVector(v2.X, v2.Y, v2.Z)));
         }
 
-        return triangleShapes.ToArray();
-    }
+        var triMesh = new TriangleMesh(triangles, true);
+        var shapes = new List<TriangleShape>();
+        for (int i = 0; i < triMesh.Indices.Length; i++)
+            shapes.Add(new TriangleShape(triMesh, i));
 
-    public override void OnEnable()
-    {
-        base.OnEnable();
-
-        if (model.IsNotValid())
-        {
-            ModelRenderer? renderer2 = GetComponent<ModelRenderer>();
-            if (renderer2.IsValid())
-            {
-                model = renderer2.Model.Res;
-            }
-            else
-            {
-                Debug.LogWarning("ConvexHullCollider could not find a MeshRenderer to get the mesh from.");
-            }
-        }
-    }
-
-    public List<JTriangle> ToTriangleList(Model model)
-    {
-        List<JTriangle> triangles = [];
-
-        foreach (var mesh in model.Meshes)
-        {
-            var m = mesh.Mesh.Res;
-            if (m == null) continue;
-            Vector.Float3[] vertices = m.Vertices;
-            int[] indices = [.. m.Indices.Select(i => (int)i)];
-
-
-            for (int i = 0; i < indices.Length; i += 3)
-            {
-                JVector v0 = new(vertices[indices[i]].X, vertices[indices[i]].Y, vertices[indices[i]].Z);
-                JVector v1 = new(vertices[indices[i + 1]].X, vertices[indices[i + 1]].Y, vertices[indices[i + 1]].Z);
-                JVector v2 = new(vertices[indices[i + 2]].X, vertices[indices[i + 2]].Y, vertices[indices[i + 2]].Z);
-                triangles.Add(new JTriangle(v0, v1, v2));
-            }
-        }
-
-        return triangles;
+        return shapes.ToArray();
     }
 }

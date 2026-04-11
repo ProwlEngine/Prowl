@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -17,33 +17,27 @@ public enum AnimationWrapMode
     ClampForever,
 }
 
+/// <summary>
+/// An animation clip containing per-bone animation curves.
+/// The Animation component evaluates these curves and applies them to bone Transforms by name.
+/// No Skeleton reference needed — bones are resolved by name at runtime.
+/// </summary>
 public sealed class AnimationClip : EngineObject, ISerializable
 {
     public float Duration;
-    public float TicksPerSecond;
+    public float TicksPerSecond = 1f;
     public float DurationInTicks;
 
     public AnimationWrapMode Wrap;
 
-    public Skeleton Skeleton { get; set; }
-
     public List<AnimBone> Bones { get; private set; } = [];
 
     private Dictionary<string, AnimBone> _boneMap = [];
-    private Dictionary<string, int> _boneNameToID = [];
 
     public void AddBone(AnimBone bone)
     {
         Bones.Add(bone);
         _boneMap[bone.BoneName] = bone;
-
-        // Build bone name to ID mapping if skeleton is available
-        if (Skeleton.IsValid())
-        {
-            int boneID = Skeleton.GetBoneIndex(bone.BoneName);
-            if (boneID >= 0)
-                _boneNameToID[bone.BoneName] = boneID;
-        }
     }
 
     public AnimBone? GetBone(string name)
@@ -53,59 +47,12 @@ public sealed class AnimationClip : EngineObject, ISerializable
         return null;
     }
 
-    /// <summary>
-    /// Rebuilds the bone name to ID mapping. Call this after setting the Skeleton.
-    /// </summary>
-    public void RebuildBoneMapping()
-    {
-        _boneNameToID.Clear();
-
-        if (Skeleton.IsValid())
-        {
-            foreach (AnimBone bone in Bones)
-            {
-                int boneID = Skeleton.GetBoneIndex(bone.BoneName);
-                if (boneID >= 0)
-                    _boneNameToID[bone.BoneName] = boneID;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Gets a pose at the specified time by evaluating all animation curves.
-    /// </summary>
-    public Pose GetPose(float time)
-    {
-        if (Skeleton.IsNotValid())
-            throw new InvalidOperationException("AnimationClip must have a valid Skeleton to get a pose");
-
-        // Create a pose with the skeleton's bind pose as the default
-        Pose pose = Pose.CreateBindPose(Skeleton);
-
-        // Apply animation data for each bone that has animation curves
-        foreach (AnimBone bone in Bones)
-        {
-            if (_boneNameToID.TryGetValue(bone.BoneName, out int boneID))
-            {
-                Float3 position = bone.EvaluatePositionAt(time);
-                Quaternion rotation = bone.EvaluateRotationAt(time);
-                Float3 scale = bone.EvaluateScaleAt(time);
-
-                pose.SetBoneTransform(boneID, position, rotation, scale);
-            }
-        }
-
-        return pose;
-    }
-
-
     public void EnsureQuaternionContinuity()
     {
         foreach (AnimBone bone in Bones)
         {
             if (bone.RotX == null || bone.RotX.Keys.Count < 2) continue;
 
-            // Store the previous quaternion value
             Quaternion prev = new(
                 bone.RotX.Keys[0].Value,
                 bone.RotY.Keys[0].Value,
@@ -113,10 +60,8 @@ public sealed class AnimationClip : EngineObject, ISerializable
                 bone.RotW.Keys[0].Value
             );
 
-            // Iterate through each keyframe starting from the second keyframe
             for (int i = 1; i < bone.RotX.Keys.Count; i++)
             {
-                // Get the current quaternion value
                 Quaternion cur = new(
                     bone.RotX.Keys[i].Value,
                     bone.RotY.Keys[i].Value,
@@ -124,7 +69,6 @@ public sealed class AnimationClip : EngineObject, ISerializable
                     bone.RotW.Keys[i].Value
                 );
 
-                // Ensure quaternion continuity between the previous and current quaternions
                 Quaternion midQ = (prev + cur) * 0.5f;
                 Quaternion midQFlipped = (prev + (-cur)) * 0.5f;
 
@@ -132,13 +76,11 @@ public sealed class AnimationClip : EngineObject, ISerializable
                 float angleFlipped = Quaternion.Angle(prev, midQFlipped);
                 Quaternion continuous = angleFlipped < angle ? (-cur) : cur;
 
-                // Update the keyframe values with the continuous quaternion
                 bone.RotX.Keys[i].Value = continuous.X;
                 bone.RotY.Keys[i].Value = continuous.Y;
                 bone.RotZ.Keys[i].Value = continuous.Z;
                 bone.RotW.Keys[i].Value = continuous.W;
 
-                // Store the current quaternion as the previous quaternion for the next iteration
                 prev = continuous;
             }
         }
@@ -146,46 +88,38 @@ public sealed class AnimationClip : EngineObject, ISerializable
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        Name = value.Get("Name").StringValue;
-        Duration = value.Get("Duration").FloatValue;
-        TicksPerSecond = value.Get("TicksPerSecond").FloatValue;
-        DurationInTicks = value.Get("DurationInTicks").FloatValue;
-        Wrap = (AnimationWrapMode)value.Get("Wrap").IntValue;
-
-        // Deserialize skeleton reference if present
-        EchoObject? skeletonObj = value.Get("Skeleton");
-        if (skeletonObj != null)
-        {
-            Skeleton = Serializer.Deserialize<Skeleton>(skeletonObj, ctx);
-        }
+        Name = value.Get("Name")?.StringValue ?? "Animation";
+        Duration = value.Get("Duration")?.FloatValue ?? 0;
+        TicksPerSecond = value.Get("TicksPerSecond")?.FloatValue ?? 1;
+        DurationInTicks = value.Get("DurationInTicks")?.FloatValue ?? 0;
+        Wrap = (AnimationWrapMode)(value.Get("Wrap")?.IntValue ?? 0);
 
         EchoObject? boneList = value.Get("Bones");
-        foreach (EchoObject boneProp in boneList.List)
+        if (boneList != null)
         {
-            var bone = new AnimBone();
-            bone.BoneName = boneProp.Get("BoneName").StringValue;
+            foreach (EchoObject boneProp in boneList.List)
+            {
+                var bone = new AnimBone();
+                bone.BoneName = boneProp.Get("BoneName")?.StringValue ?? "";
 
-            bone.PosX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosX"), ctx);
-            bone.PosY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosY"), ctx);
-            bone.PosZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosZ"), ctx);
+                bone.PosX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosX"), ctx);
+                bone.PosY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosY"), ctx);
+                bone.PosZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosZ"), ctx);
 
-            bone.RotX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotX"), ctx);
-            bone.RotY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotY"), ctx);
-            bone.RotZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotZ"), ctx);
-            bone.RotW = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotW"), ctx);
+                bone.RotX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotX"), ctx);
+                bone.RotY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotY"), ctx);
+                bone.RotZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotZ"), ctx);
+                bone.RotW = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotW"), ctx);
 
-            bone.ScaleX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleX"), ctx);
-            bone.ScaleY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleY"), ctx);
-            bone.ScaleZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleZ"), ctx);
+                bone.ScaleX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleX"), ctx);
+                bone.ScaleY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleY"), ctx);
+                bone.ScaleZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleZ"), ctx);
 
-            Bones.Add(bone);
+                Bones.Add(bone);
+            }
+
+            _boneMap = Bones.ToDictionary(b => b.BoneName);
         }
-
-        // Created map
-        _boneMap = Bones.ToDictionary(b => b.BoneName);
-
-        // Rebuild bone mapping if skeleton is available
-        RebuildBoneMapping();
     }
 
     public void Serialize(ref EchoObject value, SerializationContext ctx)
@@ -195,12 +129,6 @@ public sealed class AnimationClip : EngineObject, ISerializable
         value.Add("TicksPerSecond", new EchoObject(TicksPerSecond));
         value.Add("DurationInTicks", new EchoObject(DurationInTicks));
         value.Add("Wrap", new EchoObject((int)Wrap));
-
-        // Serialize skeleton reference if present
-        if (Skeleton.IsValid())
-        {
-            value.Add("Skeleton", Serializer.Serialize(Skeleton, ctx));
-        }
 
         var boneList = EchoObject.NewList();
         foreach (AnimBone bone in Bones)
@@ -227,6 +155,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
     }
 
 
+    /// <summary>Per-bone animation data with separate curves for each transform component.</summary>
     public class AnimBone
     {
         public string BoneName;
@@ -243,7 +172,6 @@ public sealed class AnimationClip : EngineObject, ISerializable
 
         public Quaternion EvaluateRotationAt(float time)
         {
-            // Use SLERP for smooth quaternion interpolation
             if (RotX == null || RotX.Keys.Count == 0)
                 return Quaternion.Identity;
 
@@ -257,63 +185,14 @@ public sealed class AnimationClip : EngineObject, ISerializable
                 ));
             }
 
-            // Find the two keyframes to interpolate between
-            int idx0 = -1;
-            int idx1 = -1;
+            // Evaluate each component at the given time
+            float x = RotX.Evaluate(time);
+            float y = RotY.Evaluate(time);
+            float z = RotZ.Evaluate(time);
+            float w = RotW.Evaluate(time);
 
-            for (int i = 0; i < RotX.Keys.Count - 1; i++)
-            {
-                if (time >= RotX.Keys[i].Position && time <= RotX.Keys[i + 1].Position)
-                {
-                    idx0 = i;
-                    idx1 = i + 1;
-                    break;
-                }
-            }
-
-            // Handle edge cases
-            if (idx0 == -1)
-            {
-                if (time <= RotX.Keys[0].Position)
-                {
-                    idx0 = idx1 = 0;
-                }
-                else if (time >= RotX.Keys[^1].Position)
-                {
-                    idx0 = idx1 = RotX.Keys.Count - 1;
-                }
-                else
-                {
-                    // Shouldn't happen, but fallback to first frame
-                    idx0 = idx1 = 0;
-                }
-            }
-
-            KeyFrame key0 = RotX.Keys[idx0];
-            KeyFrame key1 = RotX.Keys[idx1];
-
-            Quaternion q0 = new(
-                RotX.Keys[idx0].Value,
-                RotY.Keys[idx0].Value,
-                RotZ.Keys[idx0].Value,
-                RotW.Keys[idx0].Value
-            );
-
-            Quaternion q1 = new(
-                RotX.Keys[idx1].Value,
-                RotY.Keys[idx1].Value,
-                RotZ.Keys[idx1].Value,
-                RotW.Keys[idx1].Value
-            );
-
-            float t = 0;
-            if (key1.Position != key0.Position)
-            {
-                t = ((time - key0.Position) / (key1.Position - key0.Position));
-                t = Maths.Clamp(t, 0f, 1f);
-            }
-
-            return Quaternion.Slerp(q0, q1, t);
+            // Normalize (curve interpolation may denormalize the quaternion)
+            return NormalizeQuaternion(new Quaternion(x, y, z, w));
         }
 
         public Float3 EvaluateScaleAt(float time)
@@ -322,16 +201,10 @@ public sealed class AnimationClip : EngineObject, ISerializable
             return new(ScaleX.Evaluate(time), ScaleY.Evaluate(time), ScaleZ.Evaluate(time));
         }
 
-        /// <summary>
-        /// Normalize a quaternion
-        /// </summary>
         private static Quaternion NormalizeQuaternion(Quaternion q)
         {
             float length = Maths.Sqrt(q.X * q.X + q.Y * q.Y + q.Z * q.Z + q.W * q.W);
-
-            if (length < 0.0001f)
-                return Quaternion.Identity;
-
+            if (length < 1e-6f) return Quaternion.Identity;
             float invLength = 1.0f / length;
             return new Quaternion(
                 q.X * invLength,

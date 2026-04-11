@@ -77,10 +77,11 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         if (model == null) return;
 
-        _subjectGo = new GameObject("PreviewSubject");
+        // Instantiate the model's GO hierarchy for preview
+        _subjectGo = model.Instantiate();
+        if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
+        _subjectGo.Name = "PreviewSubject";
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
-        var renderer = _subjectGo.AddComponent<ModelRenderer>();
-        renderer.Model = model;
 
         // Scale to fit in a ~1 unit cube centered at origin
         var bounds = EstimateModelBounds(model);
@@ -264,23 +265,8 @@ public class PreviewRenderer : IDisposable
 
     private static AABB EstimateModelBounds(Model model)
     {
-        if (model.Meshes.Count == 0)
-            return AABB.FromCenterAndSize(Float3.Zero, Float3.One);
-
-        Float3 min = new Float3(float.MaxValue);
-        Float3 max = new Float3(float.MinValue);
-
-        foreach (var modelMesh in model.Meshes)
-        {
-            var mesh = modelMesh.Mesh.Res;
-            if (mesh == null) continue;
-            var b = mesh.bounds;
-            min = new Float3(MathF.Min(min.X, b.Min.X), MathF.Min(min.Y, b.Min.Y), MathF.Min(min.Z, b.Min.Z));
-            max = new Float3(MathF.Max(max.X, b.Max.X), MathF.Max(max.Y, b.Max.Y), MathF.Max(max.Z, b.Max.Z));
-        }
-
-        if (min.X > max.X) return AABB.FromCenterAndSize(Float3.Zero, Float3.One);
-        return new AABB(min, max);
+        // TODO: walk instantiated GO hierarchy for real bounds
+        return AABB.FromCenterAndSize(Float3.Zero, Float3.One);
     }
 
     public void Dispose()

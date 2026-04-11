@@ -14,25 +14,25 @@ public class InputActionMapImporter : AssetImporter
 {
     public override int Version => 1;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
-        var result = new ImportResult();
         try
         {
-            string text = File.ReadAllText(absolutePath);
+            string text = File.ReadAllText(ctx.AbsolutePath);
             var echo = EchoObject.ReadFromString(text);
 
             var map = Serializer.Deserialize<InputActionMap>(echo);
             if (map != null)
             {
-                map.Name = Path.GetFileNameWithoutExtension(absolutePath);
-                result.MainAsset = map;
+                map.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+                ctx.SetMainAsset(map);
             }
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to import input actions: {absolutePath}\n{ex.Message}");
+            Debug.LogError($"Failed to import input actions: {ctx.AbsolutePath}\n{ex.Message}");
+            return false;
         }
-        return result;
+        return true;
     }
 }

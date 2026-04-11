@@ -18,7 +18,25 @@ namespace Prowl.Runtime.AssetImporting;
 /// </summary>
 public static class ObjParser
 {
+    /// <summary>Parse an OBJ stream and return just the Mesh.</summary>
+    public static Mesh ParseMesh(Stream stream, string name)
+    {
+        return ParseInternal(stream, name);
+    }
+
+    /// <summary>Parse an OBJ stream and return a Model with GameObjectData.</summary>
     public static Model Parse(Stream stream, string name)
+    {
+        var mesh = ParseInternal(stream, name);
+        var rootGo = new GameObject(name);
+        var mr = rootGo.AddComponent<MeshRenderer>();
+        mr.Mesh = new AssetRef<Mesh>(mesh);
+        var model = new Model(name);
+        model.GameObjectData = Echo.Serializer.Serialize(typeof(object), rootGo);
+        return model;
+    }
+
+    private static Mesh ParseInternal(Stream stream, string name)
     {
         var positions = new List<Float3>();
         var normals = new List<Float3>();
@@ -85,12 +103,8 @@ public static class ObjParser
         mesh.MeshTopology = Topology.Triangles;
         mesh.Indices = outIndices.ToArray();
         mesh.RecalculateBounds();
-
-        var model = new Model(name);
-        model.Meshes = [new ModelMesh(name, mesh, null, hasBones: false)];
-        model.Materials = [];
-        model.Animations = [];
-        return model;
+        mesh.Name = name;
+        return mesh;
     }
 
     private static void ParseFace(

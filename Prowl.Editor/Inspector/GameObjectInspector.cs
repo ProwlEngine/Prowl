@@ -555,7 +555,7 @@ public static class GameObjectInspector
         Camera => EditorIcons.Camera,
         Light => EditorIcons.Sun,
         MeshRenderer => EditorIcons.Cube,
-        ModelRenderer => EditorIcons.Cubes,
+        SkinnedMeshRenderer => EditorIcons.Cubes,
         _ => EditorIcons.PuzzlePiece
     };
 

@@ -1,56 +1,49 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 
-using Prowl.Vector;
+using Prowl.Echo;
 
 namespace Prowl.Runtime.Resources;
 
-public class Model : EngineObject
+/// <summary>
+/// A Model asset stores a serialized GameObject hierarchy produced by importing a 3D model.
+/// Like PrefabAsset — call Instantiate() to create a live GO tree.
+/// Sub-assets (meshes, materials, animations) are tracked by the asset database, not by Model.
+/// </summary>
+public class Model : EngineObject, ISerializable
 {
-    public new string Name { get; set; }
-    public List<AssetRef<Material>> Materials { get; set; } = [];
-    public List<ModelMesh> Meshes { get; set; } = [];
-    public List<AnimationClip> Animations { get; set; } = [];
-    public Skeleton Skeleton { get; set; }
-    public float UnitScale { get; set; } = 1.0f;
+    /// <summary>Serialized GO hierarchy.</summary>
+    public EchoObject? GameObjectData { get; set; }
 
-    public Model(string name)
-    {
-        Name = name;
-    }
+    public Model() { }
+    public Model(string name) { Name = name; }
 
     /// <summary>
-    /// Loads a model from a file (.obj, .fbx, .gltf, etc.)
+    /// Instantiate the model as a live GameObject hierarchy.
     /// </summary>
-    public static Model LoadFromFile(string filePath, AssetImporting.ModelImporterSettings? settings = null)
+    public GameObject? Instantiate()
     {
-        if (!File.Exists(filePath))
-            throw new FileNotFoundException($"Model file not found: {filePath}");
-
-        var importer = new AssetImporting.ModelImporter();
-        Model model = importer.Import(new FileInfo(filePath), settings);
-        model.AssetPath = filePath;
-        return model;
+        if (GameObjectData == null) return null;
+        return Serializer.Deserialize<GameObject>(GameObjectData);
     }
 
-    /// <summary>
-    /// Loads a model from a stream
-    /// </summary>
-    public static Model LoadFromStream(Stream stream, string virtualPath, AssetImporting.ModelImporterSettings? settings = null)
+    public void Serialize(ref EchoObject value, SerializationContext ctx)
     {
-        var importer = new AssetImporting.ModelImporter();
-        Model model = importer.Import(stream, virtualPath, settings);
-        model.AssetPath = virtualPath;
-        return model;
+        value.Add("Name", new EchoObject(Name));
+        if (GameObjectData != null)
+            value.Add("GameObjectData", GameObjectData.Clone());
     }
 
-    /// <summary>
-    /// Loads a default embedded model
-    /// </summary>
+    public void Deserialize(EchoObject value, SerializationContext ctx)
+    {
+        Name = value.Get("Name")?.StringValue ?? "Model";
+        GameObjectData = value.Get("GameObjectData")?.Clone();
+    }
+
+    /// <summary>Loads a default embedded model (Cube, Sphere, etc.)</summary>
     public static Model LoadDefault(DefaultModel model)
     {
         string fileName = model switch
@@ -65,30 +58,13 @@ public class Model : EngineObject
         };
 
         string resourcePath = $"Assets/Defaults/{fileName}";
-        using (Stream stream = EmbeddedResources.GetStream(resourcePath))
-        {
-            var importer = new AssetImporting.ModelImporter();
-            Model result = importer.Import(stream, resourcePath);
-            result.AssetPath = $"$Default:{model}";
-            result.AssetID = BuiltInAssets.GuidFor(model);
-            result.Name = model.ToString();
-            return result;
-        }
-    }
-}
-
-public class ModelMesh
-{
-    public string Name { get; set; }
-    public AssetRef<Mesh> Mesh { get; set; }
-    public AssetRef<Material> Material { get; set; }
-    public bool HasBones { get; set; }
-
-    public ModelMesh(string name, Mesh mesh, Material material, bool hasBones = false)
-    {
-        Name = name;
-        Mesh = mesh;
-        Material = material;
-        HasBones = hasBones;
+        using Stream stream = EmbeddedResources.GetStream(resourcePath);
+        var result = new Model(model.ToString());
+        // OBJ parser returns a simple model with GameObjectData already set
+        var parsed = AssetImporting.ObjParser.Parse(stream, model.ToString());
+        result.GameObjectData = parsed.GameObjectData;
+        result.AssetPath = $"$Default:{model}";
+        result.AssetID = BuiltInAssets.GuidFor(model);
+        return result;
     }
 }

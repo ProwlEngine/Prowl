@@ -321,11 +321,6 @@ public class SceneViewPanel : DockPanel
                 continue;
             }
 
-            var modelRenderer = go.GetComponent<ModelRenderer>();
-            if (modelRenderer != null && modelRenderer.EnabledInHierarchy && modelRenderer.Raycast(ray, out dist))
-            {
-                if (dist < bestDist) { bestDist = dist; bestHit = go; }
-            }
         }
 
         return bestHit;
@@ -434,16 +429,6 @@ public class SceneViewPanel : DockPanel
                 }
             }
 
-            var modelRenderer = go.GetComponent<ModelRenderer>();
-            if (modelRenderer != null && modelRenderer.Raycast(ray, out dist))
-            {
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    bestPos = ray.Origin + ray.Direction * dist;
-                    hit = true;
-                }
-            }
         }
 
         if (hit) return bestPos;
@@ -470,8 +455,8 @@ public class SceneViewPanel : DockPanel
             Float3 scale = go.Transform.LossyScale;
             var col = new Prowl.Vector.Color(0.3f, 0.6f, 1f, 1f);
 
-            var renderer = go.GetComponent<ModelRenderer>();
-            if (renderer != null)
+            var meshRenderer = go.GetComponent<MeshRenderer>();
+            if (meshRenderer != null)
             {
                 Debug.DrawWireCube(pos, scale * 0.5f, col);
             }

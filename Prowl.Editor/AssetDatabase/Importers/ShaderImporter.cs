@@ -1,7 +1,5 @@
-using System;
 using System.IO;
 
-using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.AssetImporting;
 
@@ -12,10 +10,10 @@ public class ShaderImporter : AssetImporter
 {
     public override int Version => 1;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
-        string source = File.ReadAllText(absolutePath);
-        string dir = Path.GetDirectoryName(absolutePath) ?? "";
+        string source = File.ReadAllText(ctx.AbsolutePath);
+        string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
 
         // Resolve #include directives relative to the shader file's directory
         string? IncludeResolver(string includePath)
@@ -35,13 +33,14 @@ public class ShaderImporter : AssetImporter
             return null;
         }
 
-        if (!ShaderParser.ParseShader(absolutePath, source, IncludeResolver, out var shader) || shader == null)
+        if (!ShaderParser.ParseShader(ctx.AbsolutePath, source, IncludeResolver, out var shader) || shader == null)
         {
-            Debug.LogError($"Failed to parse shader: {absolutePath}");
-            return new ImportResult();
+            Debug.LogError($"Failed to parse shader: {ctx.AbsolutePath}");
+            return false;
         }
 
-        shader.Name = Path.GetFileNameWithoutExtension(absolutePath);
-        return new ImportResult { MainAsset = shader };
+        shader.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+        ctx.SetMainAsset(shader);
+        return true;
     }
 }

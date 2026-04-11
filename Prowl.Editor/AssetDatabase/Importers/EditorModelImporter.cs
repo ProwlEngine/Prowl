@@ -1,134 +1,96 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.AssetImporting;
-using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
 
-/// <summary>
-/// Imports 3D model files using the runtime's ModelImporter.
-/// Produces a Model with sub-assets (meshes, materials, animations).
-/// </summary>
 [ImporterFor(".gltf", ".glb")]
 public class EditorModelImporter : AssetImporter
 {
-    public override int Version => 3; // GLTF-only importer, dropped Assimp
+    public override int Version => 4;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
-        var result = new ImportResult();
         try
         {
             ModelImporterSettings? importSettings = null;
-            if (settings != null)
+            if (ctx.Settings != null)
             {
+                var s = ctx.Settings;
                 importSettings = new ModelImporterSettings
                 {
-                    GenerateNormals = !settings.TryGet("generateNormals", out var gn) || gn.BoolValue,
-                    GenerateSmoothNormals = settings.TryGet("generateSmoothNormals", out var gsn) && gsn.BoolValue,
-                    CalculateTangentSpace = !settings.TryGet("calculateTangents", out var ct) || ct.BoolValue,
-                    FlipUVs = !settings.TryGet("flipUVs", out var fu) || fu.BoolValue,
-                    UnitScale = settings.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f,
+                    GenerateNormals = !s.TryGet("generateNormals", out var gn) || gn.BoolValue,
+                    GenerateSmoothNormals = s.TryGet("generateSmoothNormals", out var gsn) && gsn.BoolValue,
+                    CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue,
+                    FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue,
+                    UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f,
                 };
             }
 
-            var runtimeImporter = new ModelImporter();
-            var model = runtimeImporter.Import(new FileInfo(absolutePath), importSettings);
-            model.Name = Path.GetFileNameWithoutExtension(absolutePath);
-            result.MainAsset = model;
+            // 1. Import — creates live meshes, materials, animations, GO hierarchy
+            var importer = new ModelImporter();
+            var data = importer.Import(new FileInfo(ctx.AbsolutePath), importSettings);
 
-            // Extract sub-assets: individual meshes, materials, animations
-            var subAssets = new List<EngineObject>();
+            // 2. Register sub-assets — assigns deterministic GUIDs immediately
+            for (int i = 0; i < data.Meshes.Count; i++)
+                ctx.AddSubAsset(data.Meshes[i].Name ?? $"Mesh_{i}", data.Meshes[i]);
 
-            for (int i = 0; i < model.Meshes.Count; i++)
-            {
-                var modelMesh = model.Meshes[i];
-                var mesh = modelMesh.Mesh.Res;
-                if (mesh != null)
-                {
-                    mesh.Name = !string.IsNullOrEmpty(modelMesh.Name) ? modelMesh.Name : $"Mesh_{i}";
-                    subAssets.Add(mesh);
-                }
-            }
+            for (int i = 0; i < data.Materials.Count; i++)
+                ctx.AddSubAsset(data.Materials[i].Name ?? $"Material_{i}", data.Materials[i]);
 
-            for (int i = 0; i < model.Materials.Count; i++)
-            {
-                var mat = model.Materials[i].Res;
-                if (mat != null)
-                {
-                    if (string.IsNullOrEmpty(mat.Name)) mat.Name = $"Material_{i}";
-                    subAssets.Add(mat);
-                }
-            }
+            for (int i = 0; i < data.Animations.Count; i++)
+                ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i]);
 
-            for (int i = 0; i < model.Animations.Count; i++)
-            {
-                var clip = model.Animations[i];
-                if (clip != null)
-                {
-                    if (string.IsNullOrEmpty(clip.Name)) clip.Name = $"Animation_{i}";
-                    subAssets.Add(clip);
-                }
-            }
+            // 3. Resolve inline textures to asset DB references
+            ResolveTextures(data, ctx);
 
-            result.SubAssets = subAssets.ToArray();
+            // 4. Serialize GO hierarchy — sub-assets have correct IDs, AssetRefs serialize as GUIDs
+            var model = new Model(Path.GetFileNameWithoutExtension(ctx.AbsolutePath));
+            if (data.RootGO != null)
+                model.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO);
 
-            // Post-process: replace inline textures with asset database references
-            ResolveTextureReferences(model, absolutePath, result);
+            ctx.SetMainAsset(model);
+            return true;
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to import model: {absolutePath}\n{ex.Message}");
+            Debug.LogError($"Failed to import model: {ctx.AbsolutePath}\n{ex.Message}");
+            return false;
         }
-        return result;
     }
 
-    /// <summary>
-    /// Walk all materials in the model and replace inline-loaded textures
-    /// with AssetRef references to the texture assets in the project.
-    /// This ensures texture import settings (filter, wrap, mipmaps) are respected.
-    /// </summary>
-    private static void ResolveTextureReferences(Model model, string modelAbsPath, ImportResult result)
+    private static void ResolveTextures(ModelImportResult data, ImportContext ctx)
     {
         var db = EditorAssetDatabase.Instance;
         if (db == null) return;
 
-        string modelDir = Path.GetDirectoryName(modelAbsPath) ?? "";
+        string modelDir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
         string assetsRoot = Project.Current?.AssetsPath ?? "";
         if (string.IsNullOrEmpty(assetsRoot)) return;
 
-        foreach (var matRef in model.Materials)
+        foreach (var mat in data.Materials)
         {
-            var mat = matRef.Res;
             if (mat == null) continue;
-
-            // Get the _textures dictionary from PropertyState via the public getter
-            // Check each texture slot and try to resolve to an asset
-            ResolveTextureSlot(mat, "_MainTex", modelDir, assetsRoot, db, result);
-            ResolveTextureSlot(mat, "_NormalTex", modelDir, assetsRoot, db, result);
-            ResolveTextureSlot(mat, "_SurfaceTex", modelDir, assetsRoot, db, result);
-            ResolveTextureSlot(mat, "_EmissionTex", modelDir, assetsRoot, db, result);
+            ResolveSlot(mat, "_MainTex", modelDir, assetsRoot, db, ctx);
+            ResolveSlot(mat, "_NormalTex", modelDir, assetsRoot, db, ctx);
+            ResolveSlot(mat, "_SurfaceTex", modelDir, assetsRoot, db, ctx);
+            ResolveSlot(mat, "_EmissionTex", modelDir, assetsRoot, db, ctx);
         }
     }
 
-    private static void ResolveTextureSlot(Material mat, string slotName, string modelDir, string assetsRoot, EditorAssetDatabase db, ImportResult result)
+    private static void ResolveSlot(Material mat, string slot, string modelDir, string assetsRoot, EditorAssetDatabase db, ImportContext ctx)
     {
-        var tex = mat._properties.GetTexture(slotName);
+        var tex = mat._properties.GetTexture(slot);
         if (tex == null || tex.IsDisposed) return;
 
-        // The texture was loaded from a file path — try to find it in the asset database
         string? texPath = tex.AssetPath;
         if (string.IsNullOrEmpty(texPath)) return;
 
-        // Convert absolute path to relative path within the Assets folder
-        string relativePath = null;
+        string? relativePath = null;
         if (Path.IsPathRooted(texPath))
         {
             if (texPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
@@ -136,10 +98,9 @@ public class EditorModelImporter : AssetImporter
         }
         else
         {
-            // Relative to model directory — resolve to absolute then to relative
-            string absTexPath = Path.GetFullPath(Path.Combine(modelDir, texPath));
-            if (absTexPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
-                relativePath = Path.GetRelativePath(assetsRoot, absTexPath).Replace('\\', '/');
+            string abs = Path.GetFullPath(Path.Combine(modelDir, texPath));
+            if (abs.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
+                relativePath = Path.GetRelativePath(assetsRoot, abs).Replace('\\', '/');
         }
 
         if (relativePath == null) return;
@@ -147,13 +108,11 @@ public class EditorModelImporter : AssetImporter
         var entry = db.GetEntry(relativePath);
         if (entry == null) return;
 
-        // Load the texture from the asset database instead of using the inline one
-        var dbTexture = Runtime.AssetDatabase.Get(entry.Guid) as Texture2D;
-        if (dbTexture != null)
-        {
-            mat.SetTexture(slotName, dbTexture);
-            result.Dependencies.Add(entry.Guid);
-        }
+        // Don't load the texture — just set the AssetRef by GUID.
+        // The texture may not be imported yet, but the GUID is assigned.
+        // At runtime, AssetRef lazy-loads via AssetDatabase.Get().
+        mat.SetTexture(slot, new AssetRef<Texture2D>(entry.Guid));
+        ctx.AddDependency(entry.Guid);
     }
 
     public override EchoObject? DefaultSettings()

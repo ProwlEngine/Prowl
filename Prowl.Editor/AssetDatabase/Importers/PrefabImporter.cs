@@ -18,12 +18,11 @@ public class PrefabImporter : AssetImporter
 {
     public override int Version => 1;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
-        var result = new ImportResult();
         try
         {
-            string text = File.ReadAllText(absolutePath);
+            string text = File.ReadAllText(ctx.AbsolutePath);
             var goEcho = EchoObject.ReadFromString(text);
 
             // Walk the EchoObject tree for dependencies — no deserialization needed
@@ -33,16 +32,18 @@ public class PrefabImporter : AssetImporter
             // Wrap in PrefabAsset
             var prefab = new PrefabAsset();
             prefab.GameObjectData = goEcho;
-            prefab.Name = Path.GetFileNameWithoutExtension(absolutePath);
+            prefab.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
 
-            result.MainAsset = prefab;
-            result.Dependencies = dependencies;
+            ctx.SetMainAsset(prefab);
+            foreach (var dep in dependencies)
+                ctx.AddDependency(dep);
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to import prefab: {absolutePath}\n{ex.Message}");
+            Debug.LogError($"Failed to import prefab: {ctx.AbsolutePath}\n{ex.Message}");
+            return false;
         }
-        return result;
+        return true;
     }
 
     /// <summary>

@@ -58,32 +58,31 @@ public static class BuiltInAssets
                 () => Shader.LoadDefault(shader));
         }
 
-        // Models and their sub-meshes
+        // Default meshes (parsed directly from embedded OBJ files)
         foreach (DefaultModel m in Enum.GetValues<DefaultModel>())
         {
             var model = m;
-            Register($"$Default:Model/{model}", model.ToString(), typeof(Model),
+            string fileName = model switch
+            {
+                DefaultModel.Cube => "Cube.obj",
+                DefaultModel.Sphere => "Sphere.obj",
+                DefaultModel.Cylinder => "Cylinder.obj",
+                DefaultModel.Plane => "Plane.obj",
+                DefaultModel.SkyDome => "SkyDome.obj",
+                DefaultModel.UnitCube => "1mcube.obj",
+                _ => null
+            };
+            if (fileName == null) continue;
+
+            Register($"$Default:Model/{model}/Mesh/0", model.ToString(), typeof(Mesh),
                 () =>
                 {
-                    var loaded = Model.LoadDefault(model);
-                    // Assign deterministic GUIDs to sub-meshes
-                    for (int i = 0; i < loaded.Meshes.Count; i++)
-                    {
-                        var mesh = loaded.Meshes[i].Mesh.Res;
-                        if (mesh != null)
-                        {
-                            var meshGuid = DeterministicGuid($"$Default:Model/{model}/Mesh/{i}");
-                            mesh.AssetID = meshGuid;
-                            mesh.Name = $"{model}_Mesh{i}";
-                            _cache[meshGuid] = mesh;
-                        }
-                    }
-                    return loaded;
+                    using var stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
+                    var mesh = AssetImporting.ObjParser.ParseMesh(stream, model.ToString());
+                    mesh.AssetID = GuidForMesh(model);
+                    mesh.AssetPath = $"$Default:Mesh/{model}";
+                    return mesh;
                 });
-
-            // Register mesh entries so they can be resolved by GUID
-            // We need the entries to exist even before the model is loaded
-            RegisterMeshEntries(model);
         }
 
         // Materials
@@ -101,28 +100,6 @@ public static class BuiltInAssets
             Register($"$Default:Texture/{tex}", tex.ToString(), typeof(Texture2D),
                 () => Texture2D.LoadDefault(tex));
         }
-    }
-
-    private static void RegisterMeshEntries(DefaultModel model)
-    {
-        // Register mesh entry that triggers parent model load to populate the cache
-        var meshGuid = DeterministicGuid($"$Default:Model/{model}/Mesh/0");
-        var modelEnum = model;
-        _entries[meshGuid] = new BuiltInEntry
-        {
-            Guid = meshGuid,
-            Name = $"{model}_Mesh0",
-            Path = $"$Default:Model/{model}/Mesh/0",
-            AssetType = typeof(Mesh),
-            Loader = () =>
-            {
-                // Loading the parent model will cache all its sub-meshes
-                var parentGuid = GuidFor(modelEnum);
-                Get(parentGuid);
-                // Now the mesh should be in the cache
-                return _cache.TryGetValue(meshGuid, out var cached) ? cached : null!;
-            }
-        };
     }
 
     private static void Register(string path, string name, Type type, Func<EngineObject> loader)

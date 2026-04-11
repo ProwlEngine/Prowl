@@ -1,5 +1,7 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -7,41 +9,48 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Renders a static mesh with one or more materials (one per submesh).
+/// For single-material meshes, use Materials[0] or the legacy Material property.
+/// </summary>
 [AddComponentMenu("Rendering/Mesh Renderer")]
-public class MeshRenderer : MonoBehaviour, IRenderable
+public class MeshRenderer : MonoBehaviour
 {
     public AssetRef<Mesh> Mesh;
-    public AssetRef<Material> Material;
 
-    private PropertyState _properties = new();
+    /// <summary>Materials array — one per submesh. Legacy single-material meshes use index 0.</summary>
+    public List<AssetRef<Material>> Materials = new();
+
+    /// <summary>Legacy single-material accessor. Gets/sets Materials[0].</summary>
+    public AssetRef<Material> Material
+    {
+        get => Materials.Count > 0 ? Materials[0] : default;
+        set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
+    }
 
     public override void OnRenderCollect()
     {
-        if (Mesh.Res != null && Material.Res != null)
+        var mesh = Mesh.Res;
+        if (mesh == null || Materials.Count == 0) return;
+
+        int subCount = mesh.SubMeshCount;
+        for (int s = 0; s < subCount; s++)
         {
-            _properties.Clear();
-            _properties.SetInt("_ObjectID", InstanceID);
-            GameObject.Scene.PushRenderable(this);
+            Material? mat = null;
+            if (s < Materials.Count)
+                mat = Materials[s].Res;
+            else if (Materials.Count > 0)
+                mat = Materials[^1].Res;
+
+            if (mat == null) continue;
+
+            PropertyState props = new();
+            props.SetInt("_ObjectID", InstanceID);
+
+            GameObject.Scene.PushRenderable(new MeshRenderable(
+                mesh, mat, Transform.LocalToWorldMatrix,
+                GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
         }
-    }
-
-    public Material GetMaterial() => Material.Res!;
-    public int GetLayer() => GameObject.LayerIndex;
-    public Float3 GetPosition() => Transform.Position;
-
-    public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh drawData, out Float4x4 model, out InstanceData[]? instanceData)
-    {
-        drawData = Mesh.Res!;
-        properties = _properties;
-        model = Transform.LocalToWorldMatrix;
-        instanceData = null; // Single instance rendering
-    }
-
-    public void GetCullingData(out bool isRenderable, out AABB bounds)
-    {
-        isRenderable = true;
-        //bounds = Bounds.CreateFromMinMax(new Vector3(999999), new Vector3(999999));
-        bounds = Mesh.Res!.bounds.TransformBy(Transform.LocalToWorldMatrix);
     }
 
     /// <summary>
@@ -55,7 +64,6 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
         Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
         Float3 localOrigin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);
-        // Transform direction through the full matrix (handles scale)
         Float3 localDirRaw = Float4x4.TransformPoint(worldRay.Origin + worldRay.Direction, worldToLocal) - localOrigin;
         Float3 localDir = Float3.Normalize(localDirRaw);
         var localRay = new Ray(localOrigin, localDir);
@@ -65,7 +73,6 @@ public class MeshRenderer : MonoBehaviour, IRenderable
 
         if (mesh.Raycast(localRay, out float localDist))
         {
-            // Convert local hit point back to world space for accurate distance
             Float3 localHit = localOrigin + localDir * localDist;
             Float3 worldHit = Float4x4.TransformPoint(localHit, Transform.LocalToWorldMatrix);
             distance = Float3.Distance(worldRay.Origin, worldHit);

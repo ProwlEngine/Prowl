@@ -11,21 +11,21 @@ public class TextureImporter : AssetImporter
 {
     public override int Version => 2; // Bumped: now applies filter/wrap settings
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
         // Settings are guaranteed to have defaults merged by EditorAssetDatabase.RunImport
-        bool generateMipmaps = settings?.TryGet("generateMipmaps", out var mipTag) == true && mipTag.BoolValue;
+        bool generateMipmaps = ctx.Settings?.TryGet("generateMipmaps", out var mipTag) == true && mipTag.BoolValue;
 
         // Load texture WITHOUT mipmaps first — we'll generate them after applying settings
-        var texture = Texture2D.FromFile(absolutePath, false);
-        texture.Name = Path.GetFileNameWithoutExtension(absolutePath);
+        var texture = Texture2D.FromFile(ctx.AbsolutePath, false);
+        texture.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
 
         // Read filter/wrap settings (defaults merged by RunImport)
-        var minFilter = settings?.TryGet("minFilter", out var minTag2) == true
+        var minFilter = ctx.Settings?.TryGet("minFilter", out var minTag2) == true
             ? (TextureMin)minTag2.IntValue : (generateMipmaps ? TextureMin.LinearMipmapLinear : TextureMin.Linear);
-        var magFilter = settings?.TryGet("magFilter", out var magTag) == true
+        var magFilter = ctx.Settings?.TryGet("magFilter", out var magTag) == true
             ? (TextureMag)magTag.IntValue : TextureMag.Linear;
-        var wrapMode = settings?.TryGet("wrapMode", out var wrapTag) == true
+        var wrapMode = ctx.Settings?.TryGet("wrapMode", out var wrapTag) == true
             ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
 
         // Generate mipmaps if requested (must happen before setting mipmap filters)
@@ -46,7 +46,8 @@ public class TextureImporter : AssetImporter
         texture.SetTextureFilters(minFilter, magFilter);
         texture.SetWrapModes(wrapMode, wrapMode);
 
-        return new ImportResult { MainAsset = texture };
+        ctx.SetMainAsset(texture);
+        return true;
     }
 
     public override EchoObject? DefaultSettings()

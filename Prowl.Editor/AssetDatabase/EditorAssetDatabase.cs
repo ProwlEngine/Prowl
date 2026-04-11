@@ -435,58 +435,48 @@ public class EditorAssetDatabase : IAssetDatabase
 
         try
         {
-            var result = importer.Import(absolutePath, settings);
+            // Create context with entry GUID so sub-assets get correct deterministic IDs
+            var ctx = new Importers.ImportContext(entry.Guid, absolutePath, settings);
+            bool success = importer.Import(ctx);
 
-            if (result.MainAsset != null)
+            if (!success || ctx.MainAsset == null)
             {
-                // Assign identity
-                result.MainAsset.AssetID = entry.Guid;
-                result.MainAsset.AssetPath = entry.Path;
-                if (string.IsNullOrEmpty(result.MainAsset.Name))
-                    result.MainAsset.Name = Path.GetFileNameWithoutExtension(entry.Path);
-
-                // Serialize to cache
-                SerializeToCache(entry.Guid, result.MainAsset);
-
-                // Cache in memory
-                _loadedAssets[entry.Guid] = result.MainAsset;
-
-                // Update entry metadata
-                entry.MainAssetType = result.MainAsset.GetType();
-                entry.Dependencies = result.Dependencies.ToArray();
+                entry.SubAssets = Array.Empty<SubAssetEntry>();
+                entry.NeedsReimport = false;
+                return false;
             }
 
-            // Process sub-assets
-            if (result.SubAssets != null && result.SubAssets.Length > 0)
+            // Main asset — ID already assigned by ctx.SetMainAsset
+            ctx.MainAsset.AssetPath = entry.Path;
+            if (string.IsNullOrEmpty(ctx.MainAsset.Name))
+                ctx.MainAsset.Name = Path.GetFileNameWithoutExtension(entry.Path);
+
+            _loadedAssets[entry.Guid] = ctx.MainAsset;
+            entry.MainAssetType = ctx.MainAsset.GetType();
+            entry.Dependencies = ctx.Dependencies.ToArray();
+
+            // Process sub-assets — IDs already assigned by ctx.AddSubAsset
+            if (ctx.SubAssets.Count > 0)
             {
                 var subEntries = new List<SubAssetEntry>();
-                for (int i = 0; i < result.SubAssets.Length; i++)
+                for (int i = 0; i < ctx.SubAssets.Count; i++)
                 {
-                    var sub = result.SubAssets[i];
+                    var sub = ctx.SubAssets[i];
                     if (sub == null) continue;
 
-                    string subName = !string.IsNullOrEmpty(sub.Name) ? sub.Name : $"SubAsset_{i}";
-                    Guid subGuid = AssetEntry.DeriveSubAssetGuid(entry.Guid, subName);
+                    sub.AssetPath = $"{entry.Path}#{sub.Name}";
 
-                    sub.AssetID = subGuid;
-                    sub.AssetPath = $"{entry.Path}#{subName}";
+                    SerializeToCache(sub.AssetID, sub);
+                    _loadedAssets[sub.AssetID] = sub;
 
-                    // Cache sub-asset to disk
-                    SerializeToCache(subGuid, sub);
-
-                    // Cache in memory
-                    _loadedAssets[subGuid] = sub;
-
-                    // Build sub-asset entry
                     subEntries.Add(new SubAssetEntry
                     {
-                        Guid = subGuid,
-                        Name = subName,
+                        Guid = sub.AssetID,
+                        Name = sub.Name,
                         Type = sub.GetType()
                     });
 
-                    // Index the sub-asset
-                    _subAssetIndex[subGuid] = (entry.Guid, i);
+                    _subAssetIndex[sub.AssetID] = (entry.Guid, i);
                 }
                 entry.SubAssets = subEntries.ToArray();
             }
@@ -495,19 +485,21 @@ public class EditorAssetDatabase : IAssetDatabase
                 entry.SubAssets = Array.Empty<SubAssetEntry>();
             }
 
+            // Serialize main asset
+            SerializeToCache(entry.Guid, ctx.MainAsset);
+
             // Update timestamps
             entry.LastModifiedTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
             entry.ImporterVersion = importer.Version;
             entry.NeedsReimport = false;
 
             // Update dependency graph
-            _dependencies.SetDependencies(entry.Guid, result.Dependencies);
+            _dependencies.SetDependencies(entry.Guid, ctx.Dependencies);
 
             // Queue thumbnail generation (lazy, one per frame)
-            if (result.MainAsset != null)
             {
-                string? sourceFile = result.MainAsset is Runtime.Resources.Texture2D ? absolutePath : null;
-                ThumbnailGenerator.Enqueue(entry.Guid, result.MainAsset, sourceFile);
+                string? sourceFile = ctx.MainAsset is Runtime.Resources.Texture2D ? absolutePath : null;
+                ThumbnailGenerator.Enqueue(entry.Guid, ctx.MainAsset, sourceFile);
             }
 
             return true;

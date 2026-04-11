@@ -1,6 +1,5 @@
 using System.IO;
 
-using Prowl.Echo;
 using Prowl.Editor.Scripting;
 
 namespace Prowl.Editor.Importers;
@@ -15,13 +14,13 @@ public class ScriptImporter : AssetImporter
 {
     public override int Version => 1;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
         // Only request recompile if the script is newer than the compiled assembly
         var project = Project.Current;
-        if (project != null && File.Exists(absolutePath))
+        if (project != null && File.Exists(ctx.AbsolutePath))
         {
-            var scriptTime = File.GetLastWriteTimeUtc(absolutePath);
+            var scriptTime = File.GetLastWriteTimeUtc(ctx.AbsolutePath);
             bool needsRecompile = true;
 
             // Check if Game assembly exists and is newer
@@ -35,6 +34,6 @@ public class ScriptImporter : AssetImporter
                 ScriptAssemblyManager.RequestRecompile();
         }
 
-        return new ImportResult();
+        return true;
     }
 }

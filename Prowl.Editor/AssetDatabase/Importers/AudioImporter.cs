@@ -1,6 +1,5 @@
 using System.IO;
 
-using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -14,19 +13,19 @@ public class AudioImporter : AssetImporter
 {
     public override int Version => 1;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
-        var result = new ImportResult();
         try
         {
-            var clip = new AudioClip(absolutePath, streamFromDisk: false);
-            clip.Name = Path.GetFileNameWithoutExtension(absolutePath);
-            result.MainAsset = clip;
+            var clip = new AudioClip(ctx.AbsolutePath, streamFromDisk: false);
+            clip.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+            ctx.SetMainAsset(clip);
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"Failed to import audio: {absolutePath}\n{ex.Message}");
+            Debug.LogError($"Failed to import audio: {ctx.AbsolutePath}\n{ex.Message}");
+            return false;
         }
-        return result;
+        return true;
     }
 }

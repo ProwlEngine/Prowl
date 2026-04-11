@@ -15,28 +15,29 @@ public class MaterialImporter : AssetImporter
 {
     public override int Version => 1;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
-        var result = new ImportResult();
         try
         {
-            string text = File.ReadAllText(absolutePath);
+            string text = File.ReadAllText(ctx.AbsolutePath);
             var echo = EchoObject.ReadFromString(text);
 
-            var ctx = ImportHelper.CreateTrackingContext(out var dependencies);
+            var serCtx = ImportHelper.CreateTrackingContext(out var dependencies);
 
-            var material = Serializer.Deserialize<Material>(echo, ctx);
+            var material = Serializer.Deserialize<Material>(echo, serCtx);
             if (material != null)
             {
-                material.Name = Path.GetFileNameWithoutExtension(absolutePath);
-                result.MainAsset = material;
-                result.Dependencies = dependencies;
+                material.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+                ctx.SetMainAsset(material);
+                foreach (var dep in dependencies)
+                    ctx.AddDependency(dep);
             }
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to import material: {absolutePath}\n{ex.Message}");
+            Debug.LogError($"Failed to import material: {ctx.AbsolutePath}\n{ex.Message}");
+            return false;
         }
-        return result;
+        return true;
     }
 }

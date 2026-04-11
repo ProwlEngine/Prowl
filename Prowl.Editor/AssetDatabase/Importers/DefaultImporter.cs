@@ -1,8 +1,3 @@
-using System.IO;
-
-using Prowl.Echo;
-using Prowl.Runtime;
-
 namespace Prowl.Editor.Importers;
 
 /// <summary>
@@ -13,9 +8,9 @@ public class DefaultImporter : AssetImporter
 {
     public override int Version => 1;
 
-    public override ImportResult Import(string absolutePath, EchoObject? settings)
+    public override bool Import(ImportContext ctx)
     {
         // Default importer just tracks the file — no runtime asset produced
-        return new ImportResult();
+        return true;
     }
 }

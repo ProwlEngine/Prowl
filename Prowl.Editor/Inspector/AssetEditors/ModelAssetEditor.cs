@@ -48,15 +48,7 @@ public class ModelAssetEditor : AssetImporterEditor
 
         if (model != null)
         {
-            EditorGUI.Label(paper, $"{id}_meshes", $"Meshes: {model.Meshes.Count}");
-            EditorGUI.Label(paper, $"{id}_mats", $"Materials: {model.Materials.Count}");
-            EditorGUI.Label(paper, $"{id}_anims", $"Animations: {model.Animations.Count}");
-            EditorGUI.Label(paper, $"{id}_skeleton", $"Skeleton: {(model.Skeleton.IsValid() ? "Yes" : "No")}");
-
-            int totalVerts = model.Meshes.Sum(m => m.Mesh.Res?.Vertices?.Length ?? 0);
-            int totalTris = model.Meshes.Sum(m => (m.Mesh.Res?.Indices?.Length ?? 0) / 3);
-            EditorGUI.Label(paper, $"{id}_verts", $"Vertices: {totalVerts:N0}");
-            EditorGUI.Label(paper, $"{id}_tris", $"Triangles: {totalTris:N0}");
+            EditorGUI.Label(paper, $"{id}_subs", $"Sub-Assets: {entry.SubAssets.Length}");
         }
 
         // Sub-assets
