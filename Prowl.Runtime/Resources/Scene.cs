@@ -102,18 +102,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public PhysicsWorld Physics => _physics;
 
-    // Rendering tracking - cleared each frame before Update, populated during Update
-    [SerializeIgnore]
-    private readonly List<IRenderable> _renderables = [];
-    [SerializeIgnore]
-    private readonly List<IRenderableLight> _lights = [];
-
     [SerializeIgnore]
     private bool _isActive = false;
-
-    public int RenderableCount => _renderables.Count;
-    public IReadOnlyList<IRenderable> Renderables => _renderables;
-    public IReadOnlyList<IRenderableLight> Lights => _lights;
 
     public struct FogParams
     {
@@ -262,30 +252,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _isActive = false;
     }
 
-    /// <summary>
-    /// Adds a renderable to the scene's render list. Called by components during Update.
-    /// </summary>
-    public void PushRenderable(IRenderable renderable)
-    {
-        _renderables.Add(renderable);
-    }
-
-    /// <summary>
-    /// Adds a light to the scene's light list. Called by light components during Update.
-    /// </summary>
-    public void PushLight(IRenderableLight light)
-    {
-        _lights.Add(light);
-    }
-
-    /// <summary>
-    /// Clears the renderable and light tracking lists. Called at the start of each Update.
-    /// </summary>
-    private void ClearRenderTracking()
-    {
-        _renderables.Clear();
-        _lights.Clear();
-    }
 
     /// <summary>
     /// Registers a GameObject and all of its children.
@@ -590,17 +556,15 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Collects render data (renderables, lights) from all active components.
-    /// Always called before rendering, regardless of play mode.
-    /// Clears previous render tracking and calls OnRenderCollect() on all active components.
+    /// Collects render data from all active components for the given camera.
+    /// Components add their renderables and lights to the provided lists.
     /// </summary>
-    public void RenderCollect()
+    public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        ClearRenderTracking();
         List<GameObject> activeGOs = [.. ActiveObjects];
         ForeachComponent(activeGOs, (x) =>
         {
-            x.OnRenderCollect();
+            x.OnRenderCollect(camera, renderables, lights);
         });
     }
 
@@ -640,8 +604,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <returns>True if any cameras were rendered, false otherwise</returns>
     public bool Render(RenderTexture? target = null)
     {
-        // Collect renderables and lights from all active components
-        RenderCollect();
+        // Renderables are now collected per-camera inside pipeline.Render()
 
         var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 

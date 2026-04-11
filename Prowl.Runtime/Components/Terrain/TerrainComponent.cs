@@ -3,43 +3,38 @@
 
 using System;
 using System.Collections.Generic;
-using System.Dynamic;
-using System.Linq;
+
+using Prowl.Echo;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-using Silk.NET.Vulkan;
-
 namespace Prowl.Runtime.Terrain;
 
 /// <summary>
 /// GPU-instanced terrain component with quadtree LOD.
-/// Renders terrain using a single 32x32 mesh instanced many times.
+/// Renders terrain using a single mesh instanced many times.
 /// Heightmap is sampled in the vertex shader for displacement.
+/// References a TerrainData asset for height/splat/layer configuration.
 /// </summary>
+[ExecuteAlways]
 [AddComponentMenu("Terrain/Terrain")]
 public class TerrainComponent : MonoBehaviour
 {
     #region Configuration
 
-    public Material Material;
-    public Camera TargetCamera;            // Camera for LOD calculations (if null, uses first camera in scene)
-    public Texture Heightmap;
-    public Texture Splatmap;
+    /// <summary>The terrain data asset containing heightmap, splatmap, and layer configuration.</summary>
+    public AssetRef<TerrainData> Data;
 
-    // Terrain textures (4 layers)
-    public Texture Layer0Albedo;
-    public Texture Layer1Albedo;
-    public Texture Layer2Albedo;
-    public Texture Layer3Albedo;
+    /// <summary>Base material. Terrain clones this internally to set its own properties.</summary>
+    public AssetRef<Material> Material;
 
-    public float TerrainSize = 1024.0f;    // World size of terrain
-    public float TerrainHeight = 100.0f;   // Maximum height
-    public int MaxLODLevel = 4;            // Maximum LOD subdivision levels
-    public int MeshResolution = 16;        // Resolution of base mesh (32x32)
-    public float TextureTiling = 10.0f;    // Tiling for terrain textures
+    /// <summary>Maximum LOD subdivision levels for the quadtree.</summary>
+    public int MaxLODLevel = 4;
+
+    /// <summary>Resolution of the base mesh grid (vertices per side).</summary>
+    public int MeshResolution = 16;
 
     #endregion
 
@@ -49,6 +44,29 @@ public class TerrainComponent : MonoBehaviour
     private Mesh _baseMesh;
     private Float4x4[] _transforms = Array.Empty<Float4x4>();
     private PropertyState _properties = new();
+
+    // Material instance (cloned from the assigned material so we don't modify the asset)
+    [NonSerialized] private Material? _materialInstance;
+    [NonSerialized] private Guid _lastMaterialGuid;
+
+    #endregion
+
+    #region Brush Preview (set by editor each frame)
+
+    [NonSerialized] public Float2 BrushPosition;
+    [NonSerialized] public float BrushRadius;
+    [NonSerialized] public float BrushFalloff;
+    [NonSerialized] public bool BrushVisible;
+
+    #endregion
+
+    #region Public Accessors
+
+    /// <summary>Shortcut to terrain size from the data asset.</summary>
+    public float TerrainSize => Data.Res?.Size ?? 1024f;
+
+    /// <summary>Shortcut to terrain height from the data asset.</summary>
+    public float TerrainHeight => Data.Res?.Height ?? 100f;
 
     #endregion
 
@@ -63,83 +81,190 @@ public class TerrainComponent : MonoBehaviour
             _quadtree = new TerrainQuadtree(Float3.Zero, TerrainSize, MaxLODLevel);
     }
 
-    public override void Update()
-    {
-        // Get camera position from target camera or first camera in scene
-        Camera camera = TargetCamera;
-        if (camera == null || !camera.Enabled)
-        {
-            // Try to get first active camera from scene
-            camera = GameObject.Scene?.ActiveObjects
-                .SelectMany(x => x.GetComponentsInChildren<Camera>())
-                .FirstOrDefault();
-        }
-
-        if (camera == null)
-            return;
-
-        Float3 cameraPos = camera.Transform.Position - this.Transform.Position;
-        // Project camera position onto terrain plane
-        cameraPos.Y = 0;
-
-        // Update quadtree with camera position
-        _quadtree.Update(cameraPos);
-
-        // Generate instance data for visible chunks
-        UpdateInstanceData();
-
-        // Render terrain using Graphics.DrawMeshInstanced
-        if (_transforms.Length > 0 && Material.IsValid() && _baseMesh != null)
-        {
-            _properties.Clear();
-            _properties.SetInt("_ObjectID", InstanceID);
-
-            // Set terrain textures (cast to Texture2D)
-            if (Heightmap.IsValid() && Heightmap is Texture2D heightmap2D)
-                _properties.SetTexture("_Heightmap", heightmap2D);
-            if (Splatmap.IsValid() && Splatmap is Texture2D splatmap2D)
-                _properties.SetTexture("_Splatmap", splatmap2D);
-            if (Layer0Albedo.IsValid() && Layer0Albedo is Texture2D layer0)
-                _properties.SetTexture("_Layer0", layer0);
-            if (Layer1Albedo.IsValid() && Layer1Albedo is Texture2D layer1)
-                _properties.SetTexture("_Layer1", layer1);
-            if (Layer2Albedo.IsValid() && Layer2Albedo is Texture2D layer2)
-                _properties.SetTexture("_Layer2", layer2);
-            if (Layer3Albedo.IsValid() && Layer3Albedo is Texture2D layer3)
-                _properties.SetTexture("_Layer3", layer3);
-
-            _properties.SetFloat("_TerrainSize", (float)TerrainSize);
-            _properties.SetFloat("_TerrainHeight", TerrainHeight);
-            _properties.SetFloat("_TextureTiling", TextureTiling);
-
-            _properties.SetVector("_TerrainOffset", this.Transform.Position);
-
-            var bounds = new AABB(this.Transform.Position + new Float3(0, -TerrainHeight * 2.0f, 0), this.Transform.Position + new Float3(TerrainSize, TerrainHeight * 2.0f, TerrainSize));
-
-            // Draw instanced terrain with properties (automatically batched for >1023 chunks)
-            Graphics.DrawMeshInstanced(
-                GameObject.Scene,
-                _baseMesh,
-                _transforms,
-                Material,
-                (bounds.Min + bounds.Max) * 0.5f, // Use center of terrain bounds for depth sorting
-                GameObject.LayerIndex,
-                _properties,
-                bounds
-            );
-        }
-    }
-
     public override void OnDisable()
     {
         base.OnDisable();
         _baseMesh?.Dispose();
         _baseMesh = null;
+        _materialInstance = null;
+    }
+
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    {
+        var terrainData = Data.Res;
+        if (terrainData == null) return;
+
+        // Update LOD using the camera that's collecting
+        Float3 cameraPos = camera.Transform.Position - this.Transform.Position;
+        cameraPos.Y = 0;
+
+        float terrainSize = terrainData.Size;
+        if (_quadtree == null || MathF.Abs(_quadtree.ChunkSize - terrainSize) > 0.01f)
+            _quadtree = new TerrainQuadtree(Float3.Zero, terrainSize, MaxLODLevel);
+
+        _quadtree.Update(cameraPos);
+        UpdateInstanceData();
+
+        var mat = GetMaterialInstance();
+        if (mat == null || _transforms.Length == 0 || _baseMesh == null) return;
+
+        _properties.Clear();
+        _properties.SetInt("_ObjectID", InstanceID);
+
+        // GPU textures from TerrainData
+        var heightmapTex = terrainData.GetHeightmapTexture();
+        var splatmapTex = terrainData.GetSplatmapTexture();
+
+        if (heightmapTex != null) _properties.SetTexture("_Heightmap", heightmapTex);
+        if (splatmapTex != null) _properties.SetTexture("_Splatmap", splatmapTex);
+
+        // Per-layer textures and settings
+        for (int i = 0; i < 4; i++)
+        {
+            var layer = terrainData.Layers[i];
+            string prefix = $"_Layer{i}";
+
+            var albedo = layer.Albedo.Res;
+            if (albedo != null) _properties.SetTexture(prefix, albedo);
+
+            var normal = layer.NormalMap.Res;
+            if (normal != null) _properties.SetTexture(prefix + "Normal", normal);
+
+            _properties.SetFloat(prefix + "Tiling", layer.Tiling);
+            _properties.SetFloat(prefix + "Roughness", layer.Roughness);
+            _properties.SetFloat(prefix + "Metallic", layer.Metallic);
+        }
+
+        _properties.SetFloat("_TerrainSize", terrainSize);
+        _properties.SetFloat("_TerrainHeight", terrainData.Height);
+        _properties.SetVector("_TerrainOffset", this.Transform.Position);
+
+        // Brush preview — set on material instance so they're applied as material uniforms
+        mat.SetVector("_BrushPosition", BrushPosition);
+        mat.SetFloat("_BrushRadius", BrushRadius);
+        mat.SetFloat("_BrushFalloff", BrushFalloff);
+        mat.SetFloat("_BrushVisible", BrushVisible ? 1f : 0f);
+
+        float height = terrainData.Height;
+        var bounds = new AABB(
+            this.Transform.Position + new Float3(0, -height * 2.0f, 0),
+            this.Transform.Position + new Float3(terrainSize, height * 2.0f, terrainSize));
+
+        InstancedMeshRenderable.CreateBatched(
+            renderables,
+            _baseMesh,
+            mat,
+            _transforms,
+            (bounds.Min + bounds.Max) * 0.5f,
+            layer: GameObject.LayerIndex,
+            properties: _properties,
+            bounds: bounds
+        );
     }
 
     public override void DrawGizmos()
     {
-        _quadtree.DrawGizmos(this.Transform.Position);
+        // _quadtree?.DrawGizmos(this.Transform.Position);
+    }
+
+    #endregion
+
+    #region Material Instance
+
+    private Material? GetMaterialInstance()
+    {
+        var sourceMat = Material.Res;
+        if (sourceMat == null)
+            sourceMat = Resources.Material.LoadDefault(DefaultMaterial.Terrain);
+        if (sourceMat == null) return null;
+
+        var sourceGuid = Material.AssetID;
+
+        if (_materialInstance == null || _lastMaterialGuid != sourceGuid)
+        {
+            // Deep copy via serialization roundtrip
+            var echo = Serializer.Serialize(sourceMat);
+            _materialInstance = Serializer.Deserialize<Material>(echo);
+            if (_materialInstance != null)
+                _materialInstance.Name = sourceMat.Name + " (Terrain Instance)";
+            _lastMaterialGuid = sourceGuid;
+        }
+
+        return _materialInstance;
+    }
+
+    #endregion
+
+    #region Raycast
+
+    /// <summary>
+    /// Raycast against the terrain heightmap surface.
+    /// Returns true if the ray hits the terrain, with the world-space hit point and terrain UV.
+    /// </summary>
+    public bool Raycast(Ray ray, out Float3 hitPoint, out Float2 terrainUV)
+    {
+        hitPoint = Float3.Zero;
+        terrainUV = Float2.Zero;
+
+        var terrainData = Data.Res;
+        if (terrainData == null || terrainData.Heights == null) return false;
+
+        Float3 terrainPos = Transform.Position;
+        float size = terrainData.Size;
+        float maxHeight = terrainData.Height;
+
+        // Step along the ray
+        float stepSize = size / terrainData.HeightmapResolution * 0.5f;
+        float maxDist = size * 2f;
+        float t = 0f;
+
+        Float3 prevPoint = ray.Origin;
+        float prevDiff = GetHeightDiff(ray.Origin, terrainPos, terrainData);
+        bool prevAbove = prevDiff > 0;
+
+        while (t < maxDist)
+        {
+            t += stepSize;
+            Float3 point = ray.Origin + ray.Direction * t;
+            float diff = GetHeightDiff(point, terrainPos, terrainData);
+            bool above = diff > 0;
+
+            if (!above && prevAbove)
+            {
+                // Crossed the surface — binary search refinement
+                float tLo = t - stepSize;
+                float tHi = t;
+                for (int i = 0; i < 8; i++)
+                {
+                    float tMid = (tLo + tHi) * 0.5f;
+                    Float3 mid = ray.Origin + ray.Direction * tMid;
+                    if (GetHeightDiff(mid, terrainPos, terrainData) > 0)
+                        tLo = tMid;
+                    else
+                        tHi = tMid;
+                }
+
+                hitPoint = ray.Origin + ray.Direction * ((tLo + tHi) * 0.5f);
+                terrainUV = new Float2(
+                    (hitPoint.X - terrainPos.X) / size,
+                    (hitPoint.Z - terrainPos.Z) / size);
+                return true;
+            }
+
+            prevDiff = diff;
+            prevAbove = above;
+        }
+
+        return false;
+    }
+
+    private static float GetHeightDiff(Float3 point, Float3 terrainPos, TerrainData data)
+    {
+        float u = (float)((point.X - terrainPos.X) / data.Size);
+        float v = (float)((point.Z - terrainPos.Z) / data.Size);
+        if (u < 0 || u > 1 || v < 0 || v > 1) return 1f; // Above (outside terrain)
+        float terrainY = (float)terrainPos.Y + data.GetInterpolatedHeight(u, v);
+        return (float)point.Y - terrainY;
     }
 
     #endregion
@@ -156,36 +281,27 @@ public class TerrainComponent : MonoBehaviour
         Float2[] uvs = new Float2[vertexCount];
         uint[] indices = new uint[indexCount];
 
-        // Generate vertices and UVs for a unit quad (0 to 1 in XZ)
         for (int z = 0; z <= resolution; z++)
         {
             for (int x = 0; x <= resolution; x++)
             {
                 int index = z * (resolution + 1) + x;
-
-                // Position in 0-1 range
                 float u = x / (float)resolution;
                 float v = z / (float)resolution;
-
                 vertices[index] = new Float3(u, 0, v);
                 uvs[index] = new Float2(u, v);
             }
         }
 
-        // Generate indices
         int triIndex = 0;
         for (int z = 0; z < resolution; z++)
         {
             for (int x = 0; x < resolution; x++)
             {
                 int vertIndex = z * (resolution + 1) + x;
-
-                // Triangle 1
                 indices[triIndex++] = (uint)(vertIndex);
                 indices[triIndex++] = (uint)(vertIndex + resolution + 1);
                 indices[triIndex++] = (uint)(vertIndex + 1);
-
-                // Triangle 2
                 indices[triIndex++] = (uint)(vertIndex + 1);
                 indices[triIndex++] = (uint)(vertIndex + resolution + 1);
                 indices[triIndex++] = (uint)(vertIndex + resolution + 2);
@@ -209,25 +325,14 @@ public class TerrainComponent : MonoBehaviour
         var visibleChunks = _quadtree.GetVisibleChunks();
 
         if (_transforms.Length != visibleChunks.Count)
-        {
             _transforms = new Float4x4[visibleChunks.Count];
-        }
 
         for (int i = 0; i < visibleChunks.Count; i++)
         {
             var chunk = visibleChunks[i];
-
-            // Calculate transform for this chunk
-            // Position: chunk position in world space (relative to terrain GameObject)
-            // Scale: chunk size
             Float3 position = (Float3)(this.Transform.Position + chunk.Position);
             float scale = (float)chunk.Size;
-
-            // Create transform matrix: Translation * Scale
-            // The position is already in world space relative to terrain origin
-            Float4x4 transform = Float4x4.CreateTranslation(position) * Float4x4.CreateScale(scale, 1.0f, scale);
-
-            _transforms[i] = transform;
+            _transforms[i] = Float4x4.CreateTranslation(position) * Float4x4.CreateScale(scale, 1.0f, scale);
         }
     }
 

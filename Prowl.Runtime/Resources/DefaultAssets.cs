@@ -54,6 +54,7 @@ public enum DefaultMaterial
 {
     Standard,
     Particle,
+    Terrain,
 }
 
 /// <summary>

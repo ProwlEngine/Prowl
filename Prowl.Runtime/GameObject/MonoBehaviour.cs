@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -302,10 +303,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public virtual void LateUpdate() { }
 
     /// <summary>
-    /// Called every frame to collect render data (push renderables, lights, etc).
-    /// Always called regardless of play mode — use this instead of Update() for rendering registration.
+    /// Called every frame per camera to collect render data.
+    /// Always called regardless of play mode.
+    /// Components add their renderables/lights to the provided lists.
+    /// Camera is provided for LOD and distance-based decisions.
     /// </summary>
-    public virtual void OnRenderCollect() { }
+    public virtual void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights) { }
 
     /// <summary>
     /// Called for rendering and handling GUI gizmos.

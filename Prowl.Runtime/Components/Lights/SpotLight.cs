@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -31,9 +33,9 @@ public class SpotLight : Light
     private Float4x4 _shadowMatrix;
     private Float4 _shadowAtlasParams; // xy = atlas pos, z = atlas size, w = 1.0
 
-    public override void OnRenderCollect()
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        GameObject.Scene.PushLight(this);
+        lights.Add(this);
     }
 
     public override void DrawGizmos()

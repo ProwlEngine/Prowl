@@ -58,47 +58,18 @@ public class SceneViewPanel : DockPanel
             .ChildTop(2).ChildBottom(2)
             .Enter())
         {
-            // Gizmo mode buttons
-            bool isTranslate = _gizmoMode == Gizmo.TransformGizmoMode.Translate;
-            bool isRotate = _gizmoMode == Gizmo.TransformGizmoMode.Rotate;
-            bool isScale = _gizmoMode == Gizmo.TransformGizmoMode.ScaleAll;
-            bool isUniversal = _gizmoMode == Gizmo.TransformGizmoMode.Universal;
+            // Let active scene view editor draw its toolbar first
+            var sceneEditor = SceneViewEditorRegistry.ActiveEditor;
+            bool suppressDefaultToolbar = false;
+            if (sceneEditor != null)
+                suppressDefaultToolbar = sceneEditor.DrawToolbar(paper, "sv_sce", font);
 
-            paper.Box("sv_move_btn")
-                .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Translate));
+            if (!suppressDefaultToolbar)
+                DrawDefaultToolbar(paper, font);
 
-            paper.Box("sv_rotate_btn")
-                .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Rotate));
+            paper.Box("sv_sep_grid").Width(1).Height(18).BackgroundColor(EditorTheme.Ink200);
 
-            paper.Box("sv_scale_btn")
-                .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll));
-
-            paper.Box("sv_universal_btn")
-                .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
-
-            paper.Box("sv_sep_1").Width(1).Height(18).BackgroundColor(EditorTheme.Ink200);
-
-            // Grid toggle
+            // Grid toggle (always shown)
             bool showGrid = _editorCamera?.ShowGrid ?? true;
             paper.Box("sv_grid_btn")
                 .Width(24).Height(24).Rounded(4)
@@ -111,6 +82,46 @@ public class SceneViewPanel : DockPanel
             // Spacer
             paper.Box("sv_spacer");
         }
+    }
+
+    private void DrawDefaultToolbar(Paper paper, Prowl.Scribe.FontFile font)
+    {
+        bool isTranslate = _gizmoMode == Gizmo.TransformGizmoMode.Translate;
+        bool isRotate = _gizmoMode == Gizmo.TransformGizmoMode.Rotate;
+        bool isScale = _gizmoMode == Gizmo.TransformGizmoMode.ScaleAll;
+        bool isUniversal = _gizmoMode == Gizmo.TransformGizmoMode.Universal;
+
+        paper.Box("sv_move_btn")
+            .Width(24).Height(24).Rounded(4)
+            .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
+            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Translate));
+
+        paper.Box("sv_rotate_btn")
+            .Width(24).Height(24).Rounded(4)
+            .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
+            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Rotate));
+
+        paper.Box("sv_scale_btn")
+            .Width(24).Height(24).Rounded(4)
+            .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
+            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll));
+
+        paper.Box("sv_universal_btn")
+            .Width(24).Height(24).Rounded(4)
+            .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
+            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
     }
 
     private void DrawViewport(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
@@ -156,8 +167,30 @@ public class SceneViewPanel : DockPanel
             return;
         }
 
-        // Update transform gizmo for selected objects
-        UpdateTransformGizmo(scene, width, height);
+        // Update scene view editor registry based on selection
+        SceneViewEditorRegistry.UpdateFromSelection();
+
+        // Let active scene editor handle input before gizmo
+        bool sceneEditorConsumedInput = false;
+        var activeSceneEditor = SceneViewEditorRegistry.ActiveEditor;
+        if (activeSceneEditor != null && _editorCamera != null)
+        {
+            var cam = _editorCamera.Camera;
+            if (cam != null)
+            {
+                Float2 mouseLocal = new Float2(Input.MousePosition.X - _viewportAbsoluteRect.Min.X,
+                                                Input.MousePosition.Y - _viewportAbsoluteRect.Min.Y);
+                Float2 viewSize = new Float2(width, height);
+                Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
+                bool hovered = mouseLocal.X >= 0 && mouseLocal.X <= viewSize.X
+                            && mouseLocal.Y >= 0 && mouseLocal.Y <= viewSize.Y;
+                sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, mouseRay, mouseLocal, hovered);
+            }
+        }
+
+        // Update transform gizmo for selected objects (skip if scene editor consumed input)
+        if (!sceneEditorConsumedInput)
+            UpdateTransformGizmo(scene, width, height);
 
         // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
         DrawSelectionGizmos();
@@ -191,18 +224,28 @@ public class SceneViewPanel : DockPanel
                     canvas.ClearBrushTexture();
                     });
 
-                    // Draw transform gizmo as 2D overlay on top of the scene
-                    if (_transformGizmo != null && _gizmoActive)
+                    // Draw transform gizmo as 2D overlay (hidden when scene editor consumes input)
+                    if (_transformGizmo != null && _gizmoActive && !sceneEditorConsumedInput)
                     {
                         paper.DrawForeground(ref handle, (canvas2, r2) =>
                         {
                             _transformGizmo.Draw(canvas2);
                         });
                     }
+
+                    // Draw scene view editor overlay
+                    var sceneEditorOverlay = SceneViewEditorRegistry.ActiveEditor;
+                    if (sceneEditorOverlay != null)
+                    {
+                        paper.DrawForeground(ref handle, (canvas2, r2) =>
+                        {
+                            sceneEditorOverlay.DrawOverlay(canvas2, r2);
+                        });
+                    }
                 })
                 .OnClick(0, (_, e) =>
                 {
-                    if (!Input.IsAltPressed)
+                    if (!Input.IsAltPressed && !sceneEditorConsumedInput)
                     {
                         Float2 localPos = new Float2((float)e.RelativePosition.X, (float)e.RelativePosition.Y);
                         Float2 panelSize = new Float2(width, height);

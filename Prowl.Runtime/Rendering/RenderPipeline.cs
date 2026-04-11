@@ -12,10 +12,11 @@ namespace Prowl.Runtime.Rendering;
 
 public struct RenderingData
 {
-    public bool DisplayGizmo;
-    public Float4x4 GridMatrix;
-    public Color GridColor;
-    public Float3 GridSizes;
+    /// <summary>Whether to draw gizmos (editor scene view).</summary>
+    public bool DisplayGizmos;
+
+    /// <summary>Whether to draw the editor grid.</summary>
+    public bool DisplayGrid;
 }
 
 /// <summary>
@@ -145,6 +146,18 @@ public abstract class RenderPipeline : EngineObject
             PropertyState.SetGlobalMatrix("prowl_PrevObjectToWorld", currentModel); // First frame, use current matrix
 
         s_prevModelMatrices[objectId] = currentModel;
+    }
+
+    /// <summary>
+    /// Collects renderables and lights from the scene for the given camera.
+    /// Components receive camera info for LOD/culling decisions.
+    /// </summary>
+    public static (List<IRenderable> renderables, List<IRenderableLight> lights) CollectRenderables(Scene scene, Camera camera)
+    {
+        var renderables = new List<IRenderable>();
+        var lights = new List<IRenderableLight>();
+        scene.CollectRenderables(camera, renderables, lights);
+        return (renderables, lights);
     }
 
     public virtual void Render(Camera camera, in RenderingData data)

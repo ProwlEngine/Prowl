@@ -28,7 +28,7 @@ public class MeshRenderer : MonoBehaviour
         set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
     }
 
-    public override void OnRenderCollect()
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var mesh = Mesh.Res;
         if (mesh == null || Materials.Count == 0) return;
@@ -47,7 +47,7 @@ public class MeshRenderer : MonoBehaviour
             PropertyState props = new();
             props.SetInt("_ObjectID", InstanceID);
 
-            GameObject.Scene.PushRenderable(new MeshRenderable(
+            renderables.Add(new MeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,
                 GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
         }

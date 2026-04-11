@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.Runtime.GUI;
@@ -102,7 +103,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
 
     }
 
-    public override void OnRenderCollect()
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         // Push this canvas as a renderable
         if (_renderTexture.IsValid() && (Material.Res?.IsValid() ?? false) && _quadMesh.IsValid())
@@ -110,7 +111,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
             _properties.Clear();
             _properties.SetInt("_ObjectID", InstanceID);
             _properties.SetTexture("_MainTex", _renderTexture.MainTexture);
-            GameObject.Scene.PushRenderable(this);
+            renderables.Add(this);
         }
     }
 

@@ -52,6 +52,8 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_skybox;
     private static Material s_gizmo;
     private static Material s_deferredCompose;
+    private static Mesh s_gridMesh;
+    private static Material s_gridMaterial;
 
     public static DefaultRenderPipeline Default { get; } = new();
 
@@ -153,7 +155,6 @@ public class DefaultRenderPipeline : RenderPipeline
         foreach (var effects in effectsByStage.Values)
             allEffects.AddRange(effects);
 
-        IReadOnlyList<IRenderableLight> lights = camera.GameObject.Scene.Lights;
         RenderTexture target = camera.UpdateRenderData();
 
         // =======================================================
@@ -167,8 +168,22 @@ public class DefaultRenderPipeline : RenderPipeline
         SetupGlobalUniforms(css);
 
         // =======================================================
-        // 3. Cull Renderables based on Snapshot data
-        IReadOnlyList<IRenderable> renderables = camera.GameObject.Scene.Renderables;
+        // 3. Collect and Cull Renderables
+        var (renderables, lights) = CollectRenderables(camera.GameObject.Scene, camera);
+
+        // Inject editor grid as a renderable if requested
+        if (data.DisplayGrid)
+        {
+            EnsureGridResources();
+            if (s_gridMesh != null && s_gridMaterial != null)
+            {
+                float cx = MathF.Round(css.CameraPosition.X);
+                float cz = MathF.Round(css.CameraPosition.Z);
+                var gridTransform = Float4x4.CreateTranslation(new Float3(cx, 0, cz));
+                renderables.Add(new MeshRenderable(s_gridMesh, s_gridMaterial, gridTransform, 0));
+            }
+        }
+
         HashSet<int> culledRenderableIndices = CullRenderables(renderables, css.WorldFrustum, css.CullingMask);
 
         // =======================================================
@@ -211,7 +226,7 @@ public class DefaultRenderPipeline : RenderPipeline
                     ClearFlags.Color | ClearFlags.Depth
                 );
 
-                RenderSkybox(css);
+                RenderSkybox(css, lights);
                 break;
 
             case CameraClearFlags.SolidColor:
@@ -389,8 +404,8 @@ public class DefaultRenderPipeline : RenderPipeline
         }
 
         // =======================================================
-        // 12. Render Gizmos (only when enabled — editor scene view, not previews)
-        if (data.DisplayGizmo)
+        // 12. Render Gizmos (only when enabled — editor scene view)
+        if (data.DisplayGizmos)
             RenderGizmos(css);
 
         // =======================================================
@@ -431,16 +446,46 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private void RenderSkybox(CameraSnapshot css)
+    private void RenderSkybox(CameraSnapshot css, List<IRenderableLight> lights)
     {
         // Set sun direction for skybox from scene's directional light
-        var sun = css.Scene.Lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
+        var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
         if (sun != null)
         {
             s_skybox.SetVector("_SunDir", sun.GetLightDirection());
         }
 
         DrawMeshNow(s_skyDome, s_skybox);
+    }
+
+    private static void EnsureGridResources()
+    {
+        if (s_gridMesh == null)
+        {
+            const float e = 500f;
+            s_gridMesh = new Mesh();
+            s_gridMesh.Vertices = [new(-e, 0, -e), new(e, 0, -e), new(e, 0, e), new(-e, 0, e)];
+            s_gridMesh.UV = [new(-e, -e), new(e, -e), new(e, e), new(-e, e)];
+            s_gridMesh.Normals = [Float3.UnitY, Float3.UnitY, Float3.UnitY, Float3.UnitY];
+            s_gridMesh.Indices = [0, 2, 1, 0, 3, 2];
+            s_gridMesh.RecalculateBounds();
+            s_gridMesh.Upload();
+        }
+
+        if (s_gridMaterial == null)
+        {
+            var shader = Shader.LoadDefault(DefaultShader.Grid);
+            if (shader != null)
+            {
+                s_gridMaterial = new Material(shader);
+                s_gridMaterial.SetColor("_GridColor", new Color(0.5f, 0.5f, 0.5f, 0.3f));
+                s_gridMaterial.SetFloat("_PrimaryGridSize", 1f);
+                s_gridMaterial.SetFloat("_SecondaryGridSize", 0.25f);
+                s_gridMaterial.SetFloat("_LineWidth", 0.02f);
+                s_gridMaterial.SetFloat("_Falloff", 1.5f);
+                s_gridMaterial.SetFloat("_MaxDist", 500f);
+            }
+        }
     }
 
     private void RenderGizmos(CameraSnapshot css)

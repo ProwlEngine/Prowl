@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -32,9 +34,9 @@ public class PointLight : Light
     private Float4x4[] _shadowMatrices = new Float4x4[6]; // View-projection for each face
     private bool _shadowsValid = false;
 
-    public override void OnRenderCollect()
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        GameObject.Scene.PushLight(this);
+        lights.Add(this);
     }
 
     public override void DrawGizmos()

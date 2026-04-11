@@ -1,11 +1,14 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 using Prowl.Editor.Panels;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Terrain;
 using Prowl.Vector;
 
 namespace Prowl.Editor;
@@ -82,6 +85,31 @@ internal static class DefaultGameObjectCreators
         ps.Initial.StartLifetime = new MinMaxCurve(2f);
         ps.Initial.StartSpeed = new MinMaxCurve(3f);
         ps.Initial.StartSize = new MinMaxCurve(0.2f);
+    }
+
+    // ---- Terrain ----
+
+    [CreateGameObjectMenu("3D Object/Terrain", Icon = EditorIcons.Mountain, Order = 15, Separator = true)]
+    static void CreateTerrain(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Terrain", parent);
+        var terrain = go.AddComponent<TerrainComponent>();
+        terrain.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Terrain));
+        go.AddComponent<TerrainCollider>();
+
+        // Create TerrainData instance, assign it, then persist as an asset
+        var terrainData = new TerrainData();
+        terrain.Data = new AssetRef<TerrainData>(terrainData);
+
+        // Save as asset file — this assigns a GUID to the instance,
+        // which the AssetRef picks up automatically
+        var db = EditorAssetDatabase.Instance;
+        if (db != null)
+        {
+            string name = AssetCreateMenu.FindUniqueName(
+                Project.Current.AssetsPath, "New Terrain Data", ".terraindata");
+            db.CreateAsset(terrainData, name);
+        }
     }
 
     // ---- Helper ----

@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -25,9 +27,9 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public ShadowQuality ShadowQuality = ShadowQuality.Hard;
 
 
-    public override void OnRenderCollect()
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        GameObject.Scene.PushLight(this);
+        lights.Add(this);
     }
 
     public virtual int GetLayer() => GameObject.LayerIndex;

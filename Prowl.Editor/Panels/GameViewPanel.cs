@@ -108,9 +108,7 @@ public class GameViewPanel : DockPanel
 
         EnsureRT(rtW, rtH);
 
-        // Collect renderables and render all scene cameras into the RT
-        scene.RenderCollect();
-
+        // Renderables are now collected inside pipeline.Render() per-camera with context
         var cameras = scene.ActiveObjects
             .SelectMany(go => go.GetComponentsInChildren<Camera>())
             .Where(c => !c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave))

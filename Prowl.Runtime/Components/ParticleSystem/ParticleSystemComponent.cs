@@ -147,7 +147,7 @@ public class ParticleSystemComponent : MonoBehaviour
         }
     }
 
-    public override void OnRenderCollect()
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         if (_particles.Count <= 0 || Material.Res == null || _quadMesh == null) return;
 
@@ -158,12 +158,12 @@ public class ParticleSystemComponent : MonoBehaviour
         _properties.Clear();
         _properties.SetInt("_ObjectID", InstanceID);
 
-        // Draw instanced particles
-        Graphics.DrawMeshInstanced(
-            GameObject.Scene,
+        // Create batched instanced renderables
+        InstancedMeshRenderable.CreateBatched(
+            renderables,
             _quadMesh,
-            _transforms,
             Material.Res,
+            _transforms,
             Transform.Position,
             _colors,
             _customData,

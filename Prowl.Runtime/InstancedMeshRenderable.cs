@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -95,5 +97,47 @@ public class InstancedMeshRenderable : IRenderable
     {
         isRenderable = _instanceData.Length > 0 && _mesh != null && _material != null;
         bounds = _bounds;
+    }
+
+    /// <summary>
+    /// Creates batched instanced renderables from transform/color/custom arrays.
+    /// Automatically splits into batches of maxBatchSize for GPU limits.
+    /// </summary>
+    public static void CreateBatched(
+        List<IRenderable> output,
+        Mesh mesh,
+        Material material,
+        Float4x4[] transforms,
+        Float3 sortPosition,
+        Float4[]? colors = null,
+        Float4[]? customData = null,
+        int layer = 0,
+        PropertyState? properties = null,
+        AABB? bounds = null,
+        int maxBatchSize = 1023)
+    {
+        if (mesh == null || material == null || transforms == null || transforms.Length == 0) return;
+
+        int remaining = transforms.Length;
+        int offset = 0;
+
+        while (remaining > 0)
+        {
+            int batchSize = Maths.Min(remaining, maxBatchSize);
+
+            var instanceData = new InstanceData[batchSize];
+            for (int i = 0; i < batchSize; i++)
+            {
+                int idx = offset + i;
+                Float4 color = colors != null && idx < colors.Length ? colors[idx] : new Float4(1, 1, 1, 1);
+                Float4 custom = customData != null && idx < customData.Length ? customData[idx] : Float4.Zero;
+                instanceData[i] = new InstanceData(transforms[idx], color, custom);
+            }
+
+            output.Add(new InstancedMeshRenderable(mesh, material, instanceData, sortPosition, layer, properties, bounds));
+
+            remaining -= batchSize;
+            offset += batchSize;
+        }
     }
 }

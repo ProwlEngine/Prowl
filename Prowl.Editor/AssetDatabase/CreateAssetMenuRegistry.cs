@@ -99,6 +99,35 @@ public static class CreateAssetMenuRegistry
     }
 
     /// <summary>
+    /// Create an asset of a specific type on disk. Used programmatically (e.g. Terrain auto-setup).
+    /// Returns the relative path on success, null on failure.
+    /// </summary>
+    public static string? CreateAssetByType<T>(string relativeFolder, string baseName, string extension) where T : new()
+    {
+        string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        string name = AssetCreateMenu.FindUniqueName(absFolder, baseName, extension);
+        string filePath = Path.Combine(absFolder, name);
+
+        try
+        {
+            var instance = new T();
+            var echo = Serializer.Serialize(typeof(object), instance);
+            if (echo != null)
+                File.WriteAllText(filePath, echo.WriteToString());
+
+            Debug.Log($"Created {typeof(T).Name}: {name}");
+            return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to create {typeof(T).Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Create an asset file on disk for the given registry entry.
     /// Returns the relative path on success, null on failure.
     /// </summary>
