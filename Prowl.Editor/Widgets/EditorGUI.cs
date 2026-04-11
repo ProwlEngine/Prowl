@@ -282,7 +282,7 @@ public static class EditorGUI
                     .Width(UnitValue.Stretch())
                     .Height(EditorTheme.RowHeight)
                     .FontSize(FontSz)
-                    .TextField(value, Font!
+                    .TextField(value, Font!,
                         onChange: v => userCallback?.Invoke(v),
                         textColor: EditorTheme.Ink500,
                         placeholder: "",
