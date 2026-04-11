@@ -22,10 +22,10 @@ public static class EditorGUI
 
     // Char filters for numeric inputs
     private static readonly Func<char, string, bool> IntFilter = (c, current) =>
-        char.IsDigit(c) || (c == '-' && current.Length == 0);
+        char.IsDigit(c) || (c == '-' && !current.Contains('-'));
 
     private static readonly Func<char, string, bool> FloatFilter = (c, current) =>
-        char.IsDigit(c) || (c == '-' && current.Length == 0) || (c == '.' && !current.Contains('.'));
+        char.IsDigit(c) || (c == '-' && !current.Contains('-')) || (c == '.' && !current.Contains('.'));
 
     private static ElementBuilder.TextInputSettings MakeNumericSettings(Func<char, string, bool> filter)
     {
