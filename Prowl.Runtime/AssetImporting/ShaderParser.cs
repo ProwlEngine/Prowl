@@ -175,7 +175,8 @@ public static class ShaderParser
     {
         shader = null;
 
-        // Strip all comments before tokenization
+        // Strip BOM and comments before tokenization
+        input = RemoveBom(input);
         input = StripComments(input);
 
         Tokenizer<ShaderToken> tokenizer = CreateTokenizer(input);
@@ -314,10 +315,15 @@ public static class ShaderParser
 
     private static string RemoveBom(string content)
     {
-        // Remove BOM if present
-        if (content.Length > 0 && content[0] == '\uFEFF')
-            return content.Substring(1);
-        return content;
+        // Strip all leading BOM characters (handles double/triple BOM from editor tools)
+        content = content.TrimStart('\uFEFF');
+
+        // Replace non-ASCII characters with spaces (GLSL compilers only accept ASCII).
+        // This handles em-dashes, smart quotes, etc. that editors may insert into comments.
+        var sb = new StringBuilder(content.Length);
+        foreach (char c in content)
+            sb.Append(c > 127 ? ' ' : c);
+        return sb.ToString();
     }
 
     private static bool ExtractShaderSections(string sourceFilePath, string program, int startLine,
