@@ -530,6 +530,9 @@ public class SceneViewPanel : DockPanel
 
         bool blockPicking = Input.GetMouseButton(1) || Input.GetMouseButton(2); // Don't pick while camera moving
 
+        // Snapping: Ctrl key toggles snap mode on the gizmo (draws increment guides for rotation)
+        _transformGizmo.Snapping = Input.GetKey(KeyCode.ControlLeft) || Input.GetKey(KeyCode.ControlRight);
+
         var result = _transformGizmo.Update(ray, mouseAbs, blockPicking);
 
         // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
