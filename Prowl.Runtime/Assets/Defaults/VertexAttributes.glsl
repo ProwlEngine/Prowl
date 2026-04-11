@@ -46,7 +46,7 @@
 	#endif
 
 		const int MAX_BONE_INFLUENCE = 4;
-		const int MAX_BONES = 100;
+		const int MAX_BONES = 150;
 		uniform mat4 boneTransforms[MAX_BONES];
 
 		// Skinning helper function
