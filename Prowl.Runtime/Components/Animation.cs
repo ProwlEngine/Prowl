@@ -13,7 +13,8 @@ namespace Prowl.Runtime;
 /// <summary>
 /// Plays AnimationClips by driving bone Transforms in the hierarchy.
 /// Simple legacy-style animation — one clip at a time.
-/// Bones are found by name in the child Transform hierarchy.
+/// Bones are found by path from the hierarchy root (e.g. "Armature/Hips/Spine").
+/// Paths match those stored in AnimationClip.AnimBone.BoneName.
 /// </summary>
 [AddComponentMenu("Animation/Animation")]
 public class AnimationComponent : MonoBehaviour
@@ -39,7 +40,7 @@ public class AnimationComponent : MonoBehaviour
     /// <summary>The currently playing clip.</summary>
     [NonSerialized] public AnimationClip? CurrentClip;
 
-    // Bone name → Transform lookup (cached on first use)
+    // Bone path → Transform lookup (cached on first use)
     [System.NonSerialized] private Dictionary<string, Transform>? _boneCache;
 
     public override void OnEnable()
@@ -153,16 +154,26 @@ public class AnimationComponent : MonoBehaviour
     {
         if (_boneCache != null) return;
         _boneCache = new Dictionary<string, Transform>();
-        CacheBonesRecursive(Transform);
+
+        // Get hierarchy root (walk up to topmost parent)
+        Transform root = Transform;
+        while (root.Parent != null) root = root.Parent;
+
+        // Cache all descendants by their relative path from root (excluding root's name)
+        foreach (var child in root.GameObject.Children)
+            CacheBonesRecursive(child.Transform, "");
     }
 
-    private void CacheBonesRecursive(Transform t)
+    private void CacheBonesRecursive(Transform t, string parentPath)
     {
-        string name = t.GameObject.Name;
-        // Don't overwrite — first occurrence wins (handles duplicate names by preferring higher in hierarchy)
-        _boneCache.TryAdd(name, t);
+        string path = string.IsNullOrEmpty(parentPath)
+            ? t.GameObject.Name
+            : parentPath + "/" + t.GameObject.Name;
+
+        // Don't overwrite — first occurrence wins
+        _boneCache.TryAdd(path, t);
 
         foreach (var child in t.GameObject.Children)
-            CacheBonesRecursive(child.Transform);
+            CacheBonesRecursive(child.Transform, path);
     }
 }

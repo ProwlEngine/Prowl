@@ -13,7 +13,8 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Renders a skinned mesh deformed by bone Transforms.
-/// Bones are child GameObjects — their Transforms drive the skinning.
+/// Bones are referenced by path (relative to this GO's root), matching Unity's convention.
+/// Paths like "Armature/Hips/Spine" are resolved via Transform.Find().
 /// Supports multiple materials via submeshes.
 /// </summary>
 [AddComponentMenu("Rendering/Skinned Mesh Renderer")]
@@ -25,19 +26,16 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// <summary>Materials array — one per submesh. If fewer materials than submeshes, last material is reused.</summary>
     public List<AssetRef<Material>> Materials = new();
 
-    /// <summary>
-    /// The root bone Transform. Used as the reference frame for skinning.
-    /// Typically the top of the skeleton hierarchy (e.g., "Hips" or "Armature").
-    /// </summary>
+    /// <summary>Path to the root bone, relative to this GO's hierarchy root.</summary>
     [SerializeField]
-    private Guid _rootBoneId;
+    public string? RootBonePath;
 
     /// <summary>
-    /// All bone Transforms, indexed to match Mesh.BindPoses and Mesh.BoneNames.
-    /// Set during import — each entry corresponds to one joint.
+    /// Paths to all bone Transforms, indexed to match Mesh.BindPoses.
+    /// Each path is relative to this GO's hierarchy root (e.g. "Armature/Hips/Spine").
     /// </summary>
     [SerializeField]
-    private Guid[] _boneIds;
+    public string[]? BonePaths;
 
     public Color MainColor = Color.White;
 
@@ -47,28 +45,48 @@ public class SkinnedMeshRenderer : MonoBehaviour
     [System.NonSerialized] private Float4x4[]? _skinMatrices;
     [System.NonSerialized] private bool _resolved;
 
-    /// <summary>Get/set the root bone Transform.</summary>
+    /// <summary>Get the resolved root bone Transform.</summary>
     public Transform? RootBone
     {
         get { Resolve(); return _rootBone; }
-        set { _rootBone = value; _rootBoneId = value?.GameObject?.Identifier ?? Guid.Empty; }
     }
 
-    /// <summary>Get/set the bone Transforms array.</summary>
+    /// <summary>Get the resolved bone Transforms array.</summary>
     public Transform?[]? Bones
     {
         get { Resolve(); return _bones; }
-        set
+    }
+
+    /// <summary>
+    /// Set bone references from live Transforms. Computes paths relative to the hierarchy root.
+    /// Call this during import when you have the live GO hierarchy.
+    /// </summary>
+    public void SetBones(Transform[] boneTransforms, Transform? rootBone)
+    {
+        Transform hierarchyRoot = GetHierarchyRoot();
+
+        BonePaths = new string[boneTransforms.Length];
+        for (int i = 0; i < boneTransforms.Length; i++)
         {
-            _bones = value;
-            if (value != null)
-            {
-                _boneIds = new Guid[value.Length];
-                for (int i = 0; i < value.Length; i++)
-                    _boneIds[i] = value[i]?.GameObject?.Identifier ?? Guid.Empty;
-            }
-            else _boneIds = null;
+            if (boneTransforms[i] != null)
+                BonePaths[i] = Transform.GetRelativePath(boneTransforms[i], hierarchyRoot);
         }
+
+        if (rootBone != null)
+            RootBonePath = Transform.GetRelativePath(rootBone, hierarchyRoot);
+
+        // Also cache resolved references immediately
+        _bones = new Transform?[boneTransforms.Length];
+        Array.Copy(boneTransforms, _bones, boneTransforms.Length);
+        _rootBone = rootBone;
+        _resolved = true;
+    }
+
+    private Transform GetHierarchyRoot()
+    {
+        Transform root = Transform;
+        while (root.Parent != null) root = root.Parent;
+        return root;
     }
 
     private void Resolve()
@@ -76,34 +94,22 @@ public class SkinnedMeshRenderer : MonoBehaviour
         if (_resolved) return;
         _resolved = true;
 
-        // Resolve root bone by identifier
-        if (_rootBoneId != Guid.Empty && GameObject?.Scene != null)
-        {
-            var rootGo = FindByIdentifier(_rootBoneId);
-            _rootBone = rootGo?.Transform;
-        }
+        Transform hierarchyRoot = GetHierarchyRoot();
 
-        // Resolve bone array
-        if (_boneIds != null)
+        // Resolve root bone by path
+        if (!string.IsNullOrEmpty(RootBonePath))
+            _rootBone = hierarchyRoot.Find(RootBonePath);
+
+        // Resolve bone array by paths
+        if (BonePaths != null)
         {
-            _bones = new Transform?[_boneIds.Length];
-            for (int i = 0; i < _boneIds.Length; i++)
+            _bones = new Transform?[BonePaths.Length];
+            for (int i = 0; i < BonePaths.Length; i++)
             {
-                if (_boneIds[i] != Guid.Empty)
-                {
-                    var boneGo = FindByIdentifier(_boneIds[i]);
-                    _bones[i] = boneGo?.Transform;
-                }
+                if (!string.IsNullOrEmpty(BonePaths[i]))
+                    _bones[i] = hierarchyRoot.Find(BonePaths[i]);
             }
         }
-    }
-
-    private GameObject? FindByIdentifier(Guid id)
-    {
-        // Search in the scene and in this GO's hierarchy
-        var root = GameObject;
-        while (root.Parent != null) root = root.Parent;
-        return root.FindChildByIdentifier(id);
     }
 
     public override void OnEnable()

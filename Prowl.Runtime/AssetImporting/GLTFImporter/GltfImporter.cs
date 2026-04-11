@@ -257,14 +257,14 @@ public class GltfImporter
                     var jointNodes = skinJointNodeIndices[skinIdx];
                     var ibms = skinIBMs[skinIdx];
 
-                    // Populate mesh bind poses and bone names
+                    // Populate mesh bind poses and bone paths (relative to hierarchy root)
                     mesh.BindPoses = new Float4x4[jointNodes.Count];
                     mesh.BoneNames = new string[jointNodes.Count];
                     for (int j = 0; j < jointNodes.Count; j++)
                     {
                         int jointNodeIdx = jointNodes[j];
                         mesh.BoneNames[j] = nodeGOs.TryGetValue(jointNodeIdx, out var jointGO)
-                            ? jointGO.Name
+                            ? Transform.GetRelativePath(jointGO.Transform, rootGO.Transform)
                             : (root.Nodes[jointNodeIdx].Name ?? $"Node_{jointNodeIdx}");
                         mesh.BindPoses[j] = (j < ibms.Length) ? ibms[j] : Float4x4.Identity;
                     }
@@ -273,21 +273,24 @@ public class GltfImporter
                     smr.SharedMesh = new AssetRef<Mesh>(mesh);
                     smr.Materials = matRefs;
 
-                    // Set bone transforms
-                    var boneTransforms = new Transform?[jointNodes.Count];
+                    // Resolve bone transforms
+                    var boneTransforms = new Transform[jointNodes.Count];
                     for (int j = 0; j < jointNodes.Count; j++)
                     {
                         if (nodeGOs.TryGetValue(jointNodes[j], out var boneGO))
                             boneTransforms[j] = boneGO.Transform;
                     }
-                    smr.Bones = boneTransforms;
 
-                    // Set root bone
+                    // Resolve root bone
+                    Transform? rootBoneTransform = null;
                     int? rootBoneNodeIdx = skinRootNode.GetValueOrDefault(skinIdx);
                     if (rootBoneNodeIdx.HasValue && nodeGOs.TryGetValue(rootBoneNodeIdx.Value, out var rootBoneGO))
-                        smr.RootBone = rootBoneGO.Transform;
+                        rootBoneTransform = rootBoneGO.Transform;
                     else if (jointNodes.Count > 0 && nodeGOs.TryGetValue(jointNodes[0], out var firstJointGO))
-                        smr.RootBone = firstJointGO.Transform;
+                        rootBoneTransform = firstJointGO.Transform;
+
+                    // SetBones computes paths relative to hierarchy root
+                    smr.SetBones(boneTransforms, rootBoneTransform);
                 }
                 else
                 {
@@ -299,8 +302,8 @@ public class GltfImporter
             }
         }
 
-        // 7. Load animations
-        var animations = LoadAnimations(gltf, root, scale);
+        // 7. Load animations (pass nodeGOs + rootGO so bone paths can be computed)
+        var animations = LoadAnimations(gltf, root, scale, nodeGOs, rootGO);
 
         // 8. Attach AnimationComponent to root if there are clips
         if (animations.Count > 0)
@@ -750,10 +753,16 @@ public class GltfImporter
     //  Animations
     // ================================================================
 
-    private List<AnimationClip> LoadAnimations(GltfFile gltf, GltfRoot root, float scale)
+    private List<AnimationClip> LoadAnimations(GltfFile gltf, GltfRoot root, float scale,
+        Dictionary<int, GameObject> nodeGOs, GameObject rootGO)
     {
         var result = new List<AnimationClip>();
         if (root.Animations == null) return result;
+
+        // Build node index → relative path map (paths relative to rootGO, excluding root name)
+        var nodePathMap = new Dictionary<int, string>();
+        foreach (var (nodeIdx, go) in nodeGOs)
+            nodePathMap[nodeIdx] = Transform.GetRelativePath(go.Transform, rootGO.Transform);
 
         foreach (var ganim in root.Animations)
         {
@@ -770,10 +779,13 @@ public class GltfImporter
 
                 if (!boneMap.TryGetValue(nodeIdx, out var animBone))
                 {
-                    string nodeName = root.Nodes != null && nodeIdx < root.Nodes.Count
-                        ? (root.Nodes[nodeIdx].Name ?? $"Node_{nodeIdx}")
-                        : $"Node_{nodeIdx}";
-                    animBone = new AnimationClip.AnimBone { BoneName = nodeName };
+                    // Use path from rootGO as the bone name
+                    string bonePath = nodePathMap.TryGetValue(nodeIdx, out var p)
+                        ? p
+                        : (root.Nodes != null && nodeIdx < root.Nodes.Count
+                            ? (root.Nodes[nodeIdx].Name ?? $"Node_{nodeIdx}")
+                            : $"Node_{nodeIdx}");
+                    animBone = new AnimationClip.AnimBone { BoneName = bonePath };
                     boneMap[nodeIdx] = animBone;
                 }
 

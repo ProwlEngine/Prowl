@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Runtime;
@@ -254,6 +255,29 @@ public class Transform
                 break;
         }
         return path;
+    }
+
+    /// <summary>
+    /// Gets the path from root to target, excluding root's own name.
+    /// E.g. if root is "Model" and target is "Model/Armature/Hips/Spine",
+    /// returns "Armature/Hips/Spine". Compatible with Transform.Find().
+    /// </summary>
+    public static string GetRelativePath(Transform target, Transform root)
+    {
+        if (target == root) return "";
+
+        var parts = new List<string>();
+        Transform current = target;
+        while (current != null && current != root)
+        {
+            parts.Add(current.GameObject.Name);
+            current = current.Parent;
+        }
+
+        if (current != root) return target.GameObject.Name; // fallback: not a descendant
+
+        parts.Reverse();
+        return string.Join("/", parts);
     }
 
     public void Translate(Float3 translation, Transform? relativeTo = null)
