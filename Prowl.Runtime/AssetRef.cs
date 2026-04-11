@@ -46,10 +46,10 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     /// <summary>Returns the cached instance without attempting to load. May be null.</summary>
     public T? ResWeak => instance.IsValid() ? instance : null;
 
-    /// <summary>The asset GUID. Setting this clears the cached instance if it doesn't match.</summary>
+    /// <summary>The asset GUID. Prefers the live instance's AssetID when available.</summary>
     public Guid AssetID
     {
-        get => assetID;
+        get => (instance.IsValid() && instance.AssetID != Guid.Empty) ? instance.AssetID : assetID;
         set
         {
             assetID = value;
@@ -58,8 +58,8 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         }
     }
 
-    public bool IsExplicitNull => instance == null && assetID == Guid.Empty;
-    public bool IsRuntimeResource => instance != null && assetID == Guid.Empty;
+    public bool IsExplicitNull => instance == null && AssetID == Guid.Empty;
+    public bool IsRuntimeResource => instance != null && AssetID == Guid.Empty;
     public string Name => instance != null ? (instance.IsNotValid() ? "DESTROYED" : instance.Name) : "None";
     public Type InstanceType => typeof(T);
 
@@ -109,15 +109,15 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
-        compound.Add("AssetID", new EchoObject(assetID.ToString()));
+        Guid id = AssetID; // Uses live instance ID when available
 
-        if (assetID != Guid.Empty && ctx is DependencySerializationContext tracker)
-        {
-            tracker.Dependencies.Add(assetID);
-        }
+        compound.Add("AssetID", new EchoObject(id.ToString()));
+
+        if (id != Guid.Empty && ctx is DependencySerializationContext tracker)
+            tracker.Dependencies.Add(id);
 
         // Only serialize the instance inline if it's a runtime resource (no asset ID)
-        if (assetID == Guid.Empty && instance != null)
+        if (id == Guid.Empty && instance != null)
             compound.Add("Instance", Echo.Serializer.Serialize(typeof(T), instance, ctx));
     }
 
