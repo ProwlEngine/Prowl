@@ -104,7 +104,7 @@ public sealed class MyGame : Game
         }
 
         // Import the model
-        ModelImporter importer = new ModelImporter();
+        /*ModelImporter importer = new ModelImporter();
         Model? model = importer.Import(new System.IO.FileInfo(fbxPath));
         if (model.IsNotValid())
         {
@@ -121,8 +121,8 @@ public sealed class MyGame : Game
         bananaManGO.Transform.LocalScale = new Float3(0.01f, 0.01f, 0.01f); // Models are often large
 
         // Add AnimatedModelRenderer
-        ModelRenderer renderer = bananaManGO.AddComponent<ModelRenderer>();
-        renderer.Model = model;
+        MeshRenderer renderer = bananaManGO.AddComponent<MeshRenderer>();
+        renderer.Mesh = model;
 
         // Set up skeleton and animation if available
         if (model.Animations.Count > 0)
@@ -140,7 +140,7 @@ public sealed class MyGame : Game
         else
         {
             Debug.LogWarning("No animations found in BananaMan.fbx - will display static model");
-        }
+        }*/
 
         scene.Add(bananaManGO);
     }
