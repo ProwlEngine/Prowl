@@ -59,7 +59,8 @@ public class ProjectSettingsPanel : DockPanel
                     string icon = string.IsNullOrEmpty(entry.Icon) ? EditorIcons.Gear : entry.Icon;
 
                     paper.Box($"ps_cat_{i}")
-                        .Height(30).ChildLeft(8).Rounded(3).Margin(0,0,0,new UnitValue(Units.Pixels, EditorTheme.VerticalNavbarSpacing))
+                        .Height(30).ChildLeft(8).Rounded(3)
+                        .Margin(0,0,0,EditorTheme.VerticalNavbarSpacing)
                         .BackgroundColor(isSelected ? EditorTheme.Purple400 : Color.Transparent)
                         .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
                         .Text($" {icon}  {entry.Name}", font)
