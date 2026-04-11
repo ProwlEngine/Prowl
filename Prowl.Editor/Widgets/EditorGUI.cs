@@ -244,6 +244,7 @@ public static class EditorGUI
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
             .RowBetween(6)
+            .Margin(UnitValue.Auto,2)
             .Enter())
         {
             if (Font != null && !string.IsNullOrEmpty(label))
@@ -265,8 +266,9 @@ public static class EditorGUI
                 .TabIndex(0)
                 .Enter())
             {
+                float yOffset = (EditorTheme.RowHeight - FontSz) / 2.0f;
                 paper.Box($"{id}_tf")
-                    .Margin(4, UnitValue.Stretch())
+                    .Margin(4, yOffset)
                     .HookToParent()
                     .IsNotInteractable()
                     .Width(UnitValue.Stretch())
