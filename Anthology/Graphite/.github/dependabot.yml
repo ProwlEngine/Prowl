@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: monthly
     target-branch: main
+    groups:
+      xunit:
+        patterns:
+          - "xunit*"
+          - "Xunit*"
 
   - package-ecosystem: github-actions
     directory: /
