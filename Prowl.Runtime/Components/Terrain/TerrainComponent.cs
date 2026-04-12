@@ -67,9 +67,11 @@ public class TerrainComponent : MonoBehaviour
     [NonSerialized] private Material? _grassMaterialInstance;
     [NonSerialized] private Guid _lastGrassMaterialGuid;
 
-    // Cached default materials (avoid LoadDefault every frame)
+    // Cached default materials and textures (avoid LoadDefault every frame)
     [NonSerialized] private static Material? s_defaultTerrainMat;
     [NonSerialized] private static Material? s_defaultGrassMat;
+    [NonSerialized] private static Texture2D? s_defaultWhite;
+    [NonSerialized] private static Texture2D? s_defaultNormal;
 
     #endregion
 
@@ -168,8 +170,10 @@ public class TerrainComponent : MonoBehaviour
             var layer = terrainData.Layers[i];
             string prefix = $"_Layer{i}";
 
-            _properties.SetTexture(prefix, layer.Albedo.Res ?? Texture2D.White);
-            _properties.SetTexture(prefix + "Normal", layer.NormalMap.Res ?? Texture2D.Normal);
+            s_defaultWhite ??= Texture2D.LoadDefault(DefaultTexture.White);
+            s_defaultNormal ??= Texture2D.LoadDefault(DefaultTexture.Normal);
+            _properties.SetTexture(prefix, layer.Albedo.Res ?? s_defaultWhite);
+            _properties.SetTexture(prefix + "Normal", layer.NormalMap.Res ?? s_defaultNormal);
 
             _properties.SetFloat(prefix + "Tiling", layer.Tiling);
             _properties.SetFloat(prefix + "Roughness", layer.Roughness);
@@ -240,7 +244,7 @@ public class TerrainComponent : MonoBehaviour
 
         var sourceGuid = Material.AssetID;
 
-        if (_materialInstance == null || _lastMaterialGuid != sourceGuid)
+        if (_materialInstance == null || (_lastMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
         {
             // Deep copy via serialization roundtrip
             var echo = Serializer.Serialize(sourceMat);
@@ -265,7 +269,7 @@ public class TerrainComponent : MonoBehaviour
 
         var sourceGuid = GrassMaterial.AssetID;
 
-        if (_grassMaterialInstance == null || _lastGrassMaterialGuid != sourceGuid)
+        if (_grassMaterialInstance == null || (_lastGrassMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
         {
             var echo = Serializer.Serialize(sourceMat);
             _grassMaterialInstance = Serializer.Deserialize<Material>(echo);

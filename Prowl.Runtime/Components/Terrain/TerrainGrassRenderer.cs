@@ -23,6 +23,8 @@ internal class TerrainGrassRenderer
 
     private Mesh? _quadMesh;
     private static Material? s_defaultStandardMat;
+    private static readonly PropertyState s_emptyProps = new();
+    private static Texture2D? s_defaultWhite;
 
     // Cache key = protoIndex * maxPatches + patchX + patchZ * patchCountX
     private readonly Dictionary<long, CachedPatch> _patchCache = [];
@@ -45,6 +47,7 @@ internal class TerrainGrassRenderer
         public Float4x4[] Transforms;
         public Float4[] Colors;
         public Float4[] CustomData;
+        public Rendering.InstanceData[] PrebuiltInstances; // cached to avoid per-frame allocation
         public int LastUsedGeneration;
         public AABB Bounds;
     }
@@ -125,7 +128,8 @@ internal class TerrainGrassRenderer
             else
             {
                 renderMesh = _quadMesh!;
-                var tex = proto.Texture.Res ?? Texture2D.White;
+                s_defaultWhite ??= Texture2D.LoadDefault(DefaultTexture.White);
+                var tex = proto.Texture.Res ?? s_defaultWhite;
                 baseMaterial.SetTexture("_MainTex", tex);
                 // Pass billboard flag to shader via uniform
                 baseMaterial.SetFloat("_Billboard", proto.RenderMode == DetailRenderMode.TextureBillboard ? 1f : 0f);
@@ -154,15 +158,15 @@ internal class TerrainGrassRenderer
                     cached.LastUsedGeneration = _cacheGeneration;
                     _patchCache[patchKey] = cached;
 
-                    if (cached.Transforms.Length == 0) continue;
+                    if (cached.PrebuiltInstances == null || cached.PrebuiltInstances.Length == 0) continue;
 
-                    InstancedMeshRenderable.CreateBatched(
-                        renderables, renderMesh, renderMat,
-                        cached.Transforms,
+                    // Use prebuilt InstanceData directly — no per-frame allocation
+                    renderables.Add(new InstancedMeshRenderable(
+                        renderMesh, renderMat, cached.PrebuiltInstances,
                         worldPatchCenter,
-                        cached.Colors, cached.CustomData,
-                        layer: terrain.GameObject.LayerIndex,
-                        bounds: cached.Bounds);
+                        terrain.GameObject.LayerIndex,
+                        s_emptyProps,
+                        cached.Bounds));
                 }
             }
         }
@@ -281,9 +285,22 @@ internal class TerrainGrassRenderer
             bmax = new Float3(MathF.Max(bmax.X, w.X), MathF.Max(bmax.Y, w.Y), MathF.Max(bmax.Z, w.Z));
         }
 
+        // Prebuild InstanceData so we don't allocate per-frame
+        var tArr = transforms.ToArray();
+        var cArr = colors.ToArray();
+        var dArr = customData.ToArray();
+        var instances = new Rendering.InstanceData[tArr.Length];
+        for (int i = 0; i < instances.Length; i++)
+        {
+            Float4 col = i < cArr.Length ? cArr[i] : new Float4(1, 1, 1, 1);
+            Float4 cust = i < dArr.Length ? dArr[i] : Float4.Zero;
+            instances[i] = new Rendering.InstanceData(tArr[i], col, cust);
+        }
+
         return new CachedPatch
         {
-            Transforms = [.. transforms], Colors = [.. colors], CustomData = [.. customData],
+            Transforms = tArr, Colors = cArr, CustomData = dArr,
+            PrebuiltInstances = instances,
             Bounds = new AABB(bmin, bmax), LastUsedGeneration = _cacheGeneration,
         };
     }

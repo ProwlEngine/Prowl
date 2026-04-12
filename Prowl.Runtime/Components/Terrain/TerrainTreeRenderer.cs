@@ -14,7 +14,9 @@ internal class TerrainTreeRenderer
 {
     private readonly List<Float4x4> _transforms = [];
     private readonly List<Float4> _colors = [];
+    private readonly List<Rendering.InstanceData> _instanceDataList = [];
     private static Material? s_defaultStandardMat;
+    private static readonly PropertyState s_emptyProps = new();
 
     public void CollectRenderables(
         TerrainData data, TerrainComponent terrain, Camera camera,
@@ -39,6 +41,7 @@ internal class TerrainTreeRenderer
 
             _transforms.Clear();
             _colors.Clear();
+            _instanceDataList.Clear();
 
             foreach (var tree in data.Trees)
             {
@@ -59,11 +62,14 @@ internal class TerrainTreeRenderer
                     * Float4x4.FromAxisAngle(new Float3(0, 1, 0), tree.Rotation)
                     * Float4x4.CreateScale(new Float3(tree.WidthScale, tree.HeightScale, tree.WidthScale));
 
-                _transforms.Add(terrain.Transform.LocalToWorldMatrix * localTransform);
-                _colors.Add(new Float4(tree.Tint.R, tree.Tint.G, tree.Tint.B, tree.Tint.A));
+                var worldTransform = terrain.Transform.LocalToWorldMatrix * localTransform;
+                var color = new Float4(tree.Tint.R, tree.Tint.G, tree.Tint.B, tree.Tint.A);
+                _transforms.Add(worldTransform);
+                _colors.Add(color);
+                _instanceDataList.Add(new Rendering.InstanceData(worldTransform, color));
             }
 
-            if (_transforms.Count == 0) continue;
+            if (_instanceDataList.Count == 0) continue;
 
             // Bounds from actual positions
             Float3 bmin = new(float.MaxValue), bmax = new(float.MinValue);
@@ -74,11 +80,12 @@ internal class TerrainTreeRenderer
                 bmax = new Float3(MathF.Max(bmax.X, tx + 5), MathF.Max(bmax.Y, ty + 20), MathF.Max(bmax.Z, tz + 5));
             }
 
-            InstancedMeshRenderable.CreateBatched(
-                renderables, mesh, mat, [.. _transforms],
-                (bmin + bmax) * 0.5f, [.. _colors],
-                layer: terrain.GameObject.LayerIndex,
-                bounds: new AABB(bmin, bmax));
+            renderables.Add(new InstancedMeshRenderable(
+                mesh, mat, [.. _instanceDataList],
+                (bmin + bmax) * 0.5f,
+                terrain.GameObject.LayerIndex,
+                s_emptyProps,
+                new AABB(bmin, bmax)));
         }
     }
 }
