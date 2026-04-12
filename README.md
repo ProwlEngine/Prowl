@@ -20,12 +20,11 @@
 3. [Getting Started](#-getting-started-)
    * [Prerequisites](#prerequisites)
    * [Installation](#installation)
-4. [Roadmap](#-roadmap-)
-5. [Contributing](#-contributing-)
-6. [Acknowledgments](#-acknowledgments-)
-   * [Prerequisites](#contributors-)
+4. [Contributing](#-contributing-)
+5. [Acknowledgments](#-acknowledgments-)
+   * [Contributors](#contributors-)
    * [Dependencies](#dependencies-)
-7. [License](#-license-)
+6. [License](#-license-)
 
 # <span align="center">📝 About The Project 📝
 
@@ -48,79 +47,89 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
 -   **General:**
     - Cross-Platform! Windows, Linux & Mac!
     - Unity-like Editor & Scripting API
-    - C# Scripting
-    - GameObject & Component structure
-    - A Powerful Custom UI Library
-        - Same Library for in-game and Editor UI
-        - 3D Drawing in UI used for Gizmo's
-        - Immediate Mode with retained properties
-    - .NET 9
-    - Editor with support for Editor Scripts and Custom Editors
+    - C# Scripting with .NET 9
+    - GameObject & MonoBehaviour Component Architecture
+    - Custom UI Framework ([Paper](https://github.com/ProwlEngine/Prowl.Paper))
+        - Shared between Editor and In-Game UI
+        - Immediate mode API with retained state
+        - World Space UI via WorldCanvas
+    - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Prowl.Quill)
+        - Slug (GPU-Accelerated Curve-Based) Text Rendering
+        - Bitmap Text Rendering
+    - Full-Featured Editor
+        - Scene View, Hierarchy, Inspector, Project Browser, Console, Game View
+        - Custom Component Editors, Property Editors, and Scene View Editors
+        - Transform Gizmos (Move, Rotate, Scale)
+        - Undo/Redo System
+        - Dockable & Resizable Panels with Layout Persistence
+        - Drag & Drop (Assets, GameObjects, Components)
+        - Asset Thumbnail Generation & 3D Previews
+        - Editor Theming with Customizable Color Palettes
+        - Playtest directly in the Editor
     - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
-        - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Mesh
-        - Collision Layers
-    - Unity-like Coroutines
-    - Playtest directly in the Editor
-    - ScriptableObjects
-    - Projects & Project Settings
-    - Powerful Serializer to create In-Memory Graphs
+        - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Hull, Mesh, Model, Terrain
+        - Constraints: Ball Socket, Hinge, Fixed Angle, Cone Limit, Distance Limit, Angular Motor, Linear Motor
+        - Character Controller & Wheel Collider
+        - Collision Layers & Filtering
+        - Raycasting & Shape Casting
+    - Audio via MiniAudio
+        - Spatial 3D Audio with Attenuation
+        - Supports WAV, MP3, OGG, FLAC
+    - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo)
         - Graph → Custom Text Format
         - Graph → Binary
-    - Fully 64-bit using Doubles
-    - Large World Coordinates Support
-        - Camera Relative Rendering
-    - Scene System
-    - Modular Audio Backend
-        - OpenAL
-        - Currently only supports .wav files
-    - Prefabs
-        - Supports Nested Prefabs
+    - Scene System with Fog & Ambient Lighting
+    - Prefabs with Nested Prefab Support
+    - Projects & Project Settings
+    - Input Action System with Composites & Processors
     - Build System - Build to Standalone Application
-        - Packed Asset files
-        - Tiny builds
+        - Packed Asset Files (.prowlpak)
         - Only exports used assets
         - Supports Windows, Mac & Linux
-    - Navmesh and AI Agents (Recast & Detour)
-    - Node Graph (Based on Unity's xNode)
 
 -   **Graphics Rendering:**
-    - Near Identical API to Unity
-    - Modular Graphics Backend
-        - OpenGL
-        - OpenGL ES
-        - Vulkan
-        - Metal
-        - DirectX 11
-    - HDR, PBR (Physically Based Rendering)
-        - Albedo Map
-        - Normal Map
-        - Roughness Map
-        - Metallic Map
-        - Ambient Occclusion Map
-    - Forward Renderer
-    - Batching & Frustum Culling
-    - Motion Vectors
-    - Multiple Shader Passes
+    - OpenGL Backend via [Silk.NET](https://github.com/dotnet/Silk.NET)
+    - Deferred Rendering Pipeline with GBuffer
+    - HDR & PBR (Physically Based Rendering) - Metallic Workflow
+        - Albedo, Normal, Surface (AO / Roughness / Metallic), Emission Maps
+    - Mesh Renderer & Skinned Mesh Renderer with Bone Animation
+    - Line Renderer
+    - GPU Instancing & Frustum Culling
     - Point, Spot, and Directional Lights
-        - Spot & Directional Light Shadows - Point shadows is not implemented
-        - Shadow Atlas
-        - Dynamic Shadow Resolutions
+        - All light types support Shadow Mapping
+        - Cascaded Shadow Maps for Directional Lights (up to 4 cascades)
+        - Cubemap Shadows for Point Lights
+        - Shadow Atlas with Dynamic Packing
     - Post Processing
-        - Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
-        - Motion Blur
-        - Very fast Kawase Bloom
-    - Transparency
-    - Procedural Super Performant Skybox
-    - Dynamic Resolutions Per Camera
+        - HDR Tonemapping
+        - Bloom
+        - FXAA (Fast Approximate Anti-Aliasing)
+        - Screen Space Reflections (SSR)
+        - Ground-Truth Ambient Occlusion (GTAO)
+        - Bokeh Depth of Field
+    - Forward-Rendered Transparency with Depth-Sorted Blending
+    - Procedural Skybox
+    - Terrain System
+        - Quadtree LOD
+        - Heightmap & Splatmap Painting
+        - GPU-Instanced Grass Rendering
+        - Tree Rendering with LOD Distance
+        - Dedicated Terrain Editor (Height, Paint, Grass, Trees, Settings)
+    - Particle System
+        - GPU-Instanced Rendering
+        - Modules: Emission, Size/Color/Rotation/Velocity Over Lifetime, Collision, UV Animation
+        - Local & World Simulation Spaces
 
 -   **Asset Pipeline:**
-    - A Powerful Asset Pipeline
-    - Meta Files & Reference by GUID
-    - Import Caching
-    - Support for Custom Importers
-    - Supports many major file formats via ImageMagick, Assimp, etc.
-    - Sub-Assets, Assets stored inside other assets
-    - Dependency Tracking
+    - GUID-Based Asset References with Meta Files
+    - Import Caching & File Watching for Auto-Reimport
+    - Custom Importers via Attributes
+    - Sub-Assets with Deterministic GUIDs
+    - Forward & Reverse Dependency Tracking
+    - Supported Formats:
+        - Models: GLTF, GLB, OBJ (Custom Importer, FBX Planned)
+        - Textures: PNG, JPG, BMP, TGA, PSD, HDR, DDS, EXR (via Magick.NET)
+        - Audio: WAV, MP3, OGG, FLAC
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -144,40 +153,6 @@ Getting Prowl up and running is super easy!
 2. Open `.sln` with your editor ([Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/), [VSCode](https://code.visualstudio.com/), [Rider]((https://www.jetbrains.com/rider/)), etc.)
 3. Run `UpdateSubmodules.bat` (on Windows) or `UpdateSubmodules.sh` (on Linux)
 4. That's it! 😄 🎉
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-# <span align="center">🗺️ Roadmap 🗺️</span>
-
-### Engine
-
-- 🛠️ Cross Platform
-    - ✔️ Windows
-    - ✔️ MacOS
-    - ✔️ Linux
-    - ❌ Android
-    - ❌ iOS
-    - ❌ Web
-- ✔️ UI Engine
-- ❌ VR Support
-- ✔️ Navmesh and AI Agents
-- 🛠️ Networking Solution
-
-### Rendering
-
-- ❌ Realtime GI
-- ❌ Lightmaps and Light Probes
-- ❌ Cascaded shadow mapping
-- ❌ [Particle System](https://github.com/ProwlEngine/Prowl/issues/37)
-- ❌ [Terrain Engine](https://github.com/ProwlEngine/Prowl/issues/38)
-
-### Editor
-
-- ❌ Animation Tools
-- ❌ Material Node Editor
-- ❌ 2D Support
-
-The complete list is in our [board](https://github.com/orgs/ProwlEngine/projects/1). Also, see the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features and known issues.
-
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <span align="center">🤝 Contributing 🤝</span>
@@ -210,17 +185,12 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 
 ## Dependencies 📦
 
-### Runtime
-
-- [Prowl.DotRecast](https://github.com/ProwlEngine/Prowl.DotRecast)
-- [Prowl.Veldrid](https://github.com/ProwlEngine/Prowl.Veldrid)
-- [Silk.NET](https://github.com/dotnet/Silk.NET)
-- [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
-
-### Editor
-
-- [Assimp](https://github.com/assimp/assimp) via [Assimp.NET](https://bitbucket.org/Starnick/assimpnet)
-- [Image Sharp](https://github.com/SixLabors/ImageSharp)
+- [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input, OpenGL & Audio Bindings
+- [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2) - Physics Engine
+- [Magick.NET](https://github.com/dlemstra/Magick.NET) - Image Processing
+- [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo) - Serialization
+- [Prowl.Paper](https://github.com/ProwlEngine/Prowl.Paper) - UI Framework
+- [Prowl.Quill](https://github.com/ProwlEngine/Prowl.Quill) - Vector Graphics & Text Rendering
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
