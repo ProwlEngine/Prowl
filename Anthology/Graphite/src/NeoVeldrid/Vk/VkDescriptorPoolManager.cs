@@ -170,17 +170,20 @@ namespace NeoVeldrid.Vk
                 }
             }
 
-            internal unsafe void Free(VkGraphicsDevice gd, DescriptorAllocationToken token, DescriptorResourceCounts counts)
+            internal void Free(VkGraphicsDevice gd, DescriptorAllocationToken token, DescriptorResourceCounts counts)
             {
                 DescriptorSet set = token.Set;
                 gd.Vk.FreeDescriptorSets(gd.Device, Pool, 1, in set);
 
+                // Every counter decremented in Allocate must be incremented here; the two methods
+                // must stay symmetric or the pool slowly leaks descriptor headroom under churn.
                 RemainingSets += 1;
-
                 UniformBufferCount += counts.UniformBufferCount;
+                UniformBufferDynamicCount += counts.UniformBufferDynamicCount;
                 SampledImageCount += counts.SampledImageCount;
                 SamplerCount += counts.SamplerCount;
                 StorageBufferCount += counts.StorageBufferCount;
+                StorageBufferDynamicCount += counts.StorageBufferDynamicCount;
                 StorageImageCount += counts.StorageImageCount;
             }
         }
