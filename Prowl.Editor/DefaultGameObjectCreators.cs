@@ -19,7 +19,7 @@ namespace Prowl.Editor;
 /// </summary>
 internal static class DefaultGameObjectCreators
 {
-    [CreateGameObjectMenu("Empty Object", Icon = EditorIcons.Cube, Order = 0, Separator = false)]
+    [CreateGameObjectMenu("Empty Object", Icon = EditorIcons.Cube, Order = 0)]
     static void CreateEmpty(GameObject? parent)
     {
         HierarchyPanel.CreateGameObject("GameObject", parent);
@@ -51,44 +51,6 @@ internal static class DefaultGameObjectCreators
         CreatePrimitive("Plane", DefaultModel.Plane, parent);
     }
 
-    // ---- Lights ----
-
-    [CreateGameObjectMenu("Light/Directional Light", Icon = EditorIcons.Sun, Order = 20, Separator = true)]
-    static void CreateDirectionalLight(GameObject? parent)
-    {
-        var go = HierarchyPanel.CreateGameObject("Directional Light", parent);
-        go.Transform.Rotation = Quaternion.FromEuler(new Float3(50, 30, 0));
-        go.AddComponent<DirectionalLight>();
-    }
-
-    // ---- Camera ----
-
-    [CreateGameObjectMenu("Camera", Icon = EditorIcons.Camera, Order = 30)]
-    static void CreateCamera(GameObject? parent)
-    {
-        var go = HierarchyPanel.CreateGameObject("Camera", parent);
-        go.AddComponent<Camera>();
-    }
-
-    // ---- Particle System ----
-
-    [CreateGameObjectMenu("Particle System", Icon = EditorIcons.SprayCanSparkles, Order = 40)]
-    static void CreateParticleSystem(GameObject? parent)
-    {
-        var go = HierarchyPanel.CreateGameObject("Particle System", parent);
-        var ps = go.AddComponent<ParticleSystemComponent>();
-        ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
-        ps.Emission.Enabled = true;
-        ps.Emission.RateOverTime = new MinMaxCurve(10f);
-        ps.Emission.Shape = EmissionShape.Cone;
-        ps.Initial.Enabled = true;
-        ps.Initial.StartLifetime = new MinMaxCurve(2f);
-        ps.Initial.StartSpeed = new MinMaxCurve(3f);
-        ps.Initial.StartSize = new MinMaxCurve(0.2f);
-    }
-
-    // ---- Terrain ----
-
     [CreateGameObjectMenu("3D Object/Terrain", Icon = EditorIcons.Mountain, Order = 15, Separator = true)]
     static void CreateTerrain(GameObject? parent)
     {
@@ -110,6 +72,82 @@ internal static class DefaultGameObjectCreators
                 Project.Current.AssetsPath, "New Terrain Data", ".terraindata");
             db.CreateAsset(terrainData, name);
         }
+    }
+
+    // ---- Lights ----
+
+    [CreateGameObjectMenu("Light/Directional Light", Icon = EditorIcons.Sun, Order = 20, Separator = true)]
+    static void CreateDirectionalLight(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Directional Light", parent);
+        go.Transform.Rotation = Quaternion.FromEuler(new Float3(50, 30, 0));
+        go.AddComponent<DirectionalLight>();
+    }
+
+    [CreateGameObjectMenu("Light/Point Light", Icon = EditorIcons.Lightbulb, Order = 21)]
+    static void CreatePointLight(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Point Light", parent);
+        go.AddComponent<PointLight>();
+    }
+
+    [CreateGameObjectMenu("Light/Spot Light", Icon = EditorIcons.Bullseye, Order = 22)]
+    static void CreateSpotLight(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Spot Light", parent);
+        go.Transform.Rotation = Quaternion.FromEuler(new Float3(90, 0, 0));
+        go.AddComponent<SpotLight>();
+    }
+
+    // ---- Audio ----
+
+    [CreateGameObjectMenu("Audio/Audio Source", Icon = EditorIcons.VolumeHigh, Order = 30, Separator = true)]
+    static void CreateAudioSource(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Audio Source", parent);
+        go.AddComponent<AudioSource>();
+    }
+
+    [CreateGameObjectMenu("Audio/Audio Listener", Icon = EditorIcons.Headphones, Order = 31)]
+    static void CreateAudioListener(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Audio Listener", parent);
+        go.AddComponent<AudioListener>();
+    }
+
+    // ---- Camera ----
+
+    [CreateGameObjectMenu("Camera", Icon = EditorIcons.Camera, Order = 40, Separator = true)]
+    static void CreateCamera(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Camera", parent);
+        go.AddComponent<Camera>();
+    }
+
+    // ---- UI ----
+
+    [CreateGameObjectMenu("UI/World Canvas", Icon = EditorIcons.Display, Order = 50, Separator = true)]
+    static void CreateWorldCanvas(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("World Canvas", parent);
+        go.AddComponent<WorldCanvas>();
+    }
+
+    // ---- Particle System ----
+
+    [CreateGameObjectMenu("Particle System", Icon = EditorIcons.SprayCanSparkles, Order = 60)]
+    static void CreateParticleSystem(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Particle System", parent);
+        var ps = go.AddComponent<ParticleSystemComponent>();
+        ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
+        ps.Emission.Enabled = true;
+        ps.Emission.RateOverTime = new MinMaxCurve(10f);
+        ps.Emission.Shape = EmissionShape.Cone;
+        ps.Initial.Enabled = true;
+        ps.Initial.StartLifetime = new MinMaxCurve(2f);
+        ps.Initial.StartSpeed = new MinMaxCurve(3f);
+        ps.Initial.StartSize = new MinMaxCurve(0.2f);
     }
 
     // ---- Helper ----
