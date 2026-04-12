@@ -67,6 +67,10 @@ public class TerrainComponent : MonoBehaviour
     [NonSerialized] private Material? _grassMaterialInstance;
     [NonSerialized] private Guid _lastGrassMaterialGuid;
 
+    // Cached default materials (avoid LoadDefault every frame)
+    [NonSerialized] private static Material? s_defaultTerrainMat;
+    [NonSerialized] private static Material? s_defaultGrassMat;
+
     #endregion
 
     #region Brush Preview (set by editor each frame)
@@ -228,7 +232,10 @@ public class TerrainComponent : MonoBehaviour
     {
         var sourceMat = Material.Res;
         if (sourceMat == null)
-            sourceMat = Resources.Material.LoadDefault(DefaultMaterial.Terrain);
+        {
+            s_defaultTerrainMat ??= Resources.Material.LoadDefault(DefaultMaterial.Terrain);
+            sourceMat = s_defaultTerrainMat;
+        }
         if (sourceMat == null) return null;
 
         var sourceGuid = Material.AssetID;
@@ -250,7 +257,10 @@ public class TerrainComponent : MonoBehaviour
     {
         var sourceMat = GrassMaterial.Res;
         if (sourceMat == null)
-            sourceMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
+        {
+            s_defaultGrassMat ??= Resources.Material.LoadDefault(DefaultMaterial.Grass);
+            sourceMat = s_defaultGrassMat;
+        }
         if (sourceMat == null) return null;
 
         var sourceGuid = GrassMaterial.AssetID;

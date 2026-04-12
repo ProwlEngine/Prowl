@@ -22,6 +22,7 @@ internal class TerrainGrassRenderer
     private const int VerticesPerBlade = 4;
 
     private Mesh? _quadMesh;
+    private static Material? s_defaultStandardMat;
 
     // Cache key = protoIndex * maxPatches + patchX + patchZ * patchCountX
     private readonly Dictionary<long, CachedPatch> _patchCache = [];
@@ -118,7 +119,8 @@ internal class TerrainGrassRenderer
                 var meshRes = proto.Mesh.Res;
                 if (meshRes == null) continue;
                 renderMesh = meshRes;
-                renderMat = Resources.Material.LoadDefault(DefaultMaterial.Standard);
+                s_defaultStandardMat ??= Resources.Material.LoadDefault(DefaultMaterial.Standard);
+                renderMat = s_defaultStandardMat;
             }
             else
             {
