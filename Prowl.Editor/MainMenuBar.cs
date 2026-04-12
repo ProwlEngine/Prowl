@@ -133,11 +133,13 @@ public static class MainMenuBar
                     {
                         paper.Box($"{id}_chk_{index}")
                             .Width(24)
+                            .Alignment(TextAlignment.MiddleLeft)
                             .Text(item.IsChecked ? "\u2713" : "", font)
                             .TextColor(textColor)
                             .FontSize(EditorTheme.FontSize);
 
                         paper.Box($"{id}_lbl_{index}")
+                            .Alignment(TextAlignment.MiddleLeft)
                             .Text(displayLabel, font)
                             .TextColor(textColor)
                             .FontSize(EditorTheme.FontSize);
@@ -150,6 +152,7 @@ public static class MainMenuBar
                         {
                             paper.Box($"{id}_arr_{index}")
                                 .Width(20)
+                                .Alignment(TextAlignment.MiddleLeft)
                                 .Margin(0, 4, 0, 0)
                                 .Text("\u25B6", font)
                                 .TextColor(textColor)
