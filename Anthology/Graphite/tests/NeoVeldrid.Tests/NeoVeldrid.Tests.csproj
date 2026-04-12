@@ -13,9 +13,9 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\NeoVeldrid.SPIRV\NeoVeldrid.SPIRV.csproj" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.4.1" />
-        <PackageReference Include="xunit" Version="2.4.2" />
-        <PackageReference Include="xunit.console" Version="2.4.2" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.console" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
         <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
         <ProjectReference Include="..\..\src\NeoVeldrid.RenderDoc\NeoVeldrid.RenderDoc.csproj" />
         <ProjectReference Include="..\..\src\NeoVeldrid.StartupUtilities\NeoVeldrid.StartupUtilities.csproj" />
