@@ -189,10 +189,8 @@ public class TerrainComponent : MonoBehaviour
 
         // Grass
         var grassMat = GetGrassMaterialInstance();
-        if (grassMat != null && terrainData.GrassTypes.Length > 0)
+        if (grassMat != null && terrainData.DetailPrototypes.Count > 0)
         {
-            var grassTex = terrainData.GrassTypes[0].Texture.Res ?? Texture2D.White;
-            grassMat.SetTexture("_MainTex", grassTex);
             _grassRenderer?.CollectRenderables(terrainData, this, camera, grassMat, GrassDistance, GrassDensityMultiplier, renderables);
         }
 

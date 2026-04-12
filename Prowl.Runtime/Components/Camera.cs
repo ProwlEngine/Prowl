@@ -282,6 +282,9 @@ public class Camera : MonoBehaviour
 
     private Float4x4 GetProjectionMatrix(float aspect)
     {
+        if (FieldOfView <= 0)
+            FieldOfView = 1f;
+
         Float4x4 proj;
 
         if (ProjectionMode == ProjectionType.Orthographic)

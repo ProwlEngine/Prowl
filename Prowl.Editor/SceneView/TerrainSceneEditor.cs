@@ -70,7 +70,7 @@ public class TerrainSceneEditor : ISceneViewEditor
         {
             DrawSimpleToolBtn(paper, $"{id}_paint", EditorIcons.Paintbrush, font);
         }
-        else if (TerrainEditor.ActiveTab == TerrainTab.Grass)
+        else if (TerrainEditor.ActiveTab == TerrainTab.Details)
         {
             DrawSimpleToolBtn(paper, $"{id}_grass", EditorIcons.Seedling, font);
         }
