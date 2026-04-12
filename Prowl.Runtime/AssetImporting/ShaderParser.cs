@@ -12,6 +12,8 @@ using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Utils;
 using Prowl.Vector;
 
+using Prowl.Runtime.Resources;
+
 using Shader = Prowl.Runtime.Resources.Shader;
 using Texture2D = Prowl.Runtime.Resources.Texture2D;
 using Texture3D = Prowl.Runtime.Resources.Texture3D;
@@ -481,7 +483,7 @@ public static class ShaderParser
                 ShaderPropertyType.Vector4 => Float4.Zero,
                 ShaderPropertyType.Color => Color.White,
                 ShaderPropertyType.Matrix => Float4x4.Identity,
-                ShaderPropertyType.Texture2D => Texture2D.White,
+                ShaderPropertyType.Texture2D => Texture2D.LoadDefault(DefaultTexture.White),
                 ShaderPropertyType.Texture3D => Texture3D.White,
                 _ => throw new Exception($"Invalid property type") // Should never execute unless EnumParse() breaks.
             };
@@ -863,13 +865,13 @@ public static class ShaderParser
     {
         return texture switch
         {
-            "white" => Texture2D.White,
-            "gray" or "grey" => Texture2D.Gray,
-            "grid" => Texture2D.Grid,
-            "black" or "emission" => Texture2D.Emission,
-            "normal" => Texture2D.Normal,
-            "surface" => Texture2D.Surface,
-            "noise" => Texture2D.Noise,
+            "white" => Texture2D.LoadDefault(DefaultTexture.White),
+            "gray" or "grey" => Texture2D.LoadDefault(DefaultTexture.Gray18),
+            "grid" => Texture2D.LoadDefault(DefaultTexture.Grid),
+            "black" or "emission" => Texture2D.LoadDefault(DefaultTexture.Emission),
+            "normal" => Texture2D.LoadDefault(DefaultTexture.Normal),
+            "surface" => Texture2D.LoadDefault(DefaultTexture.Surface),
+            "noise" => Texture2D.LoadDefault(DefaultTexture.Noise),
             _ => throw new ParseException("texture 2d", $"unknown texture default: {texture}")
         };
     }
