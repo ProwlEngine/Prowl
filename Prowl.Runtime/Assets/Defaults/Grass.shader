@@ -61,27 +61,22 @@ Pass "Grass"
                 float scaleX = length(instanceModelRow0.xyz); // width
                 float scaleY = length(instanceModelRow1.xyz); // height
 
-                // Determine up direction
-                vec3 up = _TerrainUp;
+                // Always compute terrain surface normal from heightmap (for lighting)
+                vec2 terrainUV = localPosition.xz / _TerrainSize;
+                float hmSize = float(textureSize(_Heightmap, 0).x);
+                float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
 
-                // Optionally align to terrain heightmap normal
-                if (_AlignToNormal > 0.5)
-                {
-                    // Terrain UV from local position (already in terrain space)
-                    vec2 terrainUV = localPosition.xz / _TerrainSize;
-                    float hmSize = float(textureSize(_Heightmap, 0).x);
-                    float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
+                float hR = texture(_Heightmap, terrainUV + vec2(texelSize, 0.0)).r * _TerrainHeight;
+                float hL = texture(_Heightmap, terrainUV - vec2(texelSize, 0.0)).r * _TerrainHeight;
+                float hU = texture(_Heightmap, terrainUV + vec2(0.0, texelSize)).r * _TerrainHeight;
+                float hD = texture(_Heightmap, terrainUV - vec2(0.0, texelSize)).r * _TerrainHeight;
 
-                    float hR = texture(_Heightmap, terrainUV + vec2(texelSize, 0.0)).r * _TerrainHeight;
-                    float hL = texture(_Heightmap, terrainUV - vec2(texelSize, 0.0)).r * _TerrainHeight;
-                    float hU = texture(_Heightmap, terrainUV + vec2(0.0, texelSize)).r * _TerrainHeight;
-                    float hD = texture(_Heightmap, terrainUV - vec2(0.0, texelSize)).r * _TerrainHeight;
+                float wStep = texelSize * _TerrainSize;
+                vec3 localNormal = normalize(vec3(-(hR - hL) / (wStep * 2.0), 1.0, -(hU - hD) / (wStep * 2.0)));
+                vec3 terrainNormal = normalize((terrainToWorld * vec4(localNormal, 0.0)).xyz);
 
-                    float wStep = texelSize * _TerrainSize;
-                    vec3 localNormal = normalize(vec3(-(hR - hL) / (wStep * 2.0), 1.0, -(hU - hD) / (wStep * 2.0)));
-                    // Transform local normal to world space
-                    up = normalize((terrainToWorld * vec4(localNormal, 0.0)).xyz);
-                }
+                // Up direction for blade orientation: terrain normal if AlignToNormal, else terrain's Y axis
+                vec3 up = (_AlignToNormal > 0.5) ? terrainNormal : _TerrainUp;
 
                 vec3 localOffset;
                 if (_Billboard > 0.5)
@@ -114,7 +109,7 @@ Pass "Grass"
                 vec3 worldPosition = bladePosition + localOffset;
                 worldPosition += up * 0.05 * scaleY; // Small offset to prevent ground clipping
                 worldPos = worldPosition;
-                vNormal = up; // Normal matches terrain surface
+                vNormal = terrainNormal; // Always use terrain surface normal for lighting
                 vColor = instanceColor;
 
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
