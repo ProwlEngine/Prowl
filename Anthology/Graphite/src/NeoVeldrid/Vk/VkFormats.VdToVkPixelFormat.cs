@@ -56,14 +56,14 @@ namespace NeoVeldrid.Vk
                 case PixelFormat.R16_G16_SInt:
                     return Format.R16G16Sint;
                 case PixelFormat.R16_G16_Float:
-                    return Format.R16G16B16A16Sfloat;
+                    return Format.R16G16Sfloat;
 
                 case PixelFormat.R32_G32_UInt:
                     return Format.R32G32Uint;
                 case PixelFormat.R32_G32_SInt:
                     return Format.R32G32Sint;
                 case PixelFormat.R32_G32_Float:
-                    return Format.R32G32B32A32Sfloat;
+                    return Format.R32G32Sfloat;
 
                 case PixelFormat.R8_G8_B8_A8_UNorm:
                     return Format.R8G8B8A8Unorm;

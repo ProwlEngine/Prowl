@@ -39,6 +39,7 @@ First release of NeoVeldrid. Drop-in replacement for [Veldrid](https://github.co
 - D3D11 mipmap sampling bug (caused by a struct layout issue in the old Vortice bindings)
 - Vulkan debug callback crash (threw a managed exception from an unmanaged callback)
 - Shaderc compiler recreated on every shader compilation call (now cached)
+- [Vulkan] `PixelFormat.R16_G16_Float` and `PixelFormat.R32_G32_Float` working incorrectly
 
 [Unreleased]: https://github.com/jhm-ciberman/neo-veldrid/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/jhm-ciberman/neo-veldrid/releases/tag/v1.0.0

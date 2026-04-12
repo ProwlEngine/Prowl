@@ -6,7 +6,7 @@ using Xunit;
 
 namespace NeoVeldrid.Tests
 {
-    public abstract class TextureTestBase<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
+    public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
     {
         [Fact]
         public void Map_Succeeds()
