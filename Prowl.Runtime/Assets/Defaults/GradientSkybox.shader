@@ -19,6 +19,7 @@ Pass "GradientSkybox"
         Vertex
         {
             #include "Fragment"
+            #include "VertexAttributes"
 
             out vec3 vDirection;
 

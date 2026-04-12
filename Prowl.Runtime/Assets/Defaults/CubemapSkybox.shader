@@ -24,6 +24,7 @@ Pass "CubemapSkybox"
         Vertex
         {
             #include "Fragment"
+            #include "VertexAttributes"
 
             out vec3 vDirection;
 
