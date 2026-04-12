@@ -36,41 +36,54 @@ Pass "Standard"
 			out vec3 vTangent;
 			out vec3 vBitangent;
 
+#ifdef GPU_INSTANCING
+            layout(location = 8) in vec4 instanceModelRow0;
+            layout(location = 9) in vec4 instanceModelRow1;
+            layout(location = 10) in vec4 instanceModelRow2;
+            layout(location = 11) in vec4 instanceModelRow3;
+            layout(location = 12) in vec4 instanceColor;
+            layout(location = 13) in vec4 instanceCustomData;
+#endif
+
 			void main()
 			{
+				// Determine model matrix (instanced or per-object)
+#ifdef GPU_INSTANCING
+				mat4 modelMatrix = mat4(instanceModelRow0, instanceModelRow1, instanceModelRow2, instanceModelRow3);
+				mat4 mvpMatrix = PROWL_MATRIX_VP * modelMatrix;
+#else
+				mat4 modelMatrix = PROWL_MATRIX_M;
+				mat4 mvpMatrix = PROWL_MATRIX_MVP;
+#endif
+
 #ifdef SKINNED
-				// Apply skinning transformations
 				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
 				vec3 skinnedNormal = GetSkinnedNormal(vertexNormal);
 
-				gl_Position = PROWL_MATRIX_MVP * skinnedPos;
+				gl_Position = mvpMatrix * skinnedPos;
 				texCoord0 = vertexTexCoord0;
-
-				worldPos = (PROWL_MATRIX_M * skinnedPos).xyz;
-
+				worldPos = (modelMatrix * skinnedPos).xyz;
 				vColor = vertexColor;
-
-				vNormal = normalize(mat3(PROWL_MATRIX_M) * skinnedNormal);
+				vNormal = normalize(mat3(modelMatrix) * skinnedNormal);
 #ifdef HAS_TANGENTS
-				// For skinned meshes, also transform tangents
 				vec3 skinnedTangent = GetSkinnedNormal(vertexTangent.xyz);
-				vTangent = normalize(mat3(PROWL_MATRIX_M) * skinnedTangent);
+				vTangent = normalize(mat3(modelMatrix) * skinnedTangent);
 				vBitangent = cross(vNormal, vTangent);
 #endif
 #else
-				// Non-skinned rendering (original code)
-				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+				gl_Position = mvpMatrix * vec4(vertexPosition, 1.0);
 				texCoord0 = vertexTexCoord0;
-
-				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
-
+				worldPos = (modelMatrix * vec4(vertexPosition, 1.0)).xyz;
 				vColor = vertexColor;
-
-				vNormal = normalize(mat3(PROWL_MATRIX_M) * vertexNormal);
+				vNormal = normalize(mat3(modelMatrix) * vertexNormal);
 #ifdef HAS_TANGENTS
-				vTangent = normalize(mat3(PROWL_MATRIX_M) * vertexTangent.xyz);
+				vTangent = normalize(mat3(modelMatrix) * vertexTangent.xyz);
 				vBitangent = cross(vNormal, vTangent);
 #endif
+#endif
+
+#ifdef GPU_INSTANCING
+				vColor *= instanceColor;
 #endif
 			}
 		}
@@ -238,20 +251,34 @@ Pass "StandardShadow"
 			out vec3 worldPos;
 			out vec3 worldNormal;
 
+#ifdef GPU_INSTANCING
+            layout(location = 8) in vec4 instanceModelRow0;
+            layout(location = 9) in vec4 instanceModelRow1;
+            layout(location = 10) in vec4 instanceModelRow2;
+            layout(location = 11) in vec4 instanceModelRow3;
+            layout(location = 12) in vec4 instanceColor;
+#endif
+
 			void main()
 			{
+#ifdef GPU_INSTANCING
+				mat4 modelMatrix = mat4(instanceModelRow0, instanceModelRow1, instanceModelRow2, instanceModelRow3);
+				mat4 mvpMatrix = PROWL_MATRIX_VP * modelMatrix;
+#else
+				mat4 modelMatrix = PROWL_MATRIX_M;
+				mat4 mvpMatrix = PROWL_MATRIX_MVP;
+#endif
+
 #ifdef SKINNED
-				// Apply skinning for shadows
 				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
 				vec3 skinnedNormal = GetSkinnedNormal(vertexNormal);
-
-				gl_Position = PROWL_MATRIX_MVP * skinnedPos;
-				worldPos = (PROWL_MATRIX_M * skinnedPos).xyz;
-				worldNormal = normalize(mat3(PROWL_MATRIX_M) * skinnedNormal);
+				gl_Position = mvpMatrix * skinnedPos;
+				worldPos = (modelMatrix * skinnedPos).xyz;
+				worldNormal = normalize(mat3(modelMatrix) * skinnedNormal);
 #else
-				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
-				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
-				worldNormal = normalize(mat3(PROWL_MATRIX_M) * vertexNormal);
+				gl_Position = mvpMatrix * vec4(vertexPosition, 1.0);
+				worldPos = (modelMatrix * vec4(vertexPosition, 1.0)).xyz;
+				worldNormal = normalize(mat3(modelMatrix) * vertexNormal);
 #endif
 			}
 		}
