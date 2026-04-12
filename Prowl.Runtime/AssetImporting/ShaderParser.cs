@@ -474,7 +474,8 @@ public static class ShaderParser
 
             ShaderProperty property = type switch
             {
-                ShaderPropertyType.Float => 0,
+                ShaderPropertyType.Float => 0f,
+                ShaderPropertyType.Int => (int)0,
                 ShaderPropertyType.Vector2 => Float2.Zero,
                 ShaderPropertyType.Vector3 => Float3.Zero,
                 ShaderPropertyType.Vector4 => Float4.Zero,
@@ -502,6 +503,10 @@ public static class ShaderParser
             case ShaderPropertyType.Float:
                 ExpectToken("property", tokenizer, ShaderToken.Identifier);
                 return DoubleParse(tokenizer.Token, "decimal value");
+
+            case ShaderPropertyType.Int:
+                ExpectToken("property", tokenizer, ShaderToken.Identifier);
+                return IntParse(tokenizer.Token, "integer value");
 
             case ShaderPropertyType.Vector2:
                 float[] v2 = VectorParse(tokenizer, 2);
@@ -796,6 +801,22 @@ public static class ShaderParser
         catch (FormatException)
         {
             throw new ParseException(fieldName, $"incorrect format. Attempted to parse '{text.ToString()}' as a number");
+        }
+        catch (OverflowException)
+        {
+            throw new ParseException(fieldName, $"value is too large. Attempted to parse '{text.ToString()}'");
+        }
+    }
+
+    private static int IntParse(ReadOnlySpan<char> text, string fieldName)
+    {
+        try
+        {
+            return int.Parse(text, NumberStyles.Integer | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+        }
+        catch (FormatException)
+        {
+            throw new ParseException(fieldName, $"incorrect format. Attempted to parse '{text.ToString()}' as an integer");
         }
         catch (OverflowException)
         {

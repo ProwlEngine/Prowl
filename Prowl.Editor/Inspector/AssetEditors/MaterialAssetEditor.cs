@@ -91,19 +91,37 @@ public class MaterialAssetEditor : AssetImporterEditor
         {
             case ShaderPropertyType.Float:
             {
-                float val = material._properties.GetFloat(prop.Name);
+                float val = prop.Value.X;
                 EditorGUI.FloatField(paper, id, val, label)
-                    .OnValueChanged(v => { material.SetFloat(prop.Name, v); _dirty = true; });
+                    .OnValueChanged(v =>
+                    {
+                        prop.Value = new Float4(v, 0, 0, 0);
+                        material.SetFloat(prop.Name, v);
+                        _dirty = true;
+                    });
+                break;
+            }
+
+            case ShaderPropertyType.Int:
+            {
+                int val = (int)prop.Value.X;
+                EditorGUI.IntField(paper, id, val, label)
+                    .OnValueChanged(v =>
+                    {
+                        prop.Value = new Float4(v, 0, 0, 0);
+                        material.SetInt(prop.Name, v);
+                        _dirty = true;
+                    });
                 break;
             }
 
             case ShaderPropertyType.Color:
             {
-                var val = material._properties.GetColor(prop.Name);
-                var vc = new VColor(val.R, val.G, val.B, val.A);
-                EditorGUI.ColorField(paper, id, label, vc)
+                var val = (VColor)prop;
+                EditorGUI.ColorField(paper, id, label, val)
                     .OnValueChanged(v =>
                     {
+                        prop.Value = new Float4(v.R, v.G, v.B, v.A);
                         material.SetColor(prop.Name, new Prowl.Vector.Color(v.R, v.G, v.B, v.A));
                         _dirty = true;
                         _lastPreviewAsset = null; // refresh preview
@@ -113,36 +131,53 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Vector2:
             {
-                var val = material._properties.GetVector2(prop.Name);
+                var val = new Float2(prop.Value.X, prop.Value.Y);
                 EditorGUI.Vector2Field(paper, id, label, val)
-                    .OnValueChanged(v => { material.SetVector(prop.Name, v); _dirty = true; });
+                    .OnValueChanged(v =>
+                    {
+                        prop.Value = new Float4(v.X, v.Y, 0, 0);
+                        material.SetVector(prop.Name, v);
+                        _dirty = true;
+                    });
                 break;
             }
 
             case ShaderPropertyType.Vector3:
             {
-                var val = material._properties.GetVector3(prop.Name);
+                var val = new Float3(prop.Value.X, prop.Value.Y, prop.Value.Z);
                 EditorGUI.Vector3Field(paper, id, label, val)
-                    .OnValueChanged(v => { material.SetVector(prop.Name, v); _dirty = true; });
+                    .OnValueChanged(v =>
+                    {
+                        prop.Value = new Float4(v.X, v.Y, v.Z, 0);
+                        material.SetVector(prop.Name, v);
+                        _dirty = true;
+                    });
                 break;
             }
 
             case ShaderPropertyType.Vector4:
             {
-                var val = material._properties.GetVector4(prop.Name);
+                var val = prop.Value;
                 EditorGUI.Vector4Field(paper, id, label, val)
-                    .OnValueChanged(v => { material.SetVector(prop.Name, v); _dirty = true; });
+                    .OnValueChanged(v =>
+                    {
+                        prop.Value = v;
+                        material.SetVector(prop.Name, v);
+                        _dirty = true;
+                    });
                 break;
             }
 
             case ShaderPropertyType.Texture2D:
             {
-                var val = material._properties.GetTexture(prop.Name);
+                var val = prop.Texture2DValue;
                 EngineObjectPropertyEditor.SetFieldType(typeof(Texture2D));
                 PropertyGrid.DrawField(paper, id, label, typeof(Texture2D), val,
                     newVal =>
                     {
-                        material.SetTexture(prop.Name, newVal as Texture2D);
+                        var tex = newVal as Texture2D;
+                        prop.Texture2DValue = tex;
+                        material.SetTexture(prop.Name, tex);
                         _dirty = true;
                         _lastPreviewAsset = null;
                     }, 0);
@@ -151,12 +186,14 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Texture3D:
             {
-                var val = material._properties.GetTexture3D(prop.Name);
+                var val = prop.Texture3DValue;
                 EngineObjectPropertyEditor.SetFieldType(typeof(Texture3D));
                 PropertyGrid.DrawField(paper, id, label, typeof(Texture3D), val,
                     newVal =>
                     {
-                        material.SetTexture3D(prop.Name, newVal as Texture3D);
+                        var tex = newVal as Texture3D;
+                        prop.Texture3DValue = tex;
+                        material.SetTexture3D(prop.Name, tex);
                         _dirty = true;
                     }, 0);
                 break;

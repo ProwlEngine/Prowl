@@ -9,7 +9,7 @@ using Texture3D = Prowl.Runtime.Resources.Texture3D;
 
 namespace Prowl.Runtime.Rendering.Shaders;
 
-public enum ShaderPropertyType { Float, Vector2, Vector3, Vector4, Color, Matrix, Texture2D, Texture3D }
+public enum ShaderPropertyType { Float, Vector2, Vector3, Vector4, Color, Matrix, Texture2D, Texture3D, Int }
 
 public class ShaderProperty
 {
@@ -49,6 +49,18 @@ public class ShaderProperty
 
     public static implicit operator float(ShaderProperty value)
         => value.Value.X;
+
+    public ShaderProperty(int value)
+    {
+        Value = new(value);
+        PropertyType = ShaderPropertyType.Int;
+    }
+
+    public static implicit operator ShaderProperty(int value)
+        => new(value);
+
+    public static implicit operator int(ShaderProperty value)
+        => (int)value.Value.X;
 
     public ShaderProperty(Float2 value)
     {

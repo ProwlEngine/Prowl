@@ -146,6 +146,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
                 _properties.SetFloat(property.Name, (float)property);
                 break;
 
+            case ShaderPropertyType.Int:
+                _properties.SetInt(property.Name, (int)property);
+                break;
+
             case ShaderPropertyType.Vector2:
                 _properties.SetVector(property.Name, (Float2)property);
                 break;
