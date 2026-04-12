@@ -63,7 +63,10 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Undo/Redo System
         - Dockable & Resizable Panels with Layout Persistence
         - Drag & Drop (Assets, GameObjects, Components)
+        - Multi-Select & Search/Filtering in Editor Panels
         - Asset Thumbnail Generation & 3D Previews
+        - Animation Curve & Gradient Editors
+        - Rebindable Shortcut/Hotkey System
         - Editor Theming with Customizable Color Palettes
         - Playtest directly in the Editor
     - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
@@ -78,9 +81,12 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
     - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo)
         - Graph → Custom Text Format
         - Graph → Binary
+    - Tags & Layers System (32 Customizable Layers)
     - Scene System with Fog & Ambient Lighting
     - Prefabs with Nested Prefab Support
+        - Apply, Revert, Break Instance & Override Tracking
     - Projects & Project Settings
+    - Script Compilation via dotnet build (Game & Editor Assemblies)
     - Input Action System with Composites & Processors
     - Build System - Build to Standalone Application
         - Packed Asset Files (.prowlpak)
@@ -89,11 +95,14 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
 
 -   **Graphics Rendering:**
     - OpenGL Backend via [Silk.NET](https://github.com/dotnet/Silk.NET)
+    - Extensible Render Pipeline (Custom Pipelines Supported)
     - Deferred Rendering Pipeline with GBuffer
+    - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
     - HDR & PBR (Physically Based Rendering) - Metallic Workflow
         - Albedo, Normal, Surface (AO / Roughness / Metallic), Emission Maps
     - Mesh Renderer & Skinned Mesh Renderer with Bone Animation
     - Line Renderer
+    - Render Textures & Texture3D
     - GPU Instancing & Frustum Culling
     - Point, Spot, and Directional Lights
         - All light types support Shadow Mapping
