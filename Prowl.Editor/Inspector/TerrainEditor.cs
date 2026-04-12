@@ -285,6 +285,8 @@ public class TerrainEditor : ComponentEditor
                 .OnValueChanged(v => { dp.NoiseSpread = v; MarkDetailsDirty(); });
             EditorGUI.Slider(paper, $"{id}_bend", "Bend Factor", dp.BendFactor, 0f, 1f)
                 .OnValueChanged(v => { dp.BendFactor = v; MarkDetailsDirty(); });
+            EditorGUI.Toggle(paper, $"{id}_atn", "Align To Normal", dp.AlignToNormal)
+                .OnValueChanged(v => { dp.AlignToNormal = v; MarkDetailsDirty(); });
 
             PropertyGrid.DrawField(paper, $"{id}_hc", "Healthy Color", typeof(Prowl.Vector.Color), dp.HealthyColor,
                 v => { dp.HealthyColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);

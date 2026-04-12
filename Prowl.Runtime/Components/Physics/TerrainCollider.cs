@@ -141,17 +141,24 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
             (float)terrainPos.Y,
             (float)terrainPos.Z);
 
-        JVector min = new JVector(
-            (float)terrainPos.X,
-            (float)terrainPos.Y - terrainHeight * 0.1f,
-            (float)terrainPos.Z);
+        // Compute world-space AABB by transforming local corners
+        Float3 localMin = new(0, -terrainHeight * 0.1f, 0);
+        Float3 localMax = new(terrainSize, terrainHeight, terrainSize);
+        Float3 wMin = new(float.MaxValue), wMax = new(float.MinValue);
+        for (int i = 0; i < 8; i++)
+        {
+            Float3 corner = new(
+                (i & 1) == 0 ? localMin.X : localMax.X,
+                (i & 2) == 0 ? localMin.Y : localMax.Y,
+                (i & 4) == 0 ? localMin.Z : localMax.Z);
+            Float3 world = _terrain.TerrainToWorld(corner);
+            wMin = new Float3(MathF.Min(wMin.X, world.X), MathF.Min(wMin.Y, world.Y), MathF.Min(wMin.Z, world.Z));
+            wMax = new Float3(MathF.Max(wMax.X, world.X), MathF.Max(wMax.Y, world.Y), MathF.Max(wMax.Z, world.Z));
+        }
 
-        JVector max = new JVector(
-            (float)(terrainPos.X + terrainSize),
-            (float)(terrainPos.Y + terrainHeight),
-            (float)(terrainPos.Z + terrainSize));
-
-        JBoundingBox boundingBox = new JBoundingBox(min, max);
+        JBoundingBox boundingBox = new JBoundingBox(
+            new JVector((float)wMin.X, (float)wMin.Y, (float)wMin.Z),
+            new JVector((float)wMax.X, (float)wMax.Y, (float)wMax.Z));
 
         _heightmapProxy = new TerrainHeightmapProxy(this, boundingBox, terrainOrigin, cellSize);
         _collisionFilter = new TerrainCollisionFilter(physics.World, _heightmapProxy, this, terrainOrigin, cellSize);

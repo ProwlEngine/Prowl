@@ -7,6 +7,7 @@ Properties
     _WindStrength ("Wind Strength", Float) = 0.3
     _WindSpeed ("Wind Speed", Float) = 1.5
     _Billboard ("Billboard", Float) = 1.0
+    _AlignToNormal ("Align To Normal", Float) = 0.0
 }
 
 Pass "Grass"
@@ -41,47 +42,79 @@ Pass "Grass"
             uniform float _WindStrength;
             uniform float _WindSpeed;
             uniform float _Billboard;
+            uniform float _AlignToNormal;
+            uniform vec3 _TerrainUp;
+            uniform sampler2D _Heightmap;
+            uniform float _TerrainSize;
+            uniform float _TerrainHeight;
+            uniform mat4 _TerrainWorldToLocal;
 
 			void main()
 			{
 #ifdef GPU_INSTANCING
-                // Extract grass blade position and scale
-                vec3 bladePosition = instanceModelRow3.xyz;
+                // Instance matrix is in terrain-local space; transform to world
+                mat4 terrainToWorld = inverse(_TerrainWorldToLocal);
+
+                // Extract grass blade position (terrain-local) and scale
+                vec3 localPosition = instanceModelRow3.xyz;
+                vec3 bladePosition = (terrainToWorld * vec4(localPosition, 1.0)).xyz;
                 float scaleX = length(instanceModelRow0.xyz); // width
                 float scaleY = length(instanceModelRow1.xyz); // height
+
+                // Determine up direction
+                vec3 up = _TerrainUp;
+
+                // Optionally align to terrain heightmap normal
+                if (_AlignToNormal > 0.5)
+                {
+                    // Terrain UV from local position (already in terrain space)
+                    vec2 terrainUV = localPosition.xz / _TerrainSize;
+                    float hmSize = float(textureSize(_Heightmap, 0).x);
+                    float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
+
+                    float hR = texture(_Heightmap, terrainUV + vec2(texelSize, 0.0)).r * _TerrainHeight;
+                    float hL = texture(_Heightmap, terrainUV - vec2(texelSize, 0.0)).r * _TerrainHeight;
+                    float hU = texture(_Heightmap, terrainUV + vec2(0.0, texelSize)).r * _TerrainHeight;
+                    float hD = texture(_Heightmap, terrainUV - vec2(0.0, texelSize)).r * _TerrainHeight;
+
+                    float wStep = texelSize * _TerrainSize;
+                    vec3 localNormal = normalize(vec3(-(hR - hL) / (wStep * 2.0), 1.0, -(hU - hD) / (wStep * 2.0)));
+                    // Transform local normal to world space
+                    up = normalize((terrainToWorld * vec4(localNormal, 0.0)).xyz);
+                }
 
                 vec3 localOffset;
                 if (_Billboard > 0.5)
                 {
-                    // Cylindrical billboard: face camera around Y axis only
+                    // Cylindrical billboard around terrain up axis
                     vec3 cameraRight = vec3(PROWL_MATRIX_V[0][0], PROWL_MATRIX_V[1][0], PROWL_MATRIX_V[2][0]);
-                    cameraRight.y = 0.0;
-                    cameraRight = normalize(cameraRight);
-                    vec3 up = vec3(0.0, 1.0, 0.0);
+                    // Project camera right perpendicular to up
+                    cameraRight = normalize(cameraRight - up * dot(cameraRight, up));
                     localOffset = cameraRight * vertexPosition.x * scaleX
                                  + up * vertexPosition.y * scaleY;
                 }
                 else
                 {
-                    // Non-billboard: use the instance matrix orientation
-                    vec3 right = normalize(instanceModelRow0.xyz);
-                    vec3 up = normalize(instanceModelRow1.xyz);
+                    // Non-billboard: transform instance orientation from terrain-local to world
+                    vec3 right = normalize((terrainToWorld * vec4(normalize(instanceModelRow0.xyz), 0.0)).xyz);
+                    // Re-orthogonalize right to be perpendicular to up
+                    right = normalize(right - up * dot(right, up));
                     localOffset = right * vertexPosition.x * scaleX
                                 + up * vertexPosition.y * scaleY;
                 }
 
                 // Wind sway - only affects top vertices (y > 0)
-                float windPhase = instanceCustomData.x; // per-blade phase offset
-                float bendFactor = instanceCustomData.y; // per-type bend amount
-                float windAmount = max(0.0, vertexPosition.y); // 0 at base, 1 at top
+                float windPhase = instanceCustomData.x;
+                float bendFactor = instanceCustomData.y;
+                float windAmount = max(0.0, vertexPosition.y);
                 float wind = sin(_Time.y * _WindSpeed + bladePosition.x * 0.7 + bladePosition.z * 0.4 + windPhase) * _WindStrength * bendFactor;
                 localOffset.x += wind * windAmount;
                 localOffset.z += wind * windAmount * 0.3;
 
                 vec3 worldPosition = bladePosition + localOffset;
-                worldPosition.y += 0.05 * scaleY; // Small offset to prevent ground clipping
+                worldPosition += up * 0.05 * scaleY; // Small offset to prevent ground clipping
                 worldPos = worldPosition;
-                vNormal = vec3(0.0, 1.0, 0.0); // Upward-facing normal for lighting
+                vNormal = up; // Normal matches terrain surface
                 vColor = instanceColor;
 
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);

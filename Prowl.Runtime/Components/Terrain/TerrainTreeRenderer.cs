@@ -21,8 +21,8 @@ internal class TerrainTreeRenderer
     {
         if (data.Trees.Count == 0 || data.TreePrototypes.Count == 0) return;
 
-        Float3 terrainPos = terrain.Transform.Position;
-        Float3 cameraPos = camera.Transform.Position;
+        Float3 camLocal = terrain.WorldToTerrain(camera.Transform.Position);
+        camLocal.Y = 0; // Project to terrain XZ plane for 2D distance checks
         float terrainSize = data.Size;
         float maxDistSq = maxDistance * maxDistance;
 
@@ -42,26 +42,35 @@ internal class TerrainTreeRenderer
             {
                 if (tree.PrototypeIndex != protoIdx) continue;
 
-                float wx = (float)terrainPos.X + tree.Position.X * terrainSize;
-                float wz = (float)terrainPos.Z + tree.Position.Y * terrainSize;
-                float wy = (float)terrainPos.Y + data.GetInterpolatedHeight(tree.Position.X, tree.Position.Y);
+                // Position in terrain-local space
+                float lx = tree.Position.X * terrainSize;
+                float lz = tree.Position.Y * terrainSize;
+                float ly = data.GetInterpolatedHeight(tree.Position.X, tree.Position.Y);
 
-                float dx = wx - (float)cameraPos.X;
-                float dz = wz - (float)cameraPos.Z;
+                // Distance check in local space
+                float dx = lx - (float)camLocal.X;
+                float dz = lz - (float)camLocal.Z;
                 if (dx * dx + dz * dz > maxDistSq) continue;
 
-                var transform = Float4x4.CreateTranslation(new Float3(wx, wy, wz))
+                // Build local transform, then apply terrain world matrix
+                Float4x4 localTransform = Float4x4.CreateTranslation(new Float3(lx, ly, lz))
                     * Float4x4.FromAxisAngle(new Float3(0, 1, 0), tree.Rotation)
                     * Float4x4.CreateScale(new Float3(tree.WidthScale, tree.HeightScale, tree.WidthScale));
 
-                _transforms.Add(transform);
+                _transforms.Add(terrain.Transform.LocalToWorldMatrix * localTransform);
                 _colors.Add(new Float4(tree.Tint.R, tree.Tint.G, tree.Tint.B, tree.Tint.A));
             }
 
             if (_transforms.Count == 0) continue;
 
-            Float3 bmin = terrainPos;
-            Float3 bmax = terrainPos + new Float3(terrainSize, data.Height + 20f, terrainSize);
+            // Bounds from actual positions
+            Float3 bmin = new(float.MaxValue), bmax = new(float.MinValue);
+            foreach (var tr in _transforms)
+            {
+                float tx = tr[0, 3], ty = tr[1, 3], tz = tr[2, 3];
+                bmin = new Float3(MathF.Min(bmin.X, tx - 5), MathF.Min(bmin.Y, ty), MathF.Min(bmin.Z, tz - 5));
+                bmax = new Float3(MathF.Max(bmax.X, tx + 5), MathF.Max(bmax.Y, ty + 20), MathF.Max(bmax.Z, tz + 5));
+            }
 
             InstancedMeshRenderable.CreateBatched(
                 renderables, mesh, mat, [.. _transforms],

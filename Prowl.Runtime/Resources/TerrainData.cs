@@ -44,6 +44,8 @@ public class DetailPrototype
     public float BendFactor = 0.5f;
     public Color HealthyColor = new(0.26f, 0.97f, 0.16f, 1f);
     public Color DryColor = new(0.80f, 0.73f, 0.10f, 1f);
+    /// <summary>If true, grass/detail aligns to the terrain heightmap normal (tilts on slopes).</summary>
+    public bool AlignToNormal;
 }
 
 /// <summary>A placed tree instance on the terrain (matches Unity's TreeInstance).</summary>
@@ -333,6 +335,7 @@ public sealed class TerrainData : EngineObject, ISerializable
             dpo.Add("BendFactor", new EchoObject(dp.BendFactor));
             dpo.Add("HealthyColor", Serializer.Serialize(dp.HealthyColor, ctx));
             dpo.Add("DryColor", Serializer.Serialize(dp.DryColor, ctx));
+            dpo.Add("AlignToNormal", new EchoObject(dp.AlignToNormal));
             detailProtoList.ListAdd(dpo);
         }
         value.Add("DetailPrototypes", detailProtoList);
@@ -418,6 +421,7 @@ public sealed class TerrainData : EngineObject, ISerializable
                     BendFactor = dpo.Get("BendFactor")?.FloatValue ?? 0.5f,
                     HealthyColor = Serializer.Deserialize<Color>(dpo.Get("HealthyColor") ?? dpo.Get("Tint"), ctx),
                     DryColor = Serializer.Deserialize<Color>(dpo.Get("DryColor") ?? dpo.Get("DryTint"), ctx),
+                    AlignToNormal = dpo.Get("AlignToNormal")?.BoolValue ?? false,
                 });
             }
         }
