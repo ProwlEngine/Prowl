@@ -68,6 +68,7 @@ public class ConsolePanel : DockPanel
         public Prowl.Scribe.TextLayout? TimeLayout;
         public Prowl.Scribe.TextLayout? MessageLayout;
         public Prowl.Scribe.TextLayout? CountLayout;
+        public Prowl.Scribe.TextLayout? StackTraceLayout;
     }
 
     public ConsolePanel()
@@ -298,6 +299,7 @@ public class ConsolePanel : DockPanel
                             msg.IconLayout ??= canvas.CreateLayout(icon, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
                             msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
                             msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
+                            
 
 
                             float padStack = 4;
@@ -315,8 +317,8 @@ public class ConsolePanel : DockPanel
                             {
                                 float stackSize = size * 0.8f;
                                 float stackY = rowY + totalRowSize * (_multiLine ? 0.75f : 0.5f) - stackSize * 0.5f - 2;
-                                TextLayout stackTraceLayout = canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = stackSize });
-                                canvas.DrawLayout(stackTraceLayout, paddedX + padStack+1, stackY, EditorGUI.LerpRGB(textColor,Color.Black,0.25f));
+                                msg.StackTraceLayout ??= canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = stackSize });
+                                canvas.DrawLayout(msg.StackTraceLayout, paddedX + padStack+1, stackY, EditorGUI.LerpRGB(textColor,Color.Black,0.25f));
                             }
 
                             canvas.DrawLayout(msg.MessageLayout, paddedX + padStack, textY, textColor);
