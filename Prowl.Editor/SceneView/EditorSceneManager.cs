@@ -4,6 +4,8 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Panels;
+using System.Linq;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -174,6 +176,9 @@ public static class EditorSceneManager
             Scene.Current.Name = Path.GetFileNameWithoutExtension(relativePath);
             IsDirty = false;
 
+            // Auto-save all TerrainData assets referenced by terrain components in the scene
+            SaveTerrainDataAssets();
+
             Debug.Log($"Saved scene: {relativePath}");
             return true;
         }
@@ -181,6 +186,31 @@ public static class EditorSceneManager
         {
             Debug.LogError($"Failed to save scene: {ex.Message}");
             return false;
+        }
+    }
+
+    private static void SaveTerrainDataAssets()
+    {
+        if (Scene.Current == null) return;
+        var db = EditorAssetDatabase.Instance;
+        if (db == null) return;
+
+        foreach (var go in Scene.Current.ActiveObjects)
+        {
+            var terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
+            if (terrain == null) continue;
+
+            var terrainData = terrain.Data.Res;
+            if (terrainData == null || terrainData.AssetID == Guid.Empty) continue;
+
+            try
+            {
+                db.SaveAsset(terrainData);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Failed to save TerrainData '{terrainData.Name}': {ex.Message}");
+            }
         }
     }
 
