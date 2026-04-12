@@ -265,8 +265,16 @@ public class HierarchyPanel : DockPanel
                     _assetDropTarget = false;
                 }
 
+                // Clear drag hover when not over the hierarchy panel
+                if (DragDrop.IsDragging && !bgHovered)
+                {
+                    _dragHoverTarget = null;
+                    _dragHoverTargetId = null;
+                }
+
                 // GO drop — process using hover target tracked by OnHover callback
-                if (DragDrop.IsDropFrame && DragDrop.Payload is GameObjectDragPayload goDrop)
+                // Only process drops that land inside the hierarchy panel
+                if (DragDrop.IsDropFrame && bgHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
                 {
                     if (_dragHoverTarget != null && _dragHoverTargetId != null)
                     {
