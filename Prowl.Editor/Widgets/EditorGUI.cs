@@ -617,6 +617,7 @@ public static class EditorGUI
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch(4f))
+                .Margin(UnitValue.Auto, showField ? EditorTheme.RowHeight*0.36f+6 : UnitValue.Auto, UnitValue.Auto, UnitValue.Auto)
                 .OnClick(e =>
                 {
                     float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
@@ -639,7 +640,7 @@ public static class EditorGUI
                     float rw = (float)r.Size.X;
                     float rh = (float)r.Size.Y;
 
-                    float trackH = 12f;
+                    float trackH = 5f;
                     float trackY = ry + rh * 0.5f - trackH * 0.5f;
                     float trackR = trackH * 0.5f;
                     float thumbCx = rx + rw * t;
@@ -647,7 +648,7 @@ public static class EditorGUI
                     float thumbR = rh * 0.36f;
 
                     // ── Track background ──────────────────────────────────
-                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, 0, 0, 0, 0,
+                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
                         EditorTheme.Ink100);
 
                     // ── Track fill ────────────────────────────────────────
@@ -658,10 +659,10 @@ public static class EditorGUI
                     }
 
                     // ── Thumb body ────────────────────────────────────────
-                    /*canvas.SetFillColor(EditorTheme.Ink500);
+                    canvas.SetFillColor(EditorTheme.Ink500);
                     canvas.BeginPath();
                     canvas.Circle(thumbCx, thumbCy, thumbR, 24);
-                    canvas.Fill();*/
+                    canvas.Fill();
                 }));
 
             if (showField)
@@ -881,7 +882,7 @@ public static class EditorGUI
     {
         Action<bool>? userCallback = null;
 
-        UnitValue widthValue = UnitValue.Auto;
+        UnitValue widthValue = UnitValue.StretchOne;
 
         if (fitWidth)
         {

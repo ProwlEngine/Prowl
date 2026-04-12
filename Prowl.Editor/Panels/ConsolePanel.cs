@@ -282,7 +282,7 @@ public class ConsolePanel : DockPanel
 
                             var msg = _messages[msgIdx];
                             float rowY = startY + vi * totalRowSize;
-                            float textY = rowY + totalRowSize * (_multiLine ? 0.25f : 0.5f) - size * 0.5f + 2;
+                            float textY = rowY + totalRowSize * (_multiLine ? 0.25f : 0.5f) - size * 0.5f + (_multiLine ? 2 : 0);
                             float iconY = rowY + totalRowSize * 0.5f - size * 0.5f;
 
                             GetEntryStyle(msg.Severity, vi, out string icon, out Color textColor, out Color bgColor);
