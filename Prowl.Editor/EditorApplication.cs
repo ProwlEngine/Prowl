@@ -553,6 +553,7 @@ public class EditorApplication : Game
         Widgets.FileDialog.Draw(paper);
         Inspector.EngineObjectPropertyEditor.DrawSelectorModal(paper);
         Inspector.AssetRefPropertyEditor.DrawSelectorModal(paper);
+        Inspector.TransformPropertyEditor.DrawSelectorModal(paper);
         Inspector.AddComponentPopup.Draw(paper);
         Widgets.ModalDialog.Draw(paper);
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
