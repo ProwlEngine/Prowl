@@ -561,8 +561,10 @@ public class EditorApplication : Game
         // Intro animation overlay
         if (_introTime < IntroDuration)
         {
-            _introTime += Time.UnscaledDeltaTime;
-            if (_introTime < 0.1) Runtime.Debug.Log($"Intro started! time={_introTime:F3}");
+            // Clamp delta to avoid jumping the animation after heavy loading frames.
+            // A normal frame is ~16ms; anything above 100ms is a loading stall.
+            double introDelta = Math.Min(Time.UnscaledDeltaTime, 0.05);
+            _introTime += introDelta;
             DrawIntro(paper);
         }
     }
