@@ -741,7 +741,7 @@ namespace NeoVeldrid.Vk
             foreach (uint index in familyIndices)
             {
                 DeviceQueueCreateInfo queueCreateInfo = new DeviceQueueCreateInfo(sType: StructureType.DeviceQueueCreateInfo);
-                queueCreateInfo.QueueFamilyIndex = _graphicsQueueIndex;
+                queueCreateInfo.QueueFamilyIndex = index;
                 queueCreateInfo.QueueCount = 1;
                 float priority = 1f;
                 queueCreateInfo.PQueuePriorities = &priority;
