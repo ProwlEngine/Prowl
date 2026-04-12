@@ -25,6 +25,8 @@ public enum DefaultShader
     Refraction,
 
     ProceduralSkybox,
+    GradientSkybox,
+    CubemapSkybox,
     Tonemapper,
     SSR,
     FXAA,

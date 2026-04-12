@@ -14,6 +14,7 @@ internal class TerrainTreeRenderer
 {
     private readonly List<Float4x4> _transforms = [];
     private readonly List<Float4> _colors = [];
+    private static Material? s_defaultStandardMat;
 
     public void CollectRenderables(
         TerrainData data, TerrainComponent terrain, Camera camera,
@@ -32,7 +33,8 @@ internal class TerrainTreeRenderer
             var mesh = proto.Mesh.Res;
             if (mesh == null) continue;
 
-            var mat = proto.Material.Res ?? Material.LoadDefault(DefaultMaterial.Standard);
+            s_defaultStandardMat ??= Material.LoadDefault(DefaultMaterial.Standard);
+            var mat = proto.Material.Res ?? s_defaultStandardMat;
             if (mat == null) continue;
 
             _transforms.Clear();

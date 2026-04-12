@@ -50,6 +50,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Mesh s_skyDome;
     private static Material s_defaultMaterial;
     private static Material s_skybox;
+    private static Material s_gradientSkybox;
     private static Material s_gizmo;
     private static Material s_deferredCompose;
     private static Mesh s_gridMesh;
@@ -218,16 +219,18 @@ public class DefaultRenderPipeline : RenderPipeline
         switch (camera.ClearFlags)
         {
             case CameraClearFlags.Skybox:
+            {
+                // For SolidColor skybox mode, use the skybox color as clear color
+                var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
+                    ? css.Scene.Skybox.SolidColor : camera.ClearColor;
                 Graphics.Clear(
-                    (float)camera.ClearColor.R,
-                    (float)camera.ClearColor.G,
-                    (float)camera.ClearColor.B,
-                    (float)camera.ClearColor.A,
-                    ClearFlags.Color | ClearFlags.Depth
-                );
+                    (float)skyColor.R, (float)skyColor.G,
+                    (float)skyColor.B, (float)skyColor.A,
+                    ClearFlags.Color | ClearFlags.Depth);
 
                 RenderSkybox(css, lights);
                 break;
+            }
 
             case CameraClearFlags.SolidColor:
                 Graphics.Clear(
@@ -448,14 +451,44 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private void RenderSkybox(CameraSnapshot css, List<IRenderableLight> lights)
     {
-        // Set sun direction for skybox from scene's directional light
-        var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
-        if (sun != null)
-        {
-            s_skybox.SetVector("_SunDir", sun.GetLightDirection());
-        }
+        var skyParams = css.Scene.Skybox;
 
-        DrawMeshNow(s_skyDome, s_skybox);
+        switch (skyParams.Mode)
+        {
+            case Scene.SkyboxMode.Procedural:
+            {
+                var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
+                if (sun != null)
+                    s_skybox.SetVector("_SunDir", sun.GetLightDirection());
+                DrawMeshNow(s_skyDome, s_skybox);
+                break;
+            }
+
+            case Scene.SkyboxMode.SolidColor:
+                // Camera clear already fills with color — just need to write unlit to GBuffer
+                // The camera clear handles the solid color via ClearColor override
+                break;
+
+            case Scene.SkyboxMode.Gradient:
+            {
+                s_gradientSkybox ??= new Material(Shader.LoadDefault(DefaultShader.GradientSkybox));
+                s_gradientSkybox.SetColor("_TopColor", skyParams.GradientTop);
+                s_gradientSkybox.SetColor("_BottomColor", skyParams.GradientBottom);
+                s_gradientSkybox.SetFloat("_Exponent", skyParams.GradientExponent);
+                DrawMeshNow(s_skyDome, s_gradientSkybox);
+                break;
+            }
+
+            case Scene.SkyboxMode.Material:
+            {
+                var customMat = skyParams.CustomMaterial.Res;
+                if (customMat != null)
+                    DrawMeshNow(s_skyDome, customMat);
+                else
+                    DrawMeshNow(s_skyDome, s_skybox); // Fallback to procedural
+                break;
+            }
+        }
     }
 
     private static void EnsureGridResources()

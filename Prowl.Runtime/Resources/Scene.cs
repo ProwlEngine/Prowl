@@ -157,6 +157,28 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public AmbientLightParams Ambient = new();
 
+    public enum SkyboxMode
+    {
+        Procedural,
+        SolidColor,
+        Gradient,
+        Material
+    }
+
+    public struct SkyboxParams
+    {
+        public SkyboxMode Mode = SkyboxMode.Procedural;
+        public Color SolidColor = new(0.2f, 0.3f, 0.5f, 1f);
+        public Color GradientTop = new(0.4f, 0.6f, 0.9f, 1f);
+        public Color GradientBottom = new(0.8f, 0.8f, 0.7f, 1f);
+        public float GradientExponent = 1f;
+        public AssetRef<Resources.Material> CustomMaterial;
+
+        public SkyboxParams() { }
+    }
+
+    public SkyboxParams Skybox = new();
+
     /// <summary> The number of registered objects. </summary>
     public int Count => _allObj.Count;
 
