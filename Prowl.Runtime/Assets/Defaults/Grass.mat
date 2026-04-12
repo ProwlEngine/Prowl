@@ -1,0 +1,51 @@
+{
+  "$id": 1,
+  "$type": "Prowl.Runtime.Resources.Material, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+  "_shader": {
+    "AssetID": "a95b73d2-d6fb-b25b-8918-a1ad5616656c"
+  },
+  "_properties": {
+    "$id": 2,
+    "_colors": {
+
+    },
+    "_vectors2": {
+
+    },
+    "_vectors3": {
+
+    },
+    "_vectors4": {
+
+    },
+    "_floats": {
+      "_AlphaCutoff": 0.5F,
+      "_WindStrength": 0.3F,
+      "_WindSpeed": 1.5F
+    },
+    "_ints": {
+
+    },
+    "_matrices": {
+
+    },
+    "_matrixArr": {
+
+    },
+    "_textures": {
+
+    },
+    "_textures3D": {
+
+    },
+    "_buffers": {
+
+    },
+    "_bufferBindings": {
+
+    }
+  },
+  "AssetPath": "Grass.mat",
+  "AssetID": "00000000-0000-0000-0000-000000000000",
+  "Name": "Grass"
+}

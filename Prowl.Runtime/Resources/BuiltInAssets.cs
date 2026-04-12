@@ -58,6 +58,7 @@ public static class BuiltInAssets
                 () => Shader.LoadDefault(shader));
         }
 
+
         // Default meshes (parsed directly from embedded OBJ files)
         foreach (DefaultModel m in Enum.GetValues<DefaultModel>())
         {

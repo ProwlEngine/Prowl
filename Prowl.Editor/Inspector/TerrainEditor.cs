@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
@@ -15,7 +16,7 @@ using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.Inspector;
 
-public enum TerrainTab { Height, Paint, Settings }
+public enum TerrainTab { Height, Paint, Grass, Trees, Settings }
 public enum HeightTool { Raise, Lower, Flatten, Smooth }
 
 [CustomComponentEditor(typeof(TerrainComponent))]
@@ -29,6 +30,11 @@ public class TerrainEditor : ComponentEditor
     public static float BrushFalloff = 0.5f;
     public static float FlattenHeight = 0.5f;
     public static int PaintLayer = 0;
+    public static int ActiveGrassType = 0;
+    public static int ActiveTreePrototype = 0;
+    public static float TreeBrushSize = 10f;
+    public static int TreesPerStroke = 3;
+    public static bool TreeEraseMode = false;
 
     // Instance state
     private bool _isDirty;
@@ -75,6 +81,12 @@ public class TerrainEditor : ComponentEditor
             case TerrainTab.Paint:
                 DrawPaintTab(paper, $"{id}_pt", font, terrainData);
                 break;
+            case TerrainTab.Grass:
+                DrawGrassTab(paper, $"{id}_gt", font, terrainData);
+                break;
+            case TerrainTab.Trees:
+                DrawTreesTab(paper, $"{id}_tt", font, terrainData);
+                break;
             case TerrainTab.Settings:
                 DrawSettingsTab(paper, $"{id}_st", font, terrain, terrainData);
                 break;
@@ -95,9 +107,11 @@ public class TerrainEditor : ComponentEditor
     {
         using (paper.Row($"{id}_row").Height(28).RowBetween(2).Enter())
         {
-            DrawTabButton(paper, $"{id}_h", $"{EditorIcons.Mountain}  Height", TerrainTab.Height, font);
-            DrawTabButton(paper, $"{id}_p", $"{EditorIcons.Paintbrush}  Paint", TerrainTab.Paint, font);
-            DrawTabButton(paper, $"{id}_s", $"{EditorIcons.Gear}  Settings", TerrainTab.Settings, font);
+            DrawTabButton(paper, $"{id}_h", $"{EditorIcons.Mountain}", TerrainTab.Height, font);
+            DrawTabButton(paper, $"{id}_p", $"{EditorIcons.Paintbrush}", TerrainTab.Paint, font);
+            DrawTabButton(paper, $"{id}_g", $"{EditorIcons.Seedling}", TerrainTab.Grass, font);
+            DrawTabButton(paper, $"{id}_t", $"{EditorIcons.Leaf}", TerrainTab.Trees, font);
+            DrawTabButton(paper, $"{id}_s", $"{EditorIcons.Gear}", TerrainTab.Settings, font);
         }
     }
 
@@ -210,6 +224,140 @@ public class TerrainEditor : ComponentEditor
 
     #endregion
 
+    #region Grass Tab
+
+    private void DrawGrassTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
+    {
+        // Grass type selector
+        if (data.GrassTypes.Length > 0)
+        {
+            int gt = Math.Clamp(ActiveGrassType, 0, data.GrassTypes.Length - 1);
+            var grassType = data.GrassTypes[gt];
+
+            paper.Box($"{id}_lbl").Height(20)
+                .Text($"Grass Type {gt}", font).TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+            PropertyGrid.DrawField(paper, $"{id}_tex", "Texture", typeof(AssetRef<Texture2D>), grassType.Texture,
+                v => { grassType.Texture = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
+
+            EditorGUI.Slider(paper, $"{id}_minw", "Min Width", grassType.MinWidth, 0.1f, 5f)
+                .OnValueChanged(v => { grassType.MinWidth = v; _isDirty = true; });
+            EditorGUI.Slider(paper, $"{id}_maxw", "Max Width", grassType.MaxWidth, 0.1f, 5f)
+                .OnValueChanged(v => { grassType.MaxWidth = v; _isDirty = true; });
+            EditorGUI.Slider(paper, $"{id}_minh", "Min Height", grassType.MinHeight, 0.1f, 5f)
+                .OnValueChanged(v => { grassType.MinHeight = v; _isDirty = true; });
+            EditorGUI.Slider(paper, $"{id}_maxh", "Max Height", grassType.MaxHeight, 0.1f, 5f)
+                .OnValueChanged(v => { grassType.MaxHeight = v; _isDirty = true; });
+            EditorGUI.Slider(paper, $"{id}_noise", "Noise Spread", grassType.NoiseSpread, 0.01f, 1f)
+                .OnValueChanged(v => { grassType.NoiseSpread = v; _isDirty = true; });
+            EditorGUI.Slider(paper, $"{id}_bend", "Bend Factor", grassType.BendFactor, 0f, 1f)
+                .OnValueChanged(v => { grassType.BendFactor = v; _isDirty = true; });
+
+            PropertyGrid.DrawField(paper, $"{id}_tint", "Healthy Color", typeof(Color), grassType.Tint,
+                v => { grassType.Tint = (Color)v!; _isDirty = true; }, 0);
+            PropertyGrid.DrawField(paper, $"{id}_dry", "Dry Color", typeof(Color), grassType.DryTint,
+                v => { grassType.DryTint = (Color)v!; _isDirty = true; }, 0);
+        }
+
+        paper.Box($"{id}_sp").Height(6);
+        DrawBrushSettings(paper, $"{id}_brush", font);
+    }
+
+    #endregion
+
+    #region Trees Tab
+
+    private void DrawTreesTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
+    {
+        // Prototype list
+        paper.Box($"{id}_lbl").Height(20)
+            .Text("Tree Prototypes", font).TextColor(EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+        for (int i = 0; i < data.TreePrototypes.Length; i++)
+        {
+            int idx = i;
+            bool selected = ActiveTreePrototype == i;
+            var proto = data.TreePrototypes[i];
+            string name = proto.Mesh.Res?.Name ?? $"Prototype {i}";
+
+            paper.Box($"{id}_tp{i}")
+                .Height(24).Rounded(4)
+                .BackgroundColor(selected ? EditorTheme.Purple400 : EditorTheme.Neutral300)
+                .Hovered.BackgroundColor(selected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
+                .Text(name, font)
+                .TextColor(selected ? Prowl.Vector.Color.White : EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft)
+                .OnClick(0, (_, _) => ActiveTreePrototype = idx);
+        }
+
+        // Add/Remove buttons
+        using (paper.Row($"{id}_btns").Height(24).RowBetween(4).Enter())
+        {
+            EditorGUI.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add")
+                .OnValueChanged(_ =>
+                {
+                    var list = new List<TerrainTreePrototype>(data.TreePrototypes);
+                    list.Add(new TerrainTreePrototype());
+                    data.TreePrototypes = [.. list];
+                    ActiveTreePrototype = data.TreePrototypes.Length - 1;
+                    _isDirty = true;
+                });
+
+            if (data.TreePrototypes.Length > 0)
+            {
+                EditorGUI.Button(paper, $"{id}_rem", $"{EditorIcons.Trash}  Remove")
+                    .OnValueChanged(_ =>
+                    {
+                        if (ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Length)
+                        {
+                            var list = new List<TerrainTreePrototype>(data.TreePrototypes);
+                            list.RemoveAt(ActiveTreePrototype);
+                            data.TreePrototypes = [.. list];
+                            ActiveTreePrototype = Math.Clamp(ActiveTreePrototype, 0, Math.Max(0, data.TreePrototypes.Length - 1));
+                            _isDirty = true;
+                        }
+                    });
+            }
+        }
+
+        paper.Box($"{id}_sp0").Height(6);
+
+        // Selected prototype settings
+        if (data.TreePrototypes.Length > 0 && ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Length)
+        {
+            var proto = data.TreePrototypes[ActiveTreePrototype];
+
+            PropertyGrid.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), proto.Mesh,
+                v => { proto.Mesh = (AssetRef<Mesh>)v!; _isDirty = true; }, 0);
+            PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), proto.Material,
+                v => { proto.Material = (AssetRef<Material>)v!; _isDirty = true; }, 0);
+            EditorGUI.Slider(paper, $"{id}_mins", "Min Scale", proto.MinScale, 0.1f, 5f)
+                .OnValueChanged(v => { proto.MinScale = v; _isDirty = true; });
+            EditorGUI.Slider(paper, $"{id}_maxs", "Max Scale", proto.MaxScale, 0.1f, 5f)
+                .OnValueChanged(v => { proto.MaxScale = v; _isDirty = true; });
+        }
+
+        paper.Box($"{id}_sp1").Height(6);
+
+        // Tree brush settings
+        paper.Box($"{id}_blbl").Height(20)
+            .Text("Tree Brush", font).TextColor(EditorTheme.Ink400)
+            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+        EditorGUI.Slider(paper, $"{id}_tsz", "Brush Size", TreeBrushSize, 1f, 100f)
+            .OnValueChanged(v => TreeBrushSize = v);
+        EditorGUI.IntField(paper, $"{id}_tps", TreesPerStroke, "Trees Per Stroke")
+            .OnValueChanged(v => TreesPerStroke = Math.Max(1, v));
+
+        paper.Box($"{id}_hint").Height(20)
+            .Text("Left-click to place, Shift+click to erase", font)
+            .TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleLeft);
+    }
+
+    #endregion
+
     #region Settings Tab
 
     private void DrawSettingsTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainComponent terrain, TerrainData data)
@@ -288,15 +436,18 @@ public class TerrainEditor : ComponentEditor
     /// Apply a brush stroke at the given terrain UV position.
     /// Called from TerrainSceneEditor during mouse drag.
     /// </summary>
-    public static void ApplyBrush(TerrainData data, Float2 terrainUV, float deltaTime, out bool heightChanged, out bool splatChanged)
+    public static void ApplyBrush(TerrainData data, Float2 terrainUV, float deltaTime, out bool heightChanged, out bool splatChanged, out bool grassChanged)
     {
         heightChanged = false;
         splatChanged = false;
+        grassChanged = false;
 
         if (ActiveTab == TerrainTab.Height)
             ApplyHeightBrush(data, terrainUV, deltaTime, ref heightChanged);
         else if (ActiveTab == TerrainTab.Paint)
             ApplySplatBrush(data, terrainUV, deltaTime, ref splatChanged);
+        else if (ActiveTab == TerrainTab.Grass)
+            ApplyGrassBrush(data, terrainUV, deltaTime, ref grassChanged);
     }
 
     private static void ApplyHeightBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
@@ -426,6 +577,90 @@ public class TerrainEditor : ComponentEditor
         {
             Debug.LogWarning("[TerrainEditor] Cannot save — TerrainData has no asset ID.");
         }
+    }
+
+    private static void ApplyGrassBrush(TerrainData data, Float2 uv, float dt, ref bool changed)
+    {
+        int res = data.GrassmapResolution;
+        float radiusPixels = BrushSize / data.Size * (res - 1);
+        int cx = (int)(uv.X * (res - 1));
+        int cz = (int)(uv.Y * (res - 1));
+        int r = (int)MathF.Ceiling(radiusPixels);
+
+        for (int z = cz - r; z <= cz + r; z++)
+        {
+            for (int x = cx - r; x <= cx + r; x++)
+            {
+                if (x < 0 || x >= res || z < 0 || z >= res) continue;
+
+                float dx = x - cx;
+                float dz = z - cz;
+                float dist = MathF.Sqrt(dx * dx + dz * dz);
+                if (dist > radiusPixels) continue;
+
+                float t = dist / radiusPixels;
+                float falloffStart = 1f - BrushFalloff;
+                float falloff = 1f - SmoothStep(falloffStart, 1f, t);
+                float delta = BrushStrength * falloff * dt * 3f;
+
+                float d = data.GetGrassDensity(x, z);
+                d += delta;
+                data.SetGrassDensity(x, z, d);
+                changed = true;
+            }
+        }
+    }
+
+    /// <summary>Place trees at the given terrain UV within the brush radius.</summary>
+    public static void PlaceTrees(TerrainData data, Float2 uv, float terrainSize)
+    {
+        if (data.TreePrototypes.Length == 0 || ActiveTreePrototype >= data.TreePrototypes.Length)
+            return;
+
+        var proto = data.TreePrototypes[ActiveTreePrototype];
+        float brushRadiusUV = TreeBrushSize / terrainSize;
+        var rng = new Random((int)(uv.X * 10000) ^ (int)(uv.Y * 10000) ^ Environment.TickCount);
+
+        for (int i = 0; i < TreesPerStroke; i++)
+        {
+            float angle = (float)(rng.NextDouble() * Math.PI * 2);
+            float radius = (float)(rng.NextDouble() * brushRadiusUV);
+            Float2 pos = uv + new Float2(MathF.Cos(angle) * radius, MathF.Sin(angle) * radius);
+
+            if (pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1) continue;
+
+            float scale = proto.MinScale + (float)rng.NextDouble() * (proto.MaxScale - proto.MinScale);
+            float rotation = (float)(rng.NextDouble() * Math.PI * 2);
+
+            data.Trees.Add(new TreeInstance
+            {
+                Position = pos,
+                PrototypeIndex = ActiveTreePrototype,
+                Rotation = rotation,
+                Scale = scale,
+                Tint = Color.White,
+            });
+        }
+    }
+
+    /// <summary>Remove trees within radius of the given terrain UV.</summary>
+    public static int RemoveTrees(TerrainData data, Float2 uv, float terrainSize)
+    {
+        float brushRadiusUV = TreeBrushSize / terrainSize;
+        float radiusSq = brushRadiusUV * brushRadiusUV;
+        int removed = 0;
+
+        for (int i = data.Trees.Count - 1; i >= 0; i--)
+        {
+            var diff = data.Trees[i].Position - uv;
+            if (Float2.Dot(diff, diff) < radiusSq)
+            {
+                data.Trees.RemoveAt(i);
+                removed++;
+            }
+        }
+
+        return removed;
     }
 
     private static float SmoothStep(float edge0, float edge1, float x)

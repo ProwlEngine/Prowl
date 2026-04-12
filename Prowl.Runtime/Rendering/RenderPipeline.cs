@@ -696,6 +696,16 @@ public abstract class RenderPipeline : EngineObject
         int indexCount = mesh.IndexCount;
         bool useIndex32 = mesh.IndexFormat == IndexFormat.UInt32;
 
+        // Set mesh attribute keywords
+        material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
+        material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
+        material.SetKeyword("HAS_UV", mesh.HasUV);
+        material.SetKeyword("HAS_UV2", mesh.HasUV2);
+        material.SetKeyword("HAS_COLORS", mesh.HasColors || mesh.HasColors32);
+        material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
+        material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
+        material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
+
         // Enable GPU instancing keyword
         material.SetKeyword("GPU_INSTANCING", true);
 

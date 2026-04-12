@@ -36,6 +36,18 @@ public class TerrainComponent : MonoBehaviour
     /// <summary>Resolution of the base mesh grid (vertices per side).</summary>
     public int MeshResolution = 16;
 
+    /// <summary>Grass material override. If null, uses built-in Grass material.</summary>
+    public AssetRef<Material> GrassMaterial;
+
+    /// <summary>Maximum render distance for grass.</summary>
+    public float GrassDistance = 150f;
+
+    /// <summary>Global grass density multiplier.</summary>
+    public float GrassDensityMultiplier = 1f;
+
+    /// <summary>Maximum render distance for trees.</summary>
+    public float TreeDistance = 500f;
+
     #endregion
 
     #region State
@@ -49,6 +61,12 @@ public class TerrainComponent : MonoBehaviour
     [NonSerialized] private Material? _materialInstance;
     [NonSerialized] private Guid _lastMaterialGuid;
 
+    // Vegetation renderers
+    [NonSerialized] private TerrainGrassRenderer? _grassRenderer;
+    [NonSerialized] private TerrainTreeRenderer? _treeRenderer;
+    [NonSerialized] private Material? _grassMaterialInstance;
+    [NonSerialized] private Guid _lastGrassMaterialGuid;
+
     #endregion
 
     #region Brush Preview (set by editor each frame)
@@ -61,6 +79,9 @@ public class TerrainComponent : MonoBehaviour
     #endregion
 
     #region Public Accessors
+
+    /// <summary>Invalidate cached grass patches (call after painting grass density).</summary>
+    public void InvalidateGrassCache() => _grassRenderer?.InvalidateCache();
 
     /// <summary>Shortcut to terrain size from the data asset.</summary>
     public float TerrainSize => Data.Res?.Size ?? 1024f;
@@ -79,6 +100,10 @@ public class TerrainComponent : MonoBehaviour
             CreateBaseMesh();
         if (_quadtree == null)
             _quadtree = new TerrainQuadtree(Float3.Zero, TerrainSize, MaxLODLevel);
+
+        _grassRenderer ??= new TerrainGrassRenderer();
+        _grassRenderer.Initialize();
+        _treeRenderer ??= new TerrainTreeRenderer();
     }
 
     public override void OnDisable()
@@ -87,6 +112,10 @@ public class TerrainComponent : MonoBehaviour
         _baseMesh?.Dispose();
         _baseMesh = null;
         _materialInstance = null;
+        _grassMaterialInstance = null;
+        _grassRenderer?.Dispose();
+        _grassRenderer = null;
+        _treeRenderer = null;
     }
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
@@ -124,11 +153,8 @@ public class TerrainComponent : MonoBehaviour
             var layer = terrainData.Layers[i];
             string prefix = $"_Layer{i}";
 
-            var albedo = layer.Albedo.Res;
-            if (albedo != null) _properties.SetTexture(prefix, albedo);
-
-            var normal = layer.NormalMap.Res;
-            if (normal != null) _properties.SetTexture(prefix + "Normal", normal);
+            _properties.SetTexture(prefix, layer.Albedo.Res ?? Texture2D.White);
+            _properties.SetTexture(prefix + "Normal", layer.NormalMap.Res ?? Texture2D.Normal);
 
             _properties.SetFloat(prefix + "Tiling", layer.Tiling);
             _properties.SetFloat(prefix + "Roughness", layer.Roughness);
@@ -160,6 +186,18 @@ public class TerrainComponent : MonoBehaviour
             properties: _properties,
             bounds: bounds
         );
+
+        // Grass
+        var grassMat = GetGrassMaterialInstance();
+        if (grassMat != null && terrainData.GrassTypes.Length > 0)
+        {
+            var grassTex = terrainData.GrassTypes[0].Texture.Res ?? Texture2D.White;
+            grassMat.SetTexture("_MainTex", grassTex);
+            _grassRenderer?.CollectRenderables(terrainData, this, camera, grassMat, GrassDistance, GrassDensityMultiplier, renderables);
+        }
+
+        // Trees
+        _treeRenderer?.CollectRenderables(terrainData, this, camera, TreeDistance, renderables);
     }
 
     public override void DrawGizmos()
@@ -191,6 +229,27 @@ public class TerrainComponent : MonoBehaviour
         }
 
         return _materialInstance;
+    }
+
+    private Material? GetGrassMaterialInstance()
+    {
+        var sourceMat = GrassMaterial.Res;
+        if (sourceMat == null)
+            sourceMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
+        if (sourceMat == null) return null;
+
+        var sourceGuid = GrassMaterial.AssetID;
+
+        if (_grassMaterialInstance == null || _lastGrassMaterialGuid != sourceGuid)
+        {
+            var echo = Serializer.Serialize(sourceMat);
+            _grassMaterialInstance = Serializer.Deserialize<Material>(echo);
+            if (_grassMaterialInstance != null)
+                _grassMaterialInstance.Name = sourceMat.Name + " (Grass Instance)";
+            _lastGrassMaterialGuid = sourceGuid;
+        }
+
+        return _grassMaterialInstance;
     }
 
     #endregion

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
@@ -9,9 +10,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>
-/// Per-layer texture settings for terrain rendering.
-/// </summary>
+/// <summary>Per-layer texture settings for terrain rendering.</summary>
 public class TerrainLayer
 {
     public AssetRef<Texture2D> Albedo;
@@ -19,6 +18,47 @@ public class TerrainLayer
     public float Tiling = 10f;
     public float Roughness = 1f;
     public float Metallic = 0f;
+}
+
+/// <summary>Defines a grass type for terrain vegetation.</summary>
+public class TerrainGrassType
+{
+    public AssetRef<Texture2D> Texture;
+    /// <summary>Min width in world units.</summary>
+    public float MinWidth = 1f;
+    /// <summary>Max width in world units.</summary>
+    public float MaxWidth = 2f;
+    /// <summary>Min height in world units.</summary>
+    public float MinHeight = 1f;
+    /// <summary>Max height in world units.</summary>
+    public float MaxHeight = 2f;
+    /// <summary>Perlin noise spread for size/color variation.</summary>
+    public float NoiseSpread = 0.1f;
+    /// <summary>Healthy (fully saturated) color.</summary>
+    public Color Tint = new Color(0.26f, 0.97f, 0.16f, 1f);
+    /// <summary>Dry (desaturated) color.</summary>
+    public Color DryTint = new Color(0.80f, 0.73f, 0.10f, 1f);
+    /// <summary>How much grass bends in wind (0-1).</summary>
+    public float BendFactor = 0.5f;
+}
+
+/// <summary>A placed tree instance on the terrain.</summary>
+public struct TreeInstance
+{
+    public Float2 Position;      // terrain UV (0-1)
+    public int PrototypeIndex;   // index into TerrainData.TreePrototypes
+    public float Rotation;       // Y-axis rotation in radians
+    public float Scale;          // uniform scale multiplier
+    public Color Tint;           // per-instance color variation
+}
+
+/// <summary>Defines a tree type (mesh + material) for terrain vegetation.</summary>
+public class TerrainTreePrototype
+{
+    public AssetRef<Mesh> Mesh;
+    public AssetRef<Material> Material; // null = use Standard material
+    public float MinScale = 0.8f;
+    public float MaxScale = 1.2f;
 }
 
 /// <summary>
@@ -55,16 +95,36 @@ public sealed class TerrainData : EngineObject, ISerializable
     /// <summary>4 terrain layers with per-layer textures and settings.</summary>
     public TerrainLayer[] Layers = [new(), new(), new(), new()];
 
+    // --- Vegetation ---
+
+    /// <summary>Resolution of the grass density map.</summary>
+    public int GrassmapResolution = 1024;
+
+    /// <summary>Grass density map. Single channel [0..1] per pixel.</summary>
+    public float[] GrassDensity;
+
+    /// <summary>Grass type definitions (up to 4).</summary>
+    public TerrainGrassType[] GrassTypes = [new()];
+
+    /// <summary>Placed tree instances.</summary>
+    public List<TreeInstance> Trees = [];
+
+    /// <summary>Tree prototype definitions.</summary>
+    public TerrainTreePrototype[] TreePrototypes = [];
+
     // GPU textures generated from the raw data
     [NonSerialized] private Texture2D? _heightmapTexture;
     [NonSerialized] private Texture2D? _splatmapTexture;
+    [NonSerialized] private Texture2D? _grassmapTexture;
     [NonSerialized] private bool _heightmapDirty = true;
     [NonSerialized] private bool _splatmapDirty = true;
+    [NonSerialized] private bool _grassmapDirty = true;
 
     public TerrainData() : base("New TerrainData")
     {
         Heights = new float[HeightmapResolution * HeightmapResolution];
         Splats = new float[SplatmapResolution * SplatmapResolution * 4];
+        GrassDensity = new float[GrassmapResolution * GrassmapResolution];
 
         // Default splatmap: layer 0 fully opaque
         for (int i = 0; i < Splats.Length; i += 4)
@@ -150,11 +210,63 @@ public sealed class TerrainData : EngineObject, ISerializable
         _splatmapDirty = true;
     }
 
+    /// <summary>Get grass density at a grid coordinate.</summary>
+    public float GetGrassDensity(int x, int z)
+    {
+        if (GrassDensity == null || x < 0 || x >= GrassmapResolution || z < 0 || z >= GrassmapResolution)
+            return 0f;
+        return GrassDensity[z * GrassmapResolution + x];
+    }
+
+    /// <summary>Set grass density at a grid coordinate.</summary>
+    public void SetGrassDensity(int x, int z, float value)
+    {
+        if (GrassDensity == null || x < 0 || x >= GrassmapResolution || z < 0 || z >= GrassmapResolution)
+            return;
+        GrassDensity[z * GrassmapResolution + x] = Maths.Clamp(value, 0f, 1f);
+        _grassmapDirty = true;
+    }
+
+    /// <summary>Resize grass density map. Resets to zero.</summary>
+    public void ResizeGrassmap(int newResolution)
+    {
+        GrassmapResolution = newResolution;
+        GrassDensity = new float[newResolution * newResolution];
+        _grassmapDirty = true;
+    }
+
     /// <summary>Mark the heightmap as dirty so the GPU texture is regenerated.</summary>
     public void SetHeightmapDirty() => _heightmapDirty = true;
 
     /// <summary>Mark the splatmap as dirty so the GPU texture is regenerated.</summary>
     public void SetSplatmapDirty() => _splatmapDirty = true;
+
+    /// <summary>Mark the grass density map as dirty so the GPU texture is regenerated.</summary>
+    public void SetGrassmapDirty() => _grassmapDirty = true;
+
+    /// <summary>Get the GPU grass density texture, regenerating if dirty.</summary>
+    public Texture2D? GetGrassmapTexture()
+    {
+        if (GrassDensity == null) return null;
+
+        if (_grassmapDirty || _grassmapTexture == null)
+        {
+            _grassmapTexture?.Dispose();
+            _grassmapTexture = new Texture2D((uint)GrassmapResolution, (uint)GrassmapResolution, false, TextureImageFormat.Float);
+            _grassmapTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+            Graphics.SetWrapS(_grassmapTexture.Handle, TextureWrap.ClampToEdge);
+            Graphics.SetWrapT(_grassmapTexture.Handle, TextureWrap.ClampToEdge);
+
+            unsafe
+            {
+                fixed (float* ptr = GrassDensity)
+                    _grassmapTexture.SetDataPtr(ptr, 0, 0, (uint)GrassmapResolution, (uint)GrassmapResolution);
+            }
+            _grassmapDirty = false;
+        }
+
+        return _grassmapTexture;
+    }
 
     /// <summary>Get the GPU heightmap texture, regenerating if dirty.</summary>
     public Texture2D? GetHeightmapTexture()
@@ -242,6 +354,59 @@ public sealed class TerrainData : EngineObject, ISerializable
             Buffer.BlockCopy(Splats, 0, splatBytes, 0, splatBytes.Length);
             value.Add("Splats", new EchoObject(Convert.ToBase64String(splatBytes)));
         }
+
+        // Grass density map
+        value.Add("GrassmapResolution", new EchoObject(GrassmapResolution));
+        if (GrassDensity != null)
+        {
+            byte[] grassBytes = new byte[GrassDensity.Length * sizeof(float)];
+            Buffer.BlockCopy(GrassDensity, 0, grassBytes, 0, grassBytes.Length);
+            value.Add("GrassDensity", new EchoObject(Convert.ToBase64String(grassBytes)));
+        }
+
+        // Grass types
+        var grassTypeList = EchoObject.NewList();
+        foreach (var gt in GrassTypes)
+        {
+            var gto = EchoObject.NewCompound();
+            gto.Add("Texture", Serializer.Serialize(gt.Texture, ctx));
+            gto.Add("MinHeight", new EchoObject(gt.MinHeight));
+            gto.Add("MaxHeight", new EchoObject(gt.MaxHeight));
+            gto.Add("MinWidth", new EchoObject(gt.MinWidth));
+            gto.Add("MaxWidth", new EchoObject(gt.MaxWidth));
+            gto.Add("Tint", Serializer.Serialize(gt.Tint, ctx));
+            gto.Add("DryTint", Serializer.Serialize(gt.DryTint, ctx));
+            grassTypeList.ListAdd(gto);
+        }
+        value.Add("GrassTypes", grassTypeList);
+
+        // Tree prototypes
+        var protoList = EchoObject.NewList();
+        foreach (var tp in TreePrototypes)
+        {
+            var tpo = EchoObject.NewCompound();
+            tpo.Add("Mesh", Serializer.Serialize(tp.Mesh, ctx));
+            tpo.Add("Material", Serializer.Serialize(tp.Material, ctx));
+            tpo.Add("MinScale", new EchoObject(tp.MinScale));
+            tpo.Add("MaxScale", new EchoObject(tp.MaxScale));
+            protoList.ListAdd(tpo);
+        }
+        value.Add("TreePrototypes", protoList);
+
+        // Tree instances
+        var treeList = EchoObject.NewList();
+        foreach (var ti in Trees)
+        {
+            var tio = EchoObject.NewCompound();
+            tio.Add("PosX", new EchoObject(ti.Position.X));
+            tio.Add("PosY", new EchoObject(ti.Position.Y));
+            tio.Add("Proto", new EchoObject(ti.PrototypeIndex));
+            tio.Add("Rot", new EchoObject(ti.Rotation));
+            tio.Add("Scale", new EchoObject(ti.Scale));
+            tio.Add("Tint", Serializer.Serialize(ti.Tint, ctx));
+            treeList.ListAdd(tio);
+        }
+        value.Add("Trees", treeList);
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
@@ -296,7 +461,89 @@ public sealed class TerrainData : EngineObject, ISerializable
                 Splats[i] = 1f;
         }
 
+        // Grass density
+        GrassmapResolution = value.Get("GrassmapResolution")?.IntValue ?? 256;
+        string? grassB64 = value.Get("GrassDensity")?.StringValue;
+        if (grassB64 != null)
+        {
+            byte[] grassBytes = Convert.FromBase64String(grassB64);
+            GrassDensity = new float[grassBytes.Length / sizeof(float)];
+            Buffer.BlockCopy(grassBytes, 0, GrassDensity, 0, grassBytes.Length);
+        }
+        else
+        {
+            GrassDensity = new float[GrassmapResolution * GrassmapResolution];
+        }
+
+        // Grass types
+        var grassTypeList = value.Get("GrassTypes");
+        if (grassTypeList != null && grassTypeList.List.Count > 0)
+        {
+            GrassTypes = new TerrainGrassType[grassTypeList.List.Count];
+            for (int i = 0; i < grassTypeList.List.Count; i++)
+            {
+                var gto = grassTypeList.List[i];
+                GrassTypes[i] = new TerrainGrassType
+                {
+                    Texture = Serializer.Deserialize<AssetRef<Texture2D>>(gto.Get("Texture"), ctx),
+                    MinHeight = gto.Get("MinHeight")?.FloatValue ?? 0.5f,
+                    MaxHeight = gto.Get("MaxHeight")?.FloatValue ?? 1.2f,
+                    MinWidth = gto.Get("MinWidth")?.FloatValue ?? 0.3f,
+                    MaxWidth = gto.Get("MaxWidth")?.FloatValue ?? 0.6f,
+                    Tint = Serializer.Deserialize<Color>(gto.Get("Tint"), ctx),
+                    DryTint = Serializer.Deserialize<Color>(gto.Get("DryTint"), ctx),
+                };
+            }
+        }
+        else
+        {
+            GrassTypes = [new()];
+        }
+
+        // Tree prototypes
+        var protoList = value.Get("TreePrototypes");
+        if (protoList != null && protoList.List.Count > 0)
+        {
+            TreePrototypes = new TerrainTreePrototype[protoList.List.Count];
+            for (int i = 0; i < protoList.List.Count; i++)
+            {
+                var tpo = protoList.List[i];
+                TreePrototypes[i] = new TerrainTreePrototype
+                {
+                    Mesh = Serializer.Deserialize<AssetRef<Mesh>>(tpo.Get("Mesh"), ctx),
+                    Material = Serializer.Deserialize<AssetRef<Material>>(tpo.Get("Material"), ctx),
+                    MinScale = tpo.Get("MinScale")?.FloatValue ?? 0.8f,
+                    MaxScale = tpo.Get("MaxScale")?.FloatValue ?? 1.2f,
+                };
+            }
+        }
+        else
+        {
+            TreePrototypes = [];
+        }
+
+        // Tree instances
+        Trees = [];
+        var treeList = value.Get("Trees");
+        if (treeList != null)
+        {
+            foreach (var tio in treeList.List)
+            {
+                Trees.Add(new TreeInstance
+                {
+                    Position = new Float2(
+                        tio.Get("PosX")?.FloatValue ?? 0f,
+                        tio.Get("PosY")?.FloatValue ?? 0f),
+                    PrototypeIndex = tio.Get("Proto")?.IntValue ?? 0,
+                    Rotation = tio.Get("Rot")?.FloatValue ?? 0f,
+                    Scale = tio.Get("Scale")?.FloatValue ?? 1f,
+                    Tint = Serializer.Deserialize<Color>(tio.Get("Tint"), ctx),
+                });
+            }
+        }
+
         _heightmapDirty = true;
         _splatmapDirty = true;
+        _grassmapDirty = true;
     }
 }

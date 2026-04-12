@@ -42,6 +42,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             Prowl.Runtime.Resources.DefaultMaterial.Standard => "Standard.mat",
             Prowl.Runtime.Resources.DefaultMaterial.Particle => "Particle.mat",
             Prowl.Runtime.Resources.DefaultMaterial.Terrain => "Standard Terrain.mat",
+            Prowl.Runtime.Resources.DefaultMaterial.Grass => "Grass.mat",
             _ => throw new ArgumentException($"Unknown default material: {material}")
         };
 

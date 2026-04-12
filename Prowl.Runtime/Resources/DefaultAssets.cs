@@ -21,6 +21,7 @@ public enum DefaultShader
     DeferredCompose,
     Particle,
     Terrain,
+    Grass,
     Refraction,
 
     ProceduralSkybox,
@@ -55,6 +56,7 @@ public enum DefaultMaterial
     Standard,
     Particle,
     Terrain,
+    Grass,
 }
 
 /// <summary>

@@ -68,18 +68,31 @@ public class TerrainSceneEditor : ISceneViewEditor
         }
         else if (TerrainEditor.ActiveTab == TerrainTab.Paint)
         {
-            bool isPaintActive = !_useTransformTool;
-            paper.Box($"{id}_paint")
-                .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(isPaintActive ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Paintbrush, font).TextColor(EditorTheme.Ink500)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => _useTransformTool = false);
+            DrawSimpleToolBtn(paper, $"{id}_paint", EditorIcons.Paintbrush, font);
+        }
+        else if (TerrainEditor.ActiveTab == TerrainTab.Grass)
+        {
+            DrawSimpleToolBtn(paper, $"{id}_grass", EditorIcons.Seedling, font);
+        }
+        else if (TerrainEditor.ActiveTab == TerrainTab.Trees)
+        {
+            DrawSimpleToolBtn(paper, $"{id}_tplace", EditorIcons.Leaf, font);
         }
 
         // Suppress default toolbar — we're providing our own
         return true;
+    }
+
+    private void DrawSimpleToolBtn(Paper paper, string id, string icon, Prowl.Scribe.FontFile font)
+    {
+        bool active = !_useTransformTool;
+        paper.Box(id)
+            .Width(24).Height(24).Rounded(4)
+            .BackgroundColor(active ? EditorTheme.Purple400 : Color.Transparent)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Text(icon, font).TextColor(EditorTheme.Ink500)
+            .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => _useTransformTool = false);
     }
 
     private void DrawHeightToolButtons(Paper paper, string id, Prowl.Scribe.FontFile font)
@@ -136,41 +149,73 @@ public class TerrainSceneEditor : ISceneViewEditor
             return false;
         }
 
+        // Set brush preview based on active tab
+        bool isTreeTab = TerrainEditor.ActiveTab == TerrainTab.Trees;
+        float brushSize = isTreeTab ? TerrainEditor.TreeBrushSize : TerrainEditor.BrushSize;
+
         _terrain.BrushPosition = terrainUV;
-        _terrain.BrushRadius = TerrainEditor.BrushSize / terrainData.Size;
-        _terrain.BrushFalloff = TerrainEditor.BrushFalloff;
+        _terrain.BrushRadius = brushSize / terrainData.Size;
+        _terrain.BrushFalloff = isTreeTab ? 1f : TerrainEditor.BrushFalloff;
         _terrain.BrushVisible = true;
 
-        // Handle painting
+        // Handle input
         bool leftDown = Input.GetMouseButton(0);
         bool leftPressed = Input.GetMouseButtonDown(0);
         bool leftReleased = Input.GetMouseButtonUp(0);
+        bool shiftHeld = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
 
-        // Don't paint if right/middle mouse (camera controls)
+        // Don't act if right/middle mouse (camera controls)
         if (Input.GetMouseButton(1) || Input.GetMouseButton(2))
             return false;
 
-        if (leftPressed && !_isPainting)
+        if (isTreeTab)
         {
-            _isPainting = true;
-            Undo.BeginContinuous([_terrain.GameObject], "Terrain Brush");
-        }
-
-        if (_isPainting && leftDown)
-        {
-            TerrainEditor.ApplyBrush(terrainData, terrainUV, Time.DeltaTime, out bool hChanged, out bool sChanged);
-
-            if (hChanged || sChanged)
+            // Trees: click to place/erase (not continuous drag)
+            if (leftPressed)
             {
-                TerrainEditor.ActiveInstance?.MarkDirty();
-                EditorSceneManager.IsDirty = true;
+                if (shiftHeld)
+                {
+                    int removed = TerrainEditor.RemoveTrees(terrainData, terrainUV, terrainData.Size);
+                    if (removed > 0)
+                    {
+                        TerrainEditor.ActiveInstance?.MarkDirty();
+                        EditorSceneManager.IsDirty = true;
+                    }
+                }
+                else
+                {
+                    TerrainEditor.PlaceTrees(terrainData, terrainUV, terrainData.Size);
+                    TerrainEditor.ActiveInstance?.MarkDirty();
+                    EditorSceneManager.IsDirty = true;
+                }
             }
         }
-
-        if (_isPainting && (leftReleased || !leftDown))
+        else
         {
-            _isPainting = false;
-            Undo.EndContinuous();
+            // Height/Paint/Grass: continuous brush drag
+            if (leftPressed && !_isPainting)
+            {
+                _isPainting = true;
+                Undo.BeginContinuous([_terrain.GameObject], "Terrain Brush");
+            }
+
+            if (_isPainting && leftDown)
+            {
+                TerrainEditor.ApplyBrush(terrainData, terrainUV, Time.DeltaTime, out bool hChanged, out bool sChanged, out bool gChanged);
+
+                if (hChanged || sChanged || gChanged)
+                {
+                    if (hChanged || gChanged) _terrain.InvalidateGrassCache();
+                    TerrainEditor.ActiveInstance?.MarkDirty();
+                    EditorSceneManager.IsDirty = true;
+                }
+            }
+
+            if (_isPainting && (leftReleased || !leftDown))
+            {
+                _isPainting = false;
+                Undo.EndContinuous();
+            }
         }
 
         // Consume input when over terrain with brush tool (prevents object picking)
