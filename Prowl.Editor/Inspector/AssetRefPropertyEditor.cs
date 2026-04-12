@@ -69,12 +69,17 @@ public class AssetRefPropertyEditor : PropertyEditor
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
+                .OnClick((fieldType, assetRef, onChange, instance, isAsset, isInstance), (cap, e) =>
+                {
+                    if (cap.instance != null)
+                        Selection.Ping(cap.instance!.AssetID);
+                })
                 .OnDoubleClick((fieldType, assetRef, onChange, instance, isAsset, isInstance), (cap, _) =>
                 {
                     if (cap.isAsset)
                     {
                         // Asset → focus in project
-                        Selection.FocusAsset(cap.instance!.AssetID);
+                        Selection.Ping(cap.instance!.AssetID);
                     }
                     else if (cap.isInstance)
                     {

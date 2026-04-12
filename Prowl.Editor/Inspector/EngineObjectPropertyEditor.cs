@@ -66,11 +66,16 @@ public class EngineObjectPropertyEditor : PropertyEditor
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                 .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
                 .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
-                .OnDoubleClick((fieldType, onChange, eo, isAsset), (cap, _) =>
+                .OnClick((eo, isAsset), (cap, e) =>
                 {
+                    // Single click: ping the asset (highlight without selecting)
                     if (cap.isAsset && cap.eo != null)
-                        Selection.FocusAsset(cap.eo.AssetID);
-                    else if (cap.eo != null)
+                        Selection.Ping(cap.eo.AssetID);
+                })
+                .OnDoubleClick((fieldType, onChange, eo), (cap, _) =>
+                {
+                    // Double click: select the instance or open selector
+                    if (cap.eo != null)
                         Selection.Select(cap.eo);
                     else
                         OpenSelector(cap.fieldType, cap.onChange);

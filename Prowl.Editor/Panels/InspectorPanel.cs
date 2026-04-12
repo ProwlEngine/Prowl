@@ -631,6 +631,6 @@ public class InspectorPanel : DockPanel
             .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize - 1)
             .Alignment(PaperUI.TextAlignment.MiddleLeft)
-            .OnClick(guid, (g, _) => Selection.FocusAsset(g));
+            .OnClick(guid, (g, _) => Selection.Ping(g));
     }
 }

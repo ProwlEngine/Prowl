@@ -220,6 +220,7 @@ public class EditorApplication : Game
         int h = Window.InternalWindow.Size.Y;
 
         _time += Time.UnscaledDeltaTime;
+        Selection.UpdatePing((float)Time.UnscaledDeltaTime);
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
