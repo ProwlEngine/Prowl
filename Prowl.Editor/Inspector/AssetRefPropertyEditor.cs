@@ -18,9 +18,6 @@ namespace Prowl.Editor.Inspector;
 [CustomPropertyEditor(typeof(IAssetRef))]
 public class AssetRefPropertyEditor : PropertyEditor
 {
-    private static bool _selectorOpen;
-    private static Type? _selectorType;
-    private static Action<object?>? _selectorCallback;
 
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
@@ -89,7 +86,7 @@ public class AssetRefPropertyEditor : PropertyEditor
                     else
                     {
                         // None → open selector
-                        OpenSelector(cap.fieldType, asset => { cap.assetRef.SetInstance(asset); cap.onChange(cap.assetRef); });
+                        OpenAssetSelector(cap.fieldType, asset => { cap.assetRef.SetInstance(asset); cap.onChange(cap.assetRef); });
                     }
                 });
 
@@ -123,7 +120,7 @@ public class AssetRefPropertyEditor : PropertyEditor
                     .OnClick((fieldType, assetRef, onChange), (cap, e) =>
                     {
                         e.StopPropagation();
-                        OpenSelector(cap.Item1, asset => { cap.Item2.SetInstance(asset); cap.Item3(cap.Item2); });
+                        OpenAssetSelector(cap.Item1, asset => { cap.Item2.SetInstance(asset); cap.Item3(cap.Item2); });
                     });
             }
         }
@@ -181,150 +178,8 @@ public class AssetRefPropertyEditor : PropertyEditor
         }
     }
 
-    private static void OpenSelector(Type type, Action<object?> onChange)
+    private static void OpenAssetSelector(Type type, Action<object?> onChange)
     {
-        _selectorOpen = true;
-        _selectorType = type;
-        _selectorCallback = onChange;
-    }
-
-    /// <summary>
-    /// Draw the asset selector modal. Call from EditorApplication.EndGui.
-    /// </summary>
-    public static void DrawSelectorModal(Paper paper)
-    {
-        if (!_selectorOpen || _selectorType == null) return;
-
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
-
-        var db = EditorAssetDatabase.Instance;
-        var matchingItems = db?.FindAllOfType(_selectorType).Take(100).ToList()
-            ?? new System.Collections.Generic.List<(Guid guid, string name, string parentPath, Type assetType)>();
-
-        paper.Box("ar_sel_overlay")
-            .PositionType(PositionType.SelfDirected).Position(0, 0)
-            .Size(UnitValue.Stretch(), UnitValue.Stretch())
-            .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
-            .Layer(Layer.Overlay)
-            .OnClick(0, (_, _) => _selectorOpen = false);
-
-        using (paper.Column("ar_sel_modal")
-            .Size(350, 400)
-            .Margin(UnitValue.StretchOne)
-            .BackgroundColor(EditorTheme.Neutral300)
-            .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
-            .Layer(Layer.Overlay)
-            .Enter())
-        {
-            using (paper.Row("ar_sel_header")
-                .Height(32).ChildLeft(12).ChildRight(8).RowBetween(8)
-                .BackgroundColor(EditorTheme.Neutral200)
-                .Enter())
-            {
-                paper.Box("ar_sel_title").Height(32)
-                    .Text($"Select {_selectorType.Name}", font)
-                    .TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
-
-                paper.Box("ar_sel_spacer");
-
-                paper.Box("ar_sel_close")
-                    .Width(24).Height(24).Rounded(4)
-                    .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
-                    .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => _selectorOpen = false);
-            }
-
-            using (ScrollView.Begin(paper, "ar_sel_scroll", 350, 360, paddingLeft: 4, paddingRight: 4, paddingTop: 4))
-            {
-                paper.Box("ar_sel_none")
-                    .Height(EditorTheme.RowHeight).ChildLeft(8)
-                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
-                    .Rounded(3)
-                    .Text("None", font)
-                    .TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft)
-                    .OnClick(0, (_, _) =>
-                    {
-                        _selectorCallback?.Invoke(null);
-                        _selectorOpen = false;
-                    });
-
-                var builtInItems = matchingItems.Where(m => Runtime.BuiltInAssets.IsBuiltIn(m.guid)).ToList();
-                var projectItems = matchingItems.Where(m => !Runtime.BuiltInAssets.IsBuiltIn(m.guid)).ToList();
-
-                if (builtInItems.Count > 0)
-                {
-                    paper.Box("ar_sel_bi_hdr").Height(EditorTheme.RowHeight).ChildLeft(6)
-                        .Text($"{EditorIcons.Star}  Built-In", font)
-                        .TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
-
-                    for (int i = 0; i < builtInItems.Count; i++)
-                    {
-                        var (guid, name, parentPath, _) = builtInItems[i];
-                        DrawSelectorItem(paper, font, $"ar_sel_bi_{i}", guid, name, "Built-In", EditorIcons.Star);
-                    }
-                }
-
-                if (projectItems.Count > 0)
-                {
-                    if (builtInItems.Count > 0)
-                        paper.Box("ar_sel_sep2").Height(1).Margin(4, 2, 4, 2).BackgroundColor(EditorTheme.Ink200);
-
-                    paper.Box("ar_sel_proj_hdr").Height(EditorTheme.RowHeight).ChildLeft(6)
-                        .Text($"{EditorIcons.FolderOpen}  Project", font)
-                        .TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
-
-                    for (int i = 0; i < projectItems.Count; i++)
-                    {
-                        var (guid, name, parentPath, _) = projectItems[i];
-                        DrawSelectorItem(paper, font, $"ar_sel_proj_{i}", guid, name, Path.GetFileName(parentPath), EditorIcons.Cube);
-                    }
-                }
-
-                if (matchingItems.Count == 0)
-                {
-                    paper.Box("ar_sel_empty").Height(40)
-                        .Text("No assets of this type found", font)
-                        .TextColor(EditorTheme.Ink300)
-                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
-                }
-            }
-        }
-    }
-
-    private static void DrawSelectorItem(Paper paper, Prowl.Scribe.FontFile font, string id, Guid guid, string name, string pathLabel, string icon)
-    {
-        using (paper.Row(id)
-            .Height(EditorTheme.RowHeight).ChildLeft(12).RowBetween(4)
-            .Hovered.BackgroundColor(EditorTheme.Purple400).End()
-            .Rounded(3)
-            .OnClick(guid, (g, _) =>
-            {
-                var asset = Runtime.AssetDatabase.Get(g);
-                _selectorCallback?.Invoke(asset);
-                _selectorOpen = false;
-            })
-            .Enter())
-        {
-            paper.Box($"{id}_ico")
-                .Width(14).Height(EditorTheme.RowHeight)
-                .Text(icon, font).TextColor(EditorTheme.Ink400)
-                .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
-
-            paper.Box($"{id}_name")
-                .Height(EditorTheme.RowHeight).Clip()
-                .Text(name, font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box($"{id}_path")
-                .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
-                .Text($"({pathLabel})", font).TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
-        }
+        Widgets.SelectorModal.Open($"Select {type.Name}", type, Widgets.SelectorTabs.Assets, onChange);
     }
 }
