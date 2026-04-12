@@ -85,6 +85,7 @@ public class EditorApplication : Game
         ThumbnailGeneratorRegistry.Initialize();
         SceneDropHandlerRegistry.Initialize();
         CreateGameObjectMenuRegistry.Initialize();
+        EditorCallbacks.Initialize();
 
         // Menus depend on registries above, so register after initialization
         ScanAndRegisterPanels();

@@ -22,6 +22,9 @@ public static class EditorSceneManager
     /// <summary>Whether the current scene has unsaved changes.</summary>
     public static bool IsDirty { get; set; }
 
+    /// <summary>Fired after the scene is saved. Use for auto-saving dependent assets.</summary>
+    public static event Action? OnSceneSaved;
+
     /// <summary>
     /// Create and load a new empty default scene.
     /// </summary>
@@ -176,8 +179,8 @@ public static class EditorSceneManager
             Scene.Current.Name = Path.GetFileNameWithoutExtension(relativePath);
             IsDirty = false;
 
-            // Auto-save all TerrainData assets referenced by terrain components in the scene
-            SaveTerrainDataAssets();
+            // Notify listeners (e.g. terrain editor saves TerrainData assets)
+            OnSceneSaved?.Invoke();
 
             Debug.Log($"Saved scene: {relativePath}");
             return true;
@@ -186,31 +189,6 @@ public static class EditorSceneManager
         {
             Debug.LogError($"Failed to save scene: {ex.Message}");
             return false;
-        }
-    }
-
-    private static void SaveTerrainDataAssets()
-    {
-        if (Scene.Current == null) return;
-        var db = EditorAssetDatabase.Instance;
-        if (db == null) return;
-
-        foreach (var go in Scene.Current.ActiveObjects)
-        {
-            var terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
-            if (terrain == null) continue;
-
-            var terrainData = terrain.Data.Res;
-            if (terrainData == null || terrainData.AssetID == Guid.Empty) continue;
-
-            try
-            {
-                db.SaveAsset(terrainData);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"Failed to save TerrainData '{terrainData.Name}': {ex.Message}");
-            }
         }
     }
 

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
@@ -724,6 +725,65 @@ public class TerrainEditor : ComponentEditor
 
     // Static accessor for the scene editor to find the active TerrainEditor instance
     internal static TerrainEditor? ActiveInstance { get; set; }
+
+    #endregion
+
+    #region Editor Callbacks
+
+    /// <summary>Auto-save all TerrainData assets when the scene is saved.</summary>
+    [OnSceneSaved]
+    static void OnSceneSaved()
+    {
+        if (Scene.Current == null) return;
+        var db = EditorAssetDatabase.Instance;
+        if (db == null) return;
+
+        foreach (var go in Scene.Current.ActiveObjects)
+        {
+            var terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
+            if (terrain == null) continue;
+
+            var terrainData = terrain.Data.Res;
+            if (terrainData == null || terrainData.AssetID == Guid.Empty) continue;
+
+            try
+            {
+                db.SaveAsset(terrainData);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Failed to save TerrainData '{terrainData.Name}': {ex.Message}");
+            }
+        }
+
+        // Clear dirty flag on active editor
+        if (ActiveInstance != null)
+            ActiveInstance._isDirty = false;
+    }
+
+    /// <summary>Invalidate terrain caches after undo/redo so changes are visible.</summary>
+    [OnUndoRedo]
+    static void OnUndoRedo()
+    {
+        if (Scene.Current == null) return;
+
+        foreach (var go in Scene.Current.ActiveObjects)
+        {
+            var terrain = go.GetComponent<Runtime.Terrain.TerrainComponent>();
+            if (terrain == null) continue;
+
+            terrain.InvalidateGrassCache();
+
+            // Re-mark GPU textures as dirty so they regenerate
+            var data = terrain.Data.Res;
+            if (data != null)
+            {
+                data.SetHeightmapDirty();
+                data.SetSplatmapDirty();
+                data.SetDetailsDirty();
+            }
+        }
+    }
 
     #endregion
 }
