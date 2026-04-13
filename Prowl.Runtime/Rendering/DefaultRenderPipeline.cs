@@ -229,15 +229,15 @@ public class DefaultRenderPipeline : RenderPipeline
                                  ClearFlags.Depth, BlitFilter.Nearest);
 
         // =======================================================
-        // 9. Render skybox (before opaques, with ZWrite Off so it doesn't affect depth)
+        // 9. Apply camera clear flags to colorRT
         Graphics.BindFramebuffer(colorRT.frameBuffer);
+
         switch (camera.ClearFlags)
         {
             case CameraClearFlags.Skybox:
             {
                 var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
                     ? css.Scene.Skybox.SolidColor : camera.ClearColor;
-                // Clear color only — depth already populated from pre-pass (sky pixels = 1.0)
                 Graphics.Clear(
                     (float)skyColor.R, (float)skyColor.G,
                     (float)skyColor.B, (float)skyColor.A,
@@ -254,9 +254,30 @@ public class DefaultRenderPipeline : RenderPipeline
                 break;
 
             case CameraClearFlags.Depth:
+                // Keep previous camera's color, depth already from pre-pass.
+                // Copy color from target into colorRT to preserve it.
+                if (target.IsValid())
+                {
+                    Graphics.BindFramebuffer(target.frameBuffer, FBOTarget.Read);
+                    Graphics.BindFramebuffer(colorRT.frameBuffer, FBOTarget.Draw);
+                    Graphics.BlitFramebuffer(0, 0, target.Width, target.Height,
+                                             0, 0, colorRT.Width, colorRT.Height,
+                                             ClearFlags.Color, BlitFilter.Nearest);
+                    Graphics.BindFramebuffer(colorRT.frameBuffer);
+                }
                 break;
 
             case CameraClearFlags.Nothing:
+                // Keep everything from the previous camera — copy color from target.
+                if (target.IsValid())
+                {
+                    Graphics.BindFramebuffer(target.frameBuffer, FBOTarget.Read);
+                    Graphics.BindFramebuffer(colorRT.frameBuffer, FBOTarget.Draw);
+                    Graphics.BlitFramebuffer(0, 0, target.Width, target.Height,
+                                             0, 0, colorRT.Width, colorRT.Height,
+                                             ClearFlags.Color, BlitFilter.Nearest);
+                    Graphics.BindFramebuffer(colorRT.frameBuffer);
+                }
                 break;
         }
 
