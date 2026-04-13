@@ -26,4 +26,8 @@
     <EmbeddedResource Include="Resources\**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.11.1" />
+  </ItemGroup>
+
 </Project>
