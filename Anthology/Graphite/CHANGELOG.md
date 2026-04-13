@@ -9,37 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - Unreleased
 
-First release of NeoVeldrid. Drop-in replacement for [Veldrid](https://github.com/mellinoe/veldrid) with all native bindings replaced by Silk.NET. See the [Migration Guide](docs/articles/prologue/migration.md) for upgrade instructions.
+First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](https://github.com/mellinoe/veldrid) with every native binding replaced by [Silk.NET](https://github.com/dotnet/Silk.NET). If you have a Veldrid project today, migrating is roughly a 5 minute find-and-replace. See the [Migration Guide](docs/articles/prologue/migration.md) for the exact steps.
 
 ### Changed
 
-- Vulkan backend: `Vk` 1.0.25 replaced by `Silk.NET.Vulkan` 2.23.0
-- D3D11 backend: `Vortice.Direct3D11` 2.4.2 replaced by `Silk.NET.Direct3D11` 2.23.0
-- OpenGL backend: custom `Veldrid.OpenGLBindings` replaced by `Silk.NET.OpenGL` 2.23.0
-- Windowing: custom SDL2 P/Invoke replaced by `Silk.NET.SDL` 2.23.0
-- SPIRV: native `libveldrid-spirv` replaced by pure C# via `Silk.NET.SPIRV.Cross` + `Silk.NET.Shaderc`
-- ImageSharp upgraded from 1.x to 3.x
-- Target framework changed from `netstandard2.0` to `net10.0`
-- Namespace renamed from `Veldrid` to `NeoVeldrid`
+- Vulkan backend now binds through `Silk.NET.Vulkan` 2.23.0 (was `Vk` 1.0.25).
+- D3D11 backend now binds through `Silk.NET.Direct3D11` 2.23.0 (was `Vortice.Direct3D11` 2.4.2).
+- OpenGL and OpenGL ES backends now bind through `Silk.NET.OpenGL` 2.23.0 (was the custom `Veldrid.OpenGLBindings`).
+- Windowing now goes through `Silk.NET.SDL` 2.23.0 instead of a hand-rolled SDL2 P/Invoke layer.
+- SPIRV cross-compilation is now pure C# via `Silk.NET.SPIRV.Cross` + `Silk.NET.Shaderc`. There is no `libveldrid-spirv` native binary to build or ship anymore.
+- `ImageSharp` bumped from 1.x to 3.x.
+- Target framework is now `net10.0` (was `netstandard2.0`).
+- Root namespace renamed from `Veldrid` to `NeoVeldrid`.
 
 ### Added
 
-- macOS Vulkan support via MoltenVK
-- Linux native libraries bundled via NuGet
+- macOS support through Vulkan + MoltenVK, Apple Silicon included. No extra setup, MoltenVK is bundled automatically.
+- Linux native libraries are now bundled inside the NuGet package. No more chasing down system `libSDL2.so` or building native binaries yourself.
 
 ### Removed
 
-- Metal backend (macOS uses Vulkan via MoltenVK instead)
-- `Sdl2Native` static class (use `Sdl2Window.SdlInstance` for SDL API access)
-- `Veldrid.VirtualReality` project (no hardware available for testing)
-- Android and iOS sample projects
+- Metal backend. macOS is now covered by Vulkan via MoltenVK.
+- `Sdl2Native` static class. Reach the underlying SDL API through `Sdl2Window.SdlInstance` instead.
+- `Veldrid.VirtualReality` project. There was no VR hardware available for testing, so it would have rotted into dead code.
+- Android and iOS sample projects. The core library still works on those platforms, but the samples are unmaintained. Contributions welcome.
 
 ### Fixed
 
-- D3D11 mipmap sampling bug (caused by a struct layout issue in the old Vortice bindings)
-- Vulkan debug callback crash (threw a managed exception from an unmanaged callback)
-- Shaderc compiler recreated on every shader compilation call (now cached)
-- [Vulkan] `PixelFormat.R16_G16_Float` and `PixelFormat.R32_G32_Float` working incorrectly
+- [D3D11] Mipmap sampling being silently wrong at non-zero mip levels, caused by a struct layout mismatch in the old Vortice bindings.
+- [Vulkan] Validation mode crashing the whole process on the first validation message, because the debug callback was throwing a managed exception back into unmanaged code.
+- [Vulkan] `PixelFormat.R16_G16_Float` and `PixelFormat.R32_G32_Float` working incorrectly.
+- [Vulkan] `GraphicsDeviceOptions.SwapchainSrgbFormat` being silently ignored by `CreateWindowAndGraphicsDevice`, so Vulkan swapchains always came back in the linear-UNorm format regardless of what the user requested.
+- [Vulkan] Fixes memory leak with `VkDescriptorPoolManager` related to unfreed dynamic buffers.
+- [Vulkan] Fixes `CreateLogicalDevice` ignoring the present queue family on GPUs where it differs from the graphics family.
 
 [Unreleased]: https://github.com/jhm-ciberman/neo-veldrid/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/jhm-ciberman/neo-veldrid/releases/tag/v1.0.0
