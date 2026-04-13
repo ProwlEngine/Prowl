@@ -102,6 +102,13 @@ public static class ObjParser
         mesh.IndexFormat = outVertices.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
         mesh.MeshTopology = Topology.Triangles;
         mesh.Indices = outIndices.ToArray();
+
+        // Ensure normals and tangents exist for proper lighting
+        if (!mesh.HasNormals)
+            mesh.RecalculateNormals();
+        if (mesh.HasNormals && mesh.HasUV && !mesh.HasTangents)
+            mesh.RecalculateTangents();
+
         mesh.RecalculateBounds();
         mesh.Name = name;
         return mesh;
