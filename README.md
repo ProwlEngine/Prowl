@@ -191,6 +191,7 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 - [Mark Saba (ZeppelinGames)](https://github.com/ZeppelinGames)
 - [EJTP (Unified)](https://github.com/EJTP)
 - [Paolo (xZekro51)](https://github.com/xZekro51)
+- [Kouame Benoit Junior Augustin (ZedDevStuff)](https://github.com/ZedDevStuff)
 
 ## Dependencies 📦
 
