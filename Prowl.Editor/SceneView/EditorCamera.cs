@@ -23,8 +23,9 @@ public class EditorCamera
     private float _pitch = 15f;
     private float _moveSpeed = 5f;
 
-    // Grid
+    // Toggles
     public bool ShowGrid { get; set; } = true;
+    public bool ShowGizmos { get; set; } = true;
 
     public Camera Camera => _camera;
     public RenderTexture? RenderTarget => _renderTarget;
@@ -102,7 +103,7 @@ public class EditorCamera
         // Build rendering data
         var renderData = new RenderingData
         {
-            DisplayGizmos = true,
+            DisplayGizmos = ShowGizmos,
             DisplayGrid = ShowGrid,
         };
 

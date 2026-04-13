@@ -79,6 +79,16 @@ public class SceneViewPanel : DockPanel
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; });
 
+            // Gizmos toggle
+            bool showGizmos = _editorCamera?.ShowGizmos ?? true;
+            paper.Box("sv_gizmo_btn")
+                .Width(24).Height(24).Rounded(4)
+                .BackgroundColor(showGizmos ? EditorTheme.Purple400 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.Eye, font).TextColor(EditorTheme.Ink500)
+                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; });
+
             // Spacer
             paper.Box("sv_spacer");
         }
