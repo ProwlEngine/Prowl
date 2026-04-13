@@ -245,19 +245,25 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     vec3 halfDir = normalize(lightDir + viewDir);
     vec3 radiance = _LightColors[i] * _LightIntensities[i] * attenuation;
 
-    // Cook-Torrance BRDF
+    float NdotL = max(dot(worldNormal, lightDir), 0.0);
+    float NdotV = abs(dot(worldNormal, viewDir)); // abs handles backface normals
+    float LdotH = max(dot(lightDir, halfDir), 0.0);
+
+    // Cook-Torrance specular BRDF
     float NDF = DistributionGGX(worldNormal, halfDir, roughness);
     float G = GeometrySmith(worldNormal, viewDir, lightDir, roughness);
-    vec3 F = FresnelSchlick(max(dot(halfDir, viewDir), 0.0), F0);
+    vec3 F = FresnelSchlick(LdotH, F0);
 
     vec3 kS = F;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-    float NdotL = max(dot(worldNormal, lightDir), 0.0);
-
     vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * max(dot(worldNormal, viewDir), 0.0) * NdotL + 0.0001;
+    float denominator = 4.0 * NdotV * NdotL + 0.0001;
     vec3 specular = numerator / denominator;
+
+    // Disney Diffuse (roughness-aware)
+    float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
+    vec3 diffuse = kD * albedo * diffuseTerm;
 
     // Shadow
     float shadow = 0.0;
@@ -276,8 +282,126 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     }
     float shadowFactor = 1.0 - shadow;
 
-    vec3 diffuse = kD * albedo / PI;
     return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
+}
+
+// ============================================================
+//  Per-light Anisotropic PBR calculation
+// ============================================================
+
+// Per-light anisotropic BRDF (matches Lux convention)
+// mt and mb are SQUARED roughness values passed in from the entry point.
+vec3 CalculateSingleLightAniso(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                                vec3 worldTangent, vec3 worldBitangent,
+                                vec3 albedo, float metallic, float mt, float mb,
+                                float perceptualRoughness, float ao, vec3 F0)
+{
+    int lightType = _LightType[i];
+    vec3 lightDir;
+    float attenuation = 1.0;
+
+    if (lightType == 0) {
+        lightDir = normalize(_LightDirections[i]);
+    } else {
+        vec3 lightToPixel = worldPos - _LightPositions[i];
+        float dist = length(lightToPixel);
+        lightDir = normalize(-lightToPixel);
+
+        float range = _LightRanges[i];
+        float distAtten = 1.0 / (dist * dist + 1.0);
+        float rangeAtten = 1.0 - smoothstep(range * 0.8, range, dist);
+        attenuation = distAtten * rangeAtten;
+
+        if (lightType == 2) {
+            float spotAngleRad = radians(_LightSpotAngles[i]);
+            float innerSpotAngleRad = radians(_LightInnerSpotAngles[i]);
+            float lightAngleCos = dot(normalize(_LightDirections[i]), normalize(lightToPixel));
+            attenuation *= smoothstep(cos(spotAngleRad), cos(innerSpotAngleRad), lightAngleCos);
+        }
+
+        if (attenuation <= 0.0001) return vec3(0.0);
+    }
+
+    vec3 halfDir = normalize(lightDir + viewDir);
+
+    float NdotL = max(dot(worldNormal, lightDir), 0.0);
+    float NdotV = abs(dot(worldNormal, viewDir));
+    float LdotH = max(dot(lightDir, halfDir), 0.0);
+    float NdotH = max(dot(worldNormal, halfDir), 0.0);
+
+    // Anisotropic dot products
+    float TdotH = dot(worldTangent, halfDir);
+    float BdotH = dot(worldBitangent, halfDir);
+    float TdotV = dot(worldTangent, viewDir);
+    float BdotV = dot(worldBitangent, viewDir);
+    float TdotL = dot(worldTangent, lightDir);
+    float BdotL = dot(worldBitangent, lightDir);
+
+    // Anisotropic specular: V * D * PI (Lux convention)
+    // V already includes 1/(4*NdotV*NdotL), so no separate denominator needed
+    float D = DistributionGGXAniso(TdotH, BdotH, NdotH, mt, mb);
+    float V = GeometrySmithAniso(TdotV, BdotV, NdotV, TdotL, BdotL, NdotL, mt, mb);
+    vec3 F = FresnelSchlick(LdotH, F0);
+
+    float specularTerm = max(0.0, (V * D) * PI * NdotL);
+
+    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+
+    // Disney Diffuse with averaged perceptual roughness
+    float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, perceptualRoughness) * NdotL;
+
+    // Shadow
+    float shadow = 0.0;
+    if (_LightShadowEnabled[i] != 0) {
+        if (lightType == 0) {
+            shadow = SampleDirectionalShadow(worldPos, worldNormal);
+        } else {
+            int slot = _LightShadowSlot[i];
+            if (slot >= 0) {
+                if (lightType == 1)
+                    shadow = SamplePointShadow(i, slot, worldPos, worldNormal);
+                else
+                    shadow = SampleSpotShadow(i, slot, worldPos, worldNormal);
+            }
+        }
+    }
+    float shadowFactor = 1.0 - shadow;
+
+    vec3 lightColor = _LightColors[i] * _LightIntensities[i] * attenuation * shadowFactor;
+
+    // Final composition (matches Lux BRDF output structure)
+    return (kD * albedo * diffuseTerm + specularTerm * F) * lightColor * ao;
+}
+
+// ============================================================
+//  Anisotropic forward lighting entry point
+// ============================================================
+
+vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                                    vec3 worldTangent, vec3 worldBitangent,
+                                    vec3 albedo, float metallic,
+                                    float roughness, float anisotropy, float ao)
+{
+    roughness = ApplySpecularAA(roughness, worldNormal);
+
+    // Split roughness into tangent/bitangent based on anisotropy [-1, 1]
+    float roughnessT = roughness * (1.0 + anisotropy);
+    float roughnessB = roughness * (1.0 - anisotropy);
+
+    // Square roughness for D and V functions (Lux convention)
+    float mt = roughnessT * roughnessT;
+    float mb = roughnessB * roughnessB;
+
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    vec3 totalLight = vec3(0.0);
+
+    for (int i = 0; i < _LightCount && i < MAX_FORWARD_LIGHTS; i++) {
+        totalLight += CalculateSingleLightAniso(i, worldPos, worldNormal, viewDir,
+                                                 worldTangent, worldBitangent,
+                                                 albedo, metallic, mt, mb, roughness, ao, F0);
+    }
+
+    return totalLight;
 }
 
 // ============================================================
@@ -287,6 +411,9 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
 vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
                               vec3 albedo, float metallic, float roughness, float ao)
 {
+    // Specular anti-aliasing: increase roughness where normal variance is high
+    roughness = ApplySpecularAA(roughness, worldNormal);
+
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
     vec3 totalLight = vec3(0.0);
 

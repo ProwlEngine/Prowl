@@ -1,8 +1,8 @@
-Shader "Default/Standard"
+Shader "Default/StandardAnisotropic"
 
 Properties
 {
-    _MainTex ("Albedo", Texture2D) = "grid"
+    _MainTex ("Albedo", Texture2D) = "white"
     _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
     _Tiling ("Tiling", Vector2) = (1.0, 1.0)
     _Offset ("Offset", Vector2) = (0.0, 0.0)
@@ -16,18 +16,11 @@ Properties
 
     _AlphaCutoff ("Alpha Cutoff", Float) = 0.5
 
-    _ParallaxMap ("Height Map (G)", Texture2D) = "black"
-    _Parallax ("Height Scale", Float) = 0.0
-    _ParallaxSteps ("POM Steps", Int) = 16
-
-    _TranslucencyMap ("Translucency (B) Occlusion (G)", Texture2D) = "white"
-    _TranslucencyStrength ("Translucency Strength", Float) = 0.0
-    _ScatteringPower ("Scattering Power", Float) = 0.0
-    _ScatteringDistortion ("Scattering Distortion", Float) = 0.5
-    _ScatteringScale ("Scattering Scale", Float) = 1.0
+    _Anisotropy ("Anisotropy", Float) = 0.5
+    _AnisoDirectionMap ("Anisotropy Direction (RG)", Texture2D) = "normal"
 }
 
-Pass "Standard"
+Pass "StandardAniso"
 {
     Tags { "RenderOrder" = "Opaque" }
     Cull Back
@@ -59,7 +52,6 @@ Pass "Standard"
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
 				vBitangent = cross(vNormal, vTangent);
-				// Guard against degenerate tangent frames (parallel normal/tangent)
 				if (dot(vBitangent, vBitangent) < 0.000001) {
 					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));
 					vBitangent = cross(vNormal, vTangent);
@@ -70,7 +62,8 @@ Pass "Standard"
 
 		Fragment
 		{
-            #include "StandardSurface"
+            #include "Fragment"
+            #include "Lighting"
 
 			layout (location = 0) out vec4 fragColor;
 
@@ -89,31 +82,66 @@ Pass "Standard"
 			uniform vec4 _MainColor;
 			uniform float _AlphaCutoff;
 
-			uniform sampler2D _ParallaxMap;
-			uniform float _Parallax;
-			uniform int _ParallaxSteps;
-
-			uniform sampler2D _TranslucencyMap;
-			uniform float _TranslucencyStrength;
-			uniform float _ScatteringPower;
-			uniform float _ScatteringDistortion;
-			uniform float _ScatteringScale;
+			uniform float _Anisotropy;
+			uniform sampler2D _AnisoDirectionMap;
 
 			void main()
 			{
-				vec4 result = StandardSurface(texCoord0, worldPos, vColor,
-				    vNormal, vTangent, vBitangent,
-				    _MainTex, _NormalTex, _SurfaceTex, _EmissionTex,
-				    _EmissionIntensity, _MainColor,
-				    _ParallaxMap, _Parallax, _ParallaxSteps,
-				    _TranslucencyMap, _TranslucencyStrength,
-				    _ScatteringPower, _ScatteringDistortion, _ScatteringScale);
+				// Albedo
+				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
+				vec3 baseColor = gammaToLinearSpace(albedo.rgb);
 
-				// Alpha cutout — discard below threshold, output fully opaque
-				if (result.a < _AlphaCutoff)
+				// Alpha cutout
+				if (albedo.a < _AlphaCutoff)
 				    discard;
 
-				fragColor = vec4(result.rgb, 1.0);
+				// Normal mapping
+				vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
+
+				// Surface: R = AO, G = Roughness, B = Metallic
+				vec4 surface = texture(_SurfaceTex, texCoord0);
+				float ao = 1.0 - surface.r;
+				float roughness = surface.g;
+				float metallic = surface.b;
+
+				// Tangent frame for anisotropic lighting
+				vec3 T = normalize(vTangent);
+				vec3 B = normalize(vBitangent);
+				vec3 N = normalize(worldNormal);
+
+				// Optionally rotate tangent direction by aniso direction map
+				// RG encodes direction in tangent plane, default (0.5, 0.5) = use mesh tangent as-is
+				vec2 anisoDir = texture(_AnisoDirectionMap, texCoord0).rg * 2.0 - 1.0;
+				float anisoDirLen = length(anisoDir);
+				vec3 anisoTangent, anisoBitangent;
+				if (anisoDirLen > 0.01)
+				{
+				    anisoDir /= anisoDirLen;
+				    anisoTangent = normalize(T * anisoDir.x + B * anisoDir.y);
+				    anisoBitangent = normalize(cross(N, anisoTangent));
+				}
+				else
+				{
+				    // No direction map or neutral — use mesh tangent directly
+				    anisoTangent = T;
+				    anisoBitangent = B;
+				}
+
+				// Emission
+				vec3 emission = texture(_EmissionTex, texCoord0).rgb * _EmissionIntensity;
+
+				// Anisotropic PBR lighting
+				vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
+				vec3 lighting = CalculateForwardLightingAniso(worldPos, N, viewDir,
+				    anisoTangent, anisoBitangent,
+				    baseColor, metallic, roughness, _Anisotropy, ao);
+
+				// Ambient + fog (energy conserved for metals)
+				vec3 diffuseColor = baseColor * (1.0 - metallic);
+				vec3 ambient = CalculateAmbient(N) * diffuseColor * ao * _AmbientStrength;
+				vec3 color = ApplyFog(ambient + lighting + emission, worldPos);
+
+				fragColor = vec4(color, 1.0);
 			}
 		}
 	ENDGLSL
@@ -146,10 +174,6 @@ Pass "DepthNormals"
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
 				vBitangent = cross(vNormal, vTangent);
-				if (dot(vBitangent, vBitangent) < 0.000001) {
-					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));
-					vBitangent = cross(vNormal, vTangent);
-				}
 #endif
 				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
 			}
@@ -168,17 +192,12 @@ Pass "DepthNormals"
 
 			uniform sampler2D _NormalTex;
 			uniform sampler2D _MainTex;
-			uniform vec4 _MainColor;
 			uniform float _AlphaCutoff;
 
 			void main()
 			{
-				// Alpha cutoff for cutout mode
-				if (_AlphaCutoff > 0.0)
-				{
-				    float alpha = texture(_MainTex, texCoord0).a * _MainColor.a;
-				    if (alpha < _AlphaCutoff) discard;
-				}
+				if (texture(_MainTex, texCoord0).a < _AlphaCutoff)
+				    discard;
 
                 vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
 				normalOut = EncodeViewNormal(worldNormal);
@@ -187,7 +206,7 @@ Pass "DepthNormals"
 	ENDGLSL
 }
 
-Pass "StandardShadow"
+Pass "ShadowCaster"
 {
     Tags { "LightMode" = "ShadowCaster" }
     Cull Back
@@ -217,16 +236,12 @@ Pass "StandardShadow"
 
 			in vec2 texCoord0;
 			uniform sampler2D _MainTex;
-			uniform vec4 _MainColor;
 			uniform float _AlphaCutoff;
 
 			void main()
 			{
-				if (_AlphaCutoff > 0.0)
-				{
-				    float alpha = texture(_MainTex, texCoord0).a * _MainColor.a;
-				    if (alpha < _AlphaCutoff) discard;
-				}
+				if (texture(_MainTex, texCoord0).a < _AlphaCutoff)
+				    discard;
                 gl_FragDepth = gl_FragCoord.z;
 			}
 		}

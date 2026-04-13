@@ -211,7 +211,9 @@ Pass "Terrain"
                 vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
                 vec3 lighting = CalculateForwardLighting(worldPos, finalWorldNormal, viewDir,
                                                          baseColor, metallic, roughness, 1.0);
-                vec3 ambient = CalculateAmbient(finalWorldNormal) * baseColor * _AmbientStrength;
+                // Energy-conserved ambient (metals have no diffuse ambient)
+                vec3 diffuseColor = baseColor * (1.0 - metallic);
+                vec3 ambient = CalculateAmbient(finalWorldNormal) * diffuseColor * _AmbientStrength;
                 vec3 color = ambient + lighting;
                 color = ApplyFog(color, worldPos);
 

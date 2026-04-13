@@ -73,6 +73,9 @@ public class DefaultRenderPipeline : RenderPipeline
             using var stream = EmbeddedResources.GetStream("Assets/Defaults/SkyDome.obj");
             s_skyDome = AssetImporting.ObjParser.ParseMesh(stream, "SkyDome");
         }
+
+        // Pre-compute and upload BRDF integration LUT for PBR
+        BRDFLutGenerator.UploadGlobal();
     }
 
     #endregion

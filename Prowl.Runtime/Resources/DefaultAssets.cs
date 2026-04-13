@@ -9,6 +9,8 @@ namespace Prowl.Runtime.Resources;
 public enum DefaultShader
 {
     Standard,
+    StandardTransparent,
+    StandardAnisotropic,
     Unlit,
     Line,
     Invalid,
@@ -81,5 +83,6 @@ public enum DefaultShaderInclude
     ShaderVariables,
     Shadow,
     VertexAttributes,
-    Lighting
+    Lighting,
+    StandardSurface
 }

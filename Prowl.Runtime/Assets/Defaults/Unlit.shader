@@ -4,6 +4,8 @@ Properties
 {
     _MainTex ("Texture", Texture2D) = "white"
     _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+    _Tiling ("Tiling", Vector2) = (1.0, 1.0)
+    _Offset ("Offset", Vector2) = (0.0, 0.0)
 }
 
 Pass "Unlit"
@@ -21,10 +23,13 @@ Pass "Unlit"
 			out vec3 worldPos;
 			out vec4 vColor;
 
+			uniform vec2 _Tiling;
+			uniform vec2 _Offset;
+
 			void main()
 			{
 				gl_Position = TransformClip(vertexPosition);
-				texCoord0 = vertexTexCoord0;
+				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
 				worldPos = TransformPosition(vertexPosition);
 				vColor = GetInstanceColor();
 			}
