@@ -675,7 +675,8 @@ public class TerrainEditor : ComponentEditor
 
             if (pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1) continue;
 
-            float scale = 0.8f + (float)rng.NextDouble() * 0.4f; // random 0.8-1.2
+            // TODO: Add MinScale/MaxScale fields to TreePrototype for per-type control
+            float scale = 0.8f + (float)rng.NextDouble() * 0.4f;
             float rotation = (float)(rng.NextDouble() * Math.PI * 2);
 
             data.Trees.Add(new TreeInstance

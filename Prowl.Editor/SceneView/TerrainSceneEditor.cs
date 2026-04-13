@@ -339,18 +339,22 @@ public class TerrainSceneEditor : ISceneViewEditor
     {
         minX = int.MaxValue; minZ = int.MaxValue;
         maxX = int.MinValue; maxZ = int.MinValue;
-        int elementsPerRow = rowStride;
+        int elementsPerPixel = rowStride / res; // 1 for heightmap, 4 for splatmap
 
         for (int z = 0; z < res; z++)
         {
-            for (int i = 0; i < elementsPerRow; i++)
+            for (int x = 0; x < res; x++)
             {
-                int idx = z * elementsPerRow + i;
-                if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
+                int baseIdx = (z * res + x) * elementsPerPixel;
+                bool changed = false;
+                for (int c = 0; c < elementsPerPixel; c++)
                 {
-                    int x = i / (rowStride / res); // for stride=res, x=i; for stride=res*4, x=i/4
-                    if (rowStride != res) x = i / (rowStride / res);
-                    else x = i;
+                    int idx = baseIdx + c;
+                    if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
+                    { changed = true; break; }
+                }
+                if (changed)
+                {
                     minX = Math.Min(minX, x);
                     maxX = Math.Max(maxX, x);
                     minZ = Math.Min(minZ, z);
