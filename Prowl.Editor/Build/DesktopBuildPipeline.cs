@@ -348,8 +348,8 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("    <PackageReference Include=\"Silk.NET.OpenAL.Soft.Native\" Version=\"1.23.1\" />");
         sb.AppendLine("    <PackageReference Include=\"Jitter2\" Version=\"2.7.3\" />");
         sb.AppendLine("    <PackageReference Include=\"Magick.NET-Q16-AnyCPU\" Version=\"14.9.1\" />");
-        sb.AppendLine("    <PackageReference Include=\"Prowl.Echo\" Version=\"2.0.0\" />");
-        sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.2.0\" />");
+        sb.AppendLine("    <PackageReference Include=\"Prowl.Echo\" Version=\"2.1.2\" />");
+        sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.3.1\" />");
         sb.AppendLine("  </ItemGroup>");
 
         // User NuGet packages from ProjectSettings/Packages.json
