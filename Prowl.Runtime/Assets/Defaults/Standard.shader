@@ -91,18 +91,9 @@ Pass "Standard"
 		Fragment
 		{
             #include "Fragment"
+            #include "Lighting"
 
-			//#define USEGENERATEDNORMALS
-
-			// GBuffer layout:
-			// BufferA: RGB = Albedo, A = AO
-			// BufferB: RGB = Normal (view space), A = ShadingMode
-			// BufferC: R = Roughness, G = Metalness, B = Specular, A = Unused
-			// BufferD: Custom Data per Shading Mode (e.g., shading mode 0 = Unlit with RGBA as Emissive)
-			layout (location = 0) out vec4 gBufferA;
-			layout (location = 1) out vec4 gBufferB;
-			layout (location = 2) out vec4 gBufferC;
-			layout (location = 3) out vec4 gBufferD;
+			layout (location = 0) out vec4 fragColor;
 
 			in vec2 texCoord0;
 			in vec3 worldPos;
@@ -119,54 +110,6 @@ Pass "Standard"
 
 			uniform vec4 _MainColor;
 
-            // Generated Normals implementation (unique to Standard shader)
-            const float normalThreshold = 0.05;
-            const float normalClamp = 0.5;
-
-            float GetDif(float lOriginalAlbedo, vec2 offsetCoord) {
-                float lNearbyAlbedo = length(texture(_MainTex, offsetCoord).rgb);
-
-                float dif = lOriginalAlbedo - lNearbyAlbedo;
-
-                if (dif > 0.0) dif = max(dif - normalThreshold, 0.0);
-                else           dif = min(dif + normalThreshold, 0.0);
-
-                return clamp(dif, -normalClamp, normalClamp);
-            }
-
-            vec3 GenerateNormals(vec3 color, mat3 TBN) {
-                // Calculate texture dimensions
-                vec2 texSize = vec2(textureSize(_MainTex, 0));
-                vec2 texelSize = 1.0 / texSize;
-
-                float lOriginalAlbedo = length(color.rgb);
-                float normalMult = 1.0;
-
-                vec3 normalMap = vec3(0.0, 0.0, 1.0);
-
-                // Sample in four directions around current texel
-                vec2 offsetCoord = texCoord0 + vec2(0.0, texelSize.y);
-                normalMap.y += GetDif(lOriginalAlbedo, offsetCoord);
-
-                offsetCoord = texCoord0 + vec2(texelSize.x, 0.0);
-                normalMap.x += GetDif(lOriginalAlbedo, offsetCoord);
-
-                offsetCoord = texCoord0 + vec2(0.0, -texelSize.y);
-                normalMap.y -= GetDif(lOriginalAlbedo, offsetCoord);
-
-                offsetCoord = texCoord0 + vec2(-texelSize.x, 0.0);
-                normalMap.x -= GetDif(lOriginalAlbedo, offsetCoord);
-
-                normalMap.xy *= normalMult;
-                normalMap.xy = clamp(normalMap.xy, vec2(-1.0), vec2(1.0));
-
-                if (normalMap.xy != vec2(0.0, 0.0)) {
-                    return normalize(TBN * normalMap);
-                }
-
-                return normalize(vNormal);
-            }
-
 			void main()
 			{
 				// Albedo
@@ -175,26 +118,13 @@ Pass "Standard"
 				// Normals
                 vec3 worldNormal;
 #ifdef HAS_TANGENTS
-				// Create tangent to world matrix
 				mat3 TBN = mat3(normalize(vTangent), normalize(vBitangent), normalize(vNormal));
-
-                // Normal mapping with fallback to generated normals
-                #ifdef USEGENERATEDNORMALS
-                    // Generate normals from albedo texture
-                    worldNormal = GenerateNormals(albedo.rgb, TBN);
-                #else
-                    // Sample the normal map (original approach)
-                    vec3 normalMapSample = texture(_NormalTex, texCoord0).rgb;
-                    // Convert from [0,1] to [-1,1] range
-                    vec3 normalTS = normalMapSample * 2.0 - 1.0;
-                    // Transform normal from tangent space to world space
-                    worldNormal = normalize(TBN * normalTS);
-                #endif
+                vec3 normalMapSample = texture(_NormalTex, texCoord0).rgb;
+                vec3 normalTS = normalMapSample * 2.0 - 1.0;
+                worldNormal = normalize(TBN * normalTS);
 #else
-                worldNormal = vNormal;
+                worldNormal = normalize(vNormal);
 #endif
-                // Transform to view space
-                vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * worldNormal);
 
 				// AO, roughness, metallic
 				vec4 surface = texture(_SurfaceTex, texCoord0);
@@ -203,32 +133,117 @@ Pass "Standard"
 				float metallic = surface.b;
 
 				// Emission
-				vec4 emission = texture(_EmissionTex, texCoord0) * _EmissionIntensity;
+				vec3 emission = texture(_EmissionTex, texCoord0).rgb * _EmissionIntensity;
 
 				// Convert albedo to linear space
-				vec3 baseColor = albedo.rgb;
-				baseColor.rgb = gammaToLinearSpace(baseColor.rgb);
+				vec3 baseColor = gammaToLinearSpace(albedo.rgb);
 
-				// Calculate specular from metallic workflow
-				// For non-metals, specular is 0.04 (4% reflectance)
-				// For metals, specular is derived from albedo
-				float specular = mix(0.04, 1.0, metallic);
+				// View direction
+				vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
 
-				// Output to GBuffer
-				// BufferA: RGB = Albedo, A = AO
-				gBufferA = vec4(baseColor, ao);
+				// Forward lighting
+				vec3 lighting = CalculateForwardLighting(worldPos, worldNormal, viewDir,
+				                                         baseColor, metallic, roughness, ao);
 
-				// BufferB: RGB = Normal (view space), A = ShadingMode
-				// ShadingMode: 0 = Unlit, 1 = Lit
-				float shadingMode = 1.0; // Lit by default for Standard shader
-				gBufferB = vec4(viewNormal * 0.5 + 0.5, shadingMode); // Encode normal to [0,1] range
+				// Ambient
+				vec3 ambient = CalculateAmbient(worldNormal) * baseColor * ao * _AmbientStrength;
 
-				// BufferC: R = Roughness, G = Metalness, B = Specular, A = Unused
-				gBufferC = vec4(roughness, metallic, specular, 0.0);
+				// Combine
+				vec3 color = ambient + lighting + emission;
 
-				// BufferD: Custom Data per Shading Mode
-				// For Lit mode (1), we store emission data
-				gBufferD = vec4(emission.rgb, 0.0);
+				// Fog
+				color = ApplyFog(color, worldPos);
+
+				fragColor = vec4(color, albedo.a);
+			}
+		}
+	ENDGLSL
+}
+
+Pass "DepthNormals"
+{
+    Tags { "LightMode" = "DepthNormals" }
+
+    Cull Back
+
+	GLSLPROGRAM
+
+		Vertex
+		{
+            #include "Fragment"
+            #include "VertexAttributes"
+
+			out vec3 vNormal;
+			out vec3 vTangent;
+			out vec3 vBitangent;
+			out vec2 texCoord0;
+
+#ifdef GPU_INSTANCING
+            layout(location = 8) in vec4 instanceModelRow0;
+            layout(location = 9) in vec4 instanceModelRow1;
+            layout(location = 10) in vec4 instanceModelRow2;
+            layout(location = 11) in vec4 instanceModelRow3;
+#endif
+
+			void main()
+			{
+#ifdef GPU_INSTANCING
+				mat4 modelMatrix = mat4(instanceModelRow0, instanceModelRow1, instanceModelRow2, instanceModelRow3);
+				mat4 mvpMatrix = PROWL_MATRIX_VP * modelMatrix;
+#else
+				mat4 modelMatrix = PROWL_MATRIX_M;
+				mat4 mvpMatrix = PROWL_MATRIX_MVP;
+#endif
+
+#ifdef SKINNED
+				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
+				vec3 skinnedNormal = GetSkinnedNormal(vertexNormal);
+				gl_Position = mvpMatrix * skinnedPos;
+				vNormal = normalize(mat3(modelMatrix) * skinnedNormal);
+#ifdef HAS_TANGENTS
+				vec3 skinnedTangent = GetSkinnedNormal(vertexTangent.xyz);
+				vTangent = normalize(mat3(modelMatrix) * skinnedTangent);
+				vBitangent = cross(vNormal, vTangent);
+#endif
+#else
+				gl_Position = mvpMatrix * vec4(vertexPosition, 1.0);
+				vNormal = normalize(mat3(modelMatrix) * vertexNormal);
+#ifdef HAS_TANGENTS
+				vTangent = normalize(mat3(modelMatrix) * vertexTangent.xyz);
+				vBitangent = cross(vNormal, vTangent);
+#endif
+#endif
+				texCoord0 = vertexTexCoord0;
+			}
+		}
+
+		Fragment
+		{
+            #include "Fragment"
+
+			layout (location = 0) out vec4 normalOut;
+
+			in vec3 vNormal;
+			in vec3 vTangent;
+			in vec3 vBitangent;
+			in vec2 texCoord0;
+
+			uniform sampler2D _NormalTex;
+
+			void main()
+			{
+                vec3 worldNormal;
+#ifdef HAS_TANGENTS
+				mat3 TBN = mat3(normalize(vTangent), normalize(vBitangent), normalize(vNormal));
+                vec3 normalMapSample = texture(_NormalTex, texCoord0).rgb;
+                vec3 normalTS = normalMapSample * 2.0 - 1.0;
+                worldNormal = normalize(TBN * normalTS);
+#else
+                worldNormal = normalize(vNormal);
+#endif
+				// Encode view-space normal to [0,1]
+				vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * worldNormal);
+				normalOut = vec4(viewNormal * 0.5 + 0.5, 1.0);
 			}
 		}
 	ENDGLSL

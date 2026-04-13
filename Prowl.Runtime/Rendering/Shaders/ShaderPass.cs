@@ -112,8 +112,8 @@ public sealed class ShaderPass
             }
         }
 
-        frag = frag.Insert(0, $"#version 410\n");
-        vert = vert.Insert(0, $"#version 410\n");
+        frag = frag.Insert(0, $"#version 450\n");
+        vert = vert.Insert(0, $"#version 450\n");
 
 
         Debug.Log("Compiling shader pass " + Name + " with keywords: " + keywords);

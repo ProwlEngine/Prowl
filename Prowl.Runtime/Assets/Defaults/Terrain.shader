@@ -121,11 +121,9 @@ Pass "Terrain"
         Fragment
         {
             #include "Fragment"
+            #include "Lighting"
 
-            layout (location = 0) out vec4 gBufferA;
-            layout (location = 1) out vec4 gBufferB;
-            layout (location = 2) out vec4 gBufferC;
-            layout (location = 3) out vec4 gBufferD;
+            layout (location = 0) out vec4 fragColor;
 
             in vec2 texCoord0;
             in vec3 worldPos;
@@ -204,6 +202,7 @@ Pass "Terrain"
                 vec3 B = cross(N, T);
                 vec3 finalWorldNormal = normalize(mat3(T, B, N) * blendedNormalTS);
 
+                // Brush visualization
                 if (_BrushVisible > 0.5 && _BrushRadius > 0.0)
                 {
                     float dist = length(texCoord0 - _BrushPosition);
@@ -215,12 +214,15 @@ Pass "Terrain"
                     }
                 }
 
-                vec3 viewNormal = normalize((PROWL_MATRIX_V * vec4(finalWorldNormal, 0.0)).xyz);
+                // Forward lighting
+                vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
+                vec3 lighting = CalculateForwardLighting(worldPos, finalWorldNormal, viewDir,
+                                                         baseColor, metallic, roughness, 1.0);
+                vec3 ambient = CalculateAmbient(finalWorldNormal) * baseColor * _AmbientStrength;
+                vec3 color = ambient + lighting;
+                color = ApplyFog(color, worldPos);
 
-                gBufferA = vec4(baseColor, 1.0);
-                gBufferB = vec4(viewNormal * 0.5 + 0.5, 1.0);
-                gBufferC = vec4(roughness, metallic, 0.0, 0.0);
-                gBufferD = vec4(0.0);
+                fragColor = vec4(color, 1.0);
             }
         }
     ENDGLSL
@@ -283,6 +285,81 @@ Pass "TerrainShadow"
             void main()
             {
                 gl_FragDepth = gl_FragCoord.z;
+            }
+        }
+    ENDGLSL
+}
+
+Pass "TerrainDepthNormals"
+{
+    Tags { "LightMode" = "DepthNormals" }
+    Cull Back
+
+    GLSLPROGRAM
+
+        Vertex
+        {
+            #include "Fragment"
+            #include "VertexAttributes"
+
+            out vec3 worldNormal;
+
+#ifdef GPU_INSTANCING
+            layout(location = 8) in vec4 instanceModelRow0;
+            layout(location = 9) in vec4 instanceModelRow1;
+            layout(location = 10) in vec4 instanceModelRow2;
+            layout(location = 11) in vec4 instanceModelRow3;
+            layout(location = 12) in vec4 instanceColor;
+#endif
+
+            uniform sampler2D _Heightmap;
+            uniform float _TerrainSize;
+            uniform float _TerrainHeight;
+            uniform mat4 _TerrainWorldToLocal;
+
+            void main()
+            {
+#ifdef GPU_INSTANCING
+                mat4 instanceModel = mat4(instanceModelRow0, instanceModelRow1, instanceModelRow2, instanceModelRow3);
+                vec4 worldPos4 = instanceModel * vec4(vertexPosition, 1.0);
+                vec3 terrainLocal = (_TerrainWorldToLocal * worldPos4).xyz;
+                vec2 terrainUV = terrainLocal.xz / _TerrainSize;
+
+                float height = texture(_Heightmap, terrainUV).r * _TerrainHeight;
+                vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
+                vec3 worldPosition = (inverse(_TerrainWorldToLocal) * vec4(displacedLocal, 1.0)).xyz;
+
+                float hmSize = float(textureSize(_Heightmap, 0).x);
+                float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
+                float hR = texture(_Heightmap, terrainUV + vec2(texelSize, 0.0)).r * _TerrainHeight;
+                float hL = texture(_Heightmap, terrainUV - vec2(texelSize, 0.0)).r * _TerrainHeight;
+                float hU = texture(_Heightmap, terrainUV + vec2(0.0, texelSize)).r * _TerrainHeight;
+                float hD = texture(_Heightmap, terrainUV - vec2(0.0, texelSize)).r * _TerrainHeight;
+                float wStep = texelSize * _TerrainSize;
+                float slopeX = (hR - hL) / (wStep * 2.0);
+                float slopeZ = (hU - hD) / (wStep * 2.0);
+                vec3 localNormal = normalize(vec3(-slopeX, 1.0, -slopeZ));
+                worldNormal = normalize((inverse(_TerrainWorldToLocal) * vec4(localNormal, 0.0)).xyz);
+
+                gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
+#else
+                gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+                worldNormal = normalize((PROWL_MATRIX_M * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+#endif
+            }
+        }
+
+        Fragment
+        {
+            #include "Fragment"
+
+            layout (location = 0) out vec4 normalOut;
+            in vec3 worldNormal;
+
+            void main()
+            {
+                vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * worldNormal);
+                normalOut = vec4(viewNormal * 0.5 + 0.5, 1.0);
             }
         }
     ENDGLSL

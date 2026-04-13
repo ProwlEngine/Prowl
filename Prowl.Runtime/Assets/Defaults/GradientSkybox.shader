@@ -42,10 +42,7 @@ Pass "GradientSkybox"
         {
             #include "Fragment"
 
-            layout (location = 0) out vec4 gBufferA;
-            layout (location = 1) out vec4 gBufferB;
-            layout (location = 2) out vec4 gBufferC;
-            layout (location = 3) out vec4 gBufferD;
+            layout (location = 0) out vec4 fragColor;
 
             in vec3 vDirection;
 
@@ -57,12 +54,7 @@ Pass "GradientSkybox"
             {
                 float t = pow(clamp(vDirection.y * 0.5 + 0.5, 0.0, 1.0), _Exponent);
                 vec3 color = mix(_BottomColor.rgb, _TopColor.rgb, t);
-
-                // Unlit skybox output
-                gBufferA = vec4(color, 0.0);
-                gBufferB = vec4(0.0);
-                gBufferC = vec4(0.0);
-                gBufferD = vec4(0.0);
+                fragColor = vec4(color, 1.0);
             }
         }
     ENDGLSL

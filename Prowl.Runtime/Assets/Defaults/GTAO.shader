@@ -33,7 +33,7 @@ Pass "CalculateGTAO"
         #include "Fragment"
 
         uniform sampler2D _CameraDepthTexture;
-        uniform sampler2D _GBufferB; // Normals
+        uniform sampler2D _CameraNormalsTexture; // View-space normals from depth pre-pass
 
         uniform int _Slices;
         uniform int _DirectionSamples;
@@ -141,7 +141,7 @@ Pass "CalculateGTAO"
             vec3 viewPos = getViewPos(TexCoords, depth);
 
             // Get view space normal from GBuffer
-            vec4 normalData = texture(_GBufferB, TexCoords);
+            vec4 normalData = texture(_CameraNormalsTexture, TexCoords);
             vec3 viewNormal = normalize(normalData.xyz * 2.0 - 1.0);
 
             // Generate temporal dither pattern

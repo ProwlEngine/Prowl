@@ -46,10 +46,7 @@ Pass "CubemapSkybox"
         {
             #include "Fragment"
 
-            layout (location = 0) out vec4 gBufferA;
-            layout (location = 1) out vec4 gBufferB;
-            layout (location = 2) out vec4 gBufferC;
-            layout (location = 3) out vec4 gBufferD;
+            layout (location = 0) out vec4 fragColor;
 
             in vec3 vDirection;
 
@@ -121,10 +118,7 @@ Pass "CubemapSkybox"
                 vec4 color = sampleCubemap(dir);
                 color.rgb *= _Tint.rgb * _Exposure;
 
-                gBufferA = vec4(color.rgb, 0.0);
-                gBufferB = vec4(0.0);
-                gBufferC = vec4(0.0);
-                gBufferD = vec4(0.0);
+                fragColor = vec4(color.rgb, 1.0);
             }
         }
     ENDGLSL

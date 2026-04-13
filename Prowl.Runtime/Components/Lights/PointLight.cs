@@ -4,12 +4,8 @@
 using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
-
-using Material = Prowl.Runtime.Resources.Material;
-using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -26,8 +22,6 @@ public class PointLight : Light
 
     public Resolution ShadowResolution = Resolution._256;
     public float Range = 10.0f;
-
-    private Material? _lightMaterial;
 
     // Shadow cubemap data - 6 faces stored in a 3x2 grid in the shadow atlas
     private Float4[] _shadowFaceParams = new Float4[6]; // xy = atlas pos, z = face size, w = far plane
@@ -123,60 +117,27 @@ public class PointLight : Light
         _shadowsValid = true;
     }
 
-    private static Mesh? _mesh;
-    public override void OnRenderLight(RenderTexture gBuffer, RenderTexture destination, RenderPipeline.CameraSnapshot css)
+    public override ForwardLightData GetForwardLightData()
     {
-        // Create sphere mesh if needed (shared by all point lights)
-        if (_mesh == null || !_mesh.IsValid())
+        return new ForwardLightData
         {
-            _mesh = Mesh.CreateSphere(1.0f, 8, 8); // Unit sphere, scaled by range
-        }
+            Type = LightType.Point,
+            Position = Transform.Position,
+            Direction = Transform.Forward,
+            Color = new Float3(this.Color.R, this.Color.G, this.Color.B),
+            Intensity = Intensity,
+            Range = Range,
+            SpotAngle = 0,
+            InnerSpotAngle = 0,
 
-        // Create material if needed
-        _lightMaterial ??= new Material(Shader.LoadDefault(DefaultShader.PointLight));
+            ShadowEnabled = CastShadows && _shadowsValid,
+            ShadowBias = ShadowBias,
+            ShadowNormalBias = ShadowNormalBias,
+            ShadowStrength = ShadowStrength,
+            ShadowQuality = (float)ShadowQuality,
 
-        // Set GBuffer textures
-        _lightMaterial.SetTexture("_GBufferA", gBuffer.InternalTextures[0]);
-        _lightMaterial.SetTexture("_GBufferB", gBuffer.InternalTextures[1]);
-        _lightMaterial.SetTexture("_GBufferC", gBuffer.InternalTextures[2]);
-        _lightMaterial.SetTexture("_GBufferD", gBuffer.InternalTextures[3]);
-        _lightMaterial.SetTexture("_CameraDepthTexture", gBuffer.InternalDepth);
-
-        // Set point light properties
-        _lightMaterial.SetVector("_LightPosition", Transform.Position);
-        _lightMaterial.SetColor("_LightColor", Color);
-        _lightMaterial.SetFloat("_LightIntensity", (float)Intensity);
-        _lightMaterial.SetFloat("_LightRange", (float)Range);
-
-        // Set shadow properties
-        var shadowAtlas = ShadowAtlas.GetAtlas();
-        _lightMaterial.SetTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
-        _lightMaterial.SetFloat("_ShadowsEnabled", _shadowsValid ? 1.0f : 0.0f);
-        _lightMaterial.SetFloat("_ShadowBias", (float)ShadowBias);
-        _lightMaterial.SetFloat("_ShadowNormalBias", (float)ShadowNormalBias);
-        _lightMaterial.SetFloat("_ShadowStrength", (float)ShadowStrength);
-        _lightMaterial.SetFloat("_ShadowQuality", (float)ShadowQuality);
-
-        // Set shadow matrices and face parameters for all 6 faces
-        for (int i = 0; i < 6; i++)
-        {
-            _lightMaterial.SetMatrix($"_ShadowMatrix{i}", _shadowMatrices[i]);
-            _lightMaterial.SetVector($"_ShadowFaceParams{i}", _shadowFaceParams[i]);
-        }
-
-        // Create model matrix - scale sphere by range and position at light location
-        Float4x4 model = this.Transform.LocalToWorldMatrix;
-        Float4x4 scale = Float4x4.CreateScale(new Float3(Range, Range, Range));
-        model = model * scale;
-
-        // Set transform matrices
-        _lightMaterial.SetMatrix("prowl_ObjectToWorld", model);
-        _lightMaterial.SetMatrix("prowl_WorldToObject", model.Invert());
-
-        // Bind destination framebuffer
-        Graphics.BindFramebuffer(destination.frameBuffer);
-
-        // Draw sphere mesh
-        RenderPipeline.DrawMeshNow(_mesh, _lightMaterial, 0);
+            PointShadowMatrices = _shadowMatrices,
+            PointShadowFaceParams = _shadowFaceParams,
+        };
     }
 }

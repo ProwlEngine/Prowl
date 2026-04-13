@@ -127,11 +127,9 @@ Pass "Grass"
 		Fragment
 		{
             #include "Fragment"
+            #include "Lighting"
 
-			layout (location = 0) out vec4 gBufferA;
-			layout (location = 1) out vec4 gBufferB;
-			layout (location = 2) out vec4 gBufferC;
-			layout (location = 3) out vec4 gBufferD;
+			layout (location = 0) out vec4 fragColor;
 
 			in vec2 texCoord0;
 			in vec4 vColor;
@@ -146,21 +144,132 @@ Pass "Grass"
                 vec4 texColor = texture(_MainTex, texCoord0);
                 vec4 finalColor = texColor * vColor;
 
-                // Alpha cutout
                 if (finalColor.a < _AlphaCutoff)
                     discard;
 
                 vec3 baseColor = gammaToLinearSpace(finalColor.rgb);
-                vec3 viewNormal = normalize((PROWL_MATRIX_V * vec4(vNormal, 0.0)).xyz);
+                vec3 normal = normalize(vNormal);
 
-				gBufferA = vec4(baseColor, 1.0);
-				gBufferB = vec4(viewNormal * 0.5 + 0.5, 1.0); // shading mode = 1 (lit)
-				gBufferC = vec4(0.9, 0.0, 0.0, 0.0); // rough, non-metallic
-				gBufferD = vec4(0.0);
+                // Forward lighting — grass is rough, non-metallic
+                vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
+                vec3 lighting = CalculateForwardLighting(worldPos, normal, viewDir,
+                                                         baseColor, 0.0, 0.9, 1.0);
+                vec3 ambient = CalculateAmbient(normal) * baseColor * _AmbientStrength;
+                vec3 color = ambient + lighting;
+                color = ApplyFog(color, worldPos);
+
+				fragColor = vec4(color, 1.0);
 			}
 		}
 	ENDGLSL
 }
 
-// No shadow pass — billboard grass shadows face the shadow camera which causes misalignment.
-// Mesh-based details use the Standard shader which has its own shadow pass.
+Pass "GrassDepthNormals"
+{
+    Tags { "LightMode" = "DepthNormals" }
+    Cull Off
+
+	GLSLPROGRAM
+
+		Vertex
+		{
+            #include "Fragment"
+            #include "VertexAttributes"
+
+            out vec3 vNormal;
+            out vec2 texCoord0;
+
+#ifdef GPU_INSTANCING
+            layout(location = 8) in vec4 instanceModelRow0;
+            layout(location = 9) in vec4 instanceModelRow1;
+            layout(location = 10) in vec4 instanceModelRow2;
+            layout(location = 11) in vec4 instanceModelRow3;
+            layout(location = 12) in vec4 instanceColor;
+            layout(location = 13) in vec4 instanceCustomData;
+#endif
+
+            uniform float _WindStrength;
+            uniform float _WindSpeed;
+            uniform float _Billboard;
+            uniform float _AlignToNormal;
+            uniform vec3 _TerrainUp;
+            uniform sampler2D _Heightmap;
+            uniform float _TerrainSize;
+            uniform float _TerrainHeight;
+            uniform mat4 _TerrainWorldToLocal;
+
+			void main()
+			{
+#ifdef GPU_INSTANCING
+                mat4 terrainToWorld = inverse(_TerrainWorldToLocal);
+                vec3 localPosition = instanceModelRow3.xyz;
+                vec3 bladePosition = (terrainToWorld * vec4(localPosition, 1.0)).xyz;
+                float scaleX = length(instanceModelRow0.xyz);
+                float scaleY = length(instanceModelRow1.xyz);
+
+                vec2 terrainUV = localPosition.xz / _TerrainSize;
+                float hmSize = float(textureSize(_Heightmap, 0).x);
+                float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
+                float hR = texture(_Heightmap, terrainUV + vec2(texelSize, 0.0)).r * _TerrainHeight;
+                float hL = texture(_Heightmap, terrainUV - vec2(texelSize, 0.0)).r * _TerrainHeight;
+                float hU = texture(_Heightmap, terrainUV + vec2(0.0, texelSize)).r * _TerrainHeight;
+                float hD = texture(_Heightmap, terrainUV - vec2(0.0, texelSize)).r * _TerrainHeight;
+                float wStep = texelSize * _TerrainSize;
+                vec3 localNormal = normalize(vec3(-(hR - hL) / (wStep * 2.0), 1.0, -(hU - hD) / (wStep * 2.0)));
+                vec3 terrainNormal = normalize((terrainToWorld * vec4(localNormal, 0.0)).xyz);
+
+                vec3 up = (_AlignToNormal > 0.5) ? terrainNormal : _TerrainUp;
+                vec3 localOffset;
+                if (_Billboard > 0.5) {
+                    vec3 cameraRight = vec3(PROWL_MATRIX_V[0][0], PROWL_MATRIX_V[1][0], PROWL_MATRIX_V[2][0]);
+                    cameraRight = normalize(cameraRight - up * dot(cameraRight, up));
+                    localOffset = cameraRight * vertexPosition.x * scaleX + up * vertexPosition.y * scaleY;
+                } else {
+                    vec3 right = normalize((terrainToWorld * vec4(normalize(instanceModelRow0.xyz), 0.0)).xyz);
+                    right = normalize(right - up * dot(right, up));
+                    localOffset = right * vertexPosition.x * scaleX + up * vertexPosition.y * scaleY;
+                }
+
+                float windPhase = instanceCustomData.x;
+                float bendFactor = instanceCustomData.y;
+                float windAmount = max(0.0, vertexPosition.y);
+                float wind = sin(_Time.y * _WindSpeed + bladePosition.x * 0.7 + bladePosition.z * 0.4 + windPhase) * _WindStrength * bendFactor;
+                localOffset.x += wind * windAmount;
+                localOffset.z += wind * windAmount * 0.3;
+
+                vec3 worldPosition = bladePosition + localOffset;
+                worldPosition += up * 0.05 * scaleY;
+                vNormal = terrainNormal;
+                gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
+                texCoord0 = vertexTexCoord0;
+#else
+                gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+                vNormal = vec3(0.0, 1.0, 0.0);
+                texCoord0 = vertexTexCoord0;
+#endif
+			}
+		}
+
+		Fragment
+		{
+            #include "Fragment"
+
+			layout (location = 0) out vec4 normalOut;
+            in vec3 vNormal;
+            in vec2 texCoord0;
+
+            uniform sampler2D _MainTex;
+            uniform float _AlphaCutoff;
+
+			void main()
+			{
+                vec4 texColor = texture(_MainTex, texCoord0);
+                if (texColor.a < _AlphaCutoff)
+                    discard;
+
+                vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * normalize(vNormal));
+                normalOut = vec4(viewNormal * 0.5 + 0.5, 1.0);
+			}
+		}
+	ENDGLSL
+}

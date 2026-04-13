@@ -59,6 +59,13 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         RenderTexture resolvedRT = RenderTexture.GetTemporaryRT(width, height, false, [context.SceneColor.MainTexture.ImageFormat]);
         RenderTexture blurTempRT = RenderTexture.GetTemporaryRT(width, height, false, [context.SceneColor.MainTexture.ImageFormat]);
 
+        // Explicitly set depth and normals textures from the pre-pass
+        if (context.GBuffer.IsValid())
+        {
+            _mat.SetTexture("_CameraDepthTexture", context.GBuffer.InternalDepth);
+            _mat.SetTexture("_CameraNormalsTexture", context.GBuffer.InternalTextures[0]);
+        }
+
         // Pass 0: Ray March - Trace rays and output hit UVs + confidence
         _mat.SetFloat("_MaxSteps", MaxSteps);
         _mat.SetFloat("_BinarySearchIterations", BinarySearchIterations);

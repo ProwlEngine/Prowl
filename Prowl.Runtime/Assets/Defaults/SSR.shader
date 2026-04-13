@@ -30,8 +30,7 @@ Pass "RayMarch"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _CameraDepthTexture;
-        uniform sampler2D _GBufferB;
-        uniform sampler2D _GBufferC;
+        uniform sampler2D _CameraNormalsTexture;
 
         uniform float _MaxSteps;
         uniform float _BinarySearchIterations;
@@ -122,19 +121,13 @@ Pass "RayMarch"
                 return;
             }
 
-            // Sample GBuffer data
-            vec4 normalData = texture(_GBufferB, TexCoords);
+            // Sample normals from pre-pass
+            vec4 normalData = texture(_CameraNormalsTexture, TexCoords);
             vec3 viewNormal = normalData.xyz * 2.0 - 1.0;
 
-            if(normalData.b <= 0.0) // Unlit Shading Model
+            // Skip pixels with no valid normal (e.g. sky)
+            if (length(normalData.xyz) < 0.01)
                 return;
-
-            vec4 pbrData = texture(_GBufferC, TexCoords);
-            float roughness = pbrData.r;
-            if(roughness >= 0.95)
-                return;
-
-            float metalness = pbrData.g;
 
             // Get view space position and calculate reflection direction
             vec3 viewPos = getViewPos(TexCoords, startDepth);
@@ -158,12 +151,6 @@ Pass "RayMarch"
                 vec2 edgeDist = abs(hitUV * 2.0 - 1.0);
                 float edgeFactor = 1.0 - pow(max(edgeDist.x, edgeDist.y), _ScreenEdgeFade);
                 confidence *= edgeFactor;
-
-                // Fade based on roughness (rough surfaces have weak SSR)
-                confidence *= 1.0 - roughness;
-
-                // Boost metallic surfaces
-                confidence *= mix(0.3, 1.0, metalness);
 
                 // Output: hitUV (xy), confidence (z), hit flag (w)
                 reflectionData = vec4(hitUV, confidence, 1.0);
@@ -325,7 +312,6 @@ Pass "Composite"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _ReflectionTex;
-        uniform sampler2D _GBufferC;
         uniform float _Intensity;
 
         in vec2 TexCoords;

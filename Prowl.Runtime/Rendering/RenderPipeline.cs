@@ -70,13 +70,9 @@ public interface IRenderableLight
     public bool DoCastShadows();
 
     /// <summary>
-    /// Renders the light's contribution to the scene.
-    /// Similar to ImageEffect.OnRenderImage, lights control their own drawing.
+    /// Returns the light's data for forward rendering (position, color, shadow data, etc.)
     /// </summary>
-    /// <param name="gBuffer">GBuffer containing scene geometry data</param>
-    /// <param name="destination">Destination render texture to draw light contribution to</param>
-    /// <param name="css">Camera snapshot containing view/projection matrices and other camera data</param>
-    public void OnRenderLight(RenderTexture gBuffer, RenderTexture destination, RenderPipeline.CameraSnapshot css);
+    public ForwardLightData GetForwardLightData();
 }
 
 public abstract class RenderPipeline : EngineObject

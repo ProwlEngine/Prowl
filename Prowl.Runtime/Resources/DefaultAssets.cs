@@ -15,10 +15,6 @@ public enum DefaultShader
     UI,
     Gizmos,
     Blit,
-    DirectionalLight,
-    SpotLight,
-    PointLight,
-    DeferredCompose,
     Particle,
     Terrain,
     Grass,
@@ -33,7 +29,6 @@ public enum DefaultShader
     Bloom,
     BokehDoF,
     GTAO,
-    SSPT,
     Grid
 }
 
@@ -85,5 +80,6 @@ public enum DefaultShaderInclude
     Random,
     ShaderVariables,
     Shadow,
-    VertexAttributes
+    VertexAttributes,
+    Lighting
 }

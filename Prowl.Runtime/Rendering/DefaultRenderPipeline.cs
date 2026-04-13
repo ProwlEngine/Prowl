@@ -52,7 +52,6 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_skybox;
     private static Material s_gradientSkybox;
     private static Material s_gizmo;
-    private static Material s_deferredCompose;
     private static Mesh s_gridMesh;
     private static Material s_gridMaterial;
 
@@ -68,9 +67,6 @@ public class DefaultRenderPipeline : RenderPipeline
         s_defaultMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Standard));
         s_skybox ??= new Material(Shader.LoadDefault(DefaultShader.ProceduralSkybox));
         s_gizmo ??= new Material(Shader.LoadDefault(DefaultShader.Gizmos));
-
-        // Load deferred shaders
-        s_deferredCompose ??= new Material(Shader.LoadDefault(DefaultShader.DeferredCompose));
 
         if (s_skyDome.IsNotValid())
         {
@@ -149,7 +145,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private void Internal_Render(Camera camera, in RenderingData data)
     {
         // =======================================================
-        // 0. Setup variables, and prepare the camera
+        // 0. Setup
         bool isHDR = camera.HDR;
         var effectsByStage = GatherImageEffects(camera);
         var allEffects = new List<ImageEffect>();
@@ -164,7 +160,7 @@ public class DefaultRenderPipeline : RenderPipeline
             effect.OnPreCull(camera);
 
         // =======================================================
-        // 2. Take a snapshot of all Camera data
+        // 2. Camera snapshot and global uniforms
         CameraSnapshot css = new(camera);
         SetupGlobalUniforms(css);
 
@@ -172,7 +168,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // 3. Collect and Cull Renderables
         var (renderables, lights) = CollectRenderables(camera.GameObject.Scene, camera);
 
-        // Inject editor grid as a renderable if requested
+        // Inject editor grid
         if (data.DisplayGrid)
         {
             EnsureGridResources();
@@ -193,242 +189,183 @@ public class DefaultRenderPipeline : RenderPipeline
             effect.OnPreRender(camera);
 
         // =======================================================
-        // 5. Setup Lighting and Shadows
+        // 5. Shadow Atlas
         RenderShadowAtlas(css, lights, renderables);
-
-        // 5.1 Re-Assign camera matrices (The Lighting can modify these)
         AssignCameraMatrices(css.View, css.Projection);
 
         // =======================================================
-        // 6. Create GBuffer for Deferred Rendering
-        // GBuffer layout:
-        // BufferA: RGB = Albedo, A = Alpha
-        // BufferB: RGB = Normal (view space), A = ShadingMode
-        // BufferC: R = Roughness, G = Metalness, B = Specular, A = AO
-        // BufferD: Custom Data per Shading Mode (e.g., Emissive for Lit mode)
-        RenderTexture gBuffer = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-            TextureImageFormat.Short4, // BufferA - Albedo + Alpha
-            TextureImageFormat.Color4b, // BufferB - Normal + ShadingMode
-            TextureImageFormat.Color4b, // BufferC - Roughness, Metalness, Specular, AO
-            TextureImageFormat.Color4b, // BufferD - Custom Data (Emissive, etc.)
-            ]);
+        // 6. Forward Light Setup — select 8 most relevant lights, upload as globals
+        ForwardLightManager.SelectAndUploadLights(css.CameraPosition, lights, css.CullingMask);
 
-        // Bind GBuffer as the target
-        Graphics.BindFramebuffer(gBuffer.frameBuffer);
-        // 6.1 Clear GBuffer
+        // Upload fog parameters as globals for forward shaders
+        UploadFogUniforms(css.Scene);
+        UploadAmbientUniforms(css.Scene);
+
+        // =======================================================
+        // 7. Create main color render target
+        RenderTexture colorRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
+            isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b,
+        ]);
+
+        // =======================================================
+        // 8. Depth + Normals pre-pass
+        RenderTexture depthPrepass = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
+            TextureImageFormat.Color4b, // View-space normals
+        ]);
+
+        Graphics.BindFramebuffer(depthPrepass.frameBuffer);
+        Graphics.Clear(0.5f, 0.5f, 1.0f, 1.0f, ClearFlags.Color | ClearFlags.Depth);
+        DrawRenderables(renderables, "LightMode", "DepthNormals", new ViewerData(css), culledRenderableIndices, false);
+
+        // Set depth + normals as global textures for post-processing effects
+        PropertyState.SetGlobalTexture("_CameraDepthTexture", depthPrepass.InternalDepth);
+        PropertyState.SetGlobalTexture("_CameraNormalsTexture", depthPrepass.InternalTextures[0]);
+
+        // Copy pre-pass depth to colorRT
+        Graphics.BindFramebuffer(depthPrepass.frameBuffer, FBOTarget.Read);
+        Graphics.BindFramebuffer(colorRT.frameBuffer, FBOTarget.Draw);
+        Graphics.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
+                                 0, 0, colorRT.Width, colorRT.Height,
+                                 ClearFlags.Depth, BlitFilter.Nearest);
+
+        // =======================================================
+        // 9. Render skybox (before opaques, with ZWrite Off so it doesn't affect depth)
+        Graphics.BindFramebuffer(colorRT.frameBuffer);
         switch (camera.ClearFlags)
         {
             case CameraClearFlags.Skybox:
             {
-                // For SolidColor skybox mode, use the skybox color as clear color
                 var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
                     ? css.Scene.Skybox.SolidColor : camera.ClearColor;
+                // Clear color only — depth already populated from pre-pass (sky pixels = 1.0)
                 Graphics.Clear(
                     (float)skyColor.R, (float)skyColor.G,
                     (float)skyColor.B, (float)skyColor.A,
-                    ClearFlags.Color | ClearFlags.Depth);
-
+                    ClearFlags.Color);
                 RenderSkybox(css, lights);
                 break;
             }
 
             case CameraClearFlags.SolidColor:
                 Graphics.Clear(
-                    (float)camera.ClearColor.R,
-                    (float)camera.ClearColor.G,
-                    (float)camera.ClearColor.B,
-                    (float)camera.ClearColor.A,
-                    ClearFlags.Color | ClearFlags.Depth
-                );
+                    (float)camera.ClearColor.R, (float)camera.ClearColor.G,
+                    (float)camera.ClearColor.B, (float)camera.ClearColor.A,
+                    ClearFlags.Color);
                 break;
 
             case CameraClearFlags.Depth:
-                Graphics.Clear(0, 0, 0, 0, ClearFlags.Depth);
                 break;
 
             case CameraClearFlags.Nothing:
-                // Do not clear anything
                 break;
         }
 
-        // 6.2 Draw opaque geometry to GBuffer
-        //List<IRenderable> sortFrontToBack = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.FrontToBack);
-        DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false); // Its deffered rendering, overdraw is cheap
+        // =======================================================
+        // 10. Forward Opaque Rendering — shaders do PBR lighting inline
+        //     Depth test is LEqual against pre-pass depth (same geometry = equal depth = passes)
+        DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
 
         // =======================================================
-        // 7. Deferred Lighting Pass - Render each light's contribution
-        // Create light accumulation buffer
-        RenderTexture lightAccumulation = RenderTexture.GetTemporaryRT((int)camera.PixelWidth, (int)camera.PixelHeight, false, [
-            isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b, // Accumulated lighting
-            ]);
-
-        // Set GBuffer textures as global textures for shaders
-        PropertyState.SetGlobalTexture("_GBufferA", gBuffer.InternalTextures[0]);
-        PropertyState.SetGlobalTexture("_GBufferB", gBuffer.InternalTextures[1]);
-        PropertyState.SetGlobalTexture("_GBufferC", gBuffer.InternalTextures[2]);
-        PropertyState.SetGlobalTexture("_GBufferD", gBuffer.InternalTextures[3]);
-        PropertyState.SetGlobalTexture("_CameraDepthTexture", gBuffer.InternalDepth);
-
-        // Clear light accumulation to black
-        Graphics.BindFramebuffer(lightAccumulation.frameBuffer);
-        Graphics.Clear(0, 0, 0, 0, ClearFlags.Color);
-
-        // Render each light's contribution (additive blending)
-        foreach (IRenderableLight light in lights)
-        {
-            if (css.CullingMask.HasLayer(light.GetLayer()) == false)
-                continue;
-
-            light.OnRenderLight(gBuffer, lightAccumulation, css);
-        }
-
-        // =======================================================
-        // 7.5. Apply DuringLighting effects (e.g., SSPT, GTAO that need light accumulation)
-        if (effectsByStage[RenderStage.DuringLighting].Count > 0)
-        {
-            var lightingContext = new RenderContext
-            {
-                GBuffer = gBuffer,
-                LightAccumulation = lightAccumulation,
-                SceneColor = null, // Not available yet
-                Camera = camera,
-                Width = (int)css.PixelWidth,
-                Height = (int)css.PixelHeight,
-                CurrentStage = RenderStage.DuringLighting
-            };
-
-            ExecuteImageEffects(lightingContext, effectsByStage[RenderStage.DuringLighting]);
-        }
-
-        // =======================================================
-        // 8. Deferred Composition Pass - Combine light accumulation with GBuffer
-        // Create final composition output
-        RenderTexture composedOutput = RenderTexture.GetTemporaryRT((int)camera.PixelWidth, (int)camera.PixelHeight, true, [
-            isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b,
-            ]);
-
-        // Set GBuffer and light textures for compose shader
-        s_deferredCompose.SetTexture("_LightAccumulation", lightAccumulation.InternalTextures[0]);
-        s_deferredCompose.SetTexture("_GBufferA", gBuffer.InternalTextures[0]);
-        s_deferredCompose.SetTexture("_GBufferB", gBuffer.InternalTextures[1]);
-        s_deferredCompose.SetTexture("_GBufferD", gBuffer.InternalTextures[3]);
-        s_deferredCompose.SetTexture("_CameraDepthTexture", gBuffer.InternalDepth);
-
-        // Set fog parameters
-        Scene.FogParams fog = css.Scene.Fog;
-        Float4 fogParams = Float4.Zero;
-        fogParams.X = fog.Density / 1.2011224f; // density/sqrt(ln(2))
-        fogParams.Y = fog.Density / 0.693147181f; // ln(2)
-        fogParams.Z = -1.0f / (fog.End - fog.Start);
-        fogParams.W = fog.End / (fog.End - fog.Start);
-        s_deferredCompose.SetColor("_FogColor", fog.Color);
-        s_deferredCompose.SetVector("_FogParams", fogParams);
-        s_deferredCompose.SetVector("_FogStates", new Float3(
-            fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,
-            fog.Mode == Scene.FogParams.FogMode.Exponential ? 1 : 0,
-            fog.Mode == Scene.FogParams.FogMode.ExponentialSquared ? 1 : 0
-        ));
-
-        // Set ambient lighting parameters
-        Scene.AmbientLightParams ambient = css.Scene.Ambient;
-        s_deferredCompose.SetVector("_AmbientMode", new Float2(
-            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform ? 1 : 0,
-            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? 1 : 0
-        ));
-        s_deferredCompose.SetColor("_AmbientColor", ambient.Color);
-        s_deferredCompose.SetColor("_AmbientSkyColor", ambient.SkyColor);
-        s_deferredCompose.SetColor("_AmbientGroundColor", ambient.GroundColor);
-        s_deferredCompose.SetFloat("_AmbientStrength", (float)ambient.Strength);
-
-        // Perform composition
-        Blit(lightAccumulation, composedOutput, s_deferredCompose, 0, false, false);
-
-        // Copy depth from GBuffer to composed output for transparent rendering
-        Graphics.BindFramebuffer(gBuffer.frameBuffer, FBOTarget.Read);
-        Graphics.BindFramebuffer(composedOutput.frameBuffer, FBOTarget.Draw);
-        Graphics.BlitFramebuffer(0, 0, gBuffer.Width, gBuffer.Height, 0, 0, composedOutput.Width, composedOutput.Height, ClearFlags.Depth, BlitFilter.Nearest);
-
-        // Bind composed output for transparent rendering
-        Graphics.BindFramebuffer(composedOutput.frameBuffer);
-
-        // =======================================================
-        // 9. Apply AfterLighting effects (opaque post-processing)
+        // 12. AfterLighting effects (SSR, etc.)
         if (effectsByStage[RenderStage.AfterLighting].Count > 0)
         {
-            var afterLightingContext = new RenderContext
+            var afterContext = new RenderContext
             {
-                GBuffer = gBuffer,
-                LightAccumulation = lightAccumulation,
-                SceneColor = composedOutput,
+                GBuffer = depthPrepass, // depth + normals for screen-space effects
+                LightAccumulation = null,
+                SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
                 Height = (int)css.PixelHeight,
                 CurrentStage = RenderStage.AfterLighting
             };
-
-            ExecuteImageEffects(afterLightingContext, effectsByStage[RenderStage.AfterLighting]);
+            ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterLighting]);
         }
 
         // =======================================================
-        // 10. Transparent geometry (Forward rendered on top of composed result)
+        // 13. Transparent geometry (forward, sorted back-to-front)
+        Graphics.BindFramebuffer(colorRT.frameBuffer);
         List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
         DrawRenderables(sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false);
 
         // =======================================================
-        // 11. Apply PostProcess effects (final post-processing)
+        // 14. PostProcess effects
         if (effectsByStage[RenderStage.PostProcess].Count > 0)
         {
-            var postProcessContext = new RenderContext
+            var postContext = new RenderContext
             {
-                GBuffer = gBuffer,
-                LightAccumulation = lightAccumulation,
-                SceneColor = composedOutput,
+                GBuffer = depthPrepass,
+                LightAccumulation = null,
+                SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
                 Height = (int)css.PixelHeight,
                 CurrentStage = RenderStage.PostProcess
             };
 
-            ExecuteImageEffects(postProcessContext, effectsByStage[RenderStage.PostProcess]);
+            ExecuteImageEffects(postContext, effectsByStage[RenderStage.PostProcess]);
 
-            // Effects may have replaced the scene color buffer (e.g., HDR to LDR)
-            var replacedRTs = postProcessContext.GetReplacedRTs();
+            var replacedRTs = postContext.GetReplacedRTs();
             if (replacedRTs.Count > 0)
             {
-                // Update our reference to the new buffer
-                composedOutput = postProcessContext.SceneColor;
-
-                // Clean up old buffers
+                colorRT = postContext.SceneColor;
                 foreach (var oldRT in replacedRTs)
-                {
                     RenderTexture.ReleaseTemporaryRT(oldRT);
-                }
             }
         }
 
         // =======================================================
-        // 12. Render Gizmos (only when enabled — editor scene view)
+        // 15. Gizmos
         if (data.DisplayGizmos)
             RenderGizmos(css);
 
         // =======================================================
-        // 13. Blit Result to target, If target is null Blit will go to the Screen/Window
-        Blit(composedOutput, target, null, 0, false, false);
+        // 16. Final blit to target (null = screen)
+        Blit(colorRT, target, null, 0, false, false);
 
         // =======================================================
-        // 14. Post Render
+        // 17. Post Render
         foreach (ImageEffect effect in allEffects)
             effect.OnPostRender(camera);
 
         // =======================================================
-        // 15. Cleanup temporary render textures
-        RenderTexture.ReleaseTemporaryRT(gBuffer);
-        RenderTexture.ReleaseTemporaryRT(lightAccumulation);
-        RenderTexture.ReleaseTemporaryRT(composedOutput);
+        // 18. Cleanup
+        RenderTexture.ReleaseTemporaryRT(depthPrepass);
+        RenderTexture.ReleaseTemporaryRT(colorRT);
 
-        // Reset bound framebuffer if any is bound
         Graphics.UnbindFramebuffer();
         Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+    }
+
+    private static void UploadFogUniforms(Scene scene)
+    {
+        Scene.FogParams fog = scene.Fog;
+        Float4 fogParams = Float4.Zero;
+        fogParams.X = fog.Density / 1.2011224f;
+        fogParams.Y = fog.Density / 0.693147181f;
+        fogParams.Z = -1.0f / (fog.End - fog.Start);
+        fogParams.W = fog.End / (fog.End - fog.Start);
+
+        PropertyState.SetGlobalColor("_FogColor", fog.Color);
+        PropertyState.SetGlobalVector("_FogParams", fogParams);
+        PropertyState.SetGlobalVector("_FogStates", new Float3(
+            fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,
+            fog.Mode == Scene.FogParams.FogMode.Exponential ? 1 : 0,
+            fog.Mode == Scene.FogParams.FogMode.ExponentialSquared ? 1 : 0
+        ));
+    }
+
+    private static void UploadAmbientUniforms(Scene scene)
+    {
+        Scene.AmbientLightParams ambient = scene.Ambient;
+        PropertyState.SetGlobalVector("_AmbientMode", new Float2(
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform ? 1 : 0,
+            ambient.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? 1 : 0
+        ));
+        PropertyState.SetGlobalColor("_AmbientColor", ambient.Color);
+        PropertyState.SetGlobalColor("_AmbientSkyColor", ambient.SkyColor);
+        PropertyState.SetGlobalColor("_AmbientGroundColor", ambient.GroundColor);
+        PropertyState.SetGlobalFloat("_AmbientStrength", (float)ambient.Strength);
     }
 
     private void RenderShadowAtlas(CameraSnapshot css, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)

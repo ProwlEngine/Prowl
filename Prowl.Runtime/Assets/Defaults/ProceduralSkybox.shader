@@ -251,15 +251,7 @@ Pass "Skybox"
 
 	    Fragment
 	    {
-	    	// GBuffer layout for deferred rendering:
-	    	// BufferA: RGB = Albedo, A = AO
-	    	// BufferB: RGB = Normal (view space), A = ShadingMode
-	    	// BufferC: R = Roughness, G = Metalness, B = Specular, A = Unused
-	    	// BufferD: Custom Data per Shading Mode (Emissive for Unlit mode)
-	    	layout(location = 0) out vec4 gBufferA;
-	    	layout(location = 1) out vec4 gBufferB;
-	    	layout(location = 2) out vec4 gBufferC;
-	    	layout(location = 3) out vec4 gBufferD;
+	    	layout(location = 0) out vec4 fragColor;
 
             in vec3 vSkyColor;
             in vec3 vDirection;
@@ -268,20 +260,9 @@ Pass "Skybox"
 	    	void main()
 	    	{
                 vec3 color = vSkyColor;
-
 	            color.rgb += smoothstep(0.996, 0.9965, dot(normalize(vDirection), vSunDir)); // Sun
-
-                // Apply exposure.
-                color = 1.0 - exp(-1.0 * color);
-
-	    		// Output to GBuffer as Unlit (shading mode 0)
-	    		// BufferA: Black albedo (skybox doesn't need albedo)
-	    		gBufferA = vec4(color, 0.0);
-
-	    		// Leave it all Zero, Skybox doesnt write to Depth, or to any other buffer other then color, its just a background like ClearColor almost
-	    		gBufferB = vec4(0.0, 0.0, 0.0, 0.0);
-	    		gBufferC = vec4(0.0, 0.0, 0.0, 0.0);
-	    		gBufferD = vec4(0.0, 0.0, 0.0, 0.0);
+                color = 1.0 - exp(-1.0 * color); // Exposure
+	    		fragColor = vec4(color, 1.0);
 	    	}
 
 	    }
