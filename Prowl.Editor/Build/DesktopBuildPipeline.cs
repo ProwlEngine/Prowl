@@ -322,7 +322,7 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
         sb.AppendLine("  <PropertyGroup>");
         sb.AppendLine("    <OutputType>Exe</OutputType>");
-        sb.AppendLine("    <TargetFramework>net9.0</TargetFramework>");
+        sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
         sb.AppendLine("    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>");
         sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
         sb.AppendLine("    <Nullable>enable</Nullable>");
