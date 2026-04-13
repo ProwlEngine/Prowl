@@ -155,13 +155,43 @@ public class AnimationComponent : MonoBehaviour
         if (_boneCache != null) return;
         _boneCache = new Dictionary<string, Transform>();
 
-        // Get hierarchy root (walk up to topmost parent)
-        Transform root = Transform;
-        while (root.Parent != null) root = root.Parent;
+        // Find the correct search root — try ancestors until bone paths resolve.
+        // This handles reparenting (model placed under another GO).
+        Transform root = FindBoneCacheRoot();
 
         // Cache all descendants by their relative path from root (excluding root's name)
         foreach (var child in root.GameObject.Children)
             CacheBonesRecursive(child.Transform, "");
+    }
+
+    private Transform FindBoneCacheRoot()
+    {
+        // Walk up to absolute root
+        Transform root = Transform;
+        while (root.Parent != null) root = root.Parent;
+
+        // If the clip has bones, verify the first bone path resolves from this root
+        var clip = CurrentClip ?? DefaultClip.Res;
+        if (clip != null && clip.Bones.Count > 0)
+        {
+            string testPath = clip.Bones[0].BoneName;
+            // Try each ancestor from top down until the path resolves
+            var ancestors = new List<Transform>();
+            Transform current = Transform;
+            while (current != null) { ancestors.Add(current); current = current.Parent; }
+
+            for (int i = ancestors.Count - 1; i >= 0; i--)
+            {
+                // Build cache from this ancestor and check if test path exists
+                foreach (var child in ancestors[i].GameObject.Children)
+                {
+                    if (child.Name == testPath.Split('/')[0])
+                        return ancestors[i];
+                }
+            }
+        }
+
+        return root;
     }
 
     private void CacheBonesRecursive(Transform t, string parentPath)
