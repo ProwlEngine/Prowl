@@ -1,11 +1,7 @@
-<p align="center">
-  <img src="art/logo-horizontal.svg" alt="NeoVeldrid" width="400">
-</p>
+![NeoVeldrid](https://raw.githubusercontent.com/jhm-ciberman/neo-veldrid/main/art/logo-horizontal.svg)
 
-<p align="center">
-  <a href="https://github.com/jhm-ciberman/neo-veldrid/actions/workflows/ci.yml"><img src="https://github.com/jhm-ciberman/neo-veldrid/actions/workflows/ci.yml/badge.svg" alt="Tests"></a>
-  <a href="https://www.nuget.org/packages/NeoVeldrid"><img src="https://img.shields.io/nuget/vpre/NeoVeldrid" alt="NuGet"></a>
-</p>
+[![Tests](https://github.com/jhm-ciberman/neo-veldrid/actions/workflows/ci.yml/badge.svg)](https://github.com/jhm-ciberman/neo-veldrid/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/vpre/NeoVeldrid)](https://www.nuget.org/packages/NeoVeldrid)
 
 A low-level, high-performance, cross-platform graphics library for .NET. Build 2D and 3D games, simulations, and tools with a single portable API across Vulkan, Direct3D 11, OpenGL, and OpenGL ES.
 
@@ -13,7 +9,7 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
 
 **[Documentation](https://jhm-ciberman.github.io/neo-veldrid/)** | **[Getting Started](https://jhm-ciberman.github.io/neo-veldrid/articles/prologue/intro.html)** | **[API Reference](https://jhm-ciberman.github.io/neo-veldrid/api/)**
 
-![NeoDemo - Sponza Atrium](art/sponza.webp)
+![NeoDemo - Sponza Atrium](https://raw.githubusercontent.com/jhm-ciberman/neo-veldrid/main/art/sponza.webp)
 
 ## Features
 
@@ -45,7 +41,7 @@ dotnet add package NeoVeldrid.StartupUtilities --prerelease
 dotnet add package NeoVeldrid.SPIRV --prerelease
 ```
 
-See the [documentation](https://jhm-ciberman.github.io/neo-veldrid/) for tutorials, API reference, and the [samples directory](samples/).
+See the [documentation](https://jhm-ciberman.github.io/neo-veldrid/) for tutorials, API reference, and the [samples directory](https://github.com/jhm-ciberman/neo-veldrid/tree/main/samples).
 
 ## Coming from Veldrid?
 
@@ -53,7 +49,7 @@ NeoVeldrid preserves full API compatibility. Update your NuGet packages, rename 
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing guidelines, and how to submit a PR.
+See [CONTRIBUTING.md](https://github.com/jhm-ciberman/neo-veldrid/blob/main/CONTRIBUTING.md) for build instructions, testing guidelines, and how to submit a PR.
 
 ## Acknowledgments
 
