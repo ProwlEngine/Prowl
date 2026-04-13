@@ -74,11 +74,22 @@ public class EditorCamera
     }
 
     /// <summary>
+    /// Whether to copy image effects from the scene's main camera onto the editor camera.
+    /// </summary>
+    public bool UseSceneEffects { get; set; } = true;
+
+    /// <summary>
     /// Render the scene from this camera's perspective.
     /// </summary>
     public void Render(Scene scene)
     {
         if (_renderTarget == null) return;
+
+        // Copy image effects from the scene's main camera (if enabled)
+        if (UseSceneEffects)
+            CopySceneEffects(scene);
+        else
+            _camera.Effects.Clear();
 
         // Update camera pixel dimensions
         _camera.UpdateRenderData();
@@ -102,6 +113,52 @@ public class EditorCamera
         // Remove from scene if we added it
         if (!wasInScene)
             scene.Remove(_cameraObject);
+    }
+
+    /// <summary>
+    /// Find the scene's main camera and copy its image effects to the editor camera.
+    /// Looks for a camera tagged "Main Camera", falling back to the first Camera in the scene.
+    /// </summary>
+    private void CopySceneEffects(Scene scene)
+    {
+        Camera? sceneCamera = FindSceneCamera(scene);
+        if (sceneCamera == null || sceneCamera == _camera)
+        {
+            _camera.Effects.Clear();
+            return;
+        }
+
+        // Copy the effect list — we share the same effect instances so settings
+        // tweaked on the game camera are immediately reflected in the editor view.
+        _camera.Effects.Clear();
+        _camera.Effects.AddRange(sceneCamera.Effects);
+
+        // Also match HDR setting so effects like tonemapping behave correctly
+        _camera.HDR = sceneCamera.HDR;
+    }
+
+    private static Camera? FindSceneCamera(Scene scene)
+    {
+        // First try to find a camera tagged "Main Camera"
+        foreach (var go in scene.AllObjects)
+        {
+            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
+            if (!go.CompareTag("Main Camera")) continue;
+
+            var cam = go.GetComponent<Camera>();
+            if (cam != null) return cam;
+        }
+
+        // Fallback: first visible Camera in the scene
+        foreach (var go in scene.AllObjects)
+        {
+            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
+
+            var cam = go.GetComponent<Camera>();
+            if (cam != null) return cam;
+        }
+
+        return null;
     }
 
     // ================================================================
