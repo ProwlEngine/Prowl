@@ -30,15 +30,6 @@ Pass "Grass"
             out vec3 worldPos;
             out vec3 vNormal;
 
-#ifdef GPU_INSTANCING
-            layout(location = 8) in vec4 instanceModelRow0;
-            layout(location = 9) in vec4 instanceModelRow1;
-            layout(location = 10) in vec4 instanceModelRow2;
-            layout(location = 11) in vec4 instanceModelRow3;
-            layout(location = 12) in vec4 instanceColor;
-            layout(location = 13) in vec4 instanceCustomData;
-#endif
-
             uniform float _WindStrength;
             uniform float _WindSpeed;
             uniform float _Billboard;
@@ -108,7 +99,7 @@ Pass "Grass"
                 localOffset.z += wind * windAmount * 0.3;
 
                 vec3 worldPosition = bladePosition + localOffset;
-                worldPosition += up * 0.05 * scaleY; // Small offset to prevent ground clipping
+                worldPosition += up * 0.01 * scaleY; // Minimal offset to reduce ground clipping
                 worldPos = worldPosition;
                 vNormal = terrainNormal; // Always use terrain surface normal for lighting
                 vColor = instanceColor;
@@ -180,15 +171,6 @@ Pass "GrassDepthNormals"
             out vec3 vNormal;
             out vec2 texCoord0;
 
-#ifdef GPU_INSTANCING
-            layout(location = 8) in vec4 instanceModelRow0;
-            layout(location = 9) in vec4 instanceModelRow1;
-            layout(location = 10) in vec4 instanceModelRow2;
-            layout(location = 11) in vec4 instanceModelRow3;
-            layout(location = 12) in vec4 instanceColor;
-            layout(location = 13) in vec4 instanceCustomData;
-#endif
-
             uniform float _WindStrength;
             uniform float _WindSpeed;
             uniform float _Billboard;
@@ -240,7 +222,7 @@ Pass "GrassDepthNormals"
                 localOffset.z += wind * windAmount * 0.3;
 
                 vec3 worldPosition = bladePosition + localOffset;
-                worldPosition += up * 0.05 * scaleY;
+                worldPosition += up * 0.01 * scaleY; // Must match main Grass pass offset
                 vNormal = terrainNormal;
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
                 texCoord0 = vertexTexCoord0;
@@ -269,8 +251,7 @@ Pass "GrassDepthNormals"
                 if (texColor.a < _AlphaCutoff)
                     discard;
 
-                vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * normalize(vNormal));
-                normalOut = vec4(viewNormal * 0.5 + 0.5, 1.0);
+                normalOut = EncodeViewNormal(normalize(vNormal));
 			}
 		}
 	ENDGLSL

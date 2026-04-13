@@ -50,14 +50,6 @@ Pass "Terrain"
             out vec3 worldPos;
             out vec3 worldNormal;
 
-#ifdef GPU_INSTANCING
-            layout(location = 8) in vec4 instanceModelRow0;
-            layout(location = 9) in vec4 instanceModelRow1;
-            layout(location = 10) in vec4 instanceModelRow2;
-            layout(location = 11) in vec4 instanceModelRow3;
-            layout(location = 12) in vec4 instanceColor;
-            layout(location = 13) in vec4 instanceCustomData;
-#endif
 
             uniform sampler2D _Heightmap;
             uniform float _TerrainSize;
@@ -243,13 +235,6 @@ Pass "TerrainShadow"
 
             out vec3 worldPos;
 
-#ifdef GPU_INSTANCING
-            layout(location = 8) in vec4 instanceModelRow0;
-            layout(location = 9) in vec4 instanceModelRow1;
-            layout(location = 10) in vec4 instanceModelRow2;
-            layout(location = 11) in vec4 instanceModelRow3;
-            layout(location = 12) in vec4 instanceColor;
-#endif
 
             uniform sampler2D _Heightmap;
             uniform float _TerrainSize;
@@ -306,13 +291,6 @@ Pass "TerrainDepthNormals"
 
             out vec3 worldNormal;
 
-#ifdef GPU_INSTANCING
-            layout(location = 8) in vec4 instanceModelRow0;
-            layout(location = 9) in vec4 instanceModelRow1;
-            layout(location = 10) in vec4 instanceModelRow2;
-            layout(location = 11) in vec4 instanceModelRow3;
-            layout(location = 12) in vec4 instanceColor;
-#endif
 
             uniform sampler2D _Heightmap;
             uniform float _TerrainSize;
@@ -361,8 +339,7 @@ Pass "TerrainDepthNormals"
 
             void main()
             {
-                vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * worldNormal);
-                normalOut = vec4(viewNormal * 0.5 + 0.5, 1.0);
+                normalOut = EncodeViewNormal(worldNormal);
             }
         }
     ENDGLSL

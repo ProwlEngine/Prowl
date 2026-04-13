@@ -29,13 +29,7 @@ Pass "Particle"
             out float vLifetime;
 
 #ifdef GPU_INSTANCING
-            // Instance attributes (semantic 8-13)
-            layout(location = 8) in vec4 instanceModelRow0;
-            layout(location = 9) in vec4 instanceModelRow1;
-            layout(location = 10) in vec4 instanceModelRow2;
-            layout(location = 11) in vec4 instanceModelRow3;
-            layout(location = 12) in vec4 instanceColor;
-            layout(location = 13) in vec4 instanceCustomData;
+            // Instance attributes declared in VertexAttributes.glsl
 #endif
 
 			void main()

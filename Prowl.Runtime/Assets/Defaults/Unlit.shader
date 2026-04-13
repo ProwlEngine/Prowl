@@ -23,16 +23,10 @@ Pass "Unlit"
 
 			void main()
 			{
-#ifdef SKINNED
-				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
-				gl_Position = PROWL_MATRIX_MVP * skinnedPos;
-				worldPos = (PROWL_MATRIX_M * skinnedPos).xyz;
-#else
-				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
-				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
-#endif
+				gl_Position = TransformClip(vertexPosition);
 				texCoord0 = vertexTexCoord0;
-				vColor = vertexColor;
+				worldPos = TransformPosition(vertexPosition);
+				vColor = GetInstanceColor();
 			}
 		}
 
@@ -76,15 +70,8 @@ Pass "UnlitDepthNormals"
 
 			void main()
 			{
-#ifdef SKINNED
-				vec4 skinnedPos = GetSkinnedPosition(vertexPosition);
-				vec3 skinnedNormal = GetSkinnedNormal(vertexNormal);
-				gl_Position = PROWL_MATRIX_MVP * skinnedPos;
-				vNormal = normalize(mat3(PROWL_MATRIX_M) * skinnedNormal);
-#else
-				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
-				vNormal = normalize(mat3(PROWL_MATRIX_M) * vertexNormal);
-#endif
+				gl_Position = TransformClip(vertexPosition);
+				vNormal = TransformDirection(vertexNormal);
 			}
 		}
 
@@ -97,8 +84,7 @@ Pass "UnlitDepthNormals"
 
 			void main()
 			{
-				vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * normalize(vNormal));
-				normalOut = vec4(viewNormal * 0.5 + 0.5, 1.0);
+				normalOut = EncodeViewNormal(normalize(vNormal));
 			}
 		}
 	ENDGLSL

@@ -266,6 +266,34 @@ bool IsReprojectionValid(vec2 prevUV, float currentDepth, float prevDepth, vec3 
 	return true;
 }
 
+// Normal Mapping ===========================================================
+
+// Apply a tangent-space normal map to a world-space normal.
+// If tangents are available (HAS_TANGENTS), constructs a TBN matrix and transforms
+// the sampled normal. Otherwise returns the interpolated world normal as-is.
+//
+// Usage:
+//   vec3 worldNormal = ApplyNormalMap(normalTex, uv, vNormal, vTangent, vBitangent);
+//
+// For shaders without normal maps, just use normalize(vNormal) directly.
+vec3 ApplyNormalMap(sampler2D normalTex, vec2 uv, vec3 normal, vec3 tangent, vec3 bitangent)
+{
+#ifdef HAS_TANGENTS
+    mat3 TBN = mat3(normalize(tangent), normalize(bitangent), normalize(normal));
+    vec3 normalTS = texture(normalTex, uv).rgb * 2.0 - 1.0;
+    return normalize(TBN * normalTS);
+#else
+    return normalize(normal);
+#endif
+}
+
+// Encode a world-space normal to view-space [0,1] range for the depth-normals pre-pass.
+vec4 EncodeViewNormal(vec3 worldNormal)
+{
+    vec3 viewNormal = normalize(mat3(PROWL_MATRIX_V) * worldNormal);
+    return vec4(viewNormal * 0.5 + 0.5, 1.0);
+}
+
 // ----------------------------------------------------------------------------
 
 

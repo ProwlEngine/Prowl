@@ -15,14 +15,18 @@ public class ShaderImporter : AssetImporter
         string source = File.ReadAllText(ctx.AbsolutePath);
         string dir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
 
-        // Resolve #include directives relative to the shader file's directory
+        // Resolve #include directives:
+        // 1. Relative to the shader file's directory
+        // 2. Relative to the project's Assets root
+        // 3. Built-in engine includes (Fragment.glsl, PBR.glsl, Lighting.glsl, etc.)
         string? IncludeResolver(string includePath)
         {
+            // 1. Relative to shader file
             string fullPath = Path.Combine(dir, includePath);
             if (File.Exists(fullPath))
                 return File.ReadAllText(fullPath);
 
-            // Try Assets root
+            // 2. Relative to Assets root
             if (Project.Current != null)
             {
                 string assetsPath = Path.Combine(Project.Current.AssetsPath, includePath);
@@ -30,7 +34,18 @@ public class ShaderImporter : AssetImporter
                     return File.ReadAllText(assetsPath);
             }
 
-            return null;
+            // 3. Built-in engine includes (embedded resources)
+            // The includePath may be a full absolute path like "C:/.../Assets/Fragment.glsl"
+            // Extract just the filename and try loading from the built-in defaults
+            string fileName = Path.GetFileName(includePath);
+            try
+            {
+                return Runtime.Resources.EmbeddedResources.ReadAllText($"Assets/Defaults/{fileName}");
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         if (!ShaderParser.ParseShader(ctx.AbsolutePath, source, IncludeResolver, out var shader) || shader == null)
