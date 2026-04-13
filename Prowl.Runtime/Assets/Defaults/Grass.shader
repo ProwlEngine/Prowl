@@ -48,12 +48,13 @@ Pass "Grass"
             uniform float _TerrainSize;
             uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
+            uniform mat4 _TerrainLocalToWorld;
 
 			void main()
 			{
 #ifdef GPU_INSTANCING
                 // Instance matrix is in terrain-local space; transform to world
-                mat4 terrainToWorld = inverse(_TerrainWorldToLocal);
+                mat4 terrainToWorld = _TerrainLocalToWorld;
 
                 // Extract grass blade position (terrain-local) and scale
                 vec3 localPosition = instanceModelRow3.xyz;
@@ -197,11 +198,12 @@ Pass "GrassDepthNormals"
             uniform float _TerrainSize;
             uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
+            uniform mat4 _TerrainLocalToWorld;
 
 			void main()
 			{
 #ifdef GPU_INSTANCING
-                mat4 terrainToWorld = inverse(_TerrainWorldToLocal);
+                mat4 terrainToWorld = _TerrainLocalToWorld;
                 vec3 localPosition = instanceModelRow3.xyz;
                 vec3 bladePosition = (terrainToWorld * vec4(localPosition, 1.0)).xyz;
                 float scaleX = length(instanceModelRow0.xyz);

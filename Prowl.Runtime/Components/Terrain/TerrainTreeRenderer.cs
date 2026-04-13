@@ -71,13 +71,15 @@ internal class TerrainTreeRenderer
 
             if (_instanceDataList.Count == 0) continue;
 
-            // Bounds from actual positions
+            // Bounds from actual positions + mesh extents
+            float meshExtent = mesh.bounds.Size.X > 0 ? MathF.Max(mesh.bounds.Size.X, mesh.bounds.Size.Z) * 0.5f : 5f;
+            float meshHeight = mesh.bounds.Size.Y > 0 ? mesh.bounds.Size.Y : 20f;
             Float3 bmin = new(float.MaxValue), bmax = new(float.MinValue);
             foreach (var tr in _transforms)
             {
                 float tx = tr[0, 3], ty = tr[1, 3], tz = tr[2, 3];
-                bmin = new Float3(MathF.Min(bmin.X, tx - 5), MathF.Min(bmin.Y, ty), MathF.Min(bmin.Z, tz - 5));
-                bmax = new Float3(MathF.Max(bmax.X, tx + 5), MathF.Max(bmax.Y, ty + 20), MathF.Max(bmax.Z, tz + 5));
+                bmin = new Float3(MathF.Min(bmin.X, tx - meshExtent), MathF.Min(bmin.Y, ty), MathF.Min(bmin.Z, tz - meshExtent));
+                bmax = new Float3(MathF.Max(bmax.X, tx + meshExtent), MathF.Max(bmax.Y, ty + meshHeight), MathF.Max(bmax.Z, tz + meshExtent));
             }
 
             renderables.Add(new InstancedMeshRenderable(

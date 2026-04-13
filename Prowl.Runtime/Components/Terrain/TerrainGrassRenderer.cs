@@ -185,6 +185,8 @@ internal class TerrainGrassRenderer
         int protoIdx, DetailPrototype proto, float densityMultiplier)
     {
         var densityMap = data.DetailLayers[protoIdx];
+        if (densityMap == null) return new CachedPatch { Transforms = [], Colors = [], CustomData = [], PrebuiltInstances = [], Bounds = default };
+
         var transforms = new List<Float4x4>();
         var colors = new List<Float4>();
         var customData = new List<Float4>();

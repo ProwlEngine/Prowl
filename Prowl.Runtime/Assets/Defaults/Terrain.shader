@@ -63,6 +63,7 @@ Pass "Terrain"
             uniform float _TerrainSize;
             uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
+            uniform mat4 _TerrainLocalToWorld;
 
             void main()
             {
@@ -87,8 +88,8 @@ Pass "Terrain"
                 // Transform back to world: inverse of worldToLocal = localToWorld
                 // We can use the instance model's terrain transform portion
                 // Since instanceModel = terrainToWorld * chunkLocal, and we need terrainToWorld,
-                // we can reconstruct: worldPos = inverse(_TerrainWorldToLocal) * displacedLocal
-                vec3 worldPosition = (inverse(_TerrainWorldToLocal) * vec4(displacedLocal, 1.0)).xyz;
+                // we can reconstruct: worldPos = _TerrainLocalToWorld * displacedLocal
+                vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
                 // Normal via central differences in terrain-local space
                 float hmSize = float(textureSize(_Heightmap, 0).x);
@@ -105,7 +106,7 @@ Pass "Terrain"
 
                 // Local normal -> world normal via terrain rotation
                 vec3 localNormal = normalize(vec3(-slopeX, 1.0, -slopeZ));
-                worldNormal = normalize((inverse(_TerrainWorldToLocal) * vec4(localNormal, 0.0)).xyz);
+                worldNormal = normalize((_TerrainLocalToWorld * vec4(localNormal, 0.0)).xyz);
 
                 worldPos = worldPosition;
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
@@ -254,6 +255,7 @@ Pass "TerrainShadow"
             uniform float _TerrainSize;
             uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
+            uniform mat4 _TerrainLocalToWorld;
 
             void main()
             {
@@ -265,7 +267,7 @@ Pass "TerrainShadow"
 
                 float height = texture(_Heightmap, terrainUV).r * _TerrainHeight;
                 vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
-                vec3 worldPosition = (inverse(_TerrainWorldToLocal) * vec4(displacedLocal, 1.0)).xyz;
+                vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
                 worldPos = worldPosition;
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
@@ -316,6 +318,7 @@ Pass "TerrainDepthNormals"
             uniform float _TerrainSize;
             uniform float _TerrainHeight;
             uniform mat4 _TerrainWorldToLocal;
+            uniform mat4 _TerrainLocalToWorld;
 
             void main()
             {
@@ -327,7 +330,7 @@ Pass "TerrainDepthNormals"
 
                 float height = texture(_Heightmap, terrainUV).r * _TerrainHeight;
                 vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
-                vec3 worldPosition = (inverse(_TerrainWorldToLocal) * vec4(displacedLocal, 1.0)).xyz;
+                vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
                 float hmSize = float(textureSize(_Heightmap, 0).x);
                 float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
@@ -339,7 +342,7 @@ Pass "TerrainDepthNormals"
                 float slopeX = (hR - hL) / (wStep * 2.0);
                 float slopeZ = (hU - hD) / (wStep * 2.0);
                 vec3 localNormal = normalize(vec3(-slopeX, 1.0, -slopeZ));
-                worldNormal = normalize((inverse(_TerrainWorldToLocal) * vec4(localNormal, 0.0)).xyz);
+                worldNormal = normalize((_TerrainLocalToWorld * vec4(localNormal, 0.0)).xyz);
 
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
 #else
