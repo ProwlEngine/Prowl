@@ -34,7 +34,7 @@ public class TerrainComponent : MonoBehaviour
     public int MaxLODLevel = 4;
 
     /// <summary>Resolution of the base mesh grid (vertices per side).</summary>
-    public int MeshResolution = 16;
+    public int MeshResolution = 32;
 
     /// <summary>Grass material override. If null, uses built-in Grass material.</summary>
     public AssetRef<Material> GrassMaterial;

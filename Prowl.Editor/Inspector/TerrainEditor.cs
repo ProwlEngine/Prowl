@@ -449,7 +449,7 @@ public class TerrainEditor : ComponentEditor
         paper.Box($"{id}_sp2").Height(6);
 
         // Mesh resolution dropdown (on TerrainComponent, not TerrainData)
-        string[] meshOptions = ["16", "32", "64"];
+        string[] meshOptions = ["16", "32", "64", "128"];
         int meshCurrent = Array.IndexOf(meshOptions, terrain.MeshResolution.ToString());
         if (meshCurrent < 0) meshCurrent = 0;
         EditorGUI.Dropdown(paper, $"{id}_meshres", "Mesh Resolution", meshCurrent, meshOptions)
