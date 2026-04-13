@@ -284,6 +284,8 @@ public class Camera : MonoBehaviour
     {
         if (FieldOfView <= 0)
             FieldOfView = 1f;
+        if (FieldOfView >= 180)
+            FieldOfView = 179f;
 
         Float4x4 proj;
 
