@@ -127,7 +127,7 @@ public static class ScriptCompiler
         var sb = new StringBuilder();
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
         sb.AppendLine("  <PropertyGroup>");
-        sb.AppendLine("    <TargetFramework>net9.0</TargetFramework>");
+        sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
         sb.AppendLine("    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>");
         sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
         sb.AppendLine("    <Nullable>enable</Nullable>");
@@ -192,7 +192,7 @@ public static class ScriptCompiler
         var sb = new StringBuilder();
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
         sb.AppendLine("  <PropertyGroup>");
-        sb.AppendLine("    <TargetFramework>net9.0</TargetFramework>");
+        sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
         sb.AppendLine("    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>");
         sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
         sb.AppendLine("    <Nullable>enable</Nullable>");
