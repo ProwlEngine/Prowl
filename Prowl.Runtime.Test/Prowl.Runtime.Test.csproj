@@ -8,7 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.11.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
     <PackageReference Include="NSubstitute" Version="5.1.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
