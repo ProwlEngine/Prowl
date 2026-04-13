@@ -176,8 +176,9 @@ public class ContextMenuBuilder
         public string Label;
         public Action? OnClick;
 
-        // Toggle support
-        public bool IsToggle;
+        /// <summary>
+        /// Gets the current value of the toggle. This is a Func instead of a simple bool to allow for dynamic values that may change outside of the menu (e.g. a "Show Grid" toggle that reflects the current visibility of the grid, which can also be toggled via a keyboard shortcut).
+        /// </summary>
         public Func<bool>? ToggleValue;
 
         public bool ShouldCloseOnClick { get; set; }
@@ -189,7 +190,7 @@ public class ContextMenuBuilder
 
             using (paper.Row($"{id}_i_{index}")
                         .Height(EditorTheme.RowHeight)
-                        .Hovered.BackgroundColor(item.IsEnabled ? EditorTheme.Purple400 : Color.Transparent).End()
+                        .Hovered.BackgroundColor(IsEnabled ? EditorTheme.Purple400 : Color.Transparent).End()
                         .Rounded(3)
                         .OnClick(item, (captured, e) =>
                         {
@@ -203,23 +204,14 @@ public class ContextMenuBuilder
                         .Enter())
             {
 
-                /*paper.Box($"{id}_i_{index}")
-                    .Margin(10, 0, 0, 0)
-                    .Size(EditorTheme.RowHeight)
-                    .Text(item.Icon, font).TextColor(textColor).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);*/
-
-                EditorGUI.Toggle(paper, $"{id}_t_{index}", "", item.ToggleValue?.Invoke() ?? false).OnValueChanged(newValue =>
-                {
-                    item.OnClick?.Invoke();
-                    onClose?.Invoke();
-                });
+                EditorGUI.Toggle(paper, $"{id}_t_{index}", "", ToggleValue != null ? ToggleValue.Invoke() : false);
 
 
                 paper.Box($"{id}_l_{index}")
                         .Width(UnitValue.Stretch())
                         .Margin(5, 0, 0, 0)
                         .Height(EditorTheme.RowHeight)
-                        .Text(item.Label, font).TextColor(textColor).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+                        .Text(Label, font).TextColor(textColor).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
             }
         }

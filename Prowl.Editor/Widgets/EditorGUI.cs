@@ -85,6 +85,19 @@ public static class EditorGUI
             .FontSize(FontSz + 2);
     }
 
+
+    public static void RoundedRectFilled(Prowl.Quill.Canvas canvas, float rectX, float rectY, float rectWidth, float rectHeight,
+        float radiusTopLeft, float radiusTopRight, float radiusBottomLeft, float radiusBottomRight, Color color)
+    {
+        /*canvas.RoundedRectFilled(rectX, rectY, rectWidth, rectHeight,
+            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft,
+            color);*/
+        canvas.RoundedRect(rectX, rectY, rectWidth, rectHeight,
+            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft);
+        canvas.SetFillColor(color);
+        canvas.FillComplexAA();
+    }
+
     // ================================================================
     //  Separator
     // ================================================================
@@ -617,6 +630,7 @@ public static class EditorGUI
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch(4f))
+                .Margin(UnitValue.Auto, showField ? EditorTheme.RowHeight*0.36f+6 : UnitValue.Auto, UnitValue.Auto, UnitValue.Auto)
                 .OnClick(e =>
                 {
                     float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
@@ -639,7 +653,7 @@ public static class EditorGUI
                     float rw = (float)r.Size.X;
                     float rh = (float)r.Size.Y;
 
-                    float trackH = 12f;
+                    float trackH = 5f;
                     float trackY = ry + rh * 0.5f - trackH * 0.5f;
                     float trackR = trackH * 0.5f;
                     float thumbCx = rx + rw * t;
@@ -647,21 +661,21 @@ public static class EditorGUI
                     float thumbR = rh * 0.36f;
 
                     // ── Track background ──────────────────────────────────
-                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, 0, 0, 0, 0,
+                    RoundedRectFilled(canvas, rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
                         EditorTheme.Ink100);
 
                     // ── Track fill ────────────────────────────────────────
                     if (t > 0f)
                     {
-                        canvas.RoundedRectFilled(rx, trackY, rw * t, trackH, trackR, trackR, trackR, trackR,
+                        RoundedRectFilled(canvas, rx, trackY, rw * t, trackH, trackR, trackR, trackR, trackR,
                             EditorTheme.Purple400);
                     }
 
                     // ── Thumb body ────────────────────────────────────────
-                    /*canvas.SetFillColor(EditorTheme.Ink500);
+                    canvas.SetFillColor(EditorTheme.Ink500);
                     canvas.BeginPath();
                     canvas.Circle(thumbCx, thumbCy, thumbR, 24);
-                    canvas.Fill();*/
+                    canvas.Fill();
                 }));
 
             if (showField)
@@ -881,7 +895,7 @@ public static class EditorGUI
     {
         Action<bool>? userCallback = null;
 
-        UnitValue widthValue = UnitValue.Auto;
+        UnitValue widthValue = UnitValue.StretchOne;
 
         if (fitWidth)
         {
@@ -1229,12 +1243,12 @@ public static class EditorGUI
                     float trackR = trackH * 0.5f;
 
                     // ── Track background ──────────────────────────────────
-                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
+                    RoundedRectFilled(canvas, rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
                         EditorTheme.Ink100);
 
                     // ── Track fill ────────────────────────────────────────
                     if (progress > 0f)
-                        canvas.RoundedRectFilled(rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
+                        RoundedRectFilled(canvas, rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
                             EditorTheme.Purple400);
                 }));
 
