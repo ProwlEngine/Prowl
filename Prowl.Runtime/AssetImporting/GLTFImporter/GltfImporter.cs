@@ -929,7 +929,9 @@ public class GltfImporter
         {
             var n = mesh.Normals[i];
             var t = tangents[i];
-            mesh.Tangents[i] = Float3.Normalize(t - n * Float3.Dot(n, t));
+            var orthogonalized = t - n * Float3.Dot(n, t);
+            float lenSq = Float3.Dot(orthogonalized, orthogonalized);
+            mesh.Tangents[i] = lenSq > 1e-8f ? orthogonalized / MathF.Sqrt(lenSq) : Float3.UnitX;
         }
     }
 }
