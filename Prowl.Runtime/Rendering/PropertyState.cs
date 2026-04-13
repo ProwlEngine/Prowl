@@ -104,6 +104,17 @@ public partial class PropertyState
     }
 
     // Getters
+    // Has* methods — check if a property exists without retrieving it
+    public bool HasFloat(string name) => _floats.ContainsKey(name);
+    public bool HasInt(string name) => _ints.ContainsKey(name);
+    public bool HasVector2(string name) => _vectors2.ContainsKey(name);
+    public bool HasVector3(string name) => _vectors3.ContainsKey(name);
+    public bool HasVector4(string name) => _vectors4.ContainsKey(name);
+    public bool HasColor(string name) => _colors.ContainsKey(name);
+    public bool HasMatrix(string name) => _matrices.ContainsKey(name);
+    public bool HasTexture(string name) => _textures.ContainsKey(name);
+    public bool HasTexture3D(string name) => _textures3D.ContainsKey(name);
+
     public Color GetColor(string name) => _colors.TryGetValue(name, out Color value) ? value : Color.White;
     public Float2 GetVector2(string name) => _vectors2.TryGetValue(name, out Float2 value) ? value : Float2.Zero;
     public Float3 GetVector3(string name) => _vectors3.TryGetValue(name, out Float3 value) ? value : Float3.Zero;

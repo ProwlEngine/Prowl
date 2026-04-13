@@ -214,5 +214,44 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public void OnBeforeSerialize() { }
 
-    public void OnAfterDeserialize() { }
+    public void OnAfterDeserialize()
+    {
+        // Ensure material has entries for all shader properties (fills missing ones with defaults).
+        // This handles: shader updated after material was saved, or material saved without all properties.
+        SyncShaderDefaults();
+    }
+
+    /// <summary>
+    /// Fills in any missing properties from the shader's declared defaults.
+    /// Does NOT overwrite existing values — only adds properties that are absent.
+    /// </summary>
+    public void SyncShaderDefaults()
+    {
+        var shader = _shader.Res;
+        if (shader == null) return;
+
+        foreach (ShaderProperty prop in shader.Properties)
+        {
+            // Only set if the material doesn't already have this property
+            if (!HasProperty(prop.Name, prop.PropertyType))
+                UpdatePropertyState(prop);
+        }
+    }
+
+    private bool HasProperty(string name, ShaderPropertyType type)
+    {
+        return type switch
+        {
+            ShaderPropertyType.Float => _properties.HasFloat(name),
+            ShaderPropertyType.Int => _properties.HasInt(name),
+            ShaderPropertyType.Vector2 => _properties.HasVector2(name),
+            ShaderPropertyType.Vector3 => _properties.HasVector3(name),
+            ShaderPropertyType.Vector4 => _properties.HasVector4(name),
+            ShaderPropertyType.Color => _properties.HasColor(name),
+            ShaderPropertyType.Matrix => _properties.HasMatrix(name),
+            ShaderPropertyType.Texture2D => _properties.HasTexture(name),
+            ShaderPropertyType.Texture3D => _properties.HasTexture3D(name),
+            _ => false,
+        };
+    }
 }
