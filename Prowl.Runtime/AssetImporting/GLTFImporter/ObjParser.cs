@@ -18,16 +18,22 @@ namespace Prowl.Runtime.AssetImporting;
 /// </summary>
 public static class ObjParser
 {
-    /// <summary>Parse an OBJ stream and return just the Mesh.</summary>
+    /// <summary>Parse an OBJ stream and return just the Mesh using default settings (generate all).</summary>
     public static Mesh ParseMesh(Stream stream, string name)
     {
-        return ParseInternal(stream, name);
+        return ParseMesh(stream, name, new ModelImporterSettings());
+    }
+
+    /// <summary>Parse an OBJ stream and return just the Mesh with import settings.</summary>
+    public static Mesh ParseMesh(Stream stream, string name, ModelImporterSettings settings)
+    {
+        return ParseInternal(stream, name, settings);
     }
 
     /// <summary>Parse an OBJ stream and return a Model with GameObjectData.</summary>
     public static Model Parse(Stream stream, string name)
     {
-        var mesh = ParseInternal(stream, name);
+        var mesh = ParseInternal(stream, name, new ModelImporterSettings());
         var rootGo = new GameObject(name);
         var mr = rootGo.AddComponent<MeshRenderer>();
         mr.Mesh = new AssetRef<Mesh>(mesh);
@@ -36,7 +42,7 @@ public static class ObjParser
         return model;
     }
 
-    private static Mesh ParseInternal(Stream stream, string name)
+    private static Mesh ParseInternal(Stream stream, string name, ModelImporterSettings settings)
     {
         var positions = new List<Float3>();
         var normals = new List<Float3>();
@@ -103,10 +109,34 @@ public static class ObjParser
         mesh.MeshTopology = Topology.Triangles;
         mesh.Indices = outIndices.ToArray();
 
-        // Ensure normals and tangents exist for proper lighting
-        if (!mesh.HasNormals)
-            mesh.RecalculateNormals();
-        if (mesh.HasNormals && mesh.HasUV && !mesh.HasTangents)
+        // Generate or recalculate normals based on import settings
+        bool hasFileNormals = normals.Count > 0;
+        if (settings.RecalculateNormals || (!hasFileNormals && settings.GenerateNormals))
+        {
+            if (settings.GenerateSmoothNormals)
+                mesh.RecalculateNormals(); // Smooth area-weighted normals with NaN fallback
+            else
+            {
+                // Flat normals: each face gets its own face normal
+                var flatNormals = new Float3[mesh.Vertices.Length];
+                for (int i = 0; i + 2 < mesh.Indices.Length; i += 3)
+                {
+                    int i0 = (int)mesh.Indices[i], i1 = (int)mesh.Indices[i + 1], i2 = (int)mesh.Indices[i + 2];
+                    var e1 = mesh.Vertices[i1] - mesh.Vertices[i0];
+                    var e2 = mesh.Vertices[i2] - mesh.Vertices[i0];
+                    var fn = Float3.Cross(e1, e2);
+                    float lenSq = Float3.Dot(fn, fn);
+                    fn = lenSq > 1e-8f ? fn / MathF.Sqrt(lenSq) : Float3.UnitY;
+                    flatNormals[i0] = fn;
+                    flatNormals[i1] = fn;
+                    flatNormals[i2] = fn;
+                }
+                mesh.Normals = flatNormals;
+            }
+        }
+
+        // Generate tangents
+        if (settings.CalculateTangentSpace && mesh.HasNormals && mesh.HasUV)
             mesh.RecalculateTangents();
 
         mesh.RecalculateBounds();

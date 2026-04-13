@@ -725,12 +725,12 @@ public class GltfImporter
             mesh.IndexFormat = allVertices.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
             mesh.Indices = allIndices.ToArray();
 
-            // Generate normals if missing
-            if (!hasNormals && settings.GenerateNormals)
+            // Generate or recalculate normals
+            if (settings.RecalculateNormals || (!hasNormals && settings.GenerateNormals))
                 GenerateNormals(mesh, settings.GenerateSmoothNormals);
 
-            // Generate tangents if missing
-            if (!hasTangents && settings.CalculateTangentSpace && mesh.Normals != null && mesh.UV != null)
+            // Generate or recalculate tangents
+            if (settings.CalculateTangentSpace && mesh.Normals != null && mesh.UV != null)
                 GenerateTangents(mesh);
 
             // Set submeshes
@@ -866,31 +866,23 @@ public class GltfImporter
 
     private static void GenerateNormals(Mesh mesh, bool smooth)
     {
-        mesh.Normals = new Float3[mesh.Vertices.Length];
-
         if (smooth)
         {
+            // Use Mesh.RecalculateNormals which already handles NaN fallback
+            mesh.RecalculateNormals();
+        }
+        else
+        {
+            // Flat normals: each face vertex gets the face normal
+            mesh.Normals = new Float3[mesh.Vertices.Length];
             for (int i = 0; i + 2 < mesh.Indices.Length; i += 3)
             {
                 int i0 = (int)mesh.Indices[i], i1 = (int)mesh.Indices[i + 1], i2 = (int)mesh.Indices[i + 2];
                 var e1 = mesh.Vertices[i1] - mesh.Vertices[i0];
                 var e2 = mesh.Vertices[i2] - mesh.Vertices[i0];
                 var fn = Float3.Cross(e1, e2);
-                mesh.Normals[i0] += fn;
-                mesh.Normals[i1] += fn;
-                mesh.Normals[i2] += fn;
-            }
-            for (int i = 0; i < mesh.Normals.Length; i++)
-                mesh.Normals[i] = Float3.Normalize(mesh.Normals[i]);
-        }
-        else
-        {
-            for (int i = 0; i + 2 < mesh.Indices.Length; i += 3)
-            {
-                int i0 = (int)mesh.Indices[i], i1 = (int)mesh.Indices[i + 1], i2 = (int)mesh.Indices[i + 2];
-                var e1 = mesh.Vertices[i1] - mesh.Vertices[i0];
-                var e2 = mesh.Vertices[i2] - mesh.Vertices[i0];
-                var fn = Float3.Normalize(Float3.Cross(e1, e2));
+                float lenSq = Float3.Dot(fn, fn);
+                fn = lenSq > 1e-8f ? fn / MathF.Sqrt(lenSq) : Float3.UnitY;
                 mesh.Normals[i0] = fn;
                 mesh.Normals[i1] = fn;
                 mesh.Normals[i2] = fn;
