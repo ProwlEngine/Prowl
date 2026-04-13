@@ -43,7 +43,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
     // Private fields
     private Material _mat;
 
-    public override RenderStage Stage => RenderStage.AfterLighting; // Run after deferred composition but before transparents
+    public override RenderStage Stage => RenderStage.AfterOpaques;
 
     public override void OnRenderEffect(RenderContext context)
     {
@@ -59,11 +59,11 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         RenderTexture resolvedRT = RenderTexture.GetTemporaryRT(width, height, false, [context.SceneColor.MainTexture.ImageFormat]);
         RenderTexture blurTempRT = RenderTexture.GetTemporaryRT(width, height, false, [context.SceneColor.MainTexture.ImageFormat]);
 
-        // Explicitly set depth and normals textures from the pre-pass
-        if (context.GBuffer.IsValid())
+        // Set depth and normals textures from the pre-pass
+        if (context.DepthNormals.IsValid())
         {
-            _mat.SetTexture("_CameraDepthTexture", context.GBuffer.InternalDepth);
-            _mat.SetTexture("_CameraNormalsTexture", context.GBuffer.InternalTextures[0]);
+            _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
+            _mat.SetTexture("_CameraNormalsTexture", context.DepthNormals.InternalTextures[0]);
         }
 
         // Pass 0: Ray March - Trace rays and output hit UVs + confidence

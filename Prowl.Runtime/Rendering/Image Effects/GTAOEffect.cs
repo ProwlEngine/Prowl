@@ -41,7 +41,7 @@ public sealed class GTAOEffect : ImageEffect
     // Private fields
     private Material _mat;
 
-    public override RenderStage Stage => RenderStage.AfterLighting; // Run after deferred composition but before transparents
+    public override RenderStage Stage => RenderStage.AfterOpaques;
 
     public override void OnRenderEffect(RenderContext context)
     {
@@ -62,11 +62,11 @@ public sealed class GTAOEffect : ImageEffect
         _mat.SetFloat("_Intensity", Intensity);
         _mat.SetVector("_NoiseScale", new Float2(width / 4.0f, height / 4.0f)); // Tile noise pattern
 
-        // Explicitly set depth and normals textures from the pre-pass
-        if (context.GBuffer.IsValid())
+        // Set depth and normals textures from the pre-pass
+        if (context.DepthNormals.IsValid())
         {
-            _mat.SetTexture("_CameraDepthTexture", context.GBuffer.InternalDepth);
-            _mat.SetTexture("_CameraNormalsTexture", context.GBuffer.InternalTextures[0]);
+            _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
+            _mat.SetTexture("_CameraNormalsTexture", context.DepthNormals.InternalTextures[0]);
         }
         RenderPipeline.Blit(context.SceneColor, aoRT, _mat, 0);
 

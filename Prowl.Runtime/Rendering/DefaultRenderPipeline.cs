@@ -99,29 +99,16 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         var effectsByStage = new Dictionary<RenderStage, List<ImageEffect>>
         {
-            { RenderStage.BeforeGBuffer, new List<ImageEffect>() },
-            { RenderStage.AfterGBuffer, new List<ImageEffect>() },
-            { RenderStage.DuringLighting, new List<ImageEffect>() },
-            { RenderStage.AfterLighting, new List<ImageEffect>() },
+            { RenderStage.AfterOpaques, new List<ImageEffect>() },
             { RenderStage.PostProcess, new List<ImageEffect>() }
         };
 
         foreach (ImageEffect effect in camera.Effects)
         {
             if (effect == null) continue;
-
-            // Get the stage, with backward compatibility for IsOpaqueEffect
             RenderStage stage = effect.Stage;
-
-            #pragma warning disable CS0618 // Type or member is obsolete
-            if (effect.IsOpaqueEffect && stage == RenderStage.PostProcess)
-            {
-                // Backward compatibility: IsOpaqueEffect means AfterLighting
-                stage = RenderStage.AfterLighting;
-            }
-            #pragma warning restore CS0618
-
-            effectsByStage[stage].Add(effect);
+            if (effectsByStage.ContainsKey(stage))
+                effectsByStage[stage].Add(effect);
         }
 
         return effectsByStage;
@@ -287,20 +274,19 @@ public class DefaultRenderPipeline : RenderPipeline
         DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
 
         // =======================================================
-        // 12. AfterLighting effects (SSR, etc.)
-        if (effectsByStage[RenderStage.AfterLighting].Count > 0)
+        // 11. AfterOpaques effects (GTAO, SSR, etc.)
+        if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
             var afterContext = new RenderContext
             {
-                GBuffer = depthPrepass, // depth + normals for screen-space effects
-                LightAccumulation = null,
+                DepthNormals = depthPrepass,
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
                 Height = (int)css.PixelHeight,
-                CurrentStage = RenderStage.AfterLighting
+                CurrentStage = RenderStage.AfterOpaques
             };
-            ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterLighting]);
+            ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
         }
 
         // =======================================================
@@ -315,8 +301,7 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             var postContext = new RenderContext
             {
-                GBuffer = depthPrepass,
-                LightAccumulation = null,
+                DepthNormals = depthPrepass,
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
@@ -338,7 +323,10 @@ public class DefaultRenderPipeline : RenderPipeline
         // =======================================================
         // 15. Gizmos
         if (data.DisplayGizmos)
+        {
+            Graphics.BindFramebuffer(colorRT.frameBuffer);
             RenderGizmos(css);
+        }
 
         // =======================================================
         // 16. Final blit to target (null = screen)
@@ -364,8 +352,10 @@ public class DefaultRenderPipeline : RenderPipeline
         Float4 fogParams = Float4.Zero;
         fogParams.X = fog.Density / 1.2011224f;
         fogParams.Y = fog.Density / 0.693147181f;
-        fogParams.Z = -1.0f / (fog.End - fog.Start);
-        fogParams.W = fog.End / (fog.End - fog.Start);
+        float fogRange = fog.End - fog.Start;
+        if (MathF.Abs(fogRange) < 0.0001f) fogRange = 0.0001f;
+        fogParams.Z = -1.0f / fogRange;
+        fogParams.W = fog.End / fogRange;
 
         PropertyState.SetGlobalColor("_FogColor", fog.Color);
         PropertyState.SetGlobalVector("_FogParams", fogParams);
