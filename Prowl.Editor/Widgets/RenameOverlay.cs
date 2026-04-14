@@ -94,17 +94,21 @@ public static class RenameOverlay
             .TabIndex(0)
             .Enter())
         {
-            paper.Box($"{id}_tf")
+            var textField = paper.Box($"{id}_tf")
                 .Margin(4, UnitValue.Stretch())
                 .HookToParent()
                 .IsNotInteractable()
+                .Alignment(TextAlignment.MiddleLeft)
                 .Width(UnitValue.Stretch())
-                .Height(EditorTheme.RowHeight)
+                .Height(EditorTheme.FontSize)
                 .FontSize(EditorTheme.FontSize - 1)
                 .TextField(_text, font,
                     onChange: v => _text = v,
                     textColor: EditorTheme.Ink500,
                     intID: _activeId?.GetHashCode() ?? 0);
+
+            if (!paper.IsElementFocused(textField._handle.Data.ID))
+                paper.SetFocus(textField._handle);
             // TODO: Waiting on a paper update to include the SelectAllOnFocus setting to Text Fields
         }
     }
