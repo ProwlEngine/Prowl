@@ -58,6 +58,7 @@ public class ConsolePanel : DockPanel
     internal struct LogEntry
     {
         public string Message;
+        public string FullMessage;
         public LogSeverity Severity;
         public string TimeString; // cached formatted time
         public int Count;
@@ -90,7 +91,8 @@ public class ConsolePanel : DockPanel
             {
                 _messages[^1] = new LogEntry
                 {
-                    Message = last.Message,
+                    Message = last.Message.Contains('\n') ? last.Message.Split('\n')[0] : last.Message,
+                    FullMessage = last.Message,
                     Severity = last.Severity,
                     TimeString = DateTime.Now.ToString("HH:mm:ss"),
                     Count = last.Count + 1,
@@ -106,7 +108,8 @@ public class ConsolePanel : DockPanel
 
         _messages.Add(new LogEntry
         {
-            Message = message,
+            Message = message.Contains('\n') ? message.Split('\n')[0] : message,
+            FullMessage = message,
             Severity = severity,
             TimeString = DateTime.Now.ToString("HH:mm:ss"),
             Count = 1,
@@ -443,7 +446,7 @@ public class ConsoleLogSelection
 
     internal ConsoleLogSelection(ConsolePanel.LogEntry entry)
     {
-        Message = entry.Message;
+        Message = entry.FullMessage;
         Severity = entry.Severity;
         Time = entry.TimeString;
         Count = entry.Count;

@@ -43,7 +43,7 @@ public static class StatusBar
     {
         var info = new StatusInfo
         {
-            Message = message
+            Message = message.Contains('\n') ? message.Split('\n')[0] : message
         };
 
         switch (severity)
