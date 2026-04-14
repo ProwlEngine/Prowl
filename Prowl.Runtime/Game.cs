@@ -39,9 +39,18 @@ public abstract class Game
 
     public bool DrawGizmos { get; set; }
 
-    public void Run(string title, int width, int height)
+    /// <summary>
+    /// Added a separate method to initialize the window as it might be needed to restore the latest saved state of the window (size, position, etc.) when the game is launched again.
+    /// This allows for better user experience by remembering their preferences.
+    /// </summary>
+    public virtual void InitializeWindow(string title, int width, int height)
     {
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, false);
+    } 
+
+    public void Run(string title, int width, int height)
+    {
+        InitializeWindow(title, width, height);
 
         Window.Load += () =>
         {

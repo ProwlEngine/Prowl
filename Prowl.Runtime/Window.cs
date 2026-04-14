@@ -28,6 +28,12 @@ public static class Window
     public static event Action<WindowState>? StateChanged;
     public static event Action<string[]>? FileDrop;
 
+    public static Vector2D<int> Position
+    {
+        get { return InternalWindow.Position; }
+        set { InternalWindow.Position = value; }
+    }
+
     public static Vector2D<int> Size
     {
         get { return InternalWindow.Size; }

@@ -28,6 +28,16 @@ public class EditorSettings
     public bool ReimportOnFocusOnly { get; set; } = true;
     public int ThumbnailSize { get; set; } = 32;
 
+    public int WindowX { get; set; } = -1;
+
+    public int WindowY { get; set; } = -1;
+
+    public int WindowWidth { get; set; } = 1280;
+
+    public int WindowHeight { get; set; } = 800;
+
+    public bool WindowMaximized { get; set; } = false;
+
     // Shortcuts — only user-overridden bindings are stored
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();
 
