@@ -14,7 +14,7 @@ public static class EditorTheme
 
     // Sizing — mutable so themes can override
     public static float MenuBarHeight = 26f;
-    public static float StatusBarHeight = 22f;
+    public static float StatusBarHeight = 26f;
     public static float RowHeight = 22f;
     public static float Spacing = 2f;
     public static float Padding = 4f;
