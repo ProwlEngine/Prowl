@@ -470,18 +470,22 @@ namespace Prowl.PaperUI
             float yOffset = 0;
             Float2 textSize;
 
+            // TextLayout.Size is in pixel space (DPI-scaled). Convert to logical units
+            // so alignment calculations match the logical-space availableHeight.
+            float invScale = 1.0f / canvas.Scale;
+
             if (handle.Data.IsMarkdown == false)
             {
                 if (handle.Data._textLayout == null) throw new InvalidOperationException("Text layout is not processed.");
 
-                textSize = (Float2)handle.Data._textLayout.Size;
+                textSize = (Float2)handle.Data._textLayout.Size * invScale;
             }
             else
             {
                 if (handle.Data._quillMarkdown == null) throw new InvalidOperationException("Markdown layout is not processed.");
 
                 var markdownResult = handle.Data._quillMarkdown;
-                textSize = markdownResult?.Size ?? Float2.Zero;
+                textSize = (markdownResult?.Size ?? Float2.Zero) * invScale;
             }
 
             // Apply vertical alignment based on TextAlignment

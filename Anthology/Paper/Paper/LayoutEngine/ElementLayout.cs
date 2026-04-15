@@ -1303,6 +1303,11 @@ namespace Prowl.PaperUI.LayoutEngine
             var canvas = gui.Canvas;
             if (canvas == null) throw new InvalidOperationException("Canvas is not set.");
 
+            // TextLayout.Size and markdown Size are in pixel space (because Canvas.CreateLayout
+            // applies DPI scaling via ScaleSettings). Convert back to logical units so the layout
+            // engine works in a consistent coordinate space.
+            float invScale = 1.0f / canvas.Scale;
+
             if (element.IsMarkdown == false)
             {
                 var settings = TextLayoutSettings.Default;
@@ -1326,7 +1331,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
                 element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
 
-                return (Float2)element._textLayout.Size;
+                return (Float2)element._textLayout.Size * invScale;
             }
             else
             {
@@ -1340,7 +1345,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 
                 var markdownResult = element._quillMarkdown;
-                return markdownResult?.Size ?? Float2.Zero;
+                return (markdownResult?.Size ?? Float2.Zero) * invScale;
             }
         }
 
