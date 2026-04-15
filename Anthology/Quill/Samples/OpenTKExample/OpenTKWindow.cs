@@ -53,15 +53,16 @@ namespace OpenTKExample
             _renderer.Initialize(ClientSize.X, ClientSize.Y, _whiteTexture);
             _canvas = new Canvas(_renderer, new FontAtlasSettings());
             _canvas.TextMode = TextRenderMode.Slug;
+            _canvas.SetReferenceResolution(1280, 720);
 
             RobotoFont = new FontFile("Fonts/Roboto.ttf");
             AlamakFont = new FontFile("Fonts/Alamak.ttf");
 
             _demos = new List<IDemo>
             {
-                new CanvasDemo(_canvas, ClientSize.X, ClientSize.Y, _demoTexture, RobotoFont, AlamakFont),
-                new SVGDemo(_canvas, ClientSize.X, ClientSize.Y),
-                new BenchmarkScene(_canvas, RobotoFont, ClientSize.X, ClientSize.Y),
+                new CanvasDemo(_canvas, _demoTexture, RobotoFont, AlamakFont),
+                new SVGDemo(_canvas),
+                new BenchmarkScene(_canvas, RobotoFont),
             };
         }
 
@@ -70,7 +71,8 @@ namespace OpenTKExample
             base.OnRenderFrame(args);
 
             // Clear the canvas for new frame
-            _canvas.BeginFrame(ClientSize.X, ClientSize.Y);
+            float dpiScale = (float)FramebufferSize.X / ClientSize.X;
+            _canvas.BeginFrame(ClientSize.X, ClientSize.Y, dpiScale);
 
             // Let demo render to canvas
             _demos[_currentDemoIndex].RenderFrame((float)args.Time, _offset, _zoom, _rotation);

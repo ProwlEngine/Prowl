@@ -32,15 +32,16 @@ namespace RaylibExample
             Texture2D demoTexture = LoadTexture("Textures/wall.png");
 
             Canvas canvas = new Canvas(renderer, new FontAtlasSettings());
+            canvas.SetReferenceResolution(1280, 720);
 
             RobotoFont = new FontFile("Fonts/Roboto.ttf");
             AlamakFont = new FontFile("Fonts/Alamak.ttf");
 
             var demos = new List<IDemo>
             {
-                new CanvasDemo(canvas, screenWidth, screenHeight, demoTexture, RobotoFont, AlamakFont),
-                new SVGDemo(canvas, screenWidth, screenHeight),
-                new BenchmarkScene(canvas, RobotoFont, screenWidth, screenHeight)
+                new CanvasDemo(canvas, demoTexture, RobotoFont, AlamakFont),
+                new SVGDemo(canvas),
+                new BenchmarkScene(canvas, RobotoFont)
             };
 
             int currentDemoIndex = 0;

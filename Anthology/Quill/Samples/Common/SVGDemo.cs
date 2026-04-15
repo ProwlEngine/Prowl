@@ -8,16 +8,14 @@ namespace Common
     internal class SVGDemo : IDemo
     {
         private Canvas _canvas;
-        private float _width;
-        private float _height;
+        private float _width => _canvas.Width;
+        private float _height => _canvas.Height;
 
         List<SvgElement> svgElements;
 
-        public SVGDemo(Canvas canvas, float width, float height)
+        public SVGDemo(Canvas canvas)
         {
             _canvas = canvas;
-            _width = width;
-            _height = height;
 
             ParseSVG();
         }

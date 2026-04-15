@@ -11,8 +11,8 @@ namespace Common
     internal class BenchmarkScene : IDemo
     {
         private Canvas _canvas;
-        private float _width;
-        private float _height;
+        private float _width => _canvas.Width;
+        private float _height => _canvas.Height;
         private float _time;
 
         // Benchmark parameters
@@ -28,13 +28,10 @@ namespace Common
 
         private FontFile _font;
 
-        public BenchmarkScene(Canvas canvas, FontFile font, float width, float height)
+        public BenchmarkScene(Canvas canvas, FontFile font)
         {
             _canvas = canvas;
             _font = font;
-
-            _width = width;
-            _height = height;
         }
 
         public void RenderFrame(float deltaTime, Float2 offset, float zoom, float rotate)

@@ -42,6 +42,7 @@ public partial class App
         var (cw, ch) = _renderer.GetCanvasSize();
         _canvas = new Canvas(_renderer, new FontAtlasSettings());
         _canvas.TextMode = TextRenderMode.Slug;
+        _canvas.SetReferenceResolution(1280, 720);
 
         // Load fonts from embedded resources
         var robotoFont = LoadFontResource(asm, "Fonts.Roboto.ttf");
@@ -56,9 +57,9 @@ public partial class App
 
         _demos = new List<IDemo>
         {
-            new CanvasDemo(_canvas, cw, ch, wallTexture!, robotoFont!, alamakFont!),
-            new SVGDemo(_canvas, cw, ch),
-            new BenchmarkScene(_canvas, robotoFont!, cw, ch),
+            new CanvasDemo(_canvas, wallTexture!, robotoFont!, alamakFont!),
+            new SVGDemo(_canvas),
+            new BenchmarkScene(_canvas, robotoFont!),
         };
 
         Console.WriteLine($"Initialized: {cw}x{ch}, {svgElements.Count} SVGs, {_demos.Count} demos");

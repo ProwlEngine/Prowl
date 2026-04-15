@@ -521,20 +521,32 @@ namespace Prowl.Quill
         private float _width = 0.0f;
         private float _height = 0.0f;
 
+        // Reference resolution scaling
+        private float _referenceWidth = 0.0f;
+        private float _referenceHeight = 0.0f;
+        private float _matchWidthOrHeight = 0.5f;
+        private bool _useReferenceResolution = false;
+        private float _referenceScale = 1.0f;
+
         private IMarkdownImageProvider? _markdownImageProvider = null;
 
         /// <summary>
-        /// Gets the current device pixel ratio (DPI scale factor).
+        /// Gets the current combined scale factor (reference resolution scale * DPI scale).
+        /// This maps from logical drawing units to physical pixels.
         /// </summary>
         public float Scale => _scale;
 
         /// <summary>
         /// Gets the logical width of the canvas in units.
+        /// When a reference resolution is set, this is the scaled logical width
+        /// (matching or near the reference width depending on aspect ratio and match mode).
         /// </summary>
         public float Width => _width;
 
         /// <summary>
         /// Gets the logical height of the canvas in units.
+        /// When a reference resolution is set, this is the scaled logical height
+        /// (matching or near the reference height depending on aspect ratio and match mode).
         /// </summary>
         public float Height => _height;
 
@@ -542,6 +554,17 @@ namespace Prowl.Quill
         /// Gets the size of one pixel in logical units.
         /// </summary>
         public float PixelFraction => 1.0f / _scale;
+
+        /// <summary>
+        /// Gets the reference resolution scale factor (without DPI).
+        /// Returns 1.0 when no reference resolution is set.
+        /// </summary>
+        public float ReferenceScale => _referenceScale;
+
+        /// <summary>
+        /// Gets whether a reference resolution is currently active.
+        /// </summary>
+        public bool HasReferenceResolution => _useReferenceResolution;
 
         /// <summary>
         /// Gets or sets the text rendering mode. Slug mode evaluates glyph curves
@@ -573,6 +596,37 @@ namespace Prowl.Quill
         }
 
         /// <summary>
+        /// Sets a target reference resolution for automatic scaling.
+        /// When set, drawing coordinates use a virtual resolution that is automatically
+        /// scaled to fill the actual window size. This ensures content designed for a
+        /// specific resolution (e.g., 1280x720) looks correct on any screen size.
+        /// </summary>
+        /// <param name="width">Reference width (e.g., 1280).</param>
+        /// <param name="height">Reference height (e.g., 720).</param>
+        /// <param name="matchWidthOrHeight">
+        /// Controls whether scaling prioritizes matching the width or height of the reference resolution.
+        /// 0 = match width exactly (height adjusts for aspect ratio),
+        /// 1 = match height exactly (width adjusts for aspect ratio),
+        /// 0.5 = balanced (default).
+        /// </param>
+        public void SetReferenceResolution(float width, float height, float matchWidthOrHeight = 0.5f)
+        {
+            _referenceWidth = width > 0 ? width : 1;
+            _referenceHeight = height > 0 ? height : 1;
+            _matchWidthOrHeight = Math.Clamp(matchWidthOrHeight, 0f, 1f);
+            _useReferenceResolution = true;
+        }
+
+        /// <summary>
+        /// Clears the reference resolution, reverting to direct pixel mapping.
+        /// </summary>
+        public void ClearReferenceResolution()
+        {
+            _useReferenceResolution = false;
+            _referenceScale = 1.0f;
+        }
+
+        /// <summary>
         /// Begins a new frame with the specified logical dimensions and pixel ratio.
         /// </summary>
         /// <remarks>
@@ -580,27 +634,60 @@ namespace Prowl.Quill
         /// All drawing coordinates are in logical units. The pixel ratio determines
         /// how logical units map to physical pixels for high-DPI rendering.
         ///
+        /// When a reference resolution is set via <see cref="SetReferenceResolution"/>,
+        /// the canvas Width and Height are adjusted so that drawing coordinates use
+        /// the virtual reference space. The scale factor combines both the reference
+        /// scaling and DPI scaling automatically.
+        ///
         /// Example usage:
         /// <code>
+        /// // Set once:
+        /// canvas.SetReferenceResolution(1280, 720);
+        ///
         /// // Each frame:
         /// canvas.BeginFrame(GetScreenWidth(), GetScreenHeight(), GetWindowScaleDPI().X);
         ///
-        /// // Draw using logical coordinates:
+        /// // Draw using logical coordinates (near 1280x720 regardless of actual window size):
         /// canvas.DrawRect(0, 0, canvas.Width, canvas.Height);
-        /// canvas.DrawText("Hello", 10, 10, color, 16, font); // 16 logical pixels
+        /// canvas.DrawText("Hello", 10, 10, color, 16, font); // 16 logical pixels at reference scale
         /// </code>
         /// </remarks>
-        /// <param name="width">Logical width of the canvas in units.</param>
-        /// <param name="height">Logical height of the canvas in units.</param>
+        /// <param name="width">Window width in logical pixels (before DPI scaling).</param>
+        /// <param name="height">Window height in logical pixels (before DPI scaling).</param>
         /// <param name="pixelRatio">Device pixel ratio (1.0 = standard DPI, 2.0 = Retina/HiDPI).</param>
         public void BeginFrame(float width, float height, float pixelRatio = 1.0f)
         {
             if (pixelRatio <= 0)
                 throw new ArgumentOutOfRangeException(nameof(pixelRatio), "Pixel ratio must be greater than zero.");
 
-            _width = width;
-            _height = height;
-            _scale = pixelRatio;
+            if (_useReferenceResolution && _referenceWidth > 0 && _referenceHeight > 0)
+            {
+                // Calculate how much we need to scale to match the reference resolution
+                float scaleX = width / _referenceWidth;
+                float scaleY = height / _referenceHeight;
+
+                // Blend between width-matching and height-matching based on the priority
+                // Using log-lerp for perceptually uniform blending (same as Unity's CanvasScaler)
+                float logScaleX = (float)Math.Log(scaleX);
+                float logScaleY = (float)Math.Log(scaleY);
+                float logScale = logScaleX + (logScaleY - logScaleX) * _matchWidthOrHeight;
+                _referenceScale = (float)Math.Exp(logScale);
+
+                // Logical dimensions in reference-scaled space
+                _width = width / _referenceScale;
+                _height = height / _referenceScale;
+
+                // Combined scale: reference scaling * DPI
+                _scale = _referenceScale * pixelRatio;
+            }
+            else
+            {
+                _referenceScale = 1.0f;
+                _width = width;
+                _height = height;
+                _scale = pixelRatio;
+            }
+
             UpdatePixelCalculations();
             Clear();
         }
