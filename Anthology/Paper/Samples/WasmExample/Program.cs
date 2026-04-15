@@ -20,6 +20,7 @@ public partial class App
         var (cw, ch) = _renderer.GetCanvasSize();
 
         P = new Paper(_renderer, cw, ch, new FontAtlasSettings());
+        P.SetReferenceResolution(1280, 720);
         Shared.PaperDemo.Initialize(P);
 
         Console.WriteLine($"Initialized: {cw}x{ch}");

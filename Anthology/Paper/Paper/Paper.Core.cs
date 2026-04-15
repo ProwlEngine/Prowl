@@ -43,7 +43,7 @@ namespace Prowl.PaperUI
         public uint CountOfAllElements { get; private set; }
 
         // Public properties
-        public Rect ScreenRect => new Rect(0, 0, _width, _height);
+        public Rect ScreenRect => new Rect(0, 0, _canvas?.Width ?? _width, _canvas?.Height ?? _height);
         public ElementHandle RootElement => _rootElementHandle;
         public Canvas Canvas => _canvas;
         public ICanvasRenderer Renderer => _renderer;
@@ -105,6 +105,31 @@ namespace Prowl.PaperUI
             _height = height;
         }
 
+        /// <summary>
+        /// Sets a target reference resolution for automatic UI scaling.
+        /// When set, all UI coordinates use a virtual resolution that is automatically
+        /// scaled to fill the actual window size. This ensures UI designed for a
+        /// specific resolution (e.g., 1280x720) looks correct on any screen size.
+        /// </summary>
+        /// <param name="width">Reference width (e.g., 1280).</param>
+        /// <param name="height">Reference height (e.g., 720).</param>
+        /// <param name="matchWidthOrHeight">
+        /// Controls whether scaling prioritizes matching the width or height.
+        /// 0 = match width exactly, 1 = match height exactly, 0.5 = balanced (default).
+        /// </param>
+        public void SetReferenceResolution(float width, float height, float matchWidthOrHeight = 0.5f)
+        {
+            _canvas.SetReferenceResolution(width, height, matchWidthOrHeight);
+        }
+
+        /// <summary>
+        /// Clears the reference resolution, reverting to direct pixel mapping.
+        /// </summary>
+        public void ClearReferenceResolution()
+        {
+            _canvas.ClearReferenceResolution();
+        }
+
         public void AddFallbackFont(FontFile font) => _canvas.AddFallbackFont(font);
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
@@ -137,11 +162,19 @@ namespace Prowl.PaperUI
             _timer.Restart();
             SetTime(deltaTime);
 
+            // Canvas computes logical dimensions (accounting for reference resolution if set)
+            _canvas.BeginFrame(_width, _height, _dpiScale);
+
+            // Use the canvas's logical dimensions for the root element.
+            // When reference resolution is active, these differ from _width/_height.
+            float logicalWidth = _canvas.Width;
+            float logicalHeight = _canvas.Height;
+
             _elementStack.Clear();
 
             // Reset with just the root element
             ClearElements();
-            InitializeRootElement(_width, _height);
+            InitializeRootElement(logicalWidth, logicalHeight);
             _rootElementHandle = GetRootElementHandle();
 
             // Initialize stacks
@@ -149,8 +182,6 @@ namespace Prowl.PaperUI
             _IDStack.Clear();
             _IDStack.Push(0);
             _createdElements.Clear();
-
-            _canvas.BeginFrame(_width, _height, _dpiScale);
 
             StartInputFrame();
         }
