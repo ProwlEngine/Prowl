@@ -216,8 +216,8 @@ public class EditorApplication : Game
         // Reset per-frame state
         GameViewInputHandler.IsGameViewFocused = false;
 
-        int w = Window.InternalWindow.Size.X;
-        int h = Window.InternalWindow.Size.Y;
+        float w = paper.ScreenRect.Size.X;
+        float h = paper.ScreenRect.Size.Y;
 
         _time += Time.UnscaledDeltaTime;
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
@@ -357,7 +357,7 @@ public class EditorApplication : Game
         _dockSpace.Draw(paper, pad, dockY, w - pad * 2, dockH);
     }
 
-    private void DrawTitleFlap(Paper paper, int w, int h)
+    private void DrawTitleFlap(Paper paper, float w, float h)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -573,8 +573,8 @@ public class EditorApplication : Game
 
     private void DrawIntro(Paper paper)
     {
-        int w = Window.InternalWindow.Size.X;
-        int h = Window.InternalWindow.Size.Y;
+        float w = paper.ScreenRect.Size.X;
+        float h = paper.ScreenRect.Size.Y;
 
         paper.Box("intro_overlay")
             .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)

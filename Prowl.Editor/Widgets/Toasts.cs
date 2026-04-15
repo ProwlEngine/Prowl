@@ -56,8 +56,8 @@ public static class Toasts
         if (_toasts.Count == 0) return;
         var font = EditorTheme.DefaultFont;
 
-        int w = Prowl.Runtime.Window.InternalWindow.Size.X;
-        int h = Prowl.Runtime.Window.InternalWindow.Size.Y;
+        float w = paper.ScreenRect.Size.X;
+        float h = paper.ScreenRect.Size.Y;
 
         float yOffset = h - 30f; // Start from bottom
 

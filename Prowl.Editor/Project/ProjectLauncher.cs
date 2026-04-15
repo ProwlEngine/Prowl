@@ -46,8 +46,8 @@ public static class ProjectLauncher
 
         _animTime += dt;
 
-        int w = Window.InternalWindow.Size.X;
-        int h = Window.InternalWindow.Size.Y;
+        float w = paper.ScreenRect.Size.X;
+        float h = paper.ScreenRect.Size.Y;
 
         // Full background
         paper.Box("pl_bg")

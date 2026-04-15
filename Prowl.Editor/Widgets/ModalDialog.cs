@@ -85,8 +85,8 @@ public static class ModalDialog
         var font = EditorTheme.DefaultFont;
         var modal = _current;
 
-        int w = Prowl.Runtime.Window.InternalWindow.Size.X;
-        int h = Prowl.Runtime.Window.InternalWindow.Size.Y;
+        float w = paper.ScreenRect.Size.X;
+        float h = paper.ScreenRect.Size.Y;
 
         // Fullscreen overlay (blocks input to everything behind)
         paper.Box("modal_overlay")
