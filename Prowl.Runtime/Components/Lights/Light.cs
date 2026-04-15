@@ -48,5 +48,5 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     /// <param name="renderables">List of all renderables that could cast shadows</param>
     public abstract void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
 
-    public abstract void OnRenderLight(RenderTexture gBuffer, RenderTexture destination, RenderPipeline.CameraSnapshot css);
+    public abstract ForwardLightData GetForwardLightData();
 }

@@ -32,6 +32,15 @@ public class PhysicsWorld
     /// </summary>
     private CompositeBroadPhaseFilter _compositeBroadPhaseFilter;
 
+    // Registered terrain data for shape casts
+    internal struct TerrainInfo
+    {
+        public ITerrainHeightProvider HeightProvider;
+        public JVector Origin;
+        public float CellSize;
+    }
+    internal readonly Dictionary<TerrainHeightmapProxy, TerrainInfo> _terrainProxies = [];
+
     public Float3 Gravity = new(0, -9.81f, 0);
     public int SolverIterations = 8;
     public int RelaxIterations = 4;
@@ -310,8 +319,17 @@ public class PhysicsWorld
 
         World.DynamicTree.Query(potentialShapes, in sweepBox);
 
+        var jOrientation = new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W);
+
         foreach (IDynamicTreeProxy proxy in potentialShapes)
         {
+            if (proxy is TerrainHeightmapProxy terrainProxy)
+            {
+                // Shape cast against terrain heightmap triangles
+                SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, terrainProxy, sweepBox, hits);
+                continue;
+            }
+
             if (proxy is not RigidBodyShape targetShape) continue;
 
             // Check layer mask
@@ -323,7 +341,7 @@ public class PhysicsWorld
             // Perform sweep test
             bool hit = NarrowPhase.Sweep(
                 shape, targetShape,
-                new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W), targetBody.Data.Orientation,
+                jOrientation, targetBody.Data.Orientation,
                 jOrigin, targetBody.Data.Position,
                 sweep, JVector.Zero,
                 out JVector pointA, out JVector pointB, out JVector normal, out float lambda);
@@ -334,7 +352,7 @@ public class PhysicsWorld
                 {
                     _ = NarrowPhase.MprEpa(
                         shape, targetShape,
-                        new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W), targetBody.Data.Orientation,
+                        jOrientation, targetBody.Data.Orientation,
                         jOrigin, targetBody.Data.Position,
                         out JVector _, out JVector _, out normal, out lambda);
                     normal = JVector.Normalize(normal);
@@ -356,6 +374,96 @@ public class PhysicsWorld
         }
 
         return hits.Count;
+    }
+
+    /// <summary>
+    /// Sweep a shape against terrain heightmap triangles within the sweep bounding box.
+    /// </summary>
+    private void SweepAgainstTerrain(RigidBodyShape shape, JQuaternion jOrientation,
+        JVector jOrigin, JVector sweep, TerrainHeightmapProxy terrainProxy,
+        JBoundingBox sweepBox, List<ShapeCastHit> hits)
+    {
+        if (!_terrainProxies.TryGetValue(terrainProxy, out var info))
+            return;
+
+        var hp = info.HeightProvider;
+        var origin = info.Origin;
+        float cs = info.CellSize;
+
+        // Convert sweep AABB to grid coordinates
+        int minX = Maths.Max(0, (int)Maths.Floor((sweepBox.Min.X - origin.X) / cs));
+        int minZ = Maths.Max(0, (int)Maths.Floor((sweepBox.Min.Z - origin.Z) / cs));
+        int maxX = Maths.Min(hp.Width - 1, (int)Maths.Ceiling((sweepBox.Max.X - origin.X) / cs));
+        int maxZ = Maths.Min(hp.Height - 1, (int)Maths.Ceiling((sweepBox.Max.Z - origin.Z) / cs));
+
+        float bestLambda = float.MaxValue;
+        JVector bestNormal = JVector.Zero;
+        JVector bestPointA = JVector.Zero;
+        JVector bestPointB = JVector.Zero;
+
+        for (int x = minX; x < maxX; x++)
+        {
+            for (int z = minZ; z < maxZ; z++)
+            {
+                if (!hp.IsValidCell(x, z)) continue;
+                if (!hp.TryGetHeight(x, z, out float h00) ||
+                    !hp.TryGetHeight(x + 1, z, out float h10) ||
+                    !hp.TryGetHeight(x + 1, z + 1, out float h11) ||
+                    !hp.TryGetHeight(x, z + 1, out float h01))
+                    continue;
+
+                // Two triangles per cell
+                for (int tri = 0; tri < 2; tri++)
+                {
+                    CollisionTriangle triangle;
+                    if (tri == 0)
+                    {
+                        triangle.A = new JVector(x * cs + origin.X, h00, z * cs + origin.Z);
+                        triangle.B = new JVector((x + 1) * cs + origin.X, h11, (z + 1) * cs + origin.Z);
+                        triangle.C = new JVector((x + 1) * cs + origin.X, h10, z * cs + origin.Z);
+                    }
+                    else
+                    {
+                        triangle.A = new JVector(x * cs + origin.X, h00, z * cs + origin.Z);
+                        triangle.B = new JVector(x * cs + origin.X, h01, (z + 1) * cs + origin.Z);
+                        triangle.C = new JVector((x + 1) * cs + origin.X, h11, (z + 1) * cs + origin.Z);
+                    }
+
+                    bool hit = NarrowPhase.Sweep(
+                        shape, triangle,
+                        jOrientation, JQuaternion.Identity,
+                        jOrigin, JVector.Zero,
+                        sweep, JVector.Zero,
+                        out JVector pA, out JVector pB, out JVector n, out float lambda);
+
+                    if (hit && lambda >= 0 && lambda <= 1.0f && lambda < bestLambda)
+                    {
+                        if (n.LengthSquared() <= 0)
+                            n = JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
+
+                        bestLambda = lambda;
+                        bestNormal = n;
+                        bestPointA = pA;
+                        bestPointB = pB;
+                    }
+                }
+            }
+        }
+
+        if (bestLambda < float.MaxValue)
+        {
+            hits.Add(new ShapeCastHit
+            {
+                Hit = true,
+                Fraction = bestLambda,
+                Normal = -(new Float3(bestNormal.X, bestNormal.Y, bestNormal.Z)),
+                Point = new Float3(bestPointA.X, bestPointA.Y, bestPointA.Z),
+                HitPoint = new Float3(bestPointB.X, bestPointB.Y, bestPointB.Z),
+                Rigidbody = null,
+                Shape = null,
+                Transform = null,
+            });
+        }
     }
 
     /// <summary>
@@ -1011,17 +1119,21 @@ public class PhysicsWorld
     /// </summary>
     /// <param name="heightmapProxy">The terrain heightmap proxy for raycasting.</param>
     /// <param name="collisionFilter">The terrain collision filter for broad phase collision detection.</param>
-    public void RegisterTerrain(TerrainHeightmapProxy heightmapProxy, TerrainCollisionFilter collisionFilter)
+    public void RegisterTerrain(TerrainHeightmapProxy heightmapProxy, TerrainCollisionFilter collisionFilter,
+        ITerrainHeightProvider heightProvider, JVector terrainOrigin, float cellSize)
     {
         if (heightmapProxy == null || collisionFilter == null)
             return;
 
-        // Add the heightmap proxy to the dynamic tree for raycasting
         World.DynamicTree.AddProxy(heightmapProxy, false);
-
-        // Add the terrain collision filter to the composite filter
-        // Terrain filters should be processed before the layer filter
         _compositeBroadPhaseFilter.AddFilter(collisionFilter);
+
+        _terrainProxies[heightmapProxy] = new TerrainInfo
+        {
+            HeightProvider = heightProvider,
+            Origin = terrainOrigin,
+            CellSize = cellSize,
+        };
     }
 
     /// <summary>
@@ -1034,7 +1146,8 @@ public class PhysicsWorld
         if (heightmapProxy == null || collisionFilter == null)
             return;
 
-        // Remove the heightmap proxy from the dynamic tree
+        _terrainProxies.Remove(heightmapProxy);
+
         if (heightmapProxy.SetIndex != -1)
         {
             World.DynamicTree.RemoveProxy(heightmapProxy);

@@ -1,5 +1,10 @@
-﻿#ifndef SHADER_VERTEXATTRIBUTES
+#ifndef SHADER_VERTEXATTRIBUTES
 #define SHADER_VERTEXATTRIBUTES
+
+// =============================================================
+//  Vertex Input Attributes
+// =============================================================
+
 		layout (location = 0) in vec3 vertexPosition;
 
 #ifdef HAS_UV
@@ -32,6 +37,25 @@
 		vec3 vertexTangent = vec3(1.0, 0.0, 0.0);
 #endif
 
+// =============================================================
+//  GPU Instancing
+//  When GPU_INSTANCING is defined, per-instance data is provided
+//  via vertex attributes at locations 8-13.
+// =============================================================
+
+#ifdef GPU_INSTANCING
+		layout(location = 8)  in vec4 instanceModelRow0;
+		layout(location = 9)  in vec4 instanceModelRow1;
+		layout(location = 10) in vec4 instanceModelRow2;
+		layout(location = 11) in vec4 instanceModelRow3;
+		layout(location = 12) in vec4 instanceColor;
+		layout(location = 13) in vec4 instanceCustomData;
+#endif
+
+// =============================================================
+//  Skeletal Animation (Skinning)
+// =============================================================
+
 #ifdef SKINNED
 	#ifdef HAS_BONEINDICES
 		layout (location = 6) in vec4 vertexBoneIndices;
@@ -49,11 +73,9 @@
 
 		// Bone matrices stored in a RGBA32F texture - no uniform array size limit.
 		// Layout: each bone = 4 consecutive texels (one per column of mat4).
-		// Texel at x = boneIndex*4+col contains column `col` of that bone's matrix.
 		uniform sampler2D boneMatrixTexture;
 		uniform int boneCount;
 
-		// Fetch a bone matrix from the texture
 		mat4 GetBoneMatrix(int boneIndex)
 		{
 			int texOffset = boneIndex * 4;
@@ -64,58 +86,131 @@
 			return mat4(col0, col1, col2, col3);
 		}
 
-		// Skinning helper function
 		vec4 GetSkinnedPosition(vec3 position)
 		{
 			vec4 skinnedPos = vec4(0.0);
-
-			// Apply bone transformations based on weights
-			// Note: Bone indices are 1-based in the mesh data (0 means no bone)
 			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
 			{
 				int boneIndex = int(vertexBoneIndices[i]);
 				float weight = vertexBoneWeights[i];
-
-				// Skip if no bone assigned (index 0) or no weight
 				if (boneIndex > 0 && weight > 0.0 && boneIndex <= boneCount)
 				{
-					// Bone indices are 1-based, convert to 0-based for texture fetch
 					mat4 boneTransform = GetBoneMatrix(boneIndex - 1);
 					skinnedPos += (boneTransform * vec4(position, 1.0)) * weight;
 				}
 			}
-
-			// If no bones affected this vertex, use original position
 			float totalWeight = vertexBoneWeights.x + vertexBoneWeights.y + vertexBoneWeights.z + vertexBoneWeights.w;
 			if (totalWeight < 0.01)
 				skinnedPos = vec4(position, 1.0);
-
 			return skinnedPos;
 		}
 
-		// Skinning helper function for normals (doesn't include translation)
 		vec3 GetSkinnedNormal(vec3 normal)
 		{
 			vec3 skinnedNormal = vec3(0.0);
-
 			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
 			{
 				int boneIndex = int(vertexBoneIndices[i]);
 				float weight = vertexBoneWeights[i];
-
 				if (boneIndex > 0 && weight > 0.0 && boneIndex <= boneCount)
 				{
 					mat4 boneTransform = GetBoneMatrix(boneIndex - 1);
-					// Use mat3 to remove translation component
 					skinnedNormal += (mat3(boneTransform) * normal) * weight;
 				}
 			}
-
 			float totalWeight = vertexBoneWeights.x + vertexBoneWeights.y + vertexBoneWeights.z + vertexBoneWeights.w;
 			if (totalWeight < 0.01)
 				skinnedNormal = normal;
-
 			return normalize(skinnedNormal);
 		}
 #endif
+
+// =============================================================
+//  Vertex Utilities
+//  Helper functions that handle instancing + skinning so shaders
+//  don't need to repeat the same boilerplate.
+//
+//  Usage:
+//    mat4 modelMatrix = GetModelMatrix();
+//    mat4 mvpMatrix = GetMVPMatrix();
+//    vec4 worldPos = TransformPosition(vertexPosition);          // handles skinning + instancing
+//    vec3 worldNrm = TransformNormal(vertexNormal);              // handles skinning + instancing
+//    vec3 worldTan = TransformNormal(vertexTangent.xyz);         // works for tangents too
+//    vec4 clipPos  = TransformClip(vertexPosition);              // MVP-transformed
+//    vec4 vColor   = GetVertexColor();                           // applies instance tint
+// =============================================================
+
+// Returns the model (object-to-world) matrix, accounting for GPU instancing.
+mat4 GetModelMatrix()
+{
+#ifdef GPU_INSTANCING
+	return mat4(instanceModelRow0, instanceModelRow1, instanceModelRow2, instanceModelRow3);
+#else
+	return PROWL_MATRIX_M;
+#endif
+}
+
+// Returns the Model-View-Projection matrix, accounting for GPU instancing.
+mat4 GetMVPMatrix()
+{
+#ifdef GPU_INSTANCING
+	return PROWL_MATRIX_VP * GetModelMatrix();
+#else
+	return PROWL_MATRIX_MVP;
+#endif
+}
+
+// Transform a position to world space (applies skinning if active, then model matrix).
+vec3 TransformPosition(vec3 position)
+{
+	mat4 model = GetModelMatrix();
+#ifdef SKINNED
+	return (model * GetSkinnedPosition(position)).xyz;
+#else
+	return (model * vec4(position, 1.0)).xyz;
+#endif
+}
+
+// Transform a position to clip space (applies skinning if active, then MVP matrix).
+vec4 TransformClip(vec3 position)
+{
+	mat4 mvp = GetMVPMatrix();
+#ifdef SKINNED
+	return mvp * GetSkinnedPosition(position);
+#else
+	return mvp * vec4(position, 1.0);
+#endif
+}
+
+// Transform a direction/normal to world space (applies skinning if active, then model rotation).
+vec3 TransformDirection(vec3 dir)
+{
+	mat4 model = GetModelMatrix();
+#ifdef SKINNED
+	return normalize(mat3(model) * GetSkinnedNormal(dir));
+#else
+	return normalize(mat3(model) * dir);
+#endif
+}
+
+// Get vertex color with per-instance tint applied.
+vec4 GetInstanceColor()
+{
+#ifdef GPU_INSTANCING
+	return vertexColor * instanceColor;
+#else
+	return vertexColor;
+#endif
+}
+
+// Get per-instance custom data (available only with GPU instancing).
+vec4 GetInstanceCustomData()
+{
+#ifdef GPU_INSTANCING
+	return instanceCustomData;
+#else
+	return vec4(0.0);
+#endif
+}
+
 #endif

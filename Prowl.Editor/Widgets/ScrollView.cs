@@ -31,7 +31,7 @@ public static class ScrollView
 
     public static IDisposable Begin(Paper paper, string id, float width, float height,
         float paddingLeft = 0, float paddingRight = 0, float paddingTop = 0, float paddingBottom = 0,
-        float colSpacing = 0)
+        float colSpacing = 0, bool forceScrollbar = false)
     {
         // We need the outer handle for storage, but can't capture it before Enter().
         // Declare it here and set it after Enter().
@@ -63,7 +63,7 @@ public static class ScrollView
         // Read scroll position (persisted from last frame)
         float scrollY = paper.GetElementStorage(outerHandle, "scrollY", 0f);
         float contentHeight = paper.GetElementStorage(outerHandle, "contentH", height);
-        bool needsScrollbar = contentHeight > height;
+        bool needsScrollbar = contentHeight > height || forceScrollbar;
         float contentW = needsScrollbar ? width - ScrollBarWidth : width;
 
         // Content column

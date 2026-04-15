@@ -78,8 +78,10 @@ public sealed class RenderTexture : EngineObject, ISerializable
         foreach (Texture2D texture in InternalTextures)
             texture.Dispose();
 
-        //if(hasDepthAttachment) // Should auto dispose of Depth
-        //    Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);
+        // Dispose depth texture if present
+        if (hasDepthAttachment && InternalDepth != null)
+            InternalDepth.Dispose();
+
         frameBuffer.Dispose();
     }
 
@@ -244,6 +246,19 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
         foreach (RenderTexture renderTexture in disposableTextures)
             renderTexture.Dispose();
+
+        // Clean up empty dictionary entries to prevent unbounded key accumulation
+        List<RenderTextureKey>? emptyKeys = null;
+        foreach (var pair in pool)
+            if (pair.Value.Count == 0)
+                (emptyKeys ??= []).Add(pair.Key);
+        if (emptyKeys != null) foreach (var k in emptyKeys) pool.Remove(k);
+
+        emptyKeys = null;
+        foreach (var pair in active)
+            if (pair.Value.Count == 0)
+                (emptyKeys ??= []).Add(pair.Key);
+        if (emptyKeys != null) foreach (var k in emptyKeys) active.Remove(k);
     }
 
     #endregion

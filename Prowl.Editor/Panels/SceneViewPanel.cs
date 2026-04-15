@@ -79,6 +79,16 @@ public class SceneViewPanel : DockPanel
                 .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; });
 
+            // Gizmos toggle
+            bool showGizmos = _editorCamera?.ShowGizmos ?? true;
+            paper.Box("sv_gizmo_btn")
+                .Width(24).Height(24).Rounded(4)
+                .BackgroundColor(showGizmos ? EditorTheme.Purple400 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(EditorIcons.Eye, font).TextColor(EditorTheme.Ink500)
+                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; });
+
             // Spacer
             paper.Box("sv_spacer");
         }
@@ -494,23 +504,61 @@ public class SceneViewPanel : DockPanel
         {
             if (obj is not GameObject go) continue;
 
-            Float3 pos = go.Transform.Position;
-            Float3 scale = go.Transform.LossyScale;
             var col = new Prowl.Vector.Color(0.3f, 0.6f, 1f, 1f);
 
-            var meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer != null)
+            // Collect world-space AABB from all renderers in this GO and its children
+            Float3 min = new(float.MaxValue), max = new(float.MinValue);
+            bool found = false;
+            CollectRendererBounds(go, ref min, ref max, ref found);
+
+            if (found)
             {
-                Debug.DrawWireCube(pos, scale * 0.5f, col);
+                // Draw axis-aligned wireframe box around combined world bounds
+                Float3 center = (min + max) * 0.5f;
+                Float3 halfExtents = (max - min) * 0.5f;
+                Debug.DrawWireCube(center, halfExtents, col);
             }
             else
             {
+                Float3 pos = go.Transform.Position;
                 float s = 0.3f;
                 Debug.DrawLine(pos - Float3.UnitX * s, pos + Float3.UnitX * s, col);
                 Debug.DrawLine(pos - Float3.UnitY * s, pos + Float3.UnitY * s, col);
                 Debug.DrawLine(pos - Float3.UnitZ * s, pos + Float3.UnitZ * s, col);
             }
         }
+    }
+
+    private static void CollectRendererBounds(GameObject go, ref Float3 min, ref Float3 max, ref bool found)
+    {
+        // Check MeshRenderer
+        var mr = go.GetComponent<MeshRenderer>();
+        if (mr != null && mr.Mesh.Res != null)
+            ExpandBounds(mr.Mesh.Res.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
+
+        // Check SkinnedMeshRenderer
+        var smr = go.GetComponent<SkinnedMeshRenderer>();
+        if (smr != null && smr.SharedMesh.Res != null)
+            ExpandBounds(smr.SharedMesh.Res.bounds, go.Transform.LocalToWorldMatrix, ref min, ref max, ref found);
+
+        // Recurse into children
+        foreach (var child in go.Children)
+            CollectRendererBounds(child, ref min, ref max, ref found);
+    }
+
+    private static void ExpandBounds(AABB localBounds, Float4x4 matrix, ref Float3 min, ref Float3 max, ref bool found)
+    {
+        // Transform all 8 corners to world space and expand the combined AABB
+        for (int i = 0; i < 8; i++)
+        {
+            Float3 corner = Float4x4.TransformPoint(new Float3(
+                (i & 1) == 0 ? localBounds.Min.X : localBounds.Max.X,
+                (i & 2) == 0 ? localBounds.Min.Y : localBounds.Max.Y,
+                (i & 4) == 0 ? localBounds.Min.Z : localBounds.Max.Z), matrix);
+            min = new Float3(MathF.Min(min.X, corner.X), MathF.Min(min.Y, corner.Y), MathF.Min(min.Z, corner.Z));
+            max = new Float3(MathF.Max(max.X, corner.X), MathF.Max(max.Y, corner.Y), MathF.Max(max.Z, corner.Z));
+        }
+        found = true;
     }
 
     // ================================================================

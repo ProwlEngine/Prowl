@@ -8,7 +8,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
 
-[ImporterFor(".gltf", ".glb")]
+[ImporterFor(".gltf", ".glb", ".obj")]
 public class EditorModelImporter : AssetImporter
 {
     public override int Version => 4;
@@ -24,7 +24,8 @@ public class EditorModelImporter : AssetImporter
                 importSettings = new ModelImporterSettings
                 {
                     GenerateNormals = !s.TryGet("generateNormals", out var gn) || gn.BoolValue,
-                    GenerateSmoothNormals = s.TryGet("generateSmoothNormals", out var gsn) && gsn.BoolValue,
+                    GenerateSmoothNormals = !s.TryGet("generateSmoothNormals", out var gsn) || gsn.BoolValue,
+                    RecalculateNormals = s.TryGet("recalculateNormals", out var rn) && rn.BoolValue,
                     CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue,
                     FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue,
                     UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f,
@@ -119,7 +120,8 @@ public class EditorModelImporter : AssetImporter
     {
         var s = EchoObject.NewCompound();
         s["generateNormals"] = new EchoObject(true);
-        s["generateSmoothNormals"] = new EchoObject(false);
+        s["generateSmoothNormals"] = new EchoObject(true);
+        s["recalculateNormals"] = new EchoObject(false);
         s["calculateTangents"] = new EchoObject(true);
         s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);

@@ -85,6 +85,7 @@ public class EditorApplication : Game
         ThumbnailGeneratorRegistry.Initialize();
         SceneDropHandlerRegistry.Initialize();
         CreateGameObjectMenuRegistry.Initialize();
+        EditorCallbacks.Initialize();
 
         // Menus depend on registries above, so register after initialization
         ScanAndRegisterPanels();
@@ -219,6 +220,7 @@ public class EditorApplication : Game
         int h = Window.InternalWindow.Size.Y;
 
         _time += Time.UnscaledDeltaTime;
+        Selection.UpdatePing((float)Time.UnscaledDeltaTime);
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -549,8 +551,7 @@ public class EditorApplication : Game
 
         // Systems drawn on top (Overlay/Topmost layers)
         Widgets.FileDialog.Draw(paper);
-        Inspector.EngineObjectPropertyEditor.DrawSelectorModal(paper);
-        Inspector.AssetRefPropertyEditor.DrawSelectorModal(paper);
+        Widgets.SelectorModal.Draw(paper);
         Inspector.AddComponentPopup.Draw(paper);
         Widgets.ModalDialog.Draw(paper);
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
@@ -560,8 +561,10 @@ public class EditorApplication : Game
         // Intro animation overlay
         if (_introTime < IntroDuration)
         {
-            _introTime += Time.UnscaledDeltaTime;
-            if (_introTime < 0.1) Runtime.Debug.Log($"Intro started! time={_introTime:F3}");
+            // Clamp delta to avoid jumping the animation after heavy loading frames.
+            // A normal frame is ~16ms; anything above 100ms is a loading stall.
+            double introDelta = Math.Min(Time.UnscaledDeltaTime, 0.05);
+            _introTime += introDelta;
             DrawIntro(paper);
         }
     }

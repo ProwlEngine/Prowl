@@ -58,7 +58,7 @@ jobs:
 
       # Publish
       - name: Publish
-        run: dotnet publish ./Prowl.Editor/Prowl.Editor.csproj --configuration Release --output ./publish/${{ matrix.runtime }}/Prowl --runtime ${{ matrix.runtime }} --framework net9.0
+        run: dotnet publish ./Prowl.Editor/Prowl.Editor.csproj --configuration Release --output ./publish/${{ matrix.runtime }}/Prowl --runtime ${{ matrix.runtime }} --framework net10.0
 
       # Save the resulting folder as artifacts
       - name: Upload artifact

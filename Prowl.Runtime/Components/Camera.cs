@@ -16,16 +16,10 @@ public abstract class ImageEffect
 {
     /// <summary>
     /// Defines at which stage of the rendering pipeline this effect should run.
-    /// Default is PostProcess for backward compatibility.
+    /// AfterOpaques: runs after opaque geometry, before transparents (GTAO, SSR).
+    /// PostProcess: runs after all rendering (tonemapping, bloom, FXAA).
     /// </summary>
     public virtual RenderStage Stage => RenderStage.PostProcess;
-
-    /// <summary>
-    /// For backward compatibility: effects that run during opaque rendering (AfterLighting stage).
-    /// New effects should use Stage property instead.
-    /// </summary>
-    [Obsolete("Use Stage property instead. Set Stage = RenderStage.AfterLighting")]
-    public virtual bool IsOpaqueEffect { get; } = false;
 
     /// <summary>
     /// Whether this effect transforms HDR to LDR. Used for tonemapping effects.
@@ -33,27 +27,17 @@ public abstract class ImageEffect
     public virtual bool TransformsToLDR { get; } = false;
 
     /// <summary>
-    /// NEW API: Called during rendering with full access to render targets.
-    /// Override this for effects that need access to GBuffers, light accumulation, etc.
+    /// Called during rendering with access to render targets.
     /// </summary>
-    /// <param name="context">Provides access to all render targets and rendering state</param>
-    public virtual void OnRenderEffect(RenderContext context)
-    {
-    }
+    public virtual void OnRenderEffect(RenderContext context) { }
 
-    /// <summary>
-    /// Called after all rendering is complete for this camera.
-    /// </summary>
+    /// <summary>Called after all rendering is complete for this camera.</summary>
     public virtual void OnPostRender(Camera camera) { }
 
-    /// <summary>
-    /// Called before culling for this camera.
-    /// </summary>
+    /// <summary>Called before culling for this camera.</summary>
     public virtual void OnPreCull(Camera camera) { }
 
-    /// <summary>
-    /// Called before rendering starts for this camera.
-    /// </summary>
+    /// <summary>Called before rendering starts for this camera.</summary>
     public virtual void OnPreRender(Camera camera) { }
 }
 
@@ -282,6 +266,11 @@ public class Camera : MonoBehaviour
 
     private Float4x4 GetProjectionMatrix(float aspect)
     {
+        if (FieldOfView <= 0)
+            FieldOfView = 1f;
+        if (FieldOfView >= 180)
+            FieldOfView = 179f;
+
         Float4x4 proj;
 
         if (ProjectionMode == ProjectionType.Orthographic)

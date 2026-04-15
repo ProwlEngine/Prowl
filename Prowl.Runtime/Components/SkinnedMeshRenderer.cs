@@ -68,7 +68,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// </summary>
     public void SetBones(Transform[] boneTransforms, Transform? rootBone)
     {
-        Transform hierarchyRoot = GetHierarchyRoot();
+        // During import, hierarchy is not yet reparented — root is correct
+        Transform hierarchyRoot = Transform;
+        while (hierarchyRoot.Parent != null) hierarchyRoot = hierarchyRoot.Parent;
 
         BonePaths = new string[boneTransforms.Length];
         for (int i = 0; i < boneTransforms.Length; i++)
@@ -87,11 +89,35 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _resolved = true;
     }
 
-    private Transform GetHierarchyRoot()
+    /// <summary>
+    /// Find the correct search root for bone path resolution.
+    /// Walks up from this GO to find the topmost ancestor, then tries to resolve.
+    /// If paths don't resolve from the absolute root (e.g. after reparenting),
+    /// tries progressively lower ancestors until paths work.
+    /// </summary>
+    private Transform? FindSearchRoot()
     {
-        Transform root = Transform;
-        while (root.Parent != null) root = root.Parent;
-        return root;
+        // Collect ancestors from this GO up to root
+        var ancestors = new System.Collections.Generic.List<Transform>();
+        Transform current = Transform;
+        while (current != null)
+        {
+            ancestors.Add(current);
+            current = current.Parent;
+        }
+
+        // Try from topmost ancestor first (original import behavior)
+        // If that fails (reparented), try each ancestor going down until paths resolve
+        string? testPath = RootBonePath ?? (BonePaths?.Length > 0 ? BonePaths[0] : null);
+        if (string.IsNullOrEmpty(testPath)) return ancestors[^1]; // fallback to absolute root
+
+        for (int i = ancestors.Count - 1; i >= 0; i--)
+        {
+            if (ancestors[i].Find(testPath) != null)
+                return ancestors[i];
+        }
+
+        return ancestors[^1]; // fallback
     }
 
     private void Resolve()
@@ -99,11 +125,12 @@ public class SkinnedMeshRenderer : MonoBehaviour
         if (_resolved) return;
         _resolved = true;
 
-        Transform hierarchyRoot = GetHierarchyRoot();
+        Transform? searchRoot = FindSearchRoot();
+        if (searchRoot == null) return;
 
         // Resolve root bone by path
         if (!string.IsNullOrEmpty(RootBonePath))
-            _rootBone = hierarchyRoot.Find(RootBonePath);
+            _rootBone = searchRoot.Find(RootBonePath);
 
         // Resolve bone array by paths
         if (BonePaths != null)
@@ -112,7 +139,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
             for (int i = 0; i < BonePaths.Length; i++)
             {
                 if (!string.IsNullOrEmpty(BonePaths[i]))
-                    _bones[i] = hierarchyRoot.Find(BonePaths[i]);
+                    _bones[i] = searchRoot.Find(BonePaths[i]);
             }
         }
     }

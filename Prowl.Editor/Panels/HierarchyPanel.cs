@@ -40,6 +40,10 @@ public class HierarchyPanel : DockPanel
     // Track expanded state per GO identifier
     private static readonly Dictionary<string, bool> _expandedState = new();
 
+    // Ping state — which GOs in the hierarchy match the pinged GUID
+    private static Guid _lastHierarchyPingGuid;
+    private static readonly HashSet<GameObject> _pingedGameObjects = new();
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         _paper = paper;
@@ -175,6 +179,30 @@ public class HierarchyPanel : DockPanel
                     }
                 }
 
+                // Handle ping — search for the pinged GUID among GameObjects and their component AssetRefs
+                if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastHierarchyPingGuid)
+                {
+                    _lastHierarchyPingGuid = Selection.PingedGuid;
+                    _pingedGameObjects.Clear();
+                    FindGameObjectsWithGuid(scene, Selection.PingedGuid, _pingedGameObjects);
+
+                    // Expand parents so all pinged GOs are visible
+                    foreach (var pinged in _pingedGameObjects)
+                    {
+                        var parent = pinged.Parent;
+                        while (parent.IsValid())
+                        {
+                            _expandedState[parent.Identifier.ToString()] = true;
+                            parent = parent.Parent;
+                        }
+                    }
+                }
+                if (Selection.PingedGuid == Guid.Empty)
+                {
+                    _lastHierarchyPingGuid = Guid.Empty;
+                    _pingedGameObjects.Clear();
+                }
+
                 // Tree view
                 using (ScrollView.Begin(paper, "hier_scroll", width, height - EditorTheme.RowHeight - 22))
                 {
@@ -237,8 +265,16 @@ public class HierarchyPanel : DockPanel
                     _assetDropTarget = false;
                 }
 
+                // Clear drag hover when not over the hierarchy panel
+                if (DragDrop.IsDragging && !bgHovered)
+                {
+                    _dragHoverTarget = null;
+                    _dragHoverTargetId = null;
+                }
+
                 // GO drop — process using hover target tracked by OnHover callback
-                if (DragDrop.IsDropFrame && DragDrop.Payload is GameObjectDragPayload goDrop)
+                // Only process drops that land inside the hierarchy panel
+                if (DragDrop.IsDropFrame && bgHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
                 {
                     if (_dragHoverTarget != null && _dragHoverTargetId != null)
                     {
@@ -358,12 +394,13 @@ public class HierarchyPanel : DockPanel
         }
 
         bool isDropInto = dragDropPos == DropPosition.Into;
+        bool isPinged = _pingedGameObjects.Contains(go) && Selection.PingedGuid != Guid.Empty;
 
         using (paper
             .Row($"hier_go_{goId}")
             .Height(EditorTheme.RowHeight)
-            .BackgroundColor(isSelected ? EditorTheme.Purple400 :
-                isDropInto ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
+            .BackgroundColor(isSelected ? EditorTheme.Purple400
+                : isDropInto ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Rounded(4)
             .Margin(indent + 8, 0, 0, 0)
@@ -395,6 +432,27 @@ public class HierarchyPanel : DockPanel
                 _dragHoverTarget = g;
                 _dragHoverTargetId = g.Identifier.ToString();
                 _dragHoverNormalizedY = (float)e.NormalizedPosition.Y;
+            })
+            .OnPostLayout((handle, rect) =>
+            {
+                if (!isPinged) return;
+                paper.Draw(ref handle, (canvas, r) =>
+                {
+                    float alpha = Selection.GetPingAlpha();
+                    if (alpha <= 0f) return;
+                    int fillA = (int)(alpha * 60);
+                    int borderA = (int)(alpha * 200);
+                    var fillColor = Color.FromArgb(fillA, 255, 220, 50);
+                    var borderColor = Color.FromArgb(borderA, 255, 200, 0);
+                    float x = (float)r.Min.X, y = (float)r.Min.Y;
+                    float w = (float)r.Size.X, h = (float)r.Size.Y;
+                    canvas.RoundedRectFilled(x, y, w, h, 4, 4, 4, 4, fillColor);
+                    canvas.SetStrokeColor(borderColor);
+                    canvas.SetStrokeWidth(2f);
+                    canvas.BeginPath();
+                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, 3, 3, 3, 3);
+                    canvas.Stroke();
+                });
             })
             .Enter())
         {
@@ -659,7 +717,7 @@ public class HierarchyPanel : DockPanel
             {
                 builder.Item("Select Prefab Asset", () =>
                 {
-                    Selection.FocusAsset(firstSelected.PrefabAssetId);
+                    Selection.Ping(firstSelected.PrefabAssetId);
                 }, icon: EditorIcons.Cubes);
 
                 bool hasOverrides = Prefabs.PrefabUtility.HasAnyOverrides(firstSelected);
@@ -896,6 +954,47 @@ public class HierarchyPanel : DockPanel
         var scene = Scene.Current;
         if (scene == null) return null;
         return scene.AllObjects.FirstOrDefault(g => g.Identifier.ToString() == id);
+    }
+
+    /// <summary>
+    /// Search all GameObjects in the scene for any that reference the given GUID.
+    /// Checks each component's AssetID and all AssetRef fields.
+    /// </summary>
+    private static void FindGameObjectsWithGuid(Scene scene, Guid guid, HashSet<GameObject> results)
+    {
+        foreach (var go in scene.AllObjects)
+        {
+            foreach (var comp in go.GetComponents<MonoBehaviour>())
+            {
+                if (comp.AssetID == guid)
+                {
+                    results.Add(go);
+                    break;
+                }
+
+                // Search fields for AssetRef<T> that reference this GUID
+                bool found = false;
+                var type = comp.GetType();
+                foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
+                {
+                    var fieldType = field.FieldType;
+                    if (!fieldType.IsGenericType) continue;
+                    if (fieldType.GetGenericTypeDefinition() != typeof(AssetRef<>)) continue;
+
+                    var assetRef = field.GetValue(comp);
+                    if (assetRef == null) continue;
+
+                    var assetIdProp = fieldType.GetProperty("AssetID");
+                    if (assetIdProp?.GetValue(assetRef) is Guid refGuid && refGuid == guid)
+                    {
+                        results.Add(go);
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) break;
+            }
+        }
     }
 
     // ================================================================

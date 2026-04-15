@@ -34,7 +34,19 @@ public class TerrainComponent : MonoBehaviour
     public int MaxLODLevel = 4;
 
     /// <summary>Resolution of the base mesh grid (vertices per side).</summary>
-    public int MeshResolution = 16;
+    public int MeshResolution = 32;
+
+    /// <summary>Grass material override. If null, uses built-in Grass material.</summary>
+    public AssetRef<Material> GrassMaterial;
+
+    /// <summary>Maximum render distance for grass.</summary>
+    public float GrassDistance = 150f;
+
+    /// <summary>Global grass density multiplier.</summary>
+    public float GrassDensityMultiplier = 1f;
+
+    /// <summary>Maximum render distance for trees.</summary>
+    public float TreeDistance = 500f;
 
     #endregion
 
@@ -49,6 +61,18 @@ public class TerrainComponent : MonoBehaviour
     [NonSerialized] private Material? _materialInstance;
     [NonSerialized] private Guid _lastMaterialGuid;
 
+    // Vegetation renderers
+    [NonSerialized] private TerrainGrassRenderer? _grassRenderer;
+    [NonSerialized] private TerrainTreeRenderer? _treeRenderer;
+    [NonSerialized] private Material? _grassMaterialInstance;
+    [NonSerialized] private Guid _lastGrassMaterialGuid;
+
+    // Cached default materials and textures (avoid LoadDefault every frame)
+    [NonSerialized] private static Material? s_defaultTerrainMat;
+    [NonSerialized] private static Material? s_defaultGrassMat;
+    [NonSerialized] private static Texture2D? s_defaultWhite;
+    [NonSerialized] private static Texture2D? s_defaultNormal;
+
     #endregion
 
     #region Brush Preview (set by editor each frame)
@@ -61,6 +85,9 @@ public class TerrainComponent : MonoBehaviour
     #endregion
 
     #region Public Accessors
+
+    /// <summary>Invalidate cached grass patches (call after painting grass density).</summary>
+    public void InvalidateGrassCache() => _grassRenderer?.InvalidateCache();
 
     /// <summary>Shortcut to terrain size from the data asset.</summary>
     public float TerrainSize => Data.Res?.Size ?? 1024f;
@@ -79,6 +106,10 @@ public class TerrainComponent : MonoBehaviour
             CreateBaseMesh();
         if (_quadtree == null)
             _quadtree = new TerrainQuadtree(Float3.Zero, TerrainSize, MaxLODLevel);
+
+        _grassRenderer ??= new TerrainGrassRenderer();
+        _grassRenderer.Initialize();
+        _treeRenderer ??= new TerrainTreeRenderer();
     }
 
     public override void OnDisable()
@@ -87,23 +118,38 @@ public class TerrainComponent : MonoBehaviour
         _baseMesh?.Dispose();
         _baseMesh = null;
         _materialInstance = null;
+        _grassMaterialInstance = null;
+        _grassRenderer?.Dispose();
+        _grassRenderer = null;
+        _treeRenderer = null;
     }
+
+    /// <summary>Transform a point from terrain-local space to world space.</summary>
+    public Float3 TerrainToWorld(Float3 localPoint) =>
+        Float4x4.TransformPoint(localPoint, Transform.LocalToWorldMatrix);
+
+    /// <summary>Transform a point from world space to terrain-local space.</summary>
+    public Float3 WorldToTerrain(Float3 worldPoint) =>
+        Float4x4.TransformPoint(worldPoint, Transform.WorldToLocalMatrix);
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var terrainData = Data.Res;
         if (terrainData == null) return;
 
-        // Update LOD using the camera that's collecting
-        Float3 cameraPos = camera.Transform.Position - this.Transform.Position;
-        cameraPos.Y = 0;
-
         float terrainSize = terrainData.Size;
+        Float4x4 terrainToWorld = Transform.LocalToWorldMatrix;
+        Float4x4 worldToTerrain = Transform.WorldToLocalMatrix;
+
+        // Camera position in terrain-local space for LOD
+        Float3 camLocal = WorldToTerrain(camera.Transform.Position);
+        camLocal.Y = 0;
+
         if (_quadtree == null || MathF.Abs(_quadtree.ChunkSize - terrainSize) > 0.01f)
             _quadtree = new TerrainQuadtree(Float3.Zero, terrainSize, MaxLODLevel);
 
-        _quadtree.Update(cameraPos);
-        UpdateInstanceData();
+        _quadtree.Update(camLocal);
+        UpdateInstanceData(terrainToWorld);
 
         var mat = GetMaterialInstance();
         if (mat == null || _transforms.Length == 0 || _baseMesh == null) return;
@@ -124,11 +170,10 @@ public class TerrainComponent : MonoBehaviour
             var layer = terrainData.Layers[i];
             string prefix = $"_Layer{i}";
 
-            var albedo = layer.Albedo.Res;
-            if (albedo != null) _properties.SetTexture(prefix, albedo);
-
-            var normal = layer.NormalMap.Res;
-            if (normal != null) _properties.SetTexture(prefix + "Normal", normal);
+            s_defaultWhite ??= Texture2D.LoadDefault(DefaultTexture.White);
+            s_defaultNormal ??= Texture2D.LoadDefault(DefaultTexture.Normal);
+            _properties.SetTexture(prefix, layer.Albedo.Res ?? s_defaultWhite);
+            _properties.SetTexture(prefix + "Normal", layer.NormalMap.Res ?? s_defaultNormal);
 
             _properties.SetFloat(prefix + "Tiling", layer.Tiling);
             _properties.SetFloat(prefix + "Roughness", layer.Roughness);
@@ -138,28 +183,46 @@ public class TerrainComponent : MonoBehaviour
         _properties.SetFloat("_TerrainSize", terrainSize);
         _properties.SetFloat("_TerrainHeight", terrainData.Height);
         _properties.SetVector("_TerrainOffset", this.Transform.Position);
+        _properties.SetMatrix("_TerrainWorldToLocal", worldToTerrain);
+        _properties.SetMatrix("_TerrainLocalToWorld", terrainToWorld);
 
-        // Brush preview — set on material instance so they're applied as material uniforms
+        // Brush preview
         mat.SetVector("_BrushPosition", BrushPosition);
         mat.SetFloat("_BrushRadius", BrushRadius);
         mat.SetFloat("_BrushFalloff", BrushFalloff);
         mat.SetFloat("_BrushVisible", BrushVisible ? 1f : 0f);
 
+        // World-space bounds (transform terrain AABB corners to world)
         float height = terrainData.Height;
-        var bounds = new AABB(
-            this.Transform.Position + new Float3(0, -height * 2.0f, 0),
-            this.Transform.Position + new Float3(terrainSize, height * 2.0f, terrainSize));
+        Float3 localMin = new(0, -height * 2f, 0);
+        Float3 localMax = new(terrainSize, height * 2f, terrainSize);
+        var bounds = TransformAABB(localMin, localMax, terrainToWorld);
 
         InstancedMeshRenderable.CreateBatched(
-            renderables,
-            _baseMesh,
-            mat,
-            _transforms,
+            renderables, _baseMesh, mat, _transforms,
             (bounds.Min + bounds.Max) * 0.5f,
             layer: GameObject.LayerIndex,
-            properties: _properties,
-            bounds: bounds
-        );
+            properties: _properties, bounds: bounds);
+
+        // Grass
+        var grassMat = GetGrassMaterialInstance();
+        if (grassMat != null && terrainData.DetailPrototypes.Count > 0)
+        {
+            // Pass terrain transform info to grass shader
+            Float3 terrainUp = Float3.Normalize(Float4x4.TransformPoint(Float3.UnitY, terrainToWorld) - Float4x4.TransformPoint(Float3.Zero, terrainToWorld));
+            grassMat.SetVector("_TerrainUp", terrainUp);
+            grassMat.SetMatrix("_TerrainWorldToLocal", worldToTerrain);
+            grassMat.SetMatrix("_TerrainLocalToWorld", terrainToWorld);
+            grassMat.SetFloat("_TerrainSize", terrainSize);
+            grassMat.SetFloat("_TerrainHeight", terrainData.Height);
+            var htex = terrainData.GetHeightmapTexture();
+            if (htex != null) grassMat.SetTexture("_Heightmap", htex);
+
+            _grassRenderer?.CollectRenderables(terrainData, this, camera, grassMat, GrassDistance, GrassDensityMultiplier, renderables);
+        }
+
+        // Trees
+        _treeRenderer?.CollectRenderables(terrainData, this, camera, TreeDistance, renderables);
     }
 
     public override void DrawGizmos()
@@ -175,12 +238,15 @@ public class TerrainComponent : MonoBehaviour
     {
         var sourceMat = Material.Res;
         if (sourceMat == null)
-            sourceMat = Resources.Material.LoadDefault(DefaultMaterial.Terrain);
+        {
+            s_defaultTerrainMat ??= Resources.Material.LoadDefault(DefaultMaterial.Terrain);
+            sourceMat = s_defaultTerrainMat;
+        }
         if (sourceMat == null) return null;
 
         var sourceGuid = Material.AssetID;
 
-        if (_materialInstance == null || _lastMaterialGuid != sourceGuid)
+        if (_materialInstance == null || (_lastMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
         {
             // Deep copy via serialization roundtrip
             var echo = Serializer.Serialize(sourceMat);
@@ -191,6 +257,30 @@ public class TerrainComponent : MonoBehaviour
         }
 
         return _materialInstance;
+    }
+
+    private Material? GetGrassMaterialInstance()
+    {
+        var sourceMat = GrassMaterial.Res;
+        if (sourceMat == null)
+        {
+            s_defaultGrassMat ??= Resources.Material.LoadDefault(DefaultMaterial.Grass);
+            sourceMat = s_defaultGrassMat;
+        }
+        if (sourceMat == null) return null;
+
+        var sourceGuid = GrassMaterial.AssetID;
+
+        if (_grassMaterialInstance == null || (_lastGrassMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
+        {
+            var echo = Serializer.Serialize(sourceMat);
+            _grassMaterialInstance = Serializer.Deserialize<Material>(echo);
+            if (_grassMaterialInstance != null)
+                _grassMaterialInstance.Name = sourceMat.Name + " (Grass Instance)";
+            _lastGrassMaterialGuid = sourceGuid;
+        }
+
+        return _grassMaterialInstance;
     }
 
     #endregion
@@ -209,45 +299,44 @@ public class TerrainComponent : MonoBehaviour
         var terrainData = Data.Res;
         if (terrainData == null || terrainData.Heights == null) return false;
 
-        Float3 terrainPos = Transform.Position;
         float size = terrainData.Size;
-        float maxHeight = terrainData.Height;
+        Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
 
-        // Step along the ray
+        // Transform ray into terrain-local space
+        Float3 localOrigin = Float4x4.TransformPoint(ray.Origin, worldToLocal);
+        Float3 localDir = Float3.Normalize(Float4x4.TransformPoint(ray.Origin + ray.Direction, worldToLocal) - localOrigin);
+
         float stepSize = size / terrainData.HeightmapResolution * 0.5f;
         float maxDist = size * 2f;
         float t = 0f;
 
-        Float3 prevPoint = ray.Origin;
-        float prevDiff = GetHeightDiff(ray.Origin, terrainPos, terrainData);
+        float prevDiff = GetHeightDiffLocal(localOrigin, terrainData);
         bool prevAbove = prevDiff > 0;
 
         while (t < maxDist)
         {
             t += stepSize;
-            Float3 point = ray.Origin + ray.Direction * t;
-            float diff = GetHeightDiff(point, terrainPos, terrainData);
+            Float3 localPoint = localOrigin + localDir * t;
+            float diff = GetHeightDiffLocal(localPoint, terrainData);
             bool above = diff > 0;
 
             if (!above && prevAbove)
             {
-                // Crossed the surface — binary search refinement
                 float tLo = t - stepSize;
                 float tHi = t;
                 for (int i = 0; i < 8; i++)
                 {
                     float tMid = (tLo + tHi) * 0.5f;
-                    Float3 mid = ray.Origin + ray.Direction * tMid;
-                    if (GetHeightDiff(mid, terrainPos, terrainData) > 0)
+                    Float3 mid = localOrigin + localDir * tMid;
+                    if (GetHeightDiffLocal(mid, terrainData) > 0)
                         tLo = tMid;
                     else
                         tHi = tMid;
                 }
 
-                hitPoint = ray.Origin + ray.Direction * ((tLo + tHi) * 0.5f);
-                terrainUV = new Float2(
-                    (hitPoint.X - terrainPos.X) / size,
-                    (hitPoint.Z - terrainPos.Z) / size);
+                Float3 localHit = localOrigin + localDir * ((tLo + tHi) * 0.5f);
+                terrainUV = new Float2((float)(localHit.X / size), (float)(localHit.Z / size));
+                hitPoint = TerrainToWorld(localHit);
                 return true;
             }
 
@@ -258,13 +347,13 @@ public class TerrainComponent : MonoBehaviour
         return false;
     }
 
-    private static float GetHeightDiff(Float3 point, Float3 terrainPos, TerrainData data)
+    private static float GetHeightDiffLocal(Float3 localPoint, TerrainData data)
     {
-        float u = (float)((point.X - terrainPos.X) / data.Size);
-        float v = (float)((point.Z - terrainPos.Z) / data.Size);
-        if (u < 0 || u > 1 || v < 0 || v > 1) return 1f; // Above (outside terrain)
-        float terrainY = (float)terrainPos.Y + data.GetInterpolatedHeight(u, v);
-        return (float)point.Y - terrainY;
+        float u = (float)(localPoint.X / data.Size);
+        float v = (float)(localPoint.Z / data.Size);
+        if (u < 0 || u > 1 || v < 0 || v > 1) return 1f;
+        float terrainY = data.GetInterpolatedHeight(u, v);
+        return (float)localPoint.Y - terrainY;
     }
 
     #endregion
@@ -320,7 +409,7 @@ public class TerrainComponent : MonoBehaviour
 
     #region Instance Data
 
-    private void UpdateInstanceData()
+    private void UpdateInstanceData(Float4x4 terrainToWorld)
     {
         var visibleChunks = _quadtree.GetVisibleChunks();
 
@@ -330,10 +419,27 @@ public class TerrainComponent : MonoBehaviour
         for (int i = 0; i < visibleChunks.Count; i++)
         {
             var chunk = visibleChunks[i];
-            Float3 position = (Float3)(this.Transform.Position + chunk.Position);
-            float scale = (float)chunk.Size;
-            _transforms[i] = Float4x4.CreateTranslation(position) * Float4x4.CreateScale(scale, 1.0f, scale);
+            // Chunk position is in terrain-local space; transform to world via terrain matrix
+            Float4x4 localChunk = Float4x4.CreateTranslation(chunk.Position) * Float4x4.CreateScale((float)chunk.Size, 1.0f, (float)chunk.Size);
+            _transforms[i] = terrainToWorld * localChunk;
         }
+    }
+
+    private static AABB TransformAABB(Float3 localMin, Float3 localMax, Float4x4 matrix)
+    {
+        // Transform all 8 corners and find new AABB
+        Float3 min = new(float.MaxValue), max = new(float.MinValue);
+        for (int i = 0; i < 8; i++)
+        {
+            Float3 corner = new(
+                (i & 1) == 0 ? localMin.X : localMax.X,
+                (i & 2) == 0 ? localMin.Y : localMax.Y,
+                (i & 4) == 0 ? localMin.Z : localMax.Z);
+            Float3 world = Float4x4.TransformPoint(corner, matrix);
+            min = new Float3(MathF.Min(min.X, world.X), MathF.Min(min.Y, world.Y), MathF.Min(min.Z, world.Z));
+            max = new Float3(MathF.Max(max.X, world.X), MathF.Max(max.Y, world.Y), MathF.Max(max.Z, world.Z));
+        }
+        return new AABB(min, max);
     }
 
     #endregion

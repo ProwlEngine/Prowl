@@ -4,12 +4,8 @@
 using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
-
-using Material = Prowl.Runtime.Resources.Material;
-using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -35,8 +31,6 @@ public class DirectionalLight : Light
     public CascadeCount Cascades = CascadeCount.Four;
 
     public float ShadowDistance = 100f;
-
-    private Material? _lightMaterial;
 
     // Cascade data (max 4 cascades)
     private Float4x4[] _cascadeShadowMatrices = new Float4x4[4];
@@ -180,45 +174,28 @@ public class DirectionalLight : Light
         }
     }
 
-    public override void OnRenderLight(RenderTexture gBuffer, RenderTexture destination, RenderPipeline.CameraSnapshot css)
+    public override ForwardLightData GetForwardLightData()
     {
-        // Create material if needed
-        _lightMaterial ??= new Material(Shader.LoadDefault(DefaultShader.DirectionalLight));
-
-        // Set GBuffer textures
-        _lightMaterial.SetTexture("_GBufferA", gBuffer.InternalTextures[0]);
-        _lightMaterial.SetTexture("_GBufferB", gBuffer.InternalTextures[1]);
-        _lightMaterial.SetTexture("_GBufferC", gBuffer.InternalTextures[2]);
-        _lightMaterial.SetTexture("_GBufferD", gBuffer.InternalTextures[3]);
-        _lightMaterial.SetTexture("_CameraDepthTexture", gBuffer.InternalDepth);
-
-        // Set shadow atlas texture and size
-        var shadowAtlas = ShadowAtlas.GetAtlas();
-        _lightMaterial.SetTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
-        _lightMaterial.SetVector("_ShadowAtlasSize", new Float2(shadowAtlas.Width, shadowAtlas.Height));
-
-        // Set directional light properties
-        _lightMaterial.SetVector("_LightDirection", Transform.Forward);
-        _lightMaterial.SetColor("_LightColor", Color);
-        _lightMaterial.SetFloat("_LightIntensity", (float)Intensity);
-
-        // Set shadow properties
-        _lightMaterial.SetFloat("_ShadowBias", (float)ShadowBias);
-        _lightMaterial.SetFloat("_ShadowNormalBias", (float)ShadowNormalBias);
-        _lightMaterial.SetFloat("_ShadowStrength", (float)ShadowStrength);
-        _lightMaterial.SetFloat("_ShadowQuality", (float)ShadowQuality);
-
-        // Set cascade data
-        _lightMaterial.SetInt("_CascadeCount", _activeCascades);
-
-        // Set cascade matrices and atlas parameters
-        for (int i = 0; i < 4; i++)
+        return new ForwardLightData
         {
-            _lightMaterial.SetMatrix($"_CascadeShadowMatrix{i}", _cascadeShadowMatrices[i]);
-            _lightMaterial.SetVector($"_CascadeAtlasParams{i}", _cascadeAtlasParams[i]);
-        }
+            Type = LightType.Directional,
+            Position = Transform.Position,
+            Direction = Transform.Forward,
+            Color = new Float3(this.Color.R, this.Color.G, this.Color.B),
+            Intensity = Intensity,
+            Range = 0,
+            SpotAngle = 0,
+            InnerSpotAngle = 0,
 
-        // Draw fullscreen quad with the directional light shader
-        RenderPipeline.Blit(gBuffer, destination, _lightMaterial, 0, false, false);
+            ShadowEnabled = CastShadows && _activeCascades > 0,
+            ShadowBias = ShadowBias,
+            ShadowNormalBias = ShadowNormalBias,
+            ShadowStrength = ShadowStrength,
+            ShadowQuality = (float)ShadowQuality,
+
+            CascadeCount = _activeCascades,
+            CascadeShadowMatrices = _cascadeShadowMatrices,
+            CascadeAtlasParams = _cascadeAtlasParams,
+        };
     }
 }

@@ -134,13 +134,50 @@ public static class Selection
     /// <summary>Number of selected objects.</summary>
     public static int Count => _selected.Count;
 
-    /// <summary>Fires when an asset should be focused/revealed in the Project panel.</summary>
-    public static event Action<Guid>? OnFocusAsset;
+    #region Ping
 
-    /// <summary>Request that the Project panel navigate to and highlight an asset by GUID.</summary>
-    public static void FocusAsset(Guid guid)
+    /// <summary>The GUID currently being pinged (yellow highlight).</summary>
+    public static Guid PingedGuid { get; private set; }
+
+    /// <summary>Time remaining on the current ping highlight (seconds).</summary>
+    public static float PingTimer { get; private set; }
+
+    private const float PingDuration = 2.5f;
+
+    /// <summary>
+    /// Ping an asset or object by GUID - panels that display this GUID should
+    /// scroll to it and show a temporary yellow highlight without changing selection.
+    /// </summary>
+    public static void Ping(Guid guid)
     {
-        if (guid != Guid.Empty)
-            OnFocusAsset?.Invoke(guid);
+        if (guid == Guid.Empty) return;
+        PingedGuid = guid;
+        PingTimer = PingDuration;
     }
+
+    /// <summary>Call once per frame to tick down the ping timer.</summary>
+    public static void UpdatePing(float deltaTime)
+    {
+        if (PingTimer > 0f)
+        {
+            PingTimer -= deltaTime;
+            if (PingTimer <= 0f)
+            {
+                PingTimer = 0f;
+                PingedGuid = Guid.Empty;
+            }
+        }
+    }
+
+    /// <summary>Get the current ping highlight alpha (0-1), fading out over time.</summary>
+    public static float GetPingAlpha()
+    {
+        if (PingTimer <= 0f) return 0f;
+        // Full brightness for first 1.5s, then fade out over remaining 1s
+        float fadeStart = 1.0f;
+        if (PingTimer > fadeStart) return 1f;
+        return PingTimer / fadeStart;
+    }
+
+    #endregion
 }

@@ -29,13 +29,7 @@ Pass "Particle"
             out float vLifetime;
 
 #ifdef GPU_INSTANCING
-            // Instance attributes (semantic 8-13)
-            layout(location = 8) in vec4 instanceModelRow0;
-            layout(location = 9) in vec4 instanceModelRow1;
-            layout(location = 10) in vec4 instanceModelRow2;
-            layout(location = 11) in vec4 instanceModelRow3;
-            layout(location = 12) in vec4 instanceColor;
-            layout(location = 13) in vec4 instanceCustomData;
+            // Instance attributes declared in VertexAttributes.glsl
 #endif
 
 			void main()
@@ -105,15 +99,7 @@ Pass "Particle"
 		{
             #include "Fragment"
 
-			// GBuffer layout:
-			// BufferA: RGB = Albedo, A = AO
-			// BufferB: RGB = Normal (view space), A = ShadingMode
-			// BufferC: R = Roughness, G = Metalness, B = Specular, A = Unused
-			// BufferD: Custom Data per Shading Mode (e.g., shading mode 0 = Unlit with RGBA as Emissive)
-			layout (location = 0) out vec4 gBufferA;
-			layout (location = 1) out vec4 gBufferB;
-			layout (location = 2) out vec4 gBufferC;
-			layout (location = 3) out vec4 gBufferD;
+			layout (location = 0) out vec4 fragColor;
 
 			in vec2 texCoord0;
 			in vec4 vColor;
@@ -126,34 +112,13 @@ Pass "Particle"
 
 			void main()
 			{
-                // Sample particle texture
 				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
 
-                // Discard fully transparent pixels
                 if (albedo.a < 0.01)
                     discard;
 
-                // Convert to linear space
                 vec3 baseColor = gammaToLinearSpace(albedo.rgb);
-
-                // Calculate view-space normal (face camera)
-                vec3 viewNormal = vec3(0.0, 0.0, 1.0);
-
-				// Output to GBuffer
-				// BufferA: RGB = Albedo, A = Alpha (for blending)
-				gBufferA = vec4(baseColor, albedo.a);
-
-				// BufferB: RGB = Normal (view space), A = ShadingMode
-				// ShadingMode: 0 = Unlit (particles are typically unlit)
-				float shadingMode = 0.0; // Unlit
-				gBufferB = vec4(viewNormal * 0.5 + 0.5, shadingMode);
-
-				// BufferC: R = Roughness, G = Metalness, B = Specular, A = Unused
-				gBufferC = vec4(1.0, 0.0, 0.0, 0.0); // Full roughness, no metal, no specular
-
-				// BufferD: For Unlit mode (0), this stores emissive/glow data
-				// We use the albedo as self-illumination for particles
-				gBufferD = vec4(baseColor * albedo.a, 0.0);
+				fragColor = vec4(baseColor, albedo.a);
 			}
 		}
 	ENDGLSL

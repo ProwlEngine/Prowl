@@ -16,14 +16,6 @@ namespace Prowl.Runtime.Resources;
 /// </summary>
 public sealed class Texture2D : Texture, ISerializable
 {
-    public static Texture2D White => Texture2D.LoadDefault(DefaultTexture.White);
-    public static Texture2D Gray => Texture2D.LoadDefault(DefaultTexture.Gray18);
-    public static Texture2D Normal => Texture2D.LoadDefault(DefaultTexture.Normal);
-    public static Texture2D Emission => Texture2D.LoadDefault(DefaultTexture.Emission);
-    public static Texture2D Surface => Texture2D.LoadDefault(DefaultTexture.Surface);
-    public static Texture2D Grid => Texture2D.LoadDefault(DefaultTexture.Grid);
-    public static Texture2D Noise => Texture2D.LoadDefault(DefaultTexture.Noise);
-
     /// <summary>The width of this <see cref="Texture2D"/>.</summary>
     public uint Width { get; private set; }
 

@@ -246,6 +246,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <returns>True if the MonoBehaviour can be destroyed, false otherwise.</returns>
     internal bool CanDestroy()
     {
+        // Skip dependency check if the entire GameObject is being disposed
+        if (_go.IsDisposed)
+            return true;
+
         if (_go.IsComponentRequired(this, out Type dependentType))
         {
             Debug.LogError("Can't remove " + GetType().Name + " because " + dependentType.Name + " depends on it");

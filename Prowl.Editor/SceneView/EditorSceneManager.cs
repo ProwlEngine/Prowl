@@ -4,6 +4,8 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Panels;
+using System.Linq;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -19,6 +21,9 @@ public static class EditorSceneManager
 
     /// <summary>Whether the current scene has unsaved changes.</summary>
     public static bool IsDirty { get; set; }
+
+    /// <summary>Fired after the scene is saved. Use for auto-saving dependent assets.</summary>
+    public static event Action? OnSceneSaved;
 
     /// <summary>
     /// Create and load a new empty default scene.
@@ -173,6 +178,9 @@ public static class EditorSceneManager
 
             Scene.Current.Name = Path.GetFileNameWithoutExtension(relativePath);
             IsDirty = false;
+
+            // Notify listeners (e.g. terrain editor saves TerrainData assets)
+            OnSceneSaved?.Invoke();
 
             Debug.Log($"Saved scene: {relativePath}");
             return true;

@@ -70,13 +70,9 @@ public interface IRenderableLight
     public bool DoCastShadows();
 
     /// <summary>
-    /// Renders the light's contribution to the scene.
-    /// Similar to ImageEffect.OnRenderImage, lights control their own drawing.
+    /// Returns the light's data for forward rendering (position, color, shadow data, etc.)
     /// </summary>
-    /// <param name="gBuffer">GBuffer containing scene geometry data</param>
-    /// <param name="destination">Destination render texture to draw light contribution to</param>
-    /// <param name="css">Camera snapshot containing view/projection matrices and other camera data</param>
-    public void OnRenderLight(RenderTexture gBuffer, RenderTexture destination, RenderPipeline.CameraSnapshot css);
+    public ForwardLightData GetForwardLightData();
 }
 
 public abstract class RenderPipeline : EngineObject
@@ -695,6 +691,16 @@ public abstract class RenderPipeline : EngineObject
         int instanceCount = instanceData.Length;
         int indexCount = mesh.IndexCount;
         bool useIndex32 = mesh.IndexFormat == IndexFormat.UInt32;
+
+        // Set mesh attribute keywords
+        material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
+        material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
+        material.SetKeyword("HAS_UV", mesh.HasUV);
+        material.SetKeyword("HAS_UV2", mesh.HasUV2);
+        material.SetKeyword("HAS_COLORS", mesh.HasColors || mesh.HasColors32);
+        material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
+        material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
+        material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
 
         // Enable GPU instancing keyword
         material.SetKeyword("GPU_INSTANCING", true);

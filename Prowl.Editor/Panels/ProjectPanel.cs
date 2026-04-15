@@ -28,12 +28,8 @@ public class ProjectPanel : DockPanel
     // Rename state is managed by RenameOverlay
     private static readonly HashSet<Guid> _expandedAssets = new(); // files with sub-assets expanded
     private static readonly Dictionary<Guid, Prowl.Runtime.Resources.Texture2D?> _thumbnailCache = new();
-    private static Guid _pendingFocusGuid; // Asset to focus/reveal on next frame
-
-    static ProjectPanel()
-    {
-        Selection.OnFocusAsset += guid => _pendingFocusGuid = guid;
-    }
+    private static Guid _pendingPingNavigate; // Navigate to pinged asset's folder on next frame
+    private static Guid _lastPingedGuid; // Track when a new ping starts
     private const float MinThumbSize = 20f;  // Below this = list mode
     private const float MaxThumbSize = 128f;
     private const float ListThreshold = 32f; // Below this = list view
@@ -47,27 +43,28 @@ public class ProjectPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null || Project.Current == null) return;
 
-        // Handle pending focus — navigate to the asset's folder and select it
-        if (_pendingFocusGuid != Guid.Empty)
+        // Detect new ping and navigate to the pinged asset's folder
+        if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastPingedGuid)
         {
-            var focusGuid = _pendingFocusGuid;
-            _pendingFocusGuid = Guid.Empty;
+            _lastPingedGuid = Selection.PingedGuid;
+            _pendingPingNavigate = Selection.PingedGuid;
+        }
+        if (Selection.PingedGuid == Guid.Empty)
+            _lastPingedGuid = Guid.Empty;
+
+        if (_pendingPingNavigate != Guid.Empty)
+        {
+            var pingGuid = _pendingPingNavigate;
+            _pendingPingNavigate = Guid.Empty;
             var db = EditorAssetDatabase.Instance;
             if (db != null)
             {
-                string? path = db.GuidToPath(focusGuid);
+                string? path = db.GuidToPath(pingGuid);
                 if (path != null)
                 {
                     // Navigate to the folder containing this asset
                     string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
                     _currentFolder = folder;
-                    // Select the asset's ContentItem
-                    Selection.Select(new ContentItem
-                    {
-                        Name = System.IO.Path.GetFileNameWithoutExtension(path),
-                        RelativePath = path,
-                        Guid = focusGuid,
-                    });
                 }
             }
         }
@@ -454,6 +451,7 @@ public class ProjectPanel : DockPanel
         {
             var item = entries[i];
             bool isSelected = Selection.IsSelected(item);
+            bool isPingedList = item.Guid != Guid.Empty && item.Guid == Selection.PingedGuid;
             int idx = i;
 
             using (paper.Row($"proj_li_{i}")
@@ -499,6 +497,27 @@ public class ProjectPanel : DockPanel
                         }
                         DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, assetType));
                     }
+                })
+                .OnPostLayout((handle, rect) =>
+                {
+                    if (!isPingedList) return;
+                    paper.Draw(ref handle, (canvas, r) =>
+                    {
+                        float alpha = Selection.GetPingAlpha();
+                        if (alpha <= 0f) return;
+                        int fillA = (int)(alpha * 60);
+                        int borderA = (int)(alpha * 200);
+                        var fillColor = Color.FromArgb(fillA, 255, 220, 50);
+                        var borderColor = Color.FromArgb(borderA, 255, 200, 0);
+                        float x = (float)r.Min.X, y = (float)r.Min.Y;
+                        float w = (float)r.Size.X, h = (float)r.Size.Y;
+                        canvas.RoundedRectFilled(x, y, w, h, 3, 3, 3, 3, fillColor);
+                        canvas.SetStrokeColor(borderColor);
+                        canvas.SetStrokeWidth(2f);
+                        canvas.BeginPath();
+                        canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, 2, 2, 2, 2);
+                        canvas.Stroke();
+                    });
                 })
                 .Enter())
             {
@@ -804,6 +823,7 @@ public class ProjectPanel : DockPanel
     {
         bool isSelected = Selection.IsSelected(item);
         bool isSubAsset = item.IsSubAsset;
+        bool isPinged = item.Guid != Guid.Empty && item.Guid == Selection.PingedGuid;
 
         using (paper.Column(id)
             .Width(cellSize).Height(totalCellH)
@@ -849,6 +869,27 @@ public class ProjectPanel : DockPanel
                 }
             })
             .Tooltip(item.Name)
+            .OnPostLayout((handle, rect) =>
+            {
+                if (!isPinged) return;
+                paper.Draw(ref handle, (canvas, r) =>
+                {
+                    float alpha = Selection.GetPingAlpha();
+                    if (alpha <= 0f) return;
+                    int fillA = (int)(alpha * 60);
+                    int borderA = (int)(alpha * 200);
+                    var fillColor = Color.FromArgb(fillA, 255, 220, 50);
+                    var borderColor = Color.FromArgb(borderA, 255, 200, 0);
+                    float x = (float)r.Min.X, y = (float)r.Min.Y;
+                    float w = (float)r.Size.X, h = (float)r.Size.Y;
+                    canvas.RoundedRectFilled(x, y, w, h, 4, 4, 4, 4, fillColor);
+                    canvas.SetStrokeColor(borderColor);
+                    canvas.SetStrokeWidth(2f);
+                    canvas.BeginPath();
+                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, 3, 3, 3, 3);
+                    canvas.Stroke();
+                });
+            })
             .Enter())
         {
             // Thumbnail area

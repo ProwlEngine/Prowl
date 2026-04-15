@@ -545,7 +545,11 @@ public class Mesh : EngineObject, ISerializable
             Float2 deltaUV1 = uv[bi] - uv[ai];
             Float2 deltaUV2 = uv[ci] - uv[ai];
 
-            float f = 1.0f / (deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y);
+            float det = deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y;
+            if (MathF.Abs(det) < 1e-8f)
+                continue; // Degenerate UV triangle — skip to avoid NaN
+
+            float f = 1.0f / det;
 
             Float3 tangent;
             tangent.X = f * (deltaUV2.Y * edge1.X - deltaUV1.Y * edge2.X);
@@ -558,7 +562,11 @@ public class Mesh : EngineObject, ISerializable
         }
 
         for (int i = 0; i < vertices.Length; i++)
+        {
             tangents[i] = Float3.Normalize(tangents[i]);
+            if (float.IsNaN(tangents[i].X) || float.IsNaN(tangents[i].Y) || float.IsNaN(tangents[i].Z))
+                tangents[i] = Float3.UnitX; // Fallback tangent
+        }
 
         Tangents = tangents;
     }

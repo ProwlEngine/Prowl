@@ -85,6 +85,19 @@ public static class EditorGUI
             .FontSize(FontSz + 2);
     }
 
+
+    public static void RoundedRectFilled(Prowl.Quill.Canvas canvas, float rectX, float rectY, float rectWidth, float rectHeight,
+        float radiusTopLeft, float radiusTopRight, float radiusBottomLeft, float radiusBottomRight, Color color)
+    {
+        /*canvas.RoundedRectFilled(rectX, rectY, rectWidth, rectHeight,
+            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft,
+            color);*/
+        canvas.RoundedRect(rectX, rectY, rectWidth, rectHeight,
+            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft);
+        canvas.SetFillColor(color);
+        canvas.FillComplexAA();
+    }
+
     // ================================================================
     //  Separator
     // ================================================================
@@ -180,6 +193,28 @@ public static class EditorGUI
         return new WidgetResult<bool>(cb => userCallback = cb);
     }
 
+    public static WidgetResult<bool> ButtonSquareWithHandle(Paper paper, string id, string icon, out ElementHandle buttonEl)
+    {
+        Action<bool>? userCallback = null;
+
+        buttonEl = paper.Box(id)
+            .Alignment(PaperUI.TextAlignment.MiddleCenter)
+            .Text(icon, Font)
+            .TextColor(EditorTheme.Ink500)
+            .FontSize(FontSz)
+            .Height(EditorTheme.RowHeight)
+            .Width(EditorTheme.RowHeight)
+            .BackgroundColor(EditorTheme.Ink100)
+            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Rounded(3)
+            .BorderColor(EditorTheme.Ink100)
+            .BorderWidth(1)
+            .OnClick(e => userCallback?.Invoke(true))
+            ._handle;
+
+        return new WidgetResult<bool>(cb => userCallback = cb);
+    }
+
     public static WidgetResult<bool> ButtonSquareGhost(Paper paper, string id, string icon)
     {
         Action<bool>? userCallback = null;
@@ -213,6 +248,7 @@ public static class EditorGUI
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
             .Width(UnitValue.Auto)
+            .Alignment(PaperUI.TextAlignment.MiddleLeft)
             .RowBetween(6)
             .OnClick(e => userCallback?.Invoke(!value))
             .Enter())
@@ -594,6 +630,7 @@ public static class EditorGUI
             paper.Box($"{id}_track")
                 .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Stretch(4f))
+                .Margin(UnitValue.Auto, showField ? EditorTheme.RowHeight*0.36f+6 : UnitValue.Auto, UnitValue.Auto, UnitValue.Auto)
                 .OnClick(e =>
                 {
                     float v = min + Math.Clamp((float)e.NormalizedPosition.X, 0f, 1f) * (max - min);
@@ -616,7 +653,7 @@ public static class EditorGUI
                     float rw = (float)r.Size.X;
                     float rh = (float)r.Size.Y;
 
-                    float trackH = 4f;
+                    float trackH = 5f;
                     float trackY = ry + rh * 0.5f - trackH * 0.5f;
                     float trackR = trackH * 0.5f;
                     float thumbCx = rx + rw * t;
@@ -624,13 +661,13 @@ public static class EditorGUI
                     float thumbR = rh * 0.36f;
 
                     // ── Track background ──────────────────────────────────
-                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
+                    RoundedRectFilled(canvas, rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
                         EditorTheme.Ink100);
 
                     // ── Track fill ────────────────────────────────────────
                     if (t > 0f)
                     {
-                        canvas.RoundedRectFilled(rx, trackY, rw * t, trackH, trackR, trackR, trackR, trackR,
+                        RoundedRectFilled(canvas, rx, trackY, rw * t, trackH, trackR, trackR, trackR, trackR,
                             EditorTheme.Purple400);
                     }
 
@@ -854,15 +891,24 @@ public static class EditorGUI
     //  ToggleButton
     // ================================================================
 
-    public static WidgetResult<bool> ToggleButton(Paper paper, string id, string label, bool value)
+    public static WidgetResult<bool> ToggleButton(Paper paper, string id, string label, bool value, int? width = null, bool fitWidth = false, Color? textColorOverride = null, Color ? bgColorOverride = null)
     {
         Action<bool>? userCallback = null;
-        
+
+        UnitValue widthValue = UnitValue.StretchOne;
+
+        if (fitWidth)
+        {
+            Prowl.Vector.Float2 labelLayout = paper.MeasureText(label, new Prowl.Scribe.TextLayoutSettings { Font = Font, PixelSize = FontSz });
+            widthValue = labelLayout.X + (EditorTheme.RowHeight / 4) * 2;
+        }
+
         using (paper.Box(id)
+            .Width(width ?? widthValue)
             .Height(EditorTheme.RowHeight)
             .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
-            .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.Ink100)
-            .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.Ink200).End()
+            .BackgroundColor(value ? (bgColorOverride ?? EditorTheme.Purple400) : EditorTheme.Ink100)
+            .Hovered.BackgroundColor(value ? (bgColorOverride.HasValue ? LerpRGB(bgColorOverride.Value, Color.Black,0.25f) : EditorTheme.Purple300) : EditorTheme.Ink200).End()
             .Rounded(3)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1)
             .OnClick(e => userCallback?.Invoke(!value)).Enter())
@@ -871,7 +917,7 @@ public static class EditorGUI
                 paper.Box($"{id}_label")
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .Text(label, Font)
-                    .TextColor(EditorTheme.Ink500)
+                    .TextColor(textColorOverride ?? EditorTheme.Ink500)
                     .FontSize(FontSz);
         }
 
@@ -888,13 +934,15 @@ public static class EditorGUI
 
         using (paper.Row(id)
             .Height(EditorTheme.RowHeight)
-        
+
+
             .Rounded(3)
             .BorderWidth(1)
-            
+            .Alignment(PaperUI.TextAlignment.MiddleLeft)
+
             .BackgroundColor(EditorTheme.Neutral200)
             .BorderColor(EditorTheme.Neutral100)
-            .Margin(UnitValue.Auto, EditorTheme.Spacing)
+            .Margin(UnitValue.Auto, UnitValue.Auto, UnitValue.Auto, EditorTheme.Spacing)
             .Focused.BorderColor(EditorTheme.Purple400).End()
             
             .ChildLeft(6).ChildRight(4)
@@ -1119,7 +1167,7 @@ public static class EditorGUI
                     (int)(value.G * 255),
                     (int)(value.B * 255)))
                 .Rounded(4)
-                .BorderColor(EditorTheme.Ink200).BorderWidth(2)
+                .BorderColor(EditorTheme.Ink200).BorderWidth(1)
                 .Hovered.BorderColor(EditorTheme.Purple400).End()
                 .Enter())
             {
@@ -1195,12 +1243,12 @@ public static class EditorGUI
                     float trackR = trackH * 0.5f;
 
                     // ── Track background ──────────────────────────────────
-                    canvas.RoundedRectFilled(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
+                    RoundedRectFilled(canvas, rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
                         EditorTheme.Ink100);
 
                     // ── Track fill ────────────────────────────────────────
                     if (progress > 0f)
-                        canvas.RoundedRectFilled(rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
+                        RoundedRectFilled(canvas, rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
                             EditorTheme.Purple400);
                 }));
 

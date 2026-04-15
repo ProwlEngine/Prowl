@@ -460,7 +460,7 @@ public static class GameObjectInspector
                 if (!isMissing)
                 {
                     EditorGUI.Button(paper, "gi_prefab_select", "Select", width: 55)
-                        .OnValueChanged(_ => Selection.FocusAsset(go.PrefabAssetId));
+                        .OnValueChanged(_ => Selection.Ping(go.PrefabAssetId));
 
                     if (isRoot && hasOverrides)
                     {

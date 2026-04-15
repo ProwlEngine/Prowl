@@ -4,12 +4,8 @@
 using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
-
-using Material = Prowl.Runtime.Resources.Material;
-using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime;
 
@@ -29,7 +25,6 @@ public class SpotLight : Light
     public float SpotAngle = 45.0f; // Outer cone angle in degrees
     public float InnerSpotAngle = 30.0f; // Inner cone angle in degrees for smooth falloff
 
-    private Material? _lightMaterial;
     private Float4x4 _shadowMatrix;
     private Float4 _shadowAtlasParams; // xy = atlas pos, z = atlas size, w = 1.0
 
@@ -127,63 +122,27 @@ public class SpotLight : Light
         }
     }
 
-    private static Mesh? _mesh;
-    public override void OnRenderLight(RenderTexture gBuffer, RenderTexture destination, RenderPipeline.CameraSnapshot css)
+    public override ForwardLightData GetForwardLightData()
     {
-        // Create cone mesh if needed (shared by all spot lights)
-        if (_mesh == null || !_mesh.IsValid())
+        return new ForwardLightData
         {
-            _mesh = Mesh.CreateSphere(1f, 6, 6);
-        }
+            Type = LightType.Spot,
+            Position = Transform.Position,
+            Direction = Transform.Forward,
+            Color = new Float3(this.Color.R, this.Color.G, this.Color.B),
+            Intensity = Intensity,
+            Range = Range,
+            SpotAngle = SpotAngle,
+            InnerSpotAngle = InnerSpotAngle,
 
-        // Create material if needed
-        _lightMaterial ??= new Material(Shader.LoadDefault(DefaultShader.SpotLight));
+            ShadowEnabled = CastShadows && _shadowAtlasParams.Z > 0,
+            ShadowBias = ShadowBias,
+            ShadowNormalBias = ShadowNormalBias,
+            ShadowStrength = ShadowStrength,
+            ShadowQuality = (float)ShadowQuality,
 
-        // Set GBuffer textures
-        _lightMaterial.SetTexture("_GBufferA", gBuffer.InternalTextures[0]);
-        _lightMaterial.SetTexture("_GBufferB", gBuffer.InternalTextures[1]);
-        _lightMaterial.SetTexture("_GBufferC", gBuffer.InternalTextures[2]);
-        _lightMaterial.SetTexture("_GBufferD", gBuffer.InternalTextures[3]);
-        _lightMaterial.SetTexture("_CameraDepthTexture", gBuffer.InternalDepth);
-
-        // Set shadow atlas texture
-        var shadowAtlas = ShadowAtlas.GetAtlas();
-        _lightMaterial.SetTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
-
-        // Set spot light properties
-        _lightMaterial.SetVector("_LightPosition", Transform.Position);
-        _lightMaterial.SetVector("_LightDirection", Transform.Forward);
-        _lightMaterial.SetColor("_LightColor", Color);
-        _lightMaterial.SetFloat("_LightIntensity", (float)Intensity);
-        _lightMaterial.SetFloat("_LightRange", (float)Range);
-        _lightMaterial.SetFloat("_SpotAngle", (float)SpotAngle);
-        _lightMaterial.SetFloat("_InnerSpotAngle", (float)InnerSpotAngle);
-
-        // Set shadow properties
-        _lightMaterial.SetFloat("_ShadowBias", (float)ShadowBias);
-        _lightMaterial.SetFloat("_ShadowNormalBias", (float)ShadowNormalBias);
-        _lightMaterial.SetFloat("_ShadowStrength", (float)ShadowStrength);
-        _lightMaterial.SetFloat("_ShadowQuality", (float)ShadowQuality);
-
-        // Set shadow matrix and atlas parameters
-        _lightMaterial.SetMatrix("_ShadowMatrix", _shadowMatrix);
-        _lightMaterial.SetVector("_ShadowAtlasParams", _shadowAtlasParams);
-
-#warning TODO: Use Cone and fit properly!
-        // Combine transformations
-        Float4x4 model = this.Transform.LocalToWorldMatrix;
-        // scale by range
-        Float4x4 scale = Float4x4.CreateScale(new Float3(Range, Range, Range));
-        model = model * scale;
-
-        // Set transform matrices
-        _lightMaterial.SetMatrix("prowl_ObjectToWorld", model);
-        _lightMaterial.SetMatrix("prowl_WorldToObject", model.Invert());
-
-        // Bind destination framebuffer
-        Graphics.BindFramebuffer(destination.frameBuffer);
-
-        // Draw cone mesh instead of fullscreen quad
-        RenderPipeline.DrawMeshNow(_mesh, _lightMaterial, 0);
+            SpotShadowMatrix = _shadowMatrix,
+            SpotShadowAtlasParams = _shadowAtlasParams,
+        };
     }
 }

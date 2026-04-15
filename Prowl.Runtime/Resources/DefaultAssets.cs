@@ -9,28 +9,28 @@ namespace Prowl.Runtime.Resources;
 public enum DefaultShader
 {
     Standard,
+    StandardTransparent,
+    StandardAnisotropic,
     Unlit,
     Line,
     Invalid,
     UI,
     Gizmos,
     Blit,
-    DirectionalLight,
-    SpotLight,
-    PointLight,
-    DeferredCompose,
     Particle,
     Terrain,
+    Grass,
     Refraction,
 
     ProceduralSkybox,
+    GradientSkybox,
+    CubemapSkybox,
     Tonemapper,
     SSR,
     FXAA,
     Bloom,
     BokehDoF,
     GTAO,
-    SSPT,
     Grid
 }
 
@@ -55,6 +55,7 @@ public enum DefaultMaterial
     Standard,
     Particle,
     Terrain,
+    Grass,
 }
 
 /// <summary>
@@ -81,5 +82,7 @@ public enum DefaultShaderInclude
     Random,
     ShaderVariables,
     Shadow,
-    VertexAttributes
+    VertexAttributes,
+    Lighting,
+    StandardSurface
 }
