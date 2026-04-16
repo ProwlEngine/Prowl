@@ -31,7 +31,8 @@ public enum DefaultShader
     Bloom,
     BokehDoF,
     GTAO,
-    Grid
+    Grid,
+    CinematicEffects
 }
 
 /// <summary>
