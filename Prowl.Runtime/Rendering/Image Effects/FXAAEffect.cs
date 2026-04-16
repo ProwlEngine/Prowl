@@ -27,7 +27,10 @@ public sealed class FXAAEffect : ImageEffect
         _mat.SetFloat("_SubpixelQuality", SubpixelQuality);
         _mat.SetVector("_Resolution", new Float2(context.Width, context.Height));
 
-        // Apply FXAA (in-place)
-        RenderPipeline.Blit(context.SceneColor, context.SceneColor, _mat, 0);
+        // Blit to a temporary RT to avoid reading and writing the same texture simultaneously
+        var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
+        RenderPipeline.Blit(context.SceneColor, temp, _mat, 0);
+        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        RenderTexture.ReleaseTemporaryRT(temp);
     }
 }

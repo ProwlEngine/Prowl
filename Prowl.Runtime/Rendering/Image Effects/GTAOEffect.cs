@@ -87,10 +87,13 @@ public sealed class GTAOEffect : ImageEffect
             RenderTexture.ReleaseTemporaryRT(blurTempRT);
         }
 
-        // Pass 2: Composite - Apply AO to scene (in-place)
+        // Pass 2: Composite - Apply AO to scene
         _mat.SetTexture("_AOTex", aoRT.MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
-        RenderPipeline.Blit(context.SceneColor, context.SceneColor, _mat, 2);
+        var temp = RenderTexture.GetTemporaryRT(width, height, false, [context.SceneColor.MainTexture.ImageFormat]);
+        RenderPipeline.Blit(context.SceneColor, temp, _mat, 2);
+        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        RenderTexture.ReleaseTemporaryRT(temp);
 
         // Release temporary render textures
         RenderTexture.ReleaseTemporaryRT(aoRT);

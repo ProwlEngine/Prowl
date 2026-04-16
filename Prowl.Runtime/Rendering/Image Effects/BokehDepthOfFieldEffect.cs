@@ -67,11 +67,14 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         _mat.SetTexture("_HorizB", horizontalMRT.InternalTextures[2]);
         RenderPipeline.Blit(verticalResult, _mat, 1);
 
-        // Pass 2: Final Combine - blend with original image based on CoC (at full resolution, in-place)
+        // Pass 2: Final Combine - blend with original image based on CoC (at full resolution)
         _mat.SetTexture("_MainTex", context.SceneColor.MainTexture);
         _mat.SetTexture("_BlurredTex", verticalResult.MainTexture);
         _mat.SetVector("_Resolution", new Float2(fullWidth, fullHeight));
-        RenderPipeline.Blit(context.SceneColor, context.SceneColor, _mat, 2);
+        var temp = RenderTexture.GetTemporaryRT(fullWidth, fullHeight, false, [context.SceneColor.MainTexture.ImageFormat]);
+        RenderPipeline.Blit(context.SceneColor, temp, _mat, 2);
+        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        RenderTexture.ReleaseTemporaryRT(temp);
 
         // Clean up MRT
         RenderTexture.ReleaseTemporaryRT(horizontalMRT);

@@ -68,7 +68,10 @@ public sealed class BloomEffect : ImageEffect
         // Pass 3: Composite — add bloom to original scene
         _mat.SetTexture("_BloomTex", mipChain[0].MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
-        RenderPipeline.Blit(context.SceneColor, context.SceneColor, _mat, 3);
+        var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
+        RenderPipeline.Blit(context.SceneColor, temp, _mat, 3);
+        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        RenderTexture.ReleaseTemporaryRT(temp);
 
         // Release all mip chain RTs
         foreach (var rt in mipChain)

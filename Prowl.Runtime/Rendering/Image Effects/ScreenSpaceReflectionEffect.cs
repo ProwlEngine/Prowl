@@ -87,10 +87,13 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         _mat.SetFloat("_BlurRadius", BlurRadius);
         RenderPipeline.Blit(blurTempRT, resolvedRT, _mat, 2);
 
-        // Pass 4: Composite - Blend reflections with scene (in-place)
+        // Pass 4: Composite - Blend reflections with scene
         _mat.SetTexture("_ReflectionTex", resolvedRT.MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
-        RenderPipeline.Blit(context.SceneColor, context.SceneColor, _mat, 3);
+        var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
+        RenderPipeline.Blit(context.SceneColor, temp, _mat, 3);
+        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        RenderTexture.ReleaseTemporaryRT(temp);
 
         // Release temporary render textures
         RenderTexture.ReleaseTemporaryRT(reflectionDataRT);
