@@ -34,12 +34,24 @@ public class EditorApplication : Game
     // All registered panel types (from [EditorWindow] attribute scan)
     private readonly List<(Type type, string path)> _registeredPanels = new();
 
+    public override void InitializeWindow(string title, int width, int height)
+    {
+        var instance = EditorSettings.Instance;
+        Window.InitWindow(title, width, height, instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal, false);
+
+        Window.Position = new Silk.NET.Maths.Vector2D<int>(
+            instance.WindowX > -1 ? instance.WindowX : Window.Position.X,
+            instance.WindowY > -1 ? instance.WindowY : Window.Position.Y);
+    }
+
     public override void Initialize()
     {
         Instance = this;
         Application.IsEditor = true;
         Application.IsPlaying = false;
 
+        // Set invariant culture for consistent number parsing/formatting in the editor (e.g. asset import settings)
+        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         InitializeFont();
 
         PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
@@ -129,6 +141,34 @@ public class EditorApplication : Game
 
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
+
+        // Attach to the window events to save the position and state of the window
+        Window.InternalWindow.Move += (position) =>
+        {
+            EditorSettings.Instance.WindowX = position.X;
+            EditorSettings.Instance.WindowY = position.Y;
+
+            EditorSettings.Instance.Save();
+        };
+
+        Window.InternalWindow.Resize += (size) =>
+        {
+            EditorSettings.Instance.WindowWidth = size.X;
+            EditorSettings.Instance.WindowHeight = size.Y;
+            EditorSettings.Instance.Save();
+        };
+
+        Window.InternalWindow.StateChanged += (state) =>
+        {
+            EditorSettings.Instance.WindowMaximized = state == Silk.NET.Windowing.WindowState.Maximized;
+
+            EditorSettings.Instance.Save();
+        };
+
+        Window.InternalWindow.Closing += () =>
+        {
+            SaveEditorWindowState();
+        };
     }
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
@@ -909,10 +949,27 @@ public class EditorApplication : Game
     //  Project Switching
     // ================================================================
 
+    /// <summary>
+    /// Saves the editor window position, size and maximization state.
+    /// </summary>
+    public void SaveEditorWindowState()
+    {
+        EditorSettings.Instance.WindowX = Window.Position.X;
+        EditorSettings.Instance.WindowY = Window.Position.Y;
+
+        EditorSettings.Instance.WindowWidth = Window.Size.X;
+        EditorSettings.Instance.WindowHeight = Window.Size.Y;
+
+        EditorSettings.Instance.WindowMaximized = Window.InternalWindow.WindowState == Silk.NET.Windowing.WindowState.Maximized;
+
+        EditorSettings.Instance.Save();
+    }
+
     /// <summary>Save layout and settings for the current project.</summary>
     public void SaveProjectState()
     {
         if (Project.Current == null) return;
+        SaveEditorWindowState();
         Docking.LayoutSerializer.Save(_dockSpace);
         ProjectSettingsRegistry.SaveAll();
     }
