@@ -111,6 +111,10 @@ public static class ShortcutManager
     public static bool IsPressed(string id)
     {
         if (IsRebinding) return false;
+
+        // Don't fire shortcuts when Paper has keyboard focus (e.g. text field is active)
+        if (EditorApplication.Instance?.PaperInstance?.WantsCaptureKeyboard == true) return false;
+
         if (!_shortcuts.TryGetValue(id, out var def)) return false;
 
         var b = def.Binding;
