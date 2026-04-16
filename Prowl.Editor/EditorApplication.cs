@@ -99,6 +99,12 @@ public class EditorApplication : Game
         CreateGameObjectMenuRegistry.Initialize();
         EditorCallbacks.Initialize();
 
+        // Cursor lock toasts
+        Input.OnCursorLocked += () =>
+            Widgets.Toasts.Show("Cursor Locked", "Press Escape to release.", Widgets.ToastType.Info, 3f);
+        Input.OnCursorLockFailed += () =>
+            Widgets.Toasts.Show("Cursor Lock Failed", "No valid game view is available.", Widgets.ToastType.Warning, 3f);
+
         // Menus depend on registries above, so register after initialization
         ScanAndRegisterPanels();
         RegisterMenus();

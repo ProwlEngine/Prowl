@@ -72,32 +72,67 @@ public static class Input
 
     /// <summary>
     /// Whether the cursor is currently locked (hidden + recentered each frame).
-    /// In the editor, Escape always unlocks.
     /// </summary>
     public static bool CursorLocked { get; private set; }
 
     /// <summary>
-    /// The screen-space center point where the cursor is locked to.
-    /// Updated by the viewport that initiated the lock (scene view, game view, or full window).
+    /// The screen-space center point where the cursor is locked to,
+    /// as defined by the topmost lock context.
     /// </summary>
-    public static Int2 CursorLockCenter { get; set; }
+    public static Int2 CursorLockCenter => _lockContextStack.Count > 0
+        ? _lockContextStack.Peek().GetLockCenter()
+        : new Int2(Window.InternalWindow.Size.X / 2, Window.InternalWindow.Size.Y / 2);
 
-    /// <summary>Lock the cursor to a viewport center — hides it and recenters each frame.</summary>
-    public static void LockCursor(Int2 center)
+    private static readonly Stack<CursorLockContext> _lockContextStack = new();
+
+    /// <summary>Fired when the cursor is successfully locked. Editor hooks this to show a toast.</summary>
+    public static event Action? OnCursorLocked;
+
+    /// <summary>Fired when a lock attempt is rejected by the current context. Editor hooks this for a toast.</summary>
+    public static event Action? OnCursorLockFailed;
+
+    /// <summary>
+    /// Push a lock context that defines where the cursor centers and whether locking is allowed.
+    /// The topmost context controls behavior. Does not lock the cursor by itself.
+    /// </summary>
+    public static void PushLockContext(CursorLockContext context) => _lockContextStack.Push(context);
+
+    /// <summary>
+    /// Pop the topmost lock context. If the cursor is locked and the stack becomes empty
+    /// or the new top disallows locks, the cursor is automatically unlocked.
+    /// </summary>
+    public static void PopLockContext()
     {
-        CursorLocked = true;
-        CursorLockCenter = center;
-        SetCursorVisible(false);
+        if (_lockContextStack.Count == 0) return;
+        _lockContextStack.Pop();
+
+        // If locked but no context remains, or new top disallows it, unlock
+        if (CursorLocked && (_lockContextStack.Count == 0 || !_lockContextStack.Peek().AllowLock))
+            UnlockCursor();
     }
 
-    /// <summary>Lock the cursor to the window center.</summary>
+    /// <summary>
+    /// Lock the cursor — hides it and reports CursorLockCenter as the mouse position.
+    /// Uses the topmost lock context to determine the center position.
+    /// If the topmost context disallows locking, fires OnCursorLockFailed and returns.
+    /// </summary>
     public static void LockCursor()
     {
-        var size = Window.InternalWindow.Size;
-        LockCursor(new Int2(size.X / 2, size.Y / 2));
+        // Check if the current context allows locking
+        if (_lockContextStack.Count > 0 && !_lockContextStack.Peek().AllowLock)
+        {
+            OnCursorLockFailed?.Invoke();
+            return;
+        }
+
+        CursorLocked = true;
+        SetCursorVisible(false);
+        OnCursorLocked?.Invoke();
     }
 
-    /// <summary>Unlock the cursor — shows it and stops recentering.</summary>
+    /// <summary>
+    /// Unlock the cursor — shows it and stops reporting the lock center.
+    /// </summary>
     public static void UnlockCursor()
     {
         if (!CursorLocked) return;

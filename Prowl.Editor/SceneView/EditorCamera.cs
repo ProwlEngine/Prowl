@@ -11,11 +11,34 @@ namespace Prowl.Editor;
 /// Editor camera controller with orbit, pan, zoom, and FPS navigation modes.
 /// Manages a hidden runtime Camera that renders the scene to a RenderTexture.
 /// </summary>
+/// <summary>
+/// Cursor lock context for the scene view — locks to the center of the scene panel.
+/// Panel coordinates are in Paper's reference resolution space, so they need to be
+/// converted back to window pixel coordinates for the actual cursor recentering.
+/// </summary>
+public class SceneViewLockContext : CursorLockContext
+{
+    /// <summary>Panel origin in Paper logical coordinates (reference resolution space).</summary>
+    public Float2 PanelOrigin;
+    /// <summary>Panel size in Paper logical coordinates (reference resolution space).</summary>
+    public Float2 PanelSize;
+    /// <summary>The reference resolution scale factor to convert back to window coordinates.</summary>
+    public float ReferenceScale = 1.0f;
+
+    public override Int2 GetLockCenter()
+    {
+        float centerX = (PanelOrigin.X + PanelSize.X / 2) * ReferenceScale;
+        float centerY = (PanelOrigin.Y + PanelSize.Y / 2) * ReferenceScale;
+        return new Int2((int)centerX, (int)centerY);
+    }
+}
+
 public class EditorCamera
 {
     private GameObject _cameraObject;
     private Camera _camera;
     private RenderTexture? _renderTarget;
+    private SceneViewLockContext _lockContext = new();
 
     // Camera state — position + euler angles (no orbit)
     private Float3 _position = new Float3(0, 5, -15);
@@ -202,8 +225,11 @@ public class EditorCamera
         // Right mouse = look + WASD (with cursor lock)
         if (Input.GetMouseButtonDown(1))
         {
-            var center = new Int2((int)(panelOrigin.X + panelSize.X / 2), (int)(panelOrigin.Y + panelSize.Y / 2));
-            Input.LockCursor(center);
+            _lockContext.PanelOrigin = panelOrigin;
+            _lockContext.PanelSize = panelSize;
+            _lockContext.ReferenceScale = EditorApplication.Instance?.PaperInstance?.Canvas?.ReferenceScale ?? 1.0f;
+            Input.PushLockContext(_lockContext);
+            Input.LockCursor();
         }
 
         if (Input.GetMouseButton(1))
@@ -250,6 +276,7 @@ public class EditorCamera
         if (Input.GetMouseButtonUp(1))
         {
             Input.UnlockCursor();
+            Input.PopLockContext();
         }
 
         // F = focus on selection
