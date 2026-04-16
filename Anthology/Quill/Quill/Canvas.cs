@@ -1167,16 +1167,17 @@ namespace Prowl.Quill
             }
 
             var pxform = _state.scissor;
-            var ex = _state.scissorExtent.X;
-            var ey = _state.scissorExtent.Y;
+            // Convert extents from pixel space back to logical space for intersection math
+            var ex = _state.scissorExtent.X / _scale;
+            var ey = _state.scissorExtent.Y / _scale;
             var invxorm = _state.transform.Inverse();
-            pxform = invxorm * pxform; // Or pxform * invxorm?
+            pxform = invxorm * pxform;
 
-            // Calculate extent in current transform space
+            // Calculate extent in current transform space (all in logical units now)
             var tex = ex * Maths.Abs(pxform.A) + ey * Maths.Abs(pxform.C);
             var tey = ex * Maths.Abs(pxform.B) + ey * Maths.Abs(pxform.D);
 
-            // Find the intersection - work in unit space
+            // Find the intersection in logical space, then Scissor() re-scales to pixel space
             var rect = IntersectionOfRects(pxform.E - tex, pxform.F - tey, tex * 2, tey * 2, x, y, w, h);
             Scissor(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
         }
