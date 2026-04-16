@@ -20,10 +20,22 @@ public class MaterialAssetEditor : AssetImporterEditor
 {
     private PreviewRenderer? _preview;
     private EngineObject? _lastPreviewAsset;
+    private Guid _currentGuid;
     private bool _dirty;
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
+        // Detect asset change — reset dirty flag and force preview refresh
+        if (_currentGuid != entry.Guid)
+        {
+            _currentGuid = entry.Guid;
+            _dirty = false;
+            _lastPreviewAsset = null;
+        }
+
+        // Include the GUID in element IDs so Paper UI state is unique per asset
+        id = $"{id}_{entry.Guid:N}";
+
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
         var material = asset as Material;
@@ -87,15 +99,15 @@ public class MaterialAssetEditor : AssetImporterEditor
     {
         string label = !string.IsNullOrEmpty(prop.DisplayName) ? prop.DisplayName : prop.Name;
 
+        // Read values from the material's own property state, not the shared shader defaults.
         switch (prop.PropertyType)
         {
             case ShaderPropertyType.Float:
             {
-                float val = prop.Value.X;
+                float val = material._properties.GetFloat(prop.Name);
                 EditorGUI.FloatField(paper, id, val, label)
                     .OnValueChanged(v =>
                     {
-                        prop.Value = new Float4(v, 0, 0, 0);
                         material.SetFloat(prop.Name, v);
                         _dirty = true;
                     });
@@ -104,11 +116,10 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Int:
             {
-                int val = (int)prop.Value.X;
+                int val = material._properties.GetInt(prop.Name);
                 EditorGUI.IntField(paper, id, val, label)
                     .OnValueChanged(v =>
                     {
-                        prop.Value = new Float4(v, 0, 0, 0);
                         material.SetInt(prop.Name, v);
                         _dirty = true;
                     });
@@ -117,11 +128,10 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Color:
             {
-                var val = (VColor)prop;
+                var val = material._properties.GetColor(prop.Name);
                 EditorGUI.ColorField(paper, id, label, val)
                     .OnValueChanged(v =>
                     {
-                        prop.Value = new Float4(v.R, v.G, v.B, v.A);
                         material.SetColor(prop.Name, new Prowl.Vector.Color(v.R, v.G, v.B, v.A));
                         _dirty = true;
                         _lastPreviewAsset = null; // refresh preview
@@ -131,11 +141,10 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Vector2:
             {
-                var val = new Float2(prop.Value.X, prop.Value.Y);
+                var val = material._properties.GetVector2(prop.Name);
                 EditorGUI.Vector2Field(paper, id, label, val)
                     .OnValueChanged(v =>
                     {
-                        prop.Value = new Float4(v.X, v.Y, 0, 0);
                         material.SetVector(prop.Name, v);
                         _dirty = true;
                     });
@@ -144,11 +153,10 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Vector3:
             {
-                var val = new Float3(prop.Value.X, prop.Value.Y, prop.Value.Z);
+                var val = material._properties.GetVector3(prop.Name);
                 EditorGUI.Vector3Field(paper, id, label, val)
                     .OnValueChanged(v =>
                     {
-                        prop.Value = new Float4(v.X, v.Y, v.Z, 0);
                         material.SetVector(prop.Name, v);
                         _dirty = true;
                     });
@@ -157,11 +165,10 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Vector4:
             {
-                var val = prop.Value;
+                var val = material._properties.GetVector4(prop.Name);
                 EditorGUI.Vector4Field(paper, id, label, val)
                     .OnValueChanged(v =>
                     {
-                        prop.Value = v;
                         material.SetVector(prop.Name, v);
                         _dirty = true;
                     });
@@ -170,13 +177,12 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Texture2D:
             {
-                var val = prop.Texture2DValue;
+                var val = material._properties.GetTexture(prop.Name);
                 EngineObjectPropertyEditor.SetFieldType(typeof(Texture2D));
                 PropertyGrid.DrawField(paper, id, label, typeof(Texture2D), val,
                     newVal =>
                     {
                         var tex = newVal as Texture2D;
-                        prop.Texture2DValue = tex;
                         material.SetTexture(prop.Name, tex);
                         _dirty = true;
                         _lastPreviewAsset = null;
@@ -186,13 +192,12 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             case ShaderPropertyType.Texture3D:
             {
-                var val = prop.Texture3DValue;
+                var val = material._properties.GetTexture3D(prop.Name);
                 EngineObjectPropertyEditor.SetFieldType(typeof(Texture3D));
                 PropertyGrid.DrawField(paper, id, label, typeof(Texture3D), val,
                     newVal =>
                     {
                         var tex = newVal as Texture3D;
-                        prop.Texture3DValue = tex;
                         material.SetTexture3D(prop.Name, tex);
                         _dirty = true;
                     }, 0);

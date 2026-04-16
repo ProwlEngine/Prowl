@@ -28,9 +28,22 @@ public class ModelAssetEditor : AssetImporterEditor
     private float _unitScale = 1f;
     private bool _settingsLoaded;
     private bool _settingsDirty;
+    private Guid _currentGuid;
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
+        // Detect asset change — reload settings and reset state
+        if (_currentGuid != entry.Guid)
+        {
+            _currentGuid = entry.Guid;
+            _settingsLoaded = false;
+            _settingsDirty = false;
+            _lastPreviewAsset = null;
+        }
+
+        // Include the GUID in element IDs so Paper UI state is unique per asset
+        id = $"{id}_{entry.Guid:N}";
+
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
         var model = asset as Model;
