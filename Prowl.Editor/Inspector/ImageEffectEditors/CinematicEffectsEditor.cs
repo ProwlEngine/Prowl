@@ -144,10 +144,11 @@ public class CinematicEffectsEditor : CustomEditor
 
         if (enabled)
         {
-            using (paper.Column($"{id}_body").ChildLeft(16).Enter())
+            using (paper.Column($"{id}_body").Height(UnitValue.Auto).Enter())
             {
                 drawContent();
             }
         }
     }
 }
+
