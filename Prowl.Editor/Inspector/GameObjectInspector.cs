@@ -215,7 +215,7 @@ public static class GameObjectInspector
             }
 
             // Component body — use custom editor or default PropertyGrid
-            var customEditor = ComponentEditorRegistry.GetEditor(comp.GetType());
+            var customEditor = CustomEditorRegistry.GetEditor(comp.GetType());
             if (customEditor != null)
             {
                 customEditor.OnGUI(paper, compId, comp);

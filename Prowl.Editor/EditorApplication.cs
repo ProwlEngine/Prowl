@@ -90,7 +90,7 @@ public class EditorApplication : Game
         // Initialize editor registries (now sees user types if assemblies loaded above)
         InitializeOnLoadRegistry.Initialize();
         Inspector.PropertyEditorRegistry.Initialize();
-        Inspector.ComponentEditorRegistry.Initialize();
+        Inspector.CustomEditorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
         CreateAssetMenuRegistry.Initialize();
@@ -898,7 +898,7 @@ public class EditorApplication : Game
         ScanAndRegisterPanels();
         InitializeOnLoadRegistry.Reinitialize();
         Inspector.PropertyEditorRegistry.Reinitialize();
-        Inspector.ComponentEditorRegistry.Reinitialize();
+        Inspector.CustomEditorRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
         Inspector.AddComponentPopup.Reinitialize();
         Importers.ImporterRegistry.Reinitialize();

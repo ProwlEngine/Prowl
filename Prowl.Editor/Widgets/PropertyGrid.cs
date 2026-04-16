@@ -222,6 +222,23 @@ public static class PropertyGrid
         }
 
         Type actualType = value.GetType();
+
+        // Check for a custom editor registered for this type
+        var customEditor = CustomEditorRegistry.GetEditor(actualType);
+        if (customEditor != null)
+        {
+            EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})", () =>
+            {
+                if (type.IsAbstract || type.IsInterface)
+                {
+                    DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
+                    EditorGUI.Separator(paper, $"{id}_tpsep");
+                }
+                customEditor.OnGUI(paper, id, value);
+            });
+            return;
+        }
+
         var fields = GetSerializableFields(actualType);
         if (fields.Length == 0)
         {

@@ -19,12 +19,12 @@ namespace Prowl.Editor.Inspector;
 //  Particle System Component Editor
 // ================================================================
 
-[CustomComponentEditor(typeof(ParticleSystemComponent))]
-public class ParticleSystemComponentEditor : ComponentEditor
+[CustomEditor(typeof(ParticleSystemComponent))]
+public class ParticleSystemComponentEditor : CustomEditor
 {
-    public override void OnGUI(Paper paper, string id, MonoBehaviour component)
+    public override void OnGUI(Paper paper, string id, object target)
     {
-        var ps = (ParticleSystemComponent)component;
+        var ps = (ParticleSystemComponent)target;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 

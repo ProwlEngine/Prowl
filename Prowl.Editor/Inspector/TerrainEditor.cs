@@ -20,8 +20,8 @@ namespace Prowl.Editor.Inspector;
 public enum TerrainTab { Height, Paint, Details, Trees, Settings }
 public enum HeightTool { Raise, Lower, Flatten, Smooth }
 
-[CustomComponentEditor(typeof(TerrainComponent))]
-public class TerrainEditor : ComponentEditor
+[CustomEditor(typeof(TerrainComponent))]
+public class TerrainEditor : CustomEditor
 {
     // Static brush state — persists across selection changes
     public static TerrainTab ActiveTab = TerrainTab.Height;
@@ -41,11 +41,11 @@ public class TerrainEditor : ComponentEditor
     private bool _isDirty;
     private TerrainComponent? _terrain;
 
-    public override void OnGUI(Paper paper, string id, MonoBehaviour component)
+    public override void OnGUI(Paper paper, string id, object target)
     {
         ActiveInstance = this;
 
-        _terrain = (TerrainComponent)component;
+        _terrain = (TerrainComponent)target;
         var terrain = _terrain;
         var terrainData = terrain.Data.Res;
         var font = EditorTheme.DefaultFont;
