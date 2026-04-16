@@ -8,7 +8,7 @@ namespace Prowl.Slang.Native;
 
 internal static unsafe partial class SlangNative
 {
-    const string LibName = "slang";
+    const string LibName = "slang-compiler";
 
     [LibraryImport(LibName)]
     public static partial SlangResult slang_createGlobalSession(int apiVersion, out IGlobalSession* outGlobalSession);

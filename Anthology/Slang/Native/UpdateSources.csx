@@ -16,7 +16,8 @@ using System.IO.Compression;
 
 const string RepoOwner = "shader-slang";
 const string Repo = "slang";
-const string ReleaseTag = "v2025.6.4";
+const string Release = "2026.5";
+const string ReleaseTag = "v2026.5";
 
 (string, string)?[] s_targets =
 [
@@ -28,7 +29,21 @@ const string ReleaseTag = "v2025.6.4";
     ("macos-aarch64.zip", "macos-arm64"),
 ];
 
-string[] binariesToKeep = ["slang-glsl-module", "slang-glslang", "slang"];
+(string, string)[] binaryMappings = [
+    ($"libslang-glsl-module-{Release}.so", "libslang-glsl-module.so"),
+    ($"libslang-glslang-{Release}.so", "libslang-glslang.so"),
+    ($"libslang-compiler.so.0.{Release}", "libslang-compiler.so"),
+
+    ($"libslang-glsl-module-{Release}.dylib", "libslang-glsl-module.so"),
+    ($"libslang-glslang-{Release}.dylib", "libslang-glslang.so"),
+    ($"libslang-compiler.0.{Release}.dylib", "libslang-compiler.so"),
+
+    ("slang-glsl-module.dll", "slang-glsl-module.dll"),
+    ("slang-glslang.dll", "slang-glslang.dll"),
+    ("slang-compiler.dll", "slang-compiler.dll")
+];
+
+string[] binariesToKeep = binaryMappings.Select((x, y) => x.Item1).ToArray();
 
 string GetScriptPath([CallerFilePath] string filePath = null) => Directory.GetParent(filePath).FullName;
 
@@ -111,26 +126,25 @@ async Task DownloadRelease(ReleaseAsset asset, string targetPathName, int ID)
 
 void CleanupUnusedBinaries(string path)
 {
-    string[] extensions = [".dll", ".so", ".dylib"]; // Change to your desired extension
+    var allFiles = Directory.GetFiles(path, "*", SearchOption.AllDirectories);
+    var deleteFiles = allFiles.Where(x => !binariesToKeep.Contains(Path.GetFileName(x)));
 
-    var matchingFiles = new List<string>();
-
-    foreach (var ext in extensions)
+    foreach (string file in deleteFiles)
     {
-        var files = Directory.GetFiles(path, "*" + ext, SearchOption.AllDirectories);
-        matchingFiles.AddRange(files);
+        // Console.WriteLine($"Deleting: {file}");
+        File.Delete(file);
     }
 
-    foreach (string file in matchingFiles)
+    var keepFiles = allFiles.Where(x => binariesToKeep.Contains(Path.GetFileName(x)));
+
+    foreach (string file in keepFiles)
     {
-        Console.WriteLine("Checking file: " + file);
+        string newName = binaryMappings.First(x => x.Item1 == Path.GetFileName(file)).Item2;
 
-        string filename = Path.GetFileNameWithoutExtension(file);
+        string dir = Path.GetDirectoryName(file)!;
+        string newPath = Path.Combine(dir, newName);
 
-        if (filename.StartsWith("lib"))
-            filename = filename.Substring(3);
-
-        if (!binariesToKeep.Any(x => filename.Equals(x)))
-            File.Delete(file);
+        // Console.WriteLine($"Remapping file from {file} to {newPath}");
+        File.Move(file, newPath);
     }
 }
