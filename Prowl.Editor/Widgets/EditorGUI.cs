@@ -100,6 +100,7 @@ public static class EditorGUI
             .Text(text, Font)
             .TextColor(color ?? EditorTheme.Ink500)
             .Alignment(PaperUI.TextAlignment.MiddleLeft)
+            .ChildBottom(EditorTheme.Spacing)
             .FontSize(FontSz);
     }
 
@@ -114,6 +115,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight + 4)
             .Margin(8, 10, 0, 2)
             .Text(text, Font)
+            .Clip()
             .TextColor(EditorTheme.Ink500)
             .FontSize(FontSz + 2);
     }
@@ -1245,6 +1247,7 @@ public static class EditorGUI
                 paper.Box($"{id}_pct")
                     .Width(40).Height(EditorTheme.RowHeight)
                     .IsNotInteractable()
+                    .Alignment(PaperUI.TextAlignment.MiddleCenter)
                     .Text($"{(int)(progress * 100)}%", Font)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .TextColor(EditorTheme.Ink500).FontSize(FontSz);
