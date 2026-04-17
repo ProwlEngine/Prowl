@@ -32,6 +32,8 @@ public sealed class WheelCollider : MonoBehaviour
     [SerializeField] private float maxAngularVelocity = 200.0f;
     [SerializeField] private int numberOfRays = 10;
     [SerializeField] private bool locked = false;
+    [SerializeField] private float springFraction = 0.45f;
+    [SerializeField] private float dampingFraction = 0.8f;
 
     private Rigidbody3D rigidbody;
     private float displacement;
@@ -45,8 +47,25 @@ public sealed class WheelCollider : MonoBehaviour
     private float wheelRotation;
     private float steerAngle;
 
-    private const float DampingFrac = 0.8f;
-    private const float SpringFrac = 0.45f;
+    /// <summary>
+    /// Fraction of suspension travel used as the spring's working compression.
+    /// Lower = stiffer suspension. Used by AdjustWheelValues(). Default 0.45.
+    /// </summary>
+    public float SpringFraction
+    {
+        get => springFraction;
+        set => springFraction = Maths.Max(0.01f, value);
+    }
+
+    /// <summary>
+    /// Damping ratio applied to the suspension's critical damping. 1.0 = critically damped.
+    /// Used by AdjustWheelValues(). Default 0.8.
+    /// </summary>
+    public float DampingFraction
+    {
+        get => dampingFraction;
+        set => dampingFraction = Maths.Max(0.0f, value);
+    }
 
     /// <summary>
     /// Gets or sets the steering angle of the wheel in radians.
@@ -212,8 +231,8 @@ public sealed class WheelCollider : MonoBehaviour
         wheelInertia = 0.5f * (radius * radius) * wheelMass;
     
         float gravity = (float)Float3.Length(GameObject.Scene.Physics.Gravity);
-        suspensionStiffness = mass * gravity / (suspensionTravel * SpringFrac);
-        suspensionDamping = 2.0f * (float)Maths.Sqrt(suspensionStiffness * rigidbody.Mass) * 0.25f * DampingFrac;
+        suspensionStiffness = mass * gravity / (suspensionTravel * springFraction);
+        suspensionDamping = 2.0f * (float)Maths.Sqrt(suspensionStiffness * rigidbody.Mass) * 0.25f * dampingFraction;
     }
 
     /// <summary>
@@ -308,17 +327,12 @@ public sealed class WheelCollider : MonoBehaviour
         float deepestFrac = float.MaxValue;
         RigidBody worldBody = null;
 
-        // Perform raycasts
+        // Perform raycasts along the bottom of the wheel using the cosine offset
+        // from the original Jitter2 demo — this traces a quarter-circle arc.
         for (int i = 0; i < numberOfRays; i++)
         {
-            //float distFwd = deltaFwdStart + i * deltaFwd - radius;
-            //float zOffset = radius * (1.0f - (float)Maths.Cos(Maths.PI / 2.0f * (distFwd / radius)));
-            //
-            //JVector newOrigin = wheelRayOrigin + distFwd * wheelFwd + zOffset * wheelUp;
-
-            float distFwd = deltaFwdStart + i * deltaFwd - Radius;
-            float normalizedDist = distFwd / Radius;
-            float zOffset = Radius - Maths.Sqrt(Maths.Max(0, Radius * Radius - distFwd * distFwd));
+            float distFwd = deltaFwdStart + i * deltaFwd - radius;
+            float zOffset = radius * (1.0f - (float)Maths.Cos(Maths.PI / 2.0f * (distFwd / radius)));
             JVector newOrigin = wheelRayOrigin + distFwd * wheelFwd + zOffset * wheelUp;
 
 
@@ -379,7 +393,6 @@ public sealed class WheelCollider : MonoBehaviour
         // Add rim velocity
         JVector rimVel = angularVelocity * JVector.Cross(wheelLeft, groundPos - wheelPosWorld);
         wheelPointVel += rimVel;
-        Debug.Log(rimVel);
 
         if (worldBody != null)
         {
@@ -446,10 +459,14 @@ public sealed class WheelCollider : MonoBehaviour
         angularVelocityForGrip = (float)JVector.Dot(wheelCentreVel, groundFwd) / radius;
         torque += -fwdForce * radius;
 
-        // Apply force to car
+        // Apply force to car. AddForce auto-wakes the body, but we explicitly
+        // ensure the car stays active while the wheel is driven or grounded with motion
+        // so the suspension keeps responding rather than locking up against a sleeping body.
         car.AddForce(force, groundPos);
+        if (driveTorque != 0.0f || Maths.Abs(angularVelocity) > 0.01f)
+            car.SetActivationState(true);
 
-        // Apply force to the ground body
+        // Apply force to the ground body (clamped to avoid launching small dynamic bodies)
         if (worldBody != null && !worldBody.IsStatic)
         {
             const float maxOtherBodyAcc = 500.0f;
