@@ -1,8 +1,7 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
-using System.Linq;
 
 using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
@@ -12,39 +11,74 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Builds a physics collider from a Mesh asset.
+/// </summary>
 [AddComponentMenu("Physics/Colliders/Mesh Collider")]
 public sealed class MeshCollider : Collider
 {
     [SerializeField] private AssetRef<Mesh> mesh;
+    [SerializeField] private bool convex = false;
 
     public AssetRef<Mesh> Mesh
     {
         get => mesh;
         set
         {
-            mesh.Res = value.Res;
+            mesh = value;
+            OnValidate();
+        }
+    }
+
+    /// <summary>
+    /// Toggling this will rebuild the collider shapes.
+    /// </summary>
+    public bool Convex
+    {
+        get => convex;
+        set
+        {
+            if (convex == value) return;
+            convex = value;
             OnValidate();
         }
     }
 
     public override RigidBodyShape[] CreateShapes()
     {
-        if (mesh.Res == null)
+        var m = mesh.Res;
+        if (m == null)
         {
-            OnEnable(); // Trigger OnEnable to grab the mesh from a renderer
-            if (mesh.Res == null)
-                Debug.LogError("Mesh is null");
+            // Try to grab from a MeshRenderer on this GO
+            var mr = GetComponent<MeshRenderer>();
+            if (mr != null) m = mr.Mesh.Res;
+        }
+
+        if (m == null)
+        {
+            Debug.LogError("MeshCollider: no mesh assigned.");
             return null;
         }
 
-        List<JTriangle> triangles = ToTriangleList(mesh.Res);
-        TriangleMesh triangleMesh = new(triangles, true);
+        var triangles = ToTriangleList(m);
+        if (triangles.Count == 0)
+        {
+            Debug.LogWarning("MeshCollider: mesh has no triangles.");
+            return null;
+        }
 
-        TriangleShape[] shapes = new TriangleShape[triangles.Count];
-        for (int i = 0; i < triangles.Count; i++)
-            shapes[i] = new TriangleShape(triangleMesh, i);
-
-        return shapes;
+        if (convex)
+        {
+            return [new ConvexHullShape(triangles)];
+        }
+        else
+        {
+            var triMesh = new TriangleMesh(triangles, true);
+            var shapes = new TriangleShape[triangles.Count];
+            for (int i = 0; i < triangles.Count; i++)
+                shapes[i] = new TriangleShape(triMesh, i);
+            return shapes;
+        }
     }
 
     public override void OnEnable()
@@ -53,31 +87,39 @@ public sealed class MeshCollider : Collider
 
         if (mesh.Res == null)
         {
-            MeshRenderer? renderer2 = GetComponent<MeshRenderer>();
-            if (renderer2.IsValid())
-            {
-                mesh = renderer2.Mesh;
-            }
+            var mr = GetComponent<MeshRenderer>();
+            if (mr.IsValid())
+                mesh = mr.Mesh;
             else
-            {
-                Debug.LogWarning("ConvexHullCollider could not find a MeshRenderer to get the mesh from.");
-            }
+                Debug.LogWarning("MeshCollider could not find a MeshRenderer to get the mesh from.");
         }
     }
 
-    public List<JTriangle> ToTriangleList(Mesh mesh)
+    private static List<JTriangle> ToTriangleList(Mesh mesh)
     {
-        Vector.Float3[] vertices = mesh.Vertices;
-        int[] indices = [.. mesh.Indices.Select(i => (int)i)];
+        var vertices = mesh.Vertices;
+        var indices = mesh.Indices;
+        var triangles = new List<JTriangle>(indices.Length / 3);
 
-        List<JTriangle> triangles = [];
-
-        for (int i = 0; i < indices.Length; i += 3)
+        // i + 2 < indices.Length protects against malformed meshes whose index count
+        // isn't a multiple of 3, and also protects the i+1/i+2 reads.
+        for (int i = 0; i + 2 < indices.Length; i += 3)
         {
-            JVector v0 = new(vertices[indices[i]].X, vertices[indices[i]].Y, vertices[indices[i]].Z);
-            JVector v1 = new(vertices[indices[i + 1]].X, vertices[indices[i + 1]].Y, vertices[indices[i + 1]].Z);
-            JVector v2 = new(vertices[indices[i + 2]].X, vertices[indices[i + 2]].Y, vertices[indices[i + 2]].Z);
-            triangles.Add(new JTriangle(v0, v1, v2));
+            uint i0 = indices[i];
+            uint i1 = indices[i + 1];
+            uint i2 = indices[i + 2];
+
+            // Skip degenerate triangles whose indices are out of range
+            if (i0 >= vertices.Length || i1 >= vertices.Length || i2 >= vertices.Length)
+                continue;
+
+            var v0 = vertices[i0];
+            var v1 = vertices[i1];
+            var v2 = vertices[i2];
+            triangles.Add(new JTriangle(
+                new JVector(v0.X, v0.Y, v0.Z),
+                new JVector(v1.X, v1.Y, v1.Z),
+                new JVector(v2.X, v2.Y, v2.Z)));
         }
 
         return triangles;
