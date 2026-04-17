@@ -693,6 +693,36 @@ public class EditorApplication : Game
 
     private const int BarCount = 10;
 
+    public static Stream? GetEmbeddedResource(string resource)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+
+        var resourceName = "Prowl.Editor.Resources." + resource;
+
+        var stream = assembly.GetManifestResourceStream(resourceName);
+        return stream;
+    }
+
+    public static FileStream? GetResource(string resource)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+
+        var resourceName = resource;
+
+        var pathToFile = Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory) +
+                          resourceName;
+
+        using (var stream = assembly.GetManifestResourceStream(resourceName))
+        {
+            using (var fileStream = File.Create(pathToFile))
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+                stream.CopyTo(fileStream);
+            }
+        }
+        return File.OpenRead(pathToFile);
+    }
+
     private void DrawIntro(Paper paper)
     {
         float w = paper.ScreenRect.Size.X;
