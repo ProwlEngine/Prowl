@@ -18,9 +18,14 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Project")]
 public class ProjectPanel : DockPanel
 {
+    public static ProjectPanel Instance;
     public override string Title => "Project";
     public override string Icon => EditorIcons.Folder;
 
+    // Handled Virtual (Placeholder) content to be displayed with normal objects
+    public List<ContentItem> VirtualContentItems = new();
+
+    public string CurrentFolder => _currentFolder;
     private string _currentFolder = ""; // Relative to Assets/, empty = Assets root
     private string _searchText = "";
     private float _thumbnailSize = 64f;
@@ -53,6 +58,9 @@ public class ProjectPanel : DockPanel
         _paper = paper;
         var font = EditorTheme.DefaultFont;
         if (font == null || Project.Current == null) return;
+
+        // Sets itself as instance on start
+        Instance ??= this;
 
         // Detect new ping and navigate to the pinged asset's folder
         if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastPingedGuid)
@@ -1007,6 +1015,7 @@ public class ProjectPanel : DockPanel
         });
     }
 
+
     private static void OpenWithSystem(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
@@ -1031,6 +1040,8 @@ public class ProjectPanel : DockPanel
     {
         float cellSize = _thumbnailSize + 8f;
         float labelH = 18f;
+
+
         float totalCellH = cellSize + labelH;
         int cols = Math.Max(1, (int)((width - 16) / cellSize));
 
@@ -1050,7 +1061,17 @@ public class ProjectPanel : DockPanel
                     var item = entries[idx];
                     bool isSelected = Selection.IsSelected(item);
 
-                    DrawGridItem(paper, font, $"proj_gc_{idx}", item, idx, itemObjects, cellSize, labelH, totalCellH);
+
+                    var size = paper.MeasureText(item.Name, EditorTheme.FontSize - 3, font);
+
+                    if (size.X > cellSize)
+                    {
+                        size *= 2;
+                    }
+
+                    //Runtime.Debug.Log($"Size: ({item.Name}) {labelH} - {sizeY} - {sizeYo} ({(EditorTheme.FontSize - 5)/paper.Canvas.Scale})");
+
+                    DrawGridItem(paper, font, $"proj_gc_{idx}", item, idx, itemObjects, cellSize, size.Y, totalCellH);
                 }
             }
             row++;
@@ -1179,16 +1200,19 @@ public class ProjectPanel : DockPanel
             // Label
             if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
             {
-                RenameOverlay.Draw(paper, $"{id}_rename");
+                RenameOverlay.Draw(paper, $"{id}_rename", RenameOverlay.Position.Bottom);
             }
             else
             {
                 paper.Box($"{id}_l")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(0,UnitValue.Stretch())
                     .Width(cellSize).Height(labelH)
                     .Clip()
                     .Text(item.Name, font)
+                    .Wrap(Scribe.TextWrapMode.Wrap)
                     .TextColor(isSubAsset ? EditorTheme.Purple300 : EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleCenter);
             }
 
             BuildItemContextMenu(paper, $"{id}_ctx", item);
@@ -1242,6 +1266,8 @@ public class ProjectPanel : DockPanel
             }
         }
         catch { }
+
+        items.AddRange(VirtualContentItems);
 
         // Files
         try
