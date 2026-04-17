@@ -2250,14 +2250,12 @@ namespace Prowl.Quill
             if (width <= 0 || height <= 0)
                 return;
 
-            // Center it so it scales and sits properly with AA
-            // Convert pixel adjustments to unit space since coordinates are in units
-            float unitPixelHalf = _pixelHalf / _scale;
-            float unitPixelWidth = _pixelWidth / _scale;
-            x -= unitPixelHalf;
-            y -= unitPixelHalf;
-            width += unitPixelWidth;
-            height += unitPixelWidth;
+            // Center it so it scales and sits properly with AA.
+            // _pixelHalf and _pixelWidth are already in logical units (= 0.5/scale and 1.0/scale),
+            x -= _pixelHalf;
+            y -= _pixelHalf;
+            width += _pixelWidth;
+            height += _pixelWidth;
 
             // Apply transform to the four corners of the rectangle
             Float2 topLeft = TransformPoint(new Float2(x, y));
@@ -2331,14 +2329,12 @@ namespace Prowl.Quill
             brRadii = Maths.Min(brRadii, maxRadius);
             blRadii = Maths.Min(blRadii, maxRadius);
 
-            // Adjust for proper AA
-            // Convert pixel adjustments to unit space since coordinates are in units
-            float unitPixelHalf = _pixelHalf / _scale;
-            float unitPixelWidth = _pixelWidth / _scale;
-            x -= unitPixelHalf;
-            y -= unitPixelHalf;
-            width += unitPixelWidth;
-            height += unitPixelWidth;
+            // Adjust for proper AA.
+            // _pixelHalf and _pixelWidth are already in logical units, applied directly.
+            x -= _pixelHalf;
+            y -= _pixelHalf;
+            width += _pixelWidth;
+            height += _pixelWidth;
 
             // Calculate segment counts for each corner based on radius size
             int tlSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * tlRadii / 2 / _state.roundingMinDistance));
@@ -2469,9 +2465,9 @@ namespace Prowl.Quill
             if (radius <= 0 || segments < 3)
                 return;
 
-            // Center it so it scales and sits properly with AA
-            // Convert pixel adjustments to unit space since coordinates are in units
-            radius += _pixelHalf / _scale;
+            // Center it so it scales and sits properly with AA.
+            // _pixelHalf is already in logical units (= 0.5/scale).
+            radius += _pixelHalf;
 
             // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
