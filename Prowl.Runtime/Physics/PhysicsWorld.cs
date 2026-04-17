@@ -13,6 +13,15 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Persistent keeps them alive between steps for lower latency at idle CPU cost.
+/// </summary>
+public enum PhysicsThreadModel
+{
+    Regular,
+    Persistent
+}
+
 public class PhysicsWorld
 {
     public static void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.IgnoreCollisionBetween(bodyA, bodyB);
@@ -48,6 +57,36 @@ public class PhysicsWorld
     public bool AllowSleep = true;
     public bool UseMultithreading = true;
     public bool AutoSyncTransforms = true;
+
+    /// <summary>
+    /// When true, uses Jitter2's deterministic island-based solver instead of the regular parallel solver.
+    /// Slower but produces identical results across runs — required for networked physics, replays, or lockstep simulation.
+    /// </summary>
+    public bool EnhancedDeterminism = false;
+
+    /// <summary>
+    /// Thread model for the physics step. Persistent keeps worker threads alive between steps
+    /// (lower latency, higher idle CPU). Regular spins them up per step (higher latency, lower idle CPU).
+    /// </summary>
+    public PhysicsThreadModel ThreadModel = PhysicsThreadModel.Regular;
+
+    /// <summary>
+    /// Generates extra contact points along the perimeter of contact patches for improved stability
+    /// on flat surfaces. Default true. Disable for slight perf gain at the cost of stability.
+    /// </summary>
+    public bool EnableAuxiliaryContactPoints = true;
+
+    /// <summary>
+    /// Persists contact manifolds across frames (warm-starts the solver). Default true. Disable for
+    /// slight memory savings; significantly hurts stack stability if turned off.
+    /// </summary>
+    public bool PersistentContactManifold = true;
+
+    /// <summary>
+    /// Damping factor (0..1) applied to speculative contact correction. Lower = softer prediction.
+    /// Default 0.9.
+    /// </summary>
+    public float SpeculativeRelaxationFactor = 0.9f;
 
     /// <summary>
     /// Event triggered before each physics step.
@@ -129,6 +168,15 @@ public class PhysicsWorld
         World.SolverIterations = (SolverIterations, RelaxIterations);
 
         World.Gravity = new JVector(Gravity.X, Gravity.Y, Gravity.Z);
+
+        World.SolveMode = EnhancedDeterminism ? SolveMode.Deterministic : SolveMode.Regular;
+        World.ThreadModel = ThreadModel == PhysicsThreadModel.Persistent
+            ? World.ThreadModelType.Persistent
+            : World.ThreadModelType.Regular;
+
+        World.EnableAuxiliaryContactPoints = EnableAuxiliaryContactPoints;
+        World.PersistentContactManifold = PersistentContactManifold;
+        World.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
     }

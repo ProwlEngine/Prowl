@@ -59,6 +59,20 @@ public static class PlayerSettingsLoader
             bool mt = !json.TryGetProperty("UseMultithreading", out var mtp) || mtp.GetBoolean();
             bool sync = !json.TryGetProperty("AutoSyncTransforms", out var st) || st.GetBoolean();
 
+            // Advanced settings
+            bool determ = json.TryGetProperty("EnhancedDeterminism", out var dt) && dt.GetBoolean();
+            bool persistThreads = false;
+            if (json.TryGetProperty("ThreadModel", out var tmp))
+            {
+                if (tmp.ValueKind == JsonValueKind.Number)
+                    persistThreads = tmp.GetInt32() == (int)PhysicsThreadModel.Persistent;
+                else if (tmp.ValueKind == JsonValueKind.String)
+                    persistThreads = string.Equals(tmp.GetString(), "Persistent", StringComparison.OrdinalIgnoreCase);
+            }
+            bool auxcp = !json.TryGetProperty("EnableAuxiliaryContactPoints", out var ax) || ax.GetBoolean();
+            bool persistManifold = !json.TryGetProperty("PersistentContactManifold", out var pm) || pm.GetBoolean();
+            float specRelax = json.TryGetProperty("SpeculativeRelaxationFactor", out var sr) ? sr.GetSingle() : 0.9f;
+
             var scene = Resources.Scene.Current;
             if (scene != null)
             {
@@ -69,6 +83,11 @@ public static class PlayerSettingsLoader
                 scene.Physics.AllowSleep = sleep;
                 scene.Physics.UseMultithreading = mt;
                 scene.Physics.AutoSyncTransforms = sync;
+                scene.Physics.EnhancedDeterminism = determ;
+                scene.Physics.ThreadModel = persistThreads ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular;
+                scene.Physics.EnableAuxiliaryContactPoints = auxcp;
+                scene.Physics.PersistentContactManifold = persistManifold;
+                scene.Physics.SpeculativeRelaxationFactor = specRelax;
             }
 
             // Collision matrix

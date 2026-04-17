@@ -28,30 +28,57 @@ public class PhysicsSettings : ProjectSettingsBase
     public bool UseMultithreading { get; set; } = true;
     public bool AutoSyncTransforms { get; set; } = true;
 
+    // Advanced
+    public bool EnhancedDeterminism { get; set; } = false;
+    public PhysicsThreadModel ThreadModel { get; set; } = PhysicsThreadModel.Regular;
+    public bool EnableAuxiliaryContactPoints { get; set; } = true;
+    public bool PersistentContactManifold { get; set; } = true;
+    public float SpeculativeRelaxationFactor { get; set; } = 0.9f;
+
     // Collision matrix stored as 32 uints (bit rows)
     public uint[] CollisionMatrixRows { get; set; } = CreateDefaultCollisionMatrix();
 
+    private static bool s_sceneHookRegistered;
+
     public override void Apply()
     {
-        var scene = Runtime.Resources.Scene.Current;
-        if (scene != null)
-        {
-            scene.Physics.Gravity = new Float3(GravityX, GravityY, GravityZ);
-            scene.Physics.SolverIterations = SolverIterations;
-            scene.Physics.RelaxIterations = RelaxIterations;
-            scene.Physics.Substep = SubSteps;
-            scene.Physics.AllowSleep = AllowSleep;
-            scene.Physics.UseMultithreading = UseMultithreading;
-            scene.Physics.AutoSyncTransforms = AutoSyncTransforms;
-        }
+        ApplyToScene(Runtime.Resources.Scene.Current);
 
-        // Apply collision matrix
+        // Apply collision matrix (this is global, not per-scene)
         if (CollisionMatrixRows.Length == 32)
         {
             for (int i = 0; i < 32; i++)
                 for (int j = 0; j < 32; j++)
                     CollisionMatrix.SetLayerCollision(i, j, (CollisionMatrixRows[i] & (1u << j)) != 0);
         }
+
+        // Re-apply to any scene that loads after this point
+        if (!s_sceneHookRegistered)
+        {
+            s_sceneHookRegistered = true;
+            Runtime.Resources.Scene.OnSceneLoaded += () =>
+            {
+                var s = ProjectSettingsRegistry.Get<PhysicsSettings>();
+                s.ApplyToScene(Runtime.Resources.Scene.Current);
+            };
+        }
+    }
+
+    private void ApplyToScene(Runtime.Resources.Scene scene)
+    {
+        if (scene == null) return;
+        scene.Physics.Gravity = new Float3(GravityX, GravityY, GravityZ);
+        scene.Physics.SolverIterations = SolverIterations;
+        scene.Physics.RelaxIterations = RelaxIterations;
+        scene.Physics.Substep = SubSteps;
+        scene.Physics.AllowSleep = AllowSleep;
+        scene.Physics.UseMultithreading = UseMultithreading;
+        scene.Physics.AutoSyncTransforms = AutoSyncTransforms;
+        scene.Physics.EnhancedDeterminism = EnhancedDeterminism;
+        scene.Physics.ThreadModel = ThreadModel;
+        scene.Physics.EnableAuxiliaryContactPoints = EnableAuxiliaryContactPoints;
+        scene.Physics.PersistentContactManifold = PersistentContactManifold;
+        scene.Physics.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
     }
 
     public override void ResetToDefaults()
@@ -63,6 +90,11 @@ public class PhysicsSettings : ProjectSettingsBase
         AllowSleep = true;
         UseMultithreading = true;
         AutoSyncTransforms = true;
+        EnhancedDeterminism = false;
+        ThreadModel = PhysicsThreadModel.Regular;
+        EnableAuxiliaryContactPoints = true;
+        PersistentContactManifold = true;
+        SpeculativeRelaxationFactor = 0.9f;
         CollisionMatrixRows = CreateDefaultCollisionMatrix();
     }
 
@@ -114,6 +146,27 @@ public class PhysicsSettings : ProjectSettingsBase
 
         EditorGUI.Toggle(paper, "phys_sync", "Auto Sync Transforms", AutoSyncTransforms)
             .OnValueChanged(v => { AutoSyncTransforms = v; ProjectSettingsRegistry.SaveAll(); });
+
+        paper.Box("phys_sp_adv").Height(8);
+
+        // Advanced
+        EditorGUI.Header(paper, "phys_h_adv", "Advanced");
+        EditorGUI.Separator(paper, "phys_sep_adv");
+
+        EditorGUI.Toggle(paper, "phys_determ", "Enhanced Determinism", EnhancedDeterminism)
+            .OnValueChanged(v => { EnhancedDeterminism = v; ProjectSettingsRegistry.SaveAll(); });
+
+        EditorGUI.Toggle(paper, "phys_thread", "Persistent Thread Model", ThreadModel == PhysicsThreadModel.Persistent)
+            .OnValueChanged(v => { ThreadModel = v ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular; ProjectSettingsRegistry.SaveAll(); });
+
+        EditorGUI.Toggle(paper, "phys_auxcp", "Auxiliary Contact Points", EnableAuxiliaryContactPoints)
+            .OnValueChanged(v => { EnableAuxiliaryContactPoints = v; ProjectSettingsRegistry.SaveAll(); });
+
+        EditorGUI.Toggle(paper, "phys_persist", "Persistent Contact Manifold", PersistentContactManifold)
+            .OnValueChanged(v => { PersistentContactManifold = v; ProjectSettingsRegistry.SaveAll(); });
+
+        EditorGUI.Slider(paper, "phys_specrelax", "Speculative Relaxation Factor", SpeculativeRelaxationFactor, 0f, 1f)
+            .OnValueChanged(v => { SpeculativeRelaxationFactor = v; ProjectSettingsRegistry.SaveAll(); });
 
         paper.Box("phys_sp3").Height(8);
 
