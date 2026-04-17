@@ -37,6 +37,8 @@ public class ProjectSettingsAttribute : Attribute
 /// </summary>
 public abstract class ProjectSettingsBase
 {
+    public virtual bool DrawInProjectSettingsPanel => true;
+
     /// <summary>Called after settings are loaded or reset. Override to apply values to runtime systems.</summary>
     public virtual void Apply() { }
 

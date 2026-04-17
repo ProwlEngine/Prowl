@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Panels;
 using Prowl.PaperUI;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
@@ -338,6 +339,17 @@ public class DockSpace
                 {
                     if (node.ActiveTabIndex < node.Tabs.Count)
                         node.Tabs[node.ActiveTabIndex].OnGUI(paper, w, ch);
+
+
+
+                    if (BuildSettingsPanel.IsBuildRunning && node.Tabs[node.ActiveTabIndex] is not BuildSettingsPanel buildPanel)
+                    {
+                        paper.Box("build_overlay")
+                        .PositionType(PositionType.SelfDirected).Position(0, 0)
+                        .Size(w, ch)
+                        .BackgroundColor(new Vector.Color(0, 0, 0, 120))
+                        .IsNotInteractable();
+                    }
                 }
             }
         }

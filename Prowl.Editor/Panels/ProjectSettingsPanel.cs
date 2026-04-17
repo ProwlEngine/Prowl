@@ -55,6 +55,9 @@ public class ProjectSettingsPanel : DockPanel
                 {
                     int idx = i;
                     var entry = entries[i];
+
+                    if (entry.Instance == null || !entry.Instance.DrawInProjectSettingsPanel) continue;
+
                     bool isSelected = _selectedIndex == i;
                     string icon = string.IsNullOrEmpty(entry.Icon) ? EditorIcons.Gear : entry.Icon;
 

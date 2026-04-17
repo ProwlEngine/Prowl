@@ -166,6 +166,9 @@ public class DesktopBuildPipeline : BuildPipeline
                 log.AppendLine($"Copied game assembly: {Path.GetFileName(project.GameAssemblyPath)}");
             }
 
+            // 4c. Organize assemblies — move dependency DLLs to runtimes/ subfolder
+            OrganizePublishOutput(outputDir, project.Name);
+
             // 5. Package assets AFTER publish (publish may clean the output dir)
             // For embedded mode, assets were already baked into the assembly at compile time
             progress("Packaging assets...", 0.8f);
@@ -191,7 +194,8 @@ public class DesktopBuildPipeline : BuildPipeline
             ExportSettings(settingsDir, progress);
             log.AppendLine("Exported project settings.");
 
-            // 7. Copy engine's native runtimes (miniaudioex etc.) that aren't from NuGet
+            // 7. Copy engine-custom native libraries (e.g. miniaudioex) that aren't provided by NuGet.
+            //    NuGet-provided natives (glfw3, soft_oal, Magick.Native) are already handled by dotnet publish.
             progress("Copying native libraries...", 0.9f);
             string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
             string engineRuntimes = Path.Combine(engineDir, "runtimes");
@@ -199,11 +203,12 @@ public class DesktopBuildPipeline : BuildPipeline
             {
                 foreach (var file in Directory.EnumerateFiles(engineRuntimes, "*.*", SearchOption.AllDirectories))
                 {
+                    if (!IsEngineNativeLib(Path.GetFileName(file))) continue;
+
                     string relative = Path.GetRelativePath(engineRuntimes, file);
                     string dest = Path.Combine(outputDir, "runtimes", relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                    if (!File.Exists(dest))
-                        File.Copy(file, dest, true);
+                    File.Copy(file, dest, true);
                 }
             }
 
@@ -248,7 +253,17 @@ public class DesktopBuildPipeline : BuildPipeline
             using System.IO;
             using System.Reflection;
             using System.Runtime.InteropServices;
+            using System.Runtime.Loader;
             using Prowl.Runtime;
+
+            // Resolve managed dependency assemblies from the runtimes/ subfolder
+            AssemblyLoadContext.Default.Resolving += (context, assemblyName) =>
+            {
+                string probePath = Path.Combine(AppContext.BaseDirectory, "runtimes", assemblyName.Name + ".dll");
+                if (File.Exists(probePath))
+                    return context.LoadFromAssemblyPath(probePath);
+                return null;
+            };
 
             // Register a native library resolver that probes runtimes/{rid}/native/ next to exe
             NativeLibrary.SetDllImportResolver(typeof(Prowl.Runtime.Game).Assembly, (name, asm, paths) =>
@@ -303,6 +318,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
                     // Apply project settings (physics needs scene loaded first)
                     PlayerSettingsLoader.Apply(Path.Combine(Application.DataPath, "Content", "Settings"));
+
                 }
 
                 public override void OnUpdate(Prowl.Runtime.Resources.Scene? scene) => scene?.Update();
@@ -329,6 +345,20 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine($"    <AssemblyName>{project.Name}</AssemblyName>");
         sb.AppendLine($"    <DefineConstants>PROWL;{versionDefine}</DefineConstants>"); // NO PROWL_EDITOR
         sb.AppendLine($"    <RuntimeIdentifier>{settings.RuntimeIdentifier}</RuntimeIdentifier>");
+
+        /*
+         * <PublishSingleFile>true</PublishSingleFile>
+  <SelfContained>true</SelfContained>
+  <!-- Optional but highly recommended for even smaller output -->
+  <PublishTrimmed>true</PublishTrimmed>
+  <!-- Bundles native runtime DLLs too (otherwise a few native files remain) -->
+  <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+         */
+
+        //sb.AppendLine("    <PublishSingleFile>true</PublishSingleFile>");
+        //sb.AppendLine("    <PublishTrimmed>true</PublishTrimmed>");
+        sb.AppendLine("    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>");
+
         if (settings.SelfContained)
             sb.AppendLine("    <SelfContained>true</SelfContained>");
         sb.AppendLine("  </PropertyGroup>");
@@ -349,8 +379,8 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("    <PackageReference Include=\"Jitter2\" Version=\"2.7.3\" />");
         sb.AppendLine("    <PackageReference Include=\"Magick.NET-Q16-AnyCPU\" Version=\"14.11.1\" />");
         sb.AppendLine("    <PackageReference Include=\"Prowl.Echo\" Version=\"2.1.2\" />");
-        sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.3.1\" />");
         sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.4.1\" />");
+        sb.AppendLine("    <PackageReference Include=\"Vortex\" Version=\"1.0.4\" />");
         sb.AppendLine("  </ItemGroup>");
 
         // User NuGet packages from ProjectSettings/Packages.json
@@ -384,5 +414,71 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("</Project>");
 
         File.WriteAllText(Path.Combine(outputDir, $"{project.Name}.Player.csproj"), sb.ToString());
+    }
+
+    /// <summary>
+    /// Move dependency managed DLLs from the publish root into a runtimes/ subfolder,
+    /// keeping only the player executable, game assembly, and core runtime in the root.
+    /// </summary>
+    private static void OrganizePublishOutput(string outputDir, string projectName)
+    {
+        string libsDir = Path.Combine(outputDir, "runtimes");
+        Directory.CreateDirectory(libsDir);
+
+        // Files that must remain in the root for the app to start
+        var keepInRoot = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            $"{projectName}.dll",
+            $"{projectName}.exe",
+            $"{projectName}.pdb",
+            $"{projectName}.Game.dll",
+            $"{projectName}.Game.pdb",
+            "Prowl.Runtime.dll",
+            "Prowl.Runtime.pdb",
+        };
+
+        foreach (var file in Directory.GetFiles(outputDir, "*.dll"))
+        {
+            string fileName = Path.GetFileName(file);
+            if (keepInRoot.Contains(fileName)) continue;
+
+            // Don't move .NET runtime/framework assemblies (present in self-contained builds)
+            if (fileName.StartsWith("System.", StringComparison.OrdinalIgnoreCase)) continue;
+            if (fileName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)) continue;
+            if (IsNativeRuntimeFile(fileName)) continue;
+
+            // Skip native (unmanaged) DLLs — only move managed assemblies
+            try { AssemblyName.GetAssemblyName(file); }
+            catch (BadImageFormatException) { continue; }
+
+            string dest = Path.Combine(libsDir, fileName);
+            File.Move(file, dest, true);
+
+            // Also move corresponding PDB if present
+            string pdbPath = Path.ChangeExtension(file, ".pdb");
+            if (File.Exists(pdbPath))
+            {
+                string pdbDest = Path.Combine(libsDir, Path.GetFileName(pdbPath));
+                File.Move(pdbPath, pdbDest, true);
+            }
+        }
+    }
+
+    /// <summary>Returns true for native .NET host/runtime DLLs that must stay in the app root.</summary>
+    private static bool IsNativeRuntimeFile(string fileName) =>
+        fileName.Equals("coreclr.dll", StringComparison.OrdinalIgnoreCase)
+        || fileName.Equals("clrjit.dll", StringComparison.OrdinalIgnoreCase)
+        || fileName.Equals("hostfxr.dll", StringComparison.OrdinalIgnoreCase)
+        || fileName.Equals("hostpolicy.dll", StringComparison.OrdinalIgnoreCase)
+        || fileName.Equals("mscordaccore.dll", StringComparison.OrdinalIgnoreCase)
+        || fileName.Equals("clrgc.dll", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Returns true for engine-custom native libraries not provided by NuGet packages.</summary>
+    private static bool IsEngineNativeLib(string fileName)
+    {
+        string nameNoExt = Path.GetFileNameWithoutExtension(fileName);
+        return nameNoExt.Equals("miniaudioex", StringComparison.OrdinalIgnoreCase)
+            || nameNoExt.Equals("libminiaudioex", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("MINI_AUDIO_LICENSE", StringComparison.OrdinalIgnoreCase);
     }
 }

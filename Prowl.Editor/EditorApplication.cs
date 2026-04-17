@@ -616,7 +616,6 @@ public class EditorApplication : Game
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);
 
-
         // Intro animation overlay
         if (_introTime < IntroDuration)
         {
@@ -875,7 +874,7 @@ public class EditorApplication : Game
         MenuRegistry.RegisterSeparator("File");
         MenuRegistry.Register("File/Open Project...", () => ReturnToLauncher());
         MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Build Settings...", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
+        MenuRegistry.Register("File/Build Project...", () => OpenPanel(typeof(Panels.BuildSettingsPanel)));
         MenuRegistry.RegisterSeparator("File");
         MenuRegistry.Register("File/Exit", () => Game.Quit());
 
