@@ -5,6 +5,7 @@ using System.Linq;
 using Prowl.Editor.Panels;
 using Prowl.Editor.Widgets;
 using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor;
 
@@ -19,15 +20,35 @@ public static class AssetCreateMenu
     /// </summary>
     public static void Build(ContextMenuBuilder builder, string currentFolder, Action<string>? onCreated = null)
     {
-        builder.Item($"{EditorIcons.Folder}  Folder", () => { var p = CreateFolder(currentFolder); if (p != null) onCreated?.Invoke(p); });
+        builder.Item($"{EditorIcons.Folder}  Folder", () => {
+
+            var task = new Tasks.CreateAssetTask();
+
+            task.TaskType = Tasks.CreateAssetTask.AssetType.Folder;
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Folder", Extension = "", Icon = ProjectPanel.GetFileIcon("") }, currentFolder);
+
+        });
         builder.Separator();
 
         // Registry-discovered asset types (Scene, Material, InputActions, user-defined, etc.)
         CreateAssetMenuRegistry.BuildMenu(builder, currentFolder, onCreated);
 
-        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => { var p = CreateShader(currentFolder); if (p != null) onCreated?.Invoke(p); });
+        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => {
+
+            var task = new Tasks.CreateAssetTask();
+
+            task.TaskType = Tasks.CreateAssetTask.AssetType.Shader;
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = ProjectPanel.GetFileIcon(".shader") }, currentFolder);
+
+        });
         builder.Separator();
-        builder.Item($"{EditorIcons.FileCode}  C# Script", () => NewScriptDialog.Open(currentFolder, onCreated));
+        builder.Item($"{EditorIcons.FileCode}  C# Script", () => {
+
+            var task = new Tasks.CreateAssetTask();
+            task.TaskType = Tasks.CreateAssetTask.AssetType.Script;
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = ProjectPanel.GetFileIcon(".cs") }, currentFolder);
+
+        });
     }
 
     /// <summary>

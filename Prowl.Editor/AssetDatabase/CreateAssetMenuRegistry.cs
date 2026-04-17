@@ -135,8 +135,11 @@ public static class CreateAssetMenuRegistry
             string icon = !string.IsNullOrEmpty(captured.Icon) ? captured.Icon : EditorIcons.FileCirclePlus;
             builder.Item($"{icon}  {display}", () =>
             {
-                var path = CreateAsset(captured, currentFolder);
-                if (path != null) onCreated?.Invoke(path);
+                var task = new Tasks.CreateAssetTask();
+
+                task.TaskType = Tasks.CreateAssetTask.AssetType.Asset;
+                task.BeginCreateTask(captured, currentFolder);
+
             });
         }
         foreach (var (head, list) in branches)
