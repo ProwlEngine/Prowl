@@ -2066,8 +2066,8 @@ namespace Prowl.PaperUI
                         {
                             var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
                             var cursorPos = textLayout.GetCursorPosition(renderState.CursorPosition);
-                            float cursorX = r.Min.X + cursorPos.X;
-                            float cursorY = r.Min.Y + cursorPos.Y;
+                            float cursorX = r.Min.X + cursorPos.X / canvas.Scale;
+                            float cursorY = r.Min.Y + cursorPos.Y / canvas.Scale;
 
                             canvas.BeginPath();
                             canvas.MoveTo(cursorX, cursorY);
