@@ -4,6 +4,7 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.AssetImporting;
+using Prowl.Runtime.MeshFeatures;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
@@ -11,7 +12,8 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".gltf", ".glb", ".obj")]
 public class EditorModelImporter : AssetImporter
 {
-    public override int Version => 4;
+    private const int BaseVersion = 5;
+    public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     public override bool Import(ImportContext ctx)
     {
@@ -45,6 +47,10 @@ public class EditorModelImporter : AssetImporter
 
             for (int i = 0; i < data.Animations.Count; i++)
                 ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i]);
+
+            // 2b. Generate mesh features (SDF, BVH, Prism, ...) per mesh, registered as sub-assets.
+            for (int i = 0; i < data.Meshes.Count; i++)
+                MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx);
 
             // 3. Resolve inline textures to asset DB references
             ResolveTextures(data, ctx);
@@ -125,6 +131,7 @@ public class EditorModelImporter : AssetImporter
         s["calculateTangents"] = new EchoObject(true);
         s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);
+        MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;
     }
 }
