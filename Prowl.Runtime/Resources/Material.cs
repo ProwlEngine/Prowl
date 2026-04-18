@@ -103,6 +103,24 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             _properties.ApplyOverride(properties);
     }
 
+    /// <summary>
+    /// Copy constructor — deep-clone every property value + a fresh keyword dict. The
+    /// <see cref="Shader"/> reference is shared (shaders are immutable after parse).
+    /// Use this when you need a mutable material seeded from <see cref="LoadDefault"/>
+    /// or any other shared material so your mutations don't leak to other callers.
+    /// </summary>
+    public Material(Material source) : base(source?.Name ?? "New Material")
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        _shader = source._shader;
+        _properties = new PropertyState(source._properties);
+        _localKeywords = new Dictionary<string, bool>(source._localKeywords ?? []);
+    }
+
+    /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
+    public Material Clone() => new Material(this);
+
     public void SetKeyword(string keyword, bool value) => _localKeywords[keyword] = value;
 
     public void SetColor(string name, Color value) { _properties.SetColor(name, value); MarkDirty(); }
