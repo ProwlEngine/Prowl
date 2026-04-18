@@ -1988,8 +1988,8 @@ namespace Prowl.PaperUI
                             int end = Maths.Max(renderState.SelectionStart, renderState.SelectionEnd);
 
                             var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
-                            var startPos = textLayout.GetCursorPosition(start);
-                            var endPos = textLayout.GetCursorPosition(end);
+                            var startPos = textLayout.GetCursorPosition(start) / canvas.Scale;
+                            var endPos = textLayout.GetCursorPosition(end) / canvas.Scale;
 
                             canvas.SetFillColor(Color32.FromArgb(100, 100, 150, 255));
 
@@ -2147,7 +2147,7 @@ namespace Prowl.PaperUI
             if (string.IsNullOrEmpty(text)) return 0;
             var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : float.MaxValue;
             var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
-            return textLayout.GetCursorIndex(new Float2(x, y));
+            return textLayout.GetCursorIndex(new Float2(x * _paper.Canvas.ReferenceScale, y * _paper.Canvas.ReferenceScale));
         }
 
         /// <summary>
