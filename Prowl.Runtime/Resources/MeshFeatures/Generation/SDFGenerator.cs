@@ -4,23 +4,23 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using Stopwatch = System.Diagnostics.Stopwatch;
+
 namespace Prowl.Runtime.MeshFeatures.Generation;
 
 /// <summary>
-/// CPU-side generator for a <see cref="MeshSDF"/>. Computes nearest-triangle distance
-/// using a uniform spatial grid (O(local) per voxel) and signs the result via 3-axis
-/// ray-parity majority vote (also accelerated by the grid).
+/// CPU-side generator for an unsigned distance field stored in <see cref="MeshSDF"/>.
+/// Brute-force iterates every triangle per voxel, with a cheap per-triangle bounding-sphere
+/// reject so far-away triangles never reach the exact closest-point computation.
 /// </summary>
 /// <remarks>
-/// Sign correctness assumes the input mesh is mostly closed. For meshes with intentional
-/// holes (cloth planes, leaves, etc.) the sign of voxels behind the holes may be wrong;
-/// the magnitude (unsigned distance) is always correct.
+/// The field is unsigned — values are always &gt;= 0. Sufficient for sphere tracing from
+/// outside the surface (the use case for raymarched previews and proximity queries).
 /// </remarks>
 public static class SDFGenerator
 {
@@ -33,8 +33,9 @@ public static class SDFGenerator
         public float PaddingFraction;
 
         /// <summary>
-        /// Distance values are clamped to <c>±MaxDistanceFraction × longest_axis</c>.
-        /// Default 0.25 — enough for most surface-shading use cases.
+        /// Distance values are clamped to <c>MaxDistanceFraction × longest_axis</c>. Smaller
+        /// values dramatically speed up generation because more triangles get sphere-rejected.
+        /// Default 0.25.
         /// </summary>
         public float MaxDistanceFraction;
 
@@ -47,13 +48,17 @@ public static class SDFGenerator
     }
 
     /// <summary>
-    /// Build an <see cref="MeshSDF"/> for the mesh. Returns null if the mesh has no usable
-    /// triangles. Blocks the calling thread — offload to a background task for UI responsiveness.
+    /// Build a <see cref="MeshSDF"/> for the mesh. Returns null if the mesh has no usable
+    /// triangles. Blocks the calling thread.
     /// </summary>
     public static MeshSDF? Generate(Mesh mesh, Options options)
     {
+        var totalSw = Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
+
         var tris = ExtractTriangles(mesh);
         if (tris.Length == 0) return null;
+        long tExtract = sw.ElapsedMilliseconds; sw.Restart();
 
         int res = Math.Max(4, options.Resolution);
 
@@ -70,54 +75,61 @@ public static class SDFGenerator
 
         Float3 cellSize = new(size.X / res, size.Y / res, size.Z / res);
 
-        // Build spatial index. Using ~half the SDF resolution keeps the average tri count
-        // per cell low while not exploding memory for large meshes.
-        int gridRes = Math.Max(4, res / 2);
-        var grid = new TriangleGrid(tris, bounds, gridRes);
+        // Per-tri pre-pass: center + (radius + maxDistance)² for the sphere reject.
+        ComputeTriBounds(tris, maxDistance);
+        long tPrep = sw.ElapsedMilliseconds; sw.Restart();
 
+        float maxDistSq = maxDistance * maxDistance;
         float[] distances = new float[res * res * res];
-
-        // Per-thread scratch for ray-parity tri-already-tested tracking.
-        var visitedPool = new ThreadLocal<int[]>(() => new int[tris.Length]);
-        var queryIdPool = new ThreadLocal<StrongBox<int>>(() => new StrongBox<int>(0));
 
         Parallel.For(0, res, z =>
         {
-            int[] visited = visitedPool.Value!;
-            var qBox = queryIdPool.Value!;
-
             float pz = bounds.Min.Z + (z + 0.5f) * cellSize.Z;
+            int sliceBase = z * res * res;
             for (int y = 0; y < res; y++)
             {
                 float py = bounds.Min.Y + (y + 0.5f) * cellSize.Y;
-                int rowBase = (z * res + y) * res;
+                int rowBase = sliceBase + y * res;
                 for (int x = 0; x < res; x++)
                 {
                     float px = bounds.Min.X + (x + 0.5f) * cellSize.X;
-                    Float3 p = new(px, py, pz);
 
-                    float distSq = grid.ClosestDistanceSquared(p, tris, maxDistance);
-                    float dist = MathF.Sqrt(distSq);
+                    float minSq = maxDistSq;
+                    for (int t = 0; t < tris.Length; t++)
+                    {
+                        ref readonly var tri = ref tris[t];
 
-                    int insideVotes = 0;
-                    qBox.Value++;
-                    if (grid.RayCrossings(p, _RayA, tris, visited, qBox.Value) % 2 == 1) insideVotes++;
-                    qBox.Value++;
-                    if (grid.RayCrossings(p, _RayB, tris, visited, qBox.Value) % 2 == 1) insideVotes++;
-                    qBox.Value++;
-                    if (grid.RayCrossings(p, _RayC, tris, visited, qBox.Value) % 2 == 1) insideVotes++;
+                        // Sphere reject: if voxel is further than (triRadius + maxDistance)
+                        // from the triangle's centre, this triangle can't beat maxDistance.
+                        float dx = px - tri.Center.X;
+                        float dy = py - tri.Center.Y;
+                        float dz = pz - tri.Center.Z;
+                        float centreDistSq = dx * dx + dy * dy + dz * dz;
+                        if (centreDistSq > tri.RejectDistSq) continue;
 
-                    float sign = insideVotes >= 2 ? -1f : 1f;
-                    float signed = sign * dist;
-                    if (signed > maxDistance) signed = maxDistance;
-                    else if (signed < -maxDistance) signed = -maxDistance;
-                    distances[rowBase + x] = signed;
+                        Float3 p = new(px, py, pz);
+                        Float3 closest = ClosestPointOnTriangle(p, tri.A, tri.B, tri.C);
+                        float ex = px - closest.X;
+                        float ey = py - closest.Y;
+                        float ez = pz - closest.Z;
+                        float exactSq = ex * ex + ey * ey + ez * ez;
+                        if (exactSq < minSq) minSq = exactSq;
+                    }
+
+                    distances[rowBase + x] = MathF.Sqrt(minSq);
                 }
             }
         });
+        long tVoxels = sw.ElapsedMilliseconds; sw.Restart();
 
         var volume = new Texture3D((uint)res, (uint)res, (uint)res, false, TextureImageFormat.Float);
         volume.SetData<float>(distances);
+        long tUpload = sw.ElapsedMilliseconds;
+        long tTotal = totalSw.ElapsedMilliseconds;
+
+        Debug.Log(
+            $"SDF '{mesh.Name}': {res}^3, {tris.Length:N0} tris. " +
+            $"Total {tTotal} ms (extract {tExtract}, prep {tPrep}, voxels {tVoxels}, upload {tUpload})");
 
         return new MeshSDF
         {
@@ -129,15 +141,16 @@ public static class SDFGenerator
         };
     }
 
-    // Three off-axis rays for parity voting. Off-axis to avoid tri-edge degenerate hits.
-    private static readonly Float3 _RayA = Float3.Normalize(new Float3(1.0f, 0.123f, 0.456f));
-    private static readonly Float3 _RayB = Float3.Normalize(new Float3(-0.456f, 1.0f, 0.234f));
-    private static readonly Float3 _RayC = Float3.Normalize(new Float3(0.234f, -0.345f, 1.0f));
-
-    internal readonly struct Tri
+    /// <summary>
+    /// Triangle plus its bounding sphere (centre + radius²) and a precomputed reject
+    /// threshold = (radius + maxDistance)². Voxels further from the centre than this
+    /// can't possibly bring the SDF below maxDistance via this triangle.
+    /// </summary>
+    internal struct Tri
     {
-        public readonly Float3 A, B, C;
-        public Tri(Float3 a, Float3 b, Float3 c) { A = a; B = b; C = c; }
+        public Float3 A, B, C;
+        public Float3 Center;
+        public float RejectDistSq;
     }
 
     private static Tri[] ExtractTriangles(Mesh mesh)
@@ -159,10 +172,33 @@ public static class SDFGenerator
             {
                 uint ia = indices[i], ib = indices[i + 1], ic = indices[i + 2];
                 if (ia >= verts.Length || ib >= verts.Length || ic >= verts.Length) continue;
-                list.Add(new Tri(verts[ia], verts[ib], verts[ic]));
+                list.Add(new Tri { A = verts[ia], B = verts[ib], C = verts[ic] });
             }
         }
         return list.ToArray();
+    }
+
+    private static void ComputeTriBounds(Tri[] tris, float maxDistance)
+    {
+        for (int i = 0; i < tris.Length; i++)
+        {
+            ref var t = ref tris[i];
+            Float3 c = (t.A + t.B + t.C) * (1f / 3f);
+            float ra = SqDist(c, t.A);
+            float rb = SqDist(c, t.B);
+            float rc = SqDist(c, t.C);
+            float radius = MathF.Sqrt(MathF.Max(ra, MathF.Max(rb, rc)));
+            float reject = radius + maxDistance;
+            t.Center = c;
+            t.RejectDistSq = reject * reject;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float SqDist(Float3 a, Float3 b)
+    {
+        float dx = a.X - b.X, dy = a.Y - b.Y, dz = a.Z - b.Z;
+        return dx * dx + dy * dy + dz * dz;
     }
 
     private static AABB ComputeBounds(Tri[] tris)
@@ -180,7 +216,7 @@ public static class SDFGenerator
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void Encapsulate(ref Float3 min, ref Float3 max, Float3 p)
+    private static void Encapsulate(ref Float3 min, ref Float3 max, Float3 p)
     {
         if (p.X < min.X) min.X = p.X;
         if (p.Y < min.Y) min.Y = p.Y;
@@ -223,243 +259,5 @@ public static class SDFGenerator
 
         float denom = 1.0f / (va + vb + vc);
         return a + ab * (vb * denom) + ac * (vc * denom);
-    }
-
-    /// <summary>
-    /// Möller–Trumbore ray-triangle intersection. Returns true if the ray hits with t > 0.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static bool RayTriHit(Float3 ro, Float3 rd, Float3 a, Float3 b, Float3 c)
-    {
-        const float EPS = 1e-7f;
-        Float3 ab = b - a;
-        Float3 ac = c - a;
-        Float3 pvec = Float3.Cross(rd, ac);
-        float det = Float3.Dot(ab, pvec);
-        if (det > -EPS && det < EPS) return false;
-        float invDet = 1.0f / det;
-        Float3 tvec = ro - a;
-        float u = Float3.Dot(tvec, pvec) * invDet;
-        if (u < 0 || u > 1) return false;
-        Float3 qvec = Float3.Cross(tvec, ab);
-        float v = Float3.Dot(rd, qvec) * invDet;
-        if (v < 0 || u + v > 1) return false;
-        float t = Float3.Dot(ac, qvec) * invDet;
-        return t > EPS;
-    }
-}
-
-/// <summary>
-/// Uniform spatial grid for triangle queries. Each cell stores the indices of triangles
-/// whose AABB intersects the cell. Supports closest-distance queries (ring expansion)
-/// and ray-traversal queries (3D-DDA).
-/// </summary>
-internal sealed class TriangleGrid
-{
-    public readonly Int3 Res;
-    public readonly Float3 Origin;
-    public readonly Float3 CellSize;
-    public readonly Float3 InvCellSize;
-    public readonly float MinCellSize;
-
-    private readonly int[] _cellStart;   // length = (res.x*res.y*res.z) + 1; prefix-sum offset into _triIndices
-    private readonly int[] _triIndices;  // flat triangle indices, grouped by cell
-
-    public TriangleGrid(SDFGenerator.Tri[] tris, AABB bounds, int gridRes)
-    {
-        Res = new Int3(gridRes, gridRes, gridRes);
-        Origin = bounds.Min;
-        Float3 size = bounds.Max - bounds.Min;
-        CellSize = new Float3(size.X / gridRes, size.Y / gridRes, size.Z / gridRes);
-        InvCellSize = new Float3(1f / CellSize.X, 1f / CellSize.Y, 1f / CellSize.Z);
-        MinCellSize = MathF.Min(CellSize.X, MathF.Min(CellSize.Y, CellSize.Z));
-
-        int totalCells = gridRes * gridRes * gridRes;
-        _cellStart = new int[totalCells + 1];
-
-        // Phase 1: count tris per cell.
-        for (int i = 0; i < tris.Length; i++)
-        {
-            ComputeTriCellRange(tris[i], out int x0, out int x1, out int y0, out int y1, out int z0, out int z1);
-            for (int z = z0; z <= z1; z++)
-                for (int y = y0; y <= y1; y++)
-                    for (int x = x0; x <= x1; x++)
-                        _cellStart[CellIndex(x, y, z) + 1]++;
-        }
-
-        // Prefix sum → offsets.
-        for (int i = 1; i <= totalCells; i++)
-            _cellStart[i] += _cellStart[i - 1];
-
-        int totalEntries = _cellStart[totalCells];
-        _triIndices = new int[totalEntries];
-
-        // Phase 2: fill. Use a temp cursor-per-cell.
-        int[] cursor = new int[totalCells];
-        for (int i = 0; i < tris.Length; i++)
-        {
-            ComputeTriCellRange(tris[i], out int x0, out int x1, out int y0, out int y1, out int z0, out int z1);
-            for (int z = z0; z <= z1; z++)
-                for (int y = y0; y <= y1; y++)
-                    for (int x = x0; x <= x1; x++)
-                    {
-                        int cellId = CellIndex(x, y, z);
-                        int idx = _cellStart[cellId] + cursor[cellId]++;
-                        _triIndices[idx] = i;
-                    }
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private int CellIndex(int x, int y, int z) => x + Res.X * (y + Res.Y * z);
-
-    private void ComputeTriCellRange(SDFGenerator.Tri t, out int x0, out int x1, out int y0, out int y1, out int z0, out int z1)
-    {
-        Float3 min = t.A, max = t.A;
-        SDFGenerator.Encapsulate(ref min, ref max, t.B);
-        SDFGenerator.Encapsulate(ref min, ref max, t.C);
-
-        x0 = Math.Clamp((int)MathF.Floor((min.X - Origin.X) * InvCellSize.X), 0, Res.X - 1);
-        y0 = Math.Clamp((int)MathF.Floor((min.Y - Origin.Y) * InvCellSize.Y), 0, Res.Y - 1);
-        z0 = Math.Clamp((int)MathF.Floor((min.Z - Origin.Z) * InvCellSize.Z), 0, Res.Z - 1);
-        x1 = Math.Clamp((int)MathF.Floor((max.X - Origin.X) * InvCellSize.X), 0, Res.X - 1);
-        y1 = Math.Clamp((int)MathF.Floor((max.Y - Origin.Y) * InvCellSize.Y), 0, Res.Y - 1);
-        z1 = Math.Clamp((int)MathF.Floor((max.Z - Origin.Z) * InvCellSize.Z), 0, Res.Z - 1);
-    }
-
-    /// <summary>
-    /// Closest-distance² from p to any triangle, capped at <paramref name="maxDistance"/>.
-    /// Expands rings of cells around p's cell until provably no closer triangle can exist.
-    /// </summary>
-    public float ClosestDistanceSquared(Float3 p, SDFGenerator.Tri[] tris, float maxDistance)
-    {
-        float minSq = maxDistance * maxDistance;
-
-        int px = Math.Clamp((int)MathF.Floor((p.X - Origin.X) * InvCellSize.X), 0, Res.X - 1);
-        int py = Math.Clamp((int)MathF.Floor((p.Y - Origin.Y) * InvCellSize.Y), 0, Res.Y - 1);
-        int pz = Math.Clamp((int)MathF.Floor((p.Z - Origin.Z) * InvCellSize.Z), 0, Res.Z - 1);
-
-        int maxRing = Math.Max(Res.X, Math.Max(Res.Y, Res.Z));
-        for (int r = 0; r <= maxRing; r++)
-        {
-            // After ring r-1 was processed, the closest possible tri in ring r is
-            // at distance >= (r-1)*minCellSize from p (innermost edge of ring-r cells).
-            // If that exceeds our current best, stop.
-            if (r >= 1)
-            {
-                float minDist = (r - 1) * MinCellSize;
-                if (minDist * minDist >= minSq) break;
-            }
-
-            int xLo = Math.Max(0, px - r), xHi = Math.Min(Res.X - 1, px + r);
-            int yLo = Math.Max(0, py - r), yHi = Math.Min(Res.Y - 1, py + r);
-            int zLo = Math.Max(0, pz - r), zHi = Math.Min(Res.Z - 1, pz + r);
-
-            for (int z = zLo; z <= zHi; z++)
-            {
-                for (int y = yLo; y <= yHi; y++)
-                {
-                    for (int x = xLo; x <= xHi; x++)
-                    {
-                        // Only cells on the shell at exactly Chebyshev distance r.
-                        if (r > 0 && Math.Abs(x - px) != r && Math.Abs(y - py) != r && Math.Abs(z - pz) != r)
-                            continue;
-
-                        int cellId = CellIndex(x, y, z);
-                        int start = _cellStart[cellId];
-                        int end = _cellStart[cellId + 1];
-                        for (int i = start; i < end; i++)
-                        {
-                            int triIdx = _triIndices[i];
-                            var t = tris[triIdx];
-                            Float3 closest = SDFGenerator.ClosestPointOnTriangle(p, t.A, t.B, t.C);
-                            Float3 d = p - closest;
-                            float dSq = d.X * d.X + d.Y * d.Y + d.Z * d.Z;
-                            if (dSq < minSq) minSq = dSq;
-                        }
-                    }
-                }
-            }
-        }
-
-        return minSq;
-    }
-
-    /// <summary>
-    /// Count ray-triangle intersections with t &gt; 0 from origin in <paramref name="dir"/>.
-    /// Uses 3D-DDA cell traversal; the visited[] scratch ensures each tri is tested at most
-    /// once per query (multi-cell tris won't double-count). Caller increments queryId per call.
-    /// </summary>
-    public int RayCrossings(Float3 origin, Float3 dir, SDFGenerator.Tri[] tris, int[] visited, int queryId)
-    {
-        // Start cell.
-        int cx = Math.Clamp((int)MathF.Floor((origin.X - Origin.X) * InvCellSize.X), 0, Res.X - 1);
-        int cy = Math.Clamp((int)MathF.Floor((origin.Y - Origin.Y) * InvCellSize.Y), 0, Res.Y - 1);
-        int cz = Math.Clamp((int)MathF.Floor((origin.Z - Origin.Z) * InvCellSize.Z), 0, Res.Z - 1);
-
-        int stepX = dir.X > 0 ? 1 : (dir.X < 0 ? -1 : 0);
-        int stepY = dir.Y > 0 ? 1 : (dir.Y < 0 ? -1 : 0);
-        int stepZ = dir.Z > 0 ? 1 : (dir.Z < 0 ? -1 : 0);
-
-        // tMax: distance along ray to next cell boundary in each axis.
-        float tMaxX = NextBoundary(origin.X, dir.X, cx, Origin.X, CellSize.X, stepX);
-        float tMaxY = NextBoundary(origin.Y, dir.Y, cy, Origin.Y, CellSize.Y, stepY);
-        float tMaxZ = NextBoundary(origin.Z, dir.Z, cz, Origin.Z, CellSize.Z, stepZ);
-
-        // tDelta: distance along ray needed to traverse a full cell.
-        float tDeltaX = stepX != 0 ? CellSize.X / MathF.Abs(dir.X) : float.MaxValue;
-        float tDeltaY = stepY != 0 ? CellSize.Y / MathF.Abs(dir.Y) : float.MaxValue;
-        float tDeltaZ = stepZ != 0 ? CellSize.Z / MathF.Abs(dir.Z) : float.MaxValue;
-
-        int crossings = 0;
-        int safety = Res.X + Res.Y + Res.Z + 4;
-
-        while (true)
-        {
-            if (cx >= 0 && cx < Res.X && cy >= 0 && cy < Res.Y && cz >= 0 && cz < Res.Z)
-            {
-                int cellId = CellIndex(cx, cy, cz);
-                int start = _cellStart[cellId];
-                int end = _cellStart[cellId + 1];
-                for (int i = start; i < end; i++)
-                {
-                    int triIdx = _triIndices[i];
-                    if (visited[triIdx] == queryId) continue;
-                    visited[triIdx] = queryId;
-                    var t = tris[triIdx];
-                    if (SDFGenerator.RayTriHit(origin, dir, t.A, t.B, t.C))
-                        crossings++;
-                }
-            }
-
-            // Step to next cell along smallest tMax.
-            if (tMaxX < tMaxY)
-            {
-                if (tMaxX < tMaxZ) { cx += stepX; tMaxX += tDeltaX; }
-                else { cz += stepZ; tMaxZ += tDeltaZ; }
-            }
-            else
-            {
-                if (tMaxY < tMaxZ) { cy += stepY; tMaxY += tDeltaY; }
-                else { cz += stepZ; tMaxZ += tDeltaZ; }
-            }
-
-            // Stop when we've left the grid in any direction the ray is moving.
-            if (cx < 0 || cx >= Res.X || cy < 0 || cy >= Res.Y || cz < 0 || cz >= Res.Z)
-                break;
-
-            if (--safety <= 0) break;
-        }
-
-        return crossings;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static float NextBoundary(float pos, float dir, int cell, float origin, float cellSize, int step)
-    {
-        if (step == 0) return float.MaxValue;
-        // World-space coord of the next boundary the ray will hit on this axis.
-        float boundary = origin + (cell + (step > 0 ? 1 : 0)) * cellSize;
-        return (boundary - pos) / dir;
     }
 }
