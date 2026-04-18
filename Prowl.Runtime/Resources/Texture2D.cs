@@ -330,9 +330,22 @@ public sealed class Texture2D : Texture, ISerializable
     }
 
     /// <summary>
-    /// Loads a default embedded texture
+    /// Get the shared instance of a default embedded texture. Returns the same GPU
+    /// texture across the whole app — callers that need a unique mutable copy should
+    /// call <see cref="FromImage"/>/<see cref="FromStream"/> directly.
     /// </summary>
     public static Texture2D LoadDefault(DefaultTexture texture)
+    {
+        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(texture)) is Texture2D cached)
+            return cached;
+        return ParseDefault(texture);
+    }
+
+    /// <summary>
+    /// Raw load of a default embedded texture — invoked by <see cref="BuiltInAssets"/>
+    /// on first cache miss. Public callers should use <see cref="LoadDefault"/>.
+    /// </summary>
+    internal static Texture2D ParseDefault(DefaultTexture texture)
     {
         string fileName = texture switch
         {
@@ -347,14 +360,9 @@ public sealed class Texture2D : Texture, ISerializable
         };
 
         string resourcePath = $"Assets/Defaults/{fileName}";
-        using (Stream stream = EmbeddedResources.GetStream(resourcePath))
-        {
-            Texture2D result = FromStream(stream, true);
-            result.AssetPath = $"$Default:{texture}";
-            result.AssetID = BuiltInAssets.GuidFor(texture);
-            result.Name = texture.ToString();
-            return result;
-        }
+        using Stream stream = EmbeddedResources.GetStream(resourcePath);
+        return FromStream(stream, true);
+        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
     }
 
     internal const string ImageNotContiguousError = "To load/save an image, it's backing memory must be contiguous. Consider using smaller image sizes or changing your ImageSharp memory allocation settings to allow larger buffers.";

@@ -50,12 +50,13 @@ public static class BuiltInAssets
         if (_initialized) return;
         _initialized = true;
 
-        // Shaders
+        // Shaders — loader calls the raw parse so LoadDefault can route through the cache
+        // without recursing through itself.
         foreach (DefaultShader s in Enum.GetValues<DefaultShader>())
         {
             var shader = s;
             Register($"$Default:Shader/{shader}", shader.ToString(), typeof(Shader),
-                () => Shader.LoadDefault(shader));
+                () => Shader.ParseDefault(shader));
         }
 
 
@@ -86,20 +87,20 @@ public static class BuiltInAssets
                 });
         }
 
-        // Materials
+        // Materials — register the raw parse so LoadDefault routes through this cache.
         foreach (DefaultMaterial m in Enum.GetValues<DefaultMaterial>())
         {
             var mat = m;
             Register($"$Default:Material/{mat}", mat.ToString(), typeof(Material),
-                () => Material.LoadDefault(mat));
+                () => Material.ParseDefault(mat));
         }
 
-        // Textures
+        // Textures — same: raw load, shared instance.
         foreach (DefaultTexture t in Enum.GetValues<DefaultTexture>())
         {
             var tex = t;
             Register($"$Default:Texture/{tex}", tex.ToString(), typeof(Texture2D),
-                () => Texture2D.LoadDefault(tex));
+                () => Texture2D.ParseDefault(tex));
         }
     }
 

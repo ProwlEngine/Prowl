@@ -248,11 +248,8 @@ public class TerrainComponent : MonoBehaviour
 
         if (_materialInstance == null || (_lastMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
         {
-            // Deep copy via serialization roundtrip
-            var echo = Serializer.Serialize(sourceMat);
-            _materialInstance = Serializer.Deserialize<Material>(echo);
-            if (_materialInstance != null)
-                _materialInstance.Name = sourceMat.Name + " (Terrain Instance)";
+            _materialInstance = sourceMat.Clone();
+            _materialInstance.Name = sourceMat.Name + " (Terrain Instance)";
             _lastMaterialGuid = sourceGuid;
         }
 
@@ -273,10 +270,8 @@ public class TerrainComponent : MonoBehaviour
 
         if (_grassMaterialInstance == null || (_lastGrassMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
         {
-            var echo = Serializer.Serialize(sourceMat);
-            _grassMaterialInstance = Serializer.Deserialize<Material>(echo);
-            if (_grassMaterialInstance != null)
-                _grassMaterialInstance.Name = sourceMat.Name + " (Grass Instance)";
+            _grassMaterialInstance = sourceMat.Clone();
+            _grassMaterialInstance.Name = sourceMat.Name + " (Grass Instance)";
             _lastGrassMaterialGuid = sourceGuid;
         }
 

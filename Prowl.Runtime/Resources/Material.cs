@@ -33,9 +33,28 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Loads a default embedded material.
+    /// Load a default embedded material — returns a fresh clone every call so callers
+    /// can freely mutate (SetTexture, SetFloat, ...) without stepping on each other.
+    /// The underlying template is cached in <see cref="BuiltInAssets"/> so the .mat file
+    /// is only deserialized once, but the returned instance is always yours to own.
     /// </summary>
     public static Material LoadDefault(DefaultMaterial material)
+    {
+        // Pull the shared template from the cache, then clone. Clone is a cheap deep-copy
+        // of the property dictionaries + a shared shader reference — materials are
+        // configuration objects, not heavy resources.
+        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(material)) is Material template)
+            return new Material(template);
+        // Fallback if BuiltInAssets isn't initialized — ParseDefault already returns a
+        // fresh instance, no clone needed.
+        return ParseDefault(material);
+    }
+
+    /// <summary>
+    /// Raw deserialize of a default embedded material — invoked by <see cref="BuiltInAssets"/>
+    /// on first cache miss. Public callers should use <see cref="LoadDefault"/>.
+    /// </summary>
+    internal static Material ParseDefault(DefaultMaterial material)
     {
         string fileName = material switch
         {
@@ -52,7 +71,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         string text = reader.ReadToEnd();
         var echo = EchoObject.ReadFromString(text);
         var mat = Serializer.Deserialize<Material>(echo);
-        mat.Name = material.ToString();
+        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
         return mat;
     }
 
