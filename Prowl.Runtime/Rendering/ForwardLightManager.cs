@@ -53,6 +53,7 @@ public static class ForwardLightManager
     private const int MaxLights = 8;
     private const int MaxShadowSlots = 2; // Max additional shadow-casting point/spot lights
 
+
     /// <summary>
     /// Select up to 8 lights and upload their uniform data for forward shaders.
     /// Directional light always goes to index 0. Point/spot sorted by distance to camera.
@@ -62,6 +63,18 @@ public static class ForwardLightManager
         IReadOnlyList<IRenderableLight> lights,
         LayerMask cullingMask)
     {
+        // Reset slot indices on every Light component up-front. The selected ones
+        // get assigned below; everything else stays at -1 so consumers know they
+        // weren't uploaded this frame.
+        for (int i = 0; i < lights.Count; i++)
+        {
+            if (lights[i] is Light l)
+            {
+                l.ForwardSlot = -1;
+                l.ShadowSlot = -1;
+            }
+        }
+
         // Separate directional from point/spot
         IRenderableLight? directional = null;
         var pointSpotLights = new List<(IRenderableLight light, float distSq)>();
@@ -94,7 +107,7 @@ public static class ForwardLightManager
         for (int i = 0; i < pointSpotLights.Count && i < remaining; i++)
             selected.Add(pointSpotLights[i].light);
 
-        // Upload
+        // Upload (also assigns ForwardSlot / ShadowSlot on each selected Light)
         UploadLightUniforms(selected);
     }
 
@@ -110,6 +123,11 @@ public static class ForwardLightManager
         {
             var light = selected[i];
             var data = light.GetForwardLightData();
+
+            // Stamp the slot index back onto the Light component so other systems
+            // (e.g. volumetric fog) can query "which uniform slot am I in" without
+            // needing access to the render pipeline's selection list.
+            if (light is Light lightComp) lightComp.ForwardSlot = i;
 
             int typeInt = data.Type switch
             {
@@ -155,6 +173,7 @@ public static class ForwardLightManager
             {
                 int slot = pointShadowSlot++;
                 PropertyState.SetGlobalInt($"_LightShadowSlot[{i}]", slot);
+                if (light is Light lc) lc.ShadowSlot = slot;
 
                 if (data.PointShadowMatrices != null && data.PointShadowFaceParams != null)
                 {
@@ -170,6 +189,7 @@ public static class ForwardLightManager
             {
                 int slot = spotShadowSlot++;
                 PropertyState.SetGlobalInt($"_LightShadowSlot[{i}]", slot);
+                if (light is Light lc) lc.ShadowSlot = slot;
                 PropertyState.SetGlobalMatrix($"_SpotShadowMatrices[{slot}]", data.SpotShadowMatrix);
                 PropertyState.SetGlobalVector($"_SpotShadowAtlasParams[{slot}]", data.SpotShadowAtlasParams);
             }

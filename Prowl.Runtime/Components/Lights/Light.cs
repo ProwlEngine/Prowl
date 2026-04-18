@@ -26,6 +26,21 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public bool CastShadows = true;
     public ShadowQuality ShadowQuality = ShadowQuality.Hard;
 
+    /// <summary>
+    /// Index this light occupies in the forward shader light arrays this frame
+    /// (e.g. <c>_LightPositions[ForwardSlot]</c>). -1 if the light wasn't selected
+    /// for upload (too far / too many lights). Set by <see cref="Rendering.ForwardLightManager"/>.
+    /// </summary>
+    public int ForwardSlot { get; internal set; } = -1;
+
+    /// <summary>
+    /// Slot index into the per-light shadow arrays (point: <c>_PointShadowMatrices</c>,
+    /// spot: <c>_SpotShadowMatrices</c>). -1 if no shadow data was uploaded for this light
+    /// this frame. Directional lights store shadow data in the cascade arrays instead;
+    /// for them this remains -1 even when shadows are active.
+    /// </summary>
+    public int ShadowSlot { get; internal set; } = -1;
+
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {

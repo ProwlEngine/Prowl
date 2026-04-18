@@ -33,6 +33,7 @@ public struct SubMeshDescriptor
     }
 }
 
+[CreateAssetMenu("Mesh", Extension = ".mesh", Order = 4)]
 public class Mesh : EngineObject, ISerializable
 {
     /// <summary> Whether this mesh is readable by the CPU </summary>

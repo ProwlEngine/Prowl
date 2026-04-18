@@ -32,7 +32,8 @@ public enum DefaultShader
     BokehDoF,
     GTAO,
     Grid,
-    CinematicEffects
+    CinematicEffects,
+    VolumetricFog,
 }
 
 /// <summary>

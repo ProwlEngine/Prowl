@@ -99,6 +99,52 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<SpotLight>();
     }
 
+    // ---- Fog Volumes ----
+
+    [CreateGameObjectMenu("Fog Volume/Global", Icon = EditorIcons.Cloud, Order = 25, Separator = true)]
+    static void CreateGlobalFogVolume(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Global Fog Volume", parent);
+        var v = go.AddComponent<FogVolume>();
+        v.Shape = FogVolumeShape.Global;
+    }
+
+    [CreateGameObjectMenu("Fog Volume/Box", Icon = EditorIcons.Cube, Order = 26)]
+    static void CreateBoxFogVolume(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Box Fog Volume", parent);
+        go.Transform.LocalScale = new Float3(2, 2, 2);
+        var v = go.AddComponent<FogVolume>();
+        v.Shape = FogVolumeShape.Box;
+    }
+
+    [CreateGameObjectMenu("Fog Volume/Sphere", Icon = EditorIcons.CircleDot, Order = 27)]
+    static void CreateSphereFogVolume(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Sphere Fog Volume", parent);
+        go.Transform.LocalScale = new Float3(3, 3, 3);
+        var v = go.AddComponent<FogVolume>();
+        v.Shape = FogVolumeShape.Sphere;
+    }
+
+    [CreateGameObjectMenu("Fog Volume/Cylinder", Icon = EditorIcons.Circle, Order = 28)]
+    static void CreateCylinderFogVolume(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Cylinder Fog Volume", parent);
+        go.Transform.LocalScale = new Float3(2, 3, 2);
+        var v = go.AddComponent<FogVolume>();
+        v.Shape = FogVolumeShape.Cylinder;
+    }
+
+    [CreateGameObjectMenu("Fog Volume/Cone", Icon = EditorIcons.Bullseye, Order = 29)]
+    static void CreateConeFogVolume(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Cone Fog Volume", parent);
+        go.Transform.LocalScale = new Float3(1, 4, 1);
+        var v = go.AddComponent<FogVolume>();
+        v.Shape = FogVolumeShape.Cone;
+    }
+
     // ---- Audio ----
 
     [CreateGameObjectMenu("Audio/Audio Source", Icon = EditorIcons.VolumeHigh, Order = 30, Separator = true)]
