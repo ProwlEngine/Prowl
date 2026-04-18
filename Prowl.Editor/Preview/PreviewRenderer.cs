@@ -1,9 +1,11 @@
 using System;
 using System.Linq;
 
+using Prowl.Editor.Preview;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
+using Prowl.Runtime.MeshFeatures;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -123,6 +125,38 @@ public class PreviewRenderer : IDisposable
         _scene.Add(_subjectGo);
 
         FitToSubject(AABB.FromCenterAndSize(Float3.Zero, Float3.One));
+    }
+
+    /// <summary>
+    /// Set up the preview to raymarch a <see cref="MeshSDF"/>. Renders a tight proxy cube
+    /// over the SDF bounds with the SDF raymarching material; the actual surface is traced
+    /// in the fragment shader.
+    /// </summary>
+    /// <remarks>
+    /// The proxy cube is placed at the SDF's actual bounds (no normalization), so the
+    /// distance values stored in the volume remain in world units and the sphere-tracing
+    /// step math stays consistent. The orbit camera frames the bounds.
+    /// </remarks>
+    public void SetupForMeshSDF(MeshSDF sdf)
+    {
+        ClearSubject();
+        if (sdf?.Volume == null) return;
+
+        _subjectGo = new GameObject("PreviewSubject");
+        _subjectGo.HideFlags = HideFlags.HideAndDontSave;
+
+        var bounds = sdf.Bounds;
+        var center = (bounds.Min + bounds.Max) * 0.5f;
+        var size = bounds.Max - bounds.Min;
+
+        var renderer = _subjectGo.AddComponent<MeshRenderer>();
+        renderer.Mesh = Mesh.CreateCube(size);
+        renderer.Material = SDFPreviewMaterial.Create(sdf);
+        _subjectGo.Transform.Position = center;
+
+        _scene.Add(_subjectGo);
+
+        FitToSubject(bounds);
     }
 
     /// <summary>Set up the preview to show a Material on a sphere.</summary>

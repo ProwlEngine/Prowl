@@ -7,6 +7,7 @@ using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
+using Prowl.Runtime.MeshFeatures.Generation;
 using Prowl.Runtime.Resources;
 
 using Color = System.Drawing.Color;
@@ -26,6 +27,11 @@ public class ModelAssetEditor : AssetImporterEditor
     private bool _flipUVs;
     private bool _globalScale;
     private float _unitScale = 1f;
+    // Mesh feature settings — applies to every imported sub-mesh.
+    private bool _generateSDF;
+    private int _sdfResolution = 64;
+    private float _sdfPadding = 0.1f;
+    private float _sdfMaxDistance = 0.25f;
     private bool _settingsLoaded;
     private bool _settingsDirty;
     private Guid _currentGuid;
@@ -102,6 +108,25 @@ public class ModelAssetEditor : AssetImporterEditor
         EditorGUI.FloatField(paper, $"{id}_unitScale", _unitScale, label: "Unit Scale")
             .OnValueChanged(v => { _unitScale = v; _settingsDirty = true; });
 
+        // Mesh features — produces an SDF sub-asset alongside every imported mesh.
+        EditorGUI.Separator(paper, $"{id}_sep_features");
+        EditorGUI.Header(paper, $"{id}_h_features", "Mesh Features");
+
+        EditorGUI.Toggle(paper, $"{id}_genSDF", "Generate SDF (all meshes)", _generateSDF)
+            .OnValueChanged(v => { _generateSDF = v; _settingsDirty = true; });
+
+        if (_generateSDF)
+        {
+            EditorGUI.IntField(paper, $"{id}_sdfRes", _sdfResolution, "SDF Resolution")
+                .OnValueChanged(v => { _sdfResolution = System.Math.Clamp(v, 8, 256); _settingsDirty = true; });
+
+            EditorGUI.FloatField(paper, $"{id}_sdfPad", _sdfPadding, label: "SDF Padding")
+                .OnValueChanged(v => { _sdfPadding = v; _settingsDirty = true; });
+
+            EditorGUI.FloatField(paper, $"{id}_sdfMax", _sdfMaxDistance, label: "SDF Max Distance")
+                .OnValueChanged(v => { _sdfMaxDistance = v; _settingsDirty = true; });
+        }
+
         // Save / Revert buttons
         EditorGUI.Separator(paper, $"{id}_sep_btns");
         if (_settingsDirty)
@@ -125,6 +150,7 @@ public class ModelAssetEditor : AssetImporterEditor
                         _lastPreviewAsset = null; // Force preview refresh
                         _settingsLoaded = false;
                         EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+                        MeshAssetEditor.InvalidateCachedPreviews();
                     });
             }
         }
@@ -175,6 +201,14 @@ public class ModelAssetEditor : AssetImporterEditor
             _flipUVs = s.TryGet("flipUVs", out var fu) && fu.BoolValue;
             _globalScale = s.TryGet("globalScale", out var gs) && gs.BoolValue;
             _unitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1f;
+
+            if (s.TryGet(SDFFeatureSpec.KeyRoot, out var sdf) && sdf != null)
+            {
+                _generateSDF = sdf.TryGet(SDFFeatureSpec.Key_Enabled, out var en) && en.BoolValue;
+                _sdfResolution = sdf.TryGet(SDFFeatureSpec.Key_Resolution, out var sr) ? sr.IntValue : 64;
+                _sdfPadding = sdf.TryGet(SDFFeatureSpec.Key_Padding, out var sp) ? sp.FloatValue : 0.1f;
+                _sdfMaxDistance = sdf.TryGet(SDFFeatureSpec.Key_MaxDistance, out var sm) ? sm.FloatValue : 0.25f;
+            }
         }
         catch { }
     }
@@ -196,6 +230,14 @@ public class ModelAssetEditor : AssetImporterEditor
         s["flipUVs"] = new EchoObject(_flipUVs);
         s["globalScale"] = new EchoObject(_globalScale);
         s["unitScale"] = new EchoObject(_unitScale);
+
+        var sdf = EchoObject.NewCompound();
+        sdf[SDFFeatureSpec.Key_Enabled] = new EchoObject(_generateSDF);
+        sdf[SDFFeatureSpec.Key_Resolution] = new EchoObject(_sdfResolution);
+        sdf[SDFFeatureSpec.Key_Padding] = new EchoObject(_sdfPadding);
+        sdf[SDFFeatureSpec.Key_MaxDistance] = new EchoObject(_sdfMaxDistance);
+        s[SDFFeatureSpec.KeyRoot] = sdf;
+
         meta.Settings = s;
 
         MetaFile.Write(metaPath, meta);

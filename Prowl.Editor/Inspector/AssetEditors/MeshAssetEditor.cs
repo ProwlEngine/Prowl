@@ -1,25 +1,24 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 
-using Prowl.Echo;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.MeshFeatures;
-using Prowl.Runtime.MeshFeatures.Generation;
 using Prowl.Runtime.Resources;
-using Prowl.Vector;
 
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
-/// Inspector for a <see cref="Mesh"/> — works for both standalone .mesh files and
-/// mesh sub-assets inside a model. Shows mesh info, a preview with Shaded / SDF view
-/// modes, and a Generate-SDF toolbar that edits the parent importer's settings and
-/// triggers a reimport.
+/// Read-only inspector for a <see cref="Mesh"/>. Shows mesh info, the list of generated
+/// features, and a preview with view-mode switching (Shaded vs SDF Raymarch when an SDF
+/// feature exists).
 /// </summary>
+/// <remarks>
+/// All mesh features (SDF, BVH, Prism, ...) are produced by the parent asset's importer
+/// from a single set of importer settings. To enable/configure them, edit the parent
+/// asset (e.g. the Model) — never this view.
+/// </remarks>
 [CustomAssetEditor(typeof(Mesh))]
 public class MeshAssetEditor : AssetImporterEditor
 {
@@ -68,7 +67,7 @@ public class MeshAssetEditor : AssetImporterEditor
         DrawInfoPanel(paper, id, mesh);
 
         EditorGUI.Separator(paper, $"{id}_sep_feat");
-        DrawFeaturePanel(paper, id, parentEntry, subEntry, mesh, state);
+        DrawFeaturePanel(paper, id, parentEntry, subEntry, mesh);
 
         EditorGUI.Separator(paper, $"{id}_sep_preview");
         DrawPreview(paper, id, parentEntry, subEntry, mesh, state);
@@ -97,54 +96,42 @@ public class MeshAssetEditor : AssetImporterEditor
         EditorGUI.Label(paper, $"{id}_attrs", $"Attributes: {attrs.TrimEnd()}");
     }
 
-    private static void DrawFeaturePanel(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state)
+    private static void DrawFeaturePanel(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
     {
         EditorGUI.Header(paper, $"{id}_h_feat", "Mesh Features");
 
         var sdf = FindSDF(parentEntry, subEntry, mesh);
         if (sdf != null)
-        {
             EditorGUI.Label(paper, $"{id}_sdf_info",
                 $"SDF: {sdf.Resolution.X}³  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}");
-
-            using (paper.Row($"{id}_sdf_btn_row").Height(28).RowBetween(6).ChildLeft(4).ChildRight(4).Enter())
-            {
-                EditorGUI.ToggleButton(paper, $"{id}_view_shaded", "Shaded", state.Mode == ViewMode.Shaded, fitWidth: true)
-                    .OnValueChanged(_ => { state.Mode = ViewMode.Shaded; state.LastPreviewSubject = null; });
-
-                EditorGUI.ToggleButton(paper, $"{id}_view_sdf", "SDF Raymarch", state.Mode == ViewMode.SDFRaymarch, fitWidth: true)
-                    .OnValueChanged(_ => { state.Mode = ViewMode.SDFRaymarch; state.LastPreviewSubject = null; });
-
-                paper.Box($"{id}_sdf_btn_spacer");
-
-                EditorGUI.Button(paper, $"{id}_sdf_regen", "Regenerate", width: 110)
-                    .OnValueChanged(_ => ToggleSDF(parentEntry, true));
-
-                EditorGUI.Button(paper, $"{id}_sdf_remove", "Remove", width: 90)
-                    .OnValueChanged(_ => ToggleSDF(parentEntry, false));
-            }
-        }
         else
-        {
-            EditorGUI.Label(paper, $"{id}_sdf_info", "SDF: not generated");
-            EditorGUI.Button(paper, $"{id}_sdf_gen", $"{EditorIcons.WandMagicSparkles}  Generate SDF", width: 160)
-                .OnValueChanged(_ => ToggleSDF(parentEntry, true));
-        }
+            EditorGUI.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)");
     }
 
     private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state)
     {
-        EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
-
-        state.Preview ??= new PreviewRenderer(256, 256) { ShowGrid = state.Mode == ViewMode.Shaded };
-
         var sdf = FindSDF(parentEntry, subEntry, mesh);
+
+        using (paper.Row($"{id}_preview_header").Height(28).RowBetween(6).ChildLeft(4).ChildRight(4).Enter())
+        {
+            EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
+
+            EditorGUI.ToggleButton(paper, $"{id}_view_shaded", "Shaded", state.Mode == ViewMode.Shaded, fitWidth: true)
+                .OnValueChanged(_ => { state.Mode = ViewMode.Shaded; state.LastPreviewSubject = null; });
+
+            // Only offer the SDF view when an SDF actually exists.
+            if (sdf != null)
+                EditorGUI.ToggleButton(paper, $"{id}_view_sdf", "SDF", state.Mode == ViewMode.SDFRaymarch, fitWidth: true)
+                    .OnValueChanged(_ => { state.Mode = ViewMode.SDFRaymarch; state.LastPreviewSubject = null; });
+        }
+
         if (state.Mode == ViewMode.SDFRaymarch && sdf == null)
             state.Mode = ViewMode.Shaded;
 
+        state.Preview ??= new PreviewRenderer(256, 256);
         state.Preview.ShowGrid = state.Mode == ViewMode.Shaded;
 
-        EngineObject? currentSubject = state.Mode == ViewMode.SDFRaymarch ? (EngineObject?)sdf : mesh;
+        EngineObject? currentSubject = state.Mode == ViewMode.SDFRaymarch ? sdf : (EngineObject)mesh;
         if (state.LastPreviewSubject != currentSubject)
         {
             state.LastPreviewSubject = currentSubject;
@@ -164,39 +151,13 @@ public class MeshAssetEditor : AssetImporterEditor
         return Runtime.AssetDatabase.Get(sdfGuid) as MeshSDF;
     }
 
-    /// <summary>Toggle the SDF-enabled flag in the parent's .meta and reimport.</summary>
-    private static void ToggleSDF(AssetEntry parentEntry, bool enabled)
+    /// <summary>
+    /// Called by parent-asset editors after they trigger a reimport, so cached previews
+    /// drop their stale references and re-bind to the freshly generated sub-assets.
+    /// </summary>
+    internal static void InvalidateCachedPreviews()
     {
-        if (Project.Current == null) return;
-        string absPath = Path.Combine(Project.Current.AssetsPath, parentEntry.Path);
-        string metaPath = MetaFile.GetMetaPath(absPath);
-
-        MetaFileData meta;
-        try { meta = File.Exists(metaPath) ? MetaFile.Read(metaPath) : MetaFile.CreateNew(parentEntry.ImporterType); }
-        catch { meta = MetaFile.CreateNew(parentEntry.ImporterType); }
-
-        var settings = meta.Settings ?? EchoObject.NewCompound();
-        EchoObject sdf;
-        if (settings.TryGet(SDFFeatureSpec.KeyRoot, out var existing) && existing != null)
-        {
-            sdf = existing;
-        }
-        else
-        {
-            sdf = EchoObject.NewCompound();
-            sdf[SDFFeatureSpec.Key_Resolution] = new EchoObject(64);
-            sdf[SDFFeatureSpec.Key_Padding] = new EchoObject(0.1f);
-            sdf[SDFFeatureSpec.Key_MaxDistance] = new EchoObject(0.25f);
-            settings[SDFFeatureSpec.KeyRoot] = sdf;
-        }
-        sdf[SDFFeatureSpec.Key_Enabled] = new EchoObject(enabled);
-        meta.Settings = settings;
-
-        MetaFile.Write(metaPath, meta);
-        EditorAssetDatabase.Instance?.Reimport(parentEntry.Guid);
-
-        // Clear cached preview state so the new SDF is picked up.
-        if (_subAssetStates.TryGetValue(parentEntry.Guid, out var st))
-            st.LastPreviewSubject = null;
+        foreach (var s in _subAssetStates.Values)
+            s.LastPreviewSubject = null;
     }
 }
