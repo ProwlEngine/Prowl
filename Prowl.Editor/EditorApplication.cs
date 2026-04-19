@@ -25,6 +25,9 @@ public class EditorApplication : Game
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
 
+    private string _curDefaultFont;
+    private string _curDefaultBoldFont;
+
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
     private int _savedActiveTabIndex = -1;
@@ -191,29 +194,36 @@ public class EditorApplication : Game
 
     public void InitializeFont()
     {
-        // Pick a good system font — prefer Bahnschrift then, Segoe UI (Windows), then Arial, then any Regular font
-        EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultFontName && f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
-            ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
-        EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultBoldFontName && f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "bahnschrift" && f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts()
-            .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Bold)
-            ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+        // Pick a good system font — prefer Segoe UI (Windows), then Arial, then any Regular font
+        if (EditorTheme.DefaultFontName != _curDefaultFont)
+        {
+            EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultFontName && f.Style == Prowl.Scribe.FontStyle.Regular)
+                ?? PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Regular)
+                ?? PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Regular)
+                ?? PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
+                ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+
+            _curDefaultFont = EditorTheme.DefaultFontName;
+        }
+
+        if (EditorTheme.DefaultBoldFontName != _curDefaultBoldFont)
+        {
+            EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultBoldFontName && f.Style == Prowl.Scribe.FontStyle.Bold)
+                ?? PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
+                ?? PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
+                ?? PaperInstance.EnumerateSystemFonts()
+                .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Bold)
+                ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+
+            _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
+        }
     }
 
     private void ApplyDarkTitleBar()
@@ -235,6 +245,9 @@ public class EditorApplication : Game
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
         Undo.FlushFrame();
+
+        // Set the paper reference resolution
+        PaperInstance?.SetReferenceResolution(Window.Size.X / Window.ContentScale * EditorTheme.UserScale, Window.Size.Y / Window.ContentScale * EditorTheme.UserScale);
 
         // Escape always unlocks cursor in editor
         if (Input.GetKeyDown(KeyCode.Escape) && Input.CursorLocked)
