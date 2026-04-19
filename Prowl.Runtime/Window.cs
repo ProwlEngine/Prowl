@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Runtime.InteropServices;
 
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -14,6 +15,26 @@ public static class Window
 
     public static IWindow InternalWindow { get; internal set; }
     public static IInputContext InternalInput { get; internal set; }
+
+    // --- Per-monitor DPI awareness on Windows ----------------------------------------------
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDpiAwarenessContext(nint dpiContext);
+
+    [DllImport("shcore.dll")]
+    private static extern int SetProcessDpiAwareness(int level);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDPIAware();
+
+    private static readonly nint DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4;
+
+    private static void EnsureDpiAwareOnWindows()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+        try { if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) return; } catch { }
+        try { if (SetProcessDpiAwareness(2) == 0) return; } catch { }
+        try { SetProcessDPIAware(); } catch { }
+    }
 
     public static event Action? Load;
     public static event Action<float>? Update;
@@ -121,6 +142,8 @@ public static class Window
 
     public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool VSync = true)
     {
+        EnsureDpiAwareOnWindows();
+
         WindowOptions options = WindowOptions.Default;
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
