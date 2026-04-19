@@ -1,5 +1,6 @@
 ﻿using static NeoVeldrid.OpenGL.OpenGLUtil;
 using System;
+using Silk.NET.Core.Loader;
 using Silk.NET.OpenGL;
 using Silk.NET.OpenGL.Extensions.EXT;
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
@@ -995,16 +996,16 @@ namespace NeoVeldrid.OpenGL
                         {
                             try
                             {
-                                // Check if the OpenGL context has already been destroyed by the OS. If so, just exit out.
-                                uint error = (uint)_gd.GL.GetError();
-                                if (error == (uint)ErrorCode.InvalidOperation)
+                                try
                                 {
-                                    return;
+                                    _makeCurrent(_gd._glContext);
+                                    _gd.FlushDisposables();
+                                    _gd._deleteContext(_gd._glContext);
                                 }
-                                _makeCurrent(_gd._glContext);
-
-                                _gd.FlushDisposables();
-                                _gd._deleteContext(_gd._glContext);
+                                catch (SymbolLoadingException)
+                                {
+                                    // Context already destroyed by the OS. Nothing to clean up via GL.
+                                }
                                 _gd.StagingMemoryPool.Dispose();
                             }
                             finally
@@ -1039,6 +1040,10 @@ namespace NeoVeldrid.OpenGL
                                     _gd.GL.Flush();
                                     _gd.GL.Finish();
                                 }
+                            }
+                            catch (SymbolLoadingException)
+                            {
+                                // Context destroyed before the work item ran. Flush is moot; finally releases the caller.
                             }
                             finally
                             {
