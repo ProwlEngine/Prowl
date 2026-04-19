@@ -12,6 +12,7 @@ using Prowl.PaperUI;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using System.ComponentModel;
 
 namespace Prowl.Runtime;
 
@@ -64,7 +65,7 @@ public abstract class Game
             _paperRenderer = new PaperRenderer();
             _paperRenderer.Initialize(fbSize.X, fbSize.Y);
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
-            _paper.SetReferenceResolution(width, height);
+            //_paper.SetReferenceResolution(width, height);
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
 
             BuiltInAssets.Initialize();
@@ -163,8 +164,7 @@ public abstract class Game
                 Graphics.UnbindFramebuffer();
                 Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
 
-                float dpiScale = (float)Window.InternalWindow.FramebufferSize.X / Window.InternalWindow.Size.X;
-                _paper.BeginFrame(delta, dpiScale);
+                _paper.BeginFrame(delta, Window.ContentScale);
 
                 BeginGui(_paper);
 

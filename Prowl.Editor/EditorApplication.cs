@@ -45,13 +45,10 @@ public class EditorApplication : Game
         Window.Position = new Silk.NET.Maths.Vector2D<int>(
             instance.WindowX > 0 ? instance.WindowX : Window.Position.X,
             instance.WindowY > 0 ? instance.WindowY : Window.Position.Y);
-
-        PaperInstance?.SetReferenceResolution(width / Window.ContentScale * EditorTheme.UserScale, height / Window.ContentScale * EditorTheme.UserScale);
     }
 
     public override void Resize(int width, int height)
     {
-        PaperInstance?.SetReferenceResolution(width / Window.ContentScale * EditorTheme.UserScale, height / Window.ContentScale * EditorTheme.UserScale);
     }
 
     public override void Initialize()
@@ -245,9 +242,6 @@ public class EditorApplication : Game
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
         Undo.FlushFrame();
-
-        // Set the paper reference resolution
-        PaperInstance?.SetReferenceResolution(Window.Size.X / Window.ContentScale * EditorTheme.UserScale, Window.Size.Y / Window.ContentScale * EditorTheme.UserScale);
 
         // Escape always unlocks cursor in editor
         if (Input.GetKeyDown(KeyCode.Escape) && Input.CursorLocked)
