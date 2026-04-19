@@ -48,6 +48,7 @@ First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](htt
 - [Vulkan] Fixes `CreateLogicalDevice` ignoring the present queue family on GPUs where it differs from the graphics family.
 - [SDL2] Scroll-to-zoom now respects sub-detent deltas from precision touchpads and high-end mice. Slow scrolls no longer round to zero.
 - [SDL2] Cursor position no longer desyncs when the window regains focus or the pointer re-enters the window on Windows. Modern SDL2 emits zero-delta motion events in those cases, and the previous filter discarded them too aggressively.
+- [Samples] The AnimatedMesh sample now renders correctly on OpenGL and OpenGL ES.
 
 [Unreleased]: https://github.com/jhm-ciberman/neo-veldrid/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/jhm-ciberman/neo-veldrid/releases/tag/v1.0.0
