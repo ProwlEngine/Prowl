@@ -179,16 +179,6 @@ public class BuildSettings : ProjectSettingsBase
 
         paper.Box("bld_sp3").Height(12);
 
-
-        // Build buttons
-        /*using (paper.Row("bld_buttons").Height(32).RowBetween(8).ChildLeft(4).Enter())
-        {
-            EditorGUI.Button(paper, "bld_build", $"{EditorIcons.Hammer}  Build", width: 120)
-                .OnValueChanged(_ => StartBuild(false));
-
-            EditorGUI.Button(paper, "bld_buildrun", $"{EditorIcons.Play}  Build & Run", width: 140)
-                .OnValueChanged(_ => StartBuild(true));
-        }*/
     }
 
     public static void BuildLog(string message, LogSeverity severity = LogSeverity.Normal)
