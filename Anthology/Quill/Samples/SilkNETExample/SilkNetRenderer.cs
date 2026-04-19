@@ -245,7 +245,7 @@ namespace SilkExample
             int indexOffset = 0;
             foreach (var drawCall in drawCalls)
             {
-                ProcessDrawCall(drawCall, indexOffset, canvas.Scale);
+                ProcessDrawCall(drawCall, indexOffset, (float)canvas.FramebufferScale);
                 indexOffset += drawCall.ElementCount;
             }
     

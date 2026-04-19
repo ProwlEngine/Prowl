@@ -67,7 +67,6 @@ namespace SilkExample
             _renderer.Initialize((int)_window.Size.X, (int)_window.Size.Y, _whiteTexture);
             _canvas = new Canvas(_renderer, new FontAtlasSettings());
             _canvas.TextMode = TextRenderMode.Slug;
-            _canvas.SetReferenceResolution(1280, 720);
 
             // Load fonts
             RobotoFont = new FontFile("Fonts/Roboto.ttf");

@@ -91,7 +91,6 @@ namespace SFMLExample
             
             // Initialize canvas
             _canvas = new Canvas(_renderer, new FontAtlasSettings());
-            _canvas.SetReferenceResolution(1280, 720);
 
             // Load fonts
             RobotoFont = new FontFile("Fonts/Roboto.ttf");

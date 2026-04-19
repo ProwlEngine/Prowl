@@ -514,57 +514,38 @@ namespace Prowl.Quill
         private TextRenderer _scribeRenderer;
         private SlugTextRenderer? _slugRenderer;
 
+        // Half-pixel offsets (in logical units) for edge-aligned AA.
         private float _pixelWidth = 1.0f;
         private float _pixelHalf = 0.5f;
 
-        private float _scale = 1.0f;
+        private float _framebufferScale = 1.0f;
         private float _width = 0.0f;
         private float _height = 0.0f;
-
-        // Reference resolution scaling
-        private float _referenceWidth = 0.0f;
-        private float _referenceHeight = 0.0f;
-        private float _matchWidthOrHeight = 0.5f;
-        private bool _useReferenceResolution = false;
-        private float _referenceScale = 1.0f;
 
         private IMarkdownImageProvider? _markdownImageProvider = null;
 
         /// <summary>
-        /// Gets the current combined scale factor (reference resolution scale * DPI scale).
-        /// This maps from logical drawing units to physical pixels.
+        /// Gets the framebuffer scale (physical pixels per logical pixel). All coordinates passed
+        /// to the canvas are in logical units; the canvas emits pixel-space vertices by
+        /// multiplying them by this factor, and font atlases are rasterized at this density for
+        /// crisp HiDPI output.
         /// </summary>
-        public float Scale => _scale;
+        public float FramebufferScale => _framebufferScale;
 
         /// <summary>
-        /// Gets the logical width of the canvas in units.
-        /// When a reference resolution is set, this is the scaled logical width
-        /// (matching or near the reference width depending on aspect ratio and match mode).
+        /// Gets the canvas width in logical units (framebuffer width / FramebufferScale).
         /// </summary>
         public float Width => _width;
 
         /// <summary>
-        /// Gets the logical height of the canvas in units.
-        /// When a reference resolution is set, this is the scaled logical height
-        /// (matching or near the reference height depending on aspect ratio and match mode).
+        /// Gets the canvas height in logical units (framebuffer height / FramebufferScale).
         /// </summary>
         public float Height => _height;
 
         /// <summary>
-        /// Gets the size of one pixel in logical units.
+        /// Gets the size of one physical pixel in logical units (= 1 / FramebufferScale).
         /// </summary>
-        public float PixelFraction => 1.0f / _scale;
-
-        /// <summary>
-        /// Gets the reference resolution scale factor (without DPI).
-        /// Returns 1.0 when no reference resolution is set.
-        /// </summary>
-        public float ReferenceScale => _referenceScale;
-
-        /// <summary>
-        /// Gets whether a reference resolution is currently active.
-        /// </summary>
-        public bool HasReferenceResolution => _useReferenceResolution;
+        public float PixelFraction => _pixelWidth;
 
         /// <summary>
         /// Gets or sets the text rendering mode. Slug mode evaluates glyph curves
@@ -596,97 +577,23 @@ namespace Prowl.Quill
         }
 
         /// <summary>
-        /// Sets a target reference resolution for automatic scaling.
-        /// When set, drawing coordinates use a virtual resolution that is automatically
-        /// scaled to fill the actual window size. This ensures content designed for a
-        /// specific resolution (e.g., 1280x720) looks correct on any screen size.
-        /// </summary>
-        /// <param name="width">Reference width (e.g., 1280).</param>
-        /// <param name="height">Reference height (e.g., 720).</param>
-        /// <param name="matchWidthOrHeight">
-        /// Controls whether scaling prioritizes matching the width or height of the reference resolution.
-        /// 0 = match width exactly (height adjusts for aspect ratio),
-        /// 1 = match height exactly (width adjusts for aspect ratio),
-        /// 0.5 = balanced (default).
-        /// </param>
-        public void SetReferenceResolution(float width, float height, float matchWidthOrHeight = 0.5f)
-        {
-            _referenceWidth = width > 0 ? width : 1;
-            _referenceHeight = height > 0 ? height : 1;
-            _matchWidthOrHeight = Math.Clamp(matchWidthOrHeight, 0f, 1f);
-            _useReferenceResolution = true;
-        }
-
-        /// <summary>
-        /// Clears the reference resolution, reverting to direct pixel mapping.
-        /// </summary>
-        public void ClearReferenceResolution()
-        {
-            _useReferenceResolution = false;
-            _referenceScale = 1.0f;
-        }
-
-        /// <summary>
-        /// Begins a new frame with the specified logical dimensions and pixel ratio.
+        /// Begins a new frame.
         /// </summary>
         /// <remarks>
-        /// Call this at the start of each frame before any drawing operations.
-        /// All drawing coordinates are in logical units. The pixel ratio determines
-        /// how logical units map to physical pixels for high-DPI rendering.
-        ///
-        /// When a reference resolution is set via <see cref="SetReferenceResolution"/>,
-        /// the canvas Width and Height are adjusted so that drawing coordinates use
-        /// the virtual reference space. The scale factor combines both the reference
-        /// scaling and DPI scaling automatically.
-        ///
-        /// Example usage:
-        /// <code>
-        /// // Set once:
-        /// canvas.SetReferenceResolution(1280, 720);
-        ///
-        /// // Each frame:
-        /// canvas.BeginFrame(GetScreenWidth(), GetScreenHeight(), GetWindowScaleDPI().X);
-        ///
-        /// // Draw using logical coordinates (near 1280x720 regardless of actual window size):
-        /// canvas.DrawRect(0, 0, canvas.Width, canvas.Height);
-        /// canvas.DrawText("Hello", 10, 10, color, 16, font); // 16 logical pixels at reference scale
-        /// </code>
+        /// All drawing coordinates are in logical units. The framebuffer scale tells the canvas
+        /// how many physical pixels correspond to one logical unit.
         /// </remarks>
-        /// <param name="width">Window width in logical pixels (before DPI scaling).</param>
-        /// <param name="height">Window height in logical pixels (before DPI scaling).</param>
-        /// <param name="pixelRatio">Device pixel ratio (1.0 = standard DPI, 2.0 = Retina/HiDPI).</param>
-        public void BeginFrame(float width, float height, float pixelRatio = 1.0f)
+        /// <param name="width">Window width in logical units.</param>
+        /// <param name="height">Window height in logical units.</param>
+        /// <param name="framebufferScale">Ratio of physical pixels to logical pixels (1.0 = standard, 2.0 = Retina/HiDPI).</param>
+        public void BeginFrame(float width, float height, float framebufferScale = 1.0f)
         {
-            if (pixelRatio <= 0)
-                throw new ArgumentOutOfRangeException(nameof(pixelRatio), "Pixel ratio must be greater than zero.");
+            if (framebufferScale <= 0)
+                throw new ArgumentOutOfRangeException(nameof(framebufferScale), "Framebuffer scale must be greater than zero.");
 
-            if (_useReferenceResolution && _referenceWidth > 0 && _referenceHeight > 0)
-            {
-                // Calculate how much we need to scale to match the reference resolution
-                float scaleX = width / _referenceWidth;
-                float scaleY = height / _referenceHeight;
-
-                // Blend between width-matching and height-matching based on the priority
-                // Using log-lerp for perceptually uniform blending (same as Unity's CanvasScaler)
-                float logScaleX = (float)Math.Log(scaleX);
-                float logScaleY = (float)Math.Log(scaleY);
-                float logScale = logScaleX + (logScaleY - logScaleX) * _matchWidthOrHeight;
-                _referenceScale = (float)Math.Exp(logScale);
-
-                // Logical dimensions in reference-scaled space
-                _width = width / _referenceScale;
-                _height = height / _referenceScale;
-
-                // Combined scale: reference scaling * DPI
-                _scale = _referenceScale * pixelRatio;
-            }
-            else
-            {
-                _referenceScale = 1.0f;
-                _width = width;
-                _height = height;
-                _scale = pixelRatio;
-            }
+            _framebufferScale = framebufferScale;
+            _width = width;
+            _height = height;
 
             UpdatePixelCalculations();
             Clear();
@@ -696,45 +603,30 @@ namespace Prowl.Quill
 
         /// <summary>
         /// Converts a point from physical pixel coordinates to logical units.
+        /// Handy for converting mouse/touch positions supplied by the host.
         /// </summary>
-        /// <remarks>
-        /// Use this to convert mouse/touch positions from the windowing system
-        /// (which are typically in physical pixels) to logical canvas coordinates.
-        /// </remarks>
-        /// <param name="pixelPoint">Point in physical pixel coordinates.</param>
-        /// <returns>Point in logical canvas units.</returns>
-        public Float2 PixelToLogical(Float2 pixelPoint) => pixelPoint / _scale;
+        public Float2 PixelToLogical(Float2 pixelPoint) => pixelPoint / _framebufferScale;
 
         /// <summary>
         /// Converts a value from physical pixels to logical units.
         /// </summary>
-        /// <param name="pixelValue">Value in physical pixels.</param>
-        /// <returns>Value in logical units.</returns>
-        public float PixelToLogical(float pixelValue) => pixelValue / _scale;
+        public float PixelToLogical(float pixelValue) => pixelValue / _framebufferScale;
 
         /// <summary>
         /// Converts a point from logical units to physical pixel coordinates.
         /// </summary>
-        /// <remarks>
-        /// Use this when you need to map logical canvas coordinates back to
-        /// physical pixel positions (e.g., for setting cursor position).
-        /// </remarks>
-        /// <param name="logicalPoint">Point in logical canvas units.</param>
-        /// <returns>Point in physical pixel coordinates.</returns>
-        public Float2 LogicalToPixel(Float2 logicalPoint) => logicalPoint * _scale;
+        public Float2 LogicalToPixel(Float2 logicalPoint) => logicalPoint * _framebufferScale;
 
         /// <summary>
         /// Converts a value from logical units to physical pixels.
         /// </summary>
-        /// <param name="logicalValue">Value in logical units.</param>
-        /// <returns>Value in physical pixels.</returns>
-        public float LogicalToPixel(float logicalValue) => logicalValue * _scale;
+        public float LogicalToPixel(float logicalValue) => logicalValue * _framebufferScale;
 
         #endregion
 
         private void UpdatePixelCalculations()
         {
-            _pixelWidth = 1.0f / _scale;
+            _pixelWidth = 1.0f / _framebufferScale;
             _pixelHalf = _pixelWidth * 0.5f;
         }
 
@@ -1148,10 +1040,10 @@ namespace Prowl.Quill
         {
             w = Maths.Max(0.0f, w);
             h = Maths.Max(0.0f, h);
-            // Work in unit space - conversion to pixels happens in TransformPoint
+            // Work in logical space - conversion to pixels happens in TransformPoint
             _state.scissor = _state.transform * Transform2D.CreateTranslation(x + w * 0.5f, y + h * 0.5f);
-            _state.scissorExtent.X = (w * 0.5f) * _scale;
-            _state.scissorExtent.Y = (h * 0.5f) * _scale;
+            _state.scissorExtent.X = (w * 0.5f) * _framebufferScale;
+            _state.scissorExtent.Y = (h * 0.5f) * _framebufferScale;
             InvalidateDrawState();
         }
 
@@ -1168,16 +1060,14 @@ namespace Prowl.Quill
 
             var pxform = _state.scissor;
             // Convert extents from pixel space back to logical space for intersection math
-            var ex = _state.scissorExtent.X / _scale;
-            var ey = _state.scissorExtent.Y / _scale;
+            var ex = _state.scissorExtent.X / _framebufferScale;
+            var ey = _state.scissorExtent.Y / _framebufferScale;
             var invxorm = _state.transform.Inverse();
             pxform = invxorm * pxform;
 
-            // Calculate extent in current transform space (all in logical units now)
             var tex = ex * Maths.Abs(pxform.A) + ey * Maths.Abs(pxform.C);
             var tey = ex * Maths.Abs(pxform.B) + ey * Maths.Abs(pxform.D);
 
-            // Find the intersection in logical space, then Scissor() re-scales to pixel space
             var rect = IntersectionOfRects(pxform.E - tex, pxform.F - tey, tex * 2, tey * 2, x, y, w, h);
             Scissor(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
         }
@@ -1243,9 +1133,9 @@ namespace Prowl.Quill
         /// <returns>The transformed point in pixel coordinates.</returns>
         public Float2 TransformPoint(in Float2 unitPoint)
         {
-            // Apply transform in unit space, then convert to pixels
+            // Apply transform in logical space, then convert to pixels
             Float2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
-            return transformedUnitPoint * _scale;
+            return transformedUnitPoint * _framebufferScale;
         }
 
         /// <summary>
@@ -1999,14 +1889,14 @@ namespace Prowl.Quill
                 dashPattern = new List<float>(_state.strokeDashPattern);
                 for (int i = 0; i < dashPattern.Count; i++)
                 {
-                    // Convert dash pattern from units to pixels
-                    dashPattern[i] = (dashPattern[i] * _state.strokeScale) * _scale;
+                    // Convert dash pattern from logical units to pixels
+                    dashPattern[i] = (dashPattern[i] * _state.strokeScale) * _framebufferScale;
                 }
             }
 
-            // Convert stroke width and dash offset from units to pixels
-            float pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _scale;
-            float pixelDashOffset = (_state.strokeDashOffset * _state.strokeScale) * _scale;
+            // Convert stroke width and dash offset from logical units to pixels
+            float pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _framebufferScale;
+            float pixelDashOffset = (_state.strokeDashOffset * _state.strokeScale) * _framebufferScale;
             var triangles = PolylineMesher.Create(copy, pixelStrokeWidth, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, pixelDashOffset);
 
 
@@ -2250,8 +2140,7 @@ namespace Prowl.Quill
             if (width <= 0 || height <= 0)
                 return;
 
-            // Center it so it scales and sits properly with AA.
-            // _pixelHalf and _pixelWidth are already in logical units (= 0.5/scale and 1.0/scale),
+            // Expand by a half-pixel on each side so the AA feather sits outside the requested rect.
             x -= _pixelHalf;
             y -= _pixelHalf;
             width += _pixelWidth;
@@ -2329,8 +2218,7 @@ namespace Prowl.Quill
             brRadii = Maths.Min(brRadii, maxRadius);
             blRadii = Maths.Min(blRadii, maxRadius);
 
-            // Adjust for proper AA.
-            // _pixelHalf and _pixelWidth are already in logical units, applied directly.
+            // Expand by a half-pixel on each side so the AA feather sits outside the requested rect.
             x -= _pixelHalf;
             y -= _pixelHalf;
             width += _pixelWidth;
@@ -2465,8 +2353,7 @@ namespace Prowl.Quill
             if (radius <= 0 || segments < 3)
                 return;
 
-            // Center it so it scales and sits properly with AA.
-            // _pixelHalf is already in logical units (= 0.5/scale).
+            // Expand by a half-pixel so the AA feather sits outside the requested radius.
             radius += _pixelHalf;
 
             // Store the starting index to reference _vertices
@@ -2664,98 +2551,83 @@ namespace Prowl.Quill
         public IEnumerable<FontFile> EnumerateSystemFonts() => _scribeRenderer.FontEngine.EnumerateSystemFonts();
 
         /// <summary>
-        /// Scales dimensional fields of TextLayoutSettings from logical units to physical pixels.
+        /// Scales dimensional fields of TextLayoutSettings from logical units to physical pixels
+        /// so they can be fed to the font engine (which always works in physical pixels).
         /// </summary>
         private TextLayoutSettings ScaleSettings(TextLayoutSettings settings)
         {
-            settings.PixelSize *= _scale;
-            settings.LetterSpacing *= _scale;
-            settings.WordSpacing *= _scale;
+            settings.PixelSize *= _framebufferScale;
+            settings.LetterSpacing *= _framebufferScale;
+            settings.WordSpacing *= _framebufferScale;
             if (settings.MaxWidth > 0)
-                settings.MaxWidth *= _scale;
+                settings.MaxWidth *= _framebufferScale;
             return settings;
         }
 
         /// <summary>
-        /// Measures the size of text when rendered with the specified settings.
+        /// Measures text. <paramref name="pixelSize"/> and <paramref name="letterSpacing"/> are in
+        /// logical units; the returned size is also in logical units.
         /// </summary>
-        /// <param name="text">The text to measure.</param>
-        /// <param name="pixelSize">The font size in logical units.</param>
-        /// <param name="font">The font to use.</param>
-        /// <param name="letterSpacing">Additional spacing between letters.</param>
-        /// <returns>The size of the text in logical units.</returns>
         public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0f)
         {
-            // Measure at scaled pixel size for accuracy, then convert back to logical units
-            float actualPixelSize = pixelSize * _scale;
-            float actualLetterSpacing = letterSpacing * _scale;
+            float actualPixelSize = pixelSize * _framebufferScale;
+            float actualLetterSpacing = letterSpacing * _framebufferScale;
             Float2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, actualPixelSize, font, actualLetterSpacing);
-            return pixelResult / _scale;
+            return pixelResult / _framebufferScale;
         }
 
         /// <summary>
-        /// Measures the size of text using custom layout settings.
+        /// Measures text using custom layout settings. All dimensional fields in
+        /// <paramref name="settings"/> are in logical units; the returned size is in logical units.
         /// </summary>
-        /// <param name="text">The text to measure.</param>
-        /// <param name="settings">The layout settings to use.</param>
-        /// <returns>The size of the text in logical units.</returns>
         public Float2 MeasureText(string text, TextLayoutSettings settings)
         {
             var scaled = ScaleSettings(settings);
             Float2 pixelResult = (Float2)_scribeRenderer.FontEngine.MeasureText(text, scaled);
-            return pixelResult / _scale;
+            return pixelResult / _framebufferScale;
         }
 
         /// <summary>
-        /// Draws text at the specified position.
+        /// Draws text at the specified logical-space position. <paramref name="pixelSize"/> and
+        /// <paramref name="letterSpacing"/> are in logical units; internally the canvas rasterizes
+        /// glyphs at <c>size × FramebufferScale</c> for HiDPI crispness.
         /// </summary>
-        /// <param name="text">The text to draw.</param>
-        /// <param name="x">The X coordinate.</param>
-        /// <param name="y">The Y coordinate.</param>
-        /// <param name="color">The text color.</param>
-        /// <param name="pixelSize">The font size in logical units.</param>
-        /// <param name="font">The font to use.</param>
-        /// <param name="letterSpacing">Additional spacing between letters.</param>
-        /// <param name="origin">Optional origin point for alignment (0-1 range, e.g., 0.5,0.5 for center).</param>
         public void DrawText(string text, float x, float y, Color32 color, float pixelSize, FontFile font, float letterSpacing = 0f, Float2? origin = null)
         {
-            // Try Slug mode if requested
             if (TextMode == TextRenderMode.Slug)
             {
                 _slugRenderer ??= new SlugTextRenderer(this);
 
                 Float2 position = new Float2(x, y);
-                float actualPixelSize = pixelSize * _scale;
+                float actualPixelSize = pixelSize * _framebufferScale;
                 if (origin.HasValue)
                 {
-                    float actualLetterSpacing = letterSpacing * _scale;
+                    float actualLetterSpacing = letterSpacing * _framebufferScale;
                     var textSize = _scribeRenderer.FontEngine.MeasureText(text, actualPixelSize, font, actualLetterSpacing);
-                    position.X -= (textSize.X / _scale) * origin.Value.X;
-                    position.Y -= (textSize.Y / _scale) * origin.Value.Y;
+                    position.X -= (textSize.X / _framebufferScale) * origin.Value.X;
+                    position.Y -= (textSize.Y / _framebufferScale) * origin.Value.Y;
                 }
-                // Write glyph quads directly into Canvas vertex/index buffers
                 _slugRenderer.DrawText(font, text, (float)position.X, (float)position.Y,
-                    color, actualPixelSize, _scale, _state.transform);
+                    color, actualPixelSize, _framebufferScale, _state.transform);
                 return;
             }
 
-            // Bitmap mode (default)
             Float2 bitmapPosition = new Float2(x, y);
-            float bitmapPixelSize = pixelSize * _scale;
-            float bitmapLetterSpacing = letterSpacing * _scale;
+            float bitmapPixelSize = pixelSize * _framebufferScale;
+            float bitmapLetterSpacing = letterSpacing * _framebufferScale;
             if (origin.HasValue)
             {
                 var textSize = _scribeRenderer.FontEngine.MeasureText(text, bitmapPixelSize, font, bitmapLetterSpacing);
-                bitmapPosition.X -= (textSize.X / _scale) * origin.Value.X;
-                bitmapPosition.Y -= (textSize.Y / _scale) * origin.Value.Y;
+                bitmapPosition.X -= (textSize.X / _framebufferScale) * origin.Value.X;
+                bitmapPosition.Y -= (textSize.Y / _framebufferScale) * origin.Value.Y;
             }
-            Float2 pixelPos = bitmapPosition * _scale;
+            Float2 pixelPos = bitmapPosition * _framebufferScale;
             _scribeRenderer.FontEngine.DrawText(text, pixelPos, new FontColor(color.R, color.G, color.B, color.A), bitmapPixelSize, font, bitmapLetterSpacing);
         }
 
         /// <summary>
-        /// Draws text using custom TextLayoutSettings.
-        /// DPI scaling is applied automatically to all dimensional settings.
+        /// Draws text using custom TextLayoutSettings. All coordinates and dimensional fields are
+        /// in logical units.
         /// </summary>
         public void DrawText(string text, float x, float y, Color32 color, TextLayoutSettings settings, Float2? origin = null)
         {
@@ -2764,23 +2636,23 @@ namespace Prowl.Quill
             if (origin.HasValue)
             {
                 var textSize = _scribeRenderer.FontEngine.MeasureText(text, scaled);
-                position.X -= (textSize.X / _scale) * origin.Value.X;
-                position.Y -= (textSize.Y / _scale) * origin.Value.Y;
+                position.X -= (textSize.X / _framebufferScale) * origin.Value.X;
+                position.Y -= (textSize.Y / _framebufferScale) * origin.Value.Y;
             }
-            Float2 pixelPosition = position * _scale;
+            Float2 pixelPosition = position * _framebufferScale;
             _scribeRenderer.FontEngine.DrawText(text, pixelPosition, new FontColor(color.R, color.G, color.B, color.A), scaled);
         }
 
         /// <summary>
-        /// Creates a text layout for later rendering.
-        /// DPI scaling is applied automatically. The returned layout is in pixel space;
-        /// use <see cref="PixelToLogical(Float2)"/> to convert cursor positions to logical units.
+        /// Creates a text layout. Input settings are in logical units; the returned layout
+        /// is in pixel space (use <see cref="PixelToLogical(Float2)"/> to convert cursor positions
+        /// back to logical units).
         /// </summary>
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _scribeRenderer.FontEngine.CreateLayout(text, ScaleSettings(settings));
 
         /// <summary>
-        /// Draws a pre-created text layout.
-        /// The layout should have been created via <see cref="CreateLayout"/> which applies DPI scaling automatically.
+        /// Draws a pre-created text layout at the given logical-space position.
+        /// The layout must have been created via <see cref="CreateLayout"/>.
         /// </summary>
         public void DrawLayout(TextLayout layout, float x, float y, Color32 color, Float2? origin = null)
         {
@@ -2788,10 +2660,10 @@ namespace Prowl.Quill
             if (origin.HasValue)
             {
                 var layoutSize = layout.Size;
-                position.X -= (layoutSize.X / _scale) * origin.Value.X;
-                position.Y -= (layoutSize.Y / _scale) * origin.Value.Y;
+                position.X -= (layoutSize.X / _framebufferScale) * origin.Value.X;
+                position.Y -= (layoutSize.Y / _framebufferScale) * origin.Value.Y;
             }
-            Float2 pixelPosition = position * _scale;
+            Float2 pixelPosition = position * _framebufferScale;
             _scribeRenderer.FontEngine.DrawLayout(layout, pixelPosition, new FontColor(color.R, color.G, color.B, color.A));
         }
 
@@ -2845,14 +2717,11 @@ namespace Prowl.Quill
         }
 
         /// <summary>
-        /// Draws a parsed markdown document at the specified position.
+        /// Draws a parsed markdown document at the specified logical-space position.
         /// </summary>
-        /// <param name="markdown">The markdown to render.</param>
-        /// <param name="position">The position to render at in logical units.</param>
         public void DrawMarkdown(QuillMarkdown markdown, Float2 position)
         {
-            // Convert units to pixels for position
-            Float2 pixelPosition = position * _scale;
+            Float2 pixelPosition = position * _framebufferScale;
             MarkdownLayoutEngine.Render(markdown.List, _scribeRenderer.FontEngine, _scribeRenderer, (Float2)pixelPosition, markdown.Settings);
         }
 
@@ -2867,23 +2736,15 @@ namespace Prowl.Quill
         /// <returns>True if a link was found at the point, false otherwise.</returns>
         public bool GetMarkdownLinkAt(QuillMarkdown markdown, Float2 renderOffset, Float2 point, bool useScissor, out string href)
         {
-            // Check if point is within scissor rect if enabled
             if (useScissor && _state.scissorExtent.X > 0)
             {
-                // Transform point to scissor space
                 var transformedPoint = _state.scissor.Inverse().TransformPoint(point);
-                //var transformedPoint = new Float2(
-                //    (float)(scissorMatrix.M11 * point.X + scissorMatrix.M12 * point.Y + scissorMatrix.M14),
-                //    (float)(scissorMatrix.M21 * point.X + scissorMatrix.M22 * point.Y + scissorMatrix.M24)
-                //);
 
-                // Check if the point is within the scissor extent
                 var distanceFromEdges = new Float2(
                     Maths.Abs(transformedPoint.X) - _state.scissorExtent.X,
                     Maths.Abs(transformedPoint.Y) - _state.scissorExtent.Y
                 );
 
-                // If either distance is positive, we're outside the scissor region
                 if (distanceFromEdges.X > 0.5 || distanceFromEdges.Y > 0.5)
                 {
                     href = null;
@@ -2891,10 +2752,8 @@ namespace Prowl.Quill
                 }
             }
 
-
-            // Convert units to pixels for point and render offset
-            Float2 pixelPoint = point * _scale;
-            Float2 pixelRenderOffset = renderOffset * _scale;
+            Float2 pixelPoint = point * _framebufferScale;
+            Float2 pixelRenderOffset = renderOffset * _framebufferScale;
             return MarkdownLayoutEngine.TryGetLinkAt(markdown.List, (Float2)pixelPoint, (Float2)pixelRenderOffset, out href);
         }
 

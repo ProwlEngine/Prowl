@@ -61,7 +61,9 @@ namespace Prowl.Quill.Slug
 
         /// <summary>
         /// Draw text by writing Slug glyph quads directly into Canvas vertex/index buffers.
-        /// Positions are in logical space; canvas transform is applied per-glyph.
+        /// <paramref name="pixelSize"/> is in physical pixels. <paramref name="x"/>/<paramref name="y"/>
+        /// are in logical units; <paramref name="scale"/> is the canvas framebuffer scale and is
+        /// used to convert the logical-space transform output to pixel space.
         /// </summary>
         internal void DrawText(FontFile font, string text, float x, float y,
             Color32 color, float pixelSize, float scale, Transform2D canvasTransform)
@@ -73,7 +75,6 @@ namespace Prowl.Quill.Slug
             // Canvas passes position as top-of-text. Slug needs baseline.
             y += cached.Data.Metrics.Ascent * logicalScale;
 
-            // Set up the draw state for Slug - we need the curve/band textures bound
             _canvas.SetSlugTextures(cached.CurveTexture, cached.BandTexture,
                 cached.Data.CurveTexture.Width, cached.Data.CurveTexture.Height,
                 cached.Data.BandTexture.Width, cached.Data.BandTexture.Height);
@@ -122,7 +123,6 @@ namespace Prowl.Quill.Slug
             float lx1 = baseX + g.BoundingBox.X2 * logicalScale + padLogical;
             float ly1 = baseY - g.BoundingBox.Y1 * logicalScale + padLogical;
 
-            // Transform each corner to pixel space
             Float2 p0 = transform.TransformPoint(new Float2(lx0, ly0)) * scale; // TL
             Float2 p1 = transform.TransformPoint(new Float2(lx1, ly0)) * scale; // TR
             Float2 p2 = transform.TransformPoint(new Float2(lx1, ly1)) * scale; // BR
