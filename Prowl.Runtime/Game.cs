@@ -252,30 +252,27 @@ public abstract class Game
 
     /// <summary>
     /// Called each frame right before <c>Paper.BeginFrame</c>. Compresses Paper's logical
-    /// window by <see cref="Window.ContentScale"/> so widgets scale up with the display's DPI,
-    /// and sets DisplayFramebufferScale to the total paper-logical → framebuffer-pixel factor.
+    /// window by <see cref="Window.ContentScale"/> so widgets sit in "points" (1 unit =
+    /// 1 logical dot at 1× density, matching the OS convention), and sets
+    /// <c>DisplayFramebufferScale</c> to <see cref="Window.ContentScale"/> so the canvas emits
+    /// pixel-space vertices that land correctly in the framebuffer and font atlases rasterize
+    /// at native density.
     /// <para>
-    /// The factor is <c>ContentScale × (FramebufferSize / WindowSize)</c>:
-    /// <list type="bullet">
-    /// <item>non-DPI-aware platforms (FB == Size): DFS = CS — the OS bitmap-upscales the rendered
-    /// framebuffer to the physical screen.</item>
-    /// <item>DPI-aware platforms (FB == Size × CS — e.g. macOS retina, DPI-aware Windows): DFS = CS²,
-    /// because the app renders straight into the physical-pixel framebuffer and there's no OS
-    /// upscaler to supply the extra factor.</item>
-    /// </list>
-    /// End result: widgets occupy the same physical-screen fraction regardless of platform.
+    /// Under this scheme a widget declared <c>Width(100)</c> occupies ~100 physical pixels at
+    /// 1× DPI and 200 physical pixels at 2× DPI — i.e. the same physical inches on the screen
+    /// regardless of display density. On non-DPI-aware platforms (Windows without the per-
+    /// monitor manifest) the OS bitmap-upscales the framebuffer on top of this, which makes
+    /// widgets look proportionally larger; on DPI-aware platforms (macOS retina, modern
+    /// Windows) the app renders straight into the physical framebuffer and sizes match native
+    /// apps.
     /// </para>
     /// </summary>
     protected virtual void PreparePaperFrame()
     {
         var winSize = Window.InternalWindow.Size;
-        var fbSize = Window.InternalWindow.FramebufferSize;
         float cs = Math.Max(0.01f, Window.ContentScale);
-        float fbRatio = winSize.X > 0 ? (float)fbSize.X / winSize.X : 1f;
-
         _paper.SetResolution(winSize.X / cs, winSize.Y / cs);
-        float dfs = cs * fbRatio;
-        _paper.DisplayFramebufferScale = new Float2(dfs, dfs);
+        _paper.DisplayFramebufferScale = new Float2(cs, cs);
     }
 
     /// <summary>
