@@ -32,8 +32,13 @@ public class GraphEditorWindow : DockPanel
     private Rect _canvasScreenRect;
 
     // ─── Interaction state ────────────────────────────────────────────────────────────
-    private enum DragMode { None, MoveNodes, MarqueeSelect, ConnectingWire }
+    private enum DragMode { None, MoveNodes, MoveStickyNotes, ResizeStickyNote, MarqueeSelect, ConnectingWire }
     private DragMode _dragMode = DragMode.None;
+
+    /// <summary>Resize handle size (graph-space pixels) at the bottom-right of each sticky.</summary>
+    private const float StickyResizeHandleSize = 16f;
+    /// <summary>Minimum sticky note size — prevents user dragging it to zero.</summary>
+    private static readonly Float2 StickyMinSize = new Float2(120, 80);
 
     /// <summary>Reference to a port on a node — used as the "from" endpoint of a connecting drag.</summary>
     private struct PortRef
@@ -62,6 +67,13 @@ public class GraphEditorWindow : DockPanel
     /// <summary>Per-node positions captured at drag-start, used to register one undo step per drag.</summary>
     private Dictionary<Guid, Float2>? _dragMoveStartPositions;
 
+    /// <summary>Cursor position in graph space at the moment node-drag began. Combined
+    /// with <see cref="_dragMoveStartPositions"/> to compute the *unsnapped* target
+    /// position each frame from the absolute cursor — that way snapping is a correction
+    /// applied on top of the raw position, not a cumulative shift that fights the cursor
+    /// on every small movement.</summary>
+    private Float2 _dragMoveStartCursor;
+
     /// <summary>Mouse button currently held — captured on press so drag handlers know intent.</summary>
     private PaperMouseBtn _pressedButton = PaperMouseBtn.Unknown;
 
@@ -70,6 +82,27 @@ public class GraphEditorWindow : DockPanel
 
     /// <summary>Selected wires (Edge Guids).</summary>
     private readonly HashSet<Guid> _selectedEdges = new();
+
+    /// <summary>Selected sticky notes (Guids).</summary>
+    private readonly HashSet<Guid> _selectedStickyNotes = new();
+
+    /// <summary>Sticky note whose corner is being resized. Null unless <see cref="_dragMode"/> is <see cref="DragMode.ResizeStickyNote"/>.</summary>
+    private Guid? _resizingStickyNote;
+    private Float2 _resizeStickyStartSize;
+
+    /// <summary>Pre-drag positions for sticky notes — same pattern as node drag undo.</summary>
+    private Dictionary<Guid, Float2>? _dragStickyStartPositions;
+
+    /// <summary>Alignment guide lines in graph space, populated during a snapped node
+    /// drag; rendered by the canvas so users can see which edge they snapped to.</summary>
+    private readonly List<(Float2 from, Float2 to)> _alignmentGuides = new();
+
+    /// <summary>Snap spacing when the snap modifier is held with no other-node match.
+    /// Matches the visual grid at its base level (see GraphRendering.DrawGrid: baseStep=32).</summary>
+    private const float SnapGridSize = 16f;
+    /// <summary>Snap-to-other-node tolerance in graph-space pixels (scaled by zoom for
+    /// consistent feel — see SnapToolerance()).</summary>
+    private const float SnapPixelTolerance = 8f;
 
     /// <summary>Node currently under the cursor (recomputed each frame).</summary>
     private Guid? _hoveredNode;
@@ -191,6 +224,29 @@ public class GraphEditorWindow : DockPanel
         return null;
     }
 
+    /// <summary>Return the topmost sticky note whose rect contains <paramref name="graphPoint"/>.</summary>
+    private StickyNote? HitTestStickyNote(Float2 graphPoint)
+    {
+        if (_graph == null) return null;
+        for (int i = _graph.StickyNotes.Count - 1; i >= 0; i--)
+        {
+            var s = _graph.StickyNotes[i];
+            if (graphPoint.X >= s.Position.X && graphPoint.X <= s.Position.X + s.Size.X &&
+                graphPoint.Y >= s.Position.Y && graphPoint.Y <= s.Position.Y + s.Size.Y)
+                return s;
+        }
+        return null;
+    }
+
+    /// <summary>True if <paramref name="graphPoint"/> is inside the bottom-right resize handle of <paramref name="sticky"/>.</summary>
+    private static bool IsOverStickyResizeHandle(StickyNote sticky, Float2 graphPoint)
+    {
+        float x0 = sticky.Position.X + sticky.Size.X - StickyResizeHandleSize;
+        float y0 = sticky.Position.Y + sticky.Size.Y - StickyResizeHandleSize;
+        return graphPoint.X >= x0 && graphPoint.X <= sticky.Position.X + sticky.Size.X
+            && graphPoint.Y >= y0 && graphPoint.Y <= sticky.Position.Y + sticky.Size.Y;
+    }
+
     // ─── Toolbar ──────────────────────────────────────────────────────────────────────
     private void DrawToolbar(Paper paper)
     {
@@ -278,6 +334,12 @@ public class GraphEditorWindow : DockPanel
             EditorGUI.TextField(paper, "graph_popup_search", "", _creationFilter)
                 .OnValueChanged(v => _creationFilter = v ?? "");
 
+            // Non-node entries — only shown when no wire is being dropped (a dropped wire
+            // is asking for a compatible node, so non-node items make no sense there).
+            bool showExtras = !_dragSourcePort.HasValue && string.IsNullOrEmpty(_creationFilter);
+            if (showExtras)
+                DrawStickyNoteEntry(paper);
+
             // Filtered list of node entries.
             var entries = NodeRegistry.GetForMarker(_graph.NodeMarkerInterface);
             using (paper.Column("graph_popup_list")
@@ -307,6 +369,47 @@ public class GraphEditorWindow : DockPanel
                 }
             }
         }
+    }
+
+    /// <summary>Extra row at the top of the popup for non-node entities. Currently just
+    /// Sticky Note; grows as we add groups, comments, etc.</summary>
+    private void DrawStickyNoteEntry(Paper paper)
+    {
+        const string id = "graph_popup_entry_sticky";
+        using (paper.Row(id).Height(20)
+            .ChildLeft(6).ChildRight(6).RowBetween(6)
+            .BackgroundColor(System.Drawing.Color.FromArgb(255, 64, 60, 48))
+            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(255, 80, 74, 58)).End()
+            .Rounded(3)
+            .OnClick(_ => SpawnStickyNote())
+            .Enter())
+        {
+            paper.Box($"{id}_title").Height(20)
+                .Text($"{EditorIcons.NoteSticky}  Sticky Note", EditorTheme.DefaultFont!)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
+                .Alignment(TextAlignment.MiddleLeft);
+        }
+    }
+
+    private void SpawnStickyNote()
+    {
+        if (_graph == null) return;
+        var note = new StickyNote { Position = _creationMenuGraph };
+        _graph.StickyNotes.Add(note);
+
+        var graph = _graph;
+        Undo.RegisterAction("Add Sticky Note",
+            undo: () => graph.StickyNotes.Remove(note),
+            redo: () => graph.StickyNotes.Add(note));
+
+        // Auto-select so the Inspector opens for Title/Body editing.
+        _selectedNodes.Clear();
+        _selectedEdges.Clear();
+        _selectedStickyNotes.Clear();
+        _selectedStickyNotes.Add(note.Id);
+        SyncSelectionSystem();
+
+        CloseCreationMenu();
     }
 
     private void DrawCreationEntry(Paper paper, NodeRegistration reg)
@@ -444,7 +547,8 @@ public class GraphEditorWindow : DockPanel
         GraphRendering.DrawGrid(canvas, visibleGraphRect, _view.Zoom);
         foreach (var g in _graph.Groups) GraphRendering.DrawGroup(canvas, g);
         foreach (var note in _graph.StickyNotes)
-            GraphRendering.DrawStickyNote(canvas, note, _view.Zoom, font);
+            GraphRendering.DrawStickyNote(canvas, note, _view.Zoom, font,
+                isSelected: _selectedStickyNotes.Contains(note.Id));
 
         // Wires under nodes so the node body covers the wire root for a clean look.
         foreach (var edge in _graph.Edges)
@@ -500,6 +604,21 @@ public class GraphEditorWindow : DockPanel
         {
             var rect = MakeMarqueeRect(_marqueeStartGraph.Value, _marqueeEndGraph.Value);
             GraphRendering.DrawMarquee(canvas, rect, _view.Zoom);
+        }
+
+        // Alignment snap guide lines — only visible while a snapped drag is active.
+        if (_dragMode == DragMode.MoveNodes && _alignmentGuides.Count > 0)
+        {
+            var guideColor = new Color32(255, 200, 80, 180);
+            canvas.SetStrokeColor(guideColor);
+            canvas.SetStrokeWidth(1.0f);
+            foreach (var (from, to) in _alignmentGuides)
+            {
+                canvas.BeginPath();
+                canvas.MoveTo(from.X, from.Y);
+                canvas.LineTo(to.X, to.Y);
+                canvas.Stroke();
+            }
         }
 
         canvas.RestoreState();
@@ -574,7 +693,29 @@ public class GraphEditorWindow : DockPanel
             {
                 _selectedNodes.Clear();
                 _selectedEdges.Clear();
+                _selectedStickyNotes.Clear();
                 _selectedNodes.Add(hit.Id);
+            }
+            SyncSelectionSystem();
+            return;
+        }
+
+        // Sticky note hit — same selection model as nodes, so selecting one lands it in
+        // the Inspector (so users can edit Title/Body). Checked before wires so stickies
+        // on top of a wire capture the click.
+        var stickyHit = HitTestStickyNote(graphPoint);
+        if (stickyHit != null)
+        {
+            if (additive)
+            {
+                if (!_selectedStickyNotes.Add(stickyHit.Id)) _selectedStickyNotes.Remove(stickyHit.Id);
+            }
+            else
+            {
+                _selectedNodes.Clear();
+                _selectedEdges.Clear();
+                _selectedStickyNotes.Clear();
+                _selectedStickyNotes.Add(stickyHit.Id);
             }
             SyncSelectionSystem();
             return;
@@ -595,6 +736,7 @@ public class GraphEditorWindow : DockPanel
             {
                 _selectedNodes.Clear();
                 _selectedEdges.Clear();
+                _selectedStickyNotes.Clear();
                 _selectedEdges.Add(wireHit.Id);
             }
             SyncSelectionSystem();
@@ -606,6 +748,7 @@ public class GraphEditorWindow : DockPanel
         {
             _selectedNodes.Clear();
             _selectedEdges.Clear();
+            _selectedStickyNotes.Clear();
             SyncSelectionSystem();
         }
     }
@@ -667,7 +810,6 @@ public class GraphEditorWindow : DockPanel
             }
 
             // Left-click on a node → drag-move it (and any other selected nodes).
-            // Left-click on empty space → marquee select.
             var hit = HitTestNode(graphPoint);
             if (hit != null)
             {
@@ -677,24 +819,68 @@ public class GraphEditorWindow : DockPanel
                     _selectedNodes.Add(hit.Id);
                     SyncSelectionSystem();
                 }
-                // Capture node positions before the drag so we can register a single undo
-                // step at drag-end with before/after positions.
+                // Capture node positions + cursor at drag start so each frame can
+                // recompute absolute (unsnapped) positions. This is also what the
+                // single undo step at drag-end uses for before/after.
                 _dragMoveStartPositions = new Dictionary<Guid, Float2>();
                 foreach (var id in _selectedNodes)
                 {
                     var n = _graph.FindNode(id);
                     if (n != null) _dragMoveStartPositions[id] = n.Position;
                 }
+                _dragMoveStartCursor = graphPoint;
                 _dragMode = DragMode.MoveNodes;
+                return;
             }
-            else
+
+            // Sticky-note hit-test — resize corner wins over body drag so users can grab
+            // the bottom-right handle even when body-drag would otherwise capture the event.
+            var sticky = HitTestStickyNote(graphPoint);
+            if (sticky != null)
             {
-                _dragMode = DragMode.MarqueeSelect;
-                _marqueeStartGraph = graphPoint;
-                _marqueeEndGraph = graphPoint;
-                _marqueeAdditive = Input.IsCtrlPressed || Input.IsShiftPressed;
+                if (IsOverStickyResizeHandle(sticky, graphPoint))
+                {
+                    _resizingStickyNote = sticky.Id;
+                    _resizeStickyStartSize = sticky.Size;
+                    _dragMode = DragMode.ResizeStickyNote;
+                    return;
+                }
+
+                if (!_selectedStickyNotes.Contains(sticky.Id))
+                {
+                    if (!Input.IsCtrlPressed && !Input.IsShiftPressed) _selectedStickyNotes.Clear();
+                    _selectedStickyNotes.Add(sticky.Id);
+                    SyncSelectionSystem();
+                }
+                _dragStickyStartPositions = new Dictionary<Guid, Float2>();
+                foreach (var id in _selectedStickyNotes)
+                {
+                    var s = FindStickyNote(id);
+                    if (s != null) _dragStickyStartPositions[id] = s.Position;
+                }
+                _dragMode = DragMode.MoveStickyNotes;
+                return;
             }
+
+            // Left-click on empty space → marquee select.
+            _dragMode = DragMode.MarqueeSelect;
+            _marqueeStartGraph = graphPoint;
+            _marqueeEndGraph = graphPoint;
+            _marqueeAdditive = Input.IsCtrlPressed || Input.IsShiftPressed;
         }
+    }
+
+    private StickyNote? FindStickyNote(Guid id)
+    {
+        if (_graph == null) return null;
+        foreach (var s in _graph.StickyNotes) if (s.Id == id) return s;
+        return null;
+    }
+
+    private static StickyNote? FindStickyNoteIn(Prowl.Runtime.GraphTools.Graph graph, Guid id)
+    {
+        foreach (var s in graph.StickyNotes) if (s.Id == id) return s;
+        return null;
     }
 
     /// <summary>
@@ -720,13 +906,52 @@ public class GraphEditorWindow : DockPanel
 
         switch (_dragMode)
         {
-            case DragMode.MoveNodes:
-                // Convert screen-pixel delta to graph-space delta (just divide by zoom).
-                var graphDelta = e.Delta / _view.Zoom;
-                foreach (var id in _selectedNodes)
+            case DragMode.MoveStickyNotes:
                 {
-                    var node = _graph.FindNode(id);
-                    if (node != null) node.Position += graphDelta;
+                    var d = e.Delta / _view.Zoom;
+                    foreach (var id in _selectedStickyNotes)
+                    {
+                        var s = FindStickyNote(id);
+                        if (s != null) s.Position += d;
+                    }
+                }
+                break;
+
+            case DragMode.ResizeStickyNote:
+                if (_resizingStickyNote.HasValue)
+                {
+                    var s = FindStickyNote(_resizingStickyNote.Value);
+                    if (s != null)
+                    {
+                        // Resize from bottom-right corner — the cursor's graph position
+                        // relative to the note's fixed top-left determines the new size.
+                        var cursor = ScreenToGraph(e.PointerPosition);
+                        s.Size = new Float2(
+                            MathF.Max(StickyMinSize.X, cursor.X - s.Position.X),
+                            MathF.Max(StickyMinSize.Y, cursor.Y - s.Position.Y));
+                    }
+                }
+                break;
+
+            case DragMode.MoveNodes:
+                {
+                    // Absolute positioning: each node = its drag-start position plus
+                    // the cursor's graph-space displacement since drag-start. Computing
+                    // from absolutes every frame means snapping can be re-evaluated
+                    // against the *intended* position instead of accumulating shifts —
+                    // when the user moves the cursor past the snap tolerance, the node
+                    // pulls away cleanly instead of re-snapping.
+                    if (_dragMoveStartPositions == null) break;
+                    var cursorNow = ScreenToGraph(e.PointerPosition);
+                    var cursorDelta = cursorNow - _dragMoveStartCursor;
+                    foreach (var kv in _dragMoveStartPositions)
+                    {
+                        var n = _graph.FindNode(kv.Key);
+                        if (n != null) n.Position = kv.Value + cursorDelta;
+                    }
+                    _alignmentGuides.Clear();
+                    if (IsSnapModifierDown())
+                        ApplyAlignmentSnap();
                 }
                 break;
 
@@ -766,14 +991,59 @@ public class GraphEditorWindow : DockPanel
             _dragMoveStartPositions = null;
         }
 
+        // Sticky note move/resize → one undo step per drag.
+        if (_dragMode == DragMode.MoveStickyNotes && _dragStickyStartPositions != null && _graph != null)
+        {
+            var graph = _graph;
+            var starts = _dragStickyStartPositions;
+            var ends = new Dictionary<Guid, Float2>();
+            bool anyMoved = false;
+            foreach (var kv in starts)
+            {
+                var s = FindStickyNote(kv.Key);
+                if (s == null) continue;
+                ends[kv.Key] = s.Position;
+                if (!s.Position.Equals(kv.Value)) anyMoved = true;
+            }
+            if (anyMoved)
+            {
+                Undo.RegisterAction("Move Sticky Notes",
+                    undo: () => { foreach (var kv in starts) { var s = FindStickyNoteIn(graph, kv.Key); if (s != null) s.Position = kv.Value; } },
+                    redo: () => { foreach (var kv in ends)   { var s = FindStickyNoteIn(graph, kv.Key); if (s != null) s.Position = kv.Value; } });
+            }
+            _dragStickyStartPositions = null;
+        }
+        else if (_dragMode == DragMode.ResizeStickyNote && _resizingStickyNote.HasValue && _graph != null)
+        {
+            var graph = _graph;
+            var id = _resizingStickyNote.Value;
+            var s = FindStickyNoteIn(graph, id);
+            if (s != null && !s.Size.Equals(_resizeStickyStartSize))
+            {
+                var before = _resizeStickyStartSize;
+                var after = s.Size;
+                Undo.RegisterAction("Resize Sticky Note",
+                    undo: () => { var x = FindStickyNoteIn(graph, id); if (x != null) x.Size = before; },
+                    redo: () => { var x = FindStickyNoteIn(graph, id); if (x != null) x.Size = after; });
+            }
+            _resizingStickyNote = null;
+        }
+
         if (_dragMode == DragMode.MarqueeSelect && _marqueeStartGraph.HasValue && _marqueeEndGraph.HasValue && _graph != null)
         {
             var rect = MakeMarqueeRect(_marqueeStartGraph.Value, _marqueeEndGraph.Value);
-            if (!_marqueeAdditive) { _selectedNodes.Clear(); _selectedEdges.Clear(); }
+            if (!_marqueeAdditive) { _selectedNodes.Clear(); _selectedEdges.Clear(); _selectedStickyNotes.Clear(); }
 
             foreach (var n in _graph.Nodes)
                 if (GraphLayout.GetNodeRect(n).Intersects(rect))
                     _selectedNodes.Add(n.Id);
+
+            foreach (var s in _graph.StickyNotes)
+            {
+                var sRect = new Rect(s.Position.X, s.Position.Y,
+                                      s.Position.X + s.Size.X, s.Position.Y + s.Size.Y);
+                if (sRect.Intersects(rect)) _selectedStickyNotes.Add(s.Id);
+            }
 
             // Wire hit: any sample point on the bezier inside the marquee rect counts.
             foreach (var edge in _graph.Edges)
@@ -816,6 +1086,7 @@ public class GraphEditorWindow : DockPanel
         _marqueeEndGraph = null;
         _dragSourcePort = null;
         _dragWireEndGraph = null;
+        _alignmentGuides.Clear();
     }
 
     /// <summary>
@@ -921,6 +1192,100 @@ public class GraphEditorWindow : DockPanel
         return new Rect(minX, minY, maxX, maxY);
     }
 
+    // ─── Alignment snap ──────────────────────────────────────────────────────────────
+    // When Shift is held during a node drag, the primary (most-recently-picked) node's
+    // left/centre/right and top/mid/bottom edges look for matches on every other node's
+    // edges within a screen-pixel tolerance. If a match is found, the whole selection
+    // shifts by the snap correction so the group stays coherent. No match = fall back
+    // to grid snap. Guide lines get recorded for the canvas renderer.
+
+    private static bool IsSnapModifierDown() => Input.IsShiftPressed;
+
+    /// <summary>Graph-space snap tolerance scaled by zoom so it feels consistent.</summary>
+    private float SnapTolerance() => SnapPixelTolerance / (_view?.Zoom ?? 1f);
+
+    private void ApplyAlignmentSnap()
+    {
+        if (_graph == null || _selectedNodes.Count == 0) return;
+
+        // Pick the anchor node — last inserted in the selection set iteration; stable
+        // enough for drag purposes since HashSet<Guid> enumeration isn't guaranteed
+        // ordered, but all selected nodes shift together so the choice of anchor only
+        // changes WHICH edges are considered, not the correctness of the snap.
+        Node? anchor = null;
+        foreach (var id in _selectedNodes)
+        {
+            anchor = _graph.FindNode(id);
+            if (anchor != null) break;
+        }
+        if (anchor == null) return;
+
+        var aRect = GraphLayout.GetNodeRect(anchor);
+        float aL = (float)aRect.Min.X, aR = (float)aRect.Max.X;
+        float aT = (float)aRect.Min.Y, aB = (float)aRect.Max.Y;
+        float aCx = (aL + aR) * 0.5f, aCy = (aT + aB) * 0.5f;
+
+        float tol = SnapTolerance();
+        float bestDx = 0, bestDy = 0;
+        float bestAbsDx = tol, bestAbsDy = tol;
+        float? snapLineX = null, snapLineY = null;
+
+        // Try each non-selected node's vertical (X) edges against anchor's X edges, and
+        // same for Y. "Best" = smallest absolute correction across all pairings.
+        foreach (var other in _graph.Nodes)
+        {
+            if (_selectedNodes.Contains(other.Id)) continue;
+            var oRect = GraphLayout.GetNodeRect(other);
+            float oL = (float)oRect.Min.X, oR = (float)oRect.Max.X;
+            float oT = (float)oRect.Min.Y, oB = (float)oRect.Max.Y;
+            float oCx = (oL + oR) * 0.5f, oCy = (oT + oB) * 0.5f;
+
+            foreach (float anchorX in new[] { aL, aCx, aR })
+                foreach (float otherX in new[] { oL, oCx, oR })
+                {
+                    float dx = otherX - anchorX;
+                    if (MathF.Abs(dx) < bestAbsDx) { bestAbsDx = MathF.Abs(dx); bestDx = dx; snapLineX = otherX; }
+                }
+            foreach (float anchorY in new[] { aT, aCy, aB })
+                foreach (float otherY in new[] { oT, oCy, oB })
+                {
+                    float dy = otherY - anchorY;
+                    if (MathF.Abs(dy) < bestAbsDy) { bestAbsDy = MathF.Abs(dy); bestDy = dy; snapLineY = otherY; }
+                }
+        }
+
+        // Grid fallback when no other-node snap found (axis-by-axis).
+        if (!snapLineX.HasValue)
+        {
+            float gridTarget = MathF.Round(aL / SnapGridSize) * SnapGridSize;
+            bestDx = gridTarget - aL;
+        }
+        if (!snapLineY.HasValue)
+        {
+            float gridTarget = MathF.Round(aT / SnapGridSize) * SnapGridSize;
+            bestDy = gridTarget - aT;
+        }
+
+        // Shift the whole selection.
+        if (bestDx != 0 || bestDy != 0)
+        {
+            var delta = new Float2(bestDx, bestDy);
+            foreach (var id in _selectedNodes)
+            {
+                var n = _graph.FindNode(id);
+                if (n != null) n.Position += delta;
+            }
+        }
+
+        // Record guide lines at the matched edges so the canvas can render them. Guides
+        // span a generous range centred on the anchor — rendered behind nodes, clipped
+        // by the canvas.
+        if (snapLineX.HasValue)
+            _alignmentGuides.Add((new Float2(snapLineX.Value, aT - 200), new Float2(snapLineX.Value, aB + 200)));
+        if (snapLineY.HasValue)
+            _alignmentGuides.Add((new Float2(aL - 200, snapLineY.Value), new Float2(aR + 200, snapLineY.Value)));
+    }
+
     /// <summary>True if any sample point along the wire's bezier falls inside <paramref name="rect"/>.</summary>
     private static bool WireIntersectsRect(Float2 from, Float2 to, Rect rect)
     {
@@ -949,6 +1314,7 @@ public class GraphEditorWindow : DockPanel
         // drops any edges attached to those nodes, which we capture separately.
         var removedNodes = new List<Node>();
         var removedEdges = new List<Edge>();
+        var removedStickies = new List<StickyNote>();
 
         foreach (var id in _selectedNodes)
         {
@@ -964,12 +1330,18 @@ public class GraphEditorWindow : DockPanel
             var e = _graph.Edges.Find(x => x.Id == id);
             if (e != null && !removedEdges.Contains(e)) removedEdges.Add(e);
         }
+        foreach (var id in _selectedStickyNotes)
+        {
+            var s = FindStickyNote(id);
+            if (s != null) removedStickies.Add(s);
+        }
 
-        if (removedNodes.Count == 0 && removedEdges.Count == 0) return;
+        if (removedNodes.Count == 0 && removedEdges.Count == 0 && removedStickies.Count == 0) return;
 
         foreach (var n in removedNodes) _graph.RemoveNode(n.Id);
         if (_selectedEdges.Count > 0)
             _graph.Edges.RemoveAll(e => _selectedEdges.Contains(e.Id));
+        foreach (var s in removedStickies) _graph.StickyNotes.Remove(s);
 
         var graph = _graph;
         Undo.RegisterAction("Delete Graph Elements",
@@ -977,27 +1349,32 @@ public class GraphEditorWindow : DockPanel
             {
                 foreach (var n in removedNodes) graph.Nodes.Add(n);
                 foreach (var e in removedEdges) graph.Edges.Add(e);
+                foreach (var s in removedStickies) graph.StickyNotes.Add(s);
             },
             redo: () =>
             {
                 foreach (var n in removedNodes) graph.RemoveNode(n.Id);
                 foreach (var e in removedEdges) graph.Edges.Remove(e);
+                foreach (var s in removedStickies) graph.StickyNotes.Remove(s);
             });
 
         _selectedNodes.Clear();
         _selectedEdges.Clear();
+        _selectedStickyNotes.Clear();
         SyncSelectionSystem();
     }
 
     /// <summary>
-    /// Push our internal node-selection set to the global <see cref="Selection"/> system so
-    /// the Inspector panel shows the selected node(s). Called whenever node selection
-    /// changes. No-op when nothing is selected — we don't want to clear the Inspector just
-    /// because the user clicked an empty part of the canvas.
+    /// Push our internal selection (nodes + sticky notes) to the global
+    /// <see cref="Selection"/> system so the Inspector panel shows the selected item(s).
+    /// Called whenever selection changes. No-op when nothing is selected — we don't want
+    /// to clear the Inspector just because the user clicked an empty part of the canvas.
     /// </summary>
     private void SyncSelectionSystem()
     {
-        if (_graph == null || _selectedNodes.Count == 0) return;
+        if (_graph == null) return;
+        if (_selectedNodes.Count == 0 && _selectedStickyNotes.Count == 0) return;
+
         bool first = true;
         foreach (var id in _selectedNodes)
         {
@@ -1005,6 +1382,13 @@ public class GraphEditorWindow : DockPanel
             if (n == null) continue;
             if (first) { Selection.Select(n); first = false; }
             else Selection.AddToSelection(n);
+        }
+        foreach (var id in _selectedStickyNotes)
+        {
+            var s = FindStickyNote(id);
+            if (s == null) continue;
+            if (first) { Selection.Select(s); first = false; }
+            else Selection.AddToSelection(s);
         }
     }
 

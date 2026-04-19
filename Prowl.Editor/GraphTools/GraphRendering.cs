@@ -128,26 +128,61 @@ public static class GraphRendering
 
     // ─── Sticky notes ────────────────────────────────────────────────────────────────
 
-    public static void DrawStickyNote(Canvas canvas, StickyNote note, float zoom, Prowl.Scribe.FontFile? font)
+    public static void DrawStickyNote(Canvas canvas, StickyNote note, float zoom, Prowl.Scribe.FontFile? font, bool isSelected = false)
     {
         var bg = new Color32(note.PackedColor);
-        canvas.RoundedRectFilled(note.Position.X, note.Position.Y, note.Size.X, note.Size.Y,
-            6f, 6f, 6f, 6f, bg);
+        float x = note.Position.X, y = note.Position.Y;
+        float w = note.Size.X, h = note.Size.Y;
 
-        // Title strip
-        var titleBg = new Color32((byte)Math.Max(0, bg.R - 30), (byte)Math.Max(0, bg.G - 30),
-                                   (byte)Math.Max(0, bg.B - 30), bg.A);
-        canvas.RoundedRectFilled(note.Position.X, note.Position.Y, note.Size.X, 22f,
-            6f, 6f, 0f, 0f, titleBg);
+        canvas.RoundedRectFilled(x, y, w, h, 6f, 6f, 6f, 6f, bg);
 
-        if (font != null && zoom > 0.5f)
+        // Title strip — darker tint of the body colour.
+        var titleBg = new Color32(
+            (byte)Math.Max(0, bg.R - 30),
+            (byte)Math.Max(0, bg.G - 30),
+            (byte)Math.Max(0, bg.B - 30),
+            bg.A);
+        canvas.RoundedRectFilled(x, y, w, 22f, 6f, 6f, 0f, 0f, titleBg);
+
+        // Dark text reads well on a light amber body. Title is always shown above a
+        // modest zoom threshold; body appears a bit later for LOD but doesn't require
+        // non-empty text so users see the "empty body" area during editing.
+        var ink = new Color32(40, 40, 50, 255);
+        if (font != null && zoom > 0.35f)
         {
-            canvas.DrawText(note.Title, note.Position.X + 6, note.Position.Y + 4,
-                new Color32(40, 40, 50, 255), 14f, font);
-            if (zoom > 0.7f && !string.IsNullOrEmpty(note.Body))
-                canvas.DrawText(note.Body, note.Position.X + 6, note.Position.Y + 28,
-                    new Color32(40, 40, 50, 255), 12f, font);
+            canvas.DrawText(note.Title, x + 6, y + 4, ink, 14f, font);
+            if (zoom > 0.55f && !string.IsNullOrEmpty(note.Body))
+                canvas.DrawText(note.Body, x + 6, y + 28, ink, 12f, font);
         }
+
+        // Selection border — matches the amber outline used on selected nodes so the
+        // selection convention stays consistent across element types.
+        if (isSelected)
+        {
+            canvas.BeginPath();
+            canvas.RoundedRect(x, y, w, h, 6f);
+            canvas.SetStrokeColor(new Color32(255, 200, 80, 255));
+            canvas.SetStrokeWidth(2.0f);
+            canvas.Stroke();
+        }
+
+        // Resize handle — small triangular grip in the bottom-right corner. Drawn on
+        // top of the body so it's always visible. The hit-test uses the same 16×16
+        // corner region (see GraphEditorWindow.IsOverStickyResizeHandle).
+        float hx1 = x + w, hy1 = y + h;
+        float hx0 = hx1 - 14f, hy0 = hy1 - 14f;
+        var gripCol = new Color32(
+            (byte)Math.Max(0, bg.R - 60),
+            (byte)Math.Max(0, bg.G - 60),
+            (byte)Math.Max(0, bg.B - 60),
+            bg.A);
+        canvas.BeginPath();
+        canvas.MoveTo(hx1, hy0);
+        canvas.LineTo(hx1, hy1);
+        canvas.LineTo(hx0, hy1);
+        canvas.ClosePath();
+        canvas.SetFillColor(gripCol);
+        canvas.Fill();
     }
 
     // ─── Nodes ───────────────────────────────────────────────────────────────────────
