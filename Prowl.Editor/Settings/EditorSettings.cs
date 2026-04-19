@@ -92,6 +92,8 @@ public class EditorSettings
                 
         EditorApplication.Instance?.InitializeFont();
 
+        EditorTheme.UserScale = t.UserScale;
+
         // Sizing
         EditorTheme.MenuBarHeight = t.MenuBarHeight;
         EditorTheme.RowHeight = t.RowHeight;

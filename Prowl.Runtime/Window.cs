@@ -28,6 +28,54 @@ public static class Window
     public static event Action<WindowState>? StateChanged;
     public static event Action<string[]>? FileDrop;
 
+    private static nint s_contentScaleProc;
+    private static bool s_contentScaleResolved;
+
+    /// <summary>
+    /// System content scale factor (1.0 = 100%, 1.25 = 125%, 1.5 = 150%, etc.).
+    /// Derived from framebuffer-to-window size ratio reported by GLFW.
+    /// </summary>
+    public static float ContentScale
+    {
+        get
+        {
+            if (InternalWindow == null) return 1f;
+
+            nint? nativeGlfw = InternalWindow.Native?.Glfw;
+            if (nativeGlfw.HasValue && TryGetContentScale(nativeGlfw.Value, out float scale))
+                return scale;
+
+            // If the scale through the native method is unavailable, Framebuffer pixels ÷ logical pixels = OS content scale
+            var fb = InternalWindow.FramebufferSize;
+            var win = InternalWindow.Size;
+            return win.X > 0 ? (float)fb.X / win.X : 1f;
+        }
+    }
+
+    private static unsafe bool TryGetContentScale(nint glfwWindow, out float scale)
+    {
+        scale = 1f;
+
+        if (!s_contentScaleResolved)
+        {
+            s_contentScaleResolved = true;
+            try
+            {
+                // Resolve from the same native library Silk.NET already loaded
+                s_contentScaleProc = Silk.NET.GLFW.GlfwProvider.GLFW.Value.Context.GetProcAddress("glfwGetWindowContentScale");
+            }
+            catch { /* symbol not exported (GLFW < 3.3) */ }
+        }
+
+        if (s_contentScaleProc == 0)
+            return false;
+
+        float x, y;
+        ((delegate* unmanaged[Cdecl]<nint, float*, float*, void>)s_contentScaleProc)(glfwWindow, &x, &y);
+        scale = x;
+        return true;
+    }
+
     public static Vector2D<int> Position
     {
         get { return InternalWindow.Position; }

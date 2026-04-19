@@ -64,7 +64,7 @@ public abstract class Game
             _paperRenderer = new PaperRenderer();
             _paperRenderer.Initialize(fbSize.X, fbSize.Y);
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
-            _paper.SetReferenceResolution(1280, 720);
+            _paper.SetReferenceResolution(width, height);
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
 
             BuiltInAssets.Initialize();
