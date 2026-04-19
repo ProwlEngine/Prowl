@@ -29,6 +29,7 @@ namespace NeoVeldrid.OpenGL
         private readonly ConcurrentQueue<OpenGLDeferredResource> _resourcesToDispose
             = new ConcurrentQueue<OpenGLDeferredResource>();
         private IntPtr _glContext;
+        private bool _glContextDestroyed;
         private Action<IntPtr> _makeCurrent;
         private Func<IntPtr> _getCurrentContext;
         private Action<IntPtr> _deleteContext;
@@ -793,21 +794,22 @@ namespace NeoVeldrid.OpenGL
 
         private void FlushDisposables()
         {
-            while (_resourcesToDispose.TryDequeue(out OpenGLDeferredResource resource))
+            if (_glContextDestroyed) return;
+
+            try
             {
-                try
+                while (_resourcesToDispose.TryDequeue(out OpenGLDeferredResource resource))
                 {
                     resource.DestroyGLResources();
                 }
-                catch (Exception)
-                {
-                    // After SDL_DestroyWindow, the GL context is gone and Silk.NET's
-                    // lazy symbol loader will throw SymbolLoadingException for any GL
-                    // function not yet resolved. Upstream NeoVeldrid doesn't hit this
-                    // because its function pointers are eagerly loaded and silently
-                    // no-op on a dead context. Skip the resource - the OS reclaims
-                    // all GL objects when the process exits.
-                }
+            }
+            catch (SymbolLoadingException)
+            {
+                // GL context already gone (SDL_DestroyWindow ran or the OS reclaimed it).
+                // Silk.NET's lazy symbol loader throws on any unresolved GL call. Stop
+                // attempting GL cleanup; remaining resources stay in the queue and the
+                // OS reclaims their GL objects on process exit.
+                _glContextDestroyed = true;
             }
         }
 
