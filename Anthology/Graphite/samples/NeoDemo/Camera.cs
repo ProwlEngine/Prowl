@@ -23,7 +23,6 @@ namespace NeoVeldrid.NeoDemo
         private float _yaw;
         private float _pitch;
 
-        private Vector2 _mousePressedPos;
         private bool _mousePressed = false;
         private GraphicsDevice _gd;
         private bool _useReverseDepth;
@@ -118,17 +117,16 @@ namespace NeoVeldrid.NeoDemo
                 if (!_mousePressed)
                 {
                     _mousePressed = true;
-                    _mousePressedPos = InputTracker.MousePosition;
                     _window.CursorVisible = false;
+                    _window.CursorRelativeMode = true;
                 }
-                Vector2 mouseDelta = _mousePressedPos - InputTracker.MousePosition;
-                _window.SetMousePosition((int)_mousePressedPos.X, (int)_mousePressedPos.Y);
-                Yaw += mouseDelta.X * 0.002f;
-                Pitch += mouseDelta.Y * 0.002f;
+                Vector2 mouseDelta = _window.MouseDelta;
+                Yaw -= mouseDelta.X * 0.002f;
+                Pitch -= mouseDelta.Y * 0.002f;
             }
-            else if(_mousePressed)
+            else if (_mousePressed)
             {
-                _window.SetMousePosition((int)_mousePressedPos.X, (int)_mousePressedPos.Y);
+                _window.CursorRelativeMode = false;
                 _window.CursorVisible = true;
                 _mousePressed = false;
             }

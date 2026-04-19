@@ -111,3 +111,47 @@ The `NeoVeldrid.ImGui` package now uses ImGui.NET 1.91.6.1 (up from 1.90.1.1). T
 **Likelihood Of Impact: Low**
 
 The `NeoVeldrid.ImageSharp` package now uses SixLabors.ImageSharp 3.x (up from 1.x). The NeoVeldrid.ImageSharp API itself is unchanged, but if your own code also calls ImageSharp directly, you may need to update it. See the [ImageSharp 3.0 announcement](https://sixlabors.com/posts/announcing-imagesharp-300/) for breaking changes.
+
+### Mouselook With `SetMousePosition`
+
+**Likelihood Of Impact: Medium**
+
+`Sdl2Window.SetMousePosition` is now a plain wrapper around `SDL_WarpMouseInWindow`. Code that captures the cursor and warps it back to a fixed anchor each frame to read the user's offset is no longer reliable on Windows. Patterns affected include:
+
+- First-person camera mouselook.
+- Orbit and pan cameras with mouse drag.
+- Middle-button autoscroll.
+- Drag-to-rotate or drag-to-pan viewport interactions.
+
+Switch to relative mouse mode and read per-frame deltas via `MouseDelta`.
+
+In Veldrid:
+
+```csharp
+// Per-frame, read the cursor's offset from the anchor and reset it back to the anchor
+InputSnapshot snapshot = _window.PumpEvents();
+Vector2 delta = _anchor - snapshot.MousePosition;
+_window.SetMousePosition(_anchor);
+yaw += delta.X * sensitivity;
+pitch += delta.Y * sensitivity;
+```
+
+In NeoVeldrid:
+
+```csharp
+// When capture begins, enable relative mode to lock the cursor to the window and read deltas directly
+_window.CursorRelativeMode = true;
+
+// Per-frame
+InputSnapshot snapshot = _window.PumpEvents();
+Vector2 delta = _window.MouseDelta;
+yaw -= delta.X * sensitivity; // Note the inverted sign
+pitch -= delta.Y * sensitivity;
+
+// When capture ends, disable relative mode to restore the cursor's original position
+_window.CursorRelativeMode = false;
+```
+
+While `CursorRelativeMode` is active, the cursor is hidden and confined to the window; disabling it restores the original position.
+
+Note the `+=` becomes `-=`. `_anchor - snapshot.MousePosition` measures how far the cursor has drifted from the anchor; `MouseDelta` measures how far it has moved since the previous frame. Same magnitude, opposite sign.

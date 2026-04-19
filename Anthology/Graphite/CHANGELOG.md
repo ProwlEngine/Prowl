@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](https://github.com/mellinoe/veldrid) with every native binding replaced by [Silk.NET](https://github.com/dotnet/Silk.NET). If you have a Veldrid project today, migrating is roughly a 5 minute find-and-replace. See the [Migration Guide](docs/articles/prologue/migration.md) for the exact steps.
 
+### Breaking
+
+- `Sdl2Window.SetMousePosition` no longer supports per-frame warp-cursor-back mouselook. Code using that pattern must switch to `CursorRelativeMode` + `MouseDelta`. See the [Migration Guide](docs/articles/prologue/migration.md#mouselook-with-setmouseposition).
+
 ### Changed
 
 - Vulkan backend now binds through `Silk.NET.Vulkan` 2.23.0 (was `Vk` 1.0.25).
@@ -42,6 +46,8 @@ First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](htt
 - [Vulkan] `GraphicsDeviceOptions.SwapchainSrgbFormat` being silently ignored by `CreateWindowAndGraphicsDevice`, so Vulkan swapchains always came back in the linear-UNorm format regardless of what the user requested.
 - [Vulkan] Fixes memory leak with `VkDescriptorPoolManager` related to unfreed dynamic buffers.
 - [Vulkan] Fixes `CreateLogicalDevice` ignoring the present queue family on GPUs where it differs from the graphics family.
+- [SDL2] Scroll-to-zoom now respects sub-detent deltas from precision touchpads and high-end mice. Slow scrolls no longer round to zero.
+- [SDL2] Cursor position no longer desyncs when the window regains focus or the pointer re-enters the window on Windows. Modern SDL2 emits zero-delta motion events in those cases, and the previous filter discarded them too aggressively.
 
 [Unreleased]: https://github.com/jhm-ciberman/neo-veldrid/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/jhm-ciberman/neo-veldrid/releases/tag/v1.0.0
