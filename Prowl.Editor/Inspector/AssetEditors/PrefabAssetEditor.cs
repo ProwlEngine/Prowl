@@ -11,6 +11,9 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(PrefabAsset))]
 public class PrefabAssetEditor : AssetImporterEditor
 {
+    private PreviewRenderer? _preview;
+    private PrefabAsset? _lastPreviewAsset;
+
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         var font = EditorTheme.DefaultFont;
@@ -36,5 +39,22 @@ public class PrefabAssetEditor : AssetImporterEditor
         // Open in editing mode
         EditorGUI.Button(paper, $"{id}_edit", $"{EditorIcons.PenToSquare}  Open Prefab", width: 140)
             .OnValueChanged(_ => PrefabEditingMode.Enter(entry.Guid));
+
+        // 3D Preview
+        if (prefab.GameObjectData != null)
+        {
+            EditorGUI.Separator(paper, $"{id}_sep_preview");
+            EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
+
+            _preview ??= new PreviewRenderer(256, 256) { ShowGrid = true };
+
+            if (_lastPreviewAsset != prefab)
+            {
+                _lastPreviewAsset = prefab;
+                _preview.SetupForPrefab(prefab);
+            }
+
+            _preview.DrawPreview(paper, $"{id}_preview", 256, 256);
+        }
     }
 }
