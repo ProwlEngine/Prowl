@@ -108,7 +108,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         foreach (ImageEffect effect in camera.Effects)
         {
-            if (effect == null) continue;
+            if (effect == null || !effect.Enabled) continue;
             RenderStage stage = effect.Stage;
             if (effectsByStage.ContainsKey(stage))
                 effectsByStage[stage].Add(effect);

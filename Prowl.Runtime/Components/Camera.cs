@@ -15,6 +15,11 @@ namespace Prowl.Runtime;
 public abstract class ImageEffect
 {
     /// <summary>
+    /// When false, the effect is skipped by the render pipeline.
+    /// </summary>
+    public bool Enabled = true;
+
+    /// <summary>
     /// Defines at which stage of the rendering pipeline this effect should run.
     /// AfterOpaques: runs after opaque geometry, before transparents (GTAO, SSR).
     /// PostProcess: runs after all rendering (tonemapping, bloom, FXAA).
