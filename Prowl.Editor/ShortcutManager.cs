@@ -293,5 +293,14 @@ internal static class BuiltInShortcuts
         // Project
         ShortcutManager.Register("Project/Delete", "Delete Selected", KeyCode.Delete);
         ShortcutManager.Register("Project/Rename", "Rename Selected", KeyCode.F2);
+
+        // Graph Editor
+        ShortcutManager.Register("GraphEditor/Save", "Save Graph", KeyCode.S, ctrl: true);
+        ShortcutManager.Register("GraphEditor/Delete", "Delete Selected", KeyCode.Delete);
+        ShortcutManager.Register("GraphEditor/Duplicate", "Duplicate Selected", KeyCode.D, ctrl: true);
+        ShortcutManager.Register("GraphEditor/Copy", "Copy Selected", KeyCode.C, ctrl: true);
+        ShortcutManager.Register("GraphEditor/Paste", "Paste", KeyCode.V, ctrl: true);
+        ShortcutManager.Register("GraphEditor/SelectAll", "Select All", KeyCode.A, ctrl: true);
+        ShortcutManager.Register("GraphEditor/FrameSelection", "Frame Selection", KeyCode.F);
     }
 }

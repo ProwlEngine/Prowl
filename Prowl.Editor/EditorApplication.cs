@@ -100,6 +100,7 @@ public class EditorApplication : Game
         InitializeOnLoadRegistry.Initialize();
         Inspector.PropertyEditorRegistry.Initialize();
         Inspector.CustomEditorRegistry.Initialize();
+        GraphTools.NodeRendererRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
         CreateAssetMenuRegistry.Initialize();
@@ -921,6 +922,7 @@ public class EditorApplication : Game
         InitializeOnLoadRegistry.Reinitialize();
         Inspector.PropertyEditorRegistry.Reinitialize();
         Inspector.CustomEditorRegistry.Reinitialize();
+        GraphTools.NodeRendererRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
         Inspector.AddComponentPopup.Reinitialize();
         Importers.ImporterRegistry.Reinitialize();

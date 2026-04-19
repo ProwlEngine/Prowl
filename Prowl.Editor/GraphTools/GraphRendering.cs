@@ -1,0 +1,188 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+
+using Prowl.Quill;
+using Prowl.Runtime.GraphTools;
+using Prowl.Vector;
+
+namespace Prowl.Editor.GraphTools;
+
+/// <summary>
+/// All static draw helpers for the graph canvas — grid, groups, wires, nodes, ports,
+/// sticky notes, drag-overlay. Stateless and Paper-free; takes a Quill <see cref="Canvas"/>
+/// already transformed into graph space.
+/// </summary>
+/// <remarks>
+/// LOD is implicit: each draw routine consults the current <c>zoom</c> argument to decide
+/// whether to draw text, port labels, etc. The renderer never queries the canvas's
+/// transform directly so LOD math stays predictable.
+/// </remarks>
+public static class GraphRendering
+{
+    // ─── Common colors (grid / background only — node colors live in DefaultNodeRenderer) ─
+    private static readonly Color32 BgColor  = new Color32(22, 22, 26, 255);
+    private static readonly Color32 GridLine = new Color32(40, 42, 50, 255);
+
+    // ─── Grid ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Draw the background grid: thin vertical + horizontal lines, plus brighter dots
+    /// at every 5th intersection (the "major" grid). Grid spacing adapts so screen-pixel
+    /// spacing stays between 12 and 80 px regardless of zoom level.
+    /// </summary>
+    public static void DrawGrid(Canvas canvas, Rect visibleGraphRect, float zoom)
+    {
+        float baseStep = 32f;
+        while (baseStep * zoom < 12f) baseStep *= 2f;
+        while (baseStep * zoom > 80f) baseStep *= 0.5f;
+        float majorEvery = 5f * baseStep;
+
+        float x0 = MathF.Floor((float)visibleGraphRect.Min.X / baseStep) * baseStep;
+        float y0 = MathF.Floor((float)visibleGraphRect.Min.Y / baseStep) * baseStep;
+        float x1 = (float)visibleGraphRect.Max.X;
+        float y1 = (float)visibleGraphRect.Max.Y;
+
+        canvas.SetStrokeColor(GridLine);
+        canvas.SetStrokeWidth(1.0f); // pixels; doesn't scale with transform
+
+        // Vertical lines
+        for (float x = x0; x <= x1; x += baseStep)
+        {
+            canvas.BeginPath();
+            canvas.MoveTo(x, y0);
+            canvas.LineTo(x, y1);
+            canvas.Stroke();
+        }
+        // Horizontal lines
+        for (float y = y0; y <= y1; y += baseStep)
+        {
+            canvas.BeginPath();
+            canvas.MoveTo(x0, y);
+            canvas.LineTo(x1, y);
+            canvas.Stroke();
+        }
+
+        // Major intersection dots disabled for now — they were sliding too aggressively
+        // with pan/zoom relative to the lines, looked janky.
+        // float dotR = MathF.Max(1.5f / zoom, 0.5f);
+        // for (float y = y0; y <= y1; y += majorEvery)
+        //     for (float x = x0; x <= x1; x += majorEvery)
+        //         canvas.CircleFilled(x, y, dotR, GridIntersection, 6);
+    }
+
+    // ─── Background fill (full canvas area, screen-space). Drawn before the transform. ─
+
+    public static void DrawBackground(Canvas canvas, Rect screenRect)
+    {
+        canvas.RectFilled((float)screenRect.Min.X, (float)screenRect.Min.Y,
+                          (float)screenRect.Size.X, (float)screenRect.Size.Y, BgColor);
+    }
+
+    // ─── Wires (cubic bezier) ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Draw a wire between two ports. Uses a cubic bezier with horizontal control-point
+    /// tangents proportional to the X-distance — gives Unity-style "S" curves that always
+    /// leave the output port heading right and arrive at the input heading right.
+    /// </summary>
+    public static void DrawWire(Canvas canvas, Float2 from, Float2 to, Color32 color, float zoom, float thickness = 2.5f)
+    {
+        float dx = MathF.Abs(to.X - from.X);
+        float tangent = MathF.Max(40f, dx * 0.5f);
+
+        Float2 c1 = new Float2(from.X + tangent, from.Y);
+        Float2 c2 = new Float2(to.X - tangent, to.Y);
+
+        canvas.BeginPath();
+        canvas.MoveTo(from.X, from.Y);
+        canvas.BezierCurveTo(c1.X, c1.Y, c2.X, c2.Y, to.X, to.Y);
+        canvas.SetStrokeColor(color);
+        // Quill stroke width is in screen pixels, not graph units — passing a constant
+        // here keeps the wire visually the same thickness regardless of zoom.
+        canvas.SetStrokeWidth(thickness);
+        canvas.SetStrokeStartCap(EndCapStyle.Round);
+        canvas.SetStrokeEndCap(EndCapStyle.Round);
+        canvas.Stroke();
+    }
+
+    // ─── Groups (back-most layer) ────────────────────────────────────────────────────
+
+    public static void DrawGroup(Canvas canvas, NodeGroup group)
+    {
+        var fill = new Color32(group.PackedColor);
+        fill.A = 40; // background tint
+        var border = new Color32(group.PackedColor);
+        border.A = 200;
+
+        canvas.RoundedRectFilled(group.Position.X, group.Position.Y,
+            group.Size.X, group.Size.Y, 8f, 8f, 8f, 8f, fill);
+
+        canvas.BeginPath();
+        canvas.RoundedRect(group.Position.X, group.Position.Y, group.Size.X, group.Size.Y, 8f);
+        canvas.SetStrokeColor(border);
+        canvas.SetStrokeWidth(2f);
+        canvas.Stroke();
+    }
+
+    // ─── Sticky notes ────────────────────────────────────────────────────────────────
+
+    public static void DrawStickyNote(Canvas canvas, StickyNote note, float zoom, Prowl.Scribe.FontFile? font)
+    {
+        var bg = new Color32(note.PackedColor);
+        canvas.RoundedRectFilled(note.Position.X, note.Position.Y, note.Size.X, note.Size.Y,
+            6f, 6f, 6f, 6f, bg);
+
+        // Title strip
+        var titleBg = new Color32((byte)Math.Max(0, bg.R - 30), (byte)Math.Max(0, bg.G - 30),
+                                   (byte)Math.Max(0, bg.B - 30), bg.A);
+        canvas.RoundedRectFilled(note.Position.X, note.Position.Y, note.Size.X, 22f,
+            6f, 6f, 0f, 0f, titleBg);
+
+        if (font != null && zoom > 0.5f)
+        {
+            canvas.DrawText(note.Title, note.Position.X + 6, note.Position.Y + 4,
+                new Color32(40, 40, 50, 255), 14f, font);
+            if (zoom > 0.7f && !string.IsNullOrEmpty(note.Body))
+                canvas.DrawText(note.Body, note.Position.X + 6, note.Position.Y + 28,
+                    new Color32(40, 40, 50, 255), 12f, font);
+        }
+    }
+
+    // ─── Nodes ───────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Dispatch into the node's registered <see cref="NodeRenderer"/> (or the default
+    /// card-style renderer). Node-type authors can plug in a custom renderer via
+    /// <c>[NodeRenderer(typeof(MyNode))]</c> on a <see cref="NodeRenderer"/> subclass.
+    /// </summary>
+    public static void DrawNode(Canvas canvas, Prowl.Runtime.GraphTools.Graph graph,
+        Node node, bool isSelected, bool isHovered,
+        (string portName, PortDirection direction)? hoveredPort,
+        float zoom, Prowl.Scribe.FontFile? font)
+    {
+        node.EnsureDefined();
+        NodeRendererRegistry.GetRenderer(node)
+            .Draw(canvas, graph, node, isSelected, isHovered, hoveredPort, zoom, font);
+    }
+
+    // ─── In-progress drag wire (overlay) ─────────────────────────────────────────────
+
+    public static void DrawDragWire(Canvas canvas, Float2 from, Float2 to, Color32 color, float zoom)
+        => DrawWire(canvas, from, to, color, zoom, thickness: 2.0f);
+
+    // ─── Marquee selection rectangle ─────────────────────────────────────────────────
+
+    public static void DrawMarquee(Canvas canvas, Rect r, float zoom)
+    {
+        var fill = new Color32(120, 160, 220, 30);
+        var stroke = new Color32(120, 160, 220, 200);
+        canvas.RectFilled((float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, (float)r.Size.Y, fill);
+        canvas.BeginPath();
+        canvas.Rect((float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, (float)r.Size.Y);
+        canvas.SetStrokeColor(stroke);
+        canvas.SetStrokeWidth(1.0f);
+        canvas.Stroke();
+    }
+}
