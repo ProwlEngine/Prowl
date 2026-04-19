@@ -43,6 +43,23 @@ namespace Prowl.Scribe
         public object Texture => atlasTexture;
         public int FontCount => fallbackFonts.Count;
 
+        /// <summary>
+        /// Monotonically-increasing counter bumped every time the atlas is rebuilt/resized.
+        /// <para>
+        /// When the atlas grows, the backing texture is recreated and every cached
+        /// <see cref="AtlasGlyph"/> is invalidated — their UVs and atlas positions belong to the
+        /// previous texture. Any <see cref="TextLayout"/> created before the resize still holds
+        /// references to those stale <see cref="AtlasGlyph"/> objects.
+        /// </para>
+        /// <para>
+        /// Each <see cref="TextLayout"/> stamps <see cref="TextLayout.AtlasVersion"/> when it's
+        /// built; consumers compare against this value (or call
+        /// <see cref="TextLayout.EnsureUpToDate"/>) to detect staleness and re-layout.
+        /// <see cref="DrawLayout"/> does the check automatically.
+        /// </para>
+        /// </summary>
+        public int AtlasVersion { get; private set; }
+
         public FontSystem(IFontRenderer renderer, int initialWidth = 512, int initialHeight = 512, bool includeWhiteRect = true)
         {
             this.renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
@@ -84,7 +101,10 @@ namespace Prowl.Scribe
         {
             fallbackFonts.Add(font);
 
+            // Fallback list changed → cached glyphs may resolve to different fonts now.
             glyphCache.Clear();
+            layoutCache.Clear();
+            AtlasVersion++;
         }
 
         public IEnumerable<FontFile> EnumerateSystemFonts()
@@ -299,6 +319,9 @@ namespace Prowl.Scribe
             // Clear the Layout Cache
             layoutCache.Clear();
 
+            // Bump version so any externally-held TextLayout knows it's stale.
+            AtlasVersion++;
+
             // Re-add white rect
             if (useWhiteRect)
                 AddWhiteRect();
@@ -460,6 +483,10 @@ namespace Prowl.Scribe
         public void DrawLayout(TextLayout layout, Float2 position, FontColor color)
         {
             if (layout.Lines.Count == 0) return;
+
+            // Atlas may have grown/rebuilt since the layout was created — UVs and glyph refs
+            // would be stale. Re-layout in place so glyphs repopulate against the current atlas.
+            layout.EnsureUpToDate(this);
 
             var vertices = new List<IFontRenderer.Vertex>();
             var indices = new List<int>();

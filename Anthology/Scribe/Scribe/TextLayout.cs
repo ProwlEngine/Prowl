@@ -11,6 +11,15 @@ namespace Prowl.Scribe
         public TextLayoutSettings Settings { get; private set; }
         public string Text { get; private set; }
 
+        /// <summary>
+        /// Snapshot of <see cref="FontSystem.AtlasVersion"/> taken when the layout was built.
+        /// If the atlas grows or fallback fonts change later, this will be less than the font
+        /// system's current version — meaning any <see cref="AtlasGlyph"/> references held by
+        /// this layout point at stale UVs / a destroyed texture slot.
+        /// Use <see cref="EnsureUpToDate"/> (or just call <c>DrawLayout</c>) to re-stamp.
+        /// </summary>
+        public int AtlasVersion { get; private set; } = -1;
+
         public TextLayout()
         {
             Lines = new List<Line>();
@@ -25,12 +34,32 @@ namespace Prowl.Scribe
             if (string.IsNullOrEmpty(text))
             {
                 Size = Float2.Zero;
+                AtlasVersion = fontSystem.AtlasVersion;
                 return;
             }
 
             LayoutText(fontSystem);
             ApplyAlignment();
             CalculateSize();
+
+            AtlasVersion = fontSystem.AtlasVersion;
+        }
+
+        /// <summary>
+        /// Returns true if the atlas has been rebuilt since this layout was last built.
+        /// </summary>
+        public bool IsStale(FontSystem fontSystem) => AtlasVersion != fontSystem.AtlasVersion;
+
+        /// <summary>
+        /// Re-layouts this instance against the current atlas state if it's stale. Safe to call
+        /// every frame — no-op when up-to-date. Call this before reading UV-dependent data from
+        /// the layout's glyphs, or before any direct rendering path that doesn't go through
+        /// <see cref="FontSystem.DrawLayout"/>.
+        /// </summary>
+        public void EnsureUpToDate(FontSystem fontSystem)
+        {
+            if (AtlasVersion != fontSystem.AtlasVersion && Text != null)
+                UpdateLayout(Text, Settings, fontSystem);
         }
 
         private void LayoutText(FontSystem fontSystem)
