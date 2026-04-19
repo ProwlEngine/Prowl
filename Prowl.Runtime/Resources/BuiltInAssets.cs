@@ -80,7 +80,7 @@ public static class BuiltInAssets
                 () =>
                 {
                     using var stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-                    var mesh = AssetImporting.ObjParser.ParseMesh(stream, model.ToString());
+                    var mesh = AssetImporting.Obj.ObjImporter.ParseMeshOnly(stream, model.ToString());
                     mesh.AssetID = GuidForMesh(model);
                     mesh.AssetPath = $"$Default:Mesh/{model}";
                     return mesh;

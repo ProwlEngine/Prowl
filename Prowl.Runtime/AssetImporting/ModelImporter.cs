@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Runtime.AssetImporting.Gltf;
+using Prowl.Runtime.AssetImporting.Obj;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime.AssetImporting;
@@ -46,6 +47,7 @@ public class ModelImportResult
 public class ModelImporter
 {
     private readonly GltfImporter _gltfImporter = new();
+    private readonly ObjImporter _objImporter = new();
 
     public ModelImportResult Import(FileInfo assetPath, ModelImporterSettings? settings = null)
     {
@@ -53,7 +55,7 @@ public class ModelImporter
         if (ext == ".gltf" || ext == ".glb")
             return _gltfImporter.Import(assetPath, settings);
         if (ext == ".obj")
-            return ImportObj(File.OpenRead(assetPath.FullName), assetPath.Name, settings);
+            return _objImporter.Import(assetPath, settings);
 
         throw new System.NotSupportedException($"Unsupported model format: {ext}");
     }
@@ -64,25 +66,8 @@ public class ModelImporter
         if (ext == ".gltf" || ext == ".glb")
             return _gltfImporter.Import(stream, virtualPath, settings);
         if (ext == ".obj")
-            return ImportObj(stream, Path.GetFileName(virtualPath), settings);
+            return _objImporter.Import(stream, virtualPath, settings);
 
         throw new System.NotSupportedException($"Unsupported model format: {ext}");
-    }
-
-    private static ModelImportResult ImportObj(Stream stream, string name, ModelImporterSettings? settings)
-    {
-        var s = settings ?? new ModelImporterSettings();
-        string meshName = Path.GetFileNameWithoutExtension(name);
-
-        var mesh = ObjParser.ParseMesh(stream, meshName, s);
-
-        var rootGo = new GameObject(meshName);
-        var mr = rootGo.AddComponent<MeshRenderer>();
-        mr.Mesh = new AssetRef<Mesh>(mesh);
-
-        var result = new ModelImportResult();
-        result.RootGO = rootGo;
-        result.Meshes.Add(mesh);
-        return result;
     }
 }

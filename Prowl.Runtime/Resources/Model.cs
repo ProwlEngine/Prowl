@@ -60,9 +60,14 @@ public class Model : EngineObject, ISerializable
         string resourcePath = $"Assets/Defaults/{fileName}";
         using Stream stream = EmbeddedResources.GetStream(resourcePath);
         var result = new Model(model.ToString());
-        // OBJ parser returns a simple model with GameObjectData already set
-        var parsed = AssetImporting.ObjParser.Parse(stream, model.ToString());
-        result.GameObjectData = parsed.GameObjectData;
+
+        // Import via the OBJ importer. Embedded defaults have no companion .mtl, so the
+        // resulting GO just has a MeshRenderer with an empty Materials list — callers that
+        // use these meshes (e.g. BuiltInAssets, primitive creators) assign their own material.
+        var importResult = new AssetImporting.Obj.ObjImporter().Import(stream, fileName);
+        if (importResult.RootGO != null)
+            result.GameObjectData = Serializer.Serialize(typeof(object), importResult.RootGO);
+
         result.AssetPath = $"$Default:{model}";
         result.AssetID = BuiltInAssets.GuidFor(model);
         return result;
