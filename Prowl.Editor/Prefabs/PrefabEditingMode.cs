@@ -5,6 +5,7 @@ using System.Linq;
 using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Editor.Prefabs;
 
@@ -21,6 +22,9 @@ public static class PrefabEditingMode
 
     private static EchoObject? _savedSceneState;
     private static string? _savedScenePath;
+    // Tracked so Save() can serialize the prefab root specifically, skipping the
+    // editor-only camera/light/etc. that we add for visibility.
+    private static GameObject? _editingRoot;
 
     /// <summary>
     /// Enter prefab editing mode.
@@ -64,6 +68,27 @@ public static class PrefabEditingMode
         go.ClearPrefabDataRecursive();
 
         editScene.Add(go);
+        _editingRoot = go;
+
+        // Editor-only viewing aids. Hidden from gizmos and marked DontSave so they don't end
+        // up in the serialized prefab file when the user hits Save.
+        var camGo = new GameObject("PrefabEdit Camera");
+        camGo.Tag = "Main Camera";
+        camGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        camGo.Transform.Position = new Float3(0, 2, -5);
+        camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
+        var cam = camGo.AddComponent<Camera>();
+        cam.Depth = -1;
+        cam.HDR = true;
+        editScene.Add(camGo);
+
+        var lightGo = new GameObject("PrefabEdit Light");
+        lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
+        lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
+        var light = lightGo.AddComponent<DirectionalLight>();
+        light.Intensity = 8f;
+        editScene.Add(lightGo);
+
         Scene.Load(editScene);
         Undo.Clear();
 
@@ -84,10 +109,15 @@ public static class PrefabEditingMode
         var scene = Scene.Current;
         if (scene == null) return;
 
-        // Get the root GO
-        var roots = scene.RootObjects.ToList();
-        if (roots.Count == 0) return;
-        var root = roots[0];
+        // Use the tracked prefab root so we skip the editor-only camera/light we added
+        // to light the scene during editing. Fall back to the first non-HideAndDontSave
+        // root if the tracked reference is stale.
+        var root = _editingRoot;
+        if (root == null || root.Scene != scene)
+        {
+            root = scene.RootObjects.FirstOrDefault(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+        }
+        if (root == null) return;
 
         // Serialize to .prefab file
         var echo = Serializer.Serialize(typeof(object), root);
@@ -169,5 +199,6 @@ public static class PrefabEditingMode
         OriginalSceneName = null;
         _savedSceneState = null;
         _savedScenePath = null;
+        _editingRoot = null;
     }
 }
