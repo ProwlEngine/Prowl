@@ -22,10 +22,14 @@ namespace NeoVeldrid
         /// </summary>
         public uint StructureByteStride;
         /// <summary>
-        /// Indicates that this is a raw buffer. This should be combined with
-        /// <see cref="BufferUsage.StructuredBufferReadWrite"/>. This affects how the buffer is bound in the D3D11 backend.
+        /// Controls how a structured buffer is bound on HLSL-based backends (D3D11). Only meaningful when
+        /// <see cref="Usage"/> includes <see cref="BufferUsage.StructuredBufferReadOnly"/> or
+        /// <see cref="BufferUsage.StructuredBufferReadWrite"/>. When true, binds as a typed
+        /// <c>(RW)StructuredBuffer&lt;T&gt;</c>; use this when binding hand-written HLSL that declares its
+        /// storage buffers with those types. When false (default), binds as a raw <c>(RW)ByteAddressBuffer</c>.
+        /// Has no effect on non-HLSL backends.
         /// </summary>
-        public bool RawBuffer;
+        public bool UseTypedHlslBinding;
 
         /// <summary>
         /// Constructs a new <see cref="BufferDescription"/> describing a non-dynamic <see cref="DeviceBuffer"/>.
@@ -37,7 +41,7 @@ namespace NeoVeldrid
             SizeInBytes = sizeInBytes;
             Usage = usage;
             StructureByteStride = 0;
-            RawBuffer = false;
+            UseTypedHlslBinding = false;
         }
 
         /// <summary>
@@ -52,7 +56,7 @@ namespace NeoVeldrid
             SizeInBytes = sizeInBytes;
             Usage = usage;
             StructureByteStride = structureByteStride;
-            RawBuffer = false;
+            UseTypedHlslBinding = false;
         }
 
         /// <summary>
@@ -62,15 +66,18 @@ namespace NeoVeldrid
         /// <param name="usage">Indicates how the <see cref="DeviceBuffer"/> will be used.</param>
         /// <param name="structureByteStride">For structured buffers, this value indicates the size in bytes of a single
         /// structure element, and must be non-zero. For all other buffer types, this value must be zero.</param>
-        /// <param name="rawBuffer">Indicates that this is a raw buffer. This should be combined with
-        /// <see cref="BufferUsage.StructuredBufferReadWrite"/>. This affects how the buffer is bound in the D3D11 backend.
-        /// </param>
-        public BufferDescription(uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool rawBuffer)
+        /// <param name="useTypedHlslBinding">Controls how a structured buffer is bound on HLSL-based backends (D3D11).
+        /// Only meaningful when <paramref name="usage"/> includes <see cref="BufferUsage.StructuredBufferReadOnly"/> or
+        /// <see cref="BufferUsage.StructuredBufferReadWrite"/>. When true, binds as a typed
+        /// <c>(RW)StructuredBuffer&lt;T&gt;</c>; use this when binding hand-written HLSL that declares its storage
+        /// buffers with those types. When false, binds as a raw <c>(RW)ByteAddressBuffer</c>. Has no effect on
+        /// non-HLSL backends.</param>
+        public BufferDescription(uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool useTypedHlslBinding)
         {
             SizeInBytes = sizeInBytes;
             Usage = usage;
             StructureByteStride = structureByteStride;
-            RawBuffer = rawBuffer;
+            UseTypedHlslBinding = useTypedHlslBinding;
         }
 
         /// <summary>
@@ -83,7 +90,7 @@ namespace NeoVeldrid
             return SizeInBytes.Equals(other.SizeInBytes)
                 && Usage == other.Usage
                 && StructureByteStride.Equals(other.StructureByteStride)
-                && RawBuffer.Equals(other.RawBuffer);
+                && UseTypedHlslBinding.Equals(other.UseTypedHlslBinding);
         }
 
         /// <summary>
@@ -96,7 +103,7 @@ namespace NeoVeldrid
                 SizeInBytes.GetHashCode(),
                 (int)Usage,
                 StructureByteStride.GetHashCode(),
-                RawBuffer.GetHashCode());
+                UseTypedHlslBinding.GetHashCode());
         }
     }
 }

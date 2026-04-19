@@ -16,7 +16,7 @@ namespace NeoVeldrid.D3D11
         private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs
             = new Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>>();
         private readonly uint _structureByteStride;
-        private readonly bool _rawBuffer;
+        private readonly bool _useTypedHlslBinding;
         private string _name;
         private bool _disposed;
 
@@ -28,13 +28,13 @@ namespace NeoVeldrid.D3D11
 
         public ID3D11Buffer* Buffer => _buffer;
 
-        public D3D11Buffer(ID3D11Device* device, uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool rawBuffer)
+        public D3D11Buffer(ID3D11Device* device, uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool useTypedHlslBinding)
         {
             _device = device;
             SizeInBytes = sizeInBytes;
             Usage = usage;
             _structureByteStride = structureByteStride;
-            _rawBuffer = rawBuffer;
+            _useTypedHlslBinding = useTypedHlslBinding;
 
             BufferDesc bd = new BufferDesc
             {
@@ -46,14 +46,14 @@ namespace NeoVeldrid.D3D11
             if ((usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
                 || (usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
             {
-                if (rawBuffer)
-                {
-                    bd.MiscFlags = (uint)ResourceMiscFlag.BufferAllowRawViews;
-                }
-                else
+                if (useTypedHlslBinding)
                 {
                     bd.MiscFlags = (uint)ResourceMiscFlag.BufferStructured;
                     bd.StructureByteStride = structureByteStride;
+                }
+                else
+                {
+                    bd.MiscFlags = (uint)ResourceMiscFlag.BufferAllowRawViews;
                 }
             }
 
@@ -144,19 +144,19 @@ namespace NeoVeldrid.D3D11
         {
             ShaderResourceViewDesc srvDesc = new ShaderResourceViewDesc();
 
-            if (_rawBuffer)
+            if (_useTypedHlslBinding)
+            {
+                srvDesc.ViewDimension = D3DSrvDimension.D3DSrvDimensionBuffer;
+                srvDesc.Buffer.FirstElement = offset / _structureByteStride;
+                srvDesc.Buffer.NumElements = size / _structureByteStride;
+            }
+            else
             {
                 srvDesc.Format = Format.FormatR32Typeless;
                 srvDesc.ViewDimension = D3DSrvDimension.D3DSrvDimensionBufferex;
                 srvDesc.BufferEx.FirstElement = offset / 4;
                 srvDesc.BufferEx.NumElements = size / 4;
                 srvDesc.BufferEx.Flags = (uint)BufferexSrvFlag.Raw;
-            }
-            else
-            {
-                srvDesc.ViewDimension = D3DSrvDimension.D3DSrvDimensionBuffer;
-                srvDesc.Buffer.FirstElement = offset / _structureByteStride;
-                srvDesc.Buffer.NumElements = size / _structureByteStride;
             }
 
             ID3D11ShaderResourceView* pSrv;
@@ -173,18 +173,18 @@ namespace NeoVeldrid.D3D11
                 ViewDimension = UavDimension.Buffer,
             };
 
-            if (_rawBuffer)
+            if (_useTypedHlslBinding)
+            {
+                uavDesc.Format = Format.FormatUnknown;
+                uavDesc.Buffer.FirstElement = offset / _structureByteStride;
+                uavDesc.Buffer.NumElements = size / _structureByteStride;
+            }
+            else
             {
                 uavDesc.Format = Format.FormatR32Typeless;
                 uavDesc.Buffer.FirstElement = offset / 4;
                 uavDesc.Buffer.NumElements = size / 4;
                 uavDesc.Buffer.Flags = (uint)BufferUavFlag.Raw;
-            }
-            else
-            {
-                uavDesc.Format = Format.FormatUnknown;
-                uavDesc.Buffer.FirstElement = offset / _structureByteStride;
-                uavDesc.Buffer.NumElements = size / _structureByteStride;
             }
 
             ID3D11UnorderedAccessView* pUav;

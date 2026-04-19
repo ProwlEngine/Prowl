@@ -741,8 +741,7 @@ namespace NeoVeldrid.Tests
             DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
                 vertexSize * 4,
                 BufferUsage.StructuredBufferReadWrite,
-                vertexSize,
-                true));
+                vertexSize));
 
             ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute)));
@@ -1324,8 +1323,7 @@ namespace NeoVeldrid.Tests
             using var buffer = RF.CreateBuffer(new BufferDescription(
                 vertexSize * (uint)vertices.Length,
                 BufferUsage.StructuredBufferReadOnly,
-                vertexSize,
-                true));
+                vertexSize));
             GD.UpdateBuffer(buffer, 0, vertices);
 
             using var graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
@@ -1434,8 +1432,7 @@ namespace NeoVeldrid.Tests
             using var buffer = RF.CreateBuffer(new BufferDescription(
                 vertexSize * (uint)vertices.Length,
                 BufferUsage.StructuredBufferReadOnly,
-                vertexSize,
-                true));
+                vertexSize));
             GD.UpdateBuffer(buffer, 0, vertices);
 
             using var graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(

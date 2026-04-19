@@ -14,6 +14,7 @@ First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](htt
 ### Breaking
 
 - `Sdl2Window.SetMousePosition` no longer supports per-frame warp-cursor-back mouselook. Code using that pattern must switch to `CursorRelativeMode` + `MouseDelta`. See the [Migration Guide](docs/articles/prologue/migration.md#mouselook-with-setmouseposition).
+- `BufferDescription.RawBuffer` has been renamed to `BufferDescription.UseTypedHlslBinding` and its default behavior flipped. Structured buffers now bind as `(RW)ByteAddressBuffer` on D3D11 by default, matching the HLSL that `NeoVeldrid.SPIRV` generates from GLSL. Users binding hand-written HLSL that declares its storage buffers as `(RW)StructuredBuffer<T>` must set `UseTypedHlslBinding = true`.
 
 ### Changed
 
@@ -49,6 +50,7 @@ First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](htt
 - [SDL2] Scroll-to-zoom now respects sub-detent deltas from precision touchpads and high-end mice. Slow scrolls no longer round to zero.
 - [SDL2] Cursor position no longer desyncs when the window regains focus or the pointer re-enters the window on Windows. Modern SDL2 emits zero-delta motion events in those cases, and the previous filter discarded them too aggressively.
 - [Samples] The AnimatedMesh sample now renders correctly on OpenGL and OpenGL ES.
+- [Samples] The ComputeParticles sample now renders correctly on D3D11.
 
 [Unreleased]: https://github.com/jhm-ciberman/neo-veldrid/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/jhm-ciberman/neo-veldrid/releases/tag/v1.0.0

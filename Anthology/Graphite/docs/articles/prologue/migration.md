@@ -155,3 +155,31 @@ _window.CursorRelativeMode = false;
 While `CursorRelativeMode` is active, the cursor is hidden and confined to the window; disabling it restores the original position.
 
 Note the `+=` becomes `-=`. `_anchor - snapshot.MousePosition` measures how far the cursor has drifted from the anchor; `MouseDelta` measures how far it has moved since the previous frame. Same magnitude, opposite sign.
+
+### Structured Buffer Default Changed on Direct3D11
+
+**Likelihood Of Impact: Low**
+
+**If you use `NeoVeldrid.SPIRV` to cross-compile GLSL shaders (the standard path):** no code changes are required. If you were explicitly passing `rawBuffer: true`, you can now drop the argument. The new default matches.
+
+```csharp
+// Veldrid
+new BufferDescription(size, BufferUsage.StructuredBufferReadWrite, stride, rawBuffer: true);
+
+// NeoVeldrid
+new BufferDescription(size, BufferUsage.StructuredBufferReadWrite, stride);
+```
+
+**If you bind hand-written HLSL that uses typed structured buffers** (`StructuredBuffer<T>` / `RWStructuredBuffer<T>` rather than `ByteAddressBuffer`), set `UseTypedHlslBinding = true`:
+
+```csharp
+// Veldrid
+new BufferDescription(size, BufferUsage.StructuredBufferReadWrite, stride, rawBuffer: false);
+
+// NeoVeldrid
+new BufferDescription(size, BufferUsage.StructuredBufferReadWrite, stride, useTypedHlslBinding: true);
+```
+
+#### What changed
+
+`BufferDescription.RawBuffer` was renamed to `BufferDescription.UseTypedHlslBinding` with the default behavior flipped. On D3D11, structured buffers now bind as raw `(RW)ByteAddressBuffer` by default. `UseTypedHlslBinding` has no effect on Vulkan, OpenGL, or OpenGL ES.

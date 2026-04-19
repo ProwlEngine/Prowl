@@ -84,7 +84,7 @@ namespace NeoVeldrid.D3D11
                 description.SizeInBytes,
                 description.Usage,
                 description.StructureByteStride,
-                description.RawBuffer);
+                description.UseTypedHlslBinding);
         }
 
         public override Fence CreateFence(bool signaled)

@@ -15,4 +15,4 @@ When authoring shader code, you need to keep in mind the types of resources you 
 | TextureReadWrite | image(2D,3D) | RWTexture(2D,3D) | texture(2d,3d) with access::read_write |
 | Sampler | sampler (Vulkan), Not supported in OpenGL, see [Shaders](xref:shaders-and-resources#sampler) | SamplerState | sampler |
 
-* (RW)ByteAddressBuffer can only be used with a DeviceBuffer that was created with [BufferDescription.RawBuffer](xref:NeoVeldrid.BufferDescription#NeoVeldrid_BufferDescription_RawBuffer) set to true.
+* On D3D11, a structured buffer is bound as `(RW)ByteAddressBuffer` by default (matches the HLSL that `NeoVeldrid.SPIRV` generates from GLSL). Set [BufferDescription.UseTypedHlslBinding](xref:NeoVeldrid.BufferDescription#NeoVeldrid_BufferDescription_UseTypedHlslBinding) to `true` when binding hand-written HLSL that declares its storage buffers as `(RW)StructuredBuffer<T>`.
