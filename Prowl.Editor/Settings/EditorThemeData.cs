@@ -95,8 +95,6 @@ public class EditorThemeData
 
     public string DefaultBoldFontName { get; set; } = "bahnschrift";
 
-    public float UserScale { get; set; } = 1f;
-
     // Sizing
     public float MenuBarHeight { get; set; } = 26f;
     public float RowHeight { get; set; } = 22f;

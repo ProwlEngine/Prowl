@@ -140,7 +140,7 @@ public class PaperRenderer : ICanvasRenderer
     {
         if (drawCalls.Count == 0) return;
 
-        float dpiScale = canvas.Scale;
+        float dpiScale = canvas.FramebufferScale;
 
         var state = new RasterizerState
         {
