@@ -285,7 +285,7 @@ public static class PropertyGrid
         int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) + 1 : 0;
         var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
 
-        EditorGUI.Dropdown(paper, $"{id}_dd", "Type", selectedIndex, names)
+        EditorGUI.Dropdown(paper, $"{id}_dd", "Type", selectedIndex, names, true)
             .OnValueChanged(idx =>
             {
                 if (idx == 0) onChange(null);
