@@ -39,7 +39,7 @@ namespace NeoVeldrid
 
         /// <summary>
         /// Gets a value identifying whether texture coordinates begin in the top left corner of a Texture.
-        /// If true, (0, 0) refers to the top-left texel of a Texture. If false, (0, 0) refers to the bottom-left 
+        /// If true, (0, 0) refers to the top-left texel of a Texture. If false, (0, 0) refers to the bottom-left
         /// texel of a Texture. This property is useful for determining how the output of a Framebuffer should be sampled.
         /// </summary>
         public abstract bool IsUvOriginTopLeft { get; }
@@ -1030,35 +1030,6 @@ namespace NeoVeldrid
             SwapchainDescription swapchainDescription = new SwapchainDescription(
                 SwapchainSource.CreateWin32(hwnd, IntPtr.Zero),
                 width, height,
-                options.SwapchainDepthFormat,
-                options.SyncToVerticalBlank,
-                options.SwapchainSrgbFormat);
-
-            return new D3D11.D3D11GraphicsDevice(options, new D3D11DeviceOptions(), swapchainDescription);
-        }
-
-        /// <summary>
-        /// Creates a new <see cref="GraphicsDevice"/> using Direct3D 11, with a main Swapchain.
-        /// </summary>
-        /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-        /// <param name="swapChainPanel">A COM object which must implement the ISwapChainPanelNative
-        /// or ISwapChainBackgroundPanelNative interface. Generally, this should be a SwapChainPanel
-        /// or SwapChainBackgroundPanel contained in your application window.</param>
-        /// <param name="renderWidth">The renderable width of the swapchain panel.</param>
-        /// <param name="renderHeight">The renderable height of the swapchain panel.</param>
-        /// <param name="logicalDpi">The logical DPI of the swapchain panel.</param>
-        /// <returns></returns>
-        public static GraphicsDevice CreateD3D11(
-            GraphicsDeviceOptions options,
-            object swapChainPanel,
-            double renderWidth,
-            double renderHeight,
-            float logicalDpi)
-        {
-            SwapchainDescription swapchainDescription = new SwapchainDescription(
-                SwapchainSource.CreateUwp(swapChainPanel, logicalDpi),
-                (uint)renderWidth,
-                (uint)renderHeight,
                 options.SwapchainDepthFormat,
                 options.SyncToVerticalBlank,
                 options.SwapchainSrgbFormat);

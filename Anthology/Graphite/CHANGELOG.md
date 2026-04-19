@@ -38,6 +38,7 @@ First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](htt
 - `Sdl2Native` static class. Reach the underlying SDL API through `Sdl2Window.SdlInstance` instead.
 - `Veldrid.VirtualReality` project. There was no VR hardware available for testing, so it would have rotted into dead code.
 - Android and iOS sample projects. The core library still works on those platforms, but the samples are unmaintained. Contributions welcome.
+- UWP swapchain support (`SwapchainSource.CreateUwp` and the `ISwapChainPanelNative`-taking `GraphicsDevice.CreateD3D11` overload). Microsoft deprecated UWP in 2023.
 
 ### Fixed
 

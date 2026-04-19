@@ -94,10 +94,6 @@ namespace NeoVeldrid.D3D11
                 _dxgiSwapChain = default;
                 _dxgiSwapChain.Handle = pSwapChain;
             }
-            else if (description.Source is UwpSwapchainSource)
-            {
-                throw new PlatformNotSupportedException("UWP swap chains are not supported in this desktop-only build.");
-            }
             else
             {
                 throw new NeoVeldridException($"Unsupported swapchain source type: {description.Source?.GetType().Name}");

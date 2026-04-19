@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.InteropServices;
 
 namespace NeoVeldrid
 {
@@ -20,18 +19,6 @@ namespace NeoVeldrid
         /// <returns>A new SwapchainSource which can be used to create a <see cref="Swapchain"/> for the given Win32 window.
         /// </returns>
         public static SwapchainSource CreateWin32(IntPtr hwnd, IntPtr hinstance) => new Win32SwapchainSource(hwnd, hinstance);
-
-        /// <summary>
-        /// Creates a new SwapchainSource for a UWP SwapChain panel.
-        /// </summary>
-        /// <param name="swapChainPanel">A COM object which must implement the ISwapChainPanelNative
-        /// or ISwapChainBackgroundPanelNative interface. Generally, this should be a SwapChainPanel
-        /// or SwapChainBackgroundPanel contained in your application window.</param>
-        /// <param name="logicalDpi">The logical DPI of the swapchain panel.</param>
-        /// <returns>A new SwapchainSource which can be used to create a <see cref="Swapchain"/> for the given UWP panel.
-        /// </returns>
-        public static SwapchainSource CreateUwp(object swapChainPanel, float logicalDpi)
-            => new UwpSwapchainSource(swapChainPanel, logicalDpi);
 
         /// <summary>
         /// Creates a new SwapchainSource from the given Xlib information.
@@ -98,18 +85,6 @@ namespace NeoVeldrid
         {
             Hwnd = hwnd;
             Hinstance = hinstance;
-        }
-    }
-
-    internal class UwpSwapchainSource : SwapchainSource
-    {
-        public object SwapChainPanelNative { get; }
-        public float LogicalDpi { get; }
-
-        public UwpSwapchainSource(object swapChainPanelNative, float logicalDpi)
-        {
-            SwapChainPanelNative = swapChainPanelNative;
-            LogicalDpi = logicalDpi;
         }
     }
 
