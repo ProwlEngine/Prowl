@@ -133,3 +133,10 @@ internal class MeshThumbnailGenerator : IThumbnailGenerator
     public byte[]? Generate(EngineObject asset, string? sourceFilePath)
         => ThumbnailGenerator.GenerateFor3D(p => p.SetupForMesh((Mesh)asset));
 }
+
+[CustomThumbnailGenerator(typeof(PrefabAsset))]
+internal class PrefabAssetThumbnailGenerator : IThumbnailGenerator
+{
+    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
+        => ThumbnailGenerator.GenerateFor3D(p => p.SetupForPrefab((PrefabAsset)asset));
+}

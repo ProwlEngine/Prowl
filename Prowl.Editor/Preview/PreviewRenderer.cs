@@ -159,6 +159,34 @@ public class PreviewRenderer : IDisposable
         FitToSubject(bounds);
     }
 
+    /// <summary>Set up the preview to show a Prefab's serialized GameObject hierarchy.</summary>
+    public void SetupForPrefab(PrefabAsset prefab)
+    {
+        ClearSubject();
+        if (prefab == null) return;
+
+        _subjectGo = prefab.Instantiate();
+        if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
+        _subjectGo.Name = "PreviewSubject";
+        _subjectGo.HideFlags = HideFlags.HideAndDontSave;
+
+        // Normalize to roughly a unit cube so the orbit framing below always works even on
+        // unusually-sized prefabs. Non-visual prefabs (just components, no MeshRenderers) will
+        // fall back to a unit-sized default, rendering as an empty preview.
+        var bounds = ComputeHierarchyBounds(_subjectGo);
+        float maxExtent = MathF.Max(MathF.Max(bounds.Size.X, bounds.Size.Y), bounds.Size.Z);
+        if (maxExtent > 0.001f)
+        {
+            float scale = 1f / maxExtent;
+            _subjectGo.Transform.LocalScale = new Float3(scale, scale, scale);
+            _subjectGo.Transform.Position = -bounds.Center * scale;
+        }
+
+        _scene.Add(_subjectGo);
+
+        FitToSubject(AABB.FromCenterAndSize(Float3.Zero, Float3.One));
+    }
+
     /// <summary>Set up the preview to show a Material on a sphere.</summary>
     public void SetupForMaterial(Material material)
     {
