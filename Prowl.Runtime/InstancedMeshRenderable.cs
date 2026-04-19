@@ -23,8 +23,10 @@ public class InstancedMeshRenderable : IRenderable
     private readonly AABB _bounds;
     private readonly InstanceData[] _instanceData;
     private readonly Float3 _sortPosition;
+    private readonly int _subMeshIndex;
 
     /// <param name="sortPosition">World-space origin for depth sorting. Should be a stable position (e.g., particle system transform, terrain chunk center) to avoid flickering.</param>
+    /// <param name="subMeshIndex">Which submesh to draw (0..mesh.SubMeshCount-1), or -1 for the entire mesh.</param>
     public InstancedMeshRenderable(
         Mesh mesh,
         Material material,
@@ -32,7 +34,8 @@ public class InstancedMeshRenderable : IRenderable
         Float3 sortPosition,
         int layerIndex = 0,
         PropertyState? sharedProperties = null,
-        AABB? bounds = null)
+        AABB? bounds = null,
+        int subMeshIndex = -1)
     {
         _mesh = mesh;
         _material = material;
@@ -40,6 +43,7 @@ public class InstancedMeshRenderable : IRenderable
         _layerIndex = layerIndex;
         _sharedProperties = sharedProperties ?? new PropertyState();
         _sortPosition = sortPosition;
+        _subMeshIndex = subMeshIndex;
 
         // Calculate bounds if not provided
         if (bounds.HasValue)
@@ -78,6 +82,7 @@ public class InstancedMeshRenderable : IRenderable
 
     public Material GetMaterial() => _material;
     public int GetLayer() => _layerIndex;
+    public int GetSubMeshIndex() => _subMeshIndex;
 
     public Float3 GetPosition()
     {
