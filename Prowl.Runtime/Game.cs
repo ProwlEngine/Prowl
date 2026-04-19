@@ -252,23 +252,37 @@ public abstract class Game
 
     /// <summary>
     /// Called each frame right before <c>Paper.BeginFrame</c>. Compresses Paper's logical
-    /// window by <see cref="Window.ContentScale"/> and sets DisplayFramebufferScale to match,
-    /// so widgets scale up with the display's DPI (same "zoomed in" behavior the OS gives other
-    /// HiDPI-aware apps) and fonts rasterize at native density when the framebuffer is physical.
+    /// window by <see cref="Window.ContentScale"/> so widgets scale up with the display's DPI,
+    /// and sets DisplayFramebufferScale to the total paper-logical → framebuffer-pixel factor.
+    /// <para>
+    /// The factor is <c>ContentScale × (FramebufferSize / WindowSize)</c>:
+    /// <list type="bullet">
+    /// <item>non-DPI-aware platforms (FB == Size): DFS = CS — the OS bitmap-upscales the rendered
+    /// framebuffer to the physical screen.</item>
+    /// <item>DPI-aware platforms (FB == Size × CS — e.g. macOS retina, DPI-aware Windows): DFS = CS²,
+    /// because the app renders straight into the physical-pixel framebuffer and there's no OS
+    /// upscaler to supply the extra factor.</item>
+    /// </list>
+    /// End result: widgets occupy the same physical-screen fraction regardless of platform.
+    /// </para>
     /// </summary>
     protected virtual void PreparePaperFrame()
     {
         var winSize = Window.InternalWindow.Size;
+        var fbSize = Window.InternalWindow.FramebufferSize;
         float cs = Math.Max(0.01f, Window.ContentScale);
+        float fbRatio = winSize.X > 0 ? (float)fbSize.X / winSize.X : 1f;
+
         _paper.SetResolution(winSize.X / cs, winSize.Y / cs);
-        _paper.DisplayFramebufferScale = new Float2(cs, cs);
+        float dfs = cs * fbRatio;
+        _paper.DisplayFramebufferScale = new Float2(dfs, dfs);
     }
 
     /// <summary>
     /// Returns the current mouse position in Paper-logical units. Because
     /// <see cref="PreparePaperFrame"/> compresses Paper's logical space by <see cref="Window.ContentScale"/>,
-    /// the mouse (reported in window-logical pixels) is divided by the same factor so clicks
-    /// land on widgets in the same space.
+    /// the mouse (reported in window-logical pixels by Silk.NET on every platform) is divided
+    /// by the same factor so clicks land on widgets in the same space.
     /// </summary>
     protected virtual Float2 GetPaperMousePosition()
     {
