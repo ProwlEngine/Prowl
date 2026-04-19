@@ -32,13 +32,18 @@ public class GraphEditorWindow : DockPanel
     private Rect _canvasScreenRect;
 
     // ─── Interaction state ────────────────────────────────────────────────────────────
-    private enum DragMode { None, MoveNodes, MoveStickyNotes, ResizeStickyNote, MarqueeSelect, ConnectingWire }
+    private enum DragMode { None, MoveNodes, MoveStickyNotes, ResizeStickyNote, MoveGroup, ResizeGroup, MarqueeSelect, ConnectingWire }
     private DragMode _dragMode = DragMode.None;
 
-    /// <summary>Resize handle size (graph-space pixels) at the bottom-right of each sticky.</summary>
+    /// <summary>Resize handle size (graph-space pixels) at the bottom-right of each sticky / group.</summary>
     private const float StickyResizeHandleSize = 16f;
     /// <summary>Minimum sticky note size — prevents user dragging it to zero.</summary>
     private static readonly Float2 StickyMinSize = new Float2(120, 80);
+
+    /// <summary>Height of the group title bar in graph-space units (matches DrawGroup).</summary>
+    private const float GroupTitleHeight = 24f;
+    /// <summary>Minimum group size — prevents user dragging it to zero.</summary>
+    private static readonly Float2 GroupMinSize = new Float2(140, 80);
 
     /// <summary>Reference to a port on a node — used as the "from" endpoint of a connecting drag.</summary>
     private struct PortRef
@@ -86,9 +91,22 @@ public class GraphEditorWindow : DockPanel
     /// <summary>Selected sticky notes (Guids).</summary>
     private readonly HashSet<Guid> _selectedStickyNotes = new();
 
+    /// <summary>Selected groups (Guids). Drag/resize is single-group at a time; selection
+    /// routes to Inspector like stickies so Title can be renamed via PropertyGrid.</summary>
+    private readonly HashSet<Guid> _selectedGroups = new();
+
     /// <summary>Sticky note whose corner is being resized. Null unless <see cref="_dragMode"/> is <see cref="DragMode.ResizeStickyNote"/>.</summary>
     private Guid? _resizingStickyNote;
     private Float2 _resizeStickyStartSize;
+
+    /// <summary>Group being moved or resized. Null unless drag mode is MoveGroup/ResizeGroup.</summary>
+    private Guid? _activeGroup;
+    private Float2 _groupDragStartPos;
+    private Float2 _groupDragStartSize;
+    /// <summary>Start positions of every node that was inside the group at drag-start —
+    /// moving the group translates all of them so the group + contents move as a unit.</summary>
+    private Dictionary<Guid, Float2>? _groupContainedNodeStartPositions;
+    private Dictionary<Guid, Float2>? _groupContainedStickyStartPositions;
 
     /// <summary>Pre-drag positions for sticky notes — same pattern as node drag undo.</summary>
     private Dictionary<Guid, Float2>? _dragStickyStartPositions;
@@ -142,6 +160,13 @@ public class GraphEditorWindow : DockPanel
             return;
         }
         _view ??= new GraphCanvasView(_graph);
+
+        // Fresh validation pass every frame — cheap (O(V+E) for our validators) and
+        // means the diagnostic badges always reflect the current state regardless of
+        // whether the mutation came from a mouse interaction, Ctrl+Z, or an external
+        // Inspector edit. If this becomes a perf concern on very large graphs we can
+        // switch to a dirty-flag model.
+        Prowl.Runtime.GraphTools.GraphValidatorRegistry.Validate(_graph);
 
         DrawToolbar(paper);
         DrawCanvas(paper, font);
@@ -197,6 +222,8 @@ public class GraphEditorWindow : DockPanel
             DuplicateSelection();
         else if (ShortcutManager.IsPressed("GraphEditor/FrameSelection"))
             FrameSelectionOrAll();
+        else if (ShortcutManager.IsPressed("GraphEditor/GroupSelection"))
+            GroupSelection();
 
         if (_creationMenuOpen && Input.GetKeyDown(KeyCode.Escape))
             CloseCreationMenu();
@@ -245,6 +272,76 @@ public class GraphEditorWindow : DockPanel
         float y0 = sticky.Position.Y + sticky.Size.Y - StickyResizeHandleSize;
         return graphPoint.X >= x0 && graphPoint.X <= sticky.Position.X + sticky.Size.X
             && graphPoint.Y >= y0 && graphPoint.Y <= sticky.Position.Y + sticky.Size.Y;
+    }
+
+    /// <summary>Topmost group whose title bar contains <paramref name="graphPoint"/>.
+    /// Only the title bar acts as the interaction surface so clicks on a group's body
+    /// pass through to interior nodes — without this, groups would eat every click.</summary>
+    private NodeGroup? HitTestGroupTitle(Float2 graphPoint)
+    {
+        if (_graph == null) return null;
+        for (int i = _graph.Groups.Count - 1; i >= 0; i--)
+        {
+            var g = _graph.Groups[i];
+            if (graphPoint.X >= g.Position.X && graphPoint.X <= g.Position.X + g.Size.X &&
+                graphPoint.Y >= g.Position.Y && graphPoint.Y <= g.Position.Y + GroupTitleHeight)
+                return g;
+        }
+        return null;
+    }
+
+    /// <summary>True if <paramref name="graphPoint"/> is inside the bottom-right resize
+    /// handle of <paramref name="group"/>. The corner handle is always grabbable even
+    /// when the group's body passes clicks through to interior nodes.</summary>
+    private static bool IsOverGroupResizeHandle(NodeGroup group, Float2 graphPoint)
+    {
+        float x0 = group.Position.X + group.Size.X - StickyResizeHandleSize;
+        float y0 = group.Position.Y + group.Size.Y - StickyResizeHandleSize;
+        return graphPoint.X >= x0 && graphPoint.X <= group.Position.X + group.Size.X
+            && graphPoint.Y >= y0 && graphPoint.Y <= group.Position.Y + group.Size.Y;
+    }
+
+    /// <summary>Enumerate nodes whose rect centres fall inside <paramref name="group"/>.
+    /// Used to pick up the "contained" set at move-start so the whole cluster translates
+    /// together.</summary>
+    private IEnumerable<Node> NodesInsideGroup(NodeGroup group)
+    {
+        if (_graph == null) yield break;
+        foreach (var n in _graph.Nodes)
+        {
+            var rect = GraphLayout.GetNodeRect(n);
+            float cx = (float)(rect.Min.X + rect.Max.X) * 0.5f;
+            float cy = (float)(rect.Min.Y + rect.Max.Y) * 0.5f;
+            if (cx >= group.Position.X && cx <= group.Position.X + group.Size.X &&
+                cy >= group.Position.Y && cy <= group.Position.Y + group.Size.Y)
+                yield return n;
+        }
+    }
+
+    private IEnumerable<StickyNote> StickiesInsideGroup(NodeGroup group)
+    {
+        if (_graph == null) yield break;
+        foreach (var s in _graph.StickyNotes)
+        {
+            float cx = s.Position.X + s.Size.X * 0.5f;
+            float cy = s.Position.Y + s.Size.Y * 0.5f;
+            if (cx >= group.Position.X && cx <= group.Position.X + group.Size.X &&
+                cy >= group.Position.Y && cy <= group.Position.Y + group.Size.Y)
+                yield return s;
+        }
+    }
+
+    private NodeGroup? FindGroup(Guid id)
+    {
+        if (_graph == null) return null;
+        foreach (var g in _graph.Groups) if (g.Id == id) return g;
+        return null;
+    }
+
+    private static NodeGroup? FindGroupIn(Prowl.Runtime.GraphTools.Graph graph, Guid id)
+    {
+        foreach (var g in graph.Groups) if (g.Id == id) return g;
+        return null;
     }
 
     // ─── Toolbar ──────────────────────────────────────────────────────────────────────
@@ -545,7 +642,9 @@ public class GraphEditorWindow : DockPanel
 
         // Graph-space layers (drawn back-to-front).
         GraphRendering.DrawGrid(canvas, visibleGraphRect, _view.Zoom);
-        foreach (var g in _graph.Groups) GraphRendering.DrawGroup(canvas, g);
+        foreach (var g in _graph.Groups)
+            GraphRendering.DrawGroup(canvas, g, _view.Zoom, font,
+                isSelected: _selectedGroups.Contains(g.Id));
         foreach (var note in _graph.StickyNotes)
             GraphRendering.DrawStickyNote(canvas, note, _view.Zoom, font,
                 isSelected: _selectedStickyNotes.Contains(note.Id));
@@ -721,13 +820,41 @@ public class GraphEditorWindow : DockPanel
             return;
         }
 
+        // Group title-bar hit — only the title strip is interactive; clicks on the
+        // group's body fall through to wires / empty space.
+        var groupHit = HitTestGroupTitle(graphPoint);
+        if (groupHit != null)
+        {
+            if (additive)
+            {
+                if (!_selectedGroups.Add(groupHit.Id)) _selectedGroups.Remove(groupHit.Id);
+            }
+            else
+            {
+                _selectedNodes.Clear();
+                _selectedEdges.Clear();
+                _selectedStickyNotes.Clear();
+                _selectedGroups.Clear();
+                _selectedGroups.Add(groupHit.Id);
+            }
+            SyncSelectionSystem();
+            return;
+        }
+
         // Empty space — but maybe near a wire? Wire hit-test uses a screen-pixel tolerance
         // so the catch zone stays the same regardless of zoom.
         const float wireHitPixels = 6f;
         float toleranceGraph = wireHitPixels / _view.Zoom;
-        var wireHit = HitTestWire(graphPoint, toleranceGraph);
+        var wireHit = HitTestWire(graphPoint, toleranceGraph, out var closestOnWire);
         if (wireHit != null)
         {
+            // Alt+click on a wire splits it with a RelayNode at the click point.
+            if (Input.IsAltPressed)
+            {
+                SplitWireWithRelay(wireHit, closestOnWire);
+                return;
+            }
+
             if (additive)
             {
                 if (!_selectedEdges.Add(wireHit.Id)) _selectedEdges.Remove(wireHit.Id);
@@ -749,17 +876,23 @@ public class GraphEditorWindow : DockPanel
             _selectedNodes.Clear();
             _selectedEdges.Clear();
             _selectedStickyNotes.Clear();
+            _selectedGroups.Clear();
             SyncSelectionSystem();
         }
     }
 
+    private Edge? HitTestWire(Float2 graphPoint, float toleranceGraph)
+        => HitTestWire(graphPoint, toleranceGraph, out _);
+
     /// <summary>
     /// Find the nearest wire within <paramref name="toleranceGraph"/> graph-units of
-    /// <paramref name="graphPoint"/>, or null. Approximates point-to-bezier distance via
-    /// the same 16-sample sweep used elsewhere.
+    /// <paramref name="graphPoint"/>, or null. Returns the closest point on the wire via
+    /// <paramref name="closestPoint"/> — used by alt+click split to place the relay
+    /// exactly on the wire path rather than at the (slightly off) cursor.
     /// </summary>
-    private Edge? HitTestWire(Float2 graphPoint, float toleranceGraph)
+    private Edge? HitTestWire(Float2 graphPoint, float toleranceGraph, out Float2 closestPoint)
     {
+        closestPoint = graphPoint;
         if (_graph == null) return null;
         float bestSq = toleranceGraph * toleranceGraph;
         Edge? bestEdge = null;
@@ -772,10 +905,73 @@ public class GraphEditorWindow : DockPanel
             var dstPos = GraphLayout.TryGetPortPosition(dstNode, edge.TargetPortName, PortDirection.Input);
             if (!srcPos.HasValue || !dstPos.HasValue) continue;
 
-            float dSq = GraphLayout.DistanceSqToWire(srcPos.Value, dstPos.Value, graphPoint);
-            if (dSq < bestSq) { bestSq = dSq; bestEdge = edge; }
+            float dSq = GraphLayout.DistanceSqToWire(srcPos.Value, dstPos.Value, graphPoint, out var cp);
+            if (dSq < bestSq) { bestSq = dSq; bestEdge = edge; closestPoint = cp; }
         }
         return bestEdge;
+    }
+
+    /// <summary>
+    /// Alt+click on a wire: insert a <see cref="RelayNode"/> at <paramref name="splitAt"/>
+    /// and reconnect src→relay→dst. Registered as one undo step.
+    /// </summary>
+    private void SplitWireWithRelay(Edge edge, Float2 splitAt)
+    {
+        if (_graph == null) return;
+        var srcNode = _graph.FindNode(edge.SourceNodeId);
+        var dstNode = _graph.FindNode(edge.TargetNodeId);
+        if (srcNode == null || dstNode == null) return;
+        var srcPort = srcNode.GetOutput(edge.SourcePortName);
+        if (srcPort == null) return;
+
+        // Build the relay typed to match the wire's data type. Position it so its centre
+        // lands on the split point (the renderer's rect is 28×20).
+        var relay = new RelayNode
+        {
+            CarriedTypeName = srcPort.DataType.AssemblyQualifiedName ?? typeof(object).AssemblyQualifiedName!,
+            Position = new Float2(splitAt.X - 14f, splitAt.Y - 10f),
+        };
+
+        var newA = new Edge
+        {
+            SourceNodeId = edge.SourceNodeId, SourcePortName = edge.SourcePortName,
+            TargetNodeId = relay.Id, TargetPortName = "In",
+        };
+        var newB = new Edge
+        {
+            SourceNodeId = relay.Id, SourcePortName = "Out",
+            TargetNodeId = edge.TargetNodeId, TargetPortName = edge.TargetPortName,
+        };
+        var removed = edge;
+
+        _graph.Edges.Remove(removed);
+        _graph.Nodes.Add(relay);
+        _graph.Edges.Add(newA);
+        _graph.Edges.Add(newB);
+
+        var graph = _graph;
+        Undo.RegisterAction("Insert Relay",
+            undo: () =>
+            {
+                graph.Edges.Remove(newA);
+                graph.Edges.Remove(newB);
+                graph.RemoveNode(relay.Id);
+                graph.Edges.Add(removed);
+            },
+            redo: () =>
+            {
+                graph.Edges.Remove(removed);
+                graph.Nodes.Add(relay);
+                graph.Edges.Add(newA);
+                graph.Edges.Add(newB);
+            });
+
+        // Selecting the relay lets the user immediately drag to reposition.
+        _selectedNodes.Clear();
+        _selectedEdges.Clear();
+        _selectedStickyNotes.Clear();
+        _selectedNodes.Add(relay.Id);
+        SyncSelectionSystem();
     }
 
     /// <summary>
@@ -830,6 +1026,50 @@ public class GraphEditorWindow : DockPanel
                 }
                 _dragMoveStartCursor = graphPoint;
                 _dragMode = DragMode.MoveNodes;
+                return;
+            }
+
+            // Group hit-test — resize handle wins over title-bar move, which wins over
+            // passing clicks through to interior nodes. Checked before stickies so a
+            // group containing a sticky still acts like a group on the title bar.
+            var groupResizeCandidate = (NodeGroup?)null;
+            if (_graph != null)
+            {
+                for (int i = _graph.Groups.Count - 1; i >= 0; i--)
+                {
+                    if (IsOverGroupResizeHandle(_graph.Groups[i], graphPoint))
+                    { groupResizeCandidate = _graph.Groups[i]; break; }
+                }
+            }
+            if (groupResizeCandidate != null)
+            {
+                _activeGroup = groupResizeCandidate.Id;
+                _groupDragStartPos = groupResizeCandidate.Position;
+                _groupDragStartSize = groupResizeCandidate.Size;
+                _dragMode = DragMode.ResizeGroup;
+                return;
+            }
+
+            var groupTitleHit = HitTestGroupTitle(graphPoint);
+            if (groupTitleHit != null)
+            {
+                if (!_selectedGroups.Contains(groupTitleHit.Id))
+                {
+                    if (!Input.IsCtrlPressed && !Input.IsShiftPressed) _selectedGroups.Clear();
+                    _selectedGroups.Add(groupTitleHit.Id);
+                    SyncSelectionSystem();
+                }
+                _activeGroup = groupTitleHit.Id;
+                _groupDragStartPos = groupTitleHit.Position;
+                _groupDragStartSize = groupTitleHit.Size;
+                // Capture contained items so the whole cluster translates as a unit.
+                _groupContainedNodeStartPositions = new Dictionary<Guid, Float2>();
+                foreach (var n in NodesInsideGroup(groupTitleHit))
+                    _groupContainedNodeStartPositions[n.Id] = n.Position;
+                _groupContainedStickyStartPositions = new Dictionary<Guid, Float2>();
+                foreach (var s in StickiesInsideGroup(groupTitleHit))
+                    _groupContainedStickyStartPositions[s.Id] = s.Position;
+                _dragMode = DragMode.MoveGroup;
                 return;
             }
 
@@ -933,6 +1173,46 @@ public class GraphEditorWindow : DockPanel
                 }
                 break;
 
+            case DragMode.MoveGroup:
+                if (_activeGroup.HasValue)
+                {
+                    var g = FindGroup(_activeGroup.Value);
+                    if (g != null && _groupContainedNodeStartPositions != null
+                        && _groupContainedStickyStartPositions != null)
+                    {
+                        var d = e.Delta / _view.Zoom;
+                        g.Position += d;
+                        // Translate every captured member by the same delta. Using
+                        // cumulative delta keeps the group + members in sync regardless
+                        // of where they started.
+                        foreach (var kv in _groupContainedNodeStartPositions)
+                        {
+                            var n = _graph.FindNode(kv.Key);
+                            if (n != null) n.Position += d;
+                        }
+                        foreach (var kv in _groupContainedStickyStartPositions)
+                        {
+                            var s = FindStickyNote(kv.Key);
+                            if (s != null) s.Position += d;
+                        }
+                    }
+                }
+                break;
+
+            case DragMode.ResizeGroup:
+                if (_activeGroup.HasValue)
+                {
+                    var g = FindGroup(_activeGroup.Value);
+                    if (g != null)
+                    {
+                        var cursor = ScreenToGraph(e.PointerPosition);
+                        g.Size = new Float2(
+                            MathF.Max(GroupMinSize.X, cursor.X - g.Position.X),
+                            MathF.Max(GroupMinSize.Y, cursor.Y - g.Position.Y));
+                    }
+                }
+                break;
+
             case DragMode.MoveNodes:
                 {
                     // Absolute positioning: each node = its drag-start position plus
@@ -1028,11 +1308,71 @@ public class GraphEditorWindow : DockPanel
             }
             _resizingStickyNote = null;
         }
+        else if (_dragMode == DragMode.MoveGroup && _activeGroup.HasValue && _graph != null
+                 && _groupContainedNodeStartPositions != null
+                 && _groupContainedStickyStartPositions != null)
+        {
+            var graph = _graph;
+            var id = _activeGroup.Value;
+            var g = FindGroupIn(graph, id);
+            var nodeStarts = _groupContainedNodeStartPositions;
+            var stickyStarts = _groupContainedStickyStartPositions;
+            if (g != null && !g.Position.Equals(_groupDragStartPos))
+            {
+                var groupBefore = _groupDragStartPos;
+                var groupAfter = g.Position;
+                // Capture final positions of members so redo can replay exactly.
+                var nodeEnds = new Dictionary<Guid, Float2>();
+                foreach (var kv in nodeStarts)
+                {
+                    var n = graph.FindNode(kv.Key);
+                    if (n != null) nodeEnds[kv.Key] = n.Position;
+                }
+                var stickyEnds = new Dictionary<Guid, Float2>();
+                foreach (var kv in stickyStarts)
+                {
+                    var s = FindStickyNoteIn(graph, kv.Key);
+                    if (s != null) stickyEnds[kv.Key] = s.Position;
+                }
+
+                Undo.RegisterAction("Move Group",
+                    undo: () =>
+                    {
+                        var gg = FindGroupIn(graph, id); if (gg != null) gg.Position = groupBefore;
+                        foreach (var kv in nodeStarts)   { var n = graph.FindNode(kv.Key); if (n != null) n.Position = kv.Value; }
+                        foreach (var kv in stickyStarts) { var s = FindStickyNoteIn(graph, kv.Key); if (s != null) s.Position = kv.Value; }
+                    },
+                    redo: () =>
+                    {
+                        var gg = FindGroupIn(graph, id); if (gg != null) gg.Position = groupAfter;
+                        foreach (var kv in nodeEnds)   { var n = graph.FindNode(kv.Key); if (n != null) n.Position = kv.Value; }
+                        foreach (var kv in stickyEnds) { var s = FindStickyNoteIn(graph, kv.Key); if (s != null) s.Position = kv.Value; }
+                    });
+            }
+            _activeGroup = null;
+            _groupContainedNodeStartPositions = null;
+            _groupContainedStickyStartPositions = null;
+        }
+        else if (_dragMode == DragMode.ResizeGroup && _activeGroup.HasValue && _graph != null)
+        {
+            var graph = _graph;
+            var id = _activeGroup.Value;
+            var g = FindGroupIn(graph, id);
+            if (g != null && !g.Size.Equals(_groupDragStartSize))
+            {
+                var before = _groupDragStartSize;
+                var after = g.Size;
+                Undo.RegisterAction("Resize Group",
+                    undo: () => { var x = FindGroupIn(graph, id); if (x != null) x.Size = before; },
+                    redo: () => { var x = FindGroupIn(graph, id); if (x != null) x.Size = after; });
+            }
+            _activeGroup = null;
+        }
 
         if (_dragMode == DragMode.MarqueeSelect && _marqueeStartGraph.HasValue && _marqueeEndGraph.HasValue && _graph != null)
         {
             var rect = MakeMarqueeRect(_marqueeStartGraph.Value, _marqueeEndGraph.Value);
-            if (!_marqueeAdditive) { _selectedNodes.Clear(); _selectedEdges.Clear(); _selectedStickyNotes.Clear(); }
+            if (!_marqueeAdditive) { _selectedNodes.Clear(); _selectedEdges.Clear(); _selectedStickyNotes.Clear(); _selectedGroups.Clear(); }
 
             foreach (var n in _graph.Nodes)
                 if (GraphLayout.GetNodeRect(n).Intersects(rect))
@@ -1043,6 +1383,15 @@ public class GraphEditorWindow : DockPanel
                 var sRect = new Rect(s.Position.X, s.Position.Y,
                                       s.Position.X + s.Size.X, s.Position.Y + s.Size.Y);
                 if (sRect.Intersects(rect)) _selectedStickyNotes.Add(s.Id);
+            }
+
+            // Groups join the marquee when the title bar overlaps it — body-only hits
+            // would be noisy since groups are large and visually passive.
+            foreach (var g in _graph.Groups)
+            {
+                var titleRect = new Rect(g.Position.X, g.Position.Y,
+                                          g.Position.X + g.Size.X, g.Position.Y + GroupTitleHeight);
+                if (titleRect.Intersects(rect)) _selectedGroups.Add(g.Id);
             }
 
             // Wire hit: any sample point on the bezier inside the marquee rect counts.
@@ -1335,13 +1684,20 @@ public class GraphEditorWindow : DockPanel
             var s = FindStickyNote(id);
             if (s != null) removedStickies.Add(s);
         }
+        var removedGroups = new List<NodeGroup>();
+        foreach (var id in _selectedGroups)
+        {
+            var g = FindGroup(id);
+            if (g != null) removedGroups.Add(g);
+        }
 
-        if (removedNodes.Count == 0 && removedEdges.Count == 0 && removedStickies.Count == 0) return;
+        if (removedNodes.Count == 0 && removedEdges.Count == 0 && removedStickies.Count == 0 && removedGroups.Count == 0) return;
 
         foreach (var n in removedNodes) _graph.RemoveNode(n.Id);
         if (_selectedEdges.Count > 0)
             _graph.Edges.RemoveAll(e => _selectedEdges.Contains(e.Id));
         foreach (var s in removedStickies) _graph.StickyNotes.Remove(s);
+        foreach (var g in removedGroups) _graph.Groups.Remove(g);
 
         var graph = _graph;
         Undo.RegisterAction("Delete Graph Elements",
@@ -1350,17 +1706,20 @@ public class GraphEditorWindow : DockPanel
                 foreach (var n in removedNodes) graph.Nodes.Add(n);
                 foreach (var e in removedEdges) graph.Edges.Add(e);
                 foreach (var s in removedStickies) graph.StickyNotes.Add(s);
+                foreach (var g in removedGroups) graph.Groups.Add(g);
             },
             redo: () =>
             {
                 foreach (var n in removedNodes) graph.RemoveNode(n.Id);
                 foreach (var e in removedEdges) graph.Edges.Remove(e);
                 foreach (var s in removedStickies) graph.StickyNotes.Remove(s);
+                foreach (var g in removedGroups) graph.Groups.Remove(g);
             });
 
         _selectedNodes.Clear();
         _selectedEdges.Clear();
         _selectedStickyNotes.Clear();
+        _selectedGroups.Clear();
         SyncSelectionSystem();
     }
 
@@ -1373,7 +1732,7 @@ public class GraphEditorWindow : DockPanel
     private void SyncSelectionSystem()
     {
         if (_graph == null) return;
-        if (_selectedNodes.Count == 0 && _selectedStickyNotes.Count == 0) return;
+        if (_selectedNodes.Count == 0 && _selectedStickyNotes.Count == 0 && _selectedGroups.Count == 0) return;
 
         bool first = true;
         foreach (var id in _selectedNodes)
@@ -1389,6 +1748,13 @@ public class GraphEditorWindow : DockPanel
             if (s == null) continue;
             if (first) { Selection.Select(s); first = false; }
             else Selection.AddToSelection(s);
+        }
+        foreach (var id in _selectedGroups)
+        {
+            var g = FindGroup(id);
+            if (g == null) continue;
+            if (first) { Selection.Select(g); first = false; }
+            else Selection.AddToSelection(g);
         }
     }
 
@@ -1550,6 +1916,61 @@ public class GraphEditorWindow : DockPanel
         Float2 center = sum / count + new Float2(24, 24);
         CopySelection();
         PasteAt(center);
+    }
+
+    /// <summary>Ctrl+G — wrap the current selection (nodes + stickies) in a new
+    /// <see cref="NodeGroup"/>. Group is positioned/sized with padding so its title bar
+    /// sits above the topmost selected item. Registered as a single undo step.</summary>
+    private void GroupSelection()
+    {
+        if (_graph == null) return;
+        if (_selectedNodes.Count == 0 && _selectedStickyNotes.Count == 0) return;
+
+        Float2 min = new Float2(float.MaxValue), max = new Float2(float.MinValue);
+        bool any = false;
+        foreach (var id in _selectedNodes)
+        {
+            var n = _graph.FindNode(id);
+            if (n == null) continue;
+            var r = GraphLayout.GetNodeRect(n);
+            min = new Float2(MathF.Min(min.X, (float)r.Min.X), MathF.Min(min.Y, (float)r.Min.Y));
+            max = new Float2(MathF.Max(max.X, (float)r.Max.X), MathF.Max(max.Y, (float)r.Max.Y));
+            any = true;
+        }
+        foreach (var id in _selectedStickyNotes)
+        {
+            var s = FindStickyNote(id);
+            if (s == null) continue;
+            min = new Float2(MathF.Min(min.X, s.Position.X), MathF.Min(min.Y, s.Position.Y));
+            max = new Float2(MathF.Max(max.X, s.Position.X + s.Size.X), MathF.Max(max.Y, s.Position.Y + s.Size.Y));
+            any = true;
+        }
+        if (!any) return;
+
+        // Padding around the contents + extra on top for the title bar.
+        const float pad = 16f;
+        var group = new NodeGroup
+        {
+            Position = new Float2(min.X - pad, min.Y - (pad + GroupTitleHeight)),
+            Size = new Float2((max.X - min.X) + pad * 2, (max.Y - min.Y) + pad * 2 + GroupTitleHeight),
+            Title = "Group",
+        };
+
+        _graph.Groups.Add(group);
+
+        var graph = _graph;
+        var added = group;
+        Undo.RegisterAction("Group Selection",
+            undo: () => graph.Groups.Remove(added),
+            redo: () => graph.Groups.Add(added));
+
+        // Select the new group so the Inspector opens for Title editing.
+        _selectedNodes.Clear();
+        _selectedEdges.Clear();
+        _selectedStickyNotes.Clear();
+        _selectedGroups.Clear();
+        _selectedGroups.Add(group.Id);
+        SyncSelectionSystem();
     }
 
     /// <summary>F shortcut — frame the selection, or the whole graph if nothing is selected.</summary>

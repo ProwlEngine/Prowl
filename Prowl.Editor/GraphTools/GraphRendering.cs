@@ -109,21 +109,54 @@ public static class GraphRendering
 
     // ─── Groups (back-most layer) ────────────────────────────────────────────────────
 
-    public static void DrawGroup(Canvas canvas, NodeGroup group)
+    public static void DrawGroup(Canvas canvas, NodeGroup group, float zoom, Prowl.Scribe.FontFile? font, bool isSelected = false)
     {
-        var fill = new Color32(group.PackedColor);
-        fill.A = 40; // background tint
-        var border = new Color32(group.PackedColor);
-        border.A = 200;
+        const float titleHeight = 24f;
 
-        canvas.RoundedRectFilled(group.Position.X, group.Position.Y,
-            group.Size.X, group.Size.Y, 8f, 8f, 8f, 8f, fill);
+        var baseColor = new Color32(group.PackedColor);
+        var fill = baseColor; fill.A = 40;            // faint body tint
+        var titleFill = baseColor; titleFill.A = 180; // solid title bar
+        var border = baseColor; border.A = 200;
 
+        float x = group.Position.X, y = group.Position.Y;
+        float w = group.Size.X, h = group.Size.Y;
+
+        // Body.
+        canvas.RoundedRectFilled(x, y, w, h, 8f, 8f, 8f, 8f, fill);
+
+        // Title strip — rounded corners match the body's top.
+        canvas.RoundedRectFilled(x, y, w, titleHeight, 8f, 8f, 0f, 0f, titleFill);
+
+        // Outline.
         canvas.BeginPath();
-        canvas.RoundedRect(group.Position.X, group.Position.Y, group.Size.X, group.Size.Y, 8f);
-        canvas.SetStrokeColor(border);
-        canvas.SetStrokeWidth(2f);
+        canvas.RoundedRect(x, y, w, h, 8f);
+        canvas.SetStrokeColor(isSelected ? new Color32(255, 200, 80, 255) : border);
+        canvas.SetStrokeWidth(isSelected ? 2.5f : 2f);
         canvas.Stroke();
+
+        // Title text.
+        if (font != null && zoom > 0.35f && !string.IsNullOrEmpty(group.Title))
+        {
+            canvas.DrawText(group.Title, x + 8, y + 5,
+                new Color32(238, 240, 245, 255), 14f, font);
+        }
+
+        // Resize grip (bottom-right). Matches the sticky pattern so handle discovery
+        // stays consistent across element types.
+        float hx1 = x + w, hy1 = y + h;
+        float hx0 = hx1 - 14f, hy0 = hy1 - 14f;
+        var gripCol = new Color32(
+            (byte)Math.Max(0, baseColor.R - 60),
+            (byte)Math.Max(0, baseColor.G - 60),
+            (byte)Math.Max(0, baseColor.B - 60),
+            220);
+        canvas.BeginPath();
+        canvas.MoveTo(hx1, hy0);
+        canvas.LineTo(hx1, hy1);
+        canvas.LineTo(hx0, hy1);
+        canvas.ClosePath();
+        canvas.SetFillColor(gripCol);
+        canvas.Fill();
     }
 
     // ─── Sticky notes ────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Echo;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools;
@@ -21,7 +22,7 @@ namespace Prowl.Runtime.GraphTools;
 /// <c>GameObject</c>. All persisted state lives in public fields — Echo doesn't see
 /// properties.
 /// </remarks>
-public abstract class Graph : EngineObject
+public abstract class Graph : EngineObject, ISerializable
 {
     /// <summary>All nodes in the graph. Polymorphic — subclasses live in this list.</summary>
     public List<Node> Nodes = new();
@@ -127,5 +128,114 @@ public abstract class Graph : EngineObject
                 if (e.TargetNodeId == nodeId && e.TargetPortName == portName) yield return e;
             }
         }
+    }
+
+    // ─── Custom Serialization (MissingNode fallback) ─────────────────────────────────
+    // We own Serialize/Deserialize so we can intercept each Node tag, look up its
+    // $type, and — if the type no longer resolves — wrap the raw EchoObject in a
+    // MissingNode that preserves the original payload for recovery on re-save. Same
+    // pattern GameObject uses for MissingMonobehaviour.
+
+    public void Serialize(ref EchoObject compound, SerializationContext ctx)
+    {
+        SerializeHeader(compound);
+
+        // Nodes are polymorphic — Serializer writes the $type tag that Deserialize
+        // uses below to detect unresolvable types.
+        var nodesTag = EchoObject.NewList();
+        foreach (var n in Nodes)
+            nodesTag.ListAdd(Serializer.Serialize(typeof(Node), n, ctx));
+        compound.Add("Nodes", nodesTag);
+
+        compound.Add("Edges",       Serializer.Serialize(typeof(List<Edge>), Edges, ctx));
+        compound.Add("Blackboard",  Serializer.Serialize(typeof(List<BlackboardVariable>), Blackboard, ctx));
+        compound.Add("StickyNotes", Serializer.Serialize(typeof(List<StickyNote>), StickyNotes, ctx));
+        compound.Add("Groups",      Serializer.Serialize(typeof(List<NodeGroup>), Groups, ctx));
+
+        compound.Add("ViewportPan",  Serializer.Serialize(typeof(Float2), ViewportPan, ctx));
+        compound.Add("ViewportZoom", new EchoObject(ViewportZoom));
+    }
+
+    public void Deserialize(EchoObject value, SerializationContext ctx)
+    {
+        DeserializeHeader(value);
+
+        Nodes = new List<Node>();
+        var nodesTag = value.Get("Nodes");
+        if (nodesTag != null && nodesTag.TagType == EchoType.List)
+        {
+            foreach (var nodeTag in nodesTag.List)
+            {
+                // Missing-type fallback — same shape as GameObject's component handling.
+                var typeProperty = nodeTag.Get("$type");
+                if (typeProperty != null && !string.IsNullOrWhiteSpace(typeProperty.StringValue))
+                {
+                    var resolved = RuntimeUtils.FindType(typeProperty.StringValue);
+                    if (resolved == null)
+                    {
+                        Debug.LogWarning($"Missing Node Type: {typeProperty.StringValue} on Graph '{Name}'");
+                        Nodes.Add(new MissingNode
+                        {
+                            MissingTypeName = typeProperty.StringValue,
+                            SerializedPayload = nodeTag,
+                        });
+                        continue;
+                    }
+                    if (resolved == typeof(MissingNode))
+                    {
+                        // Re-entry: we saved a MissingNode previously. If its original
+                        // payload's $type now resolves (user restored the assembly),
+                        // recover it; otherwise keep it as a MissingNode so we don't
+                        // lose the payload on this round-trip either.
+                        HandleMissingNode(nodeTag, ctx);
+                        continue;
+                    }
+                }
+
+                var node = Serializer.Deserialize<Node>(nodeTag, ctx);
+                if (node != null) Nodes.Add(node);
+            }
+        }
+
+        Edges       = Serializer.Deserialize<List<Edge>>(value.Get("Edges") ?? EchoObject.NewList(), ctx) ?? new();
+        Blackboard  = Serializer.Deserialize<List<BlackboardVariable>>(value.Get("Blackboard") ?? EchoObject.NewList(), ctx) ?? new();
+        StickyNotes = Serializer.Deserialize<List<StickyNote>>(value.Get("StickyNotes") ?? EchoObject.NewList(), ctx) ?? new();
+        Groups      = Serializer.Deserialize<List<NodeGroup>>(value.Get("Groups") ?? EchoObject.NewList(), ctx) ?? new();
+
+        var panTag = value.Get("ViewportPan");
+        if (panTag != null) ViewportPan = Serializer.Deserialize<Float2>(panTag, ctx);
+        ViewportZoom = value.Get("ViewportZoom")?.FloatValue ?? 1f;
+
+        // Drop edges whose endpoints don't exist anymore — defensive against edges
+        // surviving a node that even the MissingNode fallback couldn't resurrect.
+        var validIds = new HashSet<Guid>();
+        foreach (var n in Nodes) validIds.Add(n.Id);
+        Edges.RemoveAll(e => !validIds.Contains(e.SourceNodeId) || !validIds.Contains(e.TargetNodeId));
+    }
+
+    /// <summary>Try to rehydrate a previously-saved <see cref="MissingNode"/> back into
+    /// its original concrete type — happens when the user restores the assembly that
+    /// defines the type after saving the graph with a placeholder.</summary>
+    private void HandleMissingNode(EchoObject nodeTag, SerializationContext ctx)
+    {
+        var missing = Serializer.Deserialize<MissingNode>(nodeTag, ctx);
+        if (missing == null) return;
+
+        var payload = missing.SerializedPayload;
+        if (payload != null && payload.TryGet("$type", out var typeProp))
+        {
+            var resolved = RuntimeUtils.FindType(typeProp.StringValue);
+            if (resolved != null)
+            {
+                var recovered = Serializer.Deserialize<Node>(payload, ctx);
+                if (recovered != null)
+                {
+                    Nodes.Add(recovered);
+                    return;
+                }
+            }
+        }
+        // Still unresolved — keep the MissingNode so payload isn't lost.
+        Nodes.Add(missing);
     }
 }

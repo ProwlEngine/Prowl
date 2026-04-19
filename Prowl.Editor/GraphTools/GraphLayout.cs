@@ -142,6 +142,14 @@ public static class GraphLayout
     /// horizontal-tangent control points.
     /// </summary>
     public static float DistanceSqToWire(Float2 from, Float2 to, Float2 graphPoint)
+        => DistanceSqToWire(from, to, graphPoint, out _);
+
+    /// <summary>
+    /// Same as <see cref="DistanceSqToWire(Float2,Float2,Float2)"/> but also returns the
+    /// closest-point-on-the-wire in graph space — used by alt+click-split to place the
+    /// new relay right on the wire rather than at the cursor.
+    /// </summary>
+    public static float DistanceSqToWire(Float2 from, Float2 to, Float2 graphPoint, out Float2 closestPoint)
     {
         float dx = MathF.Abs(to.X - from.X);
         float tangent = MathF.Max(40f, dx * 0.5f);
@@ -149,7 +157,10 @@ public static class GraphLayout
         Float2 c2 = new Float2(to.X - tangent, to.Y);
 
         float bestSq = float.MaxValue;
-        const int samples = 16;
+        closestPoint = from;
+        // 32 samples — tighter than the 16 used originally so alt+click can land on a
+        // wire with pixel-ish precision even at modest zoom. O(32) per edge is cheap.
+        const int samples = 32;
         for (int i = 0; i <= samples; i++)
         {
             float t = i / (float)samples;
@@ -159,7 +170,11 @@ public static class GraphLayout
             float bx = b0 * from.X + b1 * c1.X + b2 * c2.X + b3 * to.X;
             float by = b0 * from.Y + b1 * c1.Y + b2 * c2.Y + b3 * to.Y;
             float dSq = Sq(bx - graphPoint.X) + Sq(by - graphPoint.Y);
-            if (dSq < bestSq) bestSq = dSq;
+            if (dSq < bestSq)
+            {
+                bestSq = dSq;
+                closestPoint = new Float2(bx, by);
+            }
         }
         return bestSq;
     }

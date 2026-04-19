@@ -302,5 +302,6 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("GraphEditor/Paste", "Paste", KeyCode.V, ctrl: true);
         ShortcutManager.Register("GraphEditor/SelectAll", "Select All", KeyCode.A, ctrl: true);
         ShortcutManager.Register("GraphEditor/FrameSelection", "Frame Selection", KeyCode.F);
+        ShortcutManager.Register("GraphEditor/GroupSelection", "Group Selected", KeyCode.G, ctrl: true);
     }
 }
