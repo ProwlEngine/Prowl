@@ -552,6 +552,20 @@ public static unsafe class Graphics
         GL.DrawElementsInstanced(mode, indexCount, format, null, instanceCount);
     }
 
+    /// <summary>Instanced indexed draw starting at <paramref name="startIndex"/> within the bound element buffer. Used for per-submesh instanced draws.</summary>
+    public static unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, int startIndex, bool index32bit)
+    {
+        GL.GetInteger(GetPName.VertexArrayBinding, out int currentVAO);
+        if (currentVAO == 0)
+            throw new System.InvalidOperationException("DrawIndexedInstanced called with no VAO bound! Bind a vertex array first.");
+
+        PrimitiveType mode = TopologyToGL(primitiveType);
+        DrawElementsType format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
+        int indexSize = index32bit ? sizeof(uint) : sizeof(ushort);
+
+        GL.DrawElementsInstanced(mode, indexCount, format, (void*)(startIndex * indexSize), instanceCount);
+    }
+
     public static void Dispose()
     {
         GL.Dispose();
