@@ -57,6 +57,17 @@ Pass "Terrain"
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
 
+            // Heightmap samples live at vertex positions (indices 0..N-1 → UV 0..1), but GPU
+            // texture sampling is texel-centered (texel i center at UV (i+0.5)/N). Without this
+            // remap, the rendered mesh is offset by half a texel relative to CPU-placed
+            // trees/grass that use TerrainData.GetInterpolatedHeight — the fix maps vertex UV
+            // i/(N-1) back to texel-center UV (i+0.5)/N.
+            vec2 hmSampleUV(vec2 uv)
+            {
+                vec2 s = vec2(textureSize(_Heightmap, 0));
+                return uv * (s - 1.0) / s + 0.5 / s;
+            }
+
             void main()
             {
 #ifdef GPU_INSTANCING
@@ -72,7 +83,7 @@ Pass "Terrain"
                 texCoord0 = terrainUV;
 
                 // Sample height in terrain-local Y
-                float height = texture(_Heightmap, terrainUV).r * _TerrainHeight;
+                float height = texture(_Heightmap, hmSampleUV(terrainUV)).r * _TerrainHeight;
 
                 // Displace: add height along terrain-local Y, transformed back to world
                 // terrainLocal with height applied
@@ -83,16 +94,16 @@ Pass "Terrain"
                 // we can reconstruct: worldPos = _TerrainLocalToWorld * displacedLocal
                 vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
-                // Normal via central differences in terrain-local space
+                // Normal via central differences, stepping one vertex spacing (1/(N-1)) in UV.
                 float hmSize = float(textureSize(_Heightmap, 0).x);
-                float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
+                float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
 
-                float hR = texture(_Heightmap, terrainUV + vec2(texelSize, 0.0)).r * _TerrainHeight;
-                float hL = texture(_Heightmap, terrainUV - vec2(texelSize, 0.0)).r * _TerrainHeight;
-                float hU = texture(_Heightmap, terrainUV + vec2(0.0, texelSize)).r * _TerrainHeight;
-                float hD = texture(_Heightmap, terrainUV - vec2(0.0, texelSize)).r * _TerrainHeight;
+                float hR = texture(_Heightmap, hmSampleUV(terrainUV + vec2(vertStep, 0.0))).r * _TerrainHeight;
+                float hL = texture(_Heightmap, hmSampleUV(terrainUV - vec2(vertStep, 0.0))).r * _TerrainHeight;
+                float hU = texture(_Heightmap, hmSampleUV(terrainUV + vec2(0.0, vertStep))).r * _TerrainHeight;
+                float hD = texture(_Heightmap, hmSampleUV(terrainUV - vec2(0.0, vertStep))).r * _TerrainHeight;
 
-                float wStep = texelSize * _TerrainSize;
+                float wStep = vertStep * _TerrainSize;
                 float slopeX = (hR - hL) / (wStep * 2.0);
                 float slopeZ = (hU - hD) / (wStep * 2.0);
 
@@ -244,6 +255,13 @@ Pass "TerrainShadow"
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
 
+            // Vertex-UV → texel-center-UV remap, matches Terrain pass.
+            vec2 hmSampleUV(vec2 uv)
+            {
+                vec2 s = vec2(textureSize(_Heightmap, 0));
+                return uv * (s - 1.0) / s + 0.5 / s;
+            }
+
             void main()
             {
 #ifdef GPU_INSTANCING
@@ -252,7 +270,7 @@ Pass "TerrainShadow"
                 vec3 terrainLocal = (_TerrainWorldToLocal * worldPos4).xyz;
                 vec2 terrainUV = terrainLocal.xz / _TerrainSize;
 
-                float height = texture(_Heightmap, terrainUV).r * _TerrainHeight;
+                float height = texture(_Heightmap, hmSampleUV(terrainUV)).r * _TerrainHeight;
                 vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
                 vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
@@ -300,6 +318,13 @@ Pass "TerrainDepthNormals"
             uniform mat4 _TerrainWorldToLocal;
             uniform mat4 _TerrainLocalToWorld;
 
+            // Vertex-UV → texel-center-UV remap, matches Terrain pass.
+            vec2 hmSampleUV(vec2 uv)
+            {
+                vec2 s = vec2(textureSize(_Heightmap, 0));
+                return uv * (s - 1.0) / s + 0.5 / s;
+            }
+
             void main()
             {
 #ifdef GPU_INSTANCING
@@ -308,17 +333,17 @@ Pass "TerrainDepthNormals"
                 vec3 terrainLocal = (_TerrainWorldToLocal * worldPos4).xyz;
                 vec2 terrainUV = terrainLocal.xz / _TerrainSize;
 
-                float height = texture(_Heightmap, terrainUV).r * _TerrainHeight;
+                float height = texture(_Heightmap, hmSampleUV(terrainUV)).r * _TerrainHeight;
                 vec3 displacedLocal = vec3(terrainLocal.x, height, terrainLocal.z);
                 vec3 worldPosition = (_TerrainLocalToWorld * vec4(displacedLocal, 1.0)).xyz;
 
                 float hmSize = float(textureSize(_Heightmap, 0).x);
-                float texelSize = hmSize > 0.0 ? (1.0 / hmSize) : 0.001;
-                float hR = texture(_Heightmap, terrainUV + vec2(texelSize, 0.0)).r * _TerrainHeight;
-                float hL = texture(_Heightmap, terrainUV - vec2(texelSize, 0.0)).r * _TerrainHeight;
-                float hU = texture(_Heightmap, terrainUV + vec2(0.0, texelSize)).r * _TerrainHeight;
-                float hD = texture(_Heightmap, terrainUV - vec2(0.0, texelSize)).r * _TerrainHeight;
-                float wStep = texelSize * _TerrainSize;
+                float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
+                float hR = texture(_Heightmap, hmSampleUV(terrainUV + vec2(vertStep, 0.0))).r * _TerrainHeight;
+                float hL = texture(_Heightmap, hmSampleUV(terrainUV - vec2(vertStep, 0.0))).r * _TerrainHeight;
+                float hU = texture(_Heightmap, hmSampleUV(terrainUV + vec2(0.0, vertStep))).r * _TerrainHeight;
+                float hD = texture(_Heightmap, hmSampleUV(terrainUV - vec2(0.0, vertStep))).r * _TerrainHeight;
+                float wStep = vertStep * _TerrainSize;
                 float slopeX = (hR - hL) / (wStep * 2.0);
                 float slopeZ = (hU - hD) / (wStep * 2.0);
                 vec3 localNormal = normalize(vec3(-slopeX, 1.0, -slopeZ));
