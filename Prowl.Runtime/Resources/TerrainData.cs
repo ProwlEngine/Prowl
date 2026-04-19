@@ -35,6 +35,12 @@ public class DetailPrototype
 {
     public AssetRef<Texture2D> Texture;       // texture for billboard/non-billboard modes
     public AssetRef<Mesh> Mesh;               // mesh for Mesh mode
+    /// <summary>
+    /// Materials to use for the Mesh render mode, one per submesh of <see cref="Mesh"/>.
+    /// When a slot is null (or the list is shorter than the mesh's submesh count), the
+    /// default Standard material is used for that submesh.
+    /// </summary>
+    public List<AssetRef<Material>> Materials = [];
     public DetailRenderMode RenderMode = DetailRenderMode.TextureBillboard;
     public float MinWidth = 1f;
     public float MaxWidth = 2f;
@@ -63,7 +69,21 @@ public struct TreeInstance
 public class TreePrototype
 {
     public AssetRef<Mesh> Mesh;
-    public AssetRef<Material> Material; // null = use Standard material
+
+    /// <summary>
+    /// Materials, one per submesh of <see cref="Mesh"/>. When a slot is null or the list is
+    /// shorter than the mesh's submesh count, the missing submeshes fall back to the first
+    /// non-null material in this list (or Standard if none).
+    /// </summary>
+    public List<AssetRef<Material>> Materials = [];
+
+    /// <summary>Legacy single-material accessor — reads/writes Materials[0].</summary>
+    public AssetRef<Material> Material
+    {
+        get => Materials.Count > 0 ? Materials[0] : default;
+        set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
+    }
+
     public float BendFactor = 1f;       // wind bend strength
 }
 
@@ -326,6 +346,9 @@ public sealed class TerrainData : EngineObject, ISerializable
             var dpo = EchoObject.NewCompound();
             dpo.Add("Texture", Serializer.Serialize(dp.Texture, ctx));
             dpo.Add("Mesh", Serializer.Serialize(dp.Mesh, ctx));
+            var matList = EchoObject.NewList();
+            foreach (var m in dp.Materials) matList.ListAdd(Serializer.Serialize(m, ctx));
+            dpo.Add("Materials", matList);
             dpo.Add("RenderMode", new EchoObject((int)dp.RenderMode));
             dpo.Add("MinWidth", new EchoObject(dp.MinWidth));
             dpo.Add("MaxWidth", new EchoObject(dp.MaxWidth));
@@ -351,7 +374,9 @@ public sealed class TerrainData : EngineObject, ISerializable
         {
             var tpo = EchoObject.NewCompound();
             tpo.Add("Mesh", Serializer.Serialize(tp.Mesh, ctx));
-            tpo.Add("Material", Serializer.Serialize(tp.Material, ctx));
+            var matList = EchoObject.NewList();
+            foreach (var m in tp.Materials) matList.ListAdd(Serializer.Serialize(m, ctx));
+            tpo.Add("Materials", matList);
             tpo.Add("BendFactor", new EchoObject(tp.BendFactor));
             treeProtoList.ListAdd(tpo);
         }
@@ -408,7 +433,7 @@ public sealed class TerrainData : EngineObject, ISerializable
         {
             foreach (var dpo in dpList.List)
             {
-                DetailPrototypes.Add(new DetailPrototype
+                var dp = new DetailPrototype
                 {
                     Texture = Serializer.Deserialize<AssetRef<Texture2D>>(dpo.Get("Texture"), ctx),
                     Mesh = Serializer.Deserialize<AssetRef<Mesh>>(dpo.Get("Mesh"), ctx),
@@ -422,7 +447,14 @@ public sealed class TerrainData : EngineObject, ISerializable
                     HealthyColor = Serializer.Deserialize<Color>(dpo.Get("HealthyColor") ?? dpo.Get("Tint"), ctx),
                     DryColor = Serializer.Deserialize<Color>(dpo.Get("DryColor") ?? dpo.Get("DryTint"), ctx),
                     AlignToNormal = dpo.Get("AlignToNormal")?.BoolValue ?? false,
-                });
+                };
+
+                var matList = dpo.Get("Materials");
+                if (matList != null)
+                    foreach (var mat in matList.List)
+                        dp.Materials.Add(Serializer.Deserialize<AssetRef<Material>>(mat, ctx));
+
+                DetailPrototypes.Add(dp);
             }
         }
         if (DetailPrototypes.Count == 0) DetailPrototypes.Add(new());
@@ -452,12 +484,29 @@ public sealed class TerrainData : EngineObject, ISerializable
         var tpList = value.Get("TreePrototypes");
         if (tpList != null)
             foreach (var tpo in tpList.List)
-                TreePrototypes.Add(new TreePrototype
+            {
+                var tp = new TreePrototype
                 {
                     Mesh = Serializer.Deserialize<AssetRef<Mesh>>(tpo.Get("Mesh"), ctx),
-                    Material = Serializer.Deserialize<AssetRef<Material>>(tpo.Get("Material"), ctx),
                     BendFactor = tpo.Get("BendFactor")?.FloatValue ?? 1f,
-                });
+                };
+
+                var matList = tpo.Get("Materials");
+                if (matList != null)
+                {
+                    foreach (var mat in matList.List)
+                        tp.Materials.Add(Serializer.Deserialize<AssetRef<Material>>(mat, ctx));
+                }
+                else
+                {
+                    // Back-compat: old single-material field.
+                    var legacy = tpo.Get("Material");
+                    if (legacy != null)
+                        tp.Materials.Add(Serializer.Deserialize<AssetRef<Material>>(legacy, ctx));
+                }
+
+                TreePrototypes.Add(tp);
+            }
 
         Trees = [];
         var tiList = value.Get("Trees");

@@ -266,6 +266,7 @@ public class TerrainEditor : CustomEditor
             {
                 PropertyGrid.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), dp.Mesh,
                     v => { dp.Mesh = (AssetRef<Mesh>)v!; MarkDetailsDirty(); }, 0);
+                DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", dp.Mesh.Res, dp.Materials);
             }
             else
             {
@@ -337,8 +338,9 @@ public class TerrainEditor : CustomEditor
 
             PropertyGrid.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), proto.Mesh,
                 v => { proto.Mesh = (AssetRef<Mesh>)v!; _isDirty = true; }, 0);
-            PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), proto.Material,
-                v => { proto.Material = (AssetRef<Material>)v!; _isDirty = true; }, 0);
+
+            DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", proto.Mesh.Res, proto.Materials);
+
             EditorGUI.Slider(paper, $"{id}_bend", "Bend Factor", proto.BendFactor, 0f, 2f)
                 .OnValueChanged(v => { proto.BendFactor = v; _isDirty = true; });
         }
@@ -471,6 +473,49 @@ public class TerrainEditor : CustomEditor
             .OnValueChanged(v => BrushStrength = v);
         EditorGUI.Slider(paper, $"{id}_fall", "Brush Falloff", BrushFalloff, 0f, 1f)
             .OnValueChanged(v => BrushFalloff = v);
+    }
+
+    #endregion
+
+    #region Material List (shared)
+
+    /// <summary>
+    /// Draws a per-submesh Materials list for a terrain prototype. Resizes the <paramref name="materials"/>
+    /// list to match the mesh's <see cref="Mesh.SubMeshCount"/> when a mesh is assigned, so users see one
+    /// slot per submesh; falls back to a single "Material" field when no mesh is assigned yet.
+    /// </summary>
+    private void DrawPrototypeMaterials(Paper paper, string id, string label, Mesh? mesh, List<AssetRef<Material>> materials)
+    {
+        if (mesh == null)
+        {
+            // No mesh assigned — show a single material field (will end up as submesh 0).
+            AssetRef<Material> single = materials.Count > 0 ? materials[0] : default;
+            PropertyGrid.DrawField(paper, $"{id}_single", label, typeof(AssetRef<Material>), single,
+                v =>
+                {
+                    var val = (AssetRef<Material>)v!;
+                    if (materials.Count == 0) materials.Add(val); else materials[0] = val;
+                    _isDirty = true; MarkDetailsDirty();
+                }, 0);
+            return;
+        }
+
+        int subCount = mesh.SubMeshCount;
+        // Grow the list so the user has one slot per submesh. Shrinking is left alone so user
+        // can still see (and clear) extra entries if they swap to a smaller mesh.
+        while (materials.Count < subCount) materials.Add(default);
+
+        for (int i = 0; i < subCount; i++)
+        {
+            int capturedIndex = i;
+            string slotLabel = subCount > 1 ? $"{label} [{i}]" : label;
+            PropertyGrid.DrawField(paper, $"{id}_{i}", slotLabel, typeof(AssetRef<Material>), materials[i],
+                v =>
+                {
+                    materials[capturedIndex] = (AssetRef<Material>)v!;
+                    _isDirty = true; MarkDetailsDirty();
+                }, 0);
+        }
     }
 
     #endregion

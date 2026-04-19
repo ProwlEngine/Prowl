@@ -114,20 +114,24 @@ internal class TerrainGrassRenderer
             var proto = data.DetailPrototypes[protoIdx];
             if (protoIdx >= data.DetailLayers.Count) continue;
 
-            // Determine mesh and material based on render mode
+            // Determine mesh and (for texture modes) single material based on render mode.
+            // Mesh mode picks per-submesh materials below.
             Mesh renderMesh;
             Material renderMat;
+            int subMeshCount;
             if (proto.RenderMode == DetailRenderMode.Mesh)
             {
                 var meshRes = proto.Mesh.Res;
                 if (meshRes == null) continue;
                 renderMesh = meshRes;
+                subMeshCount = meshRes.SubMeshCount;
                 s_defaultStandardMat ??= Resources.Material.LoadDefault(DefaultMaterial.Standard);
-                renderMat = s_defaultStandardMat;
+                renderMat = s_defaultStandardMat; // unused in mesh mode — per-submesh lookup handles it
             }
             else
             {
                 renderMesh = _quadMesh!;
+                subMeshCount = 1;
                 s_defaultWhite ??= Texture2D.LoadDefault(DefaultTexture.White);
                 var tex = proto.Texture.Res ?? s_defaultWhite;
                 baseMaterial.SetTexture("_MainTex", tex);
@@ -160,13 +164,30 @@ internal class TerrainGrassRenderer
 
                     if (cached.PrebuiltInstances == null || cached.PrebuiltInstances.Length == 0) continue;
 
-                    // Use prebuilt InstanceData directly — no per-frame allocation
-                    renderables.Add(new InstancedMeshRenderable(
-                        renderMesh, renderMat, cached.PrebuiltInstances,
-                        worldPatchCenter,
-                        terrain.GameObject.LayerIndex,
-                        s_emptyProps,
-                        cached.Bounds));
+                    // One instanced draw per submesh so multi-material detail meshes render
+                    // correctly. Texture modes use a fabricated single-submesh quad.
+                    for (int sub = 0; sub < subMeshCount; sub++)
+                    {
+                        Material subMat;
+                        if (proto.RenderMode == DetailRenderMode.Mesh)
+                        {
+                            subMat = null!;
+                            if (sub < proto.Materials.Count) subMat = proto.Materials[sub].Res!;
+                            subMat ??= renderMat; // default Standard
+                        }
+                        else
+                        {
+                            subMat = renderMat;
+                        }
+
+                        renderables.Add(new InstancedMeshRenderable(
+                            renderMesh, subMat, cached.PrebuiltInstances,
+                            worldPatchCenter,
+                            terrain.GameObject.LayerIndex,
+                            s_emptyProps,
+                            cached.Bounds,
+                            subMeshIndex: subMeshCount > 1 ? sub : -1));
+                    }
                 }
             }
         }

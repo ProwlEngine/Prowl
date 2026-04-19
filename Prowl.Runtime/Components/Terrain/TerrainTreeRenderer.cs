@@ -36,8 +36,6 @@ internal class TerrainTreeRenderer
             if (mesh == null) continue;
 
             s_defaultStandardMat ??= Material.LoadDefault(DefaultMaterial.Standard);
-            var mat = proto.Material.Res ?? s_defaultStandardMat;
-            if (mat == null) continue;
 
             _transforms.Clear();
             _colors.Clear();
@@ -82,12 +80,28 @@ internal class TerrainTreeRenderer
                 bmax = new Float3(MathF.Max(bmax.X, tx + meshExtent), MathF.Max(bmax.Y, ty + meshHeight), MathF.Max(bmax.Z, tz + meshExtent));
             }
 
-            renderables.Add(new InstancedMeshRenderable(
-                mesh, mat, [.. _instanceDataList],
-                (bmin + bmax) * 0.5f,
-                terrain.GameObject.LayerIndex,
-                s_emptyProps,
-                new AABB(bmin, bmax)));
+            // One instanced draw per submesh so trees with multi-material meshes render each
+            // submesh with its own material.
+            int subMeshCount = mesh.SubMeshCount;
+            var instanceArr = _instanceDataList.ToArray();
+            Float3 sortPos = (bmin + bmax) * 0.5f;
+            AABB worldBounds = new AABB(bmin, bmax);
+
+            for (int sub = 0; sub < subMeshCount; sub++)
+            {
+                Material? mat = null;
+                if (sub < proto.Materials.Count) mat = proto.Materials[sub].Res;
+                mat ??= s_defaultStandardMat;
+                if (mat == null) continue;
+
+                renderables.Add(new InstancedMeshRenderable(
+                    mesh, mat, instanceArr,
+                    sortPos,
+                    terrain.GameObject.LayerIndex,
+                    s_emptyProps,
+                    worldBounds,
+                    subMeshIndex: subMeshCount > 1 ? sub : -1));
+            }
         }
     }
 }
