@@ -13,22 +13,21 @@ namespace Prowl.Editor;
 /// </summary>
 /// <summary>
 /// Cursor lock context for the scene view — locks to the center of the scene panel.
-/// Panel coordinates are in Paper's reference resolution space, so they need to be
-/// converted back to window pixel coordinates for the actual cursor recentering.
+/// Panel coordinates are in Paper-logical space; the OS cursor position expects
+/// window-logical pixels, so we multiply by Window.ContentScale on the way out.
 /// </summary>
 public class SceneViewLockContext : CursorLockContext
 {
-    /// <summary>Panel origin in Paper logical coordinates (reference resolution space).</summary>
+    /// <summary>Panel origin in Paper-logical coordinates.</summary>
     public Float2 PanelOrigin;
-    /// <summary>Panel size in Paper logical coordinates (reference resolution space).</summary>
+    /// <summary>Panel size in Paper-logical coordinates.</summary>
     public Float2 PanelSize;
-    /// <summary>The reference resolution scale factor to convert back to window coordinates.</summary>
-    public float ReferenceScale = 1.0f;
 
     public override Int2 GetLockCenter()
     {
-        float centerX = (PanelOrigin.X + PanelSize.X / 2) * ReferenceScale;
-        float centerY = (PanelOrigin.Y + PanelSize.Y / 2) * ReferenceScale;
+        float cs = Window.ContentScale;
+        float centerX = (PanelOrigin.X + PanelSize.X / 2) * cs;
+        float centerY = (PanelOrigin.Y + PanelSize.Y / 2) * cs;
         return new Int2((int)centerX, (int)centerY);
     }
 }
@@ -227,7 +226,6 @@ public class EditorCamera
         {
             _lockContext.PanelOrigin = panelOrigin;
             _lockContext.PanelSize = panelSize;
-            _lockContext.ReferenceScale = EditorApplication.Instance?.PaperInstance?.Canvas?.ReferenceScale ?? 1.0f;
             Input.PushLockContext(_lockContext);
             Input.LockCursor();
         }

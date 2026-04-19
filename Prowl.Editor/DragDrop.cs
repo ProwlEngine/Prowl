@@ -81,7 +81,7 @@ public static class DragDrop
     {
         IsDragging = true;
         Payload = payload;
-        DragPosition = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
+        DragPosition = EditorApplication.Instance?.PaperInstance?.PointerPos ?? new Float2(Input.MousePosition.X, Input.MousePosition.Y);
     }
 
     public static void UpdateDrag()
@@ -94,7 +94,7 @@ public static class DragDrop
         }
 
         if (!IsDragging) return;
-        DragPosition = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
+        DragPosition = EditorApplication.Instance?.PaperInstance?.PointerPos ?? new Float2(Input.MousePosition.X, Input.MousePosition.Y);
 
         // Cancel on escape
         if (Input.GetKeyDown(KeyCode.Escape))

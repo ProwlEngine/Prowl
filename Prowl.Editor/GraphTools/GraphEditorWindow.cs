@@ -134,8 +134,10 @@ public class GraphEditorWindow : DockPanel
         // Middle-mouse pan — Paper's drag events only fire for left-mouse, so middle-button
         // pan is polled manually (same pattern as EditorCamera). Anywhere on the canvas,
         // including over nodes; matches the convention used by the Scene viewport.
+        // Use Paper's PointerDelta so the pan delta is in Paper-logical space (matches the
+        // canvas it's panning).
         if (Input.GetMouseButton(2))
-            _view.PanBy(Input.MouseDelta);
+            _view.PanBy(paper.PointerDelta);
 
         var graphMouse = ScreenToGraph(paper.PointerPos);
         var portHit = HitTestPort(graphMouse, out var portNode);

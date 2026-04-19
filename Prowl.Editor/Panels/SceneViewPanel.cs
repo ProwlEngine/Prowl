@@ -188,8 +188,8 @@ public class SceneViewPanel : DockPanel
             var cam = _editorCamera.Camera;
             if (cam != null)
             {
-                Float2 mouseLocal = new Float2(Input.MousePosition.X - _viewportAbsoluteRect.Min.X,
-                                                Input.MousePosition.Y - _viewportAbsoluteRect.Min.Y);
+                // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
+                Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 viewSize = new Float2(width, height);
                 Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
                 bool hovered = mouseLocal.X >= 0 && mouseLocal.X <= viewSize.X
@@ -200,7 +200,7 @@ public class SceneViewPanel : DockPanel
 
         // Update transform gizmo for selected objects (skip if scene editor consumed input)
         if (!sceneEditorConsumedInput)
-            UpdateTransformGizmo(scene, width, height);
+            UpdateTransformGizmo(paper, scene, width, height);
 
         // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
         DrawSelectionGizmos();
@@ -571,7 +571,7 @@ public class SceneViewPanel : DockPanel
         _transformGizmo?.SetMode(mode);
     }
 
-    private void UpdateTransformGizmo(Scene scene, float width, float height)
+    private void UpdateTransformGizmo(Paper paper, Scene scene, float width, float height)
     {
         _gizmoActive = false;
         if (_editorCamera == null) return;
@@ -613,9 +613,8 @@ public class SceneViewPanel : DockPanel
             camGo.Transform.Up, camGo.Transform.Forward, camGo.Transform.Right, camGo.Transform.Position);
         _transformGizmo.SetTransform(center, rotation, scale);
 
-        // Mouse position is in absolute screen coords — matches the absolute viewport
-        Float2 mouseAbs = new Float2(Input.MousePosition.X, Input.MousePosition.Y);
-        // For the ray, we still need panel-local mouse for ScreenPointToRay
+        // Mouse in Paper-logical space, matching _viewportAbsoluteRect (also Paper-logical).
+        Float2 mouseAbs = paper.PointerPos;
         Float2 mouseLocal = mouseAbs - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
         var ray = _editorCamera.ScreenPointToRay(mouseLocal, new Float2(width, height));
 

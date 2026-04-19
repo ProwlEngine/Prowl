@@ -234,11 +234,11 @@ public static class ContextMenuHelper
     {
         var parentEl = parent ?? paper.CurrentParent;
 
+        // paper.PointerPos and parentEl.Data.X/Y are both in Paper-logical space.
+        var mouse = paper.PointerPos;
         var relativePosition = new Float2(
-                //Input.MousePosition.X - parentEl.Owner.ScreenRect.Min.X,
-                //Input.MousePosition.Y - parentEl.Owner.ScreenRect.Min.Y
-                parentEl.Data.RelativeX + (Input.MousePosition.X - parentEl.Data.X),
-                parentEl.Data.RelativeY + (Input.MousePosition.Y - parentEl.Data.Y)
+                parentEl.Data.RelativeX + (mouse.X - parentEl.Data.X),
+                parentEl.Data.RelativeY + (mouse.Y - parentEl.Data.Y)
             );
 
         long frame = Time.FrameCount;
