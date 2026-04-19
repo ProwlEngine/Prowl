@@ -218,7 +218,6 @@ public class ProjectPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(3)
             .ChildLeft(indent + 4)
-            .StopEventPropagation()
             .OnClick(relativePath, (path, _) => _currentFolder = path)
             .OnDoubleClick(stateKey, (key, _) =>
             {
