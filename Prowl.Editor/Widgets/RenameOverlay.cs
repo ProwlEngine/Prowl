@@ -13,6 +13,12 @@ namespace Prowl.Editor.Widgets;
 /// </summary>
 public static class RenameOverlay
 {
+    public enum Position
+    {
+        Top,
+        Bottom
+    }
+
     private static bool _active;
     private static string _text = "";
     private static Action<string>? _onConfirm;
@@ -57,7 +63,7 @@ public static class RenameOverlay
     /// Draw the rename field at this location. Renders a fullscreen backdrop behind it
     /// and the text field on top, both on Layer.Topmost. Same pattern as ContextMenuHelper.
     /// </summary>
-    public static void Draw(Paper paper, string id)
+    public static void Draw(Paper paper, string id, Position position = Position.Top)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -82,7 +88,7 @@ public static class RenameOverlay
         // Rename field — positioned at (0,0) relative to parent, on top of backdrop
         using (paper.Box($"{id}_field")
             .PositionType(PositionType.SelfDirected)
-            .Position(0, 0)
+            .Position(0, (position == Position.Top ? 0 : UnitValue.Stretch()))
             .Width(UnitValue.Stretch())
             .Height(EditorTheme.RowHeight)
             .Rounded(3)
