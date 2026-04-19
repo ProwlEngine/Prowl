@@ -59,6 +59,8 @@ public class EditorApplication : Game
         System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         InitializeFont();
 
+        Resize(Window.Size.X, Window.Size.Y);
+
         PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
 
         // Load Font Awesome as fallback fonts for icons
