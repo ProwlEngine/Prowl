@@ -700,6 +700,7 @@ public static class EditorGUI
             .Height(EditorTheme.RowHeight)
             .Alignment(PaperUI.TextAlignment.MiddleLeft)
             .ChildLeft(4)
+            .Margin(UnitValue.Auto, EditorTheme.Spacing)
             .BackgroundColor(EditorTheme.Neutral300)
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Rounded(2);

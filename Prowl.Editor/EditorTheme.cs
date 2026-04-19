@@ -12,6 +12,9 @@ public static class EditorTheme
     public static string DefaultFontName = "bahnschrift";
     public static string DefaultBoldFontName = "bahnschrift";
 
+    // DPI Scaling value
+    public static float UserScale { get; set; } = 1f;
+
     // Sizing — mutable so themes can override
     public static float MenuBarHeight = 26f;
     public static float StatusBarHeight = 22f;
@@ -19,7 +22,7 @@ public static class EditorTheme
     public static float Spacing = 2f;
     public static float Padding = 4f;
     public static float FontSize = 17f;
-    public static float LabelWidth = 120f;
+    public static float LabelWidth = 200f;
     public static float Roundness = 8f;
 
     public static float IndicatorSize = 28f;

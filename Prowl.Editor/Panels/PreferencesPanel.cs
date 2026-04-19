@@ -191,6 +191,12 @@ public class PreferencesPanel : DockPanel
 
 
         // ── Sizing ──
+        EditorGUI.Foldout(paper, "pref_scl_general", "General Sizing", () =>
+        {
+            SzSlider(paper, s, "User Scale", theme.UserScale, 0.5f, 2, v => theme.UserScale = v);
+        });
+
+        // ── Sizing ──
         EditorGUI.Foldout(paper, "pref_sz_general", "General Sizing", () =>
         {
             SzSlider(paper, s, "Font Size", theme.FontSize, 8, 32, v => theme.FontSize = v);
