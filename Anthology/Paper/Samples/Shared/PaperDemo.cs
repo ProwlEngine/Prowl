@@ -121,17 +121,17 @@ namespace Shared
         //    });
         //
         //
-        //    //var myWindowB = ImGui.CreateWindow(
+        //    //var myWindowB = Paper.CreateWindow(
         //    //    fontMedium,
         //    //    "My OtherWindow",
         //    //    new Float2(100, 400),
         //    //    new Float2(200, 100),
         //    //    (window) => {
         //    //        // Window content rendering
-        //    //        using (ImGui.Column("WindowInnerContent")
+        //    //        using (Paper.Column("WindowInnerContent")
         //    //            .Enter())
         //    //        {
-        //    //            using (ImGui.LayoutBox("Title")
+        //    //            using (Paper.LayoutBox("Title")
         //    //                .Height(40)
         //    //                .Text(TextStyle.Center("Why Hello There", fontLarge, textColor))
         //    //                .Enter()) { }

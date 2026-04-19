@@ -20,7 +20,6 @@ namespace OpenTKSample
             _renderer = new PaperRenderer();
             _renderer.Initialize(FramebufferSize.X, FramebufferSize.Y);
             P = new Paper(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y, new Prowl.Quill.FontAtlasSettings());
-            P.SetReferenceResolution(1280, 720);
             Shared.PaperDemo.Initialize(P);
         }
 

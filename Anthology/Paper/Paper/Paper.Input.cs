@@ -390,10 +390,6 @@ namespace Prowl.PaperUI
             var index = (int)btn;
             LastButtonPressed = btn;
 
-            float scale = 1f / _canvas.ReferenceScale;
-            x *= scale;
-            y *= scale;
-
             if (!isPointerMove)
             {
                 _pointerPrevState[index] = _pointerCurState[index];

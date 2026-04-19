@@ -1303,10 +1303,9 @@ namespace Prowl.PaperUI.LayoutEngine
             var canvas = gui.Canvas;
             if (canvas == null) throw new InvalidOperationException("Canvas is not set.");
 
-            // TextLayout.Size and markdown Size are in pixel space (because Canvas.CreateLayout
-            // applies DPI scaling via ScaleSettings). Convert back to logical units so the layout
-            // engine works in a consistent coordinate space.
-            float invScale = 1.0f / canvas.Scale;
+            // TextLayout/markdown sizes returned by the canvas are in pixel space
+            // (scaled by FramebufferScale). The layout engine works in logical units.
+            float invScale = 1.0f / canvas.FramebufferScale;
 
             if (element.IsMarkdown == false)
             {

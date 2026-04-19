@@ -328,7 +328,7 @@ void main()
             else
             {
                 // Set default uniforms
-                SetUniforms(drawCall, canvas.Scale);
+                SetUniforms(drawCall, (float)canvas.FramebufferScale);
             }
 
             for (int i = 0; i < drawCall.ElementCount; i += 3)
@@ -344,7 +344,7 @@ void main()
                     }
                     else
                     {
-                        SetUniforms(drawCall, canvas.Scale);
+                        SetUniforms(drawCall, (float)canvas.FramebufferScale);
                     }
                 }
 

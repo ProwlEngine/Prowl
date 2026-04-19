@@ -181,7 +181,7 @@ public class WebGLCanvasRenderer : ICanvasRenderer
         Array.Copy(_brushBuffer, brushSlice, dcCount * 47);
 
         WebGLInterop.Render(vertexSlice, indexSlice, dcInfoSlice,
-            scissorSlice, brushSlice, canvas.Scale);
+            scissorSlice, brushSlice, (double)canvas.FramebufferScale);
     }
 
     public void Dispose() { }

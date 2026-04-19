@@ -29,7 +29,6 @@ internal class Program
 
         _renderer = new RaylibCanvasRenderer();
         P = new Paper(_renderer, width, height, new Prowl.Quill.FontAtlasSettings());
-        P.SetReferenceResolution(1280, 720);
         P.SetClipboardHandler(new RaylibClipboardHandler());
 
         // Initialize the Demo, this loads the Demo fonts and other resources
@@ -50,7 +49,7 @@ internal class Program
             BeginDrawing();
             ClearBackground(Color.RayWhite);
 
-            float dpiScale = (float)GetRenderWidth() / GetScreenWidth();
+            float dpiScale = GetScreenWidth() > 0 ? (float)GetRenderWidth() / GetScreenWidth() : 1.0f;
             P.BeginFrame(GetFrameTime(), dpiScale);
 
             PaperDemo.RenderUI();
@@ -70,23 +69,22 @@ internal class Program
     {
         // Handle mouse position and movement
         Vector2 mousePos = GetMousePosition();
-        P.SetPointerState(PaperMouseBtn.Unknown, (int)mousePos.X, (int)mousePos.Y, false, true);
+        P.SetPointerState(PaperMouseBtn.Unknown, mousePos.X, mousePos.Y, false, true);
 
-        // Handle mouse buttons
         if (IsMouseButtonPressed(MouseButton.Left))
-            P.SetPointerState(PaperMouseBtn.Left, (int)mousePos.X, (int)mousePos.Y, true, false);
+            P.SetPointerState(PaperMouseBtn.Left, mousePos.X, mousePos.Y, true, false);
         if (IsMouseButtonReleased(MouseButton.Left))
-            P.SetPointerState(PaperMouseBtn.Left, (int)mousePos.X, (int)mousePos.Y, false, false);
+            P.SetPointerState(PaperMouseBtn.Left, mousePos.X, mousePos.Y, false, false);
 
         if (IsMouseButtonPressed(MouseButton.Right))
-            P.SetPointerState(PaperMouseBtn.Right, (int)mousePos.X, (int)mousePos.Y, true, false);
+            P.SetPointerState(PaperMouseBtn.Right, mousePos.X, mousePos.Y, true, false);
         if (IsMouseButtonReleased(MouseButton.Right))
-            P.SetPointerState(PaperMouseBtn.Right, (int)mousePos.X, (int)mousePos.Y, false, false);
+            P.SetPointerState(PaperMouseBtn.Right, mousePos.X, mousePos.Y, false, false);
 
         if (IsMouseButtonPressed(MouseButton.Middle))
-            P.SetPointerState(PaperMouseBtn.Middle, (int)mousePos.X, (int)mousePos.Y, true, false);
+            P.SetPointerState(PaperMouseBtn.Middle, mousePos.X, mousePos.Y, true, false);
         if (IsMouseButtonReleased(MouseButton.Middle))
-            P.SetPointerState(PaperMouseBtn.Middle, (int)mousePos.X, (int)mousePos.Y, false, false);
+            P.SetPointerState(PaperMouseBtn.Middle, mousePos.X, mousePos.Y, false, false);
 
         // Handle mouse wheel
         float wheelDelta = GetMouseWheelMove();

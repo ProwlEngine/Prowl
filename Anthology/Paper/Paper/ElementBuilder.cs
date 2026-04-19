@@ -1773,7 +1773,12 @@ namespace Prowl.PaperUI
                     var textSettings = CreateTextLayoutSettings(settings, true, (float)(width ?? float.MaxValue));
                     var textLayout = _paper.CreateLayout(currentState.Value, textSettings);
 
-                    return (width ?? textSettings.PixelSize, Maths.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y));
+                    // textSettings.PixelSize is in logical-with-DPI units (CreateTextLayoutSettings
+                    // pre-scales). textLayout.Size is pixel-space — divide by FramebufferScale to
+                    // reach logical-with-DPI for comparison.
+                    float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+                    return (width ?? textSettings.PixelSize,
+                            Maths.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y * invFb));
                 });
             }
 
@@ -1893,12 +1898,14 @@ namespace Prowl.PaperUI
                         currentState.ScrollOffsetY += scrollSpeed;
                 }
 
-                // Clamp scroll offsets after auto-scroll
+                // Clamp scroll offsets after auto-scroll (textLayout.Size is pixel-space; convert
+                // to logical via FramebufferScale).
                 var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, e.ElementRect.Size.X);
                 var textLayout = _paper.CreateLayout(currentState.Value, layoutSettings);
                 float visibleWidth = e.ElementRect.Size.X;
                 float visibleHeight = e.ElementRect.Size.Y;
-                currentState.ClampScrollOffsets(textLayout.Size.X, textLayout.Size.Y, visibleWidth, visibleHeight);
+                float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+                currentState.ClampScrollOffsets((float)textLayout.Size.X * invFb, (float)textLayout.Size.Y * invFb, visibleWidth, visibleHeight);
 
                 var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
                 var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
@@ -1964,6 +1971,10 @@ namespace Prowl.PaperUI
                     canvas.SaveState();
                     canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
 
+                    // TextLayout positions and widths come back in pixel space (Canvas rasterizes
+                    // at logical × FramebufferScale for HiDPI crispness); divide by FramebufferScale
+                    // to reach logical space, matching the widget's own coordinate system.
+                    float invFb = 1.0f / canvas.FramebufferScale;
                     var fontSize = (float)elHandle.Data._elementStyle.GetValue(GuiProp.FontSize);
 
                     // Draw text or placeholder
@@ -1988,8 +1999,8 @@ namespace Prowl.PaperUI
                             int end = Maths.Max(renderState.SelectionStart, renderState.SelectionEnd);
 
                             var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
-                            var startPos = textLayout.GetCursorPosition(start) / canvas.Scale;
-                            var endPos = textLayout.GetCursorPosition(end) / canvas.Scale;
+                            var startPos = textLayout.GetCursorPosition(start) * invFb;
+                            var endPos = textLayout.GetCursorPosition(end) * invFb;
 
                             canvas.SetFillColor(Color32.FromArgb(100, 100, 150, 255));
 
@@ -2003,8 +2014,9 @@ namespace Prowl.PaperUI
                                 int startLineIndex = (int)(startPos.Y / lineHeight);
                                 int endLineIndex = (int)(endPos.Y / lineHeight);
 
-                                // First line: from start position to end of line
-                                float firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width : 0;
+                                // First line: from start position to end of line (line widths are
+                                // pixel-space on the layout; convert to logical).
+                                float firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width * invFb : 0;
 
                                 canvas.BeginPath();
                                 canvas.RoundedRect(
@@ -2020,7 +2032,7 @@ namespace Prowl.PaperUI
                                 int currentLineIndex = startLineIndex + 1;
                                 while (currentY < endPos.Y && currentLineIndex < textLayout.Lines.Count)
                                 {
-                                    float lineWidth = textLayout.Lines[currentLineIndex].Width;
+                                    float lineWidth = textLayout.Lines[currentLineIndex].Width * invFb;
 
                                     canvas.BeginPath();
                                     canvas.RoundedRect(
@@ -2066,8 +2078,8 @@ namespace Prowl.PaperUI
                         {
                             var textLayout = _paper.CreateLayout(renderState.Value, layoutSettings);
                             var cursorPos = textLayout.GetCursorPosition(renderState.CursorPosition);
-                            float cursorX = r.Min.X + cursorPos.X / canvas.Scale;
-                            float cursorY = r.Min.Y + cursorPos.Y / canvas.Scale;
+                            float cursorX = r.Min.X + (float)cursorPos.X / canvas.FramebufferScale;
+                            float cursorY = r.Min.Y + (float)cursorPos.Y / canvas.FramebufferScale;
 
                             canvas.BeginPath();
                             canvas.MoveTo(cursorX, cursorY);
@@ -2092,11 +2104,15 @@ namespace Prowl.PaperUI
         /// </summary>
         private void EnsureCursorVisible(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
         {
+            // Scroll offsets are applied as a logical-space canvas transform (see line ~1966),
+            // so everything in this method must be in logical units. TextLayout cursor positions
+            // and Size are in pixel space and must be divided by FramebufferScale.
+            float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+
             if (isMultiLine)
             {
-                // For multi-line, we need both horizontal and vertical scrolling
                 var textLayout = _paper.CreateLayout(state.Value, CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth));
-                var cursorPos = textLayout.GetCursorPosition(state.CursorPosition);
+                var cursorPos = textLayout.GetCursorPosition(state.CursorPosition) * invFb;
 
                 float visibleWidth = _handle.Data.LayoutWidth;
                 float visibleHeight = _handle.Data.LayoutHeight;
@@ -2105,37 +2121,38 @@ namespace Prowl.PaperUI
 
                 // Horizontal scrolling
                 if (cursorPos.X < state.ScrollOffsetX + margin)
-                    state.ScrollOffsetX = Maths.Max(0, cursorPos.X - margin);
+                    state.ScrollOffsetX = Maths.Max(0, (float)cursorPos.X - margin);
                 else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
-                    state.ScrollOffsetX = cursorPos.X - visibleWidth + margin;
+                    state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
 
                 // Vertical scrolling
                 if (cursorPos.Y < state.ScrollOffsetY + margin)
-                    state.ScrollOffsetY = Maths.Max(0, cursorPos.Y - margin);
+                    state.ScrollOffsetY = Maths.Max(0, (float)cursorPos.Y - margin);
                 else if (cursorPos.Y > state.ScrollOffsetY + visibleHeight - margin)
-                    state.ScrollOffsetY = cursorPos.Y - visibleHeight + margin;
+                    state.ScrollOffsetY = (float)cursorPos.Y - visibleHeight + margin;
 
-                // Clamp scroll offsets to content bounds
-                state.ClampScrollOffsets(textLayout.Size.X, textLayout.Size.Y, visibleWidth, visibleHeight);
+                // Clamp scroll offsets to content bounds (layout Size is pixel-space too).
+                state.ClampScrollOffsets((float)textLayout.Size.X * invFb, (float)textLayout.Size.Y * invFb, visibleWidth, visibleHeight);
             }
             else
             {
-                // Single-line horizontal scrolling only
+                // Single-line horizontal scrolling only. GetCursorPositionFromIndex returns
+                // pixel-space; convert to logical.
                 var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
                 var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
-                var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, fontSize, letterSpacing, state.CursorPosition);
+                var cursorPos = GetCursorPositionFromIndex(state.Value, settings.Font, fontSize, letterSpacing, state.CursorPosition) * invFb;
 
                 float visibleWidth = _handle.Data.LayoutWidth;
                 const float margin = 20.0f;
 
                 if (cursorPos.X < state.ScrollOffsetX + margin)
-                    state.ScrollOffsetX = Maths.Max(0, cursorPos.X - margin);
+                    state.ScrollOffsetX = Maths.Max(0, (float)cursorPos.X - margin);
                 else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
-                    state.ScrollOffsetX = cursorPos.X - visibleWidth + margin;
+                    state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
 
-                // Clamp horizontal scroll offset for single-line
+                // MeasureText returns logical units already (Canvas divides its pixel result by FramebufferScale).
                 var textSize = _paper.MeasureText(state.Value, CreateTextLayoutSettings(settings, false, float.MaxValue));
-                state.ClampScrollOffsets(textSize.X, textSize.Y, visibleWidth, _handle.Data.LayoutHeight);
+                state.ClampScrollOffsets((float)textSize.X, (float)textSize.Y, visibleWidth, _handle.Data.LayoutHeight);
             }
         }
 
@@ -2147,7 +2164,9 @@ namespace Prowl.PaperUI
             if (string.IsNullOrEmpty(text)) return 0;
             var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : float.MaxValue;
             var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
-            return textLayout.GetCursorIndex(new Float2(x * _paper.Canvas.ReferenceScale, y * _paper.Canvas.ReferenceScale));
+            // x,y are in logical units; the layout is in pixel space. Scale to match.
+            float s = _paper.Canvas.FramebufferScale;
+            return textLayout.GetCursorIndex(new Float2(x * s, y * s));
         }
 
         /// <summary>

@@ -31,7 +31,6 @@ namespace Prowl.PaperUI
         private ICanvasRenderer _renderer;
         private float _width;
         private float _height;
-        private float _dpiScale = 1.0f;
         private Stopwatch _timer = new Stopwatch();
 
         // Events
@@ -49,11 +48,44 @@ namespace Prowl.PaperUI
         public ICanvasRenderer Renderer => _renderer;
 
         /// <summary>
-        /// Gets the current DPI scale factor.
-        /// Host applications should divide raw input coordinates by this value
-        /// before passing them to Paper's input methods.
+        /// Physical-pixels-per-logical-pixel ratio for the main viewport. Default is <c>(1,1)</c>.
+        /// Set this to the host's DPI ratio (e.g. <c>(2,2)</c> on a Retina display) before
+        /// <see cref="BeginFrame"/>. Paper uses this to scale vertex output and to rasterize fonts
+        /// at the right density for crisp HiDPI rendering.
         /// </summary>
-        public float DpiScale => _dpiScale;
+        public Float2 DisplayFramebufferScale = new Float2(1.0f, 1.0f);
+
+        /// <summary>
+        /// Accumulated scale applied to the registered default dimensional values by
+        /// <see cref="ScaleAllSizes"/>.
+        /// </summary>
+        public float MainScale { get; private set; } = 1.0f;
+
+        /// <summary>
+        /// Convenience shorthand for <c>DisplayFramebufferScale.X</c>.
+        /// </summary>
+        public float DpiScale => DisplayFramebufferScale.X;
+
+        /// <summary>
+        /// Multiplies every registered default dimensional value by <paramref name="scaleFactor"/>.
+        /// Call this <b>once</b> at init — typically with the monitor's DPI ratio — to adapt
+        /// default style values (padding, border width, spacing, etc.) to a HiDPI display.
+        /// </summary>
+        public void ScaleAllSizes(float scaleFactor)
+        {
+            if (scaleFactor <= 0) throw new ArgumentOutOfRangeException(nameof(scaleFactor));
+            MainScale *= scaleFactor;
+            foreach (var scale in _scaledDefaults)
+                scale(scaleFactor);
+        }
+
+        /// <summary>
+        /// Registers a default value so <see cref="ScaleAllSizes"/> can scale it. The style
+        /// subsystem calls this during init for each scalable default.
+        /// </summary>
+        internal void RegisterScaledDefault(Action<float> applyScale) => _scaledDefaults.Add(applyScale);
+
+        private readonly List<Action<float>> _scaledDefaults = new List<Action<float>>();
 
         /// <summary>
         /// Gets the current parent element in the element hierarchy.
@@ -105,31 +137,6 @@ namespace Prowl.PaperUI
             _height = height;
         }
 
-        /// <summary>
-        /// Sets a target reference resolution for automatic UI scaling.
-        /// When set, all UI coordinates use a virtual resolution that is automatically
-        /// scaled to fill the actual window size. This ensures UI designed for a
-        /// specific resolution (e.g., 1280x720) looks correct on any screen size.
-        /// </summary>
-        /// <param name="width">Reference width (e.g., 1280).</param>
-        /// <param name="height">Reference height (e.g., 720).</param>
-        /// <param name="matchWidthOrHeight">
-        /// Controls whether scaling prioritizes matching the width or height.
-        /// 0 = match width exactly, 1 = match height exactly, 0.5 = balanced (default).
-        /// </param>
-        public void SetReferenceResolution(float width, float height, float matchWidthOrHeight = 0.5f)
-        {
-            _canvas.SetReferenceResolution(width, height, matchWidthOrHeight);
-        }
-
-        /// <summary>
-        /// Clears the reference resolution, reverting to direct pixel mapping.
-        /// </summary>
-        public void ClearReferenceResolution()
-        {
-            _canvas.ClearReferenceResolution();
-        }
-
         public void AddFallbackFont(FontFile font) => _canvas.AddFallbackFont(font);
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
@@ -152,29 +159,30 @@ namespace Prowl.PaperUI
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _canvas.CreateLayout(text, settings);
 
         /// <summary>
-        /// Begins a new UI frame, resetting the element hierarchy.
+        /// Begins a new UI frame, resetting the element hierarchy. Before calling this the host
+        /// must have set <see cref="DisplayFramebufferScale"/> for the current frame
+        /// (or supply <paramref name="dpiScale"/> here).
         /// </summary>
-        /// <param name="deltaTime">Time elapsed since the last frame</param>
-        /// <param name="dpiScale">Device pixel ratio (1.0 = standard, 2.0 = HiDPI/Retina). Can change per-frame if the window moves between monitors.</param>
+        /// <param name="deltaTime">Time elapsed since the last frame.</param>
+        /// <param name="dpiScale">
+        /// Optional convenience: when <c>&gt; 0</c>, sets <see cref="DisplayFramebufferScale"/> to
+        /// <c>(dpiScale, dpiScale)</c> for this frame. Pass <c>&lt;= 0</c> to leave whatever the host
+        /// already set on <see cref="DisplayFramebufferScale"/> untouched.
+        /// </param>
         public void BeginFrame(float deltaTime, float dpiScale = 1.0f)
         {
-            _dpiScale = dpiScale > 0 ? dpiScale : 1.0f;
+            if (dpiScale > 0)
+                DisplayFramebufferScale = new Float2(dpiScale, dpiScale);
+
             _timer.Restart();
             SetTime(deltaTime);
 
-            // Canvas computes logical dimensions (accounting for reference resolution if set)
-            _canvas.BeginFrame(_width, _height, _dpiScale);
-
-            // Use the canvas's logical dimensions for the root element.
-            // When reference resolution is active, these differ from _width/_height.
-            float logicalWidth = _canvas.Width;
-            float logicalHeight = _canvas.Height;
+            _canvas.BeginFrame(_width, _height, DisplayFramebufferScale.X);
 
             _elementStack.Clear();
 
-            // Reset with just the root element
             ClearElements();
-            InitializeRootElement(logicalWidth, logicalHeight);
+            InitializeRootElement(_width, _height);
             _rootElementHandle = GetRootElementHandle();
 
             // Initialize stacks
@@ -501,9 +509,9 @@ namespace Prowl.PaperUI
             float yOffset = 0;
             Float2 textSize;
 
-            // TextLayout.Size is in pixel space (DPI-scaled). Convert to logical units
-            // so alignment calculations match the logical-space availableHeight.
-            float invScale = 1.0f / canvas.Scale;
+            // TextLayout.Size is in pixel space (because Canvas.CreateLayout scales settings by
+            // FramebufferScale for crispness). Convert back to logical units for alignment math.
+            float invScale = 1.0f / canvas.FramebufferScale;
 
             if (handle.Data.IsMarkdown == false)
             {
