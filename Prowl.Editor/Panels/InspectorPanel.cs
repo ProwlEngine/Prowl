@@ -549,6 +549,7 @@ public class InspectorPanel : DockPanel
             .BackgroundColor(EditorTheme.Neutral400).Rounded(3)
             .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
             .Text(log.Message, font).TextColor(textColor)
+            .Wrap(Scribe.TextWrapMode.Wrap)
             .FontSize(fs - 1);
 
         // Stack trace
