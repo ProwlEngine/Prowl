@@ -145,9 +145,56 @@ public class Transform
 
     #endregion
 
-    public Float3 Right { get => Rotation * Float3.UnitX; }     // TODO: Setter
-    public Float3 Up { get => Rotation * Float3.UnitY; }           // TODO: Setter
-    public Float3 Forward { get => Rotation * Float3.UnitZ; } // TODO: Setter
+    public Float3 Right
+    {
+        get => Rotation * Float3.UnitX;
+        set => Rotation = FromToRotation(Float3.UnitX, value) * Rotation;
+    }
+
+    public Float3 Up
+    {
+        get => Rotation * Float3.UnitY;
+        set => Rotation = FromToRotation(Float3.UnitY, value) * Rotation;
+    }
+
+    /// <summary>
+    /// Facing direction (local +Z). Assigning rotates the transform so Forward points along
+    /// the new direction. Up is kept close to world +Y when possible.
+    /// </summary>
+    public Float3 Forward
+    {
+        get => Rotation * Float3.UnitZ;
+        set
+        {
+            if (Float3.LengthSquared(value) < float.Epsilon) return;
+            Rotation = Quaternion.LookRotation(Float3.Normalize(value), Float3.UnitY);
+        }
+    }
+
+    /// <summary>
+    /// Shortest-arc rotation that maps <paramref name="from"/> onto <paramref name="to"/>.
+    /// Both vectors are normalized; returns identity if either is zero or they already align.
+    /// </summary>
+    private static Quaternion FromToRotation(Float3 from, Float3 to)
+    {
+        if (Float3.LengthSquared(from) < float.Epsilon || Float3.LengthSquared(to) < float.Epsilon)
+            return Quaternion.Identity;
+
+        Float3 a = Float3.Normalize(from);
+        Float3 b = Float3.Normalize(to);
+        float d = Float3.Dot(a, b);
+        if (d >= 1f - float.Epsilon) return Quaternion.Identity;
+        if (d <= -1f + float.Epsilon)
+        {
+            // 180° — pick any perpendicular axis
+            Float3 axis = Float3.Cross(a, Float3.UnitX);
+            if (Float3.LengthSquared(axis) < float.Epsilon)
+                axis = Float3.Cross(a, Float3.UnitY);
+            return Quaternion.AxisAngle(Float3.Normalize(axis), MathF.PI);
+        }
+        Float3 c = Float3.Cross(a, b);
+        return Quaternion.NormalizeSafe(new Quaternion(c.X, c.Y, c.Z, 1f + d));
+    }
 
     public Float4x4 WorldToLocalMatrix => LocalToWorldMatrix.Invert();
 
