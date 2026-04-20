@@ -530,4 +530,85 @@ public class Transform
 
     #endregion
 
+    #region Children
+
+    /// <summary>Number of direct children on the owning GameObject.</summary>
+    public int ChildCount => GameObject?.Children.Count ?? 0;
+
+    /// <summary>Direct child transform by index. Throws if out of range.</summary>
+    public Transform GetChild(int index) => GameObject.Children[index].Transform;
+
+    /// <summary>Enumerate direct children as Transforms.</summary>
+    public IEnumerable<Transform> GetChildren()
+    {
+        if (GameObject == null) yield break;
+        foreach (var child in GameObject.Children)
+            yield return child.Transform;
+    }
+
+    /// <summary>True if this is a descendant of <paramref name="parent"/> (or is <paramref name="parent"/>).</summary>
+    public bool IsChildOf(Transform parent)
+    {
+        if (parent == null) return false;
+        Transform? cur = this;
+        while (cur != null)
+        {
+            if (cur == parent) return true;
+            cur = cur.Parent;
+        }
+        return false;
+    }
+
+    /// <summary>Index of this transform within its parent's children list, or -1 at the root.</summary>
+    public int GetSiblingIndex()
+    {
+        var p = Parent;
+        if (p == null || p.GameObject == null) return -1;
+        return p.GameObject.Children.IndexOf(GameObject);
+    }
+
+    /// <summary>
+    /// Move this transform to <paramref name="index"/> within its parent's child list. Index is
+    /// clamped. No-op if there's no parent.
+    /// </summary>
+    public void SetSiblingIndex(int index)
+    {
+        var p = Parent;
+        if (p == null || p.GameObject == null) return;
+        var siblings = p.GameObject.Children;
+        int current = siblings.IndexOf(GameObject);
+        if (current < 0) return;
+        index = System.Math.Clamp(index, 0, siblings.Count - 1);
+        if (index == current) return;
+        siblings.RemoveAt(current);
+        siblings.Insert(index, GameObject);
+        _version++;
+    }
+
+    /// <summary>Move this transform to the first position in its parent's child list.</summary>
+    public void SetAsFirstSibling() => SetSiblingIndex(0);
+
+    /// <summary>Move this transform to the last position in its parent's child list.</summary>
+    public void SetAsLastSibling()
+    {
+        var p = Parent;
+        if (p == null || p.GameObject == null) return;
+        SetSiblingIndex(p.GameObject.Children.Count - 1);
+    }
+
+    /// <summary>
+    /// Unparent every direct child. <paramref name="worldPositionStays"/> controls whether the
+    /// children keep their world pose (true) or inherit the new root's identity frame (false).
+    /// </summary>
+    public void DetachChildren(bool worldPositionStays = true)
+    {
+        if (GameObject == null) return;
+        // Copy because SetParent mutates the Children list.
+        var snapshot = GameObject.Children.ToArray();
+        foreach (var child in snapshot)
+            child.SetParent(null, worldPositionStays);
+    }
+
+    #endregion
+
 }
