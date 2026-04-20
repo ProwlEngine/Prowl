@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Editor.Widgets;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -100,14 +101,14 @@ public static class PrefabEditingMode
     }
 
     /// <summary>
-    /// Save the prefab being edited.
+    /// Save the prefab being edited. Returns true if the prefab was written to disk.
     /// </summary>
-    public static void Save()
+    public static bool Save()
     {
-        if (!IsEditing) return;
+        if (!IsEditing) return false;
 
         var scene = Scene.Current;
-        if (scene == null) return;
+        if (scene == null) return false;
 
         // Use the tracked prefab root so we skip the editor-only camera/light we added
         // to light the scene during editing. Fall back to the first non-HideAndDontSave
@@ -117,11 +118,11 @@ public static class PrefabEditingMode
         {
             root = scene.RootObjects.FirstOrDefault(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave));
         }
-        if (root == null) return;
+        if (root == null) return false;
 
         // Serialize to .prefab file
         var echo = Serializer.Serialize(typeof(object), root);
-        if (echo == null) return;
+        if (echo == null) return false;
 
         if (EditingPrefabPath != null && Project.Current != null)
         {
@@ -130,7 +131,10 @@ public static class PrefabEditingMode
             EditorAssetDatabase.Instance?.Reimport(EditingPrefabGuid);
 
             Debug.Log($"[Prefab] Saved prefab: {EditingPrefabPath}");
+            SaveBatch.Record($"Prefab: {Path.GetFileNameWithoutExtension(EditingPrefabPath)}");
+            return true;
         }
+        return false;
     }
 
     /// <summary>

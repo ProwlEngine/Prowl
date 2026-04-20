@@ -4,6 +4,7 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Panels;
+using Prowl.Editor.Widgets;
 using System.Linq;
 
 using Prowl.Runtime;
@@ -183,6 +184,7 @@ public static class EditorSceneManager
             OnSceneSaved?.Invoke();
 
             Debug.Log($"Saved scene: {relativePath}");
+            SaveBatch.Record($"Scene: {Scene.Current.Name}");
             return true;
         }
         catch (Exception ex)
