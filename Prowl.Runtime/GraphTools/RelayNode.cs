@@ -19,8 +19,24 @@ namespace Prowl.Runtime.GraphTools;
 /// runtime-type-check (handled in <see cref="NodeRegistry"/>'s marker filter).
 /// </remarks>
 [UniversalNode]
-public sealed class RelayNode : Node
+[HiddenFromMenu]
+public sealed class RelayNode : Node, IAutoPruneNode
 {
+    /// <summary>A relay is a wire waypoint — the moment it has no incoming AND no
+    /// outgoing wire, it's just clutter. Auto-prune removes it and the editor cleans
+    /// up any lingering dangling edges on the next validation pass.</summary>
+    public bool ShouldPrune(Graph graph)
+    {
+        bool hasIn = false, hasOut = false;
+        foreach (var e in graph.Edges)
+        {
+            if (e.TargetNodeId == Id) hasIn = true;
+            else if (e.SourceNodeId == Id) hasOut = true;
+            if (hasIn && hasOut) return false;
+        }
+        return !hasIn && !hasOut;
+    }
+
     /// <summary>Assembly-qualified name of the type carried through this relay. Persisted
     /// so the ports can rebuild with the right type after load.</summary>
     public string CarriedTypeName = typeof(object).AssemblyQualifiedName!;

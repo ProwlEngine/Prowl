@@ -202,12 +202,66 @@ public class GraphEditorWindow : DockPanel
         // switch to a dirty-flag model.
         Prowl.Runtime.GraphTools.GraphValidatorRegistry.Validate(_graph);
 
+        // Auto-prune pass — removes IAutoPruneNode nodes that reported they're no
+        // longer needed (e.g. dangling RelayNode after a disconnect). Runs before
+        // hover/shortcut handling so the user never interacts with a doomed node.
+        RunAutoPrune();
+
         DrawToolbar(paper);
         DrawCanvas(paper, font);
 
         // Per-frame, post-layout: update hover and process keyboard shortcuts that only
         // apply when the canvas is focused (mouse over it).
         UpdateHoverAndShortcuts(paper);
+    }
+
+    /// <summary>
+    /// Collect every <see cref="IAutoPruneNode"/> that reports it should vanish, and
+    /// delete the whole batch as one undo step. Runs every frame; usually does
+    /// nothing. Not registered as an Undo action when the user's action that caused
+    /// the prune (Delete / Disconnect) already registered its own — we register here
+    /// so Ctrl+Z still restores the auto-pruned node if the user wants it back.
+    /// </summary>
+    private void RunAutoPrune()
+    {
+        if (_graph == null) return;
+        List<Node>? doomed = null;
+        foreach (var n in _graph.Nodes)
+        {
+            if (n is IAutoPruneNode ap && ap.ShouldPrune(_graph))
+            {
+                doomed ??= new List<Node>();
+                doomed.Add(n);
+            }
+        }
+        if (doomed == null) return;
+
+        // Also capture edges touching doomed nodes so undo can restore them too.
+        var removedEdges = new List<Edge>();
+        foreach (var n in doomed)
+            foreach (var e in _graph.Edges)
+                if ((e.SourceNodeId == n.Id || e.TargetNodeId == n.Id) && !removedEdges.Contains(e))
+                    removedEdges.Add(e);
+
+        foreach (var n in doomed) _graph.RemoveNode(n.Id);
+        // Drop selection references for any pruned nodes so the Inspector and
+        // selection sets stay consistent.
+        foreach (var n in doomed) _selectedNodes.Remove(n.Id);
+
+        var graph = _graph;
+        var nodesSnapshot = doomed;
+        var edgesSnapshot = removedEdges;
+        Undo.RegisterAction("Auto-prune",
+            undo: () =>
+            {
+                foreach (var n in nodesSnapshot) graph.Nodes.Add(n);
+                foreach (var e in edgesSnapshot) graph.Edges.Add(e);
+            },
+            redo: () =>
+            {
+                foreach (var n in nodesSnapshot) graph.RemoveNode(n.Id);
+                foreach (var e in edgesSnapshot) graph.Edges.Remove(e);
+            });
     }
 
     /// <summary>

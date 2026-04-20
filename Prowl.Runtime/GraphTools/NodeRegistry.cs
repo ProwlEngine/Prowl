@@ -14,6 +14,15 @@ namespace Prowl.Runtime.GraphTools;
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class UniversalNodeAttribute : Attribute { }
 
+/// <summary>
+/// Hide a Node type from the node-creation menu. Used for nodes that only exist as
+/// the output of a specific gesture (e.g. <see cref="RelayNode"/> — inserted by alt+
+/// clicking a wire, never spawned from scratch) or for abstract/obsolete types that
+/// should still deserialize but not be manually selectable.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class HiddenFromMenuAttribute : Attribute { }
+
 /// <summary>Snapshot of a single port at registration time (so the menu can filter by
 /// compatibility without instantiating the node first).</summary>
 public readonly struct PortInfo
@@ -39,9 +48,10 @@ public readonly struct NodeRegistration
     public readonly string Category;
     public readonly IReadOnlyList<PortInfo> Ports;
     public readonly bool IsUniversal;
+    public readonly bool IsHiddenFromMenu;
 
-    public NodeRegistration(Type type, string title, string category, IReadOnlyList<PortInfo> ports, bool isUniversal)
-    { Type = type; Title = title; Category = category; Ports = ports; IsUniversal = isUniversal; }
+    public NodeRegistration(Type type, string title, string category, IReadOnlyList<PortInfo> ports, bool isUniversal, bool isHiddenFromMenu)
+    { Type = type; Title = title; Category = category; Ports = ports; IsUniversal = isUniversal; IsHiddenFromMenu = isHiddenFromMenu; }
 
     /// <summary>
     /// Does this node have any port that could accept a wire from a port of the given type
@@ -110,17 +120,21 @@ public static class NodeRegistry
     public static IReadOnlyList<NodeRegistration> GetForMarker(Type? markerInterface)
     {
         EnsureBuilt();
-        if (markerInterface == null) return s_all!;
-
         lock (s_lock)
         {
-            if (s_byMarker.TryGetValue(markerInterface, out var cached)) return cached;
+            if (markerInterface != null && s_byMarker.TryGetValue(markerInterface, out var cached))
+                return cached;
 
             var filtered = new List<NodeRegistration>();
             foreach (var reg in s_all!)
-                if (reg.IsUniversal || markerInterface.IsAssignableFrom(reg.Type))
+            {
+                if (reg.IsHiddenFromMenu) continue;
+                if (markerInterface == null
+                    || reg.IsUniversal
+                    || markerInterface.IsAssignableFrom(reg.Type))
                     filtered.Add(reg);
-            s_byMarker[markerInterface] = filtered;
+            }
+            if (markerInterface != null) s_byMarker[markerInterface] = filtered;
             return filtered;
         }
     }
@@ -181,7 +195,8 @@ public static class NodeRegistry
                     }
 
                     bool universal = t.GetCustomAttributes(typeof(UniversalNodeAttribute), inherit: false).Length > 0;
-                    list.Add(new NodeRegistration(t, title, category, ports, universal));
+                    bool hidden = t.GetCustomAttributes(typeof(HiddenFromMenuAttribute), inherit: false).Length > 0;
+                    list.Add(new NodeRegistration(t, title, category, ports, universal, hidden));
                 }
             }
 
