@@ -179,7 +179,9 @@ public class HierarchyPanel : DockPanel
                     }
                 }
 
-                // Handle ping — search for the pinged GUID among GameObjects and their component AssetRefs
+                // Handle ping — search for the pinged GUID among GameObjects and their component AssetRefs.
+                // Done BEFORE building the flat list so parent-expansion affects what FlattenVisible walks.
+                bool pingIsNew = false;
                 if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastHierarchyPingGuid)
                 {
                     _lastHierarchyPingGuid = Selection.PingedGuid;
@@ -196,6 +198,7 @@ public class HierarchyPanel : DockPanel
                             parent = parent.Parent;
                         }
                     }
+                    pingIsNew = _pingedGameObjects.Count > 0;
                 }
                 if (Selection.PingedGuid == Guid.Empty)
                 {
@@ -203,11 +206,34 @@ public class HierarchyPanel : DockPanel
                     _pingedGameObjects.Clear();
                 }
 
-                // Tree view
-                using (ScrollView.Begin(paper, "hier_scroll", width, height - EditorTheme.RowHeight - 22))
-                {
-                    var roots = GetDisplayRoots(scene);
+                float scrollHeight = height - EditorTheme.RowHeight - 22;
+                var roots = GetDisplayRoots(scene);
+                var flatList = new List<GameObject>();
+                foreach (var root in roots)
+                    FlattenVisible(root, flatList);
+                var flatObjects = flatList.Select(g => (object)g).ToList();
 
+                // Scroll-to-ping: when a newly-pinged GO lives in the scene, center its row in the
+                // scroll view so the yellow highlight is actually visible. Uses the flat list index
+                // (post-expansion) and the scroll view's known row height.
+                if (pingIsNew)
+                {
+                    int pingIndex = -1;
+                    for (int i = 0; i < flatList.Count; i++)
+                    {
+                        if (_pingedGameObjects.Contains(flatList[i])) { pingIndex = i; break; }
+                    }
+                    if (pingIndex >= 0)
+                    {
+                        float rowTotal = EditorTheme.RowHeight + 2f; // row + vertical spacing
+                        float targetY = pingIndex * rowTotal - (scrollHeight * 0.5f) + rowTotal * 0.5f;
+                        ScrollView.ScrollTo("hier_scroll", targetY);
+                    }
+                }
+
+                // Tree view
+                using (ScrollView.Begin(paper, "hier_scroll", width, scrollHeight))
+                {
                     if (roots.Count == 0)
                     {
                         paper.Box("hier_empty_scene").Height(40)
@@ -216,12 +242,6 @@ public class HierarchyPanel : DockPanel
                             .FontSize(EditorTheme.FontSize - 2)
                             .Alignment(TextAlignment.MiddleCenter);
                     }
-
-                    // Build flat list for shift-select support
-                    var flatList = new List<GameObject>();
-                    foreach (var root in roots)
-                        FlattenVisible(root, flatList);
-                    var flatObjects = flatList.Select(g => (object)g).ToList();
 
                     int drawIndex = 0;
                     foreach (var root in roots)
@@ -964,6 +984,13 @@ public class HierarchyPanel : DockPanel
     {
         foreach (var go in scene.AllObjects)
         {
+            // Direct GO match (e.g. scene-view click → Ping(go.Identifier))
+            if (go.Identifier == guid)
+            {
+                results.Add(go);
+                continue;
+            }
+
             foreach (var comp in go.GetComponents<MonoBehaviour>())
             {
                 if (comp.AssetID == guid)

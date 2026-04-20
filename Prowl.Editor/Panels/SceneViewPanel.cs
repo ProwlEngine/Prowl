@@ -389,6 +389,9 @@ public class SceneViewPanel : DockPanel
                 Selection.ToggleSelection(bestHit);
             else
                 Selection.Select(bestHit);
+
+            // Ping so the Hierarchy scrolls to and briefly highlights the clicked GO.
+            Selection.Ping(bestHit.Identifier);
         }
         else if (!Input.IsCtrlPressed && !Input.IsShiftPressed)
         {

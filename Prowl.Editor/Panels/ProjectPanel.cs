@@ -65,6 +65,10 @@ public class ProjectPanel : DockPanel
                     // Navigate to the folder containing this asset
                     string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
                     _currentFolder = folder;
+
+                    // Reset the content scroll so the pinged item lands in view — stored scroll
+                    // from a previous folder can otherwise leave the row off-screen.
+                    ScrollView.ScrollTo("proj_content", 0f);
                 }
             }
         }
