@@ -274,16 +274,32 @@ public class EditorApplication : Game
         {
             if (ShortcutManager.IsPressed("Global/Save"))
             {
-                // Focus-dependent routing: when editing a prefab, Ctrl+S saves the prefab
-                // rather than the temporary edit scene that wraps it.
-                if (Prefabs.PrefabEditingMode.IsEditing)
+                // Block any save while the game is running — scene state changes every frame
+                // during play mode, and writing that to disk silently overwrites the user's
+                // authoring state. Toast once per press so the shortcut isn't silent.
+                if (Application.IsPlaying)
+                {
+                    Widgets.Toasts.Warning("Can't save during Play Mode",
+                        "Exit Play Mode to save your scene, prefab, or graph.");
+                }
+                else if (Prefabs.PrefabEditingMode.IsEditing)
+                {
+                    // Focus-dependent routing: when editing a prefab, Ctrl+S saves the prefab
+                    // rather than the temporary edit scene that wraps it.
                     Prefabs.PrefabEditingMode.Save();
+                }
                 else if (!EditorSceneManager.Save())
+                {
                     PromptSaveAs();
+                }
             }
             else if (ShortcutManager.IsPressed("Global/SaveAs"))
             {
-                PromptSaveAs();
+                if (Application.IsPlaying)
+                    Widgets.Toasts.Warning("Can't save during Play Mode",
+                        "Exit Play Mode to save your scene.");
+                else
+                    PromptSaveAs();
             }
             else if (ShortcutManager.IsPressed("Global/NewScene"))
             {
@@ -358,8 +374,11 @@ public class EditorApplication : Game
                 ThumbnailGenerator.EnqueueMissing();
         }
 
-        // Auto-save layout periodically (every ~30s)
-        if (Project.Current != null && _time % 30.0 < Time.UnscaledDeltaTime)
+        // Auto-save layout periodically (every ~30s). Skipped during play mode so the
+        // per-panel state snapshot always reflects authoring state, not the transient
+        // playmode snapshot (e.g. scene-view camera moved during play, selection pointing
+        // at a runtime-spawned GO that won't exist next session).
+        if (Project.Current != null && !Application.IsPlaying && _time % 30.0 < Time.UnscaledDeltaTime)
             Docking.LayoutSerializer.Save(_dockSpace);
 
         // Show project launcher or intro close phase
@@ -1036,7 +1055,13 @@ public class EditorApplication : Game
     {
         if (Project.Current == null) return;
         SaveEditorWindowState();
-        Docking.LayoutSerializer.Save(_dockSpace);
+
+        // Skip layout persistence while the game is running — panel state snapshots
+        // (selection, scene-view camera) would capture the transient playmode state
+        // and overwrite authoring state on next open.
+        if (!Application.IsPlaying)
+            Docking.LayoutSerializer.Save(_dockSpace);
+
         ProjectSettingsRegistry.SaveAll();
     }
 
