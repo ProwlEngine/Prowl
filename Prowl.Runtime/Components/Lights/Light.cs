@@ -24,7 +24,7 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public float ShadowBias = 0.001f;
     public float ShadowNormalBias = 0.0f;
     public bool CastShadows = true;
-    public ShadowQuality ShadowQuality = ShadowQuality.Hard;
+    public ShadowQuality ShadowQuality = ShadowQuality.Soft;
 
     /// <summary>
     /// Index this light occupies in the forward shader light arrays this frame
