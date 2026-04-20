@@ -106,7 +106,8 @@ public static class ShortcutManager
     /// <summary>
     /// Returns true if the shortcut was triggered this frame.
     /// Checks <see cref="Input.GetKeyDown"/> for the primary key and enforces
-    /// exact modifier state (Ctrl/Shift/Alt must match exactly).
+    /// exact modifier state. On macOS the "Ctrl" modifier is interpreted as Cmd
+    /// (Super) so platform-native shortcuts like Cmd+S work without rebinding.
     /// </summary>
     public static bool IsPressed(string id)
     {
@@ -119,10 +120,21 @@ public static class ShortcutManager
 
         var b = def.Binding;
         if (!Input.GetKeyDown(b.Key)) return false;
-        if (b.Ctrl != Input.IsCtrlPressed) return false;
+        if (b.Ctrl != IsPlatformCtrlPressed()) return false;
         if (b.Shift != Input.IsShiftPressed) return false;
         if (b.Alt != Input.IsAltPressed) return false;
         return true;
+    }
+
+    /// <summary>
+    /// The platform's "command" modifier — Cmd (Super) on macOS, Ctrl everywhere else.
+    /// All shortcut bindings declared with <c>ctrl: true</c> are routed through this.
+    /// </summary>
+    private static bool IsPlatformCtrlPressed()
+    {
+        if (RuntimeUtils.IsMac())
+            return Input.GetKey(KeyCode.SuperLeft) || Input.GetKey(KeyCode.SuperRight);
+        return Input.IsCtrlPressed;
     }
 
     /// <summary>Get the effective binding for a shortcut.</summary>
@@ -220,10 +232,11 @@ public static class ShortcutManager
     {
         if (binding == null) return "None";
 
+        bool isMac = RuntimeUtils.IsMac();
         var sb = new StringBuilder();
-        if (binding.Ctrl) sb.Append("Ctrl+");
+        if (binding.Ctrl) sb.Append(isMac ? "Cmd+" : "Ctrl+");
         if (binding.Shift) sb.Append("Shift+");
-        if (binding.Alt) sb.Append("Alt+");
+        if (binding.Alt) sb.Append(isMac ? "Option+" : "Alt+");
         sb.Append(FormatKeyName(binding.Key));
         return sb.ToString();
     }
