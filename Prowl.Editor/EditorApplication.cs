@@ -982,6 +982,20 @@ public class EditorApplication : Game
             var scene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(echo, ctx);
             if (scene != null)
             {
+                // Sidecar (written by SaveSceneForRestart) carries the original Assets-relative
+                // path + AssetID. Restoring both means subsequent Ctrl+S writes back to the
+                // original scene file instead of prompting Save-As.
+                string sidecarPath = path + ".meta";
+                if (System.IO.File.Exists(sidecarPath))
+                {
+                    var lines = System.IO.File.ReadAllLines(sidecarPath);
+                    if (lines.Length > 0 && !string.IsNullOrEmpty(lines[0]))
+                        EditorSceneManager.CurrentScenePath = lines[0];
+                    if (lines.Length > 1 && Guid.TryParse(lines[1], out var id))
+                        scene.AssetID = id;
+                    try { System.IO.File.Delete(sidecarPath); } catch { }
+                }
+
                 Runtime.Resources.Scene.Load(scene);
                 Undo.Clear();
                 Runtime.Debug.Log("Restored auto-saved scene.");

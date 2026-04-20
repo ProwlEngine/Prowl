@@ -186,6 +186,14 @@ public static class ScriptAssemblyManager
             if (echo != null)
             {
                 File.WriteAllText(project.AutoSaveScenePath, echo.WriteToString());
+
+                // Sidecar records the scene's original Assets-relative path and AssetID so
+                // the restored session knows where the subsequent Ctrl+S should write. Without
+                // this, CurrentScenePath comes back null and Save falls through to SaveAs.
+                string? originalPath = EditorSceneManager.CurrentScenePath;
+                string sidecar = (originalPath ?? "") + "\n" + savedId.ToString();
+                File.WriteAllText(project.AutoSaveScenePath + ".meta", sidecar);
+
                 Runtime.Debug.Log("[ScriptAssemblyManager] Scene auto-saved for restart.");
             }
         }
