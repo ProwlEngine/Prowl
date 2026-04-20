@@ -611,4 +611,19 @@ public class Transform
 
     #endregion
 
+    #region Change Detection
+
+    /// <summary>
+    /// True if <see cref="Version"/> differs from <paramref name="lastVersion"/>; updates the
+    /// reference to the current version on return so the next call compares against today's state.
+    /// </summary>
+    public bool HasChanged(ref uint lastVersion)
+    {
+        if (_version == lastVersion) return false;
+        lastVersion = _version;
+        return true;
+    }
+
+    #endregion
+
 }
