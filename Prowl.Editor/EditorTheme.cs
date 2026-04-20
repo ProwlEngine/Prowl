@@ -12,6 +12,9 @@ public static class EditorTheme
     public static string DefaultFontName = "segoe ui";
     public static string DefaultBoldFontName = "segoe ui";
 
+    // DPI Scaling value
+    public static float UserScale { get; set; } = 1f;
+
     // Sizing — mutable so themes can override
     public static float MenuBarHeight = 26f;
     public static float StatusBarHeight = 22f;

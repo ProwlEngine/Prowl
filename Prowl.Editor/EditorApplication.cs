@@ -9,6 +9,7 @@ using Prowl.Editor.Docking;
 using Prowl.Editor.Panels;
 using Prowl.PaperUI;
 using Prowl.Runtime;
+using Prowl.Vector;
 
 namespace Prowl.Editor;
 
@@ -57,6 +58,8 @@ public class EditorApplication : Game
         // Set invariant culture for consistent number parsing/formatting in the editor (e.g. asset import settings)
         System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         InitializeFont();
+
+        Resize(Window.Size.X, Window.Size.Y);
 
         PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
 
@@ -218,6 +221,22 @@ public class EditorApplication : Game
 
             _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
         }
+    }
+
+    protected override void PreparePaperFrame()
+    {
+        var winSize = Window.InternalWindow.Size;
+        float cs = Math.Max(0.01f, Window.ContentScale * EditorTheme.UserScale);
+        PaperInstance.SetResolution(winSize.X / cs, winSize.Y / cs);
+        PaperInstance.DisplayFramebufferScale = new Float2(cs, cs);
+
+    }
+
+    protected override Float2 GetPaperMousePosition()
+    {
+        var p = Input.MousePosition;
+        float cs = Math.Max(0.01f, Window.ContentScale * EditorTheme.UserScale);
+        return new Float2(p.X / cs, p.Y / cs);
     }
 
     private void ApplyDarkTitleBar()
