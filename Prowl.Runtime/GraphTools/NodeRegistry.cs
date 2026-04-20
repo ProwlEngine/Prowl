@@ -6,6 +6,14 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime.GraphTools;
 
+/// <summary>
+/// Mark a Node type as available in every graph type's creation menu, regardless of
+/// the graph's <see cref="Graph.NodeMarkerInterface"/>. Use sparingly — for nodes that
+/// genuinely make sense in any graph (relays, subgraphs, comments, group inputs).
+/// </summary>
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class UniversalNodeAttribute : Attribute { }
+
 /// <summary>Snapshot of a single port at registration time (so the menu can filter by
 /// compatibility without instantiating the node first).</summary>
 public readonly struct PortInfo
@@ -30,9 +38,10 @@ public readonly struct NodeRegistration
     public readonly string Title;
     public readonly string Category;
     public readonly IReadOnlyList<PortInfo> Ports;
+    public readonly bool IsUniversal;
 
-    public NodeRegistration(Type type, string title, string category, IReadOnlyList<PortInfo> ports)
-    { Type = type; Title = title; Category = category; Ports = ports; }
+    public NodeRegistration(Type type, string title, string category, IReadOnlyList<PortInfo> ports, bool isUniversal)
+    { Type = type; Title = title; Category = category; Ports = ports; IsUniversal = isUniversal; }
 
     /// <summary>
     /// Does this node have any port that could accept a wire from a port of the given type
@@ -109,7 +118,7 @@ public static class NodeRegistry
 
             var filtered = new List<NodeRegistration>();
             foreach (var reg in s_all!)
-                if (markerInterface.IsAssignableFrom(reg.Type))
+                if (reg.IsUniversal || markerInterface.IsAssignableFrom(reg.Type))
                     filtered.Add(reg);
             s_byMarker[markerInterface] = filtered;
             return filtered;
@@ -171,7 +180,8 @@ public static class NodeRegistry
                         continue;
                     }
 
-                    list.Add(new NodeRegistration(t, title, category, ports));
+                    bool universal = t.GetCustomAttributes(typeof(UniversalNodeAttribute), inherit: false).Length > 0;
+                    list.Add(new NodeRegistration(t, title, category, ports, universal));
                 }
             }
 

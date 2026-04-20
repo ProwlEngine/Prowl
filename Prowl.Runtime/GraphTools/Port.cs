@@ -49,4 +49,14 @@ public sealed class Port
     /// <see cref="PortLayout.Below"/> = after, for nodes that want their PropertyGrid front-and-centre.
     /// </summary>
     public PortLayout Layout;
+
+    /// <summary>
+    /// When true, the editor skips drawing the port and its row, and ignores it for
+    /// hit-testing and wire endpoint resolution. Lets nodes show or hide ports based
+    /// on their own state (e.g. an "If" node that hides the "Else" input when in
+    /// unary mode) without having to rebuild the port list.
+    /// Not persisted — Ports are rebuilt by <see cref="Node.DefineNode"/> on each load,
+    /// so visibility is driven by the node's own state.
+    /// </summary>
+    public bool IsHidden;
 }

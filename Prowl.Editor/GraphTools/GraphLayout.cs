@@ -38,7 +38,7 @@ public static class GraphLayout
     {
         var list = direction == PortDirection.Input ? node.Inputs : node.Outputs;
         for (int i = 0; i < list.Count; i++)
-            if (list[i].Name == portName)
+            if (list[i].Name == portName && !list[i].IsHidden)
                 return NodeRendererRegistry.GetRenderer(node).GetPortPosition(node, list[i]);
         return null;
     }
@@ -64,6 +64,12 @@ public static class GraphLayout
         {
             min.X = MathF.Min(min.X, s.Position.X); min.Y = MathF.Min(min.Y, s.Position.Y);
             max.X = MathF.Max(max.X, s.Position.X + s.Size.X); max.Y = MathF.Max(max.Y, s.Position.Y + s.Size.Y);
+            found = true;
+        }
+        foreach (var g in graph.Groups)
+        {
+            min.X = MathF.Min(min.X, g.Position.X); min.Y = MathF.Min(min.Y, g.Position.Y);
+            max.X = MathF.Max(max.X, g.Position.X + g.Size.X); max.Y = MathF.Max(max.Y, g.Position.Y + g.Size.Y);
             found = true;
         }
         if (!found) { min = max = Float2.Zero; }
@@ -100,8 +106,11 @@ public static class GraphLayout
         if (from == null || to == null) return false;
         if (from.Direction != PortDirection.Output || to.Direction != PortDirection.Input) return false;
         if (from.DataType == to.DataType) return true;
-        // Allow assigning to a more general object port.
+        // Either side typed as object accepts the other side. The "from" being object
+        // is the dynamic-port case used by GraphInputNode/GraphOutputNode and any
+        // future generic relay-like node — they take whatever the wire happens to be.
         if (to.DataType == typeof(object)) return true;
+        if (from.DataType == typeof(object)) return true;
         return false;
     }
 
@@ -120,12 +129,14 @@ public static class GraphLayout
 
         for (int i = 0; i < node.Inputs.Count; i++)
         {
+            if (node.Inputs[i].IsHidden) continue;
             var p = renderer.GetPortPosition(node, node.Inputs[i]);
             if (Sq(graphPoint.X - p.X) + Sq(graphPoint.Y - p.Y) < r2)
                 return (node.Inputs[i], i);
         }
         for (int i = 0; i < node.Outputs.Count; i++)
         {
+            if (node.Outputs[i].IsHidden) continue;
             var p = renderer.GetPortPosition(node, node.Outputs[i]);
             if (Sq(graphPoint.X - p.X) + Sq(graphPoint.Y - p.Y) < r2)
                 return (node.Outputs[i], i);

@@ -32,8 +32,13 @@ public class GraphEditorWindow : DockPanel
     private Rect _canvasScreenRect;
 
     // ─── Interaction state ────────────────────────────────────────────────────────────
-    private enum DragMode { None, MoveNodes, MoveStickyNotes, ResizeStickyNote, MoveGroup, ResizeGroup, MarqueeSelect, ConnectingWire }
+    private enum DragMode { None, MoveNodes, ResizeNode, MoveStickyNotes, ResizeStickyNote, MoveGroup, ResizeGroup, MarqueeSelect, ConnectingWire }
     private DragMode _dragMode = DragMode.None;
+
+    /// <summary>Resizable node currently being drag-resized + its size at drag-start
+    /// (for the undo step). Null unless <see cref="_dragMode"/> is <see cref="DragMode.ResizeNode"/>.</summary>
+    private Guid? _resizingNode;
+    private Float2 _resizeNodeStartSize;
 
     /// <summary>Resize handle size (graph-space pixels) at the bottom-right of each sticky / group.</summary>
     private const float StickyResizeHandleSize = 16f;
@@ -72,6 +77,12 @@ public class GraphEditorWindow : DockPanel
     /// <summary>Per-node positions captured at drag-start, used to register one undo step per drag.</summary>
     private Dictionary<Guid, Float2>? _dragMoveStartPositions;
 
+    /// <summary>Time (seconds since editor start) of the last left-click on a node, and
+    /// which node was clicked — used to detect double-click. Threshold below.</summary>
+    private double _lastNodeClickTime = -1;
+    private Guid _lastClickedNode;
+    private const double DoubleClickThresholdSeconds = 0.4;
+
     /// <summary>Cursor position in graph space at the moment node-drag began. Combined
     /// with <see cref="_dragMoveStartPositions"/> to compute the *unsnapped* target
     /// position each frame from the absolute cursor — that way snapping is a correction
@@ -94,6 +105,16 @@ public class GraphEditorWindow : DockPanel
     /// <summary>Selected groups (Guids). Drag/resize is single-group at a time; selection
     /// routes to Inspector like stickies so Title can be renamed via PropertyGrid.</summary>
     private readonly HashSet<Guid> _selectedGroups = new();
+
+    /// <summary>Wipe every per-element selection set. Always prefer this over clearing
+    /// individual sets so a future selection set added here gets cleared too.</summary>
+    private void ClearAllSelection()
+    {
+        _selectedNodes.Clear();
+        _selectedEdges.Clear();
+        _selectedStickyNotes.Clear();
+        _selectedGroups.Clear();
+    }
 
     /// <summary>Sticky note whose corner is being resized. Null unless <see cref="_dragMode"/> is <see cref="DragMode.ResizeStickyNote"/>.</summary>
     private Guid? _resizingStickyNote;
@@ -128,6 +149,19 @@ public class GraphEditorWindow : DockPanel
     /// <summary>Port currently under the cursor (recomputed each frame). Highlighted while
     /// dragging a wire it would target.</summary>
     private (Guid nodeId, string portName, PortDirection direction)? _hoveredPort;
+
+    /// <summary>Edge under the cursor (recomputed each frame). The wire renderer uses
+    /// this to brighten/thicken so users get hover feedback before clicking.</summary>
+    private Guid? _hoveredEdge;
+
+    /// <summary>Cut-line gesture state — list of graph-space points sampled while the
+    /// user is alt+right-dragging. Wires intersected by any segment of the polyline
+    /// are flagged for deletion on release.</summary>
+    private List<Float2>? _cutLinePoints;
+
+    /// <summary>Node currently shown in the right-click context menu. Set by
+    /// HandleRightClick; consumed by the per-frame context-menu render.</summary>
+    private Guid? _contextMenuNode;
 
     public override string Title => _graph != null
         ? $"Graph — {_graph.Name}"
@@ -197,12 +231,34 @@ public class GraphEditorWindow : DockPanel
         if (Input.GetMouseButton(2))
             _view.PanBy(paper.PointerDelta);
 
+        // Cut-line gesture: alt+right-drag draws a slash through wires. Like the
+        // middle-mouse pan above, polled manually because Paper drag events are
+        // left-only. Right-click without drag still opens the context menu (handled
+        // by HandleRightClick when no cut-line was started).
+        if (Input.IsAltPressed && Input.GetMouseButton(1))
+        {
+            _cutLinePoints ??= new List<Float2>();
+            _cutLinePoints.Add(ScreenToGraph(paper.PointerPos));
+        }
+        else if (_cutLinePoints != null)
+        {
+            // Released — apply the cuts (if the polyline has at least one segment).
+            if (_cutLinePoints.Count >= 2) ApplyCutLine(_cutLinePoints);
+            _cutLinePoints = null;
+        }
+
         var graphMouse = ScreenToGraph(paper.PointerPos);
         var portHit = HitTestPort(graphMouse, out var portNode);
         _hoveredPort = (portHit.HasValue && portNode != null)
             ? ((Guid, string, PortDirection)?) (portNode.Id, portHit.Value.port.Name, portHit.Value.port.Direction)
             : null;
         _hoveredNode = HitTestNode(graphMouse)?.Id;
+        // Wire hover only when nothing higher-priority is under the cursor — wires
+        // sit visually beneath nodes/stickies so highlighting them while a node is
+        // also under the cursor would be noise.
+        _hoveredEdge = (_hoveredNode == null && _hoveredPort == null)
+            ? HitTestWire(graphMouse, 6f / _view.Zoom)?.Id
+            : null;
 
         // Shortcuts — only active while the canvas is hovered (so they don't steal typing
         // in the Inspector / blackboard). All IDs are registered in BuiltInShortcuts.
@@ -331,6 +387,18 @@ public class GraphEditorWindow : DockPanel
         }
     }
 
+    /// <summary>True if <paramref name="graphPoint"/> is inside the bottom-right resize
+    /// handle of a resizable node. Same 14x14 grip area as the sticky/group renderer.</summary>
+    private static bool IsOverNodeResizeHandle(Node node, Float2 graphPoint)
+    {
+        if (node is not IResizableNode) return false;
+        var rect = GraphLayout.GetNodeRect(node);
+        float x0 = (float)rect.Max.X - 14f;
+        float y0 = (float)rect.Max.Y - 14f;
+        return graphPoint.X >= x0 && graphPoint.X <= rect.Max.X
+            && graphPoint.Y >= y0 && graphPoint.Y <= rect.Max.Y;
+    }
+
     private NodeGroup? FindGroup(Guid id)
     {
         if (_graph == null) return null;
@@ -374,11 +442,34 @@ public class GraphEditorWindow : DockPanel
             EditorGUI.Button(paper, "graph_tb_recenter", "Recenter", width: 90)
                 .OnValueChanged(_ => RecenterView());
 
+            // Wire-style toggle — cycles Bezier → Linear → Rectilinear → Bezier. Cycling
+            // is fine instead of a dropdown since there are only three options.
+            string label = $"Wires: {_graph.WireStyle}";
+            EditorGUI.Button(paper, "graph_tb_wirestyle", label, width: 150)
+                .OnValueChanged(_ => CycleWireStyle());
+
             // Phase-2 helper: rebuild a fixed demo graph so we can iterate on the renderer.
             // Each click clears + re-seeds so repeated presses don't stack overlapping copies.
             EditorGUI.Button(paper, "graph_tb_seed", "Reset Demo Graph", width: 160)
                 .OnValueChanged(_ => SeedSampleNodes());
         }
+    }
+
+    private void CycleWireStyle()
+    {
+        if (_graph == null) return;
+        var graph = _graph;
+        var before = graph.WireStyle;
+        var after = before switch
+        {
+            WireRoutingStyle.Bezier => WireRoutingStyle.Linear,
+            WireRoutingStyle.Linear => WireRoutingStyle.Rectilinear,
+            _                        => WireRoutingStyle.Bezier,
+        };
+        graph.WireStyle = after;
+        Undo.RegisterAction("Change Wire Style",
+            undo: () => graph.WireStyle = before,
+            redo: () => graph.WireStyle = after);
     }
 
     private void SaveGraph()
@@ -388,6 +479,7 @@ public class GraphEditorWindow : DockPanel
         {
             EditorAssetDatabase.Instance?.SaveAsset(_graph);
             Debug.Log($"Saved {_graph.AssetPath}");
+            SaveBatch.Record($"Graph: {_graph.Name ?? "Untitled"}");
         }
         catch (Exception ex) { Debug.LogError($"Save failed: {ex.Message}"); }
     }
@@ -500,13 +592,82 @@ public class GraphEditorWindow : DockPanel
             redo: () => graph.StickyNotes.Add(note));
 
         // Auto-select so the Inspector opens for Title/Body editing.
-        _selectedNodes.Clear();
-        _selectedEdges.Clear();
-        _selectedStickyNotes.Clear();
+        ClearAllSelection();
         _selectedStickyNotes.Add(note.Id);
         SyncSelectionSystem();
 
         CloseCreationMenu();
+    }
+
+    /// <summary>Render the right-click context menu for the node stored in
+    /// <see cref="_contextMenuNode"/>. Built per-frame as a small inline popup so we
+    /// don't have to coordinate with ContextMenuHelper's storage on the canvas Box
+    /// (the menu's items depend on a runtime field, not on per-element state).</summary>
+    private void DrawNodeContextMenu(Paper paper)
+    {
+        if (_graph == null || !_contextMenuNode.HasValue) return;
+        var node = _graph.FindNode(_contextMenuNode.Value);
+        if (node == null) { _contextMenuNode = null; return; }
+
+        const float menuW = 200f;
+
+        // Backdrop — click outside dismisses.
+        paper.Box("graph_node_ctx_backdrop")
+            .PositionType(PositionType.SelfDirected)
+            .Position(-9999, -9999).Size(99999, 99999)
+            .Layer(Layer.Topmost)
+            .OnClick(_ => _contextMenuNode = null);
+
+        using (paper.Column("graph_node_ctx")
+            .PositionType(PositionType.SelfDirected)
+            .Position(_creationMenuLocal.X, _creationMenuLocal.Y)
+            .Width(menuW).Height(UnitValue.Auto)
+            .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 40, 48))
+            .BorderColor(System.Drawing.Color.FromArgb(255, 80, 84, 96))
+            .BorderWidth(1).Rounded(6)
+            .Layer(Layer.Topmost)
+            .ClampToScreen()
+            .ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4).ColBetween(2)
+            .Enter())
+        {
+            DrawCtxItem(paper, "ctx_dup", $"{EditorIcons.Clone}  Duplicate", () => DuplicateSelection());
+            DrawCtxItem(paper, "ctx_disc", $"{EditorIcons.Scissors}  Disconnect All", () => DisconnectNode(node));
+            // SubgraphNode-specific: open the referenced asset.
+            if (node is SubgraphNode sub && sub.Subgraph.Res != null)
+                DrawCtxItem(paper, "ctx_open", $"{EditorIcons.UpRightFromSquare}  Open Subgraph",
+                    () => { var inner = sub.Subgraph.Res; if (inner != null) OpenFor(inner); });
+            DrawCtxItem(paper, "ctx_del", $"{EditorIcons.Trash}  Delete", DeleteSelected);
+        }
+    }
+
+    private void DrawCtxItem(Paper paper, string id, string label, Action onClick)
+    {
+        using (paper.Row(id).Height(22)
+            .ChildLeft(8).ChildRight(8)
+            .BackgroundColor(System.Drawing.Color.FromArgb(255, 48, 50, 58))
+            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(255, 64, 70, 90)).End()
+            .Rounded(3)
+            .OnClick(_ => { onClick(); _contextMenuNode = null; })
+            .Enter())
+        {
+            paper.Box($"{id}_lbl").Height(22)
+                .Text(label, EditorTheme.DefaultFont!)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
+                .Alignment(TextAlignment.MiddleLeft);
+        }
+    }
+
+    /// <summary>Remove every wire connected to <paramref name="node"/>, registered as one undo step.</summary>
+    private void DisconnectNode(Node node)
+    {
+        if (_graph == null) return;
+        var removed = _graph.Edges.FindAll(e => e.SourceNodeId == node.Id || e.TargetNodeId == node.Id);
+        if (removed.Count == 0) return;
+        foreach (var e in removed) _graph.Edges.Remove(e);
+        var graph = _graph;
+        Undo.RegisterAction("Disconnect Node",
+            undo: () => { foreach (var e in removed) graph.Edges.Add(e); },
+            redo: () => { foreach (var e in removed) graph.Edges.Remove(e); });
     }
 
     private void DrawCreationEntry(Paper paper, NodeRegistration reg)
@@ -612,6 +773,8 @@ public class GraphEditorWindow : DockPanel
             // it visible even near the viewport edges.
             if (_creationMenuOpen)
                 DrawNodeCreationPopup(paper);
+            if (_contextMenuNode.HasValue)
+                DrawNodeContextMenu(paper);
         }
     }
 
@@ -664,9 +827,13 @@ public class GraphEditorWindow : DockPanel
                 ? GraphLayout.GetPortColor(srcPort.DataType)
                 : new Color32(170, 170, 170, 255);
             bool selected = _selectedEdges.Contains(edge.Id);
-            var color = selected ? new Color32(255, 200, 80, 255) : baseColor;
-            float thickness = selected ? 5.0f : 2.5f;
-            GraphRendering.DrawWire(canvas, srcPos.Value, dstPos.Value, color, _view.Zoom, thickness);
+            bool hovered = _hoveredEdge == edge.Id;
+            // Selected wins visually over hover; hover bumps brightness + thickness so
+            // users see the click target before clicking.
+            var color = selected ? new Color32(255, 200, 80, 255)
+                                 : (hovered ? Brighten(baseColor) : baseColor);
+            float thickness = selected ? 5.0f : (hovered ? 3.5f : 2.5f);
+            GraphRendering.DrawWire(canvas, srcPos.Value, dstPos.Value, color, _view.Zoom, thickness, _graph.WireStyle);
         }
 
         foreach (var node in _graph.Nodes)
@@ -691,9 +858,9 @@ public class GraphEditorWindow : DockPanel
                 {
                     var color = GraphLayout.GetPortColor(src.DataType);
                     if (src.Direction == PortDirection.Output)
-                        GraphRendering.DrawDragWire(canvas, srcPos.Value, _dragWireEndGraph.Value, color, _view.Zoom);
+                        GraphRendering.DrawDragWire(canvas, srcPos.Value, _dragWireEndGraph.Value, color, _view.Zoom, _graph.WireStyle);
                     else
-                        GraphRendering.DrawDragWire(canvas, _dragWireEndGraph.Value, srcPos.Value, color, _view.Zoom);
+                        GraphRendering.DrawDragWire(canvas, _dragWireEndGraph.Value, srcPos.Value, color, _view.Zoom, _graph.WireStyle);
                 }
             }
         }
@@ -703,6 +870,20 @@ public class GraphEditorWindow : DockPanel
         {
             var rect = MakeMarqueeRect(_marqueeStartGraph.Value, _marqueeEndGraph.Value);
             GraphRendering.DrawMarquee(canvas, rect, _view.Zoom);
+        }
+
+        // Cut-line gesture — render the polyline the user is dragging so it's clear
+        // which wires are about to be sliced. Drawn in red so it doesn't blend with
+        // wires of any data-type colour.
+        if (_cutLinePoints != null && _cutLinePoints.Count >= 2)
+        {
+            canvas.SetStrokeColor(new Color32(230, 90, 90, 220));
+            canvas.SetStrokeWidth(2.0f);
+            canvas.BeginPath();
+            canvas.MoveTo(_cutLinePoints[0].X, _cutLinePoints[0].Y);
+            for (int i = 1; i < _cutLinePoints.Count; i++)
+                canvas.LineTo(_cutLinePoints[i].X, _cutLinePoints[i].Y);
+            canvas.Stroke();
         }
 
         // Alignment snap guide lines — only visible while a snapped drag is active.
@@ -752,8 +933,27 @@ public class GraphEditorWindow : DockPanel
     private void HandleRightClick(ClickEvent e)
     {
         if (_view == null || _graph == null) return;
+        // Suppress the popup if the user just released an alt+right cut-line — a long
+        // drag that ends on empty space shouldn't also open the creation menu.
+        if (Input.IsAltPressed) return;
         var graphPoint = ScreenToGraph(e.PointerPosition);
-        if (HitTestNode(graphPoint) != null) return; // node context menu = future work
+
+        // Right-click on a node opens its context menu instead of the creation popup.
+        var nodeHit = HitTestNode(graphPoint);
+        if (nodeHit != null)
+        {
+            // Auto-select so menu actions (Duplicate, Disconnect, Delete) include it.
+            if (!_selectedNodes.Contains(nodeHit.Id))
+            {
+                ClearAllSelection();
+                _selectedNodes.Add(nodeHit.Id);
+                SyncSelectionSystem();
+            }
+            _contextMenuNode = nodeHit.Id;
+            _creationMenuLocal = e.PointerPosition - new Float2(
+                (float)_canvasScreenRect.Min.X, (float)_canvasScreenRect.Min.Y);
+            return;
+        }
 
         _creationMenuOpen = true;
         _creationMenuLocal = e.PointerPosition - new Float2(
@@ -783,6 +983,22 @@ public class GraphEditorWindow : DockPanel
 
         if (hit != null)
         {
+            // Double-click on a node? Currently used by SubgraphNode to open its
+            // referenced asset; future behaviours (e.g. open per-node inspector window)
+            // can hang off the same hook.
+            double now = Time.UnscaledTotalTime;
+            if (!additive && _lastClickedNode == hit.Id
+                && now - _lastNodeClickTime < DoubleClickThresholdSeconds)
+            {
+                HandleNodeDoubleClick(hit);
+                _lastNodeClickTime = -1; // consume so a 3rd click doesn't trigger again
+            }
+            else
+            {
+                _lastNodeClickTime = now;
+                _lastClickedNode = hit.Id;
+            }
+
             // Hit a node — selection logic.
             if (additive)
             {
@@ -790,9 +1006,7 @@ public class GraphEditorWindow : DockPanel
             }
             else
             {
-                _selectedNodes.Clear();
-                _selectedEdges.Clear();
-                _selectedStickyNotes.Clear();
+                ClearAllSelection();
                 _selectedNodes.Add(hit.Id);
             }
             SyncSelectionSystem();
@@ -811,9 +1025,7 @@ public class GraphEditorWindow : DockPanel
             }
             else
             {
-                _selectedNodes.Clear();
-                _selectedEdges.Clear();
-                _selectedStickyNotes.Clear();
+                ClearAllSelection();
                 _selectedStickyNotes.Add(stickyHit.Id);
             }
             SyncSelectionSystem();
@@ -831,10 +1043,7 @@ public class GraphEditorWindow : DockPanel
             }
             else
             {
-                _selectedNodes.Clear();
-                _selectedEdges.Clear();
-                _selectedStickyNotes.Clear();
-                _selectedGroups.Clear();
+                ClearAllSelection();
                 _selectedGroups.Add(groupHit.Id);
             }
             SyncSelectionSystem();
@@ -861,9 +1070,7 @@ public class GraphEditorWindow : DockPanel
             }
             else
             {
-                _selectedNodes.Clear();
-                _selectedEdges.Clear();
-                _selectedStickyNotes.Clear();
+                ClearAllSelection();
                 _selectedEdges.Add(wireHit.Id);
             }
             SyncSelectionSystem();
@@ -873,10 +1080,7 @@ public class GraphEditorWindow : DockPanel
         // Truly empty — clear selection unless adding.
         if (!additive)
         {
-            _selectedNodes.Clear();
-            _selectedEdges.Clear();
-            _selectedStickyNotes.Clear();
-            _selectedGroups.Clear();
+            ClearAllSelection();
             SyncSelectionSystem();
         }
     }
@@ -967,9 +1171,7 @@ public class GraphEditorWindow : DockPanel
             });
 
         // Selecting the relay lets the user immediately drag to reposition.
-        _selectedNodes.Clear();
-        _selectedEdges.Clear();
-        _selectedStickyNotes.Clear();
+        ClearAllSelection();
         _selectedNodes.Add(relay.Id);
         SyncSelectionSystem();
     }
@@ -1009,6 +1211,15 @@ public class GraphEditorWindow : DockPanel
             var hit = HitTestNode(graphPoint);
             if (hit != null)
             {
+                // Resize handle wins over body drag — same UX as stickies/groups.
+                if (hit is IResizableNode rNode && IsOverNodeResizeHandle(hit, graphPoint))
+                {
+                    _resizingNode = hit.Id;
+                    _resizeNodeStartSize = rNode.GetSize();
+                    _dragMode = DragMode.ResizeNode;
+                    return;
+                }
+
                 if (!_selectedNodes.Contains(hit.Id))
                 {
                     if (!Input.IsCtrlPressed && !Input.IsShiftPressed) _selectedNodes.Clear();
@@ -1146,6 +1357,21 @@ public class GraphEditorWindow : DockPanel
 
         switch (_dragMode)
         {
+            case DragMode.ResizeNode:
+                if (_resizingNode.HasValue)
+                {
+                    var n = _graph.FindNode(_resizingNode.Value);
+                    if (n is IResizableNode r)
+                    {
+                        var cursor = ScreenToGraph(e.PointerPosition);
+                        var min = r.MinSize;
+                        r.SetSize(new Float2(
+                            MathF.Max(min.X, cursor.X - n.Position.X),
+                            MathF.Max(min.Y, cursor.Y - n.Position.Y)));
+                    }
+                }
+                break;
+
             case DragMode.MoveStickyNotes:
                 {
                     var d = e.Delta / _view.Zoom;
@@ -1271,6 +1497,23 @@ public class GraphEditorWindow : DockPanel
             _dragMoveStartPositions = null;
         }
 
+        // Resizable-node drag → one undo step.
+        if (_dragMode == DragMode.ResizeNode && _resizingNode.HasValue && _graph != null)
+        {
+            var graph = _graph;
+            var id = _resizingNode.Value;
+            var n = graph.FindNode(id);
+            if (n is IResizableNode r && !r.GetSize().Equals(_resizeNodeStartSize))
+            {
+                var before = _resizeNodeStartSize;
+                var after = r.GetSize();
+                Undo.RegisterAction("Resize Node",
+                    undo: () => { var x = graph.FindNode(id); if (x is IResizableNode xr) xr.SetSize(before); },
+                    redo: () => { var x = graph.FindNode(id); if (x is IResizableNode xr) xr.SetSize(after); });
+            }
+            _resizingNode = null;
+        }
+
         // Sticky note move/resize → one undo step per drag.
         if (_dragMode == DragMode.MoveStickyNotes && _dragStickyStartPositions != null && _graph != null)
         {
@@ -1372,7 +1615,7 @@ public class GraphEditorWindow : DockPanel
         if (_dragMode == DragMode.MarqueeSelect && _marqueeStartGraph.HasValue && _marqueeEndGraph.HasValue && _graph != null)
         {
             var rect = MakeMarqueeRect(_marqueeStartGraph.Value, _marqueeEndGraph.Value);
-            if (!_marqueeAdditive) { _selectedNodes.Clear(); _selectedEdges.Clear(); _selectedStickyNotes.Clear(); _selectedGroups.Clear(); }
+            if (!_marqueeAdditive) ClearAllSelection();
 
             foreach (var n in _graph.Nodes)
                 if (GraphLayout.GetNodeRect(n).Intersects(rect))
@@ -1635,6 +1878,86 @@ public class GraphEditorWindow : DockPanel
             _alignmentGuides.Add((new Float2(aL - 200, snapLineY.Value), new Float2(aR + 200, snapLineY.Value)));
     }
 
+    /// <summary>Apply the cut-line polyline: any wire whose bezier intersects any
+    /// segment of the polyline gets removed, registered as one undo step.</summary>
+    private void ApplyCutLine(List<Float2> points)
+    {
+        if (_graph == null || points.Count < 2) return;
+        var cuts = new List<Edge>();
+        foreach (var edge in _graph.Edges)
+        {
+            var srcNode = _graph.FindNode(edge.SourceNodeId);
+            var dstNode = _graph.FindNode(edge.TargetNodeId);
+            if (srcNode == null || dstNode == null) continue;
+            var srcPos = GraphLayout.TryGetPortPosition(srcNode, edge.SourcePortName, PortDirection.Output);
+            var dstPos = GraphLayout.TryGetPortPosition(dstNode, edge.TargetPortName, PortDirection.Input);
+            if (!srcPos.HasValue || !dstPos.HasValue) continue;
+
+            if (CutLineHitsWire(points, srcPos.Value, dstPos.Value))
+                cuts.Add(edge);
+        }
+
+        if (cuts.Count == 0) return;
+        foreach (var e in cuts) _graph.Edges.Remove(e);
+
+        var graph = _graph;
+        Undo.RegisterAction("Cut Wires",
+            undo: () => { foreach (var e in cuts) graph.Edges.Add(e); },
+            redo: () => { foreach (var e in cuts) graph.Edges.Remove(e); });
+    }
+
+    /// <summary>True if any segment of the cut polyline crosses the wire's bezier
+    /// (sampled). Sample density matches the wire hit-test for consistency.</summary>
+    private static bool CutLineHitsWire(List<Float2> cut, Float2 from, Float2 to)
+    {
+        // Sample the bezier into a polyline.
+        float dx = MathF.Abs(to.X - from.X);
+        float tangent = MathF.Max(40f, dx * 0.5f);
+        Float2 c1 = new Float2(from.X + tangent, from.Y);
+        Float2 c2 = new Float2(to.X - tangent, to.Y);
+        const int samples = 32;
+        Span<Float2> wire = stackalloc Float2[samples + 1];
+        for (int i = 0; i <= samples; i++)
+        {
+            float t = i / (float)samples;
+            float u = 1f - t;
+            float b0 = u * u * u, b1 = 3 * u * u * t, b2 = 3 * u * t * t, b3 = t * t * t;
+            wire[i] = new Float2(
+                b0 * from.X + b1 * c1.X + b2 * c2.X + b3 * to.X,
+                b0 * from.Y + b1 * c1.Y + b2 * c2.Y + b3 * to.Y);
+        }
+
+        for (int i = 0; i < cut.Count - 1; i++)
+        {
+            for (int j = 0; j < samples; j++)
+            {
+                if (SegmentsIntersect(cut[i], cut[i + 1], wire[j], wire[j + 1]))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Standard segment-vs-segment intersection test (proper crossing only —
+    /// touching endpoints don't count as a hit).</summary>
+    private static bool SegmentsIntersect(Float2 a1, Float2 a2, Float2 b1, Float2 b2)
+    {
+        float d1 = Sign((b2.X - b1.X) * (a1.Y - b1.Y) - (b2.Y - b1.Y) * (a1.X - b1.X));
+        float d2 = Sign((b2.X - b1.X) * (a2.Y - b1.Y) - (b2.Y - b1.Y) * (a2.X - b1.X));
+        float d3 = Sign((a2.X - a1.X) * (b1.Y - a1.Y) - (a2.Y - a1.Y) * (b1.X - a1.X));
+        float d4 = Sign((a2.X - a1.X) * (b2.Y - a1.Y) - (a2.Y - a1.Y) * (b2.X - a1.X));
+        return d1 != d2 && d3 != d4;
+    }
+    private static float Sign(float v) => v > 0 ? 1 : (v < 0 ? -1 : 0);
+
+    /// <summary>Lift a colour toward white by ~30% — used for wire-hover highlight.</summary>
+    private static Color32 Brighten(Color32 c)
+        => new Color32(
+            (byte)Math.Min(255, c.R + 60),
+            (byte)Math.Min(255, c.G + 60),
+            (byte)Math.Min(255, c.B + 60),
+            c.A);
+
     /// <summary>True if any sample point along the wire's bezier falls inside <paramref name="rect"/>.</summary>
     private static bool WireIntersectsRect(Float2 from, Float2 to, Rect rect)
     {
@@ -1716,10 +2039,7 @@ public class GraphEditorWindow : DockPanel
                 foreach (var g in removedGroups) graph.Groups.Remove(g);
             });
 
-        _selectedNodes.Clear();
-        _selectedEdges.Clear();
-        _selectedStickyNotes.Clear();
-        _selectedGroups.Clear();
+        ClearAllSelection();
         SyncSelectionSystem();
     }
 
@@ -1779,8 +2099,7 @@ public class GraphEditorWindow : DockPanel
     private void SelectAll()
     {
         if (_graph == null) return;
-        _selectedNodes.Clear();
-        _selectedEdges.Clear();
+        ClearAllSelection();
         foreach (var n in _graph.Nodes) _selectedNodes.Add(n.Id);
         foreach (var e in _graph.Edges) _selectedEdges.Add(e.Id);
         SyncSelectionSystem();
@@ -1875,8 +2194,7 @@ public class GraphEditorWindow : DockPanel
         foreach (var e in addedEdges) _graph.Edges.Add(e);
 
         // Select the paste result so users can immediately drag-reposition / delete.
-        _selectedNodes.Clear();
-        _selectedEdges.Clear();
+        ClearAllSelection();
         foreach (var n in added) _selectedNodes.Add(n.Id);
         SyncSelectionSystem();
 
@@ -1916,6 +2234,17 @@ public class GraphEditorWindow : DockPanel
         Float2 center = sum / count + new Float2(24, 24);
         CopySelection();
         PasteAt(center);
+    }
+
+    /// <summary>Hook for node-specific double-click behaviour. SubgraphNode opens its
+    /// referenced graph asset in a new editor tab; other node types are no-op for now.</summary>
+    private void HandleNodeDoubleClick(Node node)
+    {
+        if (node is SubgraphNode sub)
+        {
+            var inner = sub.Subgraph.Res;
+            if (inner != null) OpenFor(inner);
+        }
     }
 
     /// <summary>Ctrl+G — wrap the current selection (nodes + stickies) in a new
@@ -1965,10 +2294,7 @@ public class GraphEditorWindow : DockPanel
             redo: () => graph.Groups.Add(added));
 
         // Select the new group so the Inspector opens for Title editing.
-        _selectedNodes.Clear();
-        _selectedEdges.Clear();
-        _selectedStickyNotes.Clear();
-        _selectedGroups.Clear();
+        ClearAllSelection();
         _selectedGroups.Add(group.Id);
         SyncSelectionSystem();
     }

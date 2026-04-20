@@ -99,6 +99,7 @@ public class EditorApplication : Game
         Inspector.PropertyEditorRegistry.Initialize();
         Inspector.CustomEditorRegistry.Initialize();
         GraphTools.NodeRendererRegistry.Initialize();
+        GraphTools.NodePreviewRegistry.Initialize();
         Runtime.GraphTools.GraphValidatorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
@@ -948,6 +949,7 @@ public class EditorApplication : Game
         Inspector.PropertyEditorRegistry.Reinitialize();
         Inspector.CustomEditorRegistry.Reinitialize();
         GraphTools.NodeRendererRegistry.Reinitialize();
+        GraphTools.NodePreviewRegistry.Reinitialize();
         Runtime.GraphTools.GraphValidatorRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
         Inspector.AddComponentPopup.Reinitialize();

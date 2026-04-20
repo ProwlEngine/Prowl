@@ -83,24 +83,45 @@ public static class GraphRendering
     // ─── Wires (cubic bezier) ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Draw a wire between two ports. Uses a cubic bezier with horizontal control-point
-    /// tangents proportional to the X-distance — gives Unity-style "S" curves that always
-    /// leave the output port heading right and arrive at the input heading right.
+    /// Draw a wire between two ports using the given <paramref name="style"/>.
+    /// Bezier = horizontal-tangent cubic (Unity-style "S"), Linear = straight,
+    /// Rectilinear = right-angle Z route. Stroke width stays constant in screen
+    /// pixels regardless of zoom (Quill's stroke is in screen units).
     /// </summary>
-    public static void DrawWire(Canvas canvas, Float2 from, Float2 to, Color32 color, float zoom, float thickness = 2.5f)
+    public static void DrawWire(Canvas canvas, Float2 from, Float2 to, Color32 color, float zoom, float thickness = 2.5f, WireRoutingStyle style = WireRoutingStyle.Bezier)
     {
-        float dx = MathF.Abs(to.X - from.X);
-        float tangent = MathF.Max(40f, dx * 0.5f);
-
-        Float2 c1 = new Float2(from.X + tangent, from.Y);
-        Float2 c2 = new Float2(to.X - tangent, to.Y);
-
         canvas.BeginPath();
         canvas.MoveTo(from.X, from.Y);
-        canvas.BezierCurveTo(c1.X, c1.Y, c2.X, c2.Y, to.X, to.Y);
+
+        switch (style)
+        {
+            case WireRoutingStyle.Linear:
+                canvas.LineTo(to.X, to.Y);
+                break;
+
+            case WireRoutingStyle.Rectilinear:
+                {
+                    // Z-route: half-x out, full-y across, then half-x into target.
+                    float midX = (from.X + to.X) * 0.5f;
+                    canvas.LineTo(midX, from.Y);
+                    canvas.LineTo(midX, to.Y);
+                    canvas.LineTo(to.X, to.Y);
+                }
+                break;
+
+            case WireRoutingStyle.Bezier:
+            default:
+                {
+                    float dx = MathF.Abs(to.X - from.X);
+                    float tangent = MathF.Max(40f, dx * 0.5f);
+                    Float2 c1 = new Float2(from.X + tangent, from.Y);
+                    Float2 c2 = new Float2(to.X - tangent, to.Y);
+                    canvas.BezierCurveTo(c1.X, c1.Y, c2.X, c2.Y, to.X, to.Y);
+                }
+                break;
+        }
+
         canvas.SetStrokeColor(color);
-        // Quill stroke width is in screen pixels, not graph units — passing a constant
-        // here keeps the wire visually the same thickness regardless of zoom.
         canvas.SetStrokeWidth(thickness);
         canvas.SetStrokeStartCap(EndCapStyle.Round);
         canvas.SetStrokeEndCap(EndCapStyle.Round);
@@ -237,8 +258,8 @@ public static class GraphRendering
 
     // ─── In-progress drag wire (overlay) ─────────────────────────────────────────────
 
-    public static void DrawDragWire(Canvas canvas, Float2 from, Float2 to, Color32 color, float zoom)
-        => DrawWire(canvas, from, to, color, zoom, thickness: 2.0f);
+    public static void DrawDragWire(Canvas canvas, Float2 from, Float2 to, Color32 color, float zoom, WireRoutingStyle style = WireRoutingStyle.Bezier)
+        => DrawWire(canvas, from, to, color, zoom, thickness: 2.0f, style: style);
 
     // ─── Marquee selection rectangle ─────────────────────────────────────────────────
 

@@ -77,7 +77,37 @@ public static class MinimapRenderer
         canvas.SaveState();
         canvas.IntersectScissor(innerX, innerY, innerW, innerH);
 
-        // Node dots
+        // Groups — outline only (no fill) so node dots inside are still visible. The
+        // outline uses the group's full-alpha colour so it stays legible against the
+        // dark minimap background.
+        foreach (var g in graph.Groups)
+        {
+            var p1 = GraphToMini(g.Position);
+            var p2 = GraphToMini(g.Position + g.Size);
+            float w = MathF.Max(2f, p2.X - p1.X);
+            float h = MathF.Max(2f, p2.Y - p1.Y);
+            var c = new Color32(g.PackedColor); c.A = 220;
+            canvas.BeginPath();
+            canvas.Rect(p1.X, p1.Y, w, h);
+            canvas.SetStrokeColor(c);
+            canvas.SetStrokeWidth(1.0f);
+            canvas.Stroke();
+        }
+
+        // Sticky notes — tinted by their packed colour, slightly more opaque than
+        // groups so they stay visible against group fills.
+        foreach (var s in graph.StickyNotes)
+        {
+            var p1 = GraphToMini(s.Position);
+            var p2 = GraphToMini(s.Position + s.Size);
+            float w = MathF.Max(2f, p2.X - p1.X);
+            float h = MathF.Max(2f, p2.Y - p1.Y);
+            var c = new Color32(s.PackedColor); c.A = 180;
+            canvas.RectFilled(p1.X, p1.Y, w, h, c);
+        }
+
+        // Node dots — drawn last so they sit on top of groups/stickies, matching
+        // the main canvas layer order.
         foreach (var n in graph.Nodes)
         {
             var rect = GraphLayout.GetNodeRect(n);

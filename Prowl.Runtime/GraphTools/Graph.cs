@@ -9,6 +9,18 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools;
 
+/// <summary>How wires are visually routed between two ports.</summary>
+public enum WireRoutingStyle
+{
+    /// <summary>Cubic bezier with horizontal tangents — the default. Smooth curves.</summary>
+    Bezier,
+    /// <summary>Straight line from source to target.</summary>
+    Linear,
+    /// <summary>Right-angle path: out horizontally, then vertically, then horizontally
+    /// into the target. Useful for very dense graphs where curves overlap badly.</summary>
+    Rectilinear,
+}
+
 /// <summary>
 /// Abstract base for any node-based asset (shader graphs, behaviour trees, visual scripts, ...).
 /// Holds the graph topology — nodes, edges, blackboard variables, sticky notes, groups —
@@ -42,6 +54,10 @@ public abstract class Graph : EngineObject, ISerializable
     /// <summary>Last view state — pan offset and zoom — so the editor reopens where you left off.</summary>
     public Float2 ViewportPan = Float2.Zero;
     public float ViewportZoom = 1f;
+
+    /// <summary>Visual style for wire routing — applies to every wire in this graph.
+    /// User-settable from the editor toolbar.</summary>
+    public WireRoutingStyle WireStyle = WireRoutingStyle.Bezier;
 
     protected Graph(string name) : base(name) { }
     protected Graph() : base("New Graph") { }

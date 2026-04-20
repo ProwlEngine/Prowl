@@ -18,6 +18,7 @@ namespace Prowl.Runtime.GraphTools;
 /// are useful in every graph type, so they implement every registered marker via
 /// runtime-type-check (handled in <see cref="NodeRegistry"/>'s marker filter).
 /// </remarks>
+[UniversalNode]
 public sealed class RelayNode : Node
 {
     /// <summary>Assembly-qualified name of the type carried through this relay. Persisted
