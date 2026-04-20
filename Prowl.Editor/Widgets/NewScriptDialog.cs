@@ -122,7 +122,7 @@ public static class NewScriptDialog
                         .Text(tpl.Description, font)
                         .TextColor(EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSize - 2)
-                        .Alignment(TextAlignment.TopLeft);
+                        .Alignment(TextAlignment.MiddleLeft);
                 }
 
                 EditorGUI.TextField(paper, "scr_name", "Name", s_name)
@@ -254,17 +254,60 @@ public static class NewScriptDialog
 
     private static Template[] BuildTemplates() => new[]
     {
-        new Template("MonoBehaviour", "A basic component with Start and Update lifecycle hooks.",
+        new Template("MonoBehaviour",
+            "A basic component with Start and Update lifecycle hooks. Start where most scripts begin.",
             EditorIcons.FileCode, BasicMonoBehaviour),
-        new Template("Character Controller", "First-person / third-person character movement. RequireComponent pulls in a CharacterController automatically.",
+
+        new Template("Character Controller",
+            "First/third-person character with WASD + jump. RequireComponent auto-adds a CharacterController when the script is attached.",
             EditorIcons.PersonRunning, CharacterControllerTemplate),
-        new Template("First Person Camera", "Mouse-look yaw/pitch for a camera rig. Drop on a camera GameObject.",
+
+        new Template("Rigidbody Mover",
+            "Physics-based movement via Rigidbody3D velocity. Runs in FixedUpdate and plays well with other physics bodies.",
+            EditorIcons.Cube, RigidbodyMoverTemplate),
+
+        new Template("First Person Camera",
+            "Mouse-look yaw/pitch for a camera rig. Only active while the cursor is locked — pair with a Character Controller.",
             EditorIcons.Video, FirstPersonCameraTemplate),
-        new Template("Rotator", "Continuously rotates the GameObject on a configurable axis. Handy smoke-test component.",
+
+        new Template("Follow Camera",
+            "Smoothly follows a target Transform with a configurable offset. Good for third-person / chase cameras.",
+            EditorIcons.Camera, FollowCameraTemplate),
+
+        new Template("Look At Target",
+            "Rotates the GameObject each frame to face an assigned target Transform (turrets, NPC heads, billboards).",
+            EditorIcons.Eye, LookAtTargetTemplate),
+
+        new Template("Rotator",
+            "Continuously rotates the GameObject on a configurable axis. Handy smoke-test component.",
             EditorIcons.ArrowsRotate, RotatorTemplate),
-        new Template("Singleton Manager", "Game manager pattern with a static Instance. Self-registers on enable and clears on disable.",
+
+        new Template("Health",
+            "Gameplay component with hit points, Damage/Heal helpers, and Died/HealthChanged events. Call Damage() from weapons.",
+            EditorIcons.Heart, HealthTemplate),
+
+        new Template("Timed Destroy",
+            "Destroys the GameObject after a configurable delay. Useful for projectiles, effects, and debris.",
+            EditorIcons.Clock, TimedDestroyTemplate),
+
+        new Template("Prefab Spawner",
+            "Spawns instances of an assigned prefab on key press or on a timer. Demonstrates the Prefab.Instantiate API.",
+            EditorIcons.WandMagicSparkles, SpawnerTemplate),
+
+        new Template("Audio One-Shot",
+            "Plays an AudioClip on Start or when Play() is called. Component picks up an AudioSource automatically.",
+            EditorIcons.VolumeHigh, AudioOneShotTemplate),
+
+        new Template("Singleton Manager",
+            "Game manager pattern with a static Instance. Self-registers on enable and clears on disable.",
             EditorIcons.Crown, SingletonTemplate),
-        new Template("Plain C# Class", "A regular C# class (not a MonoBehaviour). Useful for data types and services.",
+
+        new Template("Data Asset",
+            "A savable data asset (ScriptableObject-style) that appears in Assets > Create. Holds designer-tunable config data.",
+            EditorIcons.Database, DataAssetTemplate),
+
+        new Template("Plain C# Class",
+            "A regular C# class — not a MonoBehaviour. Useful for pure-data types, services, and helpers.",
             EditorIcons.File, PlainClassTemplate),
     };
 
@@ -292,12 +335,12 @@ public class {className} : MonoBehaviour
     public float JumpSpeed = 8f;
     public float Gravity = -20f;
 
-    private CharacterController _controller;
+    private CharacterController _controller = null!;
     private Float3 _velocity;
 
     public override void Start()
     {{
-        _controller = GetComponent<CharacterController>();
+        _controller = GetComponent<CharacterController>()!;
     }}
 
     public override void Update()
@@ -315,15 +358,60 @@ public class {className} : MonoBehaviour
         }}
         else
         {{
-            _velocity.Y += Gravity * (float)Time.DeltaTime;
+            _velocity.Y += Gravity * Time.DeltaTime;
         }}
 
-        _controller.Move(_velocity * (float)Time.DeltaTime);
+        _controller.Move(_velocity * Time.DeltaTime);
     }}
 }}
 ";
 
-    private static string FirstPersonCameraTemplate(string className) => $@"using Prowl.Runtime;
+    private static string RigidbodyMoverTemplate(string className) => $@"using Prowl.Runtime;
+using Prowl.Vector;
+
+[RequireComponent(typeof(Rigidbody3D))]
+public class {className} : MonoBehaviour
+{{
+    public float MoveSpeed = 5f;
+    public float JumpImpulse = 6f;
+
+    private Rigidbody3D _body = null!;
+    private bool _jumpQueued;
+
+    public override void Start()
+    {{
+        _body = GetComponent<Rigidbody3D>()!;
+    }}
+
+    public override void Update()
+    {{
+        // Input is sampled every frame, then applied in FixedUpdate so physics stays stable.
+        if (Input.GetKeyDown(KeyCode.Space))
+            _jumpQueued = true;
+    }}
+
+    public override void FixedUpdate()
+    {{
+        Float2 wasd = Input.GetWASD();
+        Float3 wish = Transform.Right * wasd.X + Transform.Forward * wasd.Y;
+
+        Float3 v = _body.LinearVelocity;
+        v.X = wish.X * MoveSpeed;
+        v.Z = wish.Z * MoveSpeed;
+        _body.LinearVelocity = v;
+
+        if (_jumpQueued)
+        {{
+            _body.ApplyImpulse(new Float3(0, JumpImpulse, 0));
+            _jumpQueued = false;
+        }}
+    }}
+}}
+";
+
+    private static string FirstPersonCameraTemplate(string className) => $@"using System;
+
+using Prowl.Runtime;
 using Prowl.Vector;
 
 public class {className} : MonoBehaviour
@@ -348,9 +436,61 @@ public class {className} : MonoBehaviour
 
         Float2 delta = Input.MouseDelta;
         _yaw += delta.X * Sensitivity;
-        _pitch = System.Math.Clamp(_pitch - delta.Y * Sensitivity, MinPitch, MaxPitch);
+        _pitch = Math.Clamp(_pitch - delta.Y * Sensitivity, MinPitch, MaxPitch);
 
         Transform.LocalEulerAngles = new Float3(_pitch, _yaw, 0f);
+    }}
+}}
+";
+
+    private static string FollowCameraTemplate(string className) => $@"using System;
+
+using Prowl.Runtime;
+using Prowl.Vector;
+
+public class {className} : MonoBehaviour
+{{
+    public GameObject? Target;
+    public Float3 Offset = new Float3(0, 3, -6);
+    public float FollowSmoothing = 8f;
+    public float LookSmoothing = 8f;
+
+    public override void LateUpdate()
+    {{
+        if (Target == null) return;
+
+        Float3 desiredPos = Target.Transform.Position + Target.Transform.Rotation * Offset;
+        float tMove = 1f - MathF.Exp(-FollowSmoothing * Time.DeltaTime);
+        Transform.Position = Maths.Lerp(Transform.Position, desiredPos, tMove);
+
+        Float3 lookDir = Target.Transform.Position - Transform.Position;
+        if (Float3.LengthSquared(lookDir) > 0.0001f)
+        {{
+            Quaternion desiredRot = Quaternion.LookRotation(Float3.Normalize(lookDir), Float3.UnitY);
+            float tLook = 1f - MathF.Exp(-LookSmoothing * Time.DeltaTime);
+            Transform.Rotation = Quaternion.Slerp(Transform.Rotation, desiredRot, tLook);
+        }}
+    }}
+}}
+";
+
+    private static string LookAtTargetTemplate(string className) => $@"using Prowl.Runtime;
+using Prowl.Vector;
+
+public class {className} : MonoBehaviour
+{{
+    public GameObject? Target;
+    public bool LockYAxis = false;
+
+    public override void LateUpdate()
+    {{
+        if (Target == null) return;
+
+        Float3 dir = Target.Transform.Position - Transform.Position;
+        if (LockYAxis) dir.Y = 0f;
+        if (Float3.LengthSquared(dir) < 0.0001f) return;
+
+        Transform.Rotation = Quaternion.LookRotation(Float3.Normalize(dir), Float3.UnitY);
     }}
 }}
 ";
@@ -365,8 +505,133 @@ public class {className} : MonoBehaviour
 
     public override void Update()
     {{
-        Transform.Rotate(Axis, DegreesPerSecond * (float)Time.DeltaTime);
+        Transform.Rotate(Axis, DegreesPerSecond * Time.DeltaTime);
     }}
+}}
+";
+
+    private static string HealthTemplate(string className) => $@"using System;
+
+using Prowl.Runtime;
+
+public class {className} : MonoBehaviour
+{{
+    public float MaxHealth = 100f;
+
+    private float _current;
+
+    public float Current => _current;
+    public float Normalized => MaxHealth > 0 ? _current / MaxHealth : 0f;
+    public bool IsDead => _current <= 0f;
+
+    public event Action<float>? HealthChanged;
+    public event Action? Died;
+
+    public override void OnEnable()
+    {{
+        _current = MaxHealth;
+    }}
+
+    public void Damage(float amount)
+    {{
+        if (IsDead || amount <= 0f) return;
+        _current = MathF.Max(0f, _current - amount);
+        HealthChanged?.Invoke(_current);
+        if (IsDead) Died?.Invoke();
+    }}
+
+    public void Heal(float amount)
+    {{
+        if (IsDead || amount <= 0f) return;
+        _current = MathF.Min(MaxHealth, _current + amount);
+        HealthChanged?.Invoke(_current);
+    }}
+}}
+";
+
+    private static string TimedDestroyTemplate(string className) => $@"using Prowl.Runtime;
+
+public class {className} : MonoBehaviour
+{{
+    public float Lifetime = 3f;
+
+    private float _elapsed;
+
+    public override void Update()
+    {{
+        _elapsed += Time.DeltaTime;
+        if (_elapsed >= Lifetime)
+        {{
+            Scene?.Remove(GameObject);
+            GameObject.Dispose();
+        }}
+    }}
+}}
+";
+
+    private static string SpawnerTemplate(string className) => $@"using Prowl.Runtime;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
+
+public class {className} : MonoBehaviour
+{{
+    public AssetRef<PrefabAsset> Prefab;
+    public KeyCode SpawnKey = KeyCode.F;
+    public float AutoSpawnInterval = 0f; // 0 = disabled
+    public Float3 SpawnOffset;
+
+    private float _timer;
+
+    public override void Update()
+    {{
+        if (Input.GetKeyDown(SpawnKey))
+            Spawn();
+
+        if (AutoSpawnInterval > 0f)
+        {{
+            _timer += Time.DeltaTime;
+            if (_timer >= AutoSpawnInterval)
+            {{
+                _timer = 0f;
+                Spawn();
+            }}
+        }}
+    }}
+
+    public GameObject? Spawn()
+    {{
+        var go = Prefab.Res?.Instantiate();
+        if (go == null) return null;
+
+        go.Transform.Position = Transform.Position + Transform.Rotation * SpawnOffset;
+        go.Transform.Rotation = Transform.Rotation;
+        Scene?.Add(go);
+        return go;
+    }}
+}}
+";
+
+    private static string AudioOneShotTemplate(string className) => $@"using Prowl.Runtime;
+
+[RequireComponent(typeof(AudioSource))]
+public class {className} : MonoBehaviour
+{{
+    public bool PlayOnStart = true;
+
+    private AudioSource _source = null!;
+
+    public override void Start()
+    {{
+        _source = GetComponent<AudioSource>()!;
+        if (PlayOnStart) Play();
+    }}
+
+    public void Play()
+    {{
+        if (_source.Clip != null) _source.Play();
+    }}
+
+    public void Stop() => _source.Stop();
 }}
 ";
 
@@ -390,6 +655,16 @@ public class {className} : MonoBehaviour
     {{
         if (Instance == this) Instance = null;
     }}
+}}
+";
+
+    private static string DataAssetTemplate(string className) => $@"using Prowl.Runtime;
+
+[CreateAssetMenu(""{className}"", Extension = "".asset"")]
+public class {className} : EngineObject
+{{
+    public float ExampleFloat = 1f;
+    public string ExampleText = """";
 }}
 ";
 
