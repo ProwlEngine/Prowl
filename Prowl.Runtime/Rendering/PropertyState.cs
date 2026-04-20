@@ -103,6 +103,43 @@ public partial class PropertyState
         _bufferBindings[name] = bindingPoint;
     }
 
+    /// <summary>Yield the names of every property that has a value set on this
+    /// <see cref="PropertyState"/>, regardless of type. Used by callers that need
+    /// to iterate over "all properties this state owns" — e.g. Material's
+    /// override-tracking migration.</summary>
+    public System.Collections.Generic.IEnumerable<string> EnumerateNames()
+    {
+        foreach (var k in _floats.Keys)     yield return k;
+        foreach (var k in _ints.Keys)       yield return k;
+        foreach (var k in _vectors2.Keys)   yield return k;
+        foreach (var k in _vectors3.Keys)   yield return k;
+        foreach (var k in _vectors4.Keys)   yield return k;
+        foreach (var k in _colors.Keys)     yield return k;
+        foreach (var k in _matrices.Keys)   yield return k;
+        foreach (var k in _textures.Keys)   yield return k;
+        foreach (var k in _textures3D.Keys) yield return k;
+    }
+
+    /// <summary>Drop the entry for <paramref name="name"/> from every type bucket.
+    /// Idempotent — no-op for names that aren't present. Used by the material
+    /// inspector's revert-to-default action so the next render falls back to the
+    /// shader's live default value.</summary>
+    public void RemoveProperty(string name)
+    {
+        _floats.Remove(name);
+        _ints.Remove(name);
+        _vectors2.Remove(name);
+        _vectors3.Remove(name);
+        _vectors4.Remove(name);
+        _colors.Remove(name);
+        _matrices.Remove(name);
+        _matrixArr.Remove(name);
+        _textures.Remove(name);
+        _textures3D.Remove(name);
+        _buffers.Remove(name);
+        _bufferBindings.Remove(name);
+    }
+
     // Getters
     // Has* methods — check if a property exists without retrieving it
     public bool HasFloat(string name) => _floats.ContainsKey(name);
@@ -182,6 +219,71 @@ public partial class PropertyState
     ///
     /// Batching flow: Global uniforms → Material uniforms → Per-object (instance) uniforms
     /// </summary>
+    /// <summary>
+    /// Same as <see cref="ApplyMaterialUniforms(PropertyState, GraphicsProgram, ref int)"/>
+    /// but with a shader-default fallback: every property the shader declares but the
+    /// material doesn't override gets bound to the shader's CURRENT default value
+    /// (read live from <paramref name="shader"/>'s <see cref="Shaders.ShaderProperty"/>
+    /// list). Lets materials store only overrides — defaults always come from the
+    /// shader, so editing a default in the shader graph propagates immediately to
+    /// every material using it without any cached snapshot.
+    /// </summary>
+    public static unsafe void ApplyMaterialUniformsWithDefaults(
+        PropertyState materialProperties,
+        Resources.Shader shader, GraphicsProgram program, ref int texSlot)
+    {
+        // First do all the overrides via the cached path.
+        ApplyMaterialUniforms(materialProperties, program, ref texSlot);
+
+        // Then fill in any shader-declared property that wasn't in the material.
+        foreach (var prop in shader.Properties)
+        {
+            string name = prop.Name;
+            switch (prop.PropertyType)
+            {
+                case Shaders.ShaderPropertyType.Float:
+                    if (!materialProperties._floats.ContainsKey(name))
+                        Graphics.SetUniformF(program, name, (float)prop.Value.X);
+                    break;
+                case Shaders.ShaderPropertyType.Int:
+                    if (!materialProperties._ints.ContainsKey(name))
+                        Graphics.SetUniformI(program, name, (int)prop.Value.X);
+                    break;
+                case Shaders.ShaderPropertyType.Vector2:
+                    if (!materialProperties._vectors2.ContainsKey(name))
+                        Graphics.SetUniformV2(program, name, new Float2((float)prop.Value.X, (float)prop.Value.Y));
+                    break;
+                case Shaders.ShaderPropertyType.Vector3:
+                    if (!materialProperties._vectors3.ContainsKey(name))
+                        Graphics.SetUniformV3(program, name, new Float3((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z));
+                    break;
+                case Shaders.ShaderPropertyType.Vector4:
+                case Shaders.ShaderPropertyType.Color:
+                    if (!materialProperties._vectors4.ContainsKey(name) && !materialProperties._colors.ContainsKey(name))
+                        Graphics.SetUniformV4(program, name, prop.Value);
+                    break;
+                case Shaders.ShaderPropertyType.Matrix:
+                    if (!materialProperties._matrices.ContainsKey(name))
+                        Graphics.SetUniformMatrix(program, name, false, prop.MatrixValue);
+                    break;
+                case Shaders.ShaderPropertyType.Texture2D:
+                    if (!materialProperties._textures.ContainsKey(name) && prop.Texture2DValue.IsValid())
+                    {
+                        Graphics.SetUniformTexture(program, name, texSlot, prop.Texture2DValue.Handle);
+                        texSlot++;
+                    }
+                    break;
+                case Shaders.ShaderPropertyType.Texture3D:
+                    if (!materialProperties._textures3D.ContainsKey(name) && prop.Texture3DValue.IsValid())
+                    {
+                        Graphics.SetUniformTexture(program, name, texSlot, prop.Texture3DValue.Handle);
+                        texSlot++;
+                    }
+                    break;
+            }
+        }
+    }
+
     /// <param name="materialProperties">The material's property state</param>
     /// <param name="shader">The compiled shader program to bind uniforms to</param>
     /// <param name="texSlot">Texture slot counter, incremented as textures are bound</param>

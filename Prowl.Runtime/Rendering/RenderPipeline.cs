@@ -612,7 +612,7 @@ public abstract class RenderPipeline : EngineObject
 
             // *** BATCHING OPTIMIZATION: Bind material uniforms ONCE for entire batch ***
             // All objects in this batch share the same material state
-            PropertyState.ApplyMaterialUniforms(material._properties, variant, ref texSlot);
+            PropertyState.ApplyMaterialUniformsWithDefaults(material._properties, material.Shader!, variant, ref texSlot);
 
             // Set render state (depth test, blend mode, cull mode, etc.) once per batch
             Graphics.SetState(pass.State);
@@ -740,7 +740,7 @@ public abstract class RenderPipeline : EngineObject
         PropertyState.ApplyGlobals(variant, cache, ref texSlot);
 
         // Apply material uniforms
-        PropertyState.ApplyMaterialUniforms(material._properties, variant, ref texSlot);
+        PropertyState.ApplyMaterialUniformsWithDefaults(material._properties, material.Shader!, variant, ref texSlot);
 
         // Apply shared instance properties
         int instanceTexSlot = texSlot;

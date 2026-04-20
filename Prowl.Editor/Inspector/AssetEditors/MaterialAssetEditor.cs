@@ -59,7 +59,10 @@ public class MaterialAssetEditor : AssetImporterEditor
                 }
             }, 0);
 
-        // Shader properties — one field per property defined in the shader
+        // Shader properties — one field per property declared by the shader. Values
+        // are read live from the shader for non-overridden entries (see
+        // DrawShaderProperty), so changes to defaults in the shader graph propagate
+        // immediately — no SyncShaderDefaults call needed.
         var shader = material.Shader;
         if (shader != null)
         {
@@ -68,7 +71,7 @@ public class MaterialAssetEditor : AssetImporterEditor
 
             foreach (var prop in shader.Properties)
             {
-                DrawShaderProperty(paper, $"{id}_p_{prop.Name}", material, prop);
+                DrawShaderPropertyRow(paper, $"{id}_p_{prop.Name}", material, prop);
             }
 
         }
@@ -95,112 +98,126 @@ public class MaterialAssetEditor : AssetImporterEditor
         _preview.DrawPreview(paper, $"{id}_preview", 256, 256);
     }
 
+    /// <summary>Wrap a property in a row that adds an override indicator on the left
+    /// and a revert-to-default button on the right when the field has been overridden.
+    /// The actual field draws inside via <see cref="DrawShaderProperty"/>.</summary>
+    private void DrawShaderPropertyRow(Paper paper, string id, Material material, ShaderProperty prop)
+    {
+        bool overridden = material.IsOverridden(prop.Name);
+
+        using (paper.Row($"{id}_row")
+            .Height(EditorTheme.RowHeight)
+            .Margin(0, EditorTheme.Spacing)
+            .Enter())
+        {
+            // Left marker: thin vertical bar in the purple theme color when overridden.
+            // Always present (transparent when not overridden) so widths line up.
+            paper.Box($"{id}_marker")
+                .Width(3).Height(EditorTheme.RowHeight - 4)
+                .Margin(2, 4, 2, 2)
+                .BackgroundColor(overridden ? EditorTheme.Purple400 : System.Drawing.Color.Transparent)
+                .Rounded(1.5f);
+
+            // The actual field — fills the remaining row width.
+            using (paper.Box($"{id}_field").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).Enter())
+            {
+                DrawShaderProperty(paper, id, material, prop);
+            }
+
+            // Right-side revert button — only shown when the property is overridden.
+            if (overridden)
+            {
+                EditorGUI.Button(paper, $"{id}_revert", EditorIcons.ArrowRotateLeft, width: 24)
+                    .OnValueChanged(_ =>
+                    {
+                        material.RevertProperty(prop.Name);
+                        // Drop the cached entry so the live shader default takes over
+                        // immediately. Without this, the override flag is gone but the
+                        // stored value is still in _properties (and would be re-uploaded
+                        // by ApplyMaterialUniformsWithDefaults).
+                        material._properties.RemoveProperty(prop.Name);
+                        _dirty = true;
+                        _lastPreviewAsset = null;
+                    });
+            }
+        }
+    }
+
     private void DrawShaderProperty(Paper paper, string id, Material material, ShaderProperty prop)
     {
         string label = !string.IsNullOrEmpty(prop.DisplayName) ? prop.DisplayName : prop.Name;
 
-        // Read values from the material's own property state, not the shared shader defaults.
+        // For each value: read from the material if the property is overridden,
+        // otherwise from the shader's CURRENT default. The material only stores
+        // user-set overrides — defaults are always live.
+        var ps = material._properties;
         switch (prop.PropertyType)
         {
             case ShaderPropertyType.Float:
             {
-                float val = material._properties.GetFloat(prop.Name);
+                float val = ps.HasFloat(prop.Name) ? ps.GetFloat(prop.Name) : (float)prop.Value.X;
                 EditorGUI.FloatField(paper, id, val, label)
-                    .OnValueChanged(v =>
-                    {
-                        material.SetFloat(prop.Name, v);
-                        _dirty = true;
-                    });
+                    .OnValueChanged(v => { material.SetFloat(prop.Name, v); _dirty = true; });
                 break;
             }
 
             case ShaderPropertyType.Int:
             {
-                int val = material._properties.GetInt(prop.Name);
+                int val = ps.HasInt(prop.Name) ? ps.GetInt(prop.Name) : (int)prop.Value.X;
                 EditorGUI.IntField(paper, id, val, label)
-                    .OnValueChanged(v =>
-                    {
-                        material.SetInt(prop.Name, v);
-                        _dirty = true;
-                    });
+                    .OnValueChanged(v => { material.SetInt(prop.Name, v); _dirty = true; });
                 break;
             }
 
             case ShaderPropertyType.Color:
             {
-                var val = material._properties.GetColor(prop.Name);
+                var val = ps.HasColor(prop.Name)
+                    ? ps.GetColor(prop.Name)
+                    : new Prowl.Vector.Color((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z, (float)prop.Value.W);
                 EditorGUI.ColorField(paper, id, label, val)
-                    .OnValueChanged(v =>
-                    {
-                        material.SetColor(prop.Name, new Prowl.Vector.Color(v.R, v.G, v.B, v.A));
-                        _dirty = true;
-                        _lastPreviewAsset = null; // refresh preview
-                    });
+                    .OnValueChanged(v => { material.SetColor(prop.Name, new Prowl.Vector.Color(v.R, v.G, v.B, v.A)); _dirty = true; _lastPreviewAsset = null; });
                 break;
             }
 
             case ShaderPropertyType.Vector2:
             {
-                var val = material._properties.GetVector2(prop.Name);
+                var val = ps.HasVector2(prop.Name) ? ps.GetVector2(prop.Name) : new Float2((float)prop.Value.X, (float)prop.Value.Y);
                 EditorGUI.Vector2Field(paper, id, label, val)
-                    .OnValueChanged(v =>
-                    {
-                        material.SetVector(prop.Name, v);
-                        _dirty = true;
-                    });
+                    .OnValueChanged(v => { material.SetVector(prop.Name, v); _dirty = true; });
                 break;
             }
 
             case ShaderPropertyType.Vector3:
             {
-                var val = material._properties.GetVector3(prop.Name);
+                var val = ps.HasVector3(prop.Name) ? ps.GetVector3(prop.Name) : new Float3((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z);
                 EditorGUI.Vector3Field(paper, id, label, val)
-                    .OnValueChanged(v =>
-                    {
-                        material.SetVector(prop.Name, v);
-                        _dirty = true;
-                    });
+                    .OnValueChanged(v => { material.SetVector(prop.Name, v); _dirty = true; });
                 break;
             }
 
             case ShaderPropertyType.Vector4:
             {
-                var val = material._properties.GetVector4(prop.Name);
+                var val = ps.HasVector4(prop.Name) ? ps.GetVector4(prop.Name) : prop.Value;
                 EditorGUI.Vector4Field(paper, id, label, val)
-                    .OnValueChanged(v =>
-                    {
-                        material.SetVector(prop.Name, v);
-                        _dirty = true;
-                    });
+                    .OnValueChanged(v => { material.SetVector(prop.Name, v); _dirty = true; });
                 break;
             }
 
             case ShaderPropertyType.Texture2D:
             {
-                var val = material._properties.GetTexture(prop.Name);
+                var val = ps.HasTexture(prop.Name) ? ps.GetTexture(prop.Name) : prop.Texture2DValue;
                 EngineObjectPropertyEditor.SetFieldType(typeof(Texture2D));
                 PropertyGrid.DrawField(paper, id, label, typeof(Texture2D), val,
-                    newVal =>
-                    {
-                        var tex = newVal as Texture2D;
-                        material.SetTexture(prop.Name, tex);
-                        _dirty = true;
-                        _lastPreviewAsset = null;
-                    }, 0);
+                    newVal => { material.SetTexture(prop.Name, newVal as Texture2D); _dirty = true; _lastPreviewAsset = null; }, 0);
                 break;
             }
 
             case ShaderPropertyType.Texture3D:
             {
-                var val = material._properties.GetTexture3D(prop.Name);
+                var val = ps.HasTexture3D(prop.Name) ? ps.GetTexture3D(prop.Name) : prop.Texture3DValue;
                 EngineObjectPropertyEditor.SetFieldType(typeof(Texture3D));
                 PropertyGrid.DrawField(paper, id, label, typeof(Texture3D), val,
-                    newVal =>
-                    {
-                        var tex = newVal as Texture3D;
-                        material.SetTexture3D(prop.Name, tex);
-                        _dirty = true;
-                    }, 0);
+                    newVal => { material.SetTexture3D(prop.Name, newVal as Texture3D); _dirty = true; }, 0);
                 break;
             }
         }
