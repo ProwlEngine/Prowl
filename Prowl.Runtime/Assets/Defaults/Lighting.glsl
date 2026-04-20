@@ -265,7 +265,13 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
     vec3 diffuse = kD * albedo * diffuseTerm;
 
-    // Shadow
+    // Shadow — shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
+    // include. With the define set, shadowFactor stays at 1.0 and no atlas samples are
+    // performed, so the surface receives full direct lighting regardless of occluders.
+    float shadowFactor;
+#ifdef SG_NO_SHADOWS
+    shadowFactor = 1.0;
+#else
     float shadow = 0.0;
     if (_LightShadowEnabled[i] != 0) {
         if (lightType == 0) {
@@ -280,7 +286,8 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
             }
         }
     }
-    float shadowFactor = 1.0 - shadow;
+    shadowFactor = 1.0 - shadow;
+#endif
 
     return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
 }
@@ -350,7 +357,13 @@ vec3 CalculateSingleLightAniso(int i, vec3 worldPos, vec3 worldNormal, vec3 view
     // Disney Diffuse with averaged perceptual roughness
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, perceptualRoughness) * NdotL;
 
-    // Shadow
+    // Shadow — shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
+    // include. With the define set, shadowFactor stays at 1.0 and no atlas samples are
+    // performed, so the surface receives full direct lighting regardless of occluders.
+    float shadowFactor;
+#ifdef SG_NO_SHADOWS
+    shadowFactor = 1.0;
+#else
     float shadow = 0.0;
     if (_LightShadowEnabled[i] != 0) {
         if (lightType == 0) {
@@ -365,7 +378,8 @@ vec3 CalculateSingleLightAniso(int i, vec3 worldPos, vec3 worldNormal, vec3 view
             }
         }
     }
-    float shadowFactor = 1.0 - shadow;
+    shadowFactor = 1.0 - shadow;
+#endif
 
     vec3 lightColor = _LightColors[i] * _LightIntensities[i] * attenuation * shadowFactor;
 

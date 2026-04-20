@@ -105,7 +105,10 @@ public abstract class Node
     /// </summary>
     protected Port AddInput<T>(string name, T? defaultValue = default,
         bool acceptsMultiple = false,
-        PortLayout layout = PortLayout.Above)
+        PortLayout layout = PortLayout.Above,
+        bool required = false,
+        string? tooltip = null,
+        bool hidden = false)
     {
         var p = new Port
         {
@@ -115,6 +118,9 @@ public abstract class Node
             AcceptsMultiple = acceptsMultiple,
             DefaultValue = defaultValue,
             Layout = layout,
+            IsRequired = required,
+            Tooltip = tooltip,
+            IsHidden = hidden,
         };
         _inputs.Add(p); // Use backing field — Inputs property would re-enter EnsureDefined.
         return p;
@@ -122,7 +128,9 @@ public abstract class Node
 
     /// <summary>Declare a typed output port. Outputs default to allowing multiple connections.</summary>
     protected Port AddOutput<T>(string name, bool acceptsMultiple = true,
-        PortLayout layout = PortLayout.Above)
+        PortLayout layout = PortLayout.Above,
+        string? tooltip = null,
+        bool hidden = false)
     {
         var p = new Port
         {
@@ -132,6 +140,8 @@ public abstract class Node
             AcceptsMultiple = acceptsMultiple,
             DefaultValue = null,
             Layout = layout,
+            Tooltip = tooltip,
+            IsHidden = hidden,
         };
         _outputs.Add(p);
         return p;

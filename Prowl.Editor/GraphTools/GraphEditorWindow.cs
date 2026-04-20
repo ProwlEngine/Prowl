@@ -6,12 +6,14 @@ using System.Collections.Generic;
 
 using Prowl.Echo;
 using Prowl.Editor.Docking;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.GraphTools;
+using Prowl.Runtime.GraphTools.ShaderGraphs;
 using Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 using Prowl.Vector;
 
@@ -30,6 +32,7 @@ public class GraphEditorWindow : DockPanel
 
     /// <summary>Latest canvas-Box screen rect captured during draw — used by input handlers.</summary>
     private Rect _canvasScreenRect;
+    private float _lastWindowHeight;
 
     // ─── Interaction state ────────────────────────────────────────────────────────────
     private enum DragMode { None, MoveNodes, ResizeNode, MoveStickyNotes, ResizeStickyNote, MoveGroup, ResizeGroup, MarqueeSelect, ConnectingWire }
@@ -67,6 +70,25 @@ public class GraphEditorWindow : DockPanel
     private Float2 _creationMenuLocal;    // popup top-left in canvas-Box-local pixels
     private Float2 _creationMenuGraph;    // graph-space point where new node lands
     private string _creationFilter = "";
+    // Expanded-category set — top-level category groups (split on '/') whose rows are
+    // visible. Persisted across popup open/close so the user doesn't have to re-expand
+    // their go-to group every time. Cleared when search is active (flat-list mode).
+    private readonly HashSet<string> _expandedCategories = new() { "Output", "Input", "Math" };
+
+    // Sidebar visibility. Shader-graph asset types get a settings panel (blend/cull/
+    // queue dropdowns); other graph types don't yet, so the toggle is hidden for them.
+    private bool _sidebarOpen = true;
+    private float _sidebarWidth = 210f;
+
+    // Preview state — lives on the window so it persists across frames / foldout
+    // expansions. Lazy-created the first time the sidebar draws.
+    private PreviewRenderer? _preview;
+    private Prowl.Runtime.Resources.Material? _lastPreviewMaterial;
+    private Prowl.Runtime.Resources.Mesh?     _lastPreviewMesh;
+    private Prowl.Runtime.AssetRef<Prowl.Runtime.Resources.Mesh> _previewMesh;
+
+    // Foldout expand/collapse state lives on Paper's element storage via EditorGUI.Foldout —
+    // no window-local fields needed.
 
     /// <summary>Active marquee corners in graph space (start at drag start, end follows mouse).</summary>
     private Float2? _marqueeStartGraph;
@@ -106,6 +128,26 @@ public class GraphEditorWindow : DockPanel
     /// routes to Inspector like stickies so Title can be renamed via PropertyGrid.</summary>
     private readonly HashSet<Guid> _selectedGroups = new();
 
+    /// <summary>Mark the graph dirty for auto-recompile. Called by every code path
+    /// that mutates Nodes / Edges / Groups / StickyNotes — selection-only changes
+    /// don't count. Records the timestamp so the per-frame debounce can decide
+    /// whether enough idle time has passed to recompile.</summary>
+    private void MarkGraphDirty()
+    {
+        _isDirtyForRecompile = true;
+        _lastChangeTime = Time.UnscaledTotalTime;
+    }
+
+    /// <summary>Wrapper around <see cref="Undo.RegisterAction"/> that also flags the
+    /// graph dirty for auto-recompile. Every mutation in this window goes through
+    /// here so we can't forget — the only places NOT using this are pure selection
+    /// updates, which don't change the compiled shader.</summary>
+    private void RegisterMutation(string label, Action undo, Action redo)
+    {
+        Undo.RegisterAction(label, undo, redo);
+        MarkGraphDirty();
+    }
+
     /// <summary>Wipe every per-element selection set. Always prefer this over clearing
     /// individual sets so a future selection set added here gets cleared too.</summary>
     private void ClearAllSelection()
@@ -142,6 +184,21 @@ public class GraphEditorWindow : DockPanel
     /// <summary>Snap-to-other-node tolerance in graph-space pixels (scaled by zoom for
     /// consistent feel — see SnapToolerance()).</summary>
     private const float SnapPixelTolerance = 8f;
+
+    // ─── Auto-recompile ────────────────────────────────────────
+    /// <summary>True after any graph mutation; cleared when SaveGraph runs. While true
+    /// the auto-recompile timer is counting down towards <see cref="AutoRecompileDelay"/>.</summary>
+    private bool _isDirtyForRecompile;
+    /// <summary>UnscaledTotalTime of the most recent mutation. Used to debounce: we
+    /// only recompile after 1s of editing inactivity so rapid edits don't re-import
+    /// every frame.</summary>
+    private double _lastChangeTime;
+    /// <summary>Toggleable from the toolbar. When off, mutations still mark dirty but
+    /// the user has to hit "Compile" (or Save) explicitly. Persisted per-window so
+    /// users with strong opinions can disable it once and forget.</summary>
+    private bool _autoRecompile = true;
+    /// <summary>Seconds of inactivity before auto-recompile fires. Mirrors SF's 1s.</summary>
+    private const float AutoRecompileDelay = 1.0f;
 
     /// <summary>Node currently under the cursor (recomputed each frame).</summary>
     private Guid? _hoveredNode;
@@ -182,8 +239,33 @@ public class GraphEditorWindow : DockPanel
         EditorApplication.Instance?.OpenPanelInstance(panel, 1100, 720);
     }
 
+    public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
+    {
+        if (_graph == null || _graph.AssetID == Guid.Empty) return false;
+        // Viewport pan/zoom already live on the Graph asset itself — only the asset
+        // reference needs to survive an editor restart.
+        state["graph"] = _graph.AssetID.ToString();
+        return true;
+    }
+
+    public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
+    {
+        string? guidStr = state["graph"]?.GetValue<string>();
+        if (!Guid.TryParse(guidStr, out var guid)) return;
+
+        // Resolve via AssetRef so the importer path runs (keeps behavior identical to
+        // double-click open). If the asset was deleted since last save we stay empty
+        // and the window shows its "No graph loaded" placeholder.
+        var graph = new Prowl.Runtime.AssetRef<Graph>(guid).Res;
+        if (graph == null) return;
+
+        _graph = graph;
+        _view = new GraphCanvasView(graph);
+    }
+
     public override void OnGUI(Paper paper, float width, float height)
     {
+        _lastWindowHeight = height;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
@@ -202,13 +284,51 @@ public class GraphEditorWindow : DockPanel
         // switch to a dirty-flag model.
         Prowl.Runtime.GraphTools.GraphValidatorRegistry.Validate(_graph);
 
+        // Auto-recompile: if the graph is dirty AND the user
+        // has finished editing for AutoRecompileDelay seconds AND auto-recompile is
+        // on, save the asset. SaveGraph writes the file → the asset DB's file
+        // watcher picks it up → importer runs → Shader sub-asset regenerates →
+        // any AssetRef holding the old shader re-resolves to the new instance.
+        if (_isDirtyForRecompile && _autoRecompile
+            && Time.UnscaledTotalTime - _lastChangeTime >= AutoRecompileDelay)
+        {
+            _isDirtyForRecompile = false;
+            SaveGraph();
+        }
+
         // Auto-prune pass — removes IAutoPruneNode nodes that reported they're no
         // longer needed (e.g. dangling RelayNode after a disconnect). Runs before
         // hover/shortcut handling so the user never interacts with a doomed node.
         RunAutoPrune();
 
-        DrawToolbar(paper);
-        DrawCanvas(paper, font);
+        // Shader graphs own their toolbar — Compile/Auto/Recenter live in the sidebar's
+        // top strip so the canvas gets the full window height. Other graph types keep
+        // the classic top toolbar.
+        bool isShaderGraph = _graph is Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph;
+        if (!isShaderGraph)
+        {
+            DrawToolbar(paper);
+            DrawCanvas(paper, font);
+        }
+        else if (_sidebarOpen)
+        {
+            // Sidebar | Canvas — sidebar on the LEFT so it reads like a typical DCC
+            // inspector (Maya attribute editor, Unity's shader graph blackboard).
+            using (paper.Row("graph_main")
+                .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
+                .Enter())
+            {
+                DrawSidebar(paper, font);
+                DrawCanvas(paper, font);
+            }
+        }
+        else
+        {
+            // Sidebar collapsed — canvas gets the whole window, plus a tiny floating
+            // toggle so the user can bring it back without a menu dive.
+            DrawCanvas(paper, font);
+            DrawSidebarTogglePill(paper);
+        }
 
         // Per-frame, post-layout: update hover and process keyboard shortcuts that only
         // apply when the canvas is focused (mouse over it).
@@ -251,7 +371,7 @@ public class GraphEditorWindow : DockPanel
         var graph = _graph;
         var nodesSnapshot = doomed;
         var edgesSnapshot = removedEdges;
-        Undo.RegisterAction("Auto-prune",
+        RegisterMutation("Auto-prune",
             undo: () =>
             {
                 foreach (var n in nodesSnapshot) graph.Nodes.Add(n);
@@ -490,8 +610,31 @@ public class GraphEditorWindow : DockPanel
                 .FontSize(EditorTheme.FontSize - 2)
                 .Alignment(TextAlignment.MiddleRight);
 
-            EditorGUI.Button(paper, "graph_tb_save", $"{EditorIcons.FloppyDisk}  Save", width: 80)
-                .OnValueChanged(_ => SaveGraph());
+            // Recompile / dirty indicator. Shows "●" + the
+            // remaining countdown when waiting on auto-recompile, "✓" when up-to-date.
+            string status;
+            if (_isDirtyForRecompile && _autoRecompile)
+            {
+                float remaining = MathF.Max(0f, AutoRecompileDelay - (float)(Time.UnscaledTotalTime - _lastChangeTime));
+                status = $"● {remaining:0.0}s";
+            }
+            else if (_isDirtyForRecompile) status = "● dirty";
+            else status = "✓ up-to-date";
+            paper.Box("graph_tb_status").Width(80).Height(28)
+                .Text(status, EditorTheme.DefaultFont!)
+                .TextColor(_isDirtyForRecompile ? EditorTheme.Purple400 : EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize - 2)
+                .Alignment(TextAlignment.MiddleRight);
+
+            EditorGUI.Button(paper, "graph_tb_compile", $"{EditorIcons.WandMagicSparkles}  Compile", width: 100)
+                .OnValueChanged(_ => { _isDirtyForRecompile = false; SaveGraph(); });
+
+            // "Auto" toggle — when on, dirty graphs auto-recompile after a short
+            // idle window. Off = user has to hit Compile explicitly. (Save and
+            // Compile are the same operation now: both write the .shadergraph,
+            // which triggers the importer to regenerate the Shader sub-asset.)
+            EditorGUI.ToggleButton(paper, "graph_tb_auto", "Auto", _autoRecompile, width: 50)
+                .OnValueChanged(v => _autoRecompile = v);
 
             EditorGUI.Button(paper, "graph_tb_recenter", "Recenter", width: 90)
                 .OnValueChanged(_ => RecenterView());
@@ -502,11 +645,363 @@ public class GraphEditorWindow : DockPanel
             EditorGUI.Button(paper, "graph_tb_wirestyle", label, width: 150)
                 .OnValueChanged(_ => CycleWireStyle());
 
-            // Phase-2 helper: rebuild a fixed demo graph so we can iterate on the renderer.
-            // Each click clears + re-seeds so repeated presses don't stack overlapping copies.
-            EditorGUI.Button(paper, "graph_tb_seed", "Reset Demo Graph", width: 160)
-                .OnValueChanged(_ => SeedSampleNodes());
+            // Sidebar toggle is only relevant for shader graphs, and in that mode the
+            // toolbar isn't rendered at all — buttons live inside the sidebar itself.
+            // So we don't draw a toggle button here.
         }
+    }
+
+    // ─── Sidebar (shader-graph settings panel) ────────────────────────────────────────
+    /// <summary>Left-hand panel that owns the graph's toolbar, a live preview of the
+    /// compiled material, and foldout sections for Properties / Lighting / Blending /
+    /// Geometry. Every control mutates through <see cref="RegisterMutation"/> so
+    /// auto-recompile and Ctrl+Z work identically to node-graph edits.</summary>
+    private void DrawSidebar(Paper paper, Prowl.Scribe.FontFile font)
+    {
+        if (_graph is not Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg) return;
+
+        using (paper.Column("graph_sidebar")
+            .Width(_sidebarWidth).Height(UnitValue.Stretch())
+            .BackgroundColor(System.Drawing.Color.FromArgb(255, 32, 34, 40))
+            .BorderColor(System.Drawing.Color.FromArgb(255, 50, 52, 60))
+            .BorderWidth(1)
+            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(8).ColBetween(4)
+            .Clip()
+            .Enter())
+        {
+            DrawSidebarToolbar(paper, sg);
+            DrawSidebarPreviewRow(paper, sg);
+            DrawSidebarPreview(paper, sg);
+
+            // ─── Foldouts (scroll view) ───────────────────────────────────────────────
+            // ScrollView takes a fixed float height, so compute what's left after the
+            // toolbar (26) + preview row (22) + preview square (sidebar - 20) + sidebar
+            // vertical padding (14) + inter-row gaps (~12). Floor at 80 so the panel
+            // stays usable even on very short windows.
+            float fixedConsumed = 26f + 22f + (_sidebarWidth - 20f) + 14f + 12f;
+            float scrollH = MathF.Max(80f, _lastWindowHeight - fixedConsumed);
+            using (ScrollView.Begin(paper, "sg_foldout_scroll", _sidebarWidth - 16, scrollH))
+            {
+                // EditorGUI.Foldout owns its expand/collapse state via Paper's element
+                // storage — matches the same behaviour used by the Preferences panel, so
+                // the chevron clicks and hover states feel identical to the rest of the
+                // editor. All four default to collapsed so the preview doesn't scroll
+                // off-screen when the panel opens.
+                EditorGUI.Foldout(paper, "sg_fold_props", "Properties",
+                    () => DrawPropertiesFoldout(paper, sg), defaultValue: false);
+                EditorGUI.Foldout(paper, "sg_fold_light", "Lighting",
+                    () => DrawLightingFoldout(paper, sg),   defaultValue: false);
+                EditorGUI.Foldout(paper, "sg_fold_blend", "Blending",
+                    () => DrawBlendingFoldout(paper, sg),   defaultValue: false);
+                EditorGUI.Foldout(paper, "sg_fold_geo", "Geometry",
+                    () => DrawGeometryFoldout(paper, sg),   defaultValue: false);
+            }
+        }
+    }
+
+    /// <summary>Top strip of the sidebar — replaces the removed window-wide toolbar.
+    /// Row 1: Compile / Auto / Recenter / dirty indicator. Compact so the preview gets
+    /// all available vertical space.</summary>
+    private void DrawSidebarToolbar(Paper paper, Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        using (paper.Row("sg_tb_row1").Height(26).RowBetween(4).Enter())
+        {
+            EditorGUI.Button(paper, "sg_tb_compile", $"{EditorIcons.WandMagicSparkles} Compile", width: 90)
+                .OnValueChanged(_ => { _isDirtyForRecompile = false; SaveGraph(); });
+            EditorGUI.ToggleButton(paper, "sg_tb_auto", "Auto", _autoRecompile, width: 48)
+                .OnValueChanged(v => _autoRecompile = v);
+            EditorGUI.Button(paper, "sg_tb_recenter", "Recenter", width: 72)
+                .OnValueChanged(_ => RecenterView());
+            // Status indicator — same ● / ✓ scheme as the old toolbar.
+            string status;
+            if (_isDirtyForRecompile && _autoRecompile)
+            {
+                float remaining = MathF.Max(0f, AutoRecompileDelay - (float)(Time.UnscaledTotalTime - _lastChangeTime));
+                status = $"● {remaining:0.0}s";
+            }
+            else if (_isDirtyForRecompile) status = "● dirty";
+            else status = "✓";
+            paper.Box("sg_tb_status").Width(UnitValue.Stretch()).Height(26)
+                .Text(status, EditorTheme.DefaultFont!)
+                .TextColor(_isDirtyForRecompile ? EditorTheme.Purple400 : EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize - 2)
+                .Alignment(TextAlignment.MiddleRight);
+            // Close-sidebar button so the user can recover screen space without hunting
+            // in a menu. Reopens via the DrawSidebarTogglePill floating pill.
+            EditorGUI.Button(paper, "sg_tb_hide", EditorIcons.CircleXmark, width: 24)
+                .OnValueChanged(_ => _sidebarOpen = false);
+        }
+    }
+
+    /// <summary>Second row: mesh picker + preview renderer feature toggles. Sits above
+    /// the preview texture so adjusting either visibly repaints the render next frame.</summary>
+    private void DrawSidebarPreviewRow(Paper paper, Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        using (paper.Row("sg_tb_row2").Height(22).RowBetween(4).Enter())
+        {
+            // Mesh AssetRef picker — PropertyGrid.DrawField handles the drag/drop,
+            // icon, and selector modal for us. Passing empty label skips the "Mesh"
+            // prefix so the picker fills the row width; AssetRefPropertyEditor checks
+            // IsNullOrEmpty and omits the label box entirely when so.
+            using (paper.Box("sg_mesh_field").Width(UnitValue.Stretch()).Height(22).Enter())
+            {
+                PropertyGrid.DrawField(paper, "sg_mesh", "",
+                    typeof(Prowl.Runtime.AssetRef<Prowl.Runtime.Resources.Mesh>),
+                    _previewMesh,
+                    newVal =>
+                    {
+                        if (newVal is Prowl.Runtime.AssetRef<Prowl.Runtime.Resources.Mesh> r) _previewMesh = r;
+                        else if (newVal is Prowl.Runtime.Resources.Mesh m) _previewMesh = new Prowl.Runtime.AssetRef<Prowl.Runtime.Resources.Mesh>(m);
+                        _lastPreviewMesh = null; // force rebuild
+                    }, 0);
+            }
+            // Grid toggle — PreviewRenderer has a ShowGrid flag; surface it here.
+            EditorGUI.ToggleButton(paper, "sg_pv_grid", "Grid",
+                _preview?.ShowGrid ?? false, width: 52)
+                .OnValueChanged(v => { if (_preview != null) _preview.ShowGrid = v; });
+        }
+    }
+
+    /// <summary>The preview RenderTexture itself. Lazy-creates PreviewRenderer on first
+    /// draw; rebinds subject when the compiled material or chosen mesh changes. Orbit
+    /// (drag) and zoom (scroll) are implemented by PreviewRenderer.DrawPreview.</summary>
+    private void DrawSidebarPreview(Paper paper, Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        _preview ??= new PreviewRenderer(180, 180);
+
+        // Default to the built-in Sphere mesh — resolved by deterministic GUID through
+        // BuiltInAssets. Set once on first draw and persisted on _previewMesh so the
+        // PropertyGrid picker shows "Sphere" rather than "None" out of the box.
+        if (_previewMesh.IsExplicitNull)
+        {
+            var sphereGuid = Prowl.Runtime.BuiltInAssets.GuidForMesh(Prowl.Runtime.Resources.DefaultModel.Sphere);
+            _previewMesh = new Prowl.Runtime.AssetRef<Prowl.Runtime.Resources.Mesh>(sphereGuid);
+        }
+
+        var material = ResolvePreviewMaterial(sg);
+        var mesh = _previewMesh.Res;
+
+        // Subject-rebuild detection: swap when the material or mesh instance changes
+        // (identity compare covers sub-asset swap after recompile AND AssetRef swaps).
+        bool needsRebuild = !ReferenceEquals(_lastPreviewMaterial, material)
+                          || !ReferenceEquals(_lastPreviewMesh, mesh);
+        if (needsRebuild && material != null && mesh != null)
+        {
+            _preview.SetupForMesh(mesh, material);
+            _lastPreviewMaterial = material;
+            _lastPreviewMesh = mesh;
+        }
+
+        // Square preview that fills the sidebar width so it scales with _sidebarWidth
+        // tweaks. Height mirrors width so the sphere stays round.
+        float w = _sidebarWidth - 20;
+        _preview.DrawPreview(paper, "sg_preview", w, w);
+    }
+
+    /// <summary>Resolve the compiled Shader sub-asset created by ShaderGraphImporter and
+    /// wrap it in a persistent Material so the Properties foldout's override edits apply
+    /// live to the preview. Returns null while the graph hasn't been compiled yet
+    /// (first-save path) — caller must guard for that.</summary>
+    private Prowl.Runtime.Resources.Material? ResolvePreviewMaterial(Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        if (sg.AssetID == Guid.Empty) return null;
+        var entry = EditorAssetDatabase.Instance?.GetEntry(sg.AssetID);
+        if (entry?.SubAssets == null || entry.SubAssets.Length == 0) return null;
+
+        // Prefer the sub-asset typed as Shader over name-matching — survives any future
+        // rename of the "CompiledShader" slot. Use Runtime.AssetDatabase.Get directly
+        // so the loader kicks in when the sub-asset hasn't been cached yet; wrapping
+        // via new AssetRef<Shader>(guid).Res sometimes returned null the first frame
+        // after a fresh compile, which is what caused the Properties foldout to stay
+        // stuck on "compile to see properties".
+        Prowl.Runtime.Resources.Shader? shader = null;
+        foreach (var sub in entry.SubAssets)
+        {
+            if (typeof(Prowl.Runtime.Resources.Shader).IsAssignableFrom(sub.Type))
+            {
+                shader = Prowl.Runtime.AssetDatabase.Get(sub.Guid) as Prowl.Runtime.Resources.Shader;
+                if (shader != null) break;
+            }
+        }
+        if (shader == null) return null;
+
+        if (_previewMaterial == null || _previewMaterial.Shader != shader)
+        {
+            _previewMaterial = new Prowl.Runtime.Resources.Material();
+            _previewMaterial.Shader = shader;
+        }
+        return _previewMaterial;
+    }
+    private Prowl.Runtime.Resources.Material? _previewMaterial;
+
+    // ─── Foldout body functions ───────────────────────────────────────────────────────
+
+    /// <summary>Properties foldout — material override fields shared with the Material
+    /// asset inspector. Reads defaults live from the graph-compiled shader; writes go
+    /// to the preview material's override set.</summary>
+    private void DrawPropertiesFoldout(Paper paper, Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        var material = ResolvePreviewMaterial(sg);
+        if (material?.Shader == null)
+        {
+            paper.Box("sg_props_none").Height(20)
+                .Text("(compile the graph to see properties)", EditorTheme.DefaultFont!)
+                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2)
+                .Alignment(TextAlignment.MiddleLeft);
+            return;
+        }
+        // No rebuild callback — Material is persistent, MeshRenderer holds the same
+        // reference, PropertyState changes upload to GPU uniforms on the next render
+        // pass. Earlier versions nulled _lastPreviewMaterial to force a SetupForMesh,
+        // which re-ran FitToSubject (resetting orbit) AND rebuilt the GO mid-edit —
+        // that was the cause of the "values apply for 1 frame then revert" bug.
+        foreach (var p in material.Shader.Properties)
+        {
+            MaterialPropertyDrawer.DrawPropertyRow(paper, $"sg_prop_{p.Name}", material, p);
+        }
+    }
+
+    /// <summary>Lighting foldout — master-node lighting mode + per-graph ambient/shadow
+    /// toggles. Mode changes rebuild master ports so hidden/visible state refreshes.</summary>
+    private void DrawLightingFoldout(Paper paper, Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        var master = FindMasterNode(sg);
+        if (master != null)
+        {
+            var current = master.Lighting;
+            EditorGUI.EnumDropdown(paper, "sg_lighting_mode", "Mode", current)
+                .OnValueChanged(v =>
+                {
+                    if (v == current) return;
+                    var cap = master; var before = current;
+                    RegisterMutation("Change Lighting Mode",
+                        undo: () => { cap.Lighting = before; RebuildMasterPorts(cap); },
+                        redo: () => { cap.Lighting = v;      RebuildMasterPorts(cap); });
+                    cap.Lighting = v;
+                    RebuildMasterPorts(cap);
+                });
+        }
+        EditorGUI.Toggle(paper, "sg_recv_ambient", "Receives Ambient", sg.RenderSettings.ReceivesAmbient)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.ReceivesAmbient = v; MutateSettings(s, "Receives Ambient"); });
+        EditorGUI.Toggle(paper, "sg_recv_shadows", "Receives Shadows", sg.RenderSettings.ReceivesShadows)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.ReceivesShadows = v; MutateSettings(s, "Receives Shadows"); });
+        EditorGUI.Toggle(paper, "sg_cast_shadows", "Casts Shadows", sg.RenderSettings.CastsShadows)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.CastsShadows = v; MutateSettings(s, "Casts Shadows"); });
+    }
+
+    /// <summary>Blending foldout — alpha compositing mode, render queue, and one-click
+    /// presets for the three common configurations.</summary>
+    private void DrawBlendingFoldout(Paper paper, Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        EditorGUI.EnumDropdown(paper, "sg_blend", "Blend Mode", sg.RenderSettings.Blend)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.Blend = v; MutateSettings(s, "Blend"); });
+
+        // Custom mode unlocks the raw Src/Dst/Op pickers — matching the parser's
+        // { Src X; Dst Y; Mode Z; } block exactly. Hidden for presets since they
+        // already bake in a specific factor combination.
+        if (sg.RenderSettings.Blend == ShaderBlendMode.Custom)
+        {
+            EditorGUI.EnumDropdown(paper, "sg_blend_src", "Src Factor", sg.RenderSettings.BlendSrc)
+                .OnValueChanged(v => { var s = sg.RenderSettings; s.BlendSrc = v; MutateSettings(s, "Src Factor"); });
+            EditorGUI.EnumDropdown(paper, "sg_blend_dst", "Dst Factor", sg.RenderSettings.BlendDst)
+                .OnValueChanged(v => { var s = sg.RenderSettings; s.BlendDst = v; MutateSettings(s, "Dst Factor"); });
+            EditorGUI.EnumDropdown(paper, "sg_blend_op", "Blend Op", sg.RenderSettings.BlendOp)
+                .OnValueChanged(v => { var s = sg.RenderSettings; s.BlendOp = v; MutateSettings(s, "Blend Op"); });
+        }
+
+        EditorGUI.EnumDropdown(paper, "sg_queue", "Queue", sg.RenderSettings.Queue)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.Queue = v; MutateSettings(s, "Queue"); });
+
+        using (paper.Row("sg_presets").Height(22).RowBetween(4).Enter())
+        {
+            EditorGUI.Button(paper, "sg_preset_opaque", "Opaque", width: 70)
+                .OnValueChanged(_ => ApplyPreset(ShaderGraphRenderSettings.OpaqueDefaults(), "Opaque Preset"));
+            EditorGUI.Button(paper, "sg_preset_transp", "Transparent", width: 90)
+                .OnValueChanged(_ => ApplyPreset(ShaderGraphRenderSettings.TransparentDefaults(), "Transparent Preset"));
+            EditorGUI.Button(paper, "sg_preset_add", "Additive", width: 70)
+                .OnValueChanged(_ => ApplyPreset(ShaderGraphRenderSettings.AdditiveDefaults(), "Additive Preset"));
+        }
+    }
+
+    /// <summary>Geometry foldout — face culling, winding, depth testing. Kept separate
+    /// from Blending so users mentally pair "transparency" (blending) with one section
+    /// and "geometry shape" (cull / winding / depth) with another.</summary>
+    private void DrawGeometryFoldout(Paper paper, Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        EditorGUI.EnumDropdown(paper, "sg_cull", "Cull", sg.RenderSettings.Cull)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.Cull = v; MutateSettings(s, "Cull"); });
+        EditorGUI.EnumDropdown(paper, "sg_winding", "Winding", sg.RenderSettings.Winding)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.Winding = v; MutateSettings(s, "Winding"); });
+        EditorGUI.Toggle(paper, "sg_zwrite", "Z Write", sg.RenderSettings.ZWrite)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.ZWrite = v; MutateSettings(s, "Z Write"); });
+        EditorGUI.EnumDropdown(paper, "sg_ztest", "Z Test", sg.RenderSettings.ZTest)
+            .OnValueChanged(v => { var s = sg.RenderSettings; s.ZTest = v; MutateSettings(s, "Z Test"); });
+    }
+
+    /// <summary>Floating pill shown in the top-left corner when the sidebar is hidden,
+    /// so the user can re-open it without scrolling a menu. Matches the closed state's
+    /// screen affordance in DCC tools (Substance, Blender) where a collapsed panel still
+    /// leaves a handle.</summary>
+    private void DrawSidebarTogglePill(Paper paper)
+    {
+        paper.Box("sg_pill_backdrop")
+            .PositionType(PositionType.SelfDirected)
+            .Position(8, 36).Size(32, 28)
+            .BackgroundColor(System.Drawing.Color.FromArgb(220, 38, 40, 48))
+            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(255, 60, 64, 78)).End()
+            .BorderColor(System.Drawing.Color.FromArgb(255, 80, 84, 96))
+            .BorderWidth(1).Rounded(5)
+            .OnClick(_ => _sidebarOpen = true)
+            .Text(EditorIcons.Sliders, EditorTheme.DefaultFont!)
+            .TextColor(EditorTheme.Ink500)
+            .Alignment(TextAlignment.MiddleCenter);
+    }
+
+    /// <summary>Apply a settings-field mutation with proper undo/redo + dirty tracking.
+    /// Caller passes the already-mutated struct; we snapshot the previous value for
+    /// undo. No-op when the value didn't actually change (dropdowns fire on same-value
+    /// re-selects).</summary>
+    private void MutateSettings(ShaderGraphRenderSettings after, string label)
+    {
+        if (_graph is not Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg) return;
+        var before = sg.RenderSettings;
+        if (before.Equals(after)) return;
+        sg.RenderSettings = after;
+        RegisterMutation(label,
+            undo: () => sg.RenderSettings = before,
+            redo: () => sg.RenderSettings = after);
+    }
+
+    private void ApplyPreset(ShaderGraphRenderSettings preset, string label)
+    {
+        if (_graph is not Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg) return;
+        var before = sg.RenderSettings;
+        if (before.Equals(preset)) return;
+        sg.RenderSettings = preset;
+        RegisterMutation(label,
+            undo: () => sg.RenderSettings = before,
+            redo: () => sg.RenderSettings = preset);
+    }
+
+    /// <summary>Locate the master output node in a shader graph (there should be exactly one).</summary>
+    private static Prowl.Runtime.GraphTools.ShaderGraphs.Nodes.PBROutputNode? FindMasterNode(
+        Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
+    {
+        foreach (var n in sg.Nodes)
+            if (n is Prowl.Runtime.GraphTools.ShaderGraphs.Nodes.PBROutputNode m) return m;
+        return null;
+    }
+
+    /// <summary>Force a node's port list to rebuild — call after mutating public fields
+    /// that influence which ports are visible (lighting mode toggles hide PBR inputs).
+    /// Uses reflection to poke the private _defined flag; cheaper than exposing a public
+    /// "invalidate" method and polluting the Node surface for one editor-only concern.</summary>
+    private static void RebuildMasterPorts(Prowl.Runtime.GraphTools.Node node)
+    {
+        var f = typeof(Prowl.Runtime.GraphTools.Node).GetField("_defined",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        f?.SetValue(node, false);
+        node.EnsureDefined();
     }
 
     private void CycleWireStyle()
@@ -521,7 +1016,7 @@ public class GraphEditorWindow : DockPanel
             _                        => WireRoutingStyle.Bezier,
         };
         graph.WireStyle = after;
-        Undo.RegisterAction("Change Wire Style",
+        RegisterMutation("Change Wire Style",
             undo: () => graph.WireStyle = before,
             redo: () => graph.WireStyle = after);
     }
@@ -529,6 +1024,11 @@ public class GraphEditorWindow : DockPanel
     private void SaveGraph()
     {
         if (_graph == null) return;
+        if (Application.IsPlaying)
+        {
+            Toasts.Warning("Can't save during Play Mode", "Exit Play Mode to save this graph.");
+            return;
+        }
         try
         {
             EditorAssetDatabase.Instance?.SaveAsset(_graph);
@@ -583,26 +1083,70 @@ public class GraphEditorWindow : DockPanel
             if (showExtras)
                 DrawStickyNoteEntry(paper);
 
-            // Filtered list of node entries.
+            // Filtered list of node entries — grouped under top-level Category token.
+            // When a search filter is active we skip grouping entirely (flat list = easier
+            // to scan). Groups persist their expanded state across popup open/close via
+            // _expandedCategories so the user doesn't re-expand "Math" every time.
             var entries = NodeRegistry.GetForMarker(_graph.NodeMarkerInterface);
+            bool flatList = !string.IsNullOrEmpty(_creationFilter);
             using (paper.Column("graph_popup_list")
                 .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
                 .Clip()
                 .ColBetween(2)
                 .Enter())
             {
-                int shown = 0;
+                // Filter once, share between both render paths. The wire-drop compatibility
+                // filter is port-type-driven; the text filter is fuzzy-ish matching on
+                // Title and Category.
+                var visible = new List<NodeRegistration>();
                 foreach (var reg in entries)
                 {
-                    // Wire-drop popup: only show nodes that can accept the dragged wire.
                     if (_dragSourcePort.HasValue &&
                         !reg.HasCompatiblePort(_dragSourcePort.Value.DataType, _dragSourcePort.Value.Direction))
                         continue;
-
                     if (!MatchesFilter(reg, _creationFilter)) continue;
-                    if (shown++ >= 50) break; // cap visible entries; future: virtualised scroll list
-                    DrawCreationEntry(paper, reg);
+                    visible.Add(reg);
                 }
+
+                int shown = 0;
+                if (flatList)
+                {
+                    foreach (var reg in visible)
+                    {
+                        if (shown++ >= 50) break;
+                        DrawCreationEntry(paper, reg);
+                    }
+                }
+                else
+                {
+                    // Group by top-level category token (before the first '/'). Nested
+                    // segments stay attached to the right-aligned category label on each
+                    // row, so "Math/Trig" collapses under "Math" but still reads as
+                    // "Math/Trig" when expanded.
+                    var groups = new SortedDictionary<string, List<NodeRegistration>>(StringComparer.Ordinal);
+                    foreach (var reg in visible)
+                    {
+                        var top = TopLevelCategory(reg.Category);
+                        if (!groups.TryGetValue(top, out var list))
+                            groups[top] = list = new List<NodeRegistration>();
+                        list.Add(reg);
+                    }
+
+                    foreach (var (groupName, regs) in groups)
+                    {
+                        DrawCategoryHeader(paper, groupName, regs.Count);
+                        if (!_expandedCategories.Contains(groupName)) continue;
+
+                        foreach (var reg in regs)
+                        {
+                            if (shown++ >= 200) break;
+                            DrawCreationEntry(paper, reg);
+                        }
+                        if (shown >= 200) break;
+                    }
+                    shown = visible.Count;
+                }
+
                 if (shown == 0)
                 {
                     paper.Box("graph_popup_empty").Height(20)
@@ -641,7 +1185,7 @@ public class GraphEditorWindow : DockPanel
         _graph.StickyNotes.Add(note);
 
         var graph = _graph;
-        Undo.RegisterAction("Add Sticky Note",
+        RegisterMutation("Add Sticky Note",
             undo: () => graph.StickyNotes.Remove(note),
             redo: () => graph.StickyNotes.Add(note));
 
@@ -719,9 +1263,47 @@ public class GraphEditorWindow : DockPanel
         if (removed.Count == 0) return;
         foreach (var e in removed) _graph.Edges.Remove(e);
         var graph = _graph;
-        Undo.RegisterAction("Disconnect Node",
+        RegisterMutation("Disconnect Node",
             undo: () => { foreach (var e in removed) graph.Edges.Add(e); },
             redo: () => { foreach (var e in removed) graph.Edges.Remove(e); });
+    }
+
+    /// <summary>Top-level token of a Category path — "Math/Trig" → "Math", "" → "Misc".
+    /// Used to group node-creation entries under collapsible headers.</summary>
+    private static string TopLevelCategory(string category)
+    {
+        if (string.IsNullOrEmpty(category)) return "Misc";
+        int slash = category.IndexOf('/');
+        return slash < 0 ? category : category.Substring(0, slash);
+    }
+
+    private void DrawCategoryHeader(Paper paper, string groupName, int count)
+    {
+        bool expanded = _expandedCategories.Contains(groupName);
+        string arrow = expanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight;
+        string id = $"graph_popup_group_{groupName}";
+        using (paper.Row(id).Height(20)
+            .ChildLeft(4).ChildRight(6).RowBetween(6)
+            .BackgroundColor(System.Drawing.Color.FromArgb(255, 44, 46, 54))
+            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(255, 58, 62, 74)).End()
+            .Rounded(3)
+            .OnClick(_ => ToggleCategoryExpanded(groupName))
+            .Enter())
+        {
+            paper.Box($"{id}_lbl").Height(20)
+                .Text($"{arrow}  {groupName}", EditorTheme.DefaultFont!)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
+                .Alignment(TextAlignment.MiddleLeft);
+            paper.Box($"{id}_cnt").Width(UnitValue.Auto).Height(20)
+                .Text(count.ToString(), EditorTheme.DefaultFont!)
+                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 3)
+                .Alignment(TextAlignment.MiddleRight);
+        }
+    }
+
+    private void ToggleCategoryExpanded(string groupName)
+    {
+        if (!_expandedCategories.Add(groupName)) _expandedCategories.Remove(groupName);
     }
 
     private void DrawCreationEntry(Paper paper, NodeRegistration reg)
@@ -765,7 +1347,7 @@ public class GraphEditorWindow : DockPanel
             // pushes a separate Connect Wire action — undo will roll back in reverse).
             var graph = _graph;
             var spawned = node;
-            Undo.RegisterAction($"Add Node ({nodeType.Name})",
+            RegisterMutation($"Add Node ({nodeType.Name})",
                 undo: () => graph.RemoveNode(spawned.Id),
                 redo: () => graph.Nodes.Add(spawned));
 
@@ -1208,7 +1790,7 @@ public class GraphEditorWindow : DockPanel
         _graph.Edges.Add(newB);
 
         var graph = _graph;
-        Undo.RegisterAction("Insert Relay",
+        RegisterMutation("Insert Relay",
             undo: () =>
             {
                 graph.Edges.Remove(newA);
@@ -1544,7 +2126,7 @@ public class GraphEditorWindow : DockPanel
             }
             if (anyMoved)
             {
-                Undo.RegisterAction("Move Nodes",
+                RegisterMutation("Move Nodes",
                     undo: () => { foreach (var kv in starts) { var n = graph.FindNode(kv.Key); if (n != null) n.Position = kv.Value; } },
                     redo: () => { foreach (var kv in ends)   { var n = graph.FindNode(kv.Key); if (n != null) n.Position = kv.Value; } });
             }
@@ -1561,7 +2143,7 @@ public class GraphEditorWindow : DockPanel
             {
                 var before = _resizeNodeStartSize;
                 var after = r.GetSize();
-                Undo.RegisterAction("Resize Node",
+                RegisterMutation("Resize Node",
                     undo: () => { var x = graph.FindNode(id); if (x is IResizableNode xr) xr.SetSize(before); },
                     redo: () => { var x = graph.FindNode(id); if (x is IResizableNode xr) xr.SetSize(after); });
             }
@@ -1584,7 +2166,7 @@ public class GraphEditorWindow : DockPanel
             }
             if (anyMoved)
             {
-                Undo.RegisterAction("Move Sticky Notes",
+                RegisterMutation("Move Sticky Notes",
                     undo: () => { foreach (var kv in starts) { var s = FindStickyNoteIn(graph, kv.Key); if (s != null) s.Position = kv.Value; } },
                     redo: () => { foreach (var kv in ends)   { var s = FindStickyNoteIn(graph, kv.Key); if (s != null) s.Position = kv.Value; } });
             }
@@ -1599,7 +2181,7 @@ public class GraphEditorWindow : DockPanel
             {
                 var before = _resizeStickyStartSize;
                 var after = s.Size;
-                Undo.RegisterAction("Resize Sticky Note",
+                RegisterMutation("Resize Sticky Note",
                     undo: () => { var x = FindStickyNoteIn(graph, id); if (x != null) x.Size = before; },
                     redo: () => { var x = FindStickyNoteIn(graph, id); if (x != null) x.Size = after; });
             }
@@ -1632,7 +2214,7 @@ public class GraphEditorWindow : DockPanel
                     if (s != null) stickyEnds[kv.Key] = s.Position;
                 }
 
-                Undo.RegisterAction("Move Group",
+                RegisterMutation("Move Group",
                     undo: () =>
                     {
                         var gg = FindGroupIn(graph, id); if (gg != null) gg.Position = groupBefore;
@@ -1659,7 +2241,7 @@ public class GraphEditorWindow : DockPanel
             {
                 var before = _groupDragStartSize;
                 var after = g.Size;
-                Undo.RegisterAction("Resize Group",
+                RegisterMutation("Resize Group",
                     undo: () => { var x = FindGroupIn(graph, id); if (x != null) x.Size = before; },
                     redo: () => { var x = FindGroupIn(graph, id); if (x != null) x.Size = after; });
             }
@@ -1800,7 +2382,7 @@ public class GraphEditorWindow : DockPanel
         _graph.Edges.Add(added);
 
         var graph = _graph;
-        Undo.RegisterAction("Connect Wire",
+        RegisterMutation("Connect Wire",
             undo: () =>
             {
                 graph.Edges.Remove(added);
@@ -1955,7 +2537,7 @@ public class GraphEditorWindow : DockPanel
         foreach (var e in cuts) _graph.Edges.Remove(e);
 
         var graph = _graph;
-        Undo.RegisterAction("Cut Wires",
+        RegisterMutation("Cut Wires",
             undo: () => { foreach (var e in cuts) graph.Edges.Add(e); },
             redo: () => { foreach (var e in cuts) graph.Edges.Remove(e); });
     }
@@ -2077,7 +2659,7 @@ public class GraphEditorWindow : DockPanel
         foreach (var g in removedGroups) _graph.Groups.Remove(g);
 
         var graph = _graph;
-        Undo.RegisterAction("Delete Graph Elements",
+        RegisterMutation("Delete Graph Elements",
             undo: () =>
             {
                 foreach (var n in removedNodes) graph.Nodes.Add(n);
@@ -2253,7 +2835,7 @@ public class GraphEditorWindow : DockPanel
         SyncSelectionSystem();
 
         var graph = _graph;
-        Undo.RegisterAction("Paste Graph Elements",
+        RegisterMutation("Paste Graph Elements",
             undo: () =>
             {
                 foreach (var e in addedEdges) graph.Edges.Remove(e);
@@ -2343,7 +2925,7 @@ public class GraphEditorWindow : DockPanel
 
         var graph = _graph;
         var added = group;
-        Undo.RegisterAction("Group Selection",
+        RegisterMutation("Group Selection",
             undo: () => graph.Groups.Remove(added),
             redo: () => graph.Groups.Add(added));
 
@@ -2395,37 +2977,6 @@ public class GraphEditorWindow : DockPanel
             _view.FrameBounds(min, max, size);
         }
         else _view.ResetView();
-    }
-
-    private void SeedSampleNodes()
-    {
-        if (_graph == null) return;
-
-        // Idempotent: wipe whatever's there before seeding so repeated clicks don't pile
-        // up duplicate copies on top of each other.
-        _graph.Nodes.Clear();
-        _graph.Edges.Clear();
-
-        // Layout: nodes are 200px wide, leave ~120px horizontal breathing room between
-        // columns so wires have visible curve and labels don't crowd the next node.
-        const float colA = 60, colB = 380, colC = 700, colD = 1020;
-
-        var c1 = _graph.AddNode(new FloatConstantNode { Value = 0.5f, Position = new Float2(colA, 60) });
-        var c2 = _graph.AddNode(new FloatConstantNode { Value = 2.0f, Position = new Float2(colA, 220) });
-        var mul = _graph.AddNode(new MultiplyNode { Position = new Float2(colB, 130) });
-        var sin = _graph.AddNode(new SinNode { Position = new Float2(colC, 130) });
-        var output = _graph.AddNode(new FragmentOutputNode { Position = new Float2(colD, 60) });
-
-        _graph.Edges.Add(new Edge { SourceNodeId = c1.Id, SourcePortName = "Out",
-                                     TargetNodeId = mul.Id, TargetPortName = "A" });
-        _graph.Edges.Add(new Edge { SourceNodeId = c2.Id, SourcePortName = "Out",
-                                     TargetNodeId = mul.Id, TargetPortName = "B" });
-        _graph.Edges.Add(new Edge { SourceNodeId = mul.Id, SourcePortName = "Result",
-                                     TargetNodeId = sin.Id, TargetPortName = "X" });
-        // Wire sin's output into the FragmentOutput's Smoothness slot to demo a wire
-        // travelling some distance (visible bezier).
-        _graph.Edges.Add(new Edge { SourceNodeId = sin.Id, SourcePortName = "Result",
-                                     TargetNodeId = output.Id, TargetPortName = "Smoothness" });
     }
 
 }

@@ -40,6 +40,8 @@ public sealed class CycleDetectorValidator : GraphValidator
                 n.Messages.Add(new NodeMessage { Severity = NodeMessageSeverity.Error, Text = "Node is part of a cycle — evaluation would loop." });
     }
 
+    // ─── required port ──────────────────────────────────────────────────────────────
+
     private static void DfsIterative(System.Guid start,
         Dictionary<System.Guid, List<System.Guid>> adj,
         Dictionary<System.Guid, byte> color,
@@ -85,6 +87,38 @@ public sealed class CycleDetectorValidator : GraphValidator
             {
                 color[u] = 2;
                 if (stack.Count > 0) stack.Pop();
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Flag any input port marked <see cref="Port.IsRequired"/> that has no incoming wire.
+/// Ports whose default value isn't a meaningful fallback (Custom Code operands, sampler
+/// bindings, etc.) opt in by setting <c>required: true</c> on their AddInput call.
+/// Hidden ports are exempt — the owning node has chosen to make them unreachable.
+/// </summary>
+[GraphValidator]
+public sealed class RequiredPortValidator : GraphValidator
+{
+    public override void Validate(Graph graph)
+    {
+        // Build a set of (nodeId, portName) that have at least one incoming edge — one
+        // scan of Edges is cheaper than nested for-each per port.
+        var connected = new HashSet<(System.Guid, string)>();
+        foreach (var e in graph.Edges)
+            connected.Add((e.TargetNodeId, e.TargetPortName));
+
+        foreach (var n in graph.Nodes)
+        {
+            foreach (var p in n.Inputs)
+            {
+                if (!p.IsRequired || p.IsHidden) continue;
+                if (connected.Contains((n.Id, p.Name))) continue;
+                n.Messages.Add(new NodeMessage {
+                    Severity = NodeMessageSeverity.Error,
+                    Text = $"Input '{p.Name}' is required.",
+                });
             }
         }
     }

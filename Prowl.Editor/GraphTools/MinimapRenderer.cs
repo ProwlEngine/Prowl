@@ -16,10 +16,13 @@ namespace Prowl.Editor.GraphTools;
 /// </summary>
 public static class MinimapRenderer
 {
-    public const float MinimapWidth  = 220f;
-    public const float MinimapHeight = 150f;
-    public const float MinimapMargin = 12f;
-    public const float MinimapPadding = 6f;
+    // Sized at ~65% of earlier dimensions — users found the larger minimap too dominant
+    // on smaller windows. Kept the padding/margin proportional so corner spacing still
+    // reads cleanly.
+    public const float MinimapWidth  = 143f;
+    public const float MinimapHeight = 98f;
+    public const float MinimapMargin = 8f;
+    public const float MinimapPadding = 4f;
 
     private static readonly Color32 BgColor       = new Color32(28, 30, 36, 220);
     private static readonly Color32 BorderColor   = new Color32(80, 84, 96, 255);

@@ -59,4 +59,19 @@ public sealed class Port
     /// so visibility is driven by the node's own state.
     /// </summary>
     public bool IsHidden;
+
+    /// <summary>
+    /// When true, validators flag the node with an error if the port has no incoming wire.
+    /// Applies only to input ports — output ports don't have the concept of "required".
+    /// Use for ports whose default value isn't a meaningful fallback (e.g. Custom Code
+    /// node operands). Not persisted — rebuilt by <see cref="Node.DefineNode"/>.
+    /// </summary>
+    public bool IsRequired;
+
+    /// <summary>
+    /// Optional hover-tooltip text shown next to the port in the editor. Supports
+    /// single-line explanatory content; longer descriptions should live on the node's
+    /// Title/Category docs instead. Not persisted — rebuilt by <see cref="Node.DefineNode"/>.
+    /// </summary>
+    public string? Tooltip;
 }

@@ -164,8 +164,16 @@ public static class NodeRegistry
             {
                 Type[] types;
                 try { types = asm.GetTypes(); }
-                catch (System.Reflection.ReflectionTypeLoadException ex) { types = ex.Types!; }
-                catch { continue; }
+                catch (System.Reflection.ReflectionTypeLoadException rtle)
+                {
+                    types = rtle.Types!;
+                    Debug.LogWarning($"NodeRegistry: '{asm.GetName().Name}' partially loaded ({rtle.LoaderExceptions?.Length ?? 0} loader errors); continuing with resolved types.");
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"NodeRegistry: failed to reflect '{asm.GetName().Name}': {ex.Message}");
+                    continue;
+                }
 
                 foreach (var t in types)
                 {

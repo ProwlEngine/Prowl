@@ -104,6 +104,7 @@ public class EditorApplication : Game
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
         CreateAssetMenuRegistry.Initialize();
+        GraphTools.ShaderGraphs.ShaderGraphTemplates.Register();
         ThumbnailGeneratorRegistry.Initialize();
         SceneDropHandlerRegistry.Initialize();
         CreateGameObjectMenuRegistry.Initialize();
@@ -975,6 +976,7 @@ public class EditorApplication : Game
         Importers.ImporterRegistry.Reinitialize();
         ProjectSettingsRegistry.Reinitialize();
         CreateAssetMenuRegistry.Reinitialize();
+        GraphTools.ShaderGraphs.ShaderGraphTemplates.Register();
         ThumbnailGeneratorRegistry.Reinitialize();
         SceneDropHandlerRegistry.Reinitialize();
         CreateGameObjectMenuRegistry.Reinitialize();

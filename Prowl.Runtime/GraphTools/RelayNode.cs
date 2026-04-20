@@ -62,7 +62,20 @@ public sealed class RelayNode : Node, IAutoPruneNode
     private Type ResolveCarriedType()
     {
         if (string.IsNullOrEmpty(CarriedTypeName)) return typeof(object);
-        try { return Type.GetType(CarriedTypeName) ?? typeof(object); }
-        catch { return typeof(object); }
+        Type? t = null;
+        try { t = Type.GetType(CarriedTypeName); }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"RelayNode: failed to resolve carried type '{CarriedTypeName}': {ex.Message}");
+            return typeof(object);
+        }
+        if (t == null)
+        {
+            // Type used to exist but no longer does — relay degrades to object and will
+            // accept any wire. Surface it so the user knows their graph lost fidelity.
+            Debug.LogWarning($"RelayNode: carried type '{CarriedTypeName}' no longer exists; relay will act as an untyped passthrough.");
+            return typeof(object);
+        }
+        return t;
     }
 }

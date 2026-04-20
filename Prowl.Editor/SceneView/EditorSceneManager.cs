@@ -151,6 +151,20 @@ public static class EditorSceneManager
             case ".prefab":
                 Prefabs.PrefabEditingMode.Enter(guid);
                 return true;
+            case ".shadergraph":
+                {
+                    // Resolve via AssetRef so the asset gets loaded through the standard
+                    // pipeline (importer runs, sub-assets register). Main asset is the
+                    // ShaderGraph itself; the compiled Shader is its sub-asset.
+                    var graphRef = new AssetRef<Runtime.GraphTools.Graph>(guid);
+                    var graph = graphRef.Res;
+                    if (graph != null)
+                    {
+                        Editor.GraphTools.GraphEditorWindow.OpenFor(graph);
+                        return true;
+                    }
+                    return false;
+                }
             default:
                 return false;
         }

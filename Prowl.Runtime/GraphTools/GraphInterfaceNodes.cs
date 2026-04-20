@@ -81,8 +81,18 @@ internal static class GraphInterfaceUtil
     public static Type ResolveType(string typeName)
     {
         if (string.IsNullOrEmpty(typeName)) return typeof(object);
-        try { return Type.GetType(typeName) ?? typeof(object); }
-        catch { return typeof(object); }
+        try
+        {
+            var t = Type.GetType(typeName);
+            if (t != null) return t;
+            Debug.LogWarning($"GraphInterfaceUtil: type '{typeName}' no longer exists; falling back to object (subgraph port will accept any wire).");
+            return typeof(object);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"GraphInterfaceUtil: failed to resolve '{typeName}': {ex.Message}");
+            return typeof(object);
+        }
     }
 
     public static void AddInput(Node node, Type type, string name)
