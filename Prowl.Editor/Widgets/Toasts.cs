@@ -84,7 +84,12 @@ public static class Toasts
             var bgColor = Color.FromArgb(alpha, 35, 35, 38);
             var borderColor = Color.FromArgb(alpha, accentColor.R, accentColor.G, accentColor.B);
 
-            float toastH = 52f;
+            // Message may span multiple lines (e.g. SaveBatch lists). Grow the toast so
+            // all lines fit with roughly the same padding as the single-line case.
+            int msgLines = CountLines(toast.Message);
+            float msgLineHeight = 16f;
+            float msgH = Math.Max(18f, msgLines * msgLineHeight);
+            float toastH = 34f + msgH; // title band + padding + message
             yOffset -= toastH + ToastSpacing;
 
             using (paper.Row($"toast_{i}")
@@ -123,7 +128,7 @@ public static class Toasts
                             .FontSize(EditorTheme.FontSize);
 
                         paper.Box($"toast_msg_{i}")
-                            .Height(18)
+                            .Height(msgH)
                             .Text(toast.Message, font)
                             .TextColor(msgColor)
                             .FontSize(EditorTheme.FontSize - 2);
@@ -131,6 +136,15 @@ public static class Toasts
                 }
             }
         }
+    }
+
+    private static int CountLines(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return 1;
+        int lines = 1;
+        for (int i = 0; i < s.Length; i++)
+            if (s[i] == '\n') lines++;
+        return lines;
     }
 
     private static Color GetAccentColor(ToastType type) => type switch

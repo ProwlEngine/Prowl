@@ -273,7 +273,11 @@ public class EditorApplication : Game
         {
             if (ShortcutManager.IsPressed("Global/Save"))
             {
-                if (!EditorSceneManager.Save())
+                // Focus-dependent routing: when editing a prefab, Ctrl+S saves the prefab
+                // rather than the temporary edit scene that wraps it.
+                if (Prefabs.PrefabEditingMode.IsEditing)
+                    Prefabs.PrefabEditingMode.Save();
+                else if (!EditorSceneManager.Save())
                     PromptSaveAs();
             }
             else if (ShortcutManager.IsPressed("Global/SaveAs"))
@@ -637,6 +641,7 @@ public class EditorApplication : Game
         Widgets.SelectorModal.Draw(paper);
         Inspector.AddComponentPopup.Draw(paper);
         Widgets.ModalDialog.Draw(paper);
+        Widgets.SaveBatch.Flush();
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);
 
