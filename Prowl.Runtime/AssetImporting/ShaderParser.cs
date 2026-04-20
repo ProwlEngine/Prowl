@@ -307,7 +307,7 @@ public static class ShaderParser
                 return false;
             }
 
-            passes[i] = new ShaderPass(parsedPass.Name, parsedPass.Tags, parsedPass.TagSortOffsets, parsedPass.State, vertexShader, fragmentShader, fallback, parsedPass.GrabTextureName ?? "");
+            passes[i] = new ShaderPass(parsedPass.Name, parsedPass.Tags, parsedPass.TagSortOffsets, parsedPass.State, vertexShader, fragmentShader, fallback, parsedPass.GrabTextureName ?? "", parsedPass.GrabDepthTextureName ?? "");
         }
 
         shader = new Shader(name, [.. properties ?? []], passes);
@@ -570,6 +570,12 @@ public static class ShaderParser
                     EnsureUndef(pass.GrabTextureName, "'GrabTexture' in pass");
                     ExpectToken("grabtexture", tokenizer, ShaderToken.Identifier);
                     pass.GrabTextureName = tokenizer.ParseQuotedStringValue();
+                    break;
+
+                case "GrabDepth":
+                    EnsureUndef(pass.GrabDepthTextureName, "'GrabDepth' in pass");
+                    ExpectToken("grabdepth", tokenizer, ShaderToken.Identifier);
+                    pass.GrabDepthTextureName = tokenizer.ParseQuotedStringValue();
                     break;
 
                 case "Blend":
@@ -913,6 +919,7 @@ public static class ShaderParser
         public string? Program;
 
         public string? GrabTextureName = null;
+        public string? GrabDepthTextureName = null;
     }
 
     public struct EntryPoint(ShaderStages stages, string name)
