@@ -438,4 +438,27 @@ public class Transform
 
     static float InverseSafe(float f) => Maths.Abs(f) > float.Epsilon ? 1.0f / f : 0.0f;
     static Float3 InverseSafe(Float3 v) => new(InverseSafe(v.X), InverseSafe(v.Y), InverseSafe(v.Z));
+
+    #region Look At
+
+    /// <summary>
+    /// Rotate so Forward points at <paramref name="target"/> in world space, with world +Y as up.
+    /// </summary>
+    public void LookAt(Float3 target) => LookAt(target, Float3.UnitY);
+
+    /// <summary>
+    /// Rotate so Forward points at <paramref name="target"/> in world space, using <paramref name="worldUp"/>
+    /// to disambiguate roll. No-op if target coincides with our position.
+    /// </summary>
+    public void LookAt(Float3 target, Float3 worldUp)
+    {
+        Float3 dir = target - Position;
+        if (Float3.LengthSquared(dir) < float.Epsilon) return;
+        Rotation = Quaternion.LookRotation(Float3.Normalize(dir), worldUp);
+    }
+
+    /// <summary>Convenience: rotate so Forward points at the given Transform.</summary>
+    public void LookAt(Transform target) => LookAt(target.Position, Float3.UnitY);
+
+    #endregion
 }
