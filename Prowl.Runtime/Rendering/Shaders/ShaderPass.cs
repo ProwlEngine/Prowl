@@ -21,6 +21,7 @@ public sealed class ShaderPass
     [SerializeField] private string _fallbackAsset;
 
     [SerializeField] private string _grabTextureName; // If not empty, captures screen before rendering
+    [SerializeField] private string _grabDepthTextureName; // If not empty, also captures the depth buffer
 
     [SerializeIgnore]
     private Dictionary<string, GraphicsProgram> _variants = [];
@@ -47,21 +48,31 @@ public sealed class ShaderPass
     public RasterizerState State => _rasterizerState;
 
     /// <summary>
-    /// The name of the texture uniform to bind the grabbed texture to. Empty if this pass doesn't grab.
+    /// The name of the texture uniform to bind the grabbed colour texture to. Empty if this pass doesn't grab.
     /// </summary>
     public string GrabTextureName => _grabTextureName;
 
     /// <summary>
-    /// Whether this pass captures the screen before rendering
+    /// The name of the texture uniform to bind the grabbed depth texture to. Empty if depth isn't grabbed.
+    /// </summary>
+    public string GrabDepthTextureName => _grabDepthTextureName;
+
+    /// <summary>
+    /// Whether this pass captures the screen colour before rendering
     /// </summary>
     public bool HasGrabTexture => !string.IsNullOrEmpty(_grabTextureName);
+
+    /// <summary>
+    /// Whether this pass also captures the depth buffer alongside colour. Implies <see cref="HasGrabTexture"/>.
+    /// </summary>
+    public bool HasGrabDepth => !string.IsNullOrEmpty(_grabDepthTextureName);
 
     public IEnumerable<KeyValuePair<string, GraphicsProgram>> Variants => _variants;
 
 
     private ShaderPass() { }
 
-    public ShaderPass(string name, Dictionary<string, string>? tags, Dictionary<string, int>? tagSortOffsets, RasterizerState state, string vertexSource, string fragmentSource, string fallbackAsset, string grabTextureName = "")
+    public ShaderPass(string name, Dictionary<string, string>? tags, Dictionary<string, int>? tagSortOffsets, RasterizerState state, string vertexSource, string fragmentSource, string fallbackAsset, string grabTextureName = "", string grabDepthTextureName = "")
     {
         _name = name;
 
@@ -74,6 +85,7 @@ public sealed class ShaderPass
         _fallbackAsset = fallbackAsset;
 
         _grabTextureName = grabTextureName;
+        _grabDepthTextureName = grabDepthTextureName;
 
         _variants = [];
     }
