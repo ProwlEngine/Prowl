@@ -252,14 +252,14 @@ public class Transform
 
     public Transform? Find(string path)
     {
-        ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
+        if (string.IsNullOrEmpty(path)) return null;
 
         string[] names = path.Split('/');
         Transform currentTransform = this;
 
         foreach (string name in names)
         {
-            ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
+            if (string.IsNullOrEmpty(name)) return null;
 
             Transform? childTransform = FindImmediateChild(currentTransform, name);
             if (childTransform == null)
