@@ -461,4 +461,61 @@ public class Transform
     public void LookAt(Transform target) => LookAt(target.Position, Float3.UnitY);
 
     #endregion
+
+    #region Atomic Setters
+
+    /// <summary>
+    /// Set world position and rotation in one call — bumps Version once instead of twice
+    /// so change detection fires a single time.
+    /// </summary>
+    public void SetPositionAndRotation(Float3 position, Quaternion rotation)
+    {
+        if (Parent != null)
+        {
+            _localPosition = MakeSafe(Parent.InverseTransformPoint(position));
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(Parent.Rotation) * rotation));
+        }
+        else
+        {
+            _localPosition = MakeSafe(position);
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(rotation));
+        }
+        _version++;
+    }
+
+    /// <summary>Local-space counterpart to <see cref="SetPositionAndRotation"/>.</summary>
+    public void SetLocalPositionAndRotation(Float3 localPosition, Quaternion localRotation)
+    {
+        _localPosition = MakeSafe(localPosition);
+        _localRotation = MakeSafe(Quaternion.NormalizeSafe(localRotation));
+        _version++;
+    }
+
+    /// <summary>
+    /// World-space counterpart to <see cref="SetLocalTransform"/>. Rotation/scale are converted
+    /// to local space via the parent, then stored.
+    /// </summary>
+    public void SetWorldTransform(Float3 position, Quaternion rotation, Float3 scale)
+    {
+        if (Parent != null)
+        {
+            _localPosition = MakeSafe(Parent.InverseTransformPoint(position));
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(Parent.Rotation) * rotation));
+            Float3 parentLossy = Parent.LossyScale;
+            _localScale = MakeSafe(new Float3(
+                scale.X * InverseSafe(parentLossy.X),
+                scale.Y * InverseSafe(parentLossy.Y),
+                scale.Z * InverseSafe(parentLossy.Z)));
+        }
+        else
+        {
+            _localPosition = MakeSafe(position);
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(rotation));
+            _localScale = MakeSafe(scale);
+        }
+        _version++;
+    }
+
+    #endregion
+
 }
