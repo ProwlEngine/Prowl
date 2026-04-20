@@ -518,4 +518,16 @@ public class Transform
 
     #endregion
 
+    #region Parenting
+
+    /// <summary>
+    /// Reparent this transform. When <paramref name="worldPositionStays"/> is true (the default)
+    /// the world pose is preserved across the reparent; when false the transform adopts the
+    /// parent's frame and keeps its local pose (effectively snapping to the new parent).
+    /// </summary>
+    public bool SetParent(Transform? parent, bool worldPositionStays = true)
+        => GameObject?.SetParent(parent?.GameObject, worldPositionStays) ?? false;
+
+    #endregion
+
 }
