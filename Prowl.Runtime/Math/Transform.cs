@@ -626,4 +626,16 @@ public class Transform
 
     #endregion
 
+    #region Bounds
+
+    /// <summary>
+    /// Transform a local-space AABB into a world-space AABB. Equivalent to
+    /// <c>bounds.TransformBy(LocalToWorldMatrix)</c> — provided here for discoverability.
+    /// </summary>
+    public AABB TransformAABB(AABB localBounds) => localBounds.TransformBy(LocalToWorldMatrix);
+
+    /// <summary>Transform a world-space AABB into this transform's local space.</summary>
+    public AABB InverseTransformAABB(AABB worldBounds) => worldBounds.TransformBy(WorldToLocalMatrix);
+
+    #endregion
 }
