@@ -403,7 +403,24 @@ public class EditorAssetDatabase : IAssetDatabase
             return false;
         }
 
-        var importer = ImporterRegistry.CreateByTypeName(entry.ImporterType) ?? new DefaultImporter();
+        // If the entry's ImporterType doesn't resolve (stale entry from before an
+        // importer was registered), retry with the extension-based lookup. Common
+        // case: asset created before its importer existed → stuck on DefaultImporter.
+        var resolved = ImporterRegistry.CreateByTypeName(entry.ImporterType);
+        if (resolved == null)
+        {
+            string ext = Path.GetExtension(entry.Path);
+            string freshName = ImporterRegistry.GetImporterTypeName(ext);
+            if (freshName != entry.ImporterType)
+            {
+                Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' → '{freshName}'");
+                entry.ImporterType = freshName;
+                resolved = ImporterRegistry.CreateByTypeName(freshName);
+            }
+        }
+
+        var importer = resolved ?? new DefaultImporter();
+        Runtime.Debug.Log($"[AssetDatabase] Importing '{entry.Path}' via {importer.GetType().Name}");
 
         // Read settings from .meta, merge with importer defaults for any missing keys
         EchoObject? settings = null;
@@ -506,7 +523,7 @@ public class EditorAssetDatabase : IAssetDatabase
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Import failed for '{entry.Path}': {ex.Message}");
+            Runtime.Debug.LogError($"Import failed for '{entry.Path}': {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
             // Keep NeedsReimport true so file changes will trigger a retry.
             // Only clear the timestamp so next scan detects the file as changed.
             entry.LastModifiedTicks = 0;
@@ -676,9 +693,18 @@ public class EditorAssetDatabase : IAssetDatabase
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 
-        // Reimport to update cache
+        // Reimport to update cache. Dispose the previous main + sub-asset instances
+        // first so any holding AssetRef sees them as invalid and re-resolves to the
+        // freshly-imported instance. Without this, downstream refs (e.g. a Material
+        // pointing at a shader sub-asset that was just regenerated) keep the stale
+        // instance until the user manually reimports the dependent asset.
         if (_guidToEntry.TryGetValue(obj.AssetID, out var entry))
         {
+            DisposeAndRemove(obj.AssetID);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                    DisposeAndRemove(sub.Guid);
+
             entry.NeedsReimport = true;
             RunImport(entry);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -694,9 +720,21 @@ public class EditorAssetDatabase : IAssetDatabase
 
         if (_pathToGuid.TryGetValue(relativePath, out var guid))
         {
+            // Dispose main + sub-asset instances FIRST so any AssetRef holding them
+            // detects IsNotValid on next access and stops returning the deleted
+            // instance. Without this, materials etc. keep using the now-orphaned
+            // shader (cached in _shader.instance) until the editor restarts.
+            var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
+            DisposeAndRemove(guid);
+            if (entry?.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                {
+                    DisposeAndRemove(sub.Guid);
+                    _subAssetIndex.Remove(sub.Guid);
+                }
+
             _guidToEntry.Remove(guid);
             _pathToGuid.Remove(relativePath);
-            _loadedAssets.Remove(guid);
             _dependencies.RemoveAsset(guid);
 
             // Clean cache
@@ -885,8 +923,19 @@ public class EditorAssetDatabase : IAssetDatabase
                         _guidToEntry[meta.Guid].NeedsReimport = true;
                     }
 
-                    _loadedAssets.Remove(meta.Guid);
-                    RunImport(_guidToEntry[meta.Guid]);
+                    // Dispose previous main + sub-asset instances so any holding
+                    // AssetRef detects them as invalid and re-resolves to the freshly
+                    // imported instance. The Reimport() entry-point already does this;
+                    // the watcher path needs to match or downstream refs (e.g. a
+                    // Material pointing at a regenerated shader sub-asset) keep the
+                    // stale instance until the user manually reimports.
+                    var existingEntry = _guidToEntry[meta.Guid];
+                    DisposeAndRemove(meta.Guid);
+                    if (existingEntry.SubAssets != null)
+                        foreach (var sub in existingEntry.SubAssets)
+                            DisposeAndRemove(sub.Guid);
+
+                    RunImport(existingEntry);
                     imported.Add(relativePath);
                     break;
                 }
