@@ -63,6 +63,15 @@ public class EditorCamera
         UpdateTransform();
     }
 
+    /// <summary>Restore full navigation state (position + yaw/pitch). Pitch is clamped.</summary>
+    public void SetPose(Float3 position, float yaw, float pitch)
+    {
+        _position = position;
+        _yaw = yaw;
+        _pitch = MathF.Max(-89f, MathF.Min(89f, pitch));
+        UpdateTransform();
+    }
+
     public EditorCamera()
     {
         _cameraObject = new GameObject("EditorCamera");

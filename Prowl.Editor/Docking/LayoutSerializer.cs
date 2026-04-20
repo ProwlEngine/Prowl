@@ -93,9 +93,28 @@ public static class LayoutSerializer
 
         if (node.IsLeaf)
         {
+            // Store each tab as {type, state} so each panel instance can round-trip its own
+            // data. Kept as a list of objects (not a parallel state array) so adding/removing
+            // a tab doesn't desync state with type.
             var tabs = new JsonArray();
             foreach (var panel in node.Tabs!)
-                tabs.Add(panel.GetType().FullName);
+            {
+                var entry = new JsonObject
+                {
+                    ["type"] = panel.GetType().FullName,
+                };
+                var state = new JsonObject();
+                try
+                {
+                    if (panel.SerializeState(state) && state.Count > 0)
+                        entry["state"] = state;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"Panel '{panel.GetType().Name}' SerializeState threw: {ex.Message}");
+                }
+                tabs.Add(entry);
+            }
 
             return new JsonObject
             {
@@ -146,7 +165,19 @@ public static class LayoutSerializer
             {
                 foreach (var tabNode in tabArr)
                 {
-                    string? typeName = tabNode?.GetValue<string>();
+                    // Supports both the current {type, state?} object form and the older
+                    // bare-string form. Older layouts on disk still load cleanly.
+                    string? typeName;
+                    JsonObject? state = null;
+                    if (tabNode is JsonObject obj)
+                    {
+                        typeName = obj["type"]?.GetValue<string>();
+                        state = obj["state"] as JsonObject;
+                    }
+                    else
+                    {
+                        typeName = tabNode?.GetValue<string>();
+                    }
                     if (typeName == null) continue;
 
                     var panelType = FindPanelType(typeName);
@@ -157,7 +188,17 @@ public static class LayoutSerializer
                     }
 
                     if (Activator.CreateInstance(panelType) is DockPanel panel)
+                    {
+                        if (state != null)
+                        {
+                            try { panel.RestoreState(state); }
+                            catch (Exception ex)
+                            {
+                                Debug.LogWarning($"Panel '{panel.GetType().Name}' RestoreState threw: {ex.Message}");
+                            }
+                        }
                         tabs.Add(panel);
+                    }
                 }
             }
 
