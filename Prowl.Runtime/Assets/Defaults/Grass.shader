@@ -8,6 +8,8 @@ Properties
     _WindSpeed ("Wind Speed", Float) = 1.5
     _Billboard ("Billboard", Float) = 1.0
     _AlignToNormal ("Align To Normal", Float) = 0.0
+    _GrassDistance ("Grass Max Distance", Float) = 150.0
+    _GrassFadeStart ("Grass Fade Start (world units)", Float) = 90.0
 }
 
 Pass "Grass"
@@ -34,6 +36,8 @@ Pass "Grass"
             uniform float _WindSpeed;
             uniform float _Billboard;
             uniform float _AlignToNormal;
+            uniform float _GrassDistance;
+            uniform float _GrassFadeStart;
             uniform vec3 _TerrainUp;
             uniform sampler2D _Heightmap;
             uniform float _TerrainSize;
@@ -52,6 +56,16 @@ Pass "Grass"
                 vec3 bladePosition = (terrainToWorld * vec4(localPosition, 1.0)).xyz;
                 float scaleX = length(instanceModelRow0.xyz); // width
                 float scaleY = length(instanceModelRow1.xyz); // height
+
+                // Distance fade — shrink blades to zero between _GrassFadeStart and _GrassDistance
+                // so patches that the CPU-side culler is about to drop don't pop out suddenly.
+                // Horizontal camera distance matches the CPU's XZ-plane patch cull.
+                vec3 camFlat = vec3(_WorldSpaceCameraPos.x, bladePosition.y, _WorldSpaceCameraPos.z);
+                float camDist = length(bladePosition - camFlat);
+                float fadeRange = max(0.0001, _GrassDistance - _GrassFadeStart);
+                float fade = 1.0 - clamp((camDist - _GrassFadeStart) / fadeRange, 0.0, 1.0);
+                scaleX *= fade;
+                scaleY *= fade;
 
                 // Always compute terrain surface normal from heightmap (for lighting).
                 // Remap vertex-UV → texel-center-UV so the GPU samples the same values
@@ -182,6 +196,8 @@ Pass "GrassDepthNormals"
             uniform float _WindSpeed;
             uniform float _Billboard;
             uniform float _AlignToNormal;
+            uniform float _GrassDistance;
+            uniform float _GrassFadeStart;
             uniform vec3 _TerrainUp;
             uniform sampler2D _Heightmap;
             uniform float _TerrainSize;
@@ -197,6 +213,14 @@ Pass "GrassDepthNormals"
                 vec3 bladePosition = (terrainToWorld * vec4(localPosition, 1.0)).xyz;
                 float scaleX = length(instanceModelRow0.xyz);
                 float scaleY = length(instanceModelRow1.xyz);
+
+                // Must match the main Grass pass fade so DepthNormals geometry stays consistent.
+                vec3 camFlat = vec3(_WorldSpaceCameraPos.x, bladePosition.y, _WorldSpaceCameraPos.z);
+                float camDist = length(bladePosition - camFlat);
+                float fadeRange = max(0.0001, _GrassDistance - _GrassFadeStart);
+                float fade = 1.0 - clamp((camDist - _GrassFadeStart) / fadeRange, 0.0, 1.0);
+                scaleX *= fade;
+                scaleY *= fade;
 
                 vec2 terrainUV = localPosition.xz / _TerrainSize;
                 float hmSize = float(textureSize(_Heightmap, 0).x);

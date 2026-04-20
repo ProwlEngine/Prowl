@@ -42,6 +42,13 @@ public class TerrainComponent : MonoBehaviour
     /// <summary>Maximum render distance for grass.</summary>
     public float GrassDistance = 150f;
 
+    /// <summary>
+    /// Normalized start of the grass blade fade-out (0..1, fraction of <see cref="GrassDistance"/>).
+    /// Blades inside this radius are full size; between it and GrassDistance they shrink to zero,
+    /// hiding the hard pop that the per-patch cutoff used to show.
+    /// </summary>
+    public float GrassFadeStart = 0.6f;
+
     /// <summary>Global grass density multiplier.</summary>
     public float GrassDensityMultiplier = 1f;
 
@@ -215,6 +222,11 @@ public class TerrainComponent : MonoBehaviour
             grassMat.SetMatrix("_TerrainLocalToWorld", terrainToWorld);
             grassMat.SetFloat("_TerrainSize", terrainSize);
             grassMat.SetFloat("_TerrainHeight", terrainData.Height);
+            // Distance fade: blades scale from 1 at FadeStart*Distance down to 0 at Distance,
+            // smoothing the per-patch cutoff in TerrainGrassRenderer.
+            float fadeStartWorld = GrassDistance * Math.Clamp(GrassFadeStart, 0f, 0.99f);
+            grassMat.SetFloat("_GrassDistance", GrassDistance);
+            grassMat.SetFloat("_GrassFadeStart", fadeStartWorld);
             var htex = terrainData.GetHeightmapTexture();
             if (htex != null) grassMat.SetTexture("_Heightmap", htex);
 
