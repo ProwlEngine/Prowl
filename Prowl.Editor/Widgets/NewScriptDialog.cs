@@ -60,43 +60,50 @@ public static class NewScriptDialog
         var font = EditorTheme.DefaultFont;
         (bool ok, string? error) = Validate(s_name, s_folder);
 
+        const float bodyHeight = 300f;
+        const float listWidth = 220f;
+
         // Template list on the left, details + name field on the right.
-        using (paper.Row("scr_body").Height(280).RowBetween(10).Enter())
+        using (paper.Row("scr_body").Height(bodyHeight).RowBetween(10).Enter())
         {
-            // Template list
-            using (paper.Column("scr_tpls")
-                .Width(220).Height(UnitValue.Stretch())
+            // Template list — wrapped in a ScrollView so 14+ templates don't overflow.
+            using (paper.Box("scr_tpls_frame")
+                .Width(listWidth).Height(bodyHeight)
                 .BackgroundColor(EditorTheme.Neutral200)
                 .BorderWidth(1).BorderColor(EditorTheme.Neutral100)
-                .Rounded(4).ChildTop(4).ChildBottom(4).RowBetween(2)
+                .Rounded(4)
                 .Enter())
             {
-                for (int i = 0; i < s_templates.Length; i++)
+                using (ScrollView.Begin(paper, "scr_tpls_scroll", listWidth, bodyHeight,
+                    paddingLeft: 4, paddingRight: 4, paddingTop: 4, paddingBottom: 4, colSpacing: 2))
                 {
-                    int captured = i;
-                    var tpl = s_templates[i];
-                    bool isSel = i == s_selectedIndex;
-
-                    using (paper.Row($"scr_tpl_{i}")
-                        .Height(28).Margin(4, 0, 0, 0).Rounded(3)
-                        .BackgroundColor(isSel ? EditorTheme.Purple400 : Color.Transparent)
-                        .Hovered.BackgroundColor(isSel ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-                        .OnClick(captured, (idx, _) => s_selectedIndex = idx)
-                        .Enter())
+                    for (int i = 0; i < s_templates.Length; i++)
                     {
-                        if (font != null)
+                        int captured = i;
+                        var tpl = s_templates[i];
+                        bool isSel = i == s_selectedIndex;
+
+                        using (paper.Row($"scr_tpl_{i}")
+                            .Width(UnitValue.Stretch()).Height(28).Rounded(3)
+                            .BackgroundColor(isSel ? EditorTheme.Purple400 : Color.Transparent)
+                            .Hovered.BackgroundColor(isSel ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
+                            .OnClick(captured, (idx, _) => s_selectedIndex = idx)
+                            .Enter())
                         {
-                            paper.Box($"scr_tpl_ico_{i}")
-                                .Width(22).Height(28)
-                                .Text(tpl.Icon, font)
-                                .TextColor(EditorTheme.Ink500)
-                                .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-                            paper.Box($"scr_tpl_name_{i}")
-                                .Width(UnitValue.Stretch()).Height(28)
-                                .Text(tpl.Name, font)
-                                .TextColor(EditorTheme.Ink500)
-                                .FontSize(EditorTheme.FontSize - 1)
-                                .Alignment(TextAlignment.MiddleLeft);
+                            if (font != null)
+                            {
+                                paper.Box($"scr_tpl_ico_{i}")
+                                    .Width(22).Height(28)
+                                    .Text(tpl.Icon, font)
+                                    .TextColor(EditorTheme.Ink500)
+                                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+                                paper.Box($"scr_tpl_name_{i}")
+                                    .Width(UnitValue.Stretch()).Height(28)
+                                    .Text(tpl.Name, font)
+                                    .TextColor(EditorTheme.Ink500)
+                                    .FontSize(EditorTheme.FontSize - 1)
+                                    .Alignment(TextAlignment.MiddleLeft);
+                            }
                         }
                     }
                 }
@@ -111,18 +118,20 @@ public static class NewScriptDialog
                 if (font != null)
                 {
                     paper.Box("scr_tpl_title")
-                        .Height(22)
+                        .Width(UnitValue.Stretch()).Height(22)
                         .Text(tpl.Name, font)
                         .TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize + 1)
                         .Alignment(TextAlignment.MiddleLeft);
 
+                    // Auto-height + wrap so long descriptions aren't clipped.
                     paper.Box("scr_tpl_desc")
-                        .Height(64)
+                        .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(48)
                         .Text(tpl.Description, font)
                         .TextColor(EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSize - 2)
-                        .Alignment(TextAlignment.MiddleLeft);
+                        .Alignment(TextAlignment.Left)
+                        .Wrap(Scribe.TextWrapMode.Wrap);
                 }
 
                 EditorGUI.TextField(paper, "scr_name", "Name", s_name)
@@ -135,19 +144,17 @@ public static class NewScriptDialog
                     string hint = ok ? $"Will create {s_name}.cs" : (error ?? "");
                     var col = ok ? Color.FromArgb(255, 90, 180, 100) : Color.FromArgb(255, 220, 110, 110);
                     paper.Box("scr_hint")
-                        .Height(18)
+                        .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(18)
                         .Text(hint, font)
                         .TextColor(col)
                         .FontSize(EditorTheme.FontSize - 2)
-                        .Alignment(TextAlignment.MiddleLeft);
-                }
+                        .Alignment(TextAlignment.Left)
+                        .Wrap(Scribe.TextWrapMode.Wrap);
 
-                // Path preview
-                if (font != null)
-                {
+                    // Path preview
                     string folderDisplay = string.IsNullOrEmpty(s_folder) ? "Assets" : $"Assets/{s_folder}";
                     paper.Box("scr_path")
-                        .Height(16)
+                        .Width(UnitValue.Stretch()).Height(16)
                         .Text(folderDisplay, font)
                         .TextColor(EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSize - 3)
@@ -156,32 +163,51 @@ public static class NewScriptDialog
             }
         }
 
-        // Footer buttons — we render them inside the content so the Create button can be
-        // disabled based on validation state (the modal's built-in Button() has no disabled
-        // styling). Cancel always works.
-        using (paper.Row("scr_btns").Height(32).ChildLeft(UnitValue.Stretch()).RowBetween(8).Enter())
+        // Footer buttons — right-aligned Cancel + Create. The Create button is a real
+        // EditorGUI.Button when valid; when invalid we render a visually-disabled Box
+        // so the user sees the error hint rather than clicking a dead button.
+        using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).ChildLeft(UnitValue.Stretch()).RowBetween(8).Enter())
         {
             EditorGUI.Button(paper, "scr_cancel", "Cancel", width: 90)
                 .OnValueChanged(_ => ModalDialog.Close());
 
-            var createBuilder = paper.Box("scr_create")
-                .Width(110).Height(EditorTheme.RowHeight).Rounded(3)
-                .BackgroundColor(ok ? EditorTheme.Purple400 : EditorTheme.Neutral200)
-                .BorderWidth(1).BorderColor(ok ? EditorTheme.Purple400 : EditorTheme.Neutral100);
             if (ok)
-                createBuilder.Hovered.BackgroundColor(EditorTheme.Purple500).End()
-                    .OnClick(0, (_, _) => DoCreate());
-
-            if (font != null)
             {
-                paper.Box("scr_create_lbl")
-                    .HookToParent()
-                    .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                    .Text("Create", font)
-                    .TextColor(ok ? Color.White : EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize)
-                    .Alignment(TextAlignment.MiddleCenter)
-                    .IsNotInteractable();
+                using (paper.Box("scr_create")
+                    .Width(110).Height(EditorTheme.RowHeight).Rounded(3)
+                    .BackgroundColor(EditorTheme.Purple400)
+                    .Hovered.BackgroundColor(EditorTheme.Purple500).End()
+                    .BorderWidth(1).BorderColor(EditorTheme.Purple400)
+                    .OnClick(0, (_, _) => DoCreate())
+                    .Enter())
+                {
+                    if (font != null)
+                        paper.Box("scr_create_lbl")
+                            .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                            .Text("Create", font)
+                            .TextColor(Color.White)
+                            .FontSize(EditorTheme.FontSize)
+                            .Alignment(TextAlignment.MiddleCenter)
+                            .IsNotInteractable();
+                }
+            }
+            else
+            {
+                using (paper.Box("scr_create_disabled")
+                    .Width(110).Height(EditorTheme.RowHeight).Rounded(3)
+                    .BackgroundColor(EditorTheme.Neutral200)
+                    .BorderWidth(1).BorderColor(EditorTheme.Neutral100)
+                    .Enter())
+                {
+                    if (font != null)
+                        paper.Box("scr_create_dis_lbl")
+                            .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                            .Text("Create", font)
+                            .TextColor(EditorTheme.Ink300)
+                            .FontSize(EditorTheme.FontSize)
+                            .Alignment(TextAlignment.MiddleCenter)
+                            .IsNotInteractable();
+                }
             }
         }
     }
