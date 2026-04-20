@@ -337,8 +337,11 @@ public class SceneViewPanel : DockPanel
                 var handler = SceneDropHandlerRegistry.FindHandler(assetDrop.AssetType);
                 if (handler != null)
                 {
+                    // Convert Paper-space pointer to viewport-local using the cached viewport
+                    // rect. CurrentParent here is an enclosing container (toolbar row etc.),
+                    // so subtracting its origin put the drop off to the side of the camera.
                     Float2 mouseLocal = paper.PointerPos - new Float2(
-                        paper.CurrentParent.Data.X, paper.CurrentParent.Data.Y);
+                        (float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
 
                     handler.Handle(assetDrop, new SceneDropContext
                     {
