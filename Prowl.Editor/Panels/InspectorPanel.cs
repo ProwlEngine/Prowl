@@ -621,16 +621,7 @@ public class InspectorPanel : DockPanel
         PropertyGrid.Draw(paper, "insp_gpg", obj);
     }
 
-    private static string GetExtensionIcon(string ext) => ext switch
-    {
-        ".cs" => EditorIcons.FileCode,
-        ".shader" => EditorIcons.WandMagicSparkles,
-        ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" => EditorIcons.FileImage,
-        ".scene" => EditorIcons.Cubes,
-        ".mat" => EditorIcons.Palette,
-        ".fbx" or ".obj" or ".gltf" or ".glb" => EditorIcons.VectorSquare,
-        _ => EditorIcons.File,
-    };
+    private static string GetExtensionIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
 
     private static void DrawAssetLink(Paper paper, Prowl.Scribe.FontFile font, string id, Guid guid, EditorAssetDatabase db)
     {

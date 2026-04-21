@@ -108,6 +108,7 @@ public class EditorApplication : Game
         ThumbnailGeneratorRegistry.Initialize();
         SceneDropHandlerRegistry.Initialize();
         CreateGameObjectMenuRegistry.Initialize();
+        FileIconRegistry.Initialize();
         EditorCallbacks.Initialize();
 
         // Cursor lock toasts

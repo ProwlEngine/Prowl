@@ -1048,24 +1048,7 @@ public class ProjectPanel : DockPanel
         return items;
     }
 
-    private static string GetFileIcon(string ext)
-    {
-        return ext switch
-        {
-            ".cs" => EditorIcons.FileCode,
-            ".shader" or ".glsl" or ".hlsl" => EditorIcons.WandMagicSparkles,
-            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" or ".psd" or ".hdr" => EditorIcons.FileImage,
-            ".mp3" or ".wav" or ".ogg" or ".flac" => EditorIcons.FileAudio,
-            ".mp4" or ".avi" or ".mkv" or ".mov" => EditorIcons.FileVideo,
-            ".fbx" or ".obj" or ".gltf" or ".glb" or ".dae" => EditorIcons.VectorSquare,
-            ".scene" => EditorIcons.Cubes,
-            ".mat" => EditorIcons.Palette,
-            ".pdf" => EditorIcons.FilePdf,
-            ".txt" or ".md" or ".json" or ".xml" or ".yaml" => EditorIcons.FileLines,
-            ".zip" or ".rar" or ".7z" => EditorIcons.FileZipper,
-            _ => EditorIcons.File,
-        };
-    }
+    private static string GetFileIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
 
     private static Prowl.Runtime.Resources.Texture2D? GetThumbnailTexture(Guid guid)
     {

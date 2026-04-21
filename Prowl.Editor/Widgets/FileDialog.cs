@@ -620,24 +620,5 @@ public static class FileDialog
             Close(result);
     }
 
-    private static string GetFileIcon(string fileName)
-    {
-        string ext = Path.GetExtension(fileName).ToLowerInvariant();
-        return ext switch
-        {
-            ".cs" or ".js" or ".ts" or ".py" or ".lua" => EditorIcons.FileCode,
-            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".tga" or ".psd" => EditorIcons.FileImage,
-            ".mp3" or ".wav" or ".ogg" or ".flac" => EditorIcons.FileAudio,
-            ".mp4" or ".avi" or ".mkv" or ".mov" => EditorIcons.FileVideo,
-            ".pdf" => EditorIcons.FilePdf,
-            ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => EditorIcons.FileZipper,
-            ".txt" or ".md" or ".log" or ".json" or ".xml" or ".yaml" or ".yml" => EditorIcons.FileLines,
-            ".exe" or ".dll" or ".so" => EditorIcons.Gear,
-            ".shader" or ".glsl" or ".hlsl" => EditorIcons.WandMagic,
-            ".scene" or ".prefab" => EditorIcons.Cubes,
-            ".mat" or ".material" => EditorIcons.Palette,
-            ".mesh" or ".fbx" or ".obj" or ".gltf" or ".glb" => EditorIcons.VectorSquare,
-            _ => EditorIcons.File,
-        };
-    }
+    private static string GetFileIcon(string fileName) => FileIconRegistry.GetIconForFile(fileName);
 }
