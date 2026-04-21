@@ -42,11 +42,15 @@ public static class ScriptCompiler
         var output = new StringBuilder();
         var errors = new StringBuilder();
 
-        // Compile Game assembly first
+        // Compile Game assembly first. `-t:Rebuild` forces a full recompile even when
+        // MSBuild thinks inputs are unchanged — avoids the stale-DLL bug where users
+        // edit a script, see "compilation successful", restart, and the old code runs.
+        // Incremental build can miss changes when the engine's Prowl.Runtime.dll is
+        // updated but user sources weren't touched (cache references old symbols).
         if (gameScripts.Count > 0)
         {
             Runtime.Debug.Log($"[ScriptCompiler] Compiling {project.Name}.Game ({gameScripts.Count} scripts)...");
-            var gameResult = RunDotnetCommand($"build \"{project.GameCsprojPath}\" --configuration Release", project.RootPath);
+            var gameResult = RunDotnetCommand($"build \"{project.GameCsprojPath}\" --configuration Release -t:Rebuild", project.RootPath);
             output.AppendLine(gameResult.stdout);
             if (!string.IsNullOrEmpty(gameResult.stderr))
                 errors.AppendLine(gameResult.stderr);
@@ -64,7 +68,7 @@ public static class ScriptCompiler
         if (editorScripts.Count > 0)
         {
             Runtime.Debug.Log($"[ScriptCompiler] Compiling {project.Name}.Editor ({editorScripts.Count} scripts)...");
-            var editorResult = RunDotnetCommand($"build \"{project.EditorCsprojPath}\" --configuration Release", project.RootPath);
+            var editorResult = RunDotnetCommand($"build \"{project.EditorCsprojPath}\" --configuration Release -t:Rebuild", project.RootPath);
             output.AppendLine(editorResult.stdout);
             if (!string.IsNullOrEmpty(editorResult.stderr))
                 errors.AppendLine(editorResult.stderr);
