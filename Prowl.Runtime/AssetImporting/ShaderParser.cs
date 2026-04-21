@@ -451,6 +451,10 @@ public static class ShaderParser
 
                 def.Name = last.Name;
                 def.DisplayName = last.DisplayName;
+                // Preserve Range hint across the default-value replacement so Range
+                // properties keep their inspector bounds.
+                def.Range = last.Range;
+                def.HasRange = last.HasRange;
 
                 properties[^1] = def;
 
@@ -470,7 +474,29 @@ public static class ShaderParser
             ExpectToken("property", tokenizer, ShaderToken.Comma);
             ExpectToken("property", tokenizer, ShaderToken.Identifier);
 
-            ShaderPropertyType type = EnumParse<ShaderPropertyType>(tokenizer.Token.ToString(), "property type");
+            // Range(min, max) — a Float with inspector-slider bounds. Parse + swap
+            // the effective type to Float so the rest of the pipeline treats it
+            // uniformly.
+            Float2 rangeBounds = default;
+            bool   hasRange = false;
+            ShaderPropertyType type;
+            if (tokenizer.Token.ToString().Equals("Range", System.StringComparison.Ordinal))
+            {
+                ExpectToken("property", tokenizer, ShaderToken.OpenParen);
+                ExpectToken("property", tokenizer, ShaderToken.Identifier);
+                float rMin = DoubleParse(tokenizer.Token, "range min");
+                ExpectToken("property", tokenizer, ShaderToken.Comma);
+                ExpectToken("property", tokenizer, ShaderToken.Identifier);
+                float rMax = DoubleParse(tokenizer.Token, "range max");
+                ExpectToken("property", tokenizer, ShaderToken.CloseParen);
+                rangeBounds = new Float2(rMin, rMax);
+                hasRange = true;
+                type = ShaderPropertyType.Float;
+            }
+            else
+            {
+                type = EnumParse<ShaderPropertyType>(tokenizer.Token.ToString(), "property type");
+            }
 
             ExpectToken("property", tokenizer, ShaderToken.CloseParen);
 
@@ -490,6 +516,11 @@ public static class ShaderParser
 
             property.Name = name;
             property.DisplayName = displayName;
+            if (hasRange)
+            {
+                property.Range = rangeBounds;
+                property.HasRange = true;
+            }
 
             properties.Add(property);
         }

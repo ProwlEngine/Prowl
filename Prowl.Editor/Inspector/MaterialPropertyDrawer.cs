@@ -78,8 +78,18 @@ public static class MaterialPropertyDrawer
             case ShaderPropertyType.Float:
             {
                 float val = ps.HasFloat(prop.Name) ? ps.GetFloat(prop.Name) : (float)prop.Value.X;
-                EditorGUI.FloatField(paper, id, val, label)
-                    .OnValueChanged(v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); });
+                // Range(min, max) Float → slider, matching the shader author's intent.
+                // Non-ranged Floats still draw as plain number fields.
+                if (prop.HasRange)
+                {
+                    EditorGUI.Slider(paper, id, label, val, (float)prop.Range.X, (float)prop.Range.Y)
+                        .OnValueChanged(v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); });
+                }
+                else
+                {
+                    EditorGUI.FloatField(paper, id, val, label)
+                        .OnValueChanged(v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); });
+                }
                 break;
             }
             case ShaderPropertyType.Int:

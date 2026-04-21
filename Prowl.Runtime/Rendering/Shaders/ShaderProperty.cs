@@ -25,6 +25,17 @@ public class ShaderProperty
     public Texture2D Texture2DValue;
     public Texture3D Texture3DValue;
 
+    /// <summary>
+    /// Optional [min, max] hint for inspector UI. Populated by the shader parser when a
+    /// property is declared as <c>Range(min, max)</c>; the inspector reads this to draw
+    /// a slider instead of a plain number field. Always zero for non-Range properties —
+    /// use <see cref="HasRange"/> to distinguish "unset" from "range 0..0".
+    /// </summary>
+    public Float2 Range;
+
+    /// <summary>True when the parser saw a <c>Range(min, max)</c> type keyword.</summary>
+    public bool HasRange;
+
     public ShaderProperty() { }
 
     public void Set(ShaderProperty other)
