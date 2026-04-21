@@ -236,6 +236,15 @@ public partial class PropertyState
         ApplyMaterialUniforms(materialProperties, program, ref texSlot);
 
         // Then fill in any shader-declared property that wasn't in the material.
+        // CRITICAL: the cache updates below are not optional. Earlier this code
+        // called Graphics.SetUniform* directly without touching `program.uniformCache`,
+        // which meant one material's default-fill could silently overwrite a GPU
+        // uniform that another material had just override-set + cached. On the
+        // next frame the override material's cache said "already set" → skipped
+        // upload → ghost value from the default-fill leaked into it. Every branch
+        // here MUST mirror its write into the cache so the redundancy check stays
+        // correct across draw calls.
+        var cache = program.uniformCache;
         foreach (var prop in shader.Properties)
         {
             string name = prop.Name;
@@ -243,28 +252,67 @@ public partial class PropertyState
             {
                 case Shaders.ShaderPropertyType.Float:
                     if (!materialProperties._floats.ContainsKey(name))
-                        Graphics.SetUniformF(program, name, (float)prop.Value.X);
+                    {
+                        float v = (float)prop.Value.X;
+                        if (!cache.floats.TryGetValue(name, out var cv) || cv != v)
+                        {
+                            Graphics.SetUniformF(program, name, v);
+                            cache.floats[name] = v;
+                        }
+                    }
                     break;
                 case Shaders.ShaderPropertyType.Int:
                     if (!materialProperties._ints.ContainsKey(name))
-                        Graphics.SetUniformI(program, name, (int)prop.Value.X);
+                    {
+                        int v = (int)prop.Value.X;
+                        if (!cache.ints.TryGetValue(name, out var cv) || cv != v)
+                        {
+                            Graphics.SetUniformI(program, name, v);
+                            cache.ints[name] = v;
+                        }
+                    }
                     break;
                 case Shaders.ShaderPropertyType.Vector2:
                     if (!materialProperties._vectors2.ContainsKey(name))
-                        Graphics.SetUniformV2(program, name, new Float2((float)prop.Value.X, (float)prop.Value.Y));
+                    {
+                        var v = new Float2((float)prop.Value.X, (float)prop.Value.Y);
+                        if (!cache.vectors2.TryGetValue(name, out var cv) || !cv.Equals(v))
+                        {
+                            Graphics.SetUniformV2(program, name, v);
+                            cache.vectors2[name] = v;
+                        }
+                    }
                     break;
                 case Shaders.ShaderPropertyType.Vector3:
                     if (!materialProperties._vectors3.ContainsKey(name))
-                        Graphics.SetUniformV3(program, name, new Float3((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z));
+                    {
+                        var v = new Float3((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z);
+                        if (!cache.vectors3.TryGetValue(name, out var cv) || !cv.Equals(v))
+                        {
+                            Graphics.SetUniformV3(program, name, v);
+                            cache.vectors3[name] = v;
+                        }
+                    }
                     break;
                 case Shaders.ShaderPropertyType.Vector4:
                 case Shaders.ShaderPropertyType.Color:
                     if (!materialProperties._vectors4.ContainsKey(name) && !materialProperties._colors.ContainsKey(name))
-                        Graphics.SetUniformV4(program, name, prop.Value);
+                    {
+                        var v = prop.Value;
+                        if (!cache.vectors4.TryGetValue(name, out var cv) || !cv.Equals(v))
+                        {
+                            Graphics.SetUniformV4(program, name, v);
+                            cache.vectors4[name] = v;
+                        }
+                    }
                     break;
                 case Shaders.ShaderPropertyType.Matrix:
                     if (!materialProperties._matrices.ContainsKey(name))
+                    {
+                        // Matrices aren't value-compared in the cache (the struct is
+                        // big — compare cost > redundant-upload cost). Always set.
                         Graphics.SetUniformMatrix(program, name, false, prop.MatrixValue);
+                    }
                     break;
                 case Shaders.ShaderPropertyType.Texture2D:
                     if (!materialProperties._textures.ContainsKey(name) && prop.Texture2DValue.IsValid())
