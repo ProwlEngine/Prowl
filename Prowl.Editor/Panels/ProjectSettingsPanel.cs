@@ -1,7 +1,11 @@
+using System;
+using System.Text.Json;
+
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
@@ -14,6 +18,53 @@ public class ProjectSettingsPanel : DockPanel
     public override string Icon => EditorIcons.Gear;
 
     private int _selectedIndex;
+
+    // Shared with ProjectSettingsRegistry.Save — keeping the serializer options identical
+    // means the before/after JSON comparison is stable field-by-field.
+    private static readonly JsonSerializerOptions s_jsonOpts = new()
+    {
+        WriteIndented = false,
+        IncludeFields = true,
+        PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>
+    /// Register an undo record if <paramref name="instance"/> changed between the captured
+    /// JSON and its current state. Used by the panel to wrap a settings OnGUI call so any
+    /// widget mutation becomes undoable — without each settings class needing to know
+    /// about Undo.
+    /// </summary>
+    private static void DiffAndRegisterUndo(ProjectSettingsRegistry.SettingsEntry entry, string beforeJson)
+    {
+        if (Application.IsPlaying) return;
+
+        string afterJson;
+        try { afterJson = JsonSerializer.Serialize(entry.Instance, entry.Type, s_jsonOpts); }
+        catch { return; }
+
+        if (beforeJson == afterJson) return;
+
+        var capturedEntry = entry;
+        Undo.RegisterCoalescableAction($"Modify {entry.Name}",
+            undo: () => ApplyJsonToEntry(capturedEntry, beforeJson),
+            redo: () => ApplyJsonToEntry(capturedEntry, afterJson));
+    }
+
+    private static void ApplyJsonToEntry(ProjectSettingsRegistry.SettingsEntry entry, string json)
+    {
+        try
+        {
+            var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type, s_jsonOpts);
+            if (loaded == null) return;
+            ProjectSettingsRegistry.CopyFields(loaded, entry.Instance);
+            entry.Instance.Apply();
+            ProjectSettingsRegistry.Save(entry);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"ProjectSettings undo/redo failed for '{entry.Name}': {ex.Message}");
+        }
+    }
 
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -74,15 +125,29 @@ public class ProjectSettingsPanel : DockPanel
             // Separator
             paper.Box("ps_divider").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
-            // Right content — selected settings
+            // Right content — selected settings.
+            // Wrap the draw with a JSON snapshot: System.Text.Json is the same serializer
+            // used to persist settings, so it handles properties, fields, lists, arrays
+            // uniformly (unlike Echo which is fields-only). Anything the user changes in
+            // OnGUI becomes a coalescable undo step keyed by the settings name.
             float contentW = width - sidebarW - 1;
+            var currentEntry = entries[_selectedIndex];
+            string? beforeJson = null;
+            if (!Application.IsPlaying)
+            {
+                try { beforeJson = JsonSerializer.Serialize(currentEntry.Instance, currentEntry.Type, s_jsonOpts); }
+                catch { beforeJson = null; }
+            }
+
             using (ScrollView.Begin(paper, "ps_content", contentW, height,
                 EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding))
             {
                 paper.Box("ps_content_pad").Height(8);
-                entries[_selectedIndex].Instance.OnGUI(paper, contentW - 16);
+                currentEntry.Instance.OnGUI(paper, contentW - 16);
                 paper.Box("ps_content_pad2").Height(16);
             }
+
+            if (beforeJson != null) DiffAndRegisterUndo(currentEntry, beforeJson);
         }
     }
 }

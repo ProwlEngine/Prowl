@@ -550,14 +550,7 @@ public static class GameObjectInspector
     //  Helpers
     // ================================================================
 
-    private static string GetComponentIcon(MonoBehaviour comp) => comp switch
-    {
-        Camera => EditorIcons.Camera,
-        Light => EditorIcons.Sun,
-        MeshRenderer => EditorIcons.Cube,
-        SkinnedMeshRenderer => EditorIcons.Cubes,
-        _ => EditorIcons.PuzzlePiece
-    };
+    private static string GetComponentIcon(MonoBehaviour comp) => ComponentIconRegistry.GetIcon(comp);
 
     private static string NicifyName(string name)
     {
