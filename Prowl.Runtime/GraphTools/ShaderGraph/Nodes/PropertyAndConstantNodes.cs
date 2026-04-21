@@ -23,10 +23,22 @@ namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
 internal static class PropNodeUtil
 {
-    /// <summary>Ensure the property name starts with an underscore.
-    /// <c>null</c> / empty → "_Property".</summary>
+    /// <summary>Coerce <paramref name="n"/> into a legal GLSL identifier starting
+    /// with an underscore. Non-[A-Za-z0-9_] characters get replaced with '_' so
+    /// property nodes named "My Color" still produce valid `_My_Color` uniforms.
+    /// Must stay in sync with the shader compiler's property-block sanitiser.</summary>
     public static string NormaliseName(string n)
-        => string.IsNullOrEmpty(n) ? "_Property" : (n.StartsWith("_") ? n : "_" + n);
+    {
+        if (string.IsNullOrEmpty(n)) return "_Property";
+        var sb = new System.Text.StringBuilder(n.Length + 1);
+        if (!n.StartsWith("_")) sb.Append('_');
+        for (int i = 0; i < n.Length; i++)
+        {
+            char c = n[i];
+            sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
+        }
+        return sb.ToString();
+    }
 
     /// <summary>Format a float as a GLSL/Prowl-property literal —
     /// invariant culture, always contains a decimal point.</summary>

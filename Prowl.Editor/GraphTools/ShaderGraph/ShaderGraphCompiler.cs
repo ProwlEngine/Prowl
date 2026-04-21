@@ -37,13 +37,22 @@ public static class ShaderGraphCompiler
 
         // Locate the master node — the graph is invalid without exactly one.
         PBROutputNode? master = null;
+        int masterCount = 0;
         foreach (var n in graph.Nodes)
-            if (n is PBROutputNode m) { master = m; break; }
+            if (n is PBROutputNode m) { master ??= m; masterCount++; }
         if (master == null)
         {
             result.Diagnostics.Add((null, "Graph has no PBR Output node — nothing to compile.", NodeMessageSeverity.Error));
             result.ShaderSource = StubShader(shaderName, "Graph missing master output node.");
             return result;
+        }
+        if (masterCount > 1)
+        {
+            // More than one output would race for the final colour — compile still
+            // runs off the first we found but the author needs to know.
+            result.Diagnostics.Add((master.Id,
+                $"Graph has {masterCount} PBR Output nodes — only the first is used; delete the extras.",
+                NodeMessageSeverity.Error));
         }
 
         // Render settings come from the ShaderGraph asset when available; fall back to
@@ -87,14 +96,16 @@ public static class ShaderGraphCompiler
         vertCtx.Varyings.Add(("vTangent",  "vec3"));
         vertCtx.Varyings.Add(("vBitangent","vec3"));
 
+        // Mirror any fragment-introduced varyings into the vertex context BEFORE
+        // building the vertex body. BuildVertexBody iterates vertCtx.Varyings to
+        // decide which optional assignments (texCoord1, vInstanceData, etc.) to
+        // emit — if we mirrored AFTER, the vertex stage would declare the `out`
+        // matching the fragment's `in` but never write it, and the fragment would
+        // read uninitialised values.
+        foreach (var v in fragCtx.Varyings) vertCtx.Varyings.Add(v);
+
         var vertexBody = BuildVertexBody(master, vertCtx);
         result.Diagnostics.AddRange(vertCtx.Diagnostics);
-
-        // Mirror any fragment-only varyings back to the vertex stage so `out`/`in`
-        // pairs line up. A node may add a varying (e.g. texCoord1) during fragment
-        // evaluation; without mirroring, the vertex stage wouldn't declare the matching
-        // `out` and the shader would fail to link.
-        foreach (var v in fragCtx.Varyings) vertCtx.Varyings.Add(v);
 
         // Build helper subtrees for the depth-only passes. The depth pre-pass and
         // shadow caster need the ALPHA CUTOUT path when the graph is cutout, and
@@ -369,7 +380,10 @@ public static class ShaderGraphCompiler
         foreach (var n in graph.Nodes)
         {
             if (n is not IShaderProperty p) continue;
-            var name = p.PropertyName;
+            // Sanitise the identifier — whatever the user typed, the emitted name
+            // has to be a legal GLSL identifier or the parser will reject the whole
+            // Properties block. Replace anything that isn't [A-Za-z0-9_] with '_'.
+            var name = SanitisePropertyIdentifier(p.PropertyName);
             if (!seen.Add(name)) continue;
 
             var keyword = ShaderTypeUtil.ToPropertyKeyword(p.PropertyType);
@@ -385,13 +399,38 @@ public static class ShaderGraphCompiler
             // Matrix properties have no parseable default syntax — emit without `= ...`.
             // Empty or whitespace default literal is treated the same way.
             var def = p.DefaultLiteral;
+            // Escape any embedded quotes / backslashes in the display label so a
+            // user-typed `"` doesn't close the string literal prematurely.
+            var display = EscapeShaderString(p.DisplayName ?? "");
             if (string.IsNullOrWhiteSpace(def))
-                propertyBlock.Add($"    {name} (\"{p.DisplayName}\", {keyword})");
+                propertyBlock.Add($"    {name} (\"{display}\", {keyword})");
             else
-                propertyBlock.Add($"    {name} (\"{p.DisplayName}\", {keyword}) = {def}");
+                propertyBlock.Add($"    {name} (\"{display}\", {keyword}) = {def}");
             uniformDecls.Add($"uniform {ShaderTypeUtil.ToGlsl(p.PropertyType)} {name};");
         }
     }
+
+    /// <summary>Coerce <paramref name="raw"/> into a legal GLSL identifier. Preserves
+    /// the leading underscore convention property nodes use; replaces invalid chars
+    /// with '_'; guarantees the result starts with a letter or underscore.</summary>
+    private static string SanitisePropertyIdentifier(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return "_Property";
+        var sb = new StringBuilder(raw.Length);
+        char first = raw[0];
+        sb.Append(char.IsLetter(first) || first == '_' ? first : '_');
+        for (int i = 1; i < raw.Length; i++)
+        {
+            char c = raw[i];
+            sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Escape characters that would break the <c>"..."</c> display-name
+    /// string literal emitted into the Properties block.</summary>
+    private static string EscapeShaderString(string raw)
+        => raw.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     // ─── Master node lowering ────────────────────────────────────────────────────────
 
