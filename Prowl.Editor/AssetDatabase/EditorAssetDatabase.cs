@@ -814,6 +814,80 @@ public class EditorAssetDatabase : IAssetDatabase
     }
 
     /// <summary>
+    /// Move a folder and everything inside it. GUIDs are preserved — the metadata index is
+    /// remapped in-place, and <see cref="OnAssetMoved"/> fires for every relocated file.
+    /// </summary>
+    public bool MoveFolder(string oldRelativeFolder, string newRelativeFolder)
+    {
+        oldRelativeFolder = oldRelativeFolder.Replace('\\', '/').TrimEnd('/');
+        newRelativeFolder = newRelativeFolder.Replace('\\', '/').TrimEnd('/');
+        if (oldRelativeFolder == newRelativeFolder) return true;
+
+        string oldAbs = Path.Combine(_project.AssetsPath, oldRelativeFolder);
+        string newAbs = Path.Combine(_project.AssetsPath, newRelativeFolder);
+
+        if (!Directory.Exists(oldAbs)) return false;
+        if (Directory.Exists(newAbs) || File.Exists(newAbs))
+        {
+            Runtime.Debug.LogWarning($"Cannot move folder: '{newRelativeFolder}' already exists.");
+            return false;
+        }
+
+        // Guard against moving a folder into itself or a descendant — that would delete the
+        // parent while its children were still mid-copy on Windows.
+        string oldWithSlash = oldRelativeFolder + "/";
+        if (newRelativeFolder.Equals(oldRelativeFolder, StringComparison.OrdinalIgnoreCase)
+            || newRelativeFolder.StartsWith(oldWithSlash, StringComparison.OrdinalIgnoreCase))
+        {
+            Runtime.Debug.LogWarning($"Cannot move folder '{oldRelativeFolder}' into itself.");
+            return false;
+        }
+
+        // Snapshot the set of tracked paths inside the folder before the move — the files on
+        // disk move atomically via Directory.Move, but the in-memory index needs per-entry
+        // path rewrites afterward.
+        var toRemap = new List<(string oldPath, string newPath, Guid guid)>();
+        foreach (var kv in _pathToGuid)
+        {
+            string p = kv.Key;
+            if (p.Equals(oldRelativeFolder, StringComparison.OrdinalIgnoreCase)
+                || p.StartsWith(oldWithSlash, StringComparison.OrdinalIgnoreCase))
+            {
+                string suffix = p.Substring(oldRelativeFolder.Length);
+                string newPath = newRelativeFolder + suffix;
+                toRemap.Add((p, newPath, kv.Value));
+            }
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
+
+        try
+        {
+            Directory.Move(oldAbs, newAbs);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to move folder '{oldRelativeFolder}' → '{newRelativeFolder}': {ex.Message}");
+            return false;
+        }
+
+        foreach (var (oldPath, newPath, guid) in toRemap)
+        {
+            _pathToGuid.Remove(oldPath);
+            _pathToGuid[newPath] = guid;
+            if (_guidToEntry.TryGetValue(guid, out var entry))
+                entry.Path = newPath;
+            if (_loadedAssets.TryGetValue(guid, out var obj))
+                obj.AssetPath = newPath;
+
+            OnAssetMoved?.Invoke(oldPath, newPath);
+        }
+
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        return true;
+    }
+
+    /// <summary>
     /// Force reimport a specific asset.
     /// </summary>
     /// <summary>Dispose and remove a cached asset. Triggers AssetRef re-resolve on next access.</summary>
