@@ -10,6 +10,7 @@ namespace Prowl.Runtime;
 /// provides just the core functionality.
 /// </summary>
 [AddComponentMenu("Physics/Character Controller")]
+[ComponentIcon("\uf70c")] // PersonRunning
 public class CharacterController : MonoBehaviour
 {
     /// <summary>

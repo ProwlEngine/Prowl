@@ -9,6 +9,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 [AddComponentMenu("Physics/Colliders/Capsule Collider")]
+[ComponentIcon("\uf46b")] // Capsules
 public sealed class CapsuleCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;

@@ -28,6 +28,7 @@ public enum FogVolumeShape
 }
 
 [AddComponentMenu("Rendering/Fog Volume")]
+[ComponentIcon("\uf0c2")] // Cloud
 public sealed class FogVolume : MonoBehaviour
 {
     [SerializeField] public FogVolumeShape Shape = FogVolumeShape.Sphere;

@@ -17,6 +17,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [RequireComponent(typeof(TerrainComponent))]
 [AddComponentMenu("Physics/Colliders/Terrain Collider")]
+[ComponentIcon("\uf6fc")] // Mountain
 public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 {
     private TerrainComponent _terrain;

@@ -17,6 +17,7 @@ namespace Prowl.Runtime;
 /// Paths match those stored in AnimationClip.AnimBone.BoneName.
 /// </summary>
 [AddComponentMenu("Animation/Animation")]
+[ComponentIcon("\uf008")] // Film
 public class AnimationComponent : MonoBehaviour
 {
     /// <summary>Default animation clip to play on start.</summary>

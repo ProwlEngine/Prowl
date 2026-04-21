@@ -18,6 +18,7 @@ namespace Prowl.Runtime;
 /// The Canvas has its own RenderTexture and Paper instance for drawing UI.
 /// </summary>
 [AddComponentMenu("UI/World Canvas")]
+[ComponentIcon("\uf03e")] // Image
 public class WorldCanvas : MonoBehaviour, IRenderable
 {
     public event Action<Paper>? OnRenderUI;

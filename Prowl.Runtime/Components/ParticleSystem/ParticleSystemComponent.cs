@@ -17,6 +17,7 @@ namespace Prowl.Runtime.ParticleSystem;
 /// </summary>
 [AddComponentMenu("Effects/Particle System")]
 [ExecuteAlways]
+[ComponentIcon("\ue2ca")] // WandMagicSparkles
 public class ParticleSystemComponent : MonoBehaviour
 {
     #region Configuration

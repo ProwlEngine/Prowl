@@ -15,6 +15,7 @@ public enum ShadowQuality
     Soft = 1
 }
 
+[ComponentIcon("\uf185")] // Sun
 public abstract class Light : MonoBehaviour, IRenderableLight
 {
 

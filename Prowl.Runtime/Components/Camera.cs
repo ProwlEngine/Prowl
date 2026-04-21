@@ -69,6 +69,7 @@ public enum DepthTextureMode
 }
 
 [AddComponentMenu("Rendering/Camera")]
+[ComponentIcon("\uf030")] // Camera
 public class Camera : MonoBehaviour
 {
     public List<ImageEffect> Effects = [];
