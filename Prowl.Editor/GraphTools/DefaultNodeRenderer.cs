@@ -143,7 +143,8 @@ public sealed class DefaultNodeRenderer : NodeRenderer
             bool portHov = hoveredPort.HasValue
                 && hoveredPort.Value.direction == PortDirection.Input
                 && hoveredPort.Value.portName == port.Name;
-            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: true, isHovered: portHov);
+            bool dim = GraphLayout.IsDropTargetRejected(node.Id, port);
+            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: true, isHovered: portHov, dim: dim);
         }
         for (int i = 0; i < node.Outputs.Count; i++)
         {
@@ -153,7 +154,8 @@ public sealed class DefaultNodeRenderer : NodeRenderer
             bool portHov = hoveredPort.HasValue
                 && hoveredPort.Value.direction == PortDirection.Output
                 && hoveredPort.Value.portName == port.Name;
-            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: false, isHovered: portHov);
+            bool dim = GraphLayout.IsDropTargetRejected(node.Id, port);
+            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: false, isHovered: portHov, dim: dim);
         }
 
         if (node.Messages.Count > 0)
@@ -198,21 +200,27 @@ public sealed class DefaultNodeRenderer : NodeRenderer
     }
 
     private static void DrawPort(Canvas canvas, Port port, Float2 pos, bool drawLabel,
-        Prowl.Scribe.FontFile? font, bool isLeftSide, bool isHovered)
+        Prowl.Scribe.FontFile? font, bool isLeftSide, bool isHovered, bool dim = false)
     {
         var color = GraphLayout.GetPortColor(port.DataType);
 
-        if (isHovered)
+        // Dim incompatible drop targets to ~40% opacity so the user sees at a glance
+        // which ports a wire can legally plug into.
+        byte DimA(byte a) => dim ? (byte)(a * 0.4f) : a;
+
+        if (isHovered && !dim)
         {
             var halo = color; halo.A = 90;
             canvas.CircleFilled(pos.X, pos.Y, GraphLayout.PortDotRadius + 5f, halo, 16);
         }
 
-        float r = isHovered ? GraphLayout.PortDotRadius + 1.5f : GraphLayout.PortDotRadius;
+        float r = isHovered && !dim ? GraphLayout.PortDotRadius + 1.5f : GraphLayout.PortDotRadius;
         // Two stacked filled circles — outer ring + inner coloured fill. Crisper than
         // a Stroke at small radii with less aliasing.
-        canvas.CircleFilled(pos.X, pos.Y, r + 1.5f, NodeBorder, 14);
-        canvas.CircleFilled(pos.X, pos.Y, r, color, 14);
+        var ring = NodeBorder; ring.A = DimA(ring.A);
+        var fill = color;      fill.A = DimA(fill.A);
+        canvas.CircleFilled(pos.X, pos.Y, r + 1.5f, ring, 14);
+        canvas.CircleFilled(pos.X, pos.Y, r, fill, 14);
 
         if (drawLabel && font != null)
         {
@@ -221,7 +229,8 @@ public sealed class DefaultNodeRenderer : NodeRenderer
             float labelX = isLeftSide
                 ? pos.X + labelGap
                 : pos.X - labelGap - MeasureWidthApprox(port.Name, labelSize);
-            canvas.DrawText(port.Name, labelX, pos.Y - labelSize * 0.5f - 1, PortLabel, labelSize, font);
+            var lbl = PortLabel; lbl.A = DimA(lbl.A);
+            canvas.DrawText(port.Name, labelX, pos.Y - labelSize * 0.5f - 1, lbl, labelSize, font);
         }
     }
 

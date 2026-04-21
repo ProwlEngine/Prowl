@@ -44,6 +44,7 @@ public class GraphEditor
             ClearAllSelection();
             _dragMode = DragMode.None;
             _dragSourcePort = null;
+        GraphLayout.ClearDragHint();
             _dragWireEndGraph = null;
         }
     }
@@ -907,6 +908,7 @@ public class GraphEditor
         // Whether the popup was triggered by a wire-drop or a plain right-click, clear
         // the dangling wire state so it stops rendering once the menu closes.
         _dragSourcePort = null;
+        GraphLayout.ClearDragHint();
         _dragWireEndGraph = null;
     }
 
@@ -1380,6 +1382,10 @@ public class GraphEditor
                 };
                 _dragWireEndGraph = graphPoint;
                 _dragMode = DragMode.ConnectingWire;
+                // Hand the drag context to the renderers so incompatible ports dim
+                // out — clears when the drag ends (see ClearDragHint callsites).
+                GraphLayout.SetDragHint(portNode.Id, portHit.Value.port.Name,
+                    portHit.Value.port.Direction, portHit.Value.port.DataType);
                 return;
             }
 
@@ -1846,6 +1852,7 @@ public class GraphEditor
             }
 
             _dragSourcePort = null;
+        GraphLayout.ClearDragHint();
             _dragWireEndGraph = null;
         }
 
@@ -1853,6 +1860,7 @@ public class GraphEditor
         _marqueeStartGraph = null;
         _marqueeEndGraph = null;
         _dragSourcePort = null;
+        GraphLayout.ClearDragHint();
         _dragWireEndGraph = null;
         _alignmentGuides.Clear();
     }

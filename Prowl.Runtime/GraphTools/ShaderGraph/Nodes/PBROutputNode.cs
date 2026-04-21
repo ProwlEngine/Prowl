@@ -5,8 +5,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-/// <summary>How the master node lights its surface. Mirrors ShaderForge's lighting
-/// mode dropdown. Selecting a mode hides mode-specific ports on the master node and
+/// <summary>How the master node lights its surface. Selecting a mode hides mode-specific ports on the master node and
 /// switches the compiler to a different emission path.</summary>
 /// <remarks>Custom lighting isn't a separate mode — <see cref="Unlit"/> already
 /// passes albedo straight through, so users who want to drive their own lit colour
@@ -34,8 +33,7 @@ public enum ShaderLightingMode
 /// </summary>
 /// <remarks>
 /// Lighting / surface features are picked via enum + bool toggles on the node itself,
-/// not via separate node types — same pattern as ShaderForge's SFN_Final + the
-/// graph-level lighting settings. Toggles drive <c>Port.IsHidden</c> so the user
+/// not via separate node types. Toggles drive <c>Port.IsHidden</c> so the user
 /// only sees the inputs that actually matter for the chosen mode.
 /// </remarks>
 [HiddenFromMenu]
@@ -48,14 +46,10 @@ public sealed class PBROutputNode : Node, IShaderGraphNode
     /// <summary>Lighting model the compiler emits. Unlit hides every PBR input.</summary>
     public ShaderLightingMode Lighting = ShaderLightingMode.PBR;
 
-    /// <summary>Anisotropic specular path (PBR only). Adds Anisotropy + Direction inputs.</summary>
-    public bool Anisotropic = false;
-
-    /// <summary>Parallax Occlusion Mapping (PBR only). Adds Height + Height Steps inputs.</summary>
-    public bool UseParallax = false;
-
-    /// <summary>Per-light backscatter / subsurface scattering (PBR only).</summary>
-    public bool UseTranslucency = false;
+    // Parallax / anisotropic / translucency are authored via dedicated nodes now —
+    // e.g. ParallaxOcclusionNode for POM feeds the displaced UV into sampler nodes.
+    // The corresponding toggles + ports were removed from the master because the
+    // compiler didn't actually read them.
 
     protected override void DefineNode()
     {
@@ -77,22 +71,8 @@ public sealed class PBROutputNode : Node, IShaderGraphNode
         AddInput<Float3>("Emission",         Float3.Zero);
         AddInput<float>("Alpha Cutoff",      0.0f);
 
-        // ─── POM (only meaningful when UseParallax + PBR) ────────────────────────────
-        AddInput<float>("Height",            0.0f);
-        AddInput<int>("Height Steps",        16);
-
-        // ─── Translucency (only meaningful when UseTranslucency + PBR) ───────────────
-        AddInput<float>("Translucency",          0.0f);
-        AddInput<float>("Scattering Power",      0.0f);
-        AddInput<float>("Scattering Distortion", 0.5f);
-        AddInput<float>("Scattering Scale",      1.0f);
-
-        // ─── Anisotropic-only inputs (PBR) ───────────────────────────────────────────
-        AddInput<float>("Anisotropy",            0.0f);
-        AddInput<Float3>("Anisotropy Direction", new Float3(1, 0, 0));
-
         // Each lighting mode uses a distinct subset of inputs — hiding ports reduces
-        // visual clutter without having to duplicate the node per mode.
+        // visual clutter without duplicating the node per mode.
         bool lambert    = Lighting == ShaderLightingMode.Lambert;
         bool blinnphong = Lighting == ShaderLightingMode.BlinnPhong;
         bool pbr        = Lighting == ShaderLightingMode.PBR;
@@ -105,16 +85,6 @@ public sealed class PBROutputNode : Node, IShaderGraphNode
         SetHiddenByName("Metallic",   !pbr);
         SetHiddenByName("Roughness",  !(pbr || blinnphong));
         SetHiddenByName("Occlusion",  !anyLit);
-
-        // Feature toggles are PBR-only — the simpler lighting modes don't support them.
-        SetHiddenByName("Height",                 !(pbr && UseParallax));
-        SetHiddenByName("Height Steps",           !(pbr && UseParallax));
-        SetHiddenByName("Translucency",           !(pbr && UseTranslucency));
-        SetHiddenByName("Scattering Power",       !(pbr && UseTranslucency));
-        SetHiddenByName("Scattering Distortion",  !(pbr && UseTranslucency));
-        SetHiddenByName("Scattering Scale",       !(pbr && UseTranslucency));
-        SetHiddenByName("Anisotropy",             !(pbr && Anisotropic));
-        SetHiddenByName("Anisotropy Direction",   !(pbr && Anisotropic));
     }
 
     private void SetHiddenByName(string name, bool hidden)

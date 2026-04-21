@@ -3,6 +3,8 @@
 
 using System;
 
+using Prowl.Echo;
+
 namespace Prowl.Runtime.GraphTools.ShaderGraphs;
 
 /// <summary>
@@ -26,6 +28,25 @@ public sealed class ShaderGraph : Graph
     public ShaderGraph() : base("New Shader Graph") { }
 
     public override Type NodeMarkerInterface => typeof(IShaderGraphNode);
+
+    // The base Graph.Serialize only writes nodes/edges/blackboard/etc — it doesn't
+    // reflect subclass fields. Override to persist Template + RenderSettings so they
+    // round-trip through .shadergraph save/load.
+    public override void Serialize(ref EchoObject compound, SerializationContext ctx)
+    {
+        base.Serialize(ref compound, ctx);
+        compound.Add("Template",       Serializer.Serialize(typeof(ShaderGraphTemplate),        Template,       ctx));
+        compound.Add("RenderSettings", Serializer.Serialize(typeof(ShaderGraphRenderSettings),  RenderSettings, ctx));
+    }
+
+    public override void Deserialize(EchoObject value, SerializationContext ctx)
+    {
+        base.Deserialize(value, ctx);
+        var tTag = value.Get("Template");
+        if (tTag != null) Template = Serializer.Deserialize<ShaderGraphTemplate>(tTag, ctx);
+        var rsTag = value.Get("RenderSettings");
+        if (rsTag != null) RenderSettings = Serializer.Deserialize<ShaderGraphRenderSettings>(rsTag, ctx);
+    }
 }
 
 /// <summary>The starter layouts a new shader graph can be created from. Purely cosmetic

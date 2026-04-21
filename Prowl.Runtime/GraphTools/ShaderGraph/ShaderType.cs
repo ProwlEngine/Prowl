@@ -88,6 +88,7 @@ public static class ShaderTypeUtil
         ShaderType.Vec4        => "Vector4",
         ShaderType.Color       => "Color",
         ShaderType.Int         => "Int",
+        ShaderType.Mat4        => "Matrix",
         ShaderType.Sampler2D   => "Texture2D",
         ShaderType.SamplerCube => "Texture3D",
         _ => null,

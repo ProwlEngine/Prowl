@@ -55,7 +55,8 @@ public readonly struct NodeRegistration
 
     /// <summary>
     /// Does this node have any port that could accept a wire from a port of the given type
-    /// + direction? Mirrors the Phase-2 <c>GraphLayout.ArePortsCompatible</c> rules.
+    /// + direction? Mirrors <c>GraphLayout.ArePortsCompatible</c>: exact match, object on
+    /// either side, or any numeric-to-numeric pair (handled by shader-side promotion).
     /// </summary>
     public bool HasCompatiblePort(Type sourceType, PortDirection sourceDirection)
     {
@@ -63,10 +64,7 @@ public readonly struct NodeRegistration
         foreach (var p in Ports)
         {
             if (p.Direction != needDir) continue;
-            if (p.DataType == sourceType) return true;
-            // Inputs typed object accept anything; flip when source is the input.
-            if (sourceDirection == PortDirection.Output && p.DataType == typeof(object)) return true;
-            if (sourceDirection == PortDirection.Input && sourceType == typeof(object)) return true;
+            if (PortTypes.AreCompatible(p.DataType, sourceType)) return true;
         }
         return false;
     }
@@ -78,9 +76,7 @@ public readonly struct NodeRegistration
         foreach (var p in Ports)
         {
             if (p.Direction != needDir) continue;
-            if (p.DataType == sourceType) return p;
-            if (sourceDirection == PortDirection.Output && p.DataType == typeof(object)) return p;
-            if (sourceDirection == PortDirection.Input && sourceType == typeof(object)) return p;
+            if (PortTypes.AreCompatible(p.DataType, sourceType)) return p;
         }
         return null;
     }

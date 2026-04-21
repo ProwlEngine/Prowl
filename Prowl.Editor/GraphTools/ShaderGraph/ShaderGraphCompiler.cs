@@ -90,9 +90,113 @@ public static class ShaderGraphCompiler
         var vertexBody = BuildVertexBody(master, vertCtx);
         result.Diagnostics.AddRange(vertCtx.Diagnostics);
 
+        // Mirror any fragment-only varyings back to the vertex stage so `out`/`in`
+        // pairs line up. A node may add a varying (e.g. texCoord1) during fragment
+        // evaluation; without mirroring, the vertex stage wouldn't declare the matching
+        // `out` and the shader would fail to link.
+        foreach (var v in fragCtx.Varyings) vertCtx.Varyings.Add(v);
+
+        // Build helper subtrees for the depth-only passes. The depth pre-pass and
+        // shadow caster need the ALPHA CUTOUT path when the graph is cutout, and
+        // the VERTEX OFFSET when the master's Vertex Position port is driven —
+        // otherwise depth disagrees with the actual colour output and foliage /
+        // displaced geometry cast wrong-shaped shadows.
+        DepthPassHelper? depthHelper = BuildDepthPassHelper(graph, master, settings, propertyUniforms);
+        if (depthHelper != null)
+            result.Diagnostics.AddRange(depthHelper.Diagnostics);
+
         result.ShaderSource = EmitShader(shaderName, propertyBlock,
-            vertCtx, fragCtx, surfaceCall, vertexBody, settings);
+            vertCtx, fragCtx, surfaceCall, vertexBody, settings, depthHelper);
         return result;
+    }
+
+    /// <summary>
+    /// Captures the slice of the graph needed by the DepthNormals + Shadow passes —
+    /// the alpha cutout subtree (when the graph is AlphaTest) and the vertex offset
+    /// subtree (when Vertex Position is wired on the master). Depth and shadow passes
+    /// emit from this same blueprint so they stay in sync.
+    /// </summary>
+    private sealed class DepthPassHelper
+    {
+        /// <summary>Fragment-stage context holding the uniforms / samplers / varyings
+        /// the alpha subtree pulled in. Null when the graph has no alpha cutout.</summary>
+        public ShaderGenContext? AlphaCtx;
+        /// <summary>GLSL expression for the evaluated Alpha input ("1.0" when unwired).</summary>
+        public string AlphaExpr = "1.0";
+        /// <summary>GLSL expression for the evaluated Alpha Cutoff input.</summary>
+        public string CutoffExpr = "0.0";
+        /// <summary>True when the fragment body should <c>discard</c> on alpha below cutoff.</summary>
+        public bool NeedsAlphaDiscard;
+
+        /// <summary>Vertex-stage context holding whatever the Vertex Position subtree
+        /// needed. Null when no vertex offset is wired.</summary>
+        public ShaderGenContext? VertexCtx;
+        /// <summary>GLSL expression for the Vertex Position offset ("vec3(0.0)" when unwired).</summary>
+        public string VertexPosOffsetExpr = "vec3(0.0)";
+        /// <summary>True when the vertex body should apply an authored position offset.</summary>
+        public bool NeedsVertexOffset;
+
+        public readonly List<(System.Guid? nodeId, string message, NodeMessageSeverity severity)> Diagnostics = new();
+    }
+
+    private static DepthPassHelper? BuildDepthPassHelper(Prowl.Runtime.GraphTools.Graph graph,
+        PBROutputNode master, ShaderGraphRenderSettings settings, List<string> propertyUniforms)
+    {
+        bool hasAlphaWire       = HasIncomingEdgeNamed(graph, master, "Alpha");
+        bool hasCutoffWire      = HasIncomingEdgeNamed(graph, master, "Alpha Cutoff");
+        bool cutoutQueue        = settings.Queue == ShaderRenderQueue.AlphaTest;
+        bool needsAlphaDiscard  = cutoutQueue || hasAlphaWire || hasCutoffWire;
+
+        bool needsVertexOffset  = HasIncomingEdgeNamed(graph, master, "Vertex Position");
+
+        if (!needsAlphaDiscard && !needsVertexOffset) return null;
+
+        var helper = new DepthPassHelper
+        {
+            NeedsAlphaDiscard = needsAlphaDiscard,
+            NeedsVertexOffset = needsVertexOffset,
+        };
+
+        if (needsAlphaDiscard)
+        {
+            var ctx = new ShaderGenContext(graph, ShaderStage.Fragment);
+            foreach (var u in propertyUniforms) ctx.Uniforms.Add(u);
+            ctx.Includes.Add("Fragment");
+            // texCoord0 is what the sampler-path UV fallback uses; pre-populate so the
+            // depth pass declares the matching varying on the vertex side too.
+            ctx.Varyings.Add(("texCoord0", "vec2"));
+
+            helper.AlphaExpr  = EvalMaster(master, "Alpha",        ctx, "1.0");
+            helper.CutoffExpr = EvalMaster(master, "Alpha Cutoff", ctx, "0.0");
+            helper.AlphaCtx   = ctx;
+            helper.Diagnostics.AddRange(ctx.Diagnostics);
+        }
+
+        if (needsVertexOffset)
+        {
+            var ctx = new ShaderGenContext(graph, ShaderStage.Vertex);
+            foreach (var u in propertyUniforms) ctx.Uniforms.Add(u);
+            ctx.Includes.Add("Fragment");
+            ctx.Includes.Add("VertexAttributes");
+
+            helper.VertexPosOffsetExpr = EvalMaster(master, "Vertex Position", ctx, "vec3(0.0)");
+            helper.VertexCtx = ctx;
+            helper.Diagnostics.AddRange(ctx.Diagnostics);
+        }
+
+        return helper;
+    }
+
+    /// <summary>Find by-name whether a master input port has an incoming edge. Lighter
+    /// than <see cref="HasIncomingEdge"/> because we don't need the ctx (this runs
+    /// before per-pass contexts are built).</summary>
+    private static bool HasIncomingEdgeNamed(Prowl.Runtime.GraphTools.Graph graph, Node node, string portName)
+    {
+        var port = node.GetInput(portName);
+        if (port == null || port.IsHidden) return false;
+        foreach (var e in graph.Edges)
+            if (e.TargetNodeId == node.Id && e.TargetPortName == portName) return true;
+        return false;
     }
 
     /// <summary>Unlit fragment body — flat-shaded passthrough of Albedo + Emission,
@@ -207,6 +311,13 @@ public static class ShaderGraphCompiler
         }
         sb.AppendLine("    gl_Position = TransformClip(_vertPos);");
         sb.AppendLine("    texCoord0 = vertexTexCoord0;");
+        // Optional varyings — assigned only when a fragment node asked for them. Keeps
+        // unused slots out of the generated shader.
+        foreach (var (name, _) in ctx.Varyings)
+        {
+            if (name == "texCoord1")     sb.AppendLine("    texCoord1 = vertexTexCoord1;");
+            if (name == "vInstanceData") sb.AppendLine("    vInstanceData = GetInstanceCustomData();");
+        }
         sb.AppendLine("    worldPos = TransformPosition(_vertPos);");
         sb.AppendLine("    vColor = GetInstanceColor();");
         sb.AppendLine("    vNormal = TransformDirection(_vertNormal);");
@@ -264,7 +375,20 @@ public static class ShaderGraphCompiler
             var keyword = ShaderTypeUtil.ToPropertyKeyword(p.PropertyType);
             if (keyword == null) continue; // not a material-property-able type
 
-            propertyBlock.Add($"    {name} (\"{p.DisplayName}\", {keyword}) = {p.DefaultLiteral}");
+            // Range(min, max) — override the plain "Float" keyword when the node asks
+            // for a ranged slider. The parser lowers Range back to ShaderPropertyType.Float
+            // at import time; this is just a way to carry the min/max hint through the
+            // generated .shader source.
+            if (n is IShaderPropertyRange rp && p.PropertyType == ShaderType.Float)
+                keyword = $"Range({ShaderGenContext.Fmt(rp.RangeMin)}, {ShaderGenContext.Fmt(rp.RangeMax)})";
+
+            // Matrix properties have no parseable default syntax — emit without `= ...`.
+            // Empty or whitespace default literal is treated the same way.
+            var def = p.DefaultLiteral;
+            if (string.IsNullOrWhiteSpace(def))
+                propertyBlock.Add($"    {name} (\"{p.DisplayName}\", {keyword})");
+            else
+                propertyBlock.Add($"    {name} (\"{p.DisplayName}\", {keyword}) = {def}");
             uniformDecls.Add($"uniform {ShaderTypeUtil.ToGlsl(p.PropertyType)} {name};");
         }
     }
@@ -345,7 +469,7 @@ public static class ShaderGraphCompiler
 
     private static string EmitShader(string shaderName, List<string> propertyBlock,
         ShaderGenContext vertCtx, ShaderGenContext fragCtx, string surfaceMain, string vertexBody,
-        ShaderGraphRenderSettings settings)
+        ShaderGraphRenderSettings settings, DepthPassHelper? depth)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Shader \"Generated/{shaderName}\"");
@@ -357,13 +481,19 @@ public static class ShaderGraphCompiler
         sb.AppendLine();
 
         EmitStandardPass(sb, vertCtx, fragCtx, surfaceMain, vertexBody, settings);
-        // DepthNormals and Shadow passes reuse the standard cull/zwrite but never blend —
-        // they're depth-only so alpha blending isn't meaningful. Shadow pass is gated
-        // by CastsShadows — transparent / particle / post-effect surfaces usually opt
-        // out because their opaque silhouette would fall across nearby meshes.
-        EmitDepthNormalsPass(sb, settings);
-        if (settings.CastsShadows)
-            EmitShadowPass(sb, settings);
+        // Transparent geometry must NOT participate in the depth pre-pass — it'd
+        // corrupt the opaque depth buffer that soft particles, SSAO, and scene-color
+        // sampling read from, and its own blend mode would never land behind it.
+        // Only opaque shaders contribute to _CameraDepthTexture.
+        if (settings.Blend == ShaderBlendMode.Opaque)
+            EmitDepthNormalsPass(sb, settings, depth);
+
+        // Shadow casting: CastsShadows is the authoritative toggle, but transparent
+        // surfaces are clamped off because a solid silhouette doesn't match the
+        // translucent render. Users who need cutout / dithered-alpha shadow casters
+        // can author an opaque graph with alpha testing in the fragment body.
+        if (settings.CastsShadows && settings.Blend == ShaderBlendMode.Opaque)
+            EmitShadowPass(sb, settings, depth);
 
         return sb.ToString();
     }
@@ -464,6 +594,9 @@ public static class ShaderGraphCompiler
         sb.AppendLine("Pass \"Standard\"");
         sb.AppendLine("{");
         AppendRenderState(sb, settings, "    ");
+        // Pass-level directives pushed by nodes (e.g. `GrabTexture "_GrabTexture"` from
+        // SceneColorNode). Fragment nodes push; we emit once the settings block is done.
+        foreach (var d in fragCtx.PassDirectives) sb.AppendLine($"    {d}");
         sb.AppendLine();
         sb.AppendLine("    GLSLPROGRAM");
         sb.AppendLine();
@@ -476,6 +609,8 @@ public static class ShaderGraphCompiler
         foreach (var inc in vertCtx.Includes) sb.AppendLine($"        #include \"{inc}\"");
         foreach (var (n, t) in vertCtx.Varyings) sb.AppendLine($"        out {t} {n};");
         foreach (var u in vertCtx.Uniforms) sb.AppendLine($"        {u}");
+        // File-scope helper functions (e.g. CustomCode wrappers) go BEFORE main().
+        if (vertCtx.TopLevelHelpers.Length > 0) { sb.AppendLine(); sb.Append(vertCtx.TopLevelHelpers.ToString()); }
         sb.AppendLine();
         sb.AppendLine("        void main()");
         sb.AppendLine("        {");
@@ -493,6 +628,7 @@ public static class ShaderGraphCompiler
         sb.AppendLine("        layout (location = 0) out vec4 fragColor;");
         foreach (var (n, t) in fragCtx.Varyings) sb.AppendLine($"        in {t} {n};");
         foreach (var u in fragCtx.Uniforms) sb.AppendLine($"        {u}");
+        if (fragCtx.TopLevelHelpers.Length > 0) { sb.AppendLine(); sb.Append(fragCtx.TopLevelHelpers.ToString()); }
         sb.AppendLine();
         sb.AppendLine("        void main()");
         sb.AppendLine("        {");
@@ -505,70 +641,148 @@ public static class ShaderGraphCompiler
         sb.AppendLine();
     }
 
-    private static void EmitDepthNormalsPass(StringBuilder sb, ShaderGraphRenderSettings settings)
+    private static void EmitDepthNormalsPass(StringBuilder sb, ShaderGraphRenderSettings settings, DepthPassHelper? depth)
     {
-        // Minimal pass for the depth-prepass / ssao path — uses geometry only, no graph.
-        // Graph-driven UV transform integration lives in task #92.
         sb.AppendLine("Pass \"DepthNormals\"");
         sb.AppendLine("{");
         sb.AppendLine("    Tags { \"LightMode\" = \"DepthNormals\" }");
         sb.AppendLine($"    Cull {CullKeyword(settings.Cull)}");
         sb.AppendLine();
         sb.AppendLine("    GLSLPROGRAM");
-        sb.AppendLine("    Vertex");
-        sb.AppendLine("    {");
-        sb.AppendLine("        #include \"Fragment\"");
-        sb.AppendLine("        #include \"VertexAttributes\"");
-        sb.AppendLine("        out vec3 vNormal;");
-        sb.AppendLine("        void main()");
-        sb.AppendLine("        {");
-        sb.AppendLine("            gl_Position = TransformClip(vertexPosition);");
-        sb.AppendLine("            vNormal = TransformDirection(vertexNormal);");
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        sb.AppendLine("    Fragment");
-        sb.AppendLine("    {");
-        sb.AppendLine("        #include \"Fragment\"");
-        sb.AppendLine("        layout (location = 0) out vec4 normalOut;");
-        sb.AppendLine("        in vec3 vNormal;");
-        sb.AppendLine("        void main()");
-        sb.AppendLine("        {");
-        sb.AppendLine("            normalOut = EncodeViewNormal(normalize(vNormal));");
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
+
+        EmitDepthVertexStage(sb, depth);
+        EmitDepthFragmentStage(sb, depth, emitNormalOut: true);
+
         sb.AppendLine("    ENDGLSL");
         sb.AppendLine("}");
         sb.AppendLine();
     }
 
-    private static void EmitShadowPass(StringBuilder sb, ShaderGraphRenderSettings settings)
+    private static void EmitShadowPass(StringBuilder sb, ShaderGraphRenderSettings settings, DepthPassHelper? depth)
     {
-        // Shadow caster — depth only. Each #include must sit on its own line; GLSL's
-        // preprocessor doesn't accept multiple directives on a single line.
         sb.AppendLine("Pass \"Shadow\"");
         sb.AppendLine("{");
         sb.AppendLine("    Tags { \"LightMode\" = \"ShadowCaster\" }");
         sb.AppendLine($"    Cull {CullKeyword(settings.Cull)}");
         sb.AppendLine();
         sb.AppendLine("    GLSLPROGRAM");
+
+        EmitDepthVertexStage(sb, depth);
+        EmitDepthFragmentStage(sb, depth, emitNormalOut: false);
+
+        sb.AppendLine("    ENDGLSL");
+        sb.AppendLine("}");
+    }
+
+    /// <summary>
+    /// Vertex stage shared between DepthNormals and Shadow passes. Always transforms
+    /// the vertex to clip space; optionally applies the authored Vertex Position
+    /// offset + forwards the UV varying when the alpha cutout subtree needs it.
+    /// </summary>
+    private static void EmitDepthVertexStage(StringBuilder sb, DepthPassHelper? depth)
+    {
+        bool needsVertOffset = depth?.NeedsVertexOffset == true;
+        bool needsUV         = depth?.NeedsAlphaDiscard == true; // cutout samples textures by UV
+        bool needsNormalOut  = true; // DepthNormals always needs world normal forwarded
+
         sb.AppendLine("    Vertex");
         sb.AppendLine("    {");
         sb.AppendLine("        #include \"Fragment\"");
         sb.AppendLine("        #include \"VertexAttributes\"");
+
+        // Uniforms + includes pulled in by the vertex offset subtree (e.g. a sampler
+        // the user wired into a wind-sway custom-code node).
+        if (needsVertOffset && depth?.VertexCtx is { } vctx)
+        {
+            foreach (var inc in vctx.Includes)
+                if (inc != "Fragment" && inc != "VertexAttributes")
+                    sb.AppendLine($"        #include \"{inc}\"");
+            foreach (var u in vctx.Uniforms) sb.AppendLine($"        {u}");
+        }
+
+        if (needsNormalOut) sb.AppendLine("        out vec3 vNormal;");
+        if (needsUV)        sb.AppendLine("        out vec2 texCoord0;");
+
+        sb.AppendLine();
         sb.AppendLine("        void main()");
         sb.AppendLine("        {");
-        sb.AppendLine("            gl_Position = TransformClip(vertexPosition);");
+        if (needsVertOffset && depth?.VertexCtx is { } vctx2)
+        {
+            if (vctx2.BodyPrelude.Length > 0) sb.Append(vctx2.BodyPrelude.ToString());
+            sb.AppendLine($"            vec3 _vertPos = vertexPosition + {depth!.VertexPosOffsetExpr};");
+            sb.AppendLine("            gl_Position = TransformClip(_vertPos);");
+        }
+        else
+        {
+            sb.AppendLine("            gl_Position = TransformClip(vertexPosition);");
+        }
+        if (needsNormalOut) sb.AppendLine("            vNormal = TransformDirection(vertexNormal);");
+        if (needsUV)        sb.AppendLine("            texCoord0 = vertexTexCoord0;");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// Fragment stage shared between DepthNormals and Shadow passes. When the graph
+    /// is cutout, evaluates the Alpha + AlphaCutoff subtree and discards below the
+    /// threshold. <paramref name="emitNormalOut"/> controls whether the encoded view
+    /// normal is written (DepthNormals) or whether the pass is purely depth (Shadow).
+    /// </summary>
+    private static void EmitDepthFragmentStage(StringBuilder sb, DepthPassHelper? depth, bool emitNormalOut)
+    {
+        bool doDiscard = depth?.NeedsAlphaDiscard == true && depth.AlphaCtx != null;
+
         sb.AppendLine("    Fragment");
         sb.AppendLine("    {");
+        sb.AppendLine("        #include \"Fragment\"");
+
+        // Pull in every include, uniform, and varying the alpha subtree needed so
+        // `texture(_MainTex, uv)` and friends resolve. The cutout expressions were
+        // authored against these.
+        if (doDiscard && depth?.AlphaCtx is { } actx)
+        {
+            foreach (var inc in actx.Includes)
+                if (inc != "Fragment") sb.AppendLine($"        #include \"{inc}\"");
+            foreach (var u in actx.Uniforms) sb.AppendLine($"        {u}");
+            // texCoord0 is the universal UV varying — the vertex stage forwarded it
+            // when needsUV fired above.
+            foreach (var (n, t) in actx.Varyings)
+            {
+                // Only declare the varyings the vertex stage also emits, otherwise
+                // the linker will complain. The vertex stage outputs: texCoord0 (via
+                // needsUV), vNormal (via emitNormalOut).
+                if (n == "texCoord0") sb.AppendLine($"        in {t} {n};");
+            }
+        }
+
+        if (emitNormalOut)
+        {
+            sb.AppendLine("        layout (location = 0) out vec4 normalOut;");
+            sb.AppendLine("        in vec3 vNormal;");
+        }
+
+        sb.AppendLine();
         sb.AppendLine("        void main()");
         sb.AppendLine("        {");
-        sb.AppendLine("            gl_FragDepth = gl_FragCoord.z;");
+        if (doDiscard && depth?.AlphaCtx is { } actx2)
+        {
+            if (actx2.BodyPrelude.Length > 0) sb.Append(actx2.BodyPrelude.ToString());
+            // Standard cutout: discard when alpha falls below the threshold. A zero
+            // cutoff is treated as "cutoff disabled" so graphs that were switched to
+            // AlphaTest but haven't wired Alpha Cutoff yet don't accidentally kill
+            // every fragment.
+            sb.AppendLine($"            float _sgCutoffAlpha  = {depth!.AlphaExpr};");
+            sb.AppendLine($"            float _sgCutoffThresh = {depth.CutoffExpr};");
+            sb.AppendLine("            if (_sgCutoffThresh > 0.0 && _sgCutoffAlpha < _sgCutoffThresh) discard;");
+        }
+
+        if (emitNormalOut)
+            sb.AppendLine("            normalOut = EncodeViewNormal(normalize(vNormal));");
+        else
+            sb.AppendLine("            gl_FragDepth = gl_FragCoord.z;");
+
         sb.AppendLine("        }");
         sb.AppendLine("    }");
-        sb.AppendLine("    ENDGLSL");
-        sb.AppendLine("}");
     }
 
     private static string StubShader(string shaderName, string reason)
