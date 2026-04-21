@@ -165,7 +165,19 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// <summary>Forget the user override for <paramref name="name"/> — next sync
     /// will refill it from the shader's current default. Useful for an inspector
     /// "revert to default" button.</summary>
-    public void RevertProperty(string name) { _overrides.Remove(name); MarkDirty(); }
+    /// <remarks>
+    /// Removes from BOTH the override set AND the backing <c>_properties</c> dict.
+    /// If we only cleared <c>_overrides</c>, <c>ApplyMaterialUniforms</c> would still
+    /// see the stale value in <c>_properties</c> and upload it anyway — the defaults
+    /// fill-in path only runs for keys not already in the property dict. This was a
+    /// silent "revert does nothing" bug before.
+    /// </remarks>
+    public void RevertProperty(string name)
+    {
+        _overrides.Remove(name);
+        _properties?.RemoveProperty(name);
+        MarkDirty();
+    }
 
     /// <summary>True if the user has explicitly set this property (vs holding the
     /// shader's default value). Inspector uses this to highlight overridden fields.</summary>
