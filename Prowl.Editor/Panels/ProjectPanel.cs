@@ -154,6 +154,156 @@ public class ProjectPanel : DockPanel
     }
 
     // ================================================================
+    //  Drag & Drop helpers
+    // ================================================================
+
+    /// <summary>
+    /// Build an <see cref="AssetDragPayload"/> for starting a drag from <paramref name="item"/>.
+    /// If the item is part of the current selection, the payload includes every selected
+    /// item so a multi-select drag moves the whole set. Returns null for undraggable items
+    /// (sub-assets — they live inside a parent asset and can't be moved independently).
+    /// </summary>
+    private static AssetDragPayload? BuildAssetDragPayload(ContentItem item)
+    {
+        if (item.IsSubAsset) return null;
+
+        // Primary lookup — the item the user actually grabbed.
+        Type? primaryType = null;
+        if (!item.IsFolder && item.Guid != Guid.Empty)
+            primaryType = EditorAssetDatabase.Instance?.GetEntry(item.RelativePath)?.MainAssetType;
+
+        // Expand to the full selection ONLY if the grabbed item is inside it. That matches
+        // how Explorer / Finder behave: clicking-and-dragging an unselected item drags just
+        // that item, not the prior selection.
+        var bundle = new List<ContentItem>();
+        if (Selection.IsSelected(item))
+        {
+            foreach (var s in Selection.GetSelected<ContentItem>())
+                if (!s.IsSubAsset) bundle.Add(s);
+            // Ensure the grabbed item is first (payload.AssetGuid/Name reflect primary).
+            bundle.Remove(item);
+            bundle.Insert(0, item);
+        }
+        else
+        {
+            bundle.Add(item);
+        }
+
+        var guids = bundle.Select(b => b.Guid).ToArray();
+        var paths = bundle.Select(b => b.RelativePath).ToArray();
+        return new AssetDragPayload(item.Guid, item.Name, primaryType, guids, paths);
+    }
+
+    /// <summary>
+    /// Move every asset/folder in <paramref name="payload"/> into <paramref name="destRelFolder"/>
+    /// (assets-relative; empty = root). Skips no-ops and self-containment cycles, resolves
+    /// name collisions with " (N)" suffixes, and refreshes thumbnails after the move.
+    /// </summary>
+    private void PerformAssetMove(AssetDragPayload payload, string destRelFolder)
+    {
+        var db = EditorAssetDatabase.Instance;
+        if (db == null || Project.Current == null) return;
+
+        destRelFolder = (destRelFolder ?? "").Replace('\\', '/').TrimEnd('/');
+        string destAbs = string.IsNullOrEmpty(destRelFolder)
+            ? Project.Current.AssetsPath
+            : Path.Combine(Project.Current.AssetsPath, destRelFolder);
+        if (!Directory.Exists(destAbs)) return;
+
+        int moved = 0;
+        foreach (var rawSrc in payload.AssetPaths)
+        {
+            if (string.IsNullOrEmpty(rawSrc)) continue;
+            string src = rawSrc.Replace('\\', '/').TrimEnd('/');
+            string srcName = Path.GetFileName(src);
+            string srcDir = Path.GetDirectoryName(src)?.Replace('\\', '/') ?? "";
+
+            // Already in target folder — nothing to do.
+            if (srcDir.Equals(destRelFolder, StringComparison.OrdinalIgnoreCase)) continue;
+
+            string srcAbs = Path.Combine(Project.Current.AssetsPath, src);
+            bool isFolder = Directory.Exists(srcAbs) && !File.Exists(srcAbs);
+
+            if (isFolder)
+            {
+                // Can't drop a folder on itself or into one of its descendants — that would
+                // delete the folder mid-move.
+                string srcWithSlash = src + "/";
+                if (destRelFolder.Equals(src, StringComparison.OrdinalIgnoreCase)
+                    || destRelFolder.StartsWith(srcWithSlash, StringComparison.OrdinalIgnoreCase))
+                {
+                    Runtime.Debug.LogWarning($"Skipped: can't move folder '{src}' into itself.");
+                    continue;
+                }
+
+                string unique = AssetCreateMenu.FindUniqueName(destAbs, srcName, "");
+                string newRel = string.IsNullOrEmpty(destRelFolder) ? unique : destRelFolder + "/" + unique;
+                if (db.MoveFolder(src, newRel)) moved++;
+            }
+            else if (File.Exists(srcAbs))
+            {
+                string ext = Path.GetExtension(srcName);
+                string baseName = Path.GetFileNameWithoutExtension(srcName);
+                string unique = AssetCreateMenu.FindUniqueName(destAbs, baseName, ext);
+                string newRel = string.IsNullOrEmpty(destRelFolder) ? unique : destRelFolder + "/" + unique;
+                if (db.MoveAsset(src, newRel)) moved++;
+            }
+        }
+
+        if (moved > 0)
+        {
+            _thumbnailCache.Clear(); // paths changed — thumbnail lookup may be stale
+            Runtime.Debug.Log($"Moved {moved} item(s) to '{(string.IsNullOrEmpty(destRelFolder) ? "Assets" : destRelFolder)}'.");
+        }
+    }
+
+    /// <summary>
+    /// Create a prefab for <paramref name="go"/> inside <paramref name="destRelFolder"/>
+    /// (assets-relative; empty = root). Uniquifies the filename against what's already there.
+    /// </summary>
+    private static void CreatePrefabInFolder(GameObject go, string destRelFolder)
+    {
+        if (Project.Current == null) return;
+        string absFolder = string.IsNullOrEmpty(destRelFolder)
+            ? Project.Current.AssetsPath
+            : Path.Combine(Project.Current.AssetsPath, destRelFolder);
+        if (!Directory.Exists(absFolder)) return;
+
+        string uniqueName = AssetCreateMenu.FindUniqueName(absFolder, go.Name, ".prefab");
+        string relPath = string.IsNullOrEmpty(destRelFolder) ? uniqueName : destRelFolder + "/" + uniqueName;
+        Prefabs.PrefabUtility.CreatePrefab(go, relPath);
+    }
+
+    /// <summary>
+    /// True when an <see cref="AssetDragPayload"/> could meaningfully land in
+    /// <paramref name="destRelFolder"/> — used to gate the hover highlight so folders that
+    /// would no-op (already the parent) or cycle (self/descendant) don't light up.
+    /// </summary>
+    private static bool CanAcceptAssetDropInto(string destRelFolder)
+    {
+        if (!DragDrop.IsDraggingType<AssetDragPayload>()) return false;
+        var payload = (AssetDragPayload)DragDrop.Payload!;
+
+        foreach (var rawSrc in payload.AssetPaths)
+        {
+            if (string.IsNullOrEmpty(rawSrc)) continue;
+            string src = rawSrc.Replace('\\', '/').TrimEnd('/');
+            string srcDir = Path.GetDirectoryName(src)?.Replace('\\', '/') ?? "";
+
+            if (srcDir.Equals(destRelFolder, StringComparison.OrdinalIgnoreCase)) continue;
+
+            // Self / descendant cycle check (folders only).
+            string srcWithSlash = src + "/";
+            if (destRelFolder.Equals(src, StringComparison.OrdinalIgnoreCase)
+                || destRelFolder.StartsWith(srcWithSlash, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            return true;
+        }
+        return false;
+    }
+
+    // ================================================================
     //  Body: Folder Tree + Content
     // ================================================================
 
@@ -276,6 +426,32 @@ public class ProjectPanel : DockPanel
 
             // Right-click context menu on folder tree
             BuildFolderTreeContextMenu(paper, $"proj_ft_ctx_{relativePath.GetHashCode()}", relativePath);
+
+            // Drop-target highlight + accepts. Folders take precedence over the content
+            // background because they're rendered first during the tree walk; the background
+            // Accept falls through when the payload is already consumed here.
+            bool isAssetDrag = DragDrop.IsDraggingType<AssetDragPayload>();
+            bool isGODrag = DragDrop.IsDraggingType<GameObjectDragPayload>();
+            bool canTakeAsset = isAssetDrag && CanAcceptAssetDropInto(relativePath);
+            if ((canTakeAsset || isGODrag) && paper.IsParentHovered)
+            {
+                paper.Box($"proj_fn_drop_{relativePath.GetHashCode()}")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
+                    .Rounded(3).IsNotInteractable()
+                    .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                    .BorderColor(EditorTheme.Purple400).BorderWidth(1);
+            }
+
+            var treeAssetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
+                _ => CanAcceptAssetDropInto(relativePath));
+            if (treeAssetDrop != null)
+                PerformAssetMove(treeAssetDrop, relativePath);
+
+            var treeGODrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
+            if (treeGODrop != null)
+                foreach (var go in treeGODrop.GameObjects)
+                    if (go != null) CreatePrefabInFolder(go, relativePath);
         }
 
         // Children
@@ -325,33 +501,32 @@ public class ProjectPanel : DockPanel
                 }
             }
 
-            // Accept GameObjectDragPayload to create prefabs
+            // While any drag is active, show a banner at the top of the content area
+            // summarizing what the user will get by dropping on the background. This is a
+            // visual hint only — the actual Accept runs AFTER the items are drawn so per-item
+            // drop targets (folders in the grid) can win before the background fallback.
             if (DragDrop.IsDraggingType<GameObjectDragPayload>() && paper.IsParentHovered)
             {
                 paper.Box("proj_prefab_drop")
                     .Height(24)
-                    .BackgroundColor(System.Drawing.Color.FromArgb(40, EditorTheme.Purple400))
+                    .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                     .Rounded(3)
-                    .Text("Drop to create Prefab", EditorTheme.DefaultFont)
+                    .Text($"Drop to create Prefab in {(string.IsNullOrEmpty(_currentFolder) ? "Assets" : _currentFolder)}", EditorTheme.DefaultFont)
                     .TextColor(EditorTheme.Purple400)
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleCenter);
             }
-
-            var goDrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
-            if (goDrop != null)
+            else if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered
+                && CanAcceptAssetDropInto(_currentFolder))
             {
-                var go = goDrop.GameObjects.FirstOrDefault();
-                if (go != null)
-                {
-                    string folder = _currentFolder;
-                    string absFolder = string.IsNullOrEmpty(folder)
-                        ? Project.Current!.AssetsPath
-                        : Path.Combine(Project.Current!.AssetsPath, folder);
-                    string uniqueName = AssetCreateMenu.FindUniqueName(absFolder, go.Name, ".prefab");
-                    string relPath = string.IsNullOrEmpty(folder) ? uniqueName : folder + "/" + uniqueName;
-                    Prefabs.PrefabUtility.CreatePrefab(go, relPath);
-                }
+                paper.Box("proj_asset_drop_hint")
+                    .Height(24)
+                    .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                    .Rounded(3)
+                    .Text($"Drop to move into {(string.IsNullOrEmpty(_currentFolder) ? "Assets" : _currentFolder)}", EditorTheme.DefaultFont)
+                    .TextColor(EditorTheme.Purple400)
+                    .FontSize(EditorTheme.FontSize - 2)
+                    .Alignment(TextAlignment.MiddleCenter);
             }
 
             // Breadcrumb
@@ -383,6 +558,21 @@ public class ProjectPanel : DockPanel
                     }
                 }
             }
+
+            // Background-level drop accepts — run last so specific folder items get first crack.
+            // By the time execution reaches here, any per-item AcceptDrop has already consumed
+            // the payload if it matched, so these fall through harmlessly.
+            var goDrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
+            if (goDrop != null)
+            {
+                foreach (var go in goDrop.GameObjects)
+                    if (go != null) CreatePrefabInFolder(go, _currentFolder);
+            }
+
+            var assetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
+                _ => CanAcceptAssetDropInto(_currentFolder));
+            if (assetDrop != null)
+                PerformAssetMove(assetDrop, _currentFolder);
         }
     }
 
@@ -479,27 +669,23 @@ public class ProjectPanel : DockPanel
                 })
                 .OnDragStart(item, (it, _) =>
                 {
-                    if (!it.IsFolder && it.Guid != Guid.Empty)
+                    // Sub-assets still handled separately: they can't be moved but we DO want
+                    // the drag to flow to scene-view drop handlers (assign material, etc.).
+                    if (it.IsSubAsset && it.Guid != Guid.Empty)
                     {
-                        Type? assetType = null;
-                        if (it.IsSubAsset)
+                        Type? subType = null;
+                        var db = EditorAssetDatabase.Instance;
+                        if (db != null)
                         {
-                            // Find sub-asset type from parent entry
-                            var db = EditorAssetDatabase.Instance;
-                            if (db != null)
-                            {
-                                var subs = db.GetSubAssets(it.ParentGuid);
-                                var sub = subs.FirstOrDefault(s => s.Guid == it.Guid);
-                                assetType = sub?.Type;
-                            }
+                            var subs = db.GetSubAssets(it.ParentGuid);
+                            subType = subs.FirstOrDefault(s => s.Guid == it.Guid)?.Type;
                         }
-                        else
-                        {
-                            var entry = EditorAssetDatabase.Instance?.GetEntry(it.RelativePath);
-                            assetType = entry?.MainAssetType;
-                        }
-                        DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, assetType));
+                        DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                        return;
                     }
+
+                    var payload = BuildAssetDragPayload(it);
+                    if (payload != null) DragDrop.StartDrag(payload);
                 })
                 .OnPostLayout((handle, rect) =>
                 {
@@ -579,6 +765,34 @@ public class ProjectPanel : DockPanel
 
                 // Right-click context menu
                 BuildItemContextMenu(paper, $"proj_li_ctx_{i}", item);
+
+                // Folder list items are drop targets just like their grid-view counterparts.
+                if (item.IsFolder)
+                {
+                    bool isAssetDrag = DragDrop.IsDraggingType<AssetDragPayload>();
+                    bool isGODrag = DragDrop.IsDraggingType<GameObjectDragPayload>();
+                    bool canTakeAsset = isAssetDrag && CanAcceptAssetDropInto(item.RelativePath);
+
+                    if ((canTakeAsset || isGODrag) && paper.IsParentHovered)
+                    {
+                        paper.Box($"proj_li_drop_{i}")
+                            .PositionType(PositionType.SelfDirected)
+                            .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
+                            .Rounded(3).IsNotInteractable()
+                            .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                            .BorderColor(EditorTheme.Purple400).BorderWidth(1);
+                    }
+
+                    var liAssetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
+                        _ => CanAcceptAssetDropInto(item.RelativePath));
+                    if (liAssetDrop != null)
+                        PerformAssetMove(liAssetDrop, item.RelativePath);
+
+                    var liGODrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
+                    if (liGODrop != null)
+                        foreach (var go in liGODrop.GameObjects)
+                            if (go != null) CreatePrefabInFolder(go, item.RelativePath);
+                }
             }
         }
     }
@@ -854,22 +1068,16 @@ public class ProjectPanel : DockPanel
             })
             .OnDragStart(item, (it, _) =>
             {
-                if (!it.IsFolder && it.Guid != Guid.Empty)
+                if (it.IsSubAsset && it.Guid != Guid.Empty)
                 {
-                    var entry = EditorAssetDatabase.Instance?.GetEntry(it.RelativePath);
-                    Type? assetType = entry?.MainAssetType;
-                    if (it.IsSubAsset)
-                    {
-                        var db = EditorAssetDatabase.Instance;
-                        if (db != null)
-                        {
-                            var subs = db.GetSubAssets(it.ParentGuid);
-                            var sub = subs.FirstOrDefault(s => s.Guid == it.Guid);
-                            assetType = sub?.Type;
-                        }
-                    }
-                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, assetType));
+                    var db = EditorAssetDatabase.Instance;
+                    Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    return;
                 }
+
+                var payload = BuildAssetDragPayload(it);
+                if (payload != null) DragDrop.StartDrag(payload);
             })
             .Tooltip(item.Name)
             .OnPostLayout((handle, rect) =>
@@ -957,6 +1165,34 @@ public class ProjectPanel : DockPanel
             }
 
             BuildItemContextMenu(paper, $"{id}_ctx", item);
+
+            // Folder grid items are drop targets for asset-move and prefab-create.
+            if (item.IsFolder)
+            {
+                bool isAssetDrag = DragDrop.IsDraggingType<AssetDragPayload>();
+                bool isGODrag = DragDrop.IsDraggingType<GameObjectDragPayload>();
+                bool canTakeAsset = isAssetDrag && CanAcceptAssetDropInto(item.RelativePath);
+
+                if ((canTakeAsset || isGODrag) && paper.IsParentHovered)
+                {
+                    paper.Box($"{id}_drop")
+                        .PositionType(PositionType.SelfDirected)
+                        .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
+                        .Rounded(4).IsNotInteractable()
+                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                        .BorderColor(EditorTheme.Purple400).BorderWidth(2);
+                }
+
+                var gridAssetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
+                    _ => CanAcceptAssetDropInto(item.RelativePath));
+                if (gridAssetDrop != null)
+                    PerformAssetMove(gridAssetDrop, item.RelativePath);
+
+                var gridGODrop = DragDrop.AcceptDrop<GameObjectDragPayload>(paper.IsParentHovered);
+                if (gridGODrop != null)
+                    foreach (var go in gridGODrop.GameObjects)
+                        if (go != null) CreatePrefabInFolder(go, item.RelativePath);
+            }
         }
     }
 
