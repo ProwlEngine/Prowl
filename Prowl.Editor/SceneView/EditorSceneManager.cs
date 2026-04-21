@@ -155,12 +155,13 @@ public static class EditorSceneManager
                 {
                     // Resolve via AssetRef so the asset gets loaded through the standard
                     // pipeline (importer runs, sub-assets register). Main asset is the
-                    // ShaderGraph itself; the compiled Shader is its sub-asset.
+                    // ShaderGraph itself; the compiled Shader is its sub-asset. Only
+                    // shader graphs have an editor window right now — visual scripting
+                    // etc. will route to their own windows once built.
                     var graphRef = new AssetRef<Runtime.GraphTools.Graph>(guid);
-                    var graph = graphRef.Res;
-                    if (graph != null)
+                    if (graphRef.Res is Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
                     {
-                        Editor.GraphTools.GraphEditorWindow.OpenFor(graph);
+                        Editor.GraphTools.ShaderGraphs.ShaderGraphEditorWindow.OpenFor(sg);
                         return true;
                     }
                     return false;
