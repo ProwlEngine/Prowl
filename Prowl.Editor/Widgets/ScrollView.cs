@@ -70,7 +70,7 @@ public static class ScrollView
         var contentBuilder = paper.Column($"{id}_content")
             .PositionType(PositionType.SelfDirected)
             .Position(0, -scrollY)
-            .Transition(GuiProp.Top, 0.25f, Easing.EaseOut)
+            .Transition(GuiProp.Top, 0.33f, Easing.EaseOut)
             .Width(contentW)
             .Height(UnitValue.Auto)
             .ChildLeft(paddingLeft).ChildRight(paddingRight)

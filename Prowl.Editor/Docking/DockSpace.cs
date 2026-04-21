@@ -33,6 +33,14 @@ public class DockSpace
     // --- Layout cache ---
     private readonly Dictionary<DockNode, Rect> _leafRects = new();
 
+    // --- Drop preview animation ---
+    // Keeps a single animated preview rect. When nothing is hovered, the preview fades out;
+    // once it's fully hidden, the next appearance snaps instantly to the new target. While
+    // visible, target changes interpolate smoothly (one rect moves between zones).
+    private Rect _previewRect;
+    private float _previewAlpha;
+    private bool _previewVisible;
+
 
     public DockSpace(DockNode root) { Root = root; }
 
@@ -661,6 +669,9 @@ public class DockSpace
 
     private void DrawDockIndicators(Paper paper)
     {
+        // Animated drop preview runs every frame so fade-out + snap-on-reappear works.
+        DrawDropPreview(paper);
+
         if (_hoveredLeaf == null) return;
         var rect = _hoveredLeafRect;
         float cx = rect.Min.X + rect.Size.X / 2, cy = rect.Min.Y + rect.Size.Y / 2;
@@ -670,35 +681,94 @@ public class DockSpace
         var hi = Color.FromArgb(85, EditorTheme.Blue500);
         var bd = Color.FromArgb(85, EditorTheme.Blue600);
 
-        if (_hoveredZone != DockZone.None) DrawDropPreview(paper);
-
-        Ind(paper, "di_c", cx - hs, cy - hs, s, _hoveredZone == DockZone.Center ? hi : bg, bd);
-        Ind(paper, "di_t", cx - hs, cy - hs - g - s, s, _hoveredZone == DockZone.Top ? hi : bg, bd);
-        Ind(paper, "di_b", cx - hs, cy + hs + g, s, _hoveredZone == DockZone.Bottom ? hi : bg, bd);
-        Ind(paper, "di_l", cx - hs - g - s, cy - hs, s, _hoveredZone == DockZone.Left ? hi : bg, bd);
-        Ind(paper, "di_r", cx + hs + g, cy - hs, s, _hoveredZone == DockZone.Right ? hi : bg, bd);
+        Ind(paper, "di_c", cx - hs, cy - hs, s, _hoveredZone == DockZone.Center ? hi : bg, bd, EditorIcons.Clone);
+        Ind(paper, "di_t", cx - hs, cy - hs - g - s, s, _hoveredZone == DockZone.Top ? hi : bg, bd, EditorIcons.ArrowUp);
+        Ind(paper, "di_b", cx - hs, cy + hs + g, s, _hoveredZone == DockZone.Bottom ? hi : bg, bd, EditorIcons.ArrowDown);
+        Ind(paper, "di_l", cx - hs - g - s, cy - hs, s, _hoveredZone == DockZone.Left ? hi : bg, bd, EditorIcons.ArrowLeft);
+        Ind(paper, "di_r", cx + hs + g, cy - hs, s, _hoveredZone == DockZone.Right ? hi : bg, bd, EditorIcons.ArrowRight);
     }
 
-    private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd)
+    private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, string icon)
     {
+        var font = EditorTheme.DefaultFont;
         paper.Box(id).PositionType(PositionType.SelfDirected).Position(x, y).Size(s, s)
-            .BackgroundColor(bg).BorderColor(bd).BorderWidth(1).Rounded(4);
+            .BackgroundColor(bg).BorderColor(bd).BorderWidth(1).Rounded(4)
+            .Text(icon, font!)
+            .TextColor(Color.FromArgb(230, 235, 240, 255))
+            .FontSize(s * 0.45f)
+            .Alignment(TextAlignment.MiddleCenter);
     }
 
     private void DrawDropPreview(Paper paper)
     {
-        var r = _hoveredLeafRect;
-        float hx = r.Min.X, hy = r.Min.Y, hw = r.Size.X, hh = r.Size.Y;
-        switch (_hoveredZone)
+        // Compute the target rect this frame, or null when no zone is hovered.
+        Rect? target = null;
+        if (_hoveredLeaf != null && _hoveredZone != DockZone.None)
         {
-            case DockZone.Top:    hh *= 0.5f; break;
-            case DockZone.Bottom: hy += hh * 0.5f; hh *= 0.5f; break;
-            case DockZone.Left:   hw *= 0.5f; break;
-            case DockZone.Right:  hx += hw * 0.5f; hw *= 0.5f; break;
+            var r = _hoveredLeafRect;
+            float hx = r.Min.X, hy = r.Min.Y, hw = r.Size.X, hh = r.Size.Y;
+            switch (_hoveredZone)
+            {
+                case DockZone.Top:    hh *= 0.5f; break;
+                case DockZone.Bottom: hy += hh * 0.5f; hh *= 0.5f; break;
+                case DockZone.Left:   hw *= 0.5f; break;
+                case DockZone.Right:  hx += hw * 0.5f; hw *= 0.5f; break;
+            }
+            target = new Rect(new Float2(hx, hy), new Float2(hx + hw, hy + hh));
         }
-        paper.Box("drop_preview").PositionType(PositionType.SelfDirected).Position(hx, hy).Size(hw, hh)
-            .BackgroundColor(Color.FromArgb(40, 51, 122, 183))
-            .BorderColor(Color.FromArgb(120, 51, 122, 183)).BorderWidth(2);
+
+        // Exponential smoothing — frame-rate independent. `tMove` follows the target rect;
+        // `tAlpha` fades the preview in/out. The chosen rates feel snappy (~120ms to settle)
+        // without the perceptible lag of a slower interpolation.
+        float dt = MathF.Max(0f, (float)Runtime.Time.DeltaTime);
+        float tMove  = 1f - MathF.Exp(-dt * 18f);
+        float tAlpha = 1f - MathF.Exp(-dt * 20f);
+
+        if (target.HasValue)
+        {
+            if (!_previewVisible)
+            {
+                // Fully hidden → snap to target on first appearance. The user sees the preview
+                // arrive at the right zone immediately; subsequent zone changes animate.
+                _previewRect = target.Value;
+                _previewVisible = true;
+            }
+            else
+            {
+                _previewRect = LerpRect(_previewRect, target.Value, tMove);
+            }
+            _previewAlpha += (1f - _previewAlpha) * tAlpha;
+        }
+        else
+        {
+            _previewAlpha += (0f - _previewAlpha) * tAlpha;
+            if (_previewAlpha < 0.01f)
+            {
+                _previewAlpha = 0f;
+                _previewVisible = false;
+            }
+        }
+
+        if (_previewAlpha <= 0.01f) return;
+
+        int fillA = (int)(40f * _previewAlpha);
+        int borderA = (int)(120f * _previewAlpha);
+        paper.Box("drop_preview")
+            .PositionType(PositionType.SelfDirected)
+            .Position((float)_previewRect.Min.X, (float)_previewRect.Min.Y)
+            .Size((float)_previewRect.Size.X, (float)_previewRect.Size.Y)
+            .IsNotInteractable()
+            .BackgroundColor(Color.FromArgb(fillA, 51, 122, 183))
+            .BorderColor(Color.FromArgb(borderA, 51, 122, 183)).BorderWidth(2);
+    }
+
+    private static Rect LerpRect(Rect a, Rect b, float t)
+    {
+        float minX = (float)(a.Min.X + (b.Min.X - a.Min.X) * t);
+        float minY = (float)(a.Min.Y + (b.Min.Y - a.Min.Y) * t);
+        float maxX = (float)(a.Max.X + (b.Max.X - a.Max.X) * t);
+        float maxY = (float)(a.Max.Y + (b.Max.Y - a.Max.Y) * t);
+        return new Rect(new Float2(minX, minY), new Float2(maxX, maxY));
     }
 
     // ================================================================
