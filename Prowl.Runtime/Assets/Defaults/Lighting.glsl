@@ -88,6 +88,59 @@ uniform vec4 _AmbientGroundColor;
 uniform float _AmbientStrength;
 
 // ============================================================
+
+// Unit direction FROM a surface point TO light i. For directionals the world-space
+// position is ignored — only the stored facing direction matters.
+vec3 GetLightDirection(int i, vec3 worldPos)
+{
+    if (_LightType[i] == 0) return normalize(-_LightDirections[i]);
+    return normalize(_LightPositions[i] - worldPos);
+}
+
+// Unit direction FROM the surface TO the camera, world-space. The common
+// `normalize(_WorldSpaceCameraPos - worldPos)` idiom with a meaningful name.
+vec3 GetWorldViewDir(vec3 worldPos)
+{
+    return normalize(_WorldSpaceCameraPos.xyz - worldPos);
+}
+
+// Unit direction FROM the surface TO the camera, expressed in tangent space.
+// Useful for parallax-occlusion UV displacement and tangent-space reflection math.
+// Expects the three vertex varyings already transformed into world-space.
+vec3 GetTangentViewDir(vec3 worldPos, vec3 worldNormal, vec3 worldTangent, vec3 worldBitangent)
+{
+    vec3 vWorld = GetWorldViewDir(worldPos);
+    mat3 tbnT = transpose(mat3(normalize(worldTangent), normalize(worldBitangent), normalize(worldNormal)));
+    return normalize(tbnT * vWorld);
+}
+
+// Combined distance + spot-cone attenuation for light i at worldPos. Directional
+// lights always return 1.0. Matches the formula used inside CalculateSingleLight
+// so graph authors get the same fall-off the built-in lighting uses.
+float GetLightAttenuation(int i, vec3 worldPos)
+{
+    int lt = _LightType[i];
+    if (lt == 0) return 1.0;
+
+    vec3 lightToPixel = worldPos - _LightPositions[i];
+    float dist = length(lightToPixel);
+
+    float range = _LightRanges[i];
+    float distAtten = 1.0 / (dist * dist + 1.0);
+    float rangeAtten = 1.0 - smoothstep(range * 0.8, range, dist);
+    float atten = distAtten * rangeAtten;
+
+    if (lt == 2) {
+        float outerCos = cos(radians(_LightSpotAngles[i]));
+        float innerCos = cos(radians(_LightInnerSpotAngles[i]));
+        float lightAngleCos = dot(normalize(_LightDirections[i]), normalize(lightToPixel));
+        atten *= smoothstep(outerCos, innerCos, lightAngleCos);
+    }
+
+    return max(atten, 0.0);
+}
+
+// ============================================================
 //  Shadow sampling functions
 // ============================================================
 
