@@ -109,6 +109,7 @@ public class EditorApplication : Game
         SceneDropHandlerRegistry.Initialize();
         CreateGameObjectMenuRegistry.Initialize();
         FileIconRegistry.Initialize();
+        AssetDoubleClickRegistry.Initialize();
         EditorCallbacks.Initialize();
 
         // Cursor lock toasts
@@ -981,6 +982,8 @@ public class EditorApplication : Game
         ThumbnailGeneratorRegistry.Reinitialize();
         SceneDropHandlerRegistry.Reinitialize();
         CreateGameObjectMenuRegistry.Reinitialize();
+        FileIconRegistry.Reinitialize();
+        AssetDoubleClickRegistry.Reinitialize();
 
         // Re-register Window menu items for any new panels from user assemblies
         foreach (var (type, path) in _registeredPanels)

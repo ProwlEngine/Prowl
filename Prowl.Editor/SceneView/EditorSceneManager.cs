@@ -137,38 +137,36 @@ public static class EditorSceneManager
     }
 
     /// <summary>
-    /// Handle double-clicking an asset in the project panel.
-    /// Returns true if the asset was handled.
+    /// Handle double-clicking an asset in the project panel. Dispatches to a handler
+    /// registered via <see cref="AssetDoubleClickHandlerAttribute"/>. Returns true if the
+    /// asset was handled.
     /// </summary>
     public static bool HandleAssetDoubleClick(string relativePath, Guid guid)
-    {
-        string ext = Path.GetExtension(relativePath).ToLowerInvariant();
+        => AssetDoubleClickRegistry.Dispatch(relativePath, guid);
 
-        switch (ext)
+    [AssetDoubleClickHandler(".scene")]
+    private static bool OpenSceneHandler(string relativePath, Guid guid) => OpenScene(relativePath);
+
+    [AssetDoubleClickHandler(".prefab")]
+    private static bool OpenPrefabHandler(string relativePath, Guid guid)
+    {
+        Prefabs.PrefabEditingMode.Enter(guid);
+        return true;
+    }
+
+    [AssetDoubleClickHandler(".shadergraph")]
+    private static bool OpenShaderGraphHandler(string relativePath, Guid guid)
+    {
+        // Resolve via AssetRef so the asset loads through the standard pipeline (importer
+        // runs, sub-assets register). Main asset is the ShaderGraph itself; the compiled
+        // Shader is its sub-asset.
+        var graphRef = new AssetRef<Runtime.GraphTools.Graph>(guid);
+        if (graphRef.Res is Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
         {
-            case ".scene":
-                return OpenScene(relativePath);
-            case ".prefab":
-                Prefabs.PrefabEditingMode.Enter(guid);
-                return true;
-            case ".shadergraph":
-                {
-                    // Resolve via AssetRef so the asset gets loaded through the standard
-                    // pipeline (importer runs, sub-assets register). Main asset is the
-                    // ShaderGraph itself; the compiled Shader is its sub-asset. Only
-                    // shader graphs have an editor window right now — visual scripting
-                    // etc. will route to their own windows once built.
-                    var graphRef = new AssetRef<Runtime.GraphTools.Graph>(guid);
-                    if (graphRef.Res is Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
-                    {
-                        Editor.GraphTools.ShaderGraphs.ShaderGraphEditorWindow.OpenFor(sg);
-                        return true;
-                    }
-                    return false;
-                }
-            default:
-                return false;
+            Editor.GraphTools.ShaderGraphs.ShaderGraphEditorWindow.OpenFor(sg);
+            return true;
         }
+        return false;
     }
 
     private static bool SaveTo(string relativePath)
