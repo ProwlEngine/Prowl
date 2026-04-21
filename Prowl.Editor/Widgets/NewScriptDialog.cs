@@ -19,20 +19,9 @@ namespace Prowl.Editor.Widgets;
 /// </summary>
 public static class NewScriptDialog
 {
-    private sealed class Template
-    {
-        public string Name;
-        public string Description;
-        public string Icon;
-        public Func<string, string> Generate; // className → source
-
-        public Template(string name, string description, string icon, Func<string, string> generate)
-        {
-            Name = name; Description = description; Icon = icon; Generate = generate;
-        }
-    }
-
-    private static readonly Template[] s_templates = BuildTemplates();
+    // Templates come from ScriptTemplateRegistry; snapshotted when the dialog opens so the
+    // selection index stays stable across a single session (a reload between opens is fine).
+    private static IReadOnlyList<ScriptTemplate> s_templates = Array.Empty<ScriptTemplate>();
 
     // Per-open state — reset each time Open() is called
     private static string s_folder = "";
@@ -51,6 +40,14 @@ public static class NewScriptDialog
         s_name = SuggestUniqueName(s_folder, "NewScript");
         s_selectedIndex = 0;
         s_onCreated = onCreated;
+
+        ScriptTemplateRegistry.Initialize();
+        s_templates = ScriptTemplateRegistry.Templates;
+        if (s_templates.Count == 0)
+        {
+            Runtime.Debug.LogWarning("NewScriptDialog: no script templates registered.");
+            return;
+        }
 
         ModalDialog.Show(new ModalDialogEntry("Create C# Script", DrawContent, width: 560));
     }
@@ -77,7 +74,7 @@ public static class NewScriptDialog
                 using (ScrollView.Begin(paper, "scr_tpls_scroll", listWidth, bodyHeight,
                     paddingLeft: 4, paddingRight: 4, paddingTop: 4, paddingBottom: 4, colSpacing: 2))
                 {
-                    for (int i = 0; i < s_templates.Length; i++)
+                    for (int i = 0; i < s_templates.Count; i++)
                     {
                         int captured = i;
                         var tpl = s_templates[i];
@@ -277,66 +274,14 @@ public static class NewScriptDialog
     }
 
     // ─── Templates ──────────────────────────────────────────────────────────────────
+    // Built-in templates. Users add their own by tagging a static method
+    //   [ScriptTemplate("Name", "Description", EditorIcons.Foo)]
+    //   public static string Generate(string className) => $"public class {className} {{}}";
+    // on any static method returning string and taking a single string (className).
 
-    private static Template[] BuildTemplates() => new[]
-    {
-        new Template("MonoBehaviour",
-            "A basic component with Start and Update lifecycle hooks. Start where most scripts begin.",
-            EditorIcons.FileCode, BasicMonoBehaviour),
-
-        new Template("Character Controller",
-            "First/third-person character with WASD + jump. RequireComponent auto-adds a CharacterController when the script is attached.",
-            EditorIcons.PersonRunning, CharacterControllerTemplate),
-
-        new Template("Rigidbody Mover",
-            "Physics-based movement via Rigidbody3D velocity. Runs in FixedUpdate and plays well with other physics bodies.",
-            EditorIcons.Cube, RigidbodyMoverTemplate),
-
-        new Template("First Person Camera",
-            "Mouse-look yaw/pitch for a camera rig. Only active while the cursor is locked — pair with a Character Controller.",
-            EditorIcons.Video, FirstPersonCameraTemplate),
-
-        new Template("Follow Camera",
-            "Smoothly follows a target Transform with a configurable offset. Good for third-person / chase cameras.",
-            EditorIcons.Camera, FollowCameraTemplate),
-
-        new Template("Look At Target",
-            "Rotates the GameObject each frame to face an assigned target Transform (turrets, NPC heads, billboards).",
-            EditorIcons.Eye, LookAtTargetTemplate),
-
-        new Template("Rotator",
-            "Continuously rotates the GameObject on a configurable axis. Handy smoke-test component.",
-            EditorIcons.ArrowsRotate, RotatorTemplate),
-
-        new Template("Health",
-            "Gameplay component with hit points, Damage/Heal helpers, and Died/HealthChanged events. Call Damage() from weapons.",
-            EditorIcons.Heart, HealthTemplate),
-
-        new Template("Timed Destroy",
-            "Destroys the GameObject after a configurable delay. Useful for projectiles, effects, and debris.",
-            EditorIcons.Clock, TimedDestroyTemplate),
-
-        new Template("Prefab Spawner",
-            "Spawns instances of an assigned prefab on key press or on a timer. Demonstrates the Prefab.Instantiate API.",
-            EditorIcons.WandMagicSparkles, SpawnerTemplate),
-
-        new Template("Audio One-Shot",
-            "Plays an AudioClip on Start or when Play() is called. Component picks up an AudioSource automatically.",
-            EditorIcons.VolumeHigh, AudioOneShotTemplate),
-
-        new Template("Singleton Manager",
-            "Game manager pattern with a static Instance. Self-registers on enable and clears on disable.",
-            EditorIcons.Crown, SingletonTemplate),
-
-        new Template("Data Asset",
-            "A savable data asset (ScriptableObject-style) that appears in Assets > Create. Holds designer-tunable config data.",
-            EditorIcons.Database, DataAssetTemplate),
-
-        new Template("Plain C# Class",
-            "A regular C# class — not a MonoBehaviour. Useful for pure-data types, services, and helpers.",
-            EditorIcons.File, PlainClassTemplate),
-    };
-
+    [ScriptTemplate("MonoBehaviour",
+        "A basic component with Start and Update lifecycle hooks. Start where most scripts begin.",
+        EditorIcons.FileCode, Order = 0)]
     private static string BasicMonoBehaviour(string className) => $@"using Prowl.Runtime;
 
 public class {className} : MonoBehaviour
@@ -351,6 +296,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Character Controller",
+        "First/third-person character with WASD + jump. RequireComponent auto-adds a CharacterController when the script is attached.",
+        EditorIcons.PersonRunning, Order = 10)]
     private static string CharacterControllerTemplate(string className) => $@"using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -392,6 +340,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Rigidbody Mover",
+        "Physics-based movement via Rigidbody3D velocity. Runs in FixedUpdate and plays well with other physics bodies.",
+        EditorIcons.Cube, Order = 20)]
     private static string RigidbodyMoverTemplate(string className) => $@"using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -435,6 +386,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("First Person Camera",
+        "Mouse-look yaw/pitch for a camera rig. Only active while the cursor is locked — pair with a Character Controller.",
+        EditorIcons.Video, Order = 30)]
     private static string FirstPersonCameraTemplate(string className) => $@"using System;
 
 using Prowl.Runtime;
@@ -469,6 +423,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Follow Camera",
+        "Smoothly follows a target Transform with a configurable offset. Good for third-person / chase cameras.",
+        EditorIcons.Camera, Order = 40)]
     private static string FollowCameraTemplate(string className) => $@"using System;
 
 using Prowl.Runtime;
@@ -500,6 +457,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Look At Target",
+        "Rotates the GameObject each frame to face an assigned target Transform (turrets, NPC heads, billboards).",
+        EditorIcons.Eye, Order = 50)]
     private static string LookAtTargetTemplate(string className) => $@"using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -521,6 +481,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Rotator",
+        "Continuously rotates the GameObject on a configurable axis. Handy smoke-test component.",
+        EditorIcons.ArrowsRotate, Order = 60)]
     private static string RotatorTemplate(string className) => $@"using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -536,6 +499,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Health",
+        "Gameplay component with hit points, Damage/Heal helpers, and Died/HealthChanged events. Call Damage() from weapons.",
+        EditorIcons.Heart, Order = 70)]
     private static string HealthTemplate(string className) => $@"using System;
 
 using Prowl.Runtime;
@@ -575,6 +541,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Timed Destroy",
+        "Destroys the GameObject after a configurable delay. Useful for projectiles, effects, and debris.",
+        EditorIcons.Clock, Order = 80)]
     private static string TimedDestroyTemplate(string className) => $@"using Prowl.Runtime;
 
 public class {className} : MonoBehaviour
@@ -595,6 +564,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Prefab Spawner",
+        "Spawns instances of an assigned prefab on key press or on a timer. Demonstrates the Prefab.Instantiate API.",
+        EditorIcons.WandMagicSparkles, Order = 90)]
     private static string SpawnerTemplate(string className) => $@"using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -637,6 +609,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Audio One-Shot",
+        "Plays an AudioClip on Start or when Play() is called. Component picks up an AudioSource automatically.",
+        EditorIcons.VolumeHigh, Order = 100)]
     private static string AudioOneShotTemplate(string className) => $@"using Prowl.Runtime;
 
 [RequireComponent(typeof(AudioSource))]
@@ -661,6 +636,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Singleton Manager",
+        "Game manager pattern with a static Instance. Self-registers on enable and clears on disable.",
+        EditorIcons.Crown, Order = 110)]
     private static string SingletonTemplate(string className) => $@"using Prowl.Runtime;
 
 public class {className} : MonoBehaviour
@@ -684,6 +662,9 @@ public class {className} : MonoBehaviour
 }}
 ";
 
+    [ScriptTemplate("Data Asset",
+        "A savable data asset (ScriptableObject-style) that appears in Assets > Create. Holds designer-tunable config data.",
+        EditorIcons.Database, Order = 120)]
     private static string DataAssetTemplate(string className) => $@"using Prowl.Runtime;
 
 [CreateAssetMenu(""{className}"", Extension = "".asset"")]
@@ -694,6 +675,9 @@ public class {className} : EngineObject
 }}
 ";
 
+    [ScriptTemplate("Plain C# Class",
+        "A regular C# class — not a MonoBehaviour. Useful for pure-data types, services, and helpers.",
+        EditorIcons.File, Order = 130)]
     private static string PlainClassTemplate(string className) => $@"namespace Game;
 
 public class {className}
