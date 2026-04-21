@@ -323,8 +323,13 @@ public sealed class EyeDepthNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
-        ctx.Varyings.Add(("worldPos", "vec3"));
         ctx.Includes.Add("ShaderVariables");
+        if (stage == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            return "length(_WorldSpaceCameraPos.xyz - TransformPosition(vertexPosition))";
+        }
+        ctx.Varyings.Add(("worldPos", "vec3"));
         return "length(_WorldSpaceCameraPos.xyz - worldPos)";
     }
 
@@ -373,6 +378,7 @@ public sealed class DepthBlendNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
         ctx.Includes.Add("ShaderVariables");
         ctx.Includes.Add("Fragment");
 
@@ -445,6 +451,8 @@ public sealed class SceneColorNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title))
+            return outputPort.Name == "RGBA" ? "vec4(0.0)" : "0.0";
         ctx.Includes.Add("ShaderVariables");
 
         // Uniform declaration — the pipeline binds this when the pass declares GrabTexture.
@@ -527,6 +535,7 @@ public sealed class SceneDepthNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
         ctx.Includes.Add("ShaderVariables");
         ctx.Includes.Add("Fragment"); // for linearizeDepthFromProjection()
 

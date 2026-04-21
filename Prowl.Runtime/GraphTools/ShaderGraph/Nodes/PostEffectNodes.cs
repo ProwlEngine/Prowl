@@ -45,13 +45,24 @@ public sealed class CameraDepthFadeNode : Node, IShaderNode, IShaderGraphNode
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         ctx.Includes.Add("ShaderVariables");
-        ctx.Includes.Add("Lighting"); // for GetWorldViewDir — we use its worldPos varying implicitly
-        ctx.Varyings.Add(("worldPos", "vec3"));
+        ctx.Includes.Add("Lighting");
+        // Works in both stages — compute worldPos inline in vertex.
+        string posExpr;
+        if (s == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            posExpr = "TransformPosition(vertexPosition)";
+        }
+        else
+        {
+            ctx.Varyings.Add(("worldPos", "vec3"));
+            posExpr = "worldPos";
+        }
 
         var len = ctx.EvaluateInputAs(GetInput("Length")!, ShaderType.Float);
         var off = ctx.EvaluateInputAs(GetInput("Offset")!, ShaderType.Float);
         // _ProjectionParams.y = near plane. distance(camera, surface) is the eye-space depth.
-        return $"clamp((length(_WorldSpaceCameraPos.xyz - worldPos) - (_ProjectionParams.y + {off})) / {len}, 0.0, 1.0)";
+        return $"clamp((length(_WorldSpaceCameraPos.xyz - {posExpr}) - (_ProjectionParams.y + {off})) / {len}, 0.0, 1.0)";
     }
 
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
@@ -85,6 +96,7 @@ public sealed class DepthFadeNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
         ctx.Includes.Add("Fragment"); // for linearizeDepthFromProjection
         ctx.Includes.Add("ShaderVariables");
         ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
@@ -148,6 +160,8 @@ public sealed class ReconstructWorldPositionNode : Node, IShaderNode, IShaderGra
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title))
+            return outputPort.Name == "XYZ" ? "vec3(0.0)" : "0.0";
         ctx.Includes.Add("Shadow"); // WorldPosFromDepth
         ctx.Includes.Add("ShaderVariables");
         ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
@@ -204,6 +218,7 @@ public sealed class ReprojectUVNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title)) return "vec2(0.0)";
         ctx.Includes.Add("Fragment"); // Reproject
         ctx.Includes.Add("ShaderVariables"); // prowl_PrevViewProj
         ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
@@ -279,6 +294,7 @@ public sealed class DitherNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
         string coord = ctx.IsConnected(GetInput("Coord")!)
             ? ctx.EvaluateInputAs(GetInput("Coord")!, ShaderType.Vec2)
             : "gl_FragCoord.xy";

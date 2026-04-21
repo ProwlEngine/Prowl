@@ -288,6 +288,11 @@ public sealed class LightDirectionNode : Node, IShaderNode, IShaderGraphNode
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         ctx.Includes.Add("Lighting");
+        if (s == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            return $"GetLightDirection({LightIndex}, TransformPosition(vertexPosition))";
+        }
         ctx.Varyings.Add(("worldPos", "vec3"));
         return $"GetLightDirection({LightIndex}, worldPos)";
     }
@@ -309,6 +314,11 @@ public sealed class LightAttenuationNode : Node, IShaderNode, IShaderGraphNode
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         ctx.Includes.Add("Lighting");
+        if (s == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            return $"GetLightAttenuation({LightIndex}, TransformPosition(vertexPosition))";
+        }
         ctx.Varyings.Add(("worldPos", "vec3"));
         return $"GetLightAttenuation({LightIndex}, worldPos)";
     }
@@ -329,12 +339,23 @@ public sealed class HalfDirectionNode : Node, IShaderNode, IShaderGraphNode
     {
         ctx.Includes.Add("Lighting");
         ctx.Includes.Add("ShaderVariables");
-        ctx.Varyings.Add(("worldPos", "vec3"));
+        // worldPos varying isn't written yet in vertex stage — compute inline then.
+        string posExpr;
+        if (s == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            posExpr = "TransformPosition(vertexPosition)";
+        }
+        else
+        {
+            ctx.Varyings.Add(("worldPos", "vec3"));
+            posExpr = "worldPos";
+        }
         var tmp = $"_hd{Id:N}";
         ctx.EmitOnce(tmp, () =>
         {
             ctx.BodyPrelude.AppendLine(
-                $"    vec3 {tmp} = normalize(GetWorldViewDir(worldPos) + GetLightDirection({LightIndex}, worldPos));");
+                $"    vec3 {tmp} = normalize(GetWorldViewDir({posExpr}) + GetLightDirection({LightIndex}, {posExpr}));");
         });
         return tmp;
     }

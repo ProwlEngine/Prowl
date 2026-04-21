@@ -436,6 +436,11 @@ public sealed class ViewDirectionNode : Node, IShaderNode, IShaderGraphNode
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
         ctx.Includes.Add("Lighting");
+        if (stage == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            return "GetWorldViewDir(TransformPosition(vertexPosition))";
+        }
         ctx.Varyings.Add(("worldPos", "vec3"));
         return "GetWorldViewDir(worldPos)";
     }
@@ -465,10 +470,21 @@ public sealed class ViewReflectionDirectionNode : Node, IShaderNode, IShaderGrap
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
         ctx.Includes.Add("Lighting");
-        ctx.Varyings.Add(("worldPos", "vec3"));
-        ctx.Varyings.Add(("vNormal",  "vec3"));
 
         var local = $"_vdRefl{Id:N}";
+        if (stage == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            ctx.EmitOnce("vdrefl:" + local, () =>
+            {
+                ctx.BodyPrelude.AppendLine(
+                    $"    vec3 {local} = reflect(-GetWorldViewDir(TransformPosition(vertexPosition)), TransformDirection(vertexNormal));");
+            });
+            return local;
+        }
+
+        ctx.Varyings.Add(("worldPos", "vec3"));
+        ctx.Varyings.Add(("vNormal",  "vec3"));
         ctx.EmitOnce("vdrefl:" + local, () =>
         {
             ctx.BodyPrelude.AppendLine(
@@ -511,6 +527,7 @@ public sealed class ScreenPositionNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title)) return outputPort.Name == "UV" ? "vec2(0.0)" : "0.0";
         ctx.Includes.Add("ShaderVariables");
         var local = $"_scrPos{Id:N}";
         if (!ctx.HelperFunctions.Contains(local))
@@ -571,6 +588,7 @@ public sealed class FaceSignNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title)) return "1.0";
         return OutputMode == FaceSignOutputMode.PlusMinusOne
             ? "(gl_FrontFacing ? 1.0 : -1.0)"
             : "(gl_FrontFacing ? 1.0 :  0.0)";
@@ -606,23 +624,33 @@ public sealed class FresnelNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
-        // View direction — same cached pattern as ViewDirectionNode.
-        var vdLocal = $"_frVd{Id:N}";
-        if (!ctx.HelperFunctions.Contains(vdLocal))
+        ctx.Includes.Add("Lighting");
+
+        // View direction — varying-based in fragment, inline in vertex (the worldPos
+        // varying isn't populated yet when vertex-offset subtrees evaluate).
+        string vdExpr;
+        if (stage == ShaderStage.Vertex)
         {
-            ctx.HelperFunctions.Add(vdLocal);
+            ctx.Includes.Add("VertexAttributes");
+            vdExpr = "GetWorldViewDir(TransformPosition(vertexPosition))";
+        }
+        else
+        {
             ctx.Varyings.Add(("worldPos", "vec3"));
-            ctx.Includes.Add("ShaderVariables");
-            ctx.BodyPrelude.AppendLine(
-                $"    vec3 {vdLocal} = normalize(_WorldSpaceCameraPos.xyz - worldPos);");
+            vdExpr = "GetWorldViewDir(worldPos)";
         }
 
-        // Normal: use connected input; fall back to world-space vNormal.
+        // Normal: use connected input; fall back to the appropriate-stage world normal.
         string normalExpr;
         var normalPort = GetInput("Normal")!;
         if (ctx.IsConnected(normalPort))
         {
             normalExpr = $"normalize({ctx.EvaluateInputAs(normalPort, ShaderType.Vec3)})";
+        }
+        else if (stage == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            normalExpr = "TransformDirection(vertexNormal)";
         }
         else
         {
@@ -634,7 +662,7 @@ public sealed class FresnelNode : Node, IShaderNode, IShaderGraphNode
         string powerExpr = ctx.EvaluateInput(GetInput("Power")!);
 
         // Bias shifts the base term before the exponent is applied.
-        return $"({biasExpr} + pow(1.0 - abs(dot({normalExpr}, {vdLocal})), {powerExpr}))";
+        return $"({biasExpr} + pow(1.0 - abs(dot({normalExpr}, {vdExpr})), {powerExpr}))";
     }
 
     ShaderType IShaderNode.GetOutputType(Port outputPort, ShaderGenContext ctx)
@@ -661,15 +689,25 @@ public sealed class DepthNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
-        ctx.Varyings.Add(("worldPos", "vec3"));
         ctx.Includes.Add("ShaderVariables");
-        var local = $"_depth{Id:N}";
-        if (!ctx.HelperFunctions.Contains(local))
+        // Compute world pos inline in vertex stage — the varying isn't written yet.
+        string posExpr;
+        if (stage == ShaderStage.Vertex)
         {
-            ctx.HelperFunctions.Add(local);
-            ctx.BodyPrelude.AppendLine(
-                $"    float {local} = length(_WorldSpaceCameraPos.xyz - worldPos);");
+            ctx.Includes.Add("VertexAttributes");
+            posExpr = "TransformPosition(vertexPosition)";
         }
+        else
+        {
+            ctx.Varyings.Add(("worldPos", "vec3"));
+            posExpr = "worldPos";
+        }
+        var local = $"_depth{Id:N}";
+        ctx.EmitOnce("depth:" + local, () =>
+        {
+            ctx.BodyPrelude.AppendLine(
+                $"    float {local} = length(_WorldSpaceCameraPos.xyz - {posExpr});");
+        });
         return local;
     }
 
@@ -700,14 +738,24 @@ public sealed class InstanceColorNode : Node, IShaderNode, IShaderGraphNode
     }
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        // vColor already captures the instance tint because the vertex body calls
-        // GetInstanceColor() — no separate varying needed.
-        ctx.Varyings.Add(("vColor", "vec4"));
+        // Varying in fragment; direct attribute call in vertex (varying hasn't been
+        // written yet when Vertex Position offsets evaluate).
+        string src;
+        if (s == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            src = "GetInstanceColor()";
+        }
+        else
+        {
+            ctx.Varyings.Add(("vColor", "vec4"));
+            src = "vColor";
+        }
         return p.Name switch
         {
-            "R"    => "vColor.r", "G" => "vColor.g", "B" => "vColor.b", "A" => "vColor.a",
-            "RGB"  => "vColor.rgb",
-            _      => "vColor",
+            "R"    => $"{src}.r", "G" => $"{src}.g", "B" => $"{src}.b", "A" => $"{src}.a",
+            "RGB"  => $"{src}.rgb",
+            _      => src,
         };
     }
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => p.Name switch
@@ -738,14 +786,24 @@ public sealed class InstanceCustomDataNode : Node, IShaderNode, IShaderGraphNode
     }
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        // Declared as a varying so the vertex stage can capture it once per instance —
-        // the fragment can then read it like any other per-vertex attribute.
-        ctx.Varyings.Add(("vInstanceData", "vec4"));
+        // Varying in fragment (captured once by the vertex body), direct attribute
+        // call in vertex stage when the varying hasn't been assigned yet.
+        string src;
+        if (s == ShaderStage.Vertex)
+        {
+            ctx.Includes.Add("VertexAttributes");
+            src = "GetInstanceCustomData()";
+        }
+        else
+        {
+            ctx.Varyings.Add(("vInstanceData", "vec4"));
+            src = "vInstanceData";
+        }
         return p.Name switch
         {
-            "X" => "vInstanceData.x", "Y" => "vInstanceData.y",
-            "Z" => "vInstanceData.z", "W" => "vInstanceData.w",
-            _   => "vInstanceData",
+            "X" => $"{src}.x", "Y" => $"{src}.y",
+            "Z" => $"{src}.z", "W" => $"{src}.w",
+            _   => src,
         };
     }
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx)

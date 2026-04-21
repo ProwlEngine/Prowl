@@ -155,7 +155,7 @@ public static class GraphLayout
     /// <paramref name="to"/>'s input. Allows exact match, object-typed (dynamic)
     /// either side, and any numeric-to-numeric pair — scalar ↔ vector promotion is
     /// handled by the shader compiler (<c>ShaderTypeUtil.Promote</c>) so users can wire
-    /// a Float into a Vec3 input the same way ShaderForge does.
+    /// a Float into a Vec3 input.
     /// </summary>
     public static bool ArePortsCompatible(Port from, Port to)
     {

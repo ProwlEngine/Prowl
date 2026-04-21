@@ -100,6 +100,22 @@ public sealed class ShaderGenContext
     /// Lets a node decide between "emit the preamble" vs. "just reference the local".</summary>
     public bool HasEmitted(string key) => _emittedKeys.Contains(key);
 
+    /// <summary>
+    /// Emit a compile-time diagnostic when a node that relies on fragment-only GLSL
+    /// (<c>gl_FragCoord</c>, <c>gl_FrontFacing</c>, depth-buffer samples, etc.) is
+    /// reached in the vertex stage. Returns <c>true</c> when the current stage is
+    /// vertex — the node should follow up with a sane fallback expression so the
+    /// generated shader still links.
+    /// </summary>
+    public bool RequireFragmentStage(System.Guid nodeId, string nodeName)
+    {
+        if (Stage == ShaderStage.Fragment) return false;
+        Diagnostics.Add((nodeId,
+            $"'{nodeName}' is fragment-stage only (uses gl_FragCoord / depth buffer / etc.) — reached from a vertex-stage subtree; output replaced with a zero fallback.",
+            NodeMessageSeverity.Warning));
+        return true;
+    }
+
     // ─── per-port memoisation ─────────────────────────────────────────────────────────
     private readonly Dictionary<(System.Guid nodeId, string portName), string> _cache = new();
     private readonly HashSet<(System.Guid nodeId, string portName)> _evaluating = new();

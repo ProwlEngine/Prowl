@@ -45,7 +45,7 @@ public class ShaderGraphEditorWindow : DockPanel
     private Prowl.Runtime.AssetRef<Prowl.Runtime.Resources.Mesh> _previewMesh;
     private Prowl.Runtime.Resources.Material? _previewMaterial;
 
-    // ─── Auto-recompile (ShaderForge pattern) ────────────────────────────────────────
+    // ─── Auto-recompile ────────────────────────────────────────
     /// <summary>Toggleable "save after idle" — off means user hits Compile manually.</summary>
     private bool _autoRecompile = true;
     /// <summary>Seconds of edit inactivity before auto-save fires. Mirrors SF's 1s.</summary>

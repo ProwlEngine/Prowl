@@ -682,8 +682,18 @@ public static class ShaderGraphCompiler
     private static void EmitDepthVertexStage(StringBuilder sb, DepthPassHelper? depth)
     {
         bool needsVertOffset = depth?.NeedsVertexOffset == true;
-        bool needsUV         = depth?.NeedsAlphaDiscard == true; // cutout samples textures by UV
         bool needsNormalOut  = true; // DepthNormals always needs world normal forwarded
+
+        // Collect every varying the alpha cutout subtree referenced so the vertex
+        // stage can `out` them and assign from the appropriate attribute. Without
+        // this, a cutout graph that samples a texture at UV1, uses VertexColor as
+        // a mask, or reads a world normal would fail to link.
+        var forwardVaryings = new HashSet<(string name, string type)>();
+        if (depth?.NeedsAlphaDiscard == true && depth.AlphaCtx is { } ac)
+            foreach (var v in ac.Varyings) forwardVaryings.Add(v);
+        // vNormal is always written anyway (DepthNormals pass encodes it); don't
+        // re-emit the `out` line.
+        forwardVaryings.RemoveWhere(v => v.name == "vNormal");
 
         sb.AppendLine("    Vertex");
         sb.AppendLine("    {");
@@ -701,7 +711,7 @@ public static class ShaderGraphCompiler
         }
 
         if (needsNormalOut) sb.AppendLine("        out vec3 vNormal;");
-        if (needsUV)        sb.AppendLine("        out vec2 texCoord0;");
+        foreach (var (n, t) in forwardVaryings) sb.AppendLine($"        out {t} {n};");
 
         sb.AppendLine();
         sb.AppendLine("        void main()");
@@ -717,7 +727,23 @@ public static class ShaderGraphCompiler
             sb.AppendLine("            gl_Position = TransformClip(vertexPosition);");
         }
         if (needsNormalOut) sb.AppendLine("            vNormal = TransformDirection(vertexNormal);");
-        if (needsUV)        sb.AppendLine("            texCoord0 = vertexTexCoord0;");
+        // Assign each forwarded varying from its source attribute. The mapping
+        // mirrors what the main Standard pass's vertex body does.
+        foreach (var (n, _) in forwardVaryings)
+        {
+            switch (n)
+            {
+                case "texCoord0":     sb.AppendLine("            texCoord0 = vertexTexCoord0;"); break;
+                case "texCoord1":     sb.AppendLine("            texCoord1 = vertexTexCoord1;"); break;
+                case "worldPos":      sb.AppendLine("            worldPos = TransformPosition(vertexPosition);"); break;
+                case "vColor":        sb.AppendLine("            vColor = GetInstanceColor();"); break;
+                case "vTangent":      sb.AppendLine("            vTangent = TransformDirection(vertexTangent.xyz);"); break;
+                case "vBitangent":    sb.AppendLine("            vBitangent = cross(TransformDirection(vertexNormal), TransformDirection(vertexTangent.xyz));"); break;
+                case "vInstanceData": sb.AppendLine("            vInstanceData = GetInstanceCustomData();"); break;
+                // Unknown varying — leave uninitialised rather than guess. The
+                // fragment side will read garbage, which is no worse than before.
+            }
+        }
         sb.AppendLine("        }");
         sb.AppendLine("    }");
     }
@@ -738,20 +764,19 @@ public static class ShaderGraphCompiler
 
         // Pull in every include, uniform, and varying the alpha subtree needed so
         // `texture(_MainTex, uv)` and friends resolve. The cutout expressions were
-        // authored against these.
+        // authored against these. Declaring ALL of the subtree's varyings here
+        // mirrors what the vertex stage forwards — see EmitDepthVertexStage.
         if (doDiscard && depth?.AlphaCtx is { } actx)
         {
             foreach (var inc in actx.Includes)
                 if (inc != "Fragment") sb.AppendLine($"        #include \"{inc}\"");
             foreach (var u in actx.Uniforms) sb.AppendLine($"        {u}");
-            // texCoord0 is the universal UV varying — the vertex stage forwarded it
-            // when needsUV fired above.
             foreach (var (n, t) in actx.Varyings)
             {
-                // Only declare the varyings the vertex stage also emits, otherwise
-                // the linker will complain. The vertex stage outputs: texCoord0 (via
-                // needsUV), vNormal (via emitNormalOut).
-                if (n == "texCoord0") sb.AppendLine($"        in {t} {n};");
+                // vNormal is always declared when emitNormalOut is true — avoid a
+                // duplicate declaration.
+                if (n == "vNormal" && emitNormalOut) continue;
+                sb.AppendLine($"        in {t} {n};");
             }
         }
 
