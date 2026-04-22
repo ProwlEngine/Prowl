@@ -49,4 +49,10 @@ public sealed class TonemapperEffect : ImageEffect
         // Replace the scene color buffer with LDR version
         context.ReplaceSceneColor(ldrBuffer);
     }
+
+    public override void OnDisable()
+    {
+        _mat?.Dispose();
+        _mat = null;
+    }
 }

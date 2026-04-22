@@ -192,6 +192,7 @@ public class PreferencesPanel : DockPanel
         // ── Sizing ──
         EditorGUI.Foldout(paper, "pref_sz_general", "General Sizing", () =>
         {
+            SzSlider(paper, s, "User Scale", theme.UserScale, 0.5f, 2, v => theme.UserScale = v, false);
             SzSlider(paper, s, "Font Size", theme.FontSize, 8, 32, v => theme.FontSize = v);
             SzSlider(paper, s, "Row Height", theme.RowHeight, 16, 40, v => theme.RowHeight = v);
             SzSlider(paper, s, "Menu Bar Height", theme.MenuBarHeight, 18, 48, v => theme.MenuBarHeight = v);
@@ -270,14 +271,17 @@ public class PreferencesPanel : DockPanel
     }
 
 
-    private void SzSlider(Paper paper, EditorSettings s, string label, float value, float min, float max, Action<float> set)
+    private void SzSlider(Paper paper, EditorSettings s, string label, float value, float min, float max, Action<float> set, bool applyOnSlide = true)
     {
         EditorGUI.Slider(paper, $"pref_sz_{label.Replace(" ", "_")}", label, value, min, max)
             .OnValueChanged(v =>
             {
                 set(MathF.Round(v, 1));
-                s.ApplyTheme();
-                s.Save();
+                if (applyOnSlide)
+                {
+                    s.ApplyTheme();
+                    s.Save();
+                }
             });
     }
 

@@ -5,6 +5,7 @@ using Prowl.Echo;
 
 namespace Prowl.Runtime;
 
+[ComponentIcon("\uf059")] // CircleQuestion
 public class MissingMonobehaviour : MonoBehaviour
 {
     public EchoObject ComponentData;

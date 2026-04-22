@@ -10,6 +10,7 @@ using Prowl.Vector.Geometry;
 namespace Prowl.Runtime;
 
 [AddComponentMenu("Light/Point Light")]
+[ComponentIcon("\uf0eb")] // Lightbulb
 public class PointLight : Light
 {
     public enum Resolution : int

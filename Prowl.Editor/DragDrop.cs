@@ -16,21 +16,41 @@ public abstract class DragPayload
     public abstract string Icon { get; }
 }
 
-/// <summary>Payload for dragging assets from the Project panel.</summary>
+/// <summary>
+/// Payload for dragging assets from the Project panel. Carries the primary asset's
+/// guid/name/type for single-item drop targets (scene view, inspectors) plus the full set
+/// of dragged assets for multi-item targets (folder moves).
+/// </summary>
 public class AssetDragPayload : DragPayload
 {
+    /// <summary>GUID of the primary (first) asset — for drop targets that only consume one.</summary>
     public Guid AssetGuid { get; }
+    /// <summary>Primary asset display name.</summary>
     public string AssetName { get; }
+    /// <summary>Primary asset runtime type, if known.</summary>
     public Type? AssetType { get; }
 
-    public override string DisplayName => AssetName;
+    /// <summary>All asset GUIDs in the drag. Length ≥ 1; first element matches <see cref="AssetGuid"/>.</summary>
+    public Guid[] AssetGuids { get; }
+    /// <summary>Assets-relative paths of dragged items; aligned with <see cref="AssetGuids"/>.
+    /// May contain folder paths (no associated GUID — empty Guid in that slot).</summary>
+    public string[] AssetPaths { get; }
+    /// <summary>True when more than one asset is being dragged.</summary>
+    public bool IsMulti => AssetGuids.Length > 1;
+
+    public override string DisplayName => IsMulti ? $"{AssetGuids.Length} assets" : AssetName;
     public override string Icon => EditorIcons.Cube;
 
     public AssetDragPayload(Guid guid, string name, Type? type)
+        : this(guid, name, type, [guid], [name]) { }
+
+    public AssetDragPayload(Guid guid, string name, Type? type, Guid[] allGuids, string[] allPaths)
     {
         AssetGuid = guid;
         AssetName = name;
         AssetType = type;
+        AssetGuids = allGuids;
+        AssetPaths = allPaths;
     }
 }
 

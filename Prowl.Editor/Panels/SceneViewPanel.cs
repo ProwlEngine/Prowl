@@ -32,12 +32,28 @@ public class SceneViewPanel : DockPanel
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
+    // Pose restored from disk by RestoreState; applied the first time the camera is created
+    // (the camera itself is constructed lazily inside OnGUI because it needs graphics ready).
+    private bool _hasPendingPose;
+    private Float3 _pendingPos;
+    private float _pendingYaw, _pendingPitch;
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        _editorCamera ??= new EditorCamera();
+        if (_editorCamera == null)
+        {
+            _editorCamera = new EditorCamera();
+            if (_hasPendingPose)
+            {
+                _editorCamera.SetPose(_pendingPos, _pendingYaw, _pendingPitch);
+                _hasPendingPose = false;
+            }
+            if (_pendingGrid is bool pg) { _editorCamera.ShowGrid = pg; _pendingGrid = null; }
+            if (_pendingGizmos is bool pz) { _editorCamera.ShowGizmos = pz; _pendingGizmos = null; }
+        }
         ActiveCamera = _editorCamera;
 
         using (paper.Box("sv_root").Size(width, height).Enter())
@@ -337,8 +353,11 @@ public class SceneViewPanel : DockPanel
                 var handler = SceneDropHandlerRegistry.FindHandler(assetDrop.AssetType);
                 if (handler != null)
                 {
+                    // Convert Paper-space pointer to viewport-local using the cached viewport
+                    // rect. CurrentParent here is an enclosing container (toolbar row etc.),
+                    // so subtracting its origin put the drop off to the side of the camera.
                     Float2 mouseLocal = paper.PointerPos - new Float2(
-                        paper.CurrentParent.Data.X, paper.CurrentParent.Data.Y);
+                        (float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
 
                     handler.Handle(assetDrop, new SceneDropContext
                     {
@@ -389,12 +408,45 @@ public class SceneViewPanel : DockPanel
                 Selection.ToggleSelection(bestHit);
             else
                 Selection.Select(bestHit);
+
+            // Ping so the Hierarchy scrolls to and briefly highlights the clicked GO.
+            Selection.Ping(bestHit.Identifier);
         }
         else if (!Input.IsCtrlPressed && !Input.IsShiftPressed)
         {
             Selection.Clear();
         }
     }
+
+    public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
+    {
+        if (_editorCamera == null) return false;
+        var p = _editorCamera.Position;
+        state["px"] = p.X; state["py"] = p.Y; state["pz"] = p.Z;
+        state["yaw"] = _editorCamera.Yaw;
+        state["pitch"] = _editorCamera.Pitch;
+        state["grid"] = _editorCamera.ShowGrid;
+        state["gizmos"] = _editorCamera.ShowGizmos;
+        return true;
+    }
+
+    public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
+    {
+        float px = state["px"]?.GetValue<float>() ?? 0f;
+        float py = state["py"]?.GetValue<float>() ?? 5f;
+        float pz = state["pz"]?.GetValue<float>() ?? -15f;
+        _pendingPos = new Float3(px, py, pz);
+        _pendingYaw = state["yaw"]?.GetValue<float>() ?? 0f;
+        _pendingPitch = state["pitch"]?.GetValue<float>() ?? 15f;
+        _hasPendingPose = true;
+
+        // Camera is created lazily in OnGUI; stash toggles and apply when it exists.
+        _pendingGrid = state["grid"]?.GetValue<bool>();
+        _pendingGizmos = state["gizmos"]?.GetValue<bool>();
+    }
+
+    private bool? _pendingGrid;
+    private bool? _pendingGizmos;
 
     /// <summary>
     /// Create a default scene with camera, light, floor, and cubes, and load it.

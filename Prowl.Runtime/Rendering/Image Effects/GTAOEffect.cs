@@ -99,8 +99,9 @@ public sealed class GTAOEffect : ImageEffect
         RenderTexture.ReleaseTemporaryRT(aoRT);
     }
 
-    public override void OnPostRender(Camera camera)
+    public override void OnDisable()
     {
-        // Cleanup could be done here if needed
+        _mat?.Dispose();
+        _mat = null;
     }
 }

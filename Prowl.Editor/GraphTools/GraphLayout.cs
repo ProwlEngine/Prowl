@@ -38,7 +38,7 @@ public static class GraphLayout
     {
         var list = direction == PortDirection.Input ? node.Inputs : node.Outputs;
         for (int i = 0; i < list.Count; i++)
-            if (list[i].Name == portName)
+            if (list[i].Name == portName && !list[i].IsHidden)
                 return NodeRendererRegistry.GetRenderer(node).GetPortPosition(node, list[i]);
         return null;
     }
@@ -66,6 +66,12 @@ public static class GraphLayout
             max.X = MathF.Max(max.X, s.Position.X + s.Size.X); max.Y = MathF.Max(max.Y, s.Position.Y + s.Size.Y);
             found = true;
         }
+        foreach (var g in graph.Groups)
+        {
+            min.X = MathF.Min(min.X, g.Position.X); min.Y = MathF.Min(min.Y, g.Position.Y);
+            max.X = MathF.Max(max.X, g.Position.X + g.Size.X); max.Y = MathF.Max(max.Y, g.Position.Y + g.Size.Y);
+            found = true;
+        }
         if (!found) { min = max = Float2.Zero; }
         return found;
     }
@@ -83,6 +89,60 @@ public static class GraphLayout
         [typeof(string)]  = new Color32(200, 160, 120, 255),   // tan
     };
 
+    // ─── Drag-context hint ────────────────────────────────────────────────────────────
+    // GraphEditor writes into this before rendering each frame while the user is
+    // dragging a wire. Renderers read it to dim ports that can't be a drop target —
+    // wrong direction OR type-incompatible — giving a clear "this can plug here"
+    // affordance without per-renderer plumbing.
+    private static Type? _dragSourceType;
+    private static PortDirection? _dragSourceDirection;
+    private static Guid _dragSourceNodeId;
+    private static string? _dragSourcePortName;
+
+    /// <summary>Enter drag-dim mode. Clears automatically via
+    /// <see cref="ClearDragHint"/> when the drag ends.</summary>
+    public static void SetDragHint(Guid sourceNodeId, string sourcePortName, PortDirection direction, Type dataType)
+    {
+        _dragSourceNodeId    = sourceNodeId;
+        _dragSourcePortName  = sourcePortName;
+        _dragSourceDirection = direction;
+        _dragSourceType      = dataType;
+    }
+
+    public static void ClearDragHint()
+    {
+        _dragSourceNodeId    = Guid.Empty;
+        _dragSourcePortName  = null;
+        _dragSourceDirection = null;
+        _dragSourceType      = null;
+    }
+
+    /// <summary>True when a drag is in progress. Renderers use this to branch their
+    /// port-drawing into a dimmed-by-default style.</summary>
+    public static bool IsDragActive => _dragSourceType != null;
+
+    /// <summary>
+    /// True when <paramref name="port"/> on <paramref name="nodeId"/> cannot receive
+    /// the in-progress drag — wrong direction, type-incompatible, or same node
+    /// (self-wire prevention). Returns false for the source port itself so it stays
+    /// at full opacity. Renderers tint by this flag.
+    /// </summary>
+    public static bool IsDropTargetRejected(Guid nodeId, Port port)
+    {
+        if (_dragSourceType == null || _dragSourceDirection == null) return false;
+        // The source port itself — never dim.
+        if (nodeId == _dragSourceNodeId && port.Name == _dragSourcePortName) return false;
+
+        // Must be opposite direction (output ↔ input).
+        var needDir = _dragSourceDirection.Value == PortDirection.Output
+                    ? PortDirection.Input : PortDirection.Output;
+        if (port.Direction != needDir) return true;
+
+        // Type compatibility — same rules as ArePortsCompatible (exact, object, or
+        // numeric-to-numeric).
+        return !PortTypes.AreCompatible(_dragSourceType, port.DataType);
+    }
+
     /// <summary>Get the connection-circle colour for a port type. Falls back to grey for unknown types.</summary>
     public static Color32 GetPortColor(Type dataType)
     {
@@ -92,17 +152,16 @@ public static class GraphLayout
 
     /// <summary>
     /// Compatibility check for connecting <paramref name="from"/>'s output to
-    /// <paramref name="to"/>'s input. Phase-2 implementation is exact-type-match;
-    /// Phase-3 will add implicit conversions (Float3 → Float4, scalar → vector, etc.).
+    /// <paramref name="to"/>'s input. Allows exact match, object-typed (dynamic)
+    /// either side, and any numeric-to-numeric pair — scalar ↔ vector promotion is
+    /// handled by the shader compiler (<c>ShaderTypeUtil.Promote</c>) so users can wire
+    /// a Float into a Vec3 input.
     /// </summary>
     public static bool ArePortsCompatible(Port from, Port to)
     {
         if (from == null || to == null) return false;
         if (from.Direction != PortDirection.Output || to.Direction != PortDirection.Input) return false;
-        if (from.DataType == to.DataType) return true;
-        // Allow assigning to a more general object port.
-        if (to.DataType == typeof(object)) return true;
-        return false;
+        return PortTypes.AreCompatible(from.DataType, to.DataType);
     }
 
     /// <summary>
@@ -120,12 +179,14 @@ public static class GraphLayout
 
         for (int i = 0; i < node.Inputs.Count; i++)
         {
+            if (node.Inputs[i].IsHidden) continue;
             var p = renderer.GetPortPosition(node, node.Inputs[i]);
             if (Sq(graphPoint.X - p.X) + Sq(graphPoint.Y - p.Y) < r2)
                 return (node.Inputs[i], i);
         }
         for (int i = 0; i < node.Outputs.Count; i++)
         {
+            if (node.Outputs[i].IsHidden) continue;
             var p = renderer.GetPortPosition(node, node.Outputs[i]);
             if (Sq(graphPoint.X - p.X) + Sq(graphPoint.Y - p.Y) < r2)
                 return (node.Outputs[i], i);

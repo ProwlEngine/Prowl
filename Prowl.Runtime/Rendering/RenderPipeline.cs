@@ -567,19 +567,27 @@ public abstract class RenderPipeline : EngineObject
                     int fbWidth = (int)currentFB.Width;
                     int fbHeight = (int)currentFB.Height;
 
-                    // Create temporary RT for grabbed texture
-                    grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, false, [TextureImageFormat.Color4b]);
+                    // Create temporary RT for grabbed texture. Allocate a depth attachment
+                    // when this pass also wants the depth buffer (refraction/water shaders
+                    // use it for depth-fade and proximity effects).
+                    bool wantDepth = pass.HasGrabDepth;
+                    grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, wantDepth, [TextureImageFormat.Color4b]);
 
-                    // Setup blit: currentFB (read) -> grabRT (draw)
+                    // Setup blit: currentFB (read) -> grabRT (draw). Blit color always,
+                    // depth additionally when requested.
                     Graphics.BindFramebuffer(currentFB, FBOTarget.Read);
                     Graphics.BindFramebuffer(grabRT.frameBuffer, FBOTarget.Draw);
                     Graphics.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Color, BlitFilter.Nearest);
+                    if (wantDepth)
+                        Graphics.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Depth, BlitFilter.Nearest);
 
                     // Restore the original framebuffer (for both read and draw)
                     Graphics.BindFramebuffer(currentFB, FBOTarget.Framebuffer);
 
                     // Set as global texture for this and subsequent passes
                     PropertyState.SetGlobalTexture(pass.GrabTextureName, grabRT.MainTexture);
+                    if (wantDepth && grabRT.InternalDepth != null)
+                        PropertyState.SetGlobalTexture(pass.GrabDepthTextureName, grabRT.InternalDepth);
                 }
             }
 
@@ -604,7 +612,7 @@ public abstract class RenderPipeline : EngineObject
 
             // *** BATCHING OPTIMIZATION: Bind material uniforms ONCE for entire batch ***
             // All objects in this batch share the same material state
-            PropertyState.ApplyMaterialUniforms(material._properties, variant, ref texSlot);
+            PropertyState.ApplyMaterialUniformsWithDefaults(material._properties, material.Shader!, variant, ref texSlot);
 
             // Set render state (depth test, blend mode, cull mode, etc.) once per batch
             Graphics.SetState(pass.State);
@@ -662,6 +670,8 @@ public abstract class RenderPipeline : EngineObject
             if (grabRT != null)
             {
                 PropertyState.SetGlobalTexture(pass.GrabTextureName, null);
+                if (pass.HasGrabDepth)
+                    PropertyState.SetGlobalTexture(pass.GrabDepthTextureName, null);
                 RenderTexture.ReleaseTemporaryRT(grabRT);
                 grabRT = null;
             }
@@ -730,7 +740,7 @@ public abstract class RenderPipeline : EngineObject
         PropertyState.ApplyGlobals(variant, cache, ref texSlot);
 
         // Apply material uniforms
-        PropertyState.ApplyMaterialUniforms(material._properties, variant, ref texSlot);
+        PropertyState.ApplyMaterialUniformsWithDefaults(material._properties, material.Shader!, variant, ref texSlot);
 
         // Apply shared instance properties
         int instanceTexSlot = texSlot;

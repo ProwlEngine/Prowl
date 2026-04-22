@@ -19,6 +19,7 @@ namespace Prowl.Runtime;
 /// Bone matrices are uploaded via a float texture (no uniform array size limit).
 /// </summary>
 [AddComponentMenu("Rendering/Skinned Mesh Renderer")]
+[ComponentIcon("\uf1b3")] // Cubes
 public class SkinnedMeshRenderer : MonoBehaviour
 {
     /// <summary>The mesh to render (may contain submeshes).</summary>

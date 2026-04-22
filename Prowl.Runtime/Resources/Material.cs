@@ -87,6 +87,13 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     [SerializeField]
     public PropertyState _properties;
 
+    /// <summary>Names of properties the user has explicitly set (vs auto-filled
+    /// shader defaults). When the shader's defaults change, only NON-overridden
+    /// entries get refreshed — user customizations are preserved. Without this,
+    /// stale defaults stick around forever (the Unity-style override pattern).</summary>
+    [SerializeField]
+    public HashSet<string> _overrides = new();
+
     [SerializeIgnore]
     internal Dictionary<string, bool> _localKeywords;
 
@@ -142,16 +149,39 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public void SetKeyword(string keyword, bool value) => _localKeywords[keyword] = value;
 
-    public void SetColor(string name, Color value) { _properties.SetColor(name, value); MarkDirty(); }
-    public void SetVector(string name, Float2 value) { _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float3 value) { _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float4 value) { _properties.SetVector(name, value); MarkDirty(); }
-    public void SetFloat(string name, float value) { _properties.SetFloat(name, value); MarkDirty(); }
-    public void SetInt(string name, int value) { _properties.SetInt(name, value); MarkDirty(); }
-    public void SetMatrix(string name, Float4x4 value) { _properties.SetMatrix(name, value); MarkDirty(); }
-    public void SetTexture(string name, Texture2D value) { _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture(string name, AssetRef<Texture2D> value) { _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture3D(string name, Texture3D value) { _properties.SetTexture3D(name, value); MarkDirty(); }
+    // Every public Set marks the property as user-overridden so subsequent shader
+    // default-refreshes won't stomp the user's value.
+    public void SetColor(string name, Color value)        { _overrides.Add(name); _properties.SetColor(name, value); MarkDirty(); }
+    public void SetVector(string name, Float2 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetVector(string name, Float3 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetVector(string name, Float4 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetFloat(string name, float value)        { _overrides.Add(name); _properties.SetFloat(name, value); MarkDirty(); }
+    public void SetInt(string name, int value)            { _overrides.Add(name); _properties.SetInt(name, value); MarkDirty(); }
+    public void SetMatrix(string name, Float4x4 value)    { _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
+    public void SetTexture(string name, Texture2D value)  { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
+    public void SetTexture(string name, AssetRef<Texture2D> value) { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
+    public void SetTexture3D(string name, Texture3D value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+
+    /// <summary>Forget the user override for <paramref name="name"/> — next sync
+    /// will refill it from the shader's current default. Useful for an inspector
+    /// "revert to default" button.</summary>
+    /// <remarks>
+    /// Removes from BOTH the override set AND the backing <c>_properties</c> dict.
+    /// If we only cleared <c>_overrides</c>, <c>ApplyMaterialUniforms</c> would still
+    /// see the stale value in <c>_properties</c> and upload it anyway — the defaults
+    /// fill-in path only runs for keys not already in the property dict. This was a
+    /// silent "revert does nothing" bug before.
+    /// </remarks>
+    public void RevertProperty(string name)
+    {
+        _overrides.Remove(name);
+        _properties?.RemoveProperty(name);
+        MarkDirty();
+    }
+
+    /// <summary>True if the user has explicitly set this property (vs holding the
+    /// shader's default value). Inspector uses this to highlight overridden fields.</summary>
+    public bool IsOverridden(string name) => _overrides.Contains(name);
 
     #region Global Properties
 
@@ -218,9 +248,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             return;
 
         _shader = new AssetRef<Shader>(shader);
-        foreach (ShaderProperty prop in shader.Properties)
-            UpdatePropertyState(prop);
-
+        // Intentionally do NOT pre-fill _properties with shader defaults — defaults
+        // are read live from the shader at access time (see DrawShaderProperty
+        // fallback + ApplyMaterialUniformsWithDefaults). Pre-filling would mark
+        // every default as an "override" once the material is serialized.
         _isDirty = true;
     }
 
@@ -253,14 +284,27 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public void OnAfterDeserialize()
     {
-        // Ensure material has entries for all shader properties (fills missing ones with defaults).
-        // This handles: shader updated after material was saved, or material saved without all properties.
-        SyncShaderDefaults();
+        // Migration: materials saved before the override-tracking model don't have
+        // _overrides populated, but their _properties dictionary holds values the
+        // user actually set. Treat every existing entry as an override so saved
+        // values are preserved when the override-aware code paths take over.
+        if (_overrides == null) _overrides = new HashSet<string>();
+        if (_overrides.Count == 0 && _properties != null)
+        {
+            foreach (var name in _properties.EnumerateNames())
+                _overrides.Add(name);
+        }
+        // No SyncShaderDefaults — defaults are read live from the shader at access
+        // time (see PropertyState.ApplyMaterialUniformsWithDefaults + the inspector's
+        // DrawShaderProperty fallback). Materials only ever store overrides.
     }
 
     /// <summary>
-    /// Fills in any missing properties from the shader's declared defaults.
-    /// Does NOT overwrite existing values — only adds properties that are absent.
+    /// Refresh non-overridden properties from the shader's CURRENT defaults. Adds
+    /// missing entries AND overwrites existing entries that aren't user-overridden,
+    /// so changes to a property's default in the shader propagate immediately
+    /// without dropping user customizations. Cheap enough to call every frame from
+    /// the material inspector.
     /// </summary>
     public void SyncShaderDefaults()
     {
@@ -269,9 +313,9 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
         foreach (ShaderProperty prop in shader.Properties)
         {
-            // Only set if the material doesn't already have this property
-            if (!HasProperty(prop.Name, prop.PropertyType))
-                UpdatePropertyState(prop);
+            // User-set values are sacred — leave them alone.
+            if (_overrides.Contains(prop.Name)) continue;
+            UpdatePropertyState(prop);
         }
     }
 

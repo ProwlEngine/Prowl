@@ -403,7 +403,24 @@ public class EditorAssetDatabase : IAssetDatabase
             return false;
         }
 
-        var importer = ImporterRegistry.CreateByTypeName(entry.ImporterType) ?? new DefaultImporter();
+        // If the entry's ImporterType doesn't resolve (stale entry from before an
+        // importer was registered), retry with the extension-based lookup. Common
+        // case: asset created before its importer existed → stuck on DefaultImporter.
+        var resolved = ImporterRegistry.CreateByTypeName(entry.ImporterType);
+        if (resolved == null)
+        {
+            string ext = Path.GetExtension(entry.Path);
+            string freshName = ImporterRegistry.GetImporterTypeName(ext);
+            if (freshName != entry.ImporterType)
+            {
+                Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' → '{freshName}'");
+                entry.ImporterType = freshName;
+                resolved = ImporterRegistry.CreateByTypeName(freshName);
+            }
+        }
+
+        var importer = resolved ?? new DefaultImporter();
+        Runtime.Debug.Log($"[AssetDatabase] Importing '{entry.Path}' via {importer.GetType().Name}");
 
         // Read settings from .meta, merge with importer defaults for any missing keys
         EchoObject? settings = null;
@@ -506,7 +523,7 @@ public class EditorAssetDatabase : IAssetDatabase
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Import failed for '{entry.Path}': {ex.Message}");
+            Runtime.Debug.LogError($"Import failed for '{entry.Path}': {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
             // Keep NeedsReimport true so file changes will trigger a retry.
             // Only clear the timestamp so next scan detects the file as changed.
             entry.LastModifiedTicks = 0;
@@ -676,9 +693,18 @@ public class EditorAssetDatabase : IAssetDatabase
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 
-        // Reimport to update cache
+        // Reimport to update cache. Dispose the previous main + sub-asset instances
+        // first so any holding AssetRef sees them as invalid and re-resolves to the
+        // freshly-imported instance. Without this, downstream refs (e.g. a Material
+        // pointing at a shader sub-asset that was just regenerated) keep the stale
+        // instance until the user manually reimports the dependent asset.
         if (_guidToEntry.TryGetValue(obj.AssetID, out var entry))
         {
+            DisposeAndRemove(obj.AssetID);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                    DisposeAndRemove(sub.Guid);
+
             entry.NeedsReimport = true;
             RunImport(entry);
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -694,9 +720,21 @@ public class EditorAssetDatabase : IAssetDatabase
 
         if (_pathToGuid.TryGetValue(relativePath, out var guid))
         {
+            // Dispose main + sub-asset instances FIRST so any AssetRef holding them
+            // detects IsNotValid on next access and stops returning the deleted
+            // instance. Without this, materials etc. keep using the now-orphaned
+            // shader (cached in _shader.instance) until the editor restarts.
+            var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
+            DisposeAndRemove(guid);
+            if (entry?.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                {
+                    DisposeAndRemove(sub.Guid);
+                    _subAssetIndex.Remove(sub.Guid);
+                }
+
             _guidToEntry.Remove(guid);
             _pathToGuid.Remove(relativePath);
-            _loadedAssets.Remove(guid);
             _dependencies.RemoveAsset(guid);
 
             // Clean cache
@@ -772,6 +810,80 @@ public class EditorAssetDatabase : IAssetDatabase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
+        return true;
+    }
+
+    /// <summary>
+    /// Move a folder and everything inside it. GUIDs are preserved — the metadata index is
+    /// remapped in-place, and <see cref="OnAssetMoved"/> fires for every relocated file.
+    /// </summary>
+    public bool MoveFolder(string oldRelativeFolder, string newRelativeFolder)
+    {
+        oldRelativeFolder = oldRelativeFolder.Replace('\\', '/').TrimEnd('/');
+        newRelativeFolder = newRelativeFolder.Replace('\\', '/').TrimEnd('/');
+        if (oldRelativeFolder == newRelativeFolder) return true;
+
+        string oldAbs = Path.Combine(_project.AssetsPath, oldRelativeFolder);
+        string newAbs = Path.Combine(_project.AssetsPath, newRelativeFolder);
+
+        if (!Directory.Exists(oldAbs)) return false;
+        if (Directory.Exists(newAbs) || File.Exists(newAbs))
+        {
+            Runtime.Debug.LogWarning($"Cannot move folder: '{newRelativeFolder}' already exists.");
+            return false;
+        }
+
+        // Guard against moving a folder into itself or a descendant — that would delete the
+        // parent while its children were still mid-copy on Windows.
+        string oldWithSlash = oldRelativeFolder + "/";
+        if (newRelativeFolder.Equals(oldRelativeFolder, StringComparison.OrdinalIgnoreCase)
+            || newRelativeFolder.StartsWith(oldWithSlash, StringComparison.OrdinalIgnoreCase))
+        {
+            Runtime.Debug.LogWarning($"Cannot move folder '{oldRelativeFolder}' into itself.");
+            return false;
+        }
+
+        // Snapshot the set of tracked paths inside the folder before the move — the files on
+        // disk move atomically via Directory.Move, but the in-memory index needs per-entry
+        // path rewrites afterward.
+        var toRemap = new List<(string oldPath, string newPath, Guid guid)>();
+        foreach (var kv in _pathToGuid)
+        {
+            string p = kv.Key;
+            if (p.Equals(oldRelativeFolder, StringComparison.OrdinalIgnoreCase)
+                || p.StartsWith(oldWithSlash, StringComparison.OrdinalIgnoreCase))
+            {
+                string suffix = p.Substring(oldRelativeFolder.Length);
+                string newPath = newRelativeFolder + suffix;
+                toRemap.Add((p, newPath, kv.Value));
+            }
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
+
+        try
+        {
+            Directory.Move(oldAbs, newAbs);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to move folder '{oldRelativeFolder}' → '{newRelativeFolder}': {ex.Message}");
+            return false;
+        }
+
+        foreach (var (oldPath, newPath, guid) in toRemap)
+        {
+            _pathToGuid.Remove(oldPath);
+            _pathToGuid[newPath] = guid;
+            if (_guidToEntry.TryGetValue(guid, out var entry))
+                entry.Path = newPath;
+            if (_loadedAssets.TryGetValue(guid, out var obj))
+                obj.AssetPath = newPath;
+
+            OnAssetMoved?.Invoke(oldPath, newPath);
+        }
+
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         return true;
     }
 
@@ -885,8 +997,19 @@ public class EditorAssetDatabase : IAssetDatabase
                         _guidToEntry[meta.Guid].NeedsReimport = true;
                     }
 
-                    _loadedAssets.Remove(meta.Guid);
-                    RunImport(_guidToEntry[meta.Guid]);
+                    // Dispose previous main + sub-asset instances so any holding
+                    // AssetRef detects them as invalid and re-resolves to the freshly
+                    // imported instance. The Reimport() entry-point already does this;
+                    // the watcher path needs to match or downstream refs (e.g. a
+                    // Material pointing at a regenerated shader sub-asset) keep the
+                    // stale instance until the user manually reimports.
+                    var existingEntry = _guidToEntry[meta.Guid];
+                    DisposeAndRemove(meta.Guid);
+                    if (existingEntry.SubAssets != null)
+                        foreach (var sub in existingEntry.SubAssets)
+                            DisposeAndRemove(sub.Guid);
+
+                    RunImport(existingEntry);
                     imported.Add(relativePath);
                     break;
                 }

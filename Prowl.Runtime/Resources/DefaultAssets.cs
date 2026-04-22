@@ -87,5 +87,7 @@ public enum DefaultShaderInclude
     Shadow,
     VertexAttributes,
     Lighting,
-    StandardSurface
+    StandardSurface,
+    FastNoiseLite,
+    SimplexNoise4D
 }

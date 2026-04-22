@@ -145,9 +145,56 @@ public class Transform
 
     #endregion
 
-    public Float3 Right { get => Rotation * Float3.UnitX; }     // TODO: Setter
-    public Float3 Up { get => Rotation * Float3.UnitY; }           // TODO: Setter
-    public Float3 Forward { get => Rotation * Float3.UnitZ; } // TODO: Setter
+    public Float3 Right
+    {
+        get => Rotation * Float3.UnitX;
+        set => Rotation = FromToRotation(Float3.UnitX, value) * Rotation;
+    }
+
+    public Float3 Up
+    {
+        get => Rotation * Float3.UnitY;
+        set => Rotation = FromToRotation(Float3.UnitY, value) * Rotation;
+    }
+
+    /// <summary>
+    /// Facing direction (local +Z). Assigning rotates the transform so Forward points along
+    /// the new direction. Up is kept close to world +Y when possible.
+    /// </summary>
+    public Float3 Forward
+    {
+        get => Rotation * Float3.UnitZ;
+        set
+        {
+            if (Float3.LengthSquared(value) < float.Epsilon) return;
+            Rotation = Quaternion.LookRotation(Float3.Normalize(value), Float3.UnitY);
+        }
+    }
+
+    /// <summary>
+    /// Shortest-arc rotation that maps <paramref name="from"/> onto <paramref name="to"/>.
+    /// Both vectors are normalized; returns identity if either is zero or they already align.
+    /// </summary>
+    private static Quaternion FromToRotation(Float3 from, Float3 to)
+    {
+        if (Float3.LengthSquared(from) < float.Epsilon || Float3.LengthSquared(to) < float.Epsilon)
+            return Quaternion.Identity;
+
+        Float3 a = Float3.Normalize(from);
+        Float3 b = Float3.Normalize(to);
+        float d = Float3.Dot(a, b);
+        if (d >= 1f - float.Epsilon) return Quaternion.Identity;
+        if (d <= -1f + float.Epsilon)
+        {
+            // 180° — pick any perpendicular axis
+            Float3 axis = Float3.Cross(a, Float3.UnitX);
+            if (Float3.LengthSquared(axis) < float.Epsilon)
+                axis = Float3.Cross(a, Float3.UnitY);
+            return Quaternion.AxisAngle(Float3.Normalize(axis), MathF.PI);
+        }
+        Float3 c = Float3.Cross(a, b);
+        return Quaternion.NormalizeSafe(new Quaternion(c.X, c.Y, c.Z, 1f + d));
+    }
 
     public Float4x4 WorldToLocalMatrix => LocalToWorldMatrix.Invert();
 
@@ -205,14 +252,14 @@ public class Transform
 
     public Transform? Find(string path)
     {
-        ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
+        if (string.IsNullOrEmpty(path)) return null;
 
         string[] names = path.Split('/');
         Transform currentTransform = this;
 
         foreach (string name in names)
         {
-            ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
+            if (string.IsNullOrEmpty(name)) return null;
 
             Transform? childTransform = FindImmediateChild(currentTransform, name);
             if (childTransform == null)
@@ -391,4 +438,204 @@ public class Transform
 
     static float InverseSafe(float f) => Maths.Abs(f) > float.Epsilon ? 1.0f / f : 0.0f;
     static Float3 InverseSafe(Float3 v) => new(InverseSafe(v.X), InverseSafe(v.Y), InverseSafe(v.Z));
+
+    #region Look At
+
+    /// <summary>
+    /// Rotate so Forward points at <paramref name="target"/> in world space, with world +Y as up.
+    /// </summary>
+    public void LookAt(Float3 target) => LookAt(target, Float3.UnitY);
+
+    /// <summary>
+    /// Rotate so Forward points at <paramref name="target"/> in world space, using <paramref name="worldUp"/>
+    /// to disambiguate roll. No-op if target coincides with our position.
+    /// </summary>
+    public void LookAt(Float3 target, Float3 worldUp)
+    {
+        Float3 dir = target - Position;
+        if (Float3.LengthSquared(dir) < float.Epsilon) return;
+        Rotation = Quaternion.LookRotation(Float3.Normalize(dir), worldUp);
+    }
+
+    /// <summary>Convenience: rotate so Forward points at the given Transform.</summary>
+    public void LookAt(Transform target) => LookAt(target.Position, Float3.UnitY);
+
+    #endregion
+
+    #region Atomic Setters
+
+    /// <summary>
+    /// Set world position and rotation in one call — bumps Version once instead of twice
+    /// so change detection fires a single time.
+    /// </summary>
+    public void SetPositionAndRotation(Float3 position, Quaternion rotation)
+    {
+        if (Parent != null)
+        {
+            _localPosition = MakeSafe(Parent.InverseTransformPoint(position));
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(Parent.Rotation) * rotation));
+        }
+        else
+        {
+            _localPosition = MakeSafe(position);
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(rotation));
+        }
+        _version++;
+    }
+
+    /// <summary>Local-space counterpart to <see cref="SetPositionAndRotation"/>.</summary>
+    public void SetLocalPositionAndRotation(Float3 localPosition, Quaternion localRotation)
+    {
+        _localPosition = MakeSafe(localPosition);
+        _localRotation = MakeSafe(Quaternion.NormalizeSafe(localRotation));
+        _version++;
+    }
+
+    /// <summary>
+    /// World-space counterpart to <see cref="SetLocalTransform"/>. Rotation/scale are converted
+    /// to local space via the parent, then stored.
+    /// </summary>
+    public void SetWorldTransform(Float3 position, Quaternion rotation, Float3 scale)
+    {
+        if (Parent != null)
+        {
+            _localPosition = MakeSafe(Parent.InverseTransformPoint(position));
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(Parent.Rotation) * rotation));
+            Float3 parentLossy = Parent.LossyScale;
+            _localScale = MakeSafe(new Float3(
+                scale.X * InverseSafe(parentLossy.X),
+                scale.Y * InverseSafe(parentLossy.Y),
+                scale.Z * InverseSafe(parentLossy.Z)));
+        }
+        else
+        {
+            _localPosition = MakeSafe(position);
+            _localRotation = MakeSafe(Quaternion.NormalizeSafe(rotation));
+            _localScale = MakeSafe(scale);
+        }
+        _version++;
+    }
+
+    #endregion
+
+    #region Parenting
+
+    /// <summary>
+    /// Reparent this transform. When <paramref name="worldPositionStays"/> is true (the default)
+    /// the world pose is preserved across the reparent; when false the transform adopts the
+    /// parent's frame and keeps its local pose (effectively snapping to the new parent).
+    /// </summary>
+    public bool SetParent(Transform? parent, bool worldPositionStays = true)
+        => GameObject?.SetParent(parent?.GameObject, worldPositionStays) ?? false;
+
+    #endregion
+
+    #region Children
+
+    /// <summary>Number of direct children on the owning GameObject.</summary>
+    public int ChildCount => GameObject?.Children.Count ?? 0;
+
+    /// <summary>Direct child transform by index. Throws if out of range.</summary>
+    public Transform GetChild(int index) => GameObject.Children[index].Transform;
+
+    /// <summary>Enumerate direct children as Transforms.</summary>
+    public IEnumerable<Transform> GetChildren()
+    {
+        if (GameObject == null) yield break;
+        foreach (var child in GameObject.Children)
+            yield return child.Transform;
+    }
+
+    /// <summary>True if this is a descendant of <paramref name="parent"/> (or is <paramref name="parent"/>).</summary>
+    public bool IsChildOf(Transform parent)
+    {
+        if (parent == null) return false;
+        Transform? cur = this;
+        while (cur != null)
+        {
+            if (cur == parent) return true;
+            cur = cur.Parent;
+        }
+        return false;
+    }
+
+    /// <summary>Index of this transform within its parent's children list, or -1 at the root.</summary>
+    public int GetSiblingIndex()
+    {
+        var p = Parent;
+        if (p == null || p.GameObject == null) return -1;
+        return p.GameObject.Children.IndexOf(GameObject);
+    }
+
+    /// <summary>
+    /// Move this transform to <paramref name="index"/> within its parent's child list. Index is
+    /// clamped. No-op if there's no parent.
+    /// </summary>
+    public void SetSiblingIndex(int index)
+    {
+        var p = Parent;
+        if (p == null || p.GameObject == null) return;
+        var siblings = p.GameObject.Children;
+        int current = siblings.IndexOf(GameObject);
+        if (current < 0) return;
+        index = System.Math.Clamp(index, 0, siblings.Count - 1);
+        if (index == current) return;
+        siblings.RemoveAt(current);
+        siblings.Insert(index, GameObject);
+        _version++;
+    }
+
+    /// <summary>Move this transform to the first position in its parent's child list.</summary>
+    public void SetAsFirstSibling() => SetSiblingIndex(0);
+
+    /// <summary>Move this transform to the last position in its parent's child list.</summary>
+    public void SetAsLastSibling()
+    {
+        var p = Parent;
+        if (p == null || p.GameObject == null) return;
+        SetSiblingIndex(p.GameObject.Children.Count - 1);
+    }
+
+    /// <summary>
+    /// Unparent every direct child. <paramref name="worldPositionStays"/> controls whether the
+    /// children keep their world pose (true) or inherit the new root's identity frame (false).
+    /// </summary>
+    public void DetachChildren(bool worldPositionStays = true)
+    {
+        if (GameObject == null) return;
+        // Copy because SetParent mutates the Children list.
+        var snapshot = GameObject.Children.ToArray();
+        foreach (var child in snapshot)
+            child.SetParent(null, worldPositionStays);
+    }
+
+    #endregion
+
+    #region Change Detection
+
+    /// <summary>
+    /// True if <see cref="Version"/> differs from <paramref name="lastVersion"/>; updates the
+    /// reference to the current version on return so the next call compares against today's state.
+    /// </summary>
+    public bool HasChanged(ref uint lastVersion)
+    {
+        if (_version == lastVersion) return false;
+        lastVersion = _version;
+        return true;
+    }
+
+    #endregion
+
+    #region Bounds
+
+    /// <summary>
+    /// Transform a local-space AABB into a world-space AABB. Equivalent to
+    /// <c>bounds.TransformBy(LocalToWorldMatrix)</c> — provided here for discoverability.
+    /// </summary>
+    public AABB TransformAABB(AABB localBounds) => localBounds.TransformBy(LocalToWorldMatrix);
+
+    /// <summary>Transform a world-space AABB into this transform's local space.</summary>
+    public AABB InverseTransformAABB(AABB worldBounds) => worldBounds.TransformBy(WorldToLocalMatrix);
+
+    #endregion
 }

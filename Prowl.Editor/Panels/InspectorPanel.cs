@@ -20,6 +20,39 @@ public class InspectorPanel : DockPanel
     public override string Title => "Inspector";
     public override string Icon => EditorIcons.Sliders;
 
+    public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
+    {
+        // Selection is global, so the Inspector is the natural owner of its persistence.
+        // Only GameObjects round-trip here — arbitrary objects (assets, etc.) would need
+        // their own addressing scheme and currently aren't stable enough to restore.
+        var arr = new System.Text.Json.Nodes.JsonArray();
+        foreach (var go in Selection.GetSelected<GameObject>())
+            arr.Add(go.Identifier.ToString());
+        if (arr.Count == 0) return false;
+        state["selection"] = arr;
+        return true;
+    }
+
+    public override void RestoreState(System.Text.Json.Nodes.JsonObject state)
+    {
+        if (state["selection"] is not System.Text.Json.Nodes.JsonArray arr) return;
+
+        var scene = Runtime.Resources.Scene.Current;
+        if (scene == null) return;
+
+        bool first = true;
+        foreach (var node in arr)
+        {
+            string? guidStr = node?.GetValue<string>();
+            if (!Guid.TryParse(guidStr, out var guid)) continue;
+            var go = scene.FindObjectByIdentifier<GameObject>(guid);
+            if (go == null) continue;
+
+            if (first) { Selection.Select(go); first = false; }
+            else Selection.AddToSelection(go);
+        }
+    }
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
@@ -549,6 +582,7 @@ public class InspectorPanel : DockPanel
             .BackgroundColor(EditorTheme.Neutral400).Rounded(3)
             .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
             .Text(log.Message, font).TextColor(textColor)
+            .Wrap(Scribe.TextWrapMode.Wrap)
             .FontSize(fs - 1);
 
         // Stack trace
@@ -587,16 +621,7 @@ public class InspectorPanel : DockPanel
         PropertyGrid.Draw(paper, "insp_gpg", obj);
     }
 
-    private static string GetExtensionIcon(string ext) => ext switch
-    {
-        ".cs" => EditorIcons.FileCode,
-        ".shader" => EditorIcons.WandMagicSparkles,
-        ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" => EditorIcons.FileImage,
-        ".scene" => EditorIcons.Cubes,
-        ".mat" => EditorIcons.Palette,
-        ".fbx" or ".obj" or ".gltf" or ".glb" => EditorIcons.VectorSquare,
-        _ => EditorIcons.File,
-    };
+    private static string GetExtensionIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
 
     private static void DrawAssetLink(Paper paper, Prowl.Scribe.FontFile font, string id, Guid guid, EditorAssetDatabase db)
     {

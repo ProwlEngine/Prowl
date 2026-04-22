@@ -1,4 +1,4 @@
-using Prowl.Editor.GraphTools;
+using Prowl.Editor.GraphTools.ShaderGraphs;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -8,8 +8,8 @@ namespace Prowl.Editor.Inspector;
 
 /// <summary>
 /// Inspector for <see cref="ShaderGraph"/> assets — quick stats + a button to open the
-/// node-graph editor window. The actual editing experience lives in
-/// <see cref="GraphEditorWindow"/>.
+/// shader-graph editor window. The actual editing experience lives in
+/// <see cref="ShaderGraphEditorWindow"/>.
 /// </summary>
 [CustomAssetEditor(typeof(ShaderGraph))]
 public class ShaderGraphAssetEditor : AssetImporterEditor
@@ -32,6 +32,6 @@ public class ShaderGraphAssetEditor : AssetImporterEditor
         paper.Box($"{id}_sp").Height(8);
 
         EditorGUI.Button(paper, $"{id}_open", $"{EditorIcons.PenToSquare}  Open Editor", width: 160)
-            .OnValueChanged(_ => GraphEditorWindow.OpenFor(graph));
+            .OnValueChanged(_ => ShaderGraphEditorWindow.OpenFor(graph));
     }
 }

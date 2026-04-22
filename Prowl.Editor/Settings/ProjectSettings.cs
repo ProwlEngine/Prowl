@@ -190,7 +190,7 @@ public static class ProjectSettingsRegistry
         LoadAll();
     }
 
-    private static void CopyFields(object source, object target)
+    internal static void CopyFields(object source, object target)
     {
         var type = source.GetType();
         foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))

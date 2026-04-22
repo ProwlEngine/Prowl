@@ -459,6 +459,21 @@ public class TerrainEditor : CustomEditor
 
         EditorGUI.IntField(paper, $"{id}_lod", terrain.MaxLODLevel, "Max LOD Levels")
             .OnValueChanged(v => { terrain.MaxLODLevel = Math.Clamp(v, 1, 8); });
+
+        paper.Box($"{id}_sp3").Height(10);
+        EditorGUI.Label(paper, $"{id}_veg_hdr", "Vegetation");
+
+        EditorGUI.Slider(paper, $"{id}_grassdist", "Grass View Distance", terrain.GrassDistance, 10f, 1000f)
+            .OnValueChanged(v => { terrain.GrassDistance = MathF.Max(1f, v); });
+
+        EditorGUI.Slider(paper, $"{id}_grassfade", "Grass Fade Start", terrain.GrassFadeStart, 0f, 0.99f)
+            .OnValueChanged(v => { terrain.GrassFadeStart = Math.Clamp(v, 0f, 0.99f); });
+
+        EditorGUI.Slider(paper, $"{id}_grassdensity", "Grass Density", terrain.GrassDensityMultiplier, 0f, 4f)
+            .OnValueChanged(v => { terrain.GrassDensityMultiplier = MathF.Max(0f, v); terrain.InvalidateGrassCache(); });
+
+        EditorGUI.Slider(paper, $"{id}_treedist", "Tree View Distance", terrain.TreeDistance, 50f, 2000f)
+            .OnValueChanged(v => { terrain.TreeDistance = MathF.Max(1f, v); });
     }
 
     #endregion

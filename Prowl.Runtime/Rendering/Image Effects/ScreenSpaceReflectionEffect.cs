@@ -101,8 +101,9 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         RenderTexture.ReleaseTemporaryRT(blurTempRT);
     }
 
-    public override void OnPostRender(Camera camera)
+    public override void OnDisable()
     {
-        // Cleanup could be done here if needed
+        _mat?.Dispose();
+        _mat = null;
     }
 }

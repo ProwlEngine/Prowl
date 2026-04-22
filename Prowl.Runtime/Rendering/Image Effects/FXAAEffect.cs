@@ -33,4 +33,10 @@ public sealed class FXAAEffect : ImageEffect
         RenderPipeline.Blit(temp, context.SceneColor, null, 0);
         RenderTexture.ReleaseTemporaryRT(temp);
     }
+
+    public override void OnDisable()
+    {
+        _mat?.Dispose();
+        _mat = null;
+    }
 }

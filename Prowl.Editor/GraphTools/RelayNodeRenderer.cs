@@ -61,17 +61,20 @@ public sealed class RelayNodeRenderer : NodeRenderer
 
         // Ports (just the dots — no labels, no halo for zoomed-out simplicity).
         foreach (var port in node.Inputs)
-            DrawDot(canvas, GetPortPosition(node, port), dataColor, hoveredPort, port);
+            DrawDot(canvas, GetPortPosition(node, port), dataColor, hoveredPort, node.Id, port);
         foreach (var port in node.Outputs)
-            DrawDot(canvas, GetPortPosition(node, port), dataColor, hoveredPort, port);
+            DrawDot(canvas, GetPortPosition(node, port), dataColor, hoveredPort, node.Id, port);
     }
 
     private static void DrawDot(Canvas canvas, Float2 pos, Color32 color,
-        (string portName, PortDirection direction)? hoveredPort, Port port)
+        (string portName, PortDirection direction)? hoveredPort, System.Guid nodeId, Port port)
     {
-        bool isHov = hoveredPort.HasValue
+        bool dim = GraphLayout.IsDropTargetRejected(nodeId, port);
+        bool isHov = !dim && hoveredPort.HasValue
             && hoveredPort.Value.direction == port.Direction
             && hoveredPort.Value.portName == port.Name;
+
+        byte DimA(byte a) => dim ? (byte)(a * 0.4f) : a;
 
         if (isHov)
         {
@@ -79,7 +82,9 @@ public sealed class RelayNodeRenderer : NodeRenderer
             canvas.CircleFilled(pos.X, pos.Y, GraphLayout.PortDotRadius + 5f, halo, 16);
         }
         float r = isHov ? GraphLayout.PortDotRadius + 1.5f : GraphLayout.PortDotRadius;
-        canvas.CircleFilled(pos.X, pos.Y, r + 1.5f, new Color32(20, 22, 28, 255), 14);
-        canvas.CircleFilled(pos.X, pos.Y, r, color, 14);
+        var ring = new Color32(20, 22, 28, 255); ring.A = DimA(ring.A);
+        var fill = color;                        fill.A = DimA(fill.A);
+        canvas.CircleFilled(pos.X, pos.Y, r + 1.5f, ring, 14);
+        canvas.CircleFilled(pos.X, pos.Y, r, fill, 14);
     }
 }

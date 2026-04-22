@@ -20,6 +20,7 @@ namespace Prowl.Runtime;
 /// Uses raycasting instead of actual collision shapes for better performance and stability.
 /// </summary>
 [AddComponentMenu("Physics/Wheel Collider")]
+[ComponentIcon("\uf5e4")] // CarSide
 public sealed class WheelCollider : MonoBehaviour
 {
     [SerializeField] private float radius = 0.5f;

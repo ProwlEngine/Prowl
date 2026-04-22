@@ -142,6 +142,10 @@ public class DefaultRenderPipeline : RenderPipeline
         foreach (var effects in effectsByStage.Values)
             allEffects.AddRange(effects);
 
+        // Fire OnDisable on effects that were active last frame but aren't now
+        // (user disabled them, removed them from Camera.Effects, or hot-swapped).
+        camera.UpdateImageEffectLifecycle(allEffects);
+
         RenderTexture target = camera.UpdateRenderData();
 
         // =======================================================

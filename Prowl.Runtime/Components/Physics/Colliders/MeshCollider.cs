@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// Builds a physics collider from a Mesh asset.
 /// </summary>
 [AddComponentMenu("Physics/Colliders/Mesh Collider")]
+[ComponentIcon("\uf1b3")] // Cubes
 public sealed class MeshCollider : Collider
 {
     [SerializeField] private AssetRef<Mesh> mesh;

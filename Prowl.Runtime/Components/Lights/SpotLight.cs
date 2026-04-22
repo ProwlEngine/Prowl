@@ -10,6 +10,7 @@ using Prowl.Vector.Geometry;
 namespace Prowl.Runtime;
 
 [AddComponentMenu("Light/Spot Light")]
+[ComponentIcon("\uf0e7")] // Bolt
 public class SpotLight : Light
 {
     public enum Resolution : int

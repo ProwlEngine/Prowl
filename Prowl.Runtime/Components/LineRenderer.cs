@@ -10,6 +10,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 [AddComponentMenu("Rendering/Line Renderer")]
+[ComponentIcon("\uf4d7")] // Route
 public class LineRenderer : MonoBehaviour, IRenderable
 {
     public AssetRef<Material> Material;

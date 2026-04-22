@@ -29,11 +29,29 @@ public sealed class DefaultNodeRenderer : NodeRenderer
     public override Rect GetRect(Node node)
     {
         node.EnsureDefined();
-        int rows = Math.Max(node.Inputs.Count, node.Outputs.Count);
+
+        // Resizable node? Use its explicit size when set (non-zero on either axis).
+        if (node is IResizableNode r)
+        {
+            var s = r.GetSize();
+            if (s.X > 0 && s.Y > 0)
+                return new Rect(node.Position.X, node.Position.Y,
+                                 node.Position.X + s.X, node.Position.Y + s.Y);
+        }
+
+        int rows = Math.Max(VisibleCount(node.Inputs), VisibleCount(node.Outputs));
         float bodyHeight = MathF.Max(
             rows * GraphLayout.PortRowHeight + GraphLayout.BodyPadding * 2,
             GraphLayout.PortRowHeight);
         float h = GraphLayout.HeaderHeight + bodyHeight;
+
+        // Reserve preview area below the body when the node opts in. Only counts when
+        // both the node says HasPreview AND a drawer is registered — otherwise the
+        // node stays its compact size.
+        if (node is INodePreview p && p.HasPreview && p.PreviewHeight > 0
+            && NodePreviewRegistry.GetDrawer(node.GetType()) != null)
+            h += p.PreviewHeight + GraphLayout.BodyPadding;
+
         return new Rect(node.Position.X, node.Position.Y,
                         node.Position.X + GraphLayout.NodeWidth,
                         node.Position.Y + h);
@@ -42,20 +60,33 @@ public sealed class DefaultNodeRenderer : NodeRenderer
     public override Float2 GetPortPosition(Node node, Port port)
     {
         node.EnsureDefined();
-        // Default card: ports are indexed by their position in the same-direction list,
-        // stacked top-to-bottom after the header, inputs on the left edge / outputs on
-        // the right. Unknown ports (shouldn't happen) land at node origin.
+        // Default card: ports are indexed by their VISIBLE position in the same-
+        // direction list. Hidden ports are skipped so the visible row indices stay
+        // dense and ports don't visually float over empty rows.
         var list = port.Direction == PortDirection.Input ? node.Inputs : node.Outputs;
-        int idx = list.IndexOf(port);
-        if (idx < 0) return node.Position;
+        int visibleIdx = -1, found = -1;
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i].IsHidden) continue;
+            visibleIdx++;
+            if (list[i] == port) { found = visibleIdx; break; }
+        }
+        if (found < 0) return node.Position;
 
         float yOffset = GraphLayout.HeaderHeight + GraphLayout.BodyPadding
-                      + idx * GraphLayout.PortRowHeight
+                      + found * GraphLayout.PortRowHeight
                       + GraphLayout.PortRowHeight * 0.5f;
         float x = port.Direction == PortDirection.Input
             ? node.Position.X
             : node.Position.X + GraphLayout.NodeWidth;
         return new Float2(x, node.Position.Y + yOffset);
+    }
+
+    private static int VisibleCount(System.Collections.Generic.List<Port> ports)
+    {
+        int n = 0;
+        for (int i = 0; i < ports.Count; i++) if (!ports[i].IsHidden) n++;
+        return n;
     }
 
     public override void Draw(Canvas canvas, Prowl.Runtime.GraphTools.Graph graph, Node node,
@@ -107,42 +138,89 @@ public sealed class DefaultNodeRenderer : NodeRenderer
         for (int i = 0; i < node.Inputs.Count; i++)
         {
             var port = node.Inputs[i];
+            if (port.IsHidden) continue;
             var pos = GetPortPosition(node, port);
             bool portHov = hoveredPort.HasValue
                 && hoveredPort.Value.direction == PortDirection.Input
                 && hoveredPort.Value.portName == port.Name;
-            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: true, isHovered: portHov);
+            bool dim = GraphLayout.IsDropTargetRejected(node.Id, port);
+            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: true, isHovered: portHov, dim: dim);
         }
         for (int i = 0; i < node.Outputs.Count; i++)
         {
             var port = node.Outputs[i];
+            if (port.IsHidden) continue;
             var pos = GetPortPosition(node, port);
             bool portHov = hoveredPort.HasValue
                 && hoveredPort.Value.direction == PortDirection.Output
                 && hoveredPort.Value.portName == port.Name;
-            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: false, isHovered: portHov);
+            bool dim = GraphLayout.IsDropTargetRejected(node.Id, port);
+            DrawPort(canvas, port, pos, drawPortLabels, font, isLeftSide: false, isHovered: portHov, dim: dim);
         }
 
         if (node.Messages.Count > 0)
             DrawNodeMessages(canvas, node, rect);
+
+        // Resize grip — small triangular tab in the bottom-right corner. Same
+        // visual / hit area as sticky notes / groups so the gesture is consistent.
+        if (node is IResizableNode)
+        {
+            float hx1 = (float)rect.Max.X, hy1 = (float)rect.Max.Y;
+            float hx0 = hx1 - 14f, hy0 = hy1 - 14f;
+            var gripCol = new Color32(180, 184, 196, 220);
+            canvas.BeginPath();
+            canvas.MoveTo(hx1, hy0);
+            canvas.LineTo(hx1, hy1);
+            canvas.LineTo(hx0, hy1);
+            canvas.ClosePath();
+            canvas.SetFillColor(gripCol);
+            canvas.Fill();
+        }
+
+        // Custom preview region — drawn AFTER ports so the preview can extend down past
+        // the natural body. Sized by the node, drawn by the registered drawer.
+        if (node is INodePreview p && p.HasPreview && p.PreviewHeight > 0)
+        {
+            var drawer = NodePreviewRegistry.GetDrawer(node.GetType());
+            if (drawer != null)
+            {
+                int rows = Math.Max(VisibleCount(node.Inputs), VisibleCount(node.Outputs));
+                float bodyHeight = MathF.Max(
+                    rows * GraphLayout.PortRowHeight + GraphLayout.BodyPadding * 2,
+                    GraphLayout.PortRowHeight);
+                float top = node.Position.Y + GraphLayout.HeaderHeight + bodyHeight;
+                var pRect = new Rect(
+                    node.Position.X + GraphLayout.BodyPadding,
+                    top,
+                    node.Position.X + GraphLayout.NodeWidth - GraphLayout.BodyPadding,
+                    top + p.PreviewHeight);
+                drawer.Draw(canvas, node, pRect, zoom);
+            }
+        }
     }
 
     private static void DrawPort(Canvas canvas, Port port, Float2 pos, bool drawLabel,
-        Prowl.Scribe.FontFile? font, bool isLeftSide, bool isHovered)
+        Prowl.Scribe.FontFile? font, bool isLeftSide, bool isHovered, bool dim = false)
     {
         var color = GraphLayout.GetPortColor(port.DataType);
 
-        if (isHovered)
+        // Dim incompatible drop targets to ~40% opacity so the user sees at a glance
+        // which ports a wire can legally plug into.
+        byte DimA(byte a) => dim ? (byte)(a * 0.4f) : a;
+
+        if (isHovered && !dim)
         {
             var halo = color; halo.A = 90;
             canvas.CircleFilled(pos.X, pos.Y, GraphLayout.PortDotRadius + 5f, halo, 16);
         }
 
-        float r = isHovered ? GraphLayout.PortDotRadius + 1.5f : GraphLayout.PortDotRadius;
+        float r = isHovered && !dim ? GraphLayout.PortDotRadius + 1.5f : GraphLayout.PortDotRadius;
         // Two stacked filled circles — outer ring + inner coloured fill. Crisper than
         // a Stroke at small radii with less aliasing.
-        canvas.CircleFilled(pos.X, pos.Y, r + 1.5f, NodeBorder, 14);
-        canvas.CircleFilled(pos.X, pos.Y, r, color, 14);
+        var ring = NodeBorder; ring.A = DimA(ring.A);
+        var fill = color;      fill.A = DimA(fill.A);
+        canvas.CircleFilled(pos.X, pos.Y, r + 1.5f, ring, 14);
+        canvas.CircleFilled(pos.X, pos.Y, r, fill, 14);
 
         if (drawLabel && font != null)
         {
@@ -151,7 +229,8 @@ public sealed class DefaultNodeRenderer : NodeRenderer
             float labelX = isLeftSide
                 ? pos.X + labelGap
                 : pos.X - labelGap - MeasureWidthApprox(port.Name, labelSize);
-            canvas.DrawText(port.Name, labelX, pos.Y - labelSize * 0.5f - 1, PortLabel, labelSize, font);
+            var lbl = PortLabel; lbl.A = DimA(lbl.A);
+            canvas.DrawText(port.Name, labelX, pos.Y - labelSize * 0.5f - 1, lbl, labelSize, font);
         }
     }
 

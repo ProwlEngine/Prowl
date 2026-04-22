@@ -15,6 +15,7 @@ namespace Prowl.Runtime;
 /// <summary>
 /// Base class for all physics constraints that connect two rigidbodies.
 /// </summary>
+[ComponentIcon("\uf0c1")] // Link — inherited by all joints/constraints
 public abstract class PhysicsConstraint : MonoBehaviour
 {
     [SerializeField] protected Rigidbody3D connectedBody;

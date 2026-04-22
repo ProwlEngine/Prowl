@@ -119,17 +119,18 @@ public static class ModalDialog
             .Layer(Layer.Overlay)
             .Enter())
         {
-            // Title bar
+            // Title bar — centered horizontally and vertically. Without explicit alignment
+            // the default TopLeft left the title pinned to the top-left of the 32px bar.
             if (font != null)
             {
                 paper.Box("modal_title")
                     .Height(32)
                     .BackgroundColor(EditorTheme.Neutral300)
                     .Rounded(8)
-                    .ChildLeft(12)
                     .Text(modal.Title, font)
                     .TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize + 1);
+                    .FontSize(EditorTheme.FontSize + 1)
+                    .Alignment(PaperUI.TextAlignment.MiddleCenter);
             }
 
             // Content area

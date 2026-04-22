@@ -208,6 +208,12 @@ public sealed class CinematicEffects : ImageEffect
         RenderTexture.ReleaseTemporaryRT(temp);
     }
 
+    public override void OnDisable()
+    {
+        _mat?.Dispose();
+        _mat = null;
+    }
+
     private static Float3 GetSunDirection(Camera camera)
     {
         var scene = Resources.Scene.Current;

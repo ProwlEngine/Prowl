@@ -9,6 +9,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 [AddComponentMenu("Physics/Colliders/Sphere Collider")]
+[ComponentIcon("\uf111")] // Circle
 public sealed class SphereCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;

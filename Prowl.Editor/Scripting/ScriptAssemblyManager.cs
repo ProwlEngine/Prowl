@@ -109,13 +109,28 @@ public static class ScriptAssemblyManager
             string tempDir = Path.Combine(Path.GetDirectoryName(dllPath)!, ".loaded");
             Directory.CreateDirectory(tempDir);
 
-            // Clean old temp files
-            try { foreach (var f in Directory.GetFiles(tempDir, "*.dll")) File.Delete(f); } catch { }
+            // Purge ALL leftover files from previous sessions (dll + pdb + anything). The
+            // per-GUID unique naming scheme means these can't be loaded against, but they
+            // pile up on disk across restarts — and on Windows leftovers can be the very
+            // same DLL the previous (dying) process still has mmap'd which can cause the
+            // CLR to resolve to a stale copy if another code path loads by simple name.
+            foreach (var f in Directory.EnumerateFiles(tempDir))
+                try { File.Delete(f); } catch { /* held open by a dying process — harmless */ }
 
-            string tempPath = Path.Combine(tempDir, $"{Path.GetFileNameWithoutExtension(dllPath)}_{Guid.NewGuid():N}.dll");
+            string stem = Path.GetFileNameWithoutExtension(dllPath);
+            string tempPath = Path.Combine(tempDir, $"{stem}_{Guid.NewGuid():N}.dll");
             File.Copy(dllPath, tempPath, true);
+
+            // Also copy the .pdb next to the .dll if present, so stack traces resolve to
+            // user source lines in debug builds.
+            string pdbPath = Path.ChangeExtension(dllPath, ".pdb");
+            if (File.Exists(pdbPath))
+            {
+                try { File.Copy(pdbPath, Path.ChangeExtension(tempPath, ".pdb"), true); } catch { }
+            }
+
             Assembly.LoadFrom(tempPath);
-            Runtime.Debug.Log($"[ScriptAssemblyManager] Loaded {label} assembly: {Path.GetFileName(dllPath)}");
+            Runtime.Debug.Log($"[ScriptAssemblyManager] Loaded {label} assembly: {Path.GetFileName(dllPath)} (from {Path.GetFileName(tempPath)})");
         }
         catch (Exception ex)
         {
@@ -144,21 +159,44 @@ public static class ScriptAssemblyManager
             return;
         }
 
-        // Build command-line args
+        // Build command-line args (same format on every platform — only the launcher differs)
         string args = $"--project \"{project.RootPath}\"";
         if (File.Exists(project.AutoSaveScenePath))
             args += $" --restore-scene \"{project.AutoSaveScenePath}\"";
 
-        Runtime.Debug.Log($"[ScriptAssemblyManager] Restarting: {exePath} {args}");
-
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            System.Diagnostics.Process? child;
+
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)
+                && TryFindAppBundle(exePath, out string? appBundle))
             {
-                FileName = exePath,
-                Arguments = args,
-                UseShellExecute = false,
-            });
+                // macOS: route through `open -n -a` so LaunchServices activates the new
+                // instance properly (Dock icon, focus, app-nap). Directly Process.Start'ing
+                // the Mach-O inside the bundle often spawns a process that never presents
+                // a window — the classic "restart silently does nothing" symptom.
+                string openArgs = $"-n -a \"{appBundle}\" --args {args}";
+                Runtime.Debug.Log($"[ScriptAssemblyManager] Restarting via open: {openArgs}");
+                child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "/usr/bin/open",
+                    Arguments = openArgs,
+                    UseShellExecute = false,
+                });
+            }
+            else
+            {
+                Runtime.Debug.Log($"[ScriptAssemblyManager] Restarting: {exePath} {args}");
+                child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = exePath,
+                    Arguments = args,
+                    UseShellExecute = false,
+                });
+            }
+
+            if (child != null)
+                Runtime.Debug.Log($"[ScriptAssemblyManager] Spawned PID {child.Id}");
         }
         catch (Exception ex)
         {
@@ -167,6 +205,26 @@ public static class ScriptAssemblyManager
         }
 
         Environment.Exit(0);
+    }
+
+    /// <summary>
+    /// Walk up from a Mach-O path looking for the enclosing .app bundle directory.
+    /// Returns false if not running from a bundle (e.g. `dotnet run`, loose binary).
+    /// </summary>
+    private static bool TryFindAppBundle(string executablePath, out string? appBundle)
+    {
+        appBundle = null;
+        var dir = new DirectoryInfo(Path.GetDirectoryName(executablePath) ?? "");
+        while (dir != null)
+        {
+            if (dir.Extension.Equals(".app", StringComparison.OrdinalIgnoreCase))
+            {
+                appBundle = dir.FullName;
+                return true;
+            }
+            dir = dir.Parent;
+        }
+        return false;
     }
 
     private static void SaveSceneForRestart(Project project)
@@ -186,6 +244,14 @@ public static class ScriptAssemblyManager
             if (echo != null)
             {
                 File.WriteAllText(project.AutoSaveScenePath, echo.WriteToString());
+
+                // Sidecar records the scene's original Assets-relative path and AssetID so
+                // the restored session knows where the subsequent Ctrl+S should write. Without
+                // this, CurrentScenePath comes back null and Save falls through to SaveAs.
+                string? originalPath = EditorSceneManager.CurrentScenePath;
+                string sidecar = (originalPath ?? "") + "\n" + savedId.ToString();
+                File.WriteAllText(project.AutoSaveScenePath + ".meta", sidecar);
+
                 Runtime.Debug.Log("[ScriptAssemblyManager] Scene auto-saved for restart.");
             }
         }

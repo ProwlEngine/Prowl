@@ -63,6 +63,15 @@ public class EditorCamera
         UpdateTransform();
     }
 
+    /// <summary>Restore full navigation state (position + yaw/pitch). Pitch is clamped.</summary>
+    public void SetPose(Float3 position, float yaw, float pitch)
+    {
+        _position = position;
+        _yaw = yaw;
+        _pitch = MathF.Max(-89f, MathF.Min(89f, pitch));
+        UpdateTransform();
+    }
+
     public EditorCamera()
     {
         _cameraObject = new GameObject("EditorCamera");
@@ -289,22 +298,71 @@ public class EditorCamera
 
     public void FocusSelection()
     {
-        Float3 center = Float3.Zero;
-        int count = 0;
+        Float3 min = new(float.MaxValue);
+        Float3 max = new(float.MinValue);
+        bool anyBounds = false;
+        int goCount = 0;
+        Float3 positionSum = Float3.Zero;
+
         foreach (var go in Selection.GetSelected<GameObject>())
         {
-            center += go.Transform.Position;
-            count++;
+            goCount++;
+            positionSum += go.Transform.Position;
+            AccumulateRendererBounds(go, ref min, ref max, ref anyBounds);
+        }
+        if (goCount == 0) return;
+
+        // Frame size is driven by renderer bounds when any are present; otherwise fall
+        // back to the Transform position(s) so even empty GOs (lights, cameras) focus.
+        Float3 target;
+        float radius;
+        if (anyBounds)
+        {
+            target = (min + max) * 0.5f;
+            Float3 size = max - min;
+            radius = MathF.Max(0.5f, Float3.Length(size) * 0.5f);
+        }
+        else
+        {
+            target = positionSum / goCount;
+            radius = 0.5f;
         }
 
-        if (count > 0)
+        // Distance that fits the object in the vertical FOV, with a little padding.
+        float fovRad = _camera.FieldOfView * MathF.PI / 180f;
+        float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
+        dist = MathF.Max(dist, 0.5f);
+
+        // Look at target from the camera's current orientation — subsequent F presses
+        // retighten the frame rather than being no-ops once we're "close enough".
+        Float3 forward = _cameraObject.Transform.Forward;
+        if (Float3.LengthSquared(forward) < 0.0001f) forward = new Float3(0, 0, 1);
+        forward = Float3.Normalize(forward);
+
+        _position = target - forward * dist;
+        UpdateTransform();
+    }
+
+    private static void AccumulateRendererBounds(GameObject go, ref Float3 min, ref Float3 max, ref bool any)
+    {
+        var mr = go.GetComponent<MeshRenderer>();
+        if (mr != null && mr.Mesh.Res != null)
         {
-            Float3 target = center / count;
-            Float3 dir = Float3.Normalize(target - _position);
-            float dist = Float3.Length(target - _position);
-            _position = target - dir * MathF.Min(dist, 10f);
-            UpdateTransform();
+            var wb = mr.Mesh.Res.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
+            min = new Float3(MathF.Min(min.X, wb.Min.X), MathF.Min(min.Y, wb.Min.Y), MathF.Min(min.Z, wb.Min.Z));
+            max = new Float3(MathF.Max(max.X, wb.Max.X), MathF.Max(max.Y, wb.Max.Y), MathF.Max(max.Z, wb.Max.Z));
+            any = true;
         }
+        var smr = go.GetComponent<SkinnedMeshRenderer>();
+        if (smr != null && smr.SharedMesh.Res != null)
+        {
+            var wb = smr.SharedMesh.Res.bounds.TransformBy(go.Transform.LocalToWorldMatrix);
+            min = new Float3(MathF.Min(min.X, wb.Min.X), MathF.Min(min.Y, wb.Min.Y), MathF.Min(min.Z, wb.Min.Z));
+            max = new Float3(MathF.Max(max.X, wb.Max.X), MathF.Max(max.Y, wb.Max.Y), MathF.Max(max.Z, wb.Max.Z));
+            any = true;
+        }
+        foreach (var child in go.Children)
+            AccumulateRendererBounds(child, ref min, ref max, ref any);
     }
 
     public void SetOrientation(float yaw, float pitch)

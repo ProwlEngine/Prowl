@@ -14,6 +14,7 @@ namespace Prowl.Runtime;
 /// For single-material meshes, use Materials[0] or the legacy Material property.
 /// </summary>
 [AddComponentMenu("Rendering/Mesh Renderer")]
+[ComponentIcon("\uf1b2")] // Cube
 public class MeshRenderer : MonoBehaviour
 {
     public AssetRef<Mesh> Mesh;

@@ -13,6 +13,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 [AddComponentMenu("Physics/Rigidbody")]
+[ComponentIcon("\uf1b2")] // Cube
 public sealed class Rigidbody3D : MonoBehaviour
 {
     public class RigidBodyUserData

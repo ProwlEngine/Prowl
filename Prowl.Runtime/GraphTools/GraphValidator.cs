@@ -66,7 +66,17 @@ public static class GraphValidatorRegistry
         {
             Type[] types;
             try { types = asm.GetTypes(); }
-            catch { continue; }
+            catch (ReflectionTypeLoadException rtle)
+            {
+                // Partial-load case: reflect over whatever DID resolve; skip nulls.
+                types = System.Array.FindAll(rtle.Types, t => t != null)!;
+                Debug.LogWarning($"GraphValidatorRegistry: '{asm.GetName().Name}' partially loaded ({rtle.LoaderExceptions?.Length ?? 0} loader errors); continuing with {types.Length} resolved type(s).");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"GraphValidatorRegistry: failed to reflect '{asm.GetName().Name}': {ex.Message}");
+                continue;
+            }
 
             foreach (var type in types)
             {
@@ -74,7 +84,11 @@ public static class GraphValidatorRegistry
                 var attr = type.GetCustomAttribute<GraphValidatorAttribute>();
                 GraphValidator instance;
                 try { instance = (GraphValidator)Activator.CreateInstance(type)!; }
-                catch { continue; }
+                catch (System.Exception ex)
+                {
+                    Debug.LogWarning($"GraphValidatorRegistry: could not instantiate '{type.FullName}': {ex.Message}");
+                    continue;
+                }
                 _validators.Add((attr?.TargetMarker, instance));
             }
         }

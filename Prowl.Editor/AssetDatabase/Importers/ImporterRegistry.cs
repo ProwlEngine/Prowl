@@ -48,7 +48,7 @@ public static class ImporterRegistry
             }
         }
 
-        Runtime.Debug.Log($"ImporterRegistry: Registered {_nameToImporter.Count} importers for {_extensionToImporter.Count} extensions.");
+        Runtime.Debug.Log($"ImporterRegistry: Registered {_nameToImporter.Count} importers for {_extensionToImporter.Count} extensions. Extensions: {string.Join(", ", _extensionToImporter.Keys)}");
     }
 
     public static AssetImporter? GetForExtension(string extension)

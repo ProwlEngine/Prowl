@@ -22,6 +22,7 @@ public delegate void AudioReadEvent(NativeArray<float> framesOut, UInt64 frameCo
 /// Supports spatial audio, effects, procedural generation, and serialization.
 /// </summary>
 [AddComponentMenu("Audio/Audio Source")]
+[ComponentIcon("\uf028")] // VolumeHigh
 public sealed class AudioSource : MonoBehaviour, ISerializable
 {
     /// <summary>

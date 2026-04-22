@@ -18,8 +18,25 @@ namespace Prowl.Runtime.GraphTools;
 /// are useful in every graph type, so they implement every registered marker via
 /// runtime-type-check (handled in <see cref="NodeRegistry"/>'s marker filter).
 /// </remarks>
-public sealed class RelayNode : Node
+[UniversalNode]
+[HiddenFromMenu]
+public sealed class RelayNode : Node, IAutoPruneNode
 {
+    /// <summary>A relay is a wire waypoint — the moment it has no incoming AND no
+    /// outgoing wire, it's just clutter. Auto-prune removes it and the editor cleans
+    /// up any lingering dangling edges on the next validation pass.</summary>
+    public bool ShouldPrune(Graph graph)
+    {
+        bool hasIn = false, hasOut = false;
+        foreach (var e in graph.Edges)
+        {
+            if (e.TargetNodeId == Id) hasIn = true;
+            else if (e.SourceNodeId == Id) hasOut = true;
+            if (hasIn && hasOut) return false;
+        }
+        return !hasIn && !hasOut;
+    }
+
     /// <summary>Assembly-qualified name of the type carried through this relay. Persisted
     /// so the ports can rebuild with the right type after load.</summary>
     public string CarriedTypeName = typeof(object).AssemblyQualifiedName!;
@@ -45,7 +62,20 @@ public sealed class RelayNode : Node
     private Type ResolveCarriedType()
     {
         if (string.IsNullOrEmpty(CarriedTypeName)) return typeof(object);
-        try { return Type.GetType(CarriedTypeName) ?? typeof(object); }
-        catch { return typeof(object); }
+        Type? t = null;
+        try { t = Type.GetType(CarriedTypeName); }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"RelayNode: failed to resolve carried type '{CarriedTypeName}': {ex.Message}");
+            return typeof(object);
+        }
+        if (t == null)
+        {
+            // Type used to exist but no longer does — relay degrades to object and will
+            // accept any wire. Surface it so the user knows their graph lost fidelity.
+            Debug.LogWarning($"RelayNode: carried type '{CarriedTypeName}' no longer exists; relay will act as an untyped passthrough.");
+            return typeof(object);
+        }
+        return t;
     }
 }
