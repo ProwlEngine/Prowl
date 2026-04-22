@@ -27,29 +27,16 @@ public enum ShaderLightingMode
 }
 
 /// <summary>
-/// The master output node for surface shaders — every shader graph needs exactly one.
-/// Hidden from the creation menu (auto-seeded by templates) and intentionally NOT
-/// <c>IShaderNode</c> — the compiler dispatches it directly via type-check.
+/// Master output node for the <c>Surface</c> shader type. Covers Lit PBR, Lit Basic
+/// (Lambert / Blinn-Phong), and Unlit via the <see cref="Lighting"/> dropdown —
+/// selecting a mode hides the mode-specific inputs so the node stays tidy.
 /// </summary>
-/// <remarks>
-/// Lighting / surface features are picked via enum + bool toggles on the node itself,
-/// not via separate node types. Toggles drive <c>Port.IsHidden</c> so the user
-/// only sees the inputs that actually matter for the chosen mode.
-/// </remarks>
-[HiddenFromMenu]
-public sealed class PBROutputNode : Node, IShaderGraphNode
+public sealed class SurfaceMasterNode : MasterNodeBase
 {
-    public override string Title => "Output";
-    public override string Category => "Output";
-    public override System.Drawing.Color AccentColor => System.Drawing.Color.FromArgb(255, 200, 80, 100);
+    public override string Title => "Surface Output";
 
     /// <summary>Lighting model the compiler emits. Unlit hides every PBR input.</summary>
     public ShaderLightingMode Lighting = ShaderLightingMode.PBR;
-
-    // Parallax / anisotropic / translucency are authored via dedicated nodes now —
-    // e.g. ParallaxOcclusionNode for POM feeds the displaced UV into sampler nodes.
-    // The corresponding toggles + ports were removed from the master because the
-    // compiler didn't actually read them.
 
     protected override void DefineNode()
     {

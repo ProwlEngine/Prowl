@@ -14,10 +14,13 @@ namespace Prowl.Runtime.GraphTools.ShaderGraphs;
 /// </summary>
 public sealed class ShaderGraph : Graph
 {
-    /// <summary>What template seeded this graph at creation time. Persisted only as
-    /// metadata — the compiler branches on <see cref="PBROutputNode.Lighting"/> and
-    /// <see cref="RenderSettings"/>, not on this value.</summary>
-    public ShaderGraphTemplate Template = ShaderGraphTemplate.Surface;
+    /// <summary>
+    /// Stable identifier of the shader type this graph belongs to (Surface / PostEffect /
+    /// Grass / Terrain / Particle / ...). Decides which master node, which passes,
+    /// and which nodes are available in the editor's node browser. Resolved via
+    /// <see cref="ShaderTypeRegistry"/> at compile time.
+    /// </summary>
+    public string ShaderTypeId = "Surface";
 
     /// <summary>Fixed-function render state emitted into the .shader pass block —
     /// blend mode, cull, z-write, z-test, render queue. Lives on the graph asset so the
@@ -30,39 +33,23 @@ public sealed class ShaderGraph : Graph
     public override Type NodeMarkerInterface => typeof(IShaderGraphNode);
 
     // The base Graph.Serialize only writes nodes/edges/blackboard/etc — it doesn't
-    // reflect subclass fields. Override to persist Template + RenderSettings so they
-    // round-trip through .shadergraph save/load.
+    // reflect subclass fields. Override to persist ShaderTypeId + RenderSettings so
+    // they round-trip through .shadergraph save/load.
     public override void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
         base.Serialize(ref compound, ctx);
-        compound.Add("Template",       Serializer.Serialize(typeof(ShaderGraphTemplate),        Template,       ctx));
-        compound.Add("RenderSettings", Serializer.Serialize(typeof(ShaderGraphRenderSettings),  RenderSettings, ctx));
+        compound.Add("ShaderTypeId",   Serializer.Serialize(typeof(string),                    ShaderTypeId,   ctx));
+        compound.Add("RenderSettings", Serializer.Serialize(typeof(ShaderGraphRenderSettings), RenderSettings, ctx));
     }
 
     public override void Deserialize(EchoObject value, SerializationContext ctx)
     {
         base.Deserialize(value, ctx);
-        var tTag = value.Get("Template");
-        if (tTag != null) Template = Serializer.Deserialize<ShaderGraphTemplate>(tTag, ctx);
+        var stTag = value.Get("ShaderTypeId");
+        if (stTag != null) ShaderTypeId = Serializer.Deserialize<string>(stTag, ctx) ?? "Surface";
         var rsTag = value.Get("RenderSettings");
         if (rsTag != null) RenderSettings = Serializer.Deserialize<ShaderGraphRenderSettings>(rsTag, ctx);
     }
-}
-
-/// <summary>The starter layouts a new shader graph can be created from. Purely cosmetic
-/// (seed-time only); behavioral differences live on the master node and render settings.</summary>
-public enum ShaderGraphTemplate
-{
-    Surface,        // Lit PBR — default opaque lit shader
-    Unlit,          // Flat colour passthrough, doubles as "custom lighting" base
-    LitBasic,       // Lambert / Blinn-Phong — cheaper than PBR
-    CustomLighting, // Deprecated — use Unlit and compute lighting in the graph
-    Transparent,    // Alpha-blended surface
-    Particle,       // Additive / alpha-blended unlit, no zwrite
-    Sky,            // Background pass, front-cull, no zwrite, no fog
-    PostEffect,     // Fullscreen image effect — source texture passthrough
-    Terrain,
-    Grass,
 }
 
 /// <summary>High-level blend preset. <see cref="Custom"/> unlocks the raw Src/Dst/Op

@@ -629,6 +629,11 @@ public class GraphEditor
             // to scan). Groups persist their expanded state across popup open/close via
             // _expandedCategories so the user doesn't re-expand "Math" every time.
             var entries = NodeRegistry.GetForMarker(_graph.NodeMarkerInterface);
+
+            // Shader graphs narrow further by the graph's shader type — nodes carrying
+            // a [ShaderType("X")] attribute are only visible when X matches the current
+            // graph's ShaderTypeId. Untagged nodes stay universal.
+            string? shaderTypeId = (_graph as Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph)?.ShaderTypeId;
             bool flatList = !string.IsNullOrEmpty(_creationFilter);
             using (paper.Column("graph_popup_list")
                 .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
@@ -646,6 +651,9 @@ public class GraphEditor
                         !reg.HasCompatiblePort(_dragSourcePort.Value.DataType, _dragSourcePort.Value.Direction))
                         continue;
                     if (!MatchesFilter(reg, _creationFilter)) continue;
+                    if (shaderTypeId != null &&
+                        !Prowl.Runtime.GraphTools.ShaderGraphs.ShaderTypeRegistry.IsNodeApplicable(reg.Type, shaderTypeId))
+                        continue;
                     visible.Add(reg);
                 }
 

@@ -162,8 +162,8 @@ public sealed class NormalDirectionNode : Node, IShaderNode, IShaderGraphNode
         switch (Space)
         {
             case NormalSpace.Tangent:
-                // Tangent-space passthrough — the TBN matrix will be applied by the
-                // PBR output node. This is the same default value PBROutputNode uses.
+                // Tangent-space passthrough — the TBN matrix is applied by the
+                // surface master. Same default value SurfaceMasterNode uses for its Normal input.
                 return "vec3(0.0, 0.0, 1.0)";
 
             case NormalSpace.Object:

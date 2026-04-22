@@ -438,10 +438,13 @@ public class ShaderGraphEditorWindow : DockPanel
 
     // ─── Master-node helpers ──────────────────────────────────────────────────────────
 
-    private static PBROutputNode? FindMasterNode(ShaderGraph sg)
+    // Returns the Surface master when present. Shader-type-specific UI (like the
+    // lighting-mode dropdown) only applies to surface graphs; other types show a
+    // different sidebar in slice 6.
+    private static SurfaceMasterNode? FindMasterNode(ShaderGraph sg)
     {
         foreach (var n in sg.Nodes)
-            if (n is PBROutputNode m) return m;
+            if (n is SurfaceMasterNode m) return m;
         return null;
     }
 
