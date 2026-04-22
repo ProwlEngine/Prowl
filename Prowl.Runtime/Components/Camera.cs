@@ -44,6 +44,13 @@ public abstract class ImageEffect
 
     /// <summary>Called before rendering starts for this camera.</summary>
     public virtual void OnPreRender(Camera camera) { }
+
+    /// <summary>
+    /// Called when the effect transitions from active to inactive (Enabled = false,
+    /// or removed from Camera.Effects). Override to release GPU resources such as
+    /// materials, persistent RenderTextures, or shader-program handles.
+    /// </summary>
+    public virtual void OnDisable() { }
 }
 
 public enum CameraClearFlags
@@ -108,6 +115,12 @@ public class Camera : MonoBehaviour
     private Float4x4 _previousViewProjectionMatrix;
     private bool _firstFrame = true;
 
+    // Image effects that were considered active on the previous render tick for this
+    // camera. Compared against the current list each frame to fire OnDisable() on
+    // anything that's been disabled, removed, or hot-swapped out.
+    [SerializeIgnore]
+    private readonly HashSet<ImageEffect> _lastActiveEffects = new();
+
     public uint PixelWidth { get; private set; }
     public uint PixelHeight { get; private set; }
 
@@ -142,6 +155,47 @@ public class Camera : MonoBehaviour
     public override void OnEnable()
     {
         _firstFrame = true;
+    }
+
+    /// <summary>
+    /// Fire OnDisable on every image effect we were rendering, because the camera
+    /// itself is going away (disabled or destroyed). Render pipelines never get
+    /// another chance to do this for us, so it has to happen here.
+    /// </summary>
+    public override void OnDisable()
+    {
+        foreach (var effect in _lastActiveEffects)
+        {
+            if (effect == null) continue;
+            try { effect.OnDisable(); }
+            catch (Exception e) { Debug.LogError($"ImageEffect.OnDisable threw: {e}"); }
+        }
+        _lastActiveEffects.Clear();
+    }
+
+    /// <summary>
+    /// Called once per render tick by the render pipeline. Fires OnDisable on any
+    /// effect that was active last frame but isn't in <paramref name="currentlyActive"/>
+    /// this frame — covers disabled, removed, and hot-swapped effects. Pipelines
+    /// don't need to track this themselves; they just pass in whatever they're about
+    /// to render.
+    /// </summary>
+    public void UpdateImageEffectLifecycle(IEnumerable<ImageEffect> currentlyActive)
+    {
+        var current = new HashSet<ImageEffect>();
+        foreach (var effect in currentlyActive)
+            if (effect != null) current.Add(effect);
+
+        foreach (var previous in _lastActiveEffects)
+        {
+            if (previous == null || current.Contains(previous)) continue;
+            try { previous.OnDisable(); }
+            catch (Exception e) { Debug.LogError($"ImageEffect.OnDisable threw: {e}"); }
+        }
+
+        _lastActiveEffects.Clear();
+        foreach (var effect in current)
+            _lastActiveEffects.Add(effect);
     }
 
     public override void DrawGizmos()

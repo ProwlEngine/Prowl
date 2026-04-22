@@ -81,4 +81,9 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         RenderTexture.ReleaseTemporaryRT(verticalResult);
     }
 
+    public override void OnDisable()
+    {
+        _mat?.Dispose();
+        _mat = null;
+    }
 }

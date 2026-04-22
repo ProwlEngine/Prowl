@@ -77,4 +77,10 @@ public sealed class BloomEffect : ImageEffect
         foreach (var rt in mipChain)
             RenderTexture.ReleaseTemporaryRT(rt);
     }
+
+    public override void OnDisable()
+    {
+        _mat?.Dispose();
+        _mat = null;
+    }
 }

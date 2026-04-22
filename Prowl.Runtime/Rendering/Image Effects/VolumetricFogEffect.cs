@@ -113,6 +113,10 @@ public sealed class VolumetricFogEffect : ImageEffect
 
         RenderTexture.ReleaseTemporaryRT(lowRes);
         RenderTexture.ReleaseTemporaryRT(temp);
+    public override void OnDisable()
+    {
+        _mat?.Dispose();
+        _mat = null;
     }
 
     /// <summary>
