@@ -243,38 +243,6 @@ public sealed class PosterizeNode : Node, IShaderNode, IShaderGraphNode
         => ctx.GetSourceType(GetInput("In")!);
 }
 
-// ─── NoiseNode ───────────────────────────────────────────────────────────────────────────
-
-/// <summary>
-/// Single-channel hash noise from a UV input.
-/// Uses Prowl's <c>hash1(vec2)</c> helper from Fragment.glsl — a 3-constant-mix
-/// hash that's smoother and more uniformly distributed than the classic
-/// frac(sin(...)) pattern while being just as cheap.
-/// Output type: Float (always single-channel, 0..1).
-/// </summary>
-public sealed class NoiseNode : Node, IShaderNode, IShaderGraphNode
-{
-    public override string Title => "Noise";
-    public override string Category => "Arithmetic";
-    public override System.Drawing.Color AccentColor => System.Drawing.Color.FromArgb(255, 100, 140, 180);
-
-    protected override void DefineNode()
-    {
-        AddInput<Float2>("UV", Float2.Zero, required: false);
-        AddOutput<float>("Rnd");
-    }
-
-    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
-    {
-        ctx.Includes.Add("Fragment");
-        var uv = ctx.EvaluateInputAs(GetInput("UV")!, ShaderType.Vec2);
-        return $"hash1({uv})";
-    }
-
-    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx)
-        => ShaderType.Float;
-}
-
 // ─── IfNode ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
