@@ -432,6 +432,94 @@ Pass "FogMarch"
     ENDGLSL
 }
 
+Pass "FogTemporal"
+{
+    Tags { "RenderOrder" = "Opaque" }
+
+    Blend Off
+    ZTest Off
+    ZWrite Off
+    Cull Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        #include "Fragment"
+
+        layout(location = 0) out vec4 OutputColor;
+
+        in vec2 TexCoords;
+
+        uniform sampler2D _FogCurrentTex;   // this frame's low-res march result
+        uniform sampler2D _FogHistoryTex;   // previous frame's (already temporally blended) result
+        uniform sampler2D _CameraDepthTexture;
+        uniform vec2 _LowResolution;
+        uniform float _FogHistoryValid;     // 0 on first frame / after resize, 1 otherwise
+        uniform float _FogTemporalBlend;    // history weight (0..0.99)
+
+        void main()
+        {
+            vec2 uv = TexCoords;
+            vec4 current = texture(_FogCurrentTex, uv);
+
+            if (_FogHistoryValid < 0.5) {
+                OutputColor = current;
+                return;
+            }
+
+            // Reproject this pixel's world position into the previous frame's screen space.
+            // Uses the scene depth at the current pixel (not the fog march distance) since the
+            // fog volume effectively sits on the geometry behind each pixel.
+            float depth = texture(_CameraDepthTexture, uv).r;
+            vec3 prev = Reproject(uv, depth, PROWL_MATRIX_VP_PREVIOUS);
+            vec2 prevUV = prev.xy;
+
+            if (prevUV.x < 0.0 || prevUV.x > 1.0 || prevUV.y < 0.0 || prevUV.y > 1.0) {
+                OutputColor = current;
+                return;
+            }
+
+            vec4 history = texture(_FogHistoryTex, prevUV);
+
+            // Neighborhood clamp: limit history to the min/max of the 3x3 current
+            // neighborhood. Handles disocclusion and fast-moving lights without
+            // needing previous-frame depth / motion vectors.
+            vec2 texel = 1.0 / _LowResolution;
+            vec4 mn = current;
+            vec4 mx = current;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    if (dx == 0 && dy == 0) continue;
+                    vec4 s = texture(_FogCurrentTex, uv + vec2(float(dx), float(dy)) * texel);
+                    mn = min(mn, s);
+                    mx = max(mx, s);
+                }
+            }
+            history = clamp(history, mn, mx);
+
+            float alpha = clamp(_FogTemporalBlend, 0.0, 0.99);
+            OutputColor = mix(current, history, alpha);
+        }
+    }
+
+    ENDGLSL
+}
+
 Pass "FogComposite"
 {
     Tags { "RenderOrder" = "Opaque" }

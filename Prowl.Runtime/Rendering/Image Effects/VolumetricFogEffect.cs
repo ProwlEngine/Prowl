@@ -66,10 +66,25 @@ public sealed class VolumetricFogEffect : ImageEffect
     /// <summary>Bilateral upsample depth-similarity threshold.</summary>
     public float UpsampleDepthThreshold = 0.1f;
 
+    // ── Temporal reprojection ──
+    /// <summary>
+    /// Blend the previous frame's low-res fog into this frame. Drops a LOT of the
+    /// ray-march noise at the cost of a small amount of ghosting on fast-moving lights.
+    /// </summary>
+    public bool EnableTemporalReprojection = true;
+
+    /// <summary>How much of the reprojected history to keep (0..0.99). Higher is smoother
+    /// but ghosts more. 0.9 is a good default.</summary>
+    public float TemporalBlendWeight = 0.9f;
+
     private const int MaxFogLights = 5;     // 1 directional + 4 closest point/spot
     private const int MaxFogVolumes = 16;
 
     private Material _mat;
+
+    // Persistent low-res history for temporal reprojection. Recreated on resolution change.
+    private RenderTexture _history;
+    private bool _historyValid;
 
     public override void OnRenderEffect(RenderContext context)
     {
@@ -103,20 +118,64 @@ public sealed class VolumetricFogEffect : ImageEffect
 
         var format = context.SceneColor.MainTexture.ImageFormat;
 
-        var lowRes = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
-        RenderPipeline.Blit(context.SceneColor, lowRes, _mat, 0);
+        // Drop history if the low-res size changed — reprojecting against a
+        // differently-sized history is garbage and a one-frame flash is fine.
+        if (_history != null && (_history.Width != lowW || _history.Height != lowH))
+        {
+            _history.Dispose();
+            _history = null;
+            _historyValid = false;
+        }
 
-        _mat.SetTexture("_FogTex", lowRes.MainTexture);
-        var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [format]);
-        RenderPipeline.Blit(context.SceneColor, temp, _mat, 1);
-        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        // Pass 0 — Ray march into low-res.
+        var currentLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
+        RenderPipeline.Blit(context.SceneColor, currentLow, _mat, 0);
 
-        RenderTexture.ReleaseTemporaryRT(lowRes);
-        RenderTexture.ReleaseTemporaryRT(temp);
+        RenderTexture blendedLow;
+        if (EnableTemporalReprojection)
+        {
+            _history ??= new RenderTexture(lowW, lowH, false, [format]);
+
+            // Pass 1 — Temporal blend of current against reprojected history.
+            blendedLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
+            _mat.SetTexture("_FogCurrentTex", currentLow.MainTexture);
+            _mat.SetTexture("_FogHistoryTex", _history.MainTexture);
+            _mat.SetFloat("_FogHistoryValid", _historyValid ? 1f : 0f);
+            _mat.SetFloat("_FogTemporalBlend", Math.Clamp(TemporalBlendWeight, 0f, 0.99f));
+            RenderPipeline.Blit(currentLow, blendedLow, _mat, 1);
+
+            // Stash the blended result for next frame.
+            RenderPipeline.Blit(blendedLow, _history, null, 0);
+            _historyValid = true;
+        }
+        else
+        {
+            // Temporal disabled — just composite the raw march, and invalidate
+            // any stale history so re-enabling doesn't reproject against a
+            // frame from however long ago the user last turned it off.
+            blendedLow = currentLow;
+            _historyValid = false;
+        }
+
+        // Pass 2 — Bilateral upsample + composite onto scene color.
+        _mat.SetTexture("_FogTex", blendedLow.MainTexture);
+        var fullRes = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [format]);
+        RenderPipeline.Blit(context.SceneColor, fullRes, _mat, 2);
+        RenderPipeline.Blit(fullRes, context.SceneColor, null, 0);
+
+        if (!ReferenceEquals(blendedLow, currentLow))
+            RenderTexture.ReleaseTemporaryRT(blendedLow);
+        RenderTexture.ReleaseTemporaryRT(currentLow);
+        RenderTexture.ReleaseTemporaryRT(fullRes);
+    }
+
     public override void OnDisable()
     {
         _mat?.Dispose();
         _mat = null;
+        _history?.Dispose();
+        _history = null;
+        _historyValid = false;
     }
 
     /// <summary>
