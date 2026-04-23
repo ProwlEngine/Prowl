@@ -40,7 +40,7 @@ public class HierarchyPanel : DockPanel
     // Track expanded state per GO identifier
     private static readonly Dictionary<string, bool> _expandedState = new();
 
-    // Ping state — which GOs in the hierarchy match the pinged GUID
+    // Ping state which GOs in the hierarchy match the pinged GUID
     private static Guid _lastHierarchyPingGuid;
     private static readonly HashSet<GameObject> _pingedGameObjects = new();
 
@@ -141,7 +141,7 @@ public class HierarchyPanel : DockPanel
 
             using (paper.Box("hier_bg").Enter())
             {
-                // Background right-click — create menu only
+                // Background right-click create menu only
                 BuildBackgroundContextMenu(paper);
 
                 // Track if the background (hier_bg) is hovered for drop-on-empty-space
@@ -179,7 +179,7 @@ public class HierarchyPanel : DockPanel
                     }
                 }
 
-                // Handle ping — search for the pinged GUID among GameObjects and their component AssetRefs.
+                // Handle ping search for the pinged GUID among GameObjects and their component AssetRefs.
                 // Done BEFORE building the flat list so parent-expansion affects what FlattenVisible walks.
                 bool pingIsNew = false;
                 if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastHierarchyPingGuid)
@@ -252,7 +252,7 @@ public class HierarchyPanel : DockPanel
 
                 // --- All drop handling uses hier_bg (the stable outer background) ---
 
-                // Asset drops — show visual indicator and spawn at root
+                // Asset drops show visual indicator and spawn at root
                 if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered)
                 {
                     _assetDropTarget = true;
@@ -292,13 +292,13 @@ public class HierarchyPanel : DockPanel
                     _dragHoverTargetId = null;
                 }
 
-                // GO drop — process using hover target tracked by OnHover callback
+                // GO drop process using hover target tracked by OnHover callback
                 // Only process drops that land inside the hierarchy panel
                 if (DragDrop.IsDropFrame && bgHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
                 {
                     if (_dragHoverTarget != null && _dragHoverTargetId != null)
                     {
-                        // Dropped on a GO row — use normalized Y to determine Above/Into/Below
+                        // Dropped on a GO row use normalized Y to determine Above/Into/Below
                         DropPosition dropPos;
                         if (_dragHoverNormalizedY < 0.25f)
                             dropPos = DropPosition.Above;
@@ -311,7 +311,7 @@ public class HierarchyPanel : DockPanel
                     }
                     else if (bgHovered)
                     {
-                        // Dropped on empty background — unparent to root
+                        // Dropped on empty background unparent to root
                         foreach (var dragged in goDrop.GameObjects)
                         {
                             if (dragged.Parent != null && dragged.Parent.IsValid())
@@ -611,7 +611,7 @@ public class HierarchyPanel : DockPanel
                     }
                     else
                     {
-                        // Child reorder — reparent to target's parent, then set sibling index
+                        // Child reorder reparent to target's parent, then set sibling index
                         if (dragged.Parent != targetParent)
                             dragged.SetParent(targetParent!);
 
@@ -762,7 +762,7 @@ public class HierarchyPanel : DockPanel
                 builder.Separator();
             }
 
-            // Create — parent to first selected
+            // Create parent to first selected
             BuildCreateMenu(builder, firstSelected);
             builder.Separator();
 
@@ -950,13 +950,13 @@ public class HierarchyPanel : DockPanel
         var entry = EditorAssetDatabase.Instance?.GetEntry(go.PrefabAssetId);
         if (entry == null)
         {
-            // Broken prefab link — red text
+            // Broken prefab link red text
             return go.EnabledInHierarchy
                 ? Color.FromArgb(255, 220, 80, 80)
                 : Color.FromArgb(255, 160, 60, 60);
         }
 
-        // Valid prefab — purple text
+        // Valid prefab purple text
         return go.EnabledInHierarchy ? EditorTheme.Purple400 : EditorTheme.Purple300;
     }
 

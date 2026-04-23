@@ -277,7 +277,7 @@ public static class ContextMenuHelper
                 .Enter())
             {
 
-                // Fullscreen backdrop — click to close
+                // Fullscreen backdrop click to close
                 paper.Box($"{id}_backdrop")
                     .PositionType(PositionType.SelfDirected)
                     .Position(-9999, -9999)
@@ -301,7 +301,7 @@ public static class ContextMenuHelper
         float menuX = paper.GetElementStorage(parentEl, $"{id}_x", 0f);
         float menuY = paper.GetElementStorage(parentEl, $"{id}_y", 0f);
 
-        // Right-click opens at cursor position — only if no other menu opened this frame
+        // Right-click opens at cursor position only if no other menu opened this frame
         parentEl.Data.OnClick += e =>
         {
             long frame = Time.FrameCount;
@@ -325,7 +325,7 @@ public static class ContextMenuHelper
             builder.SetCloseAction(close);
             build(builder);
 
-            // Fullscreen backdrop — click to close
+            // Fullscreen backdrop click to close
             paper.Box($"{id}_backdrop")
                 .PositionType(PositionType.SelfDirected)
                 .Position(-9999, -9999)
@@ -357,7 +357,7 @@ public static class ContextMenuHelper
         float menuX = paper.GetElementStorage(parentEl, $"{id}_x", 0f);
         float menuY = paper.GetElementStorage(parentEl, $"{id}_y", 0f);
 
-        // Right-click opens at cursor position — only if no other menu opened this frame
+        // Right-click opens at cursor position only if no other menu opened this frame
         parentEl.Data.OnRightClick += e =>
         {
             long frame = Time.FrameCount;
@@ -381,7 +381,7 @@ public static class ContextMenuHelper
             builder.SetCloseAction(close);
             build(builder);
 
-            // Fullscreen backdrop — click to close
+            // Fullscreen backdrop click to close
             paper.Box($"{id}_backdrop")
                 .PositionType(PositionType.SelfDirected)
                 .Position(-9999, -9999)

@@ -23,7 +23,7 @@ public enum HeightTool { Raise, Lower, Flatten, Smooth }
 [CustomEditor(typeof(TerrainComponent))]
 public class TerrainEditor : CustomEditor
 {
-    // Static brush state — persists across selection changes
+    // Static brush state persists across selection changes
     public static TerrainTab ActiveTab = TerrainTab.Height;
     public static HeightTool ActiveHeightTool = HeightTool.Raise;
     public static float BrushSize = 5f;
@@ -503,7 +503,7 @@ public class TerrainEditor : CustomEditor
     {
         if (mesh == null)
         {
-            // No mesh assigned — show a single material field (will end up as submesh 0).
+            // No mesh assigned show a single material field (will end up as submesh 0).
             AssetRef<Material> single = materials.Count > 0 ? materials[0] : default;
             PropertyGrid.DrawField(paper, $"{id}_single", label, typeof(AssetRef<Material>), single,
                 v =>
@@ -680,7 +680,7 @@ public class TerrainEditor : CustomEditor
         }
         else
         {
-            Debug.LogWarning("[TerrainEditor] Cannot save — TerrainData has no asset ID.");
+            Debug.LogWarning("[TerrainEditor] Cannot save TerrainData has no asset ID.");
         }
     }
 

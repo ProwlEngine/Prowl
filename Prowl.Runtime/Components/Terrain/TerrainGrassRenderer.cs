@@ -126,7 +126,7 @@ internal class TerrainGrassRenderer
                 renderMesh = meshRes;
                 subMeshCount = meshRes.SubMeshCount;
                 s_defaultStandardMat ??= Resources.Material.LoadDefault(DefaultMaterial.Standard);
-                renderMat = s_defaultStandardMat; // unused in mesh mode — per-submesh lookup handles it
+                renderMat = s_defaultStandardMat; // unused in mesh mode per-submesh lookup handles it
             }
             else
             {
@@ -251,7 +251,7 @@ internal class TerrainGrassRenderer
                     patchMaxY = MathF.Max(patchMaxY, wy);
 
                     float noise = NoiseAt(wx * proto.NoiseSpread, wz * proto.NoiseSpread);
-                    // Density influences size — low density areas get shorter/narrower grass
+                    // Density influences size low density areas get shorter/narrower grass
                     float densityScale = MathF.Min(1f, rawDensity * 2f); // 0-0.5 density ramps size, 0.5+ is full
                     float sizeT = noise * densityScale;
                     float sw = proto.MinWidth + sizeT * (proto.MaxWidth - proto.MinWidth);

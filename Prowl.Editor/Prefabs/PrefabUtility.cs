@@ -82,7 +82,7 @@ public static class PrefabUtility
     // ================================================================
 
     /// <summary>
-    /// Break a prefab instance — removes all prefab tracking data.
+    /// Break a prefab instance removes all prefab tracking data.
     /// The GameObject becomes a plain non-prefab object.
     /// </summary>
     public static void BreakPrefabInstance(GameObject go)
@@ -127,7 +127,7 @@ public static class PrefabUtility
         var entry = db.GetEntry(instanceRoot.PrefabAssetId);
         if (entry == null)
         {
-            Runtime.Debug.LogWarning("[Prefab] Cannot apply — prefab asset not found.");
+            Runtime.Debug.LogWarning("[Prefab] Cannot apply prefab asset not found.");
             return;
         }
 
@@ -151,7 +151,7 @@ public static class PrefabUtility
         // Clear overrides on this instance
         ClearOverridesWithinBoundary(instanceRoot, instanceRoot.PrefabAssetId);
 
-        // Reimport and refresh — invalidate source cache first
+        // Reimport and refresh invalidate source cache first
         _sourceCache.Remove(instanceRoot.PrefabAssetId);
         db.Reimport(entry.Guid);
         RefreshAllInstances(instanceRoot.PrefabAssetId);
@@ -183,7 +183,7 @@ public static class PrefabUtility
         var prefab = AssetDatabase.Get(instanceRoot.PrefabAssetId) as PrefabAsset;
         if (prefab == null)
         {
-            Runtime.Debug.LogWarning("[Prefab] Cannot revert — prefab asset not found.");
+            Runtime.Debug.LogWarning("[Prefab] Cannot revert prefab asset not found.");
             return;
         }
 
@@ -358,7 +358,7 @@ public static class PrefabUtility
     }
 
     /// <summary>
-    /// Revert a single override — load the source value and write it back to the instance field.
+    /// Revert a single override load the source value and write it back to the instance field.
     /// </summary>
     public static void RevertSingleOverride(GameObject instanceGO, string overridePath)
     {
@@ -730,7 +730,7 @@ public static class PrefabUtility
         string pathPrefix = string.IsNullOrEmpty(goPath) ? "$" : $"{goPath}.$";
         var overrides = instanceGO.PrefabOverrides;
 
-        // Compare GO-level fields (excluding Name and Transform — those are per-instance)
+        // Compare GO-level fields (excluding Name and Transform those are per-instance)
         CompareField(pathPrefix, "TagIndex", instanceGO.TagIndex, sourceGO.TagIndex, overrides);
         CompareField(pathPrefix, "LayerIndex", instanceGO.LayerIndex, sourceGO.LayerIndex, overrides);
         CompareField(pathPrefix, "Enabled", instanceGO.Enabled, sourceGO.Enabled, overrides);

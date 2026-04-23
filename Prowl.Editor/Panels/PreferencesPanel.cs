@@ -307,7 +307,7 @@ public class PreferencesPanel : DockPanel
                 foreach (KeyCode key in Enum.GetValues<KeyCode>())
                 {
                     if (key == KeyCode.Unknown || key == KeyCode.Escape) continue;
-                    // Skip modifier keys themselves — they're captured via flags
+                    // Skip modifier keys themselves they're captured via flags
                     if (key is KeyCode.ShiftLeft or KeyCode.ShiftRight
                         or KeyCode.ControlLeft or KeyCode.ControlRight
                         or KeyCode.AltLeft or KeyCode.AltRight

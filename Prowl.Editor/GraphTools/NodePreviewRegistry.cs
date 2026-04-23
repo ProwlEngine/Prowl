@@ -14,7 +14,7 @@ namespace Prowl.Editor.GraphTools;
 /// <summary>
 /// Mark a <see cref="NodePreviewDrawer"/> subclass as the previewer for a specific
 /// node type that implements <see cref="INodePreview"/>. Same discovery pattern as
-/// <see cref="NodeRendererAttribute"/> — picked up reflectively at startup.
+/// <see cref="NodeRendererAttribute"/> picked up reflectively at startup.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class NodePreviewDrawerAttribute : Attribute
@@ -23,18 +23,18 @@ public sealed class NodePreviewDrawerAttribute : Attribute
     public NodePreviewDrawerAttribute(Type targetType) => TargetType = targetType;
 }
 
-/// <summary>Renders the preview region of a single node. Stateless — one instance per
+/// <summary>Renders the preview region of a single node. Stateless one instance per
 /// node type, shared across every node of that type.</summary>
 public abstract class NodePreviewDrawer
 {
     /// <summary>Draw into <paramref name="rect"/> (graph-space). The canvas has the
-    /// graph's pan/zoom transform already applied — draw in graph units.</summary>
+    /// graph's pan/zoom transform already applied draw in graph units.</summary>
     public abstract void Draw(Canvas canvas, Node node, Rect rect, float zoom);
 }
 
 /// <summary>
 /// Discovers <see cref="NodePreviewDrawer"/> subclasses by attribute. Returns null
-/// for node types without a registered drawer — the renderer then skips the preview
+/// for node types without a registered drawer the renderer then skips the preview
 /// area even if the node implements <see cref="INodePreview"/>.
 /// </summary>
 public static class NodePreviewRegistry

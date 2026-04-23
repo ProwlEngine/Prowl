@@ -89,7 +89,7 @@ public sealed class CinematicEffects : ImageEffect
     public float GodRayWeight = 0.6f;
     /// <summary>Number of ray marching samples (8-128).</summary>
     public int GodRaySamples = 64;
-    /// <summary>Luminance threshold — only pixels brighter than this contribute to rays.</summary>
+    /// <summary>Luminance threshold only pixels brighter than this contribute to rays.</summary>
     public float GodRayThreshold = 0.8f;
 
     private Material _mat;

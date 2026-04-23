@@ -15,7 +15,7 @@ public static class EditorTheme
     // DPI Scaling value
     public static float UserScale { get; set; } = 1f;
 
-    // Sizing — mutable so themes can override
+    // Sizing mutable so themes can override
     public static float MenuBarHeight = 26f;
     public static float StatusBarHeight = 26f;
     public static float RowHeight = 22f;
@@ -48,8 +48,8 @@ public static class EditorTheme
     //
     // Interactive state convention (applies to all ramps):
     //   Normal  = ★ primary stop
-    //   Hovered = +100  (one step lighter — lifts)
-    //   Pressed = -100  (one step darker  — sinks)
+    //   Hovered = +100  (one step lighter lifts)
+    //   Pressed = -100  (one step darker  sinks)
     //
     // Ramps:
     //   Neutral  100–500  Background depth stack (page → surface)
@@ -59,38 +59,38 @@ public static class EditorTheme
     //   Ink      100–500  Text and border hierarchy
 
     // ─────────────────────────────────────────────────────────────
-    //  NEUTRAL — Background depth stack
+    //  NEUTRAL Background depth stack
     //  Use in ascending order from the deepest layer upward.
     //  100 = page base (behind everything), 400 = elevated surface.
     // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Neutral100 — #101116  "Void"
+    /// Neutral100 #101116  "Void"
     /// Deepest background. The lowest layer of the UI; sits behind everything else.
     /// </summary>
     public static Color Neutral100 = ColorTranslator.FromHtml("#101116");
 
     /// <summary>
-    /// Neutral200 — #16151A  "Abyss"
+    /// Neutral200 #16151A  "Abyss"
     /// App background. The main application shell; one step above the page base.
     /// </summary>
     public static Color Neutral200 = ColorTranslator.FromHtml("#16151A");
 
     /// <summary>
-    /// Neutral300 — #18191D  "Obsidian"
+    /// Neutral300 #18191D  "Obsidian"
     /// Sidebar / panels. Used for sidebars, drawers, and secondary panels.
     /// </summary>
     public static Color Neutral300 = ColorTranslator.FromHtml("#18191D");
 
     /// <summary>
-    /// Neutral400 — #1D1E22  "Slate"  ★
+    /// Neutral400 #1D1E22  "Slate"  ★
     /// Cards / surfaces / elevated elements.
     /// The topmost background layer; use for cards, modals, and raised containers.
     /// </summary>
     public static Color Neutral400 = ColorTranslator.FromHtml("#1D1E22");
 
     /// <summary>
-    /// Neutral500 — #2E2D35  "Graphite"
+    /// Neutral500 #2E2D35  "Graphite"
     /// Default border / separator.
     /// Dividers, input outlines, card edges, and table row lines.
     /// </summary>
@@ -98,7 +98,7 @@ public static class EditorTheme
 
 
     // ─────────────────────────────────────────────────────────────
-    //  PURPLE — Primary brand / interactive ramp
+    //  PURPLE Primary brand / interactive ramp
     //  ★ Primary = Purple400 (#563784)
     //
     //  Button states:
@@ -108,44 +108,44 @@ public static class EditorTheme
     // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Purple100 — #1D1010  "Char"
+    /// Purple100 #1D1010  "Char"
     /// Darkest purple tint. Deep background for critical or heavily tinted surfaces.
     /// </summary>
     public static Color Purple100 = ColorTranslator.FromHtml("#1D1010");
 
     /// <summary>
-    /// Purple200 — #271D36  "Dusk"
+    /// Purple200 #271D36  "Dusk"
     /// Subtle tinted surface. Use for hover fills on rows or list items.
     /// </summary>
     public static Color Purple200 = ColorTranslator.FromHtml("#271D36");
 
     /// <summary>
-    /// Purple300 — #3D2660  "Twilight"
+    /// Purple300 #3D2660  "Twilight"
     /// Active / pressed state background. Also used for selected item backgrounds.
     /// </summary>
     public static Color Purple300 = ColorTranslator.FromHtml("#3D2660");
 
     /// <summary>
-    /// Purple400 — #563784  "Amethyst"  ★
+    /// Purple400 #563784  "Amethyst"  ★
     /// PRIMARY BRAND COLOR. Default fill for buttons, focus rings, and key UI actions.
     /// </summary>
     public static Color Purple400 = ColorTranslator.FromHtml("#563784");
 
     /// <summary>
-    /// Purple500 — #7252AA  "Lavender"
+    /// Purple500 #7252AA  "Lavender"
     /// Hover state. One step lighter than Amethyst; use as the hovered variant of Purple400.
     /// </summary>
     public static Color Purple500 = ColorTranslator.FromHtml("#7252AA");
 
     /// <summary>
-    /// Purple600 — #A886D8  "Wisteria"
+    /// Purple600 #A886D8  "Wisteria"
     /// Highlighted text / badges / chips.
     /// Mid-tone purple for text labels, badge text, and icon fills on dark backgrounds.
     /// </summary>
     public static Color Purple600 = ColorTranslator.FromHtml("#A886D8");
 
     /// <summary>
-    /// Purple700 — #D4B8F4  "Lilac"
+    /// Purple700 #D4B8F4  "Lilac"
     /// Lightest purple highlight. Use for very soft highlights or placeholder text
     /// that sits on a purple-tinted surface.
     /// </summary>
@@ -153,7 +153,7 @@ public static class EditorTheme
 
 
     // ─────────────────────────────────────────────────────────────
-    //  BLUE — Secondary / informational ramp
+    //  BLUE Secondary / informational ramp
     //  ★ Primary = Blue400 (#82AAC6)
     //
     //  Button / link states:
@@ -163,44 +163,44 @@ public static class EditorTheme
     // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Blue100 — #0D1A24  "Deep Ocean"
+    /// Blue100 #0D1A24  "Deep Ocean"
     /// Darkest informational tint. Background for deeply nested info surfaces.
     /// </summary>
     public static Color Blue100 = ColorTranslator.FromHtml("#0D1A24");
 
     /// <summary>
-    /// Blue200 — #1D3044  "Midnight"
+    /// Blue200 #1D3044  "Midnight"
     /// Info callout / tooltip background.
     /// Use as the background of informational banners or tooltip panels.
     /// </summary>
     public static Color Blue200 = ColorTranslator.FromHtml("#1D3044");
 
     /// <summary>
-    /// Blue300 — #2E5470  "Harbor"
+    /// Blue300 #2E5470  "Harbor"
     /// Pressed state. Also used for borders on secondary actions or bordered info tags.
     /// </summary>
     public static Color Blue300 = ColorTranslator.FromHtml("#2E5470");
 
     /// <summary>
-    /// Blue400 — #82AAC6  "Glacier"  ★
+    /// Blue400 #82AAC6  "Glacier"  ★
     /// SECONDARY / INFO COLOR. Use for hyperlinks, info-state icons, and secondary CTAs.
     /// </summary>
     public static Color Blue400 = ColorTranslator.FromHtml("#82AAC6");
 
     /// <summary>
-    /// Blue500 — #AECADD  "Mist"
+    /// Blue500 #AECADD  "Mist"
     /// Hover state. Lighter blue text; also readable on dark info-tinted backgrounds.
     /// </summary>
     public static Color Blue500 = ColorTranslator.FromHtml("#AECADD");
 
     /// <summary>
-    /// Blue600 — #CDDEED  "Powder"
+    /// Blue600 #CDDEED  "Powder"
     /// Soft informational highlight. Use for subtle info-state underlines or chart fill areas.
     /// </summary>
     public static Color Blue600 = ColorTranslator.FromHtml("#CDDEED");
 
     /// <summary>
-    /// Blue700 — #E8F2F9  "Frost"
+    /// Blue700 #E8F2F9  "Frost"
     /// Faintest informational background tint.
     /// Barely-there blue wash for alternating rows or disabled info areas.
     /// </summary>
@@ -208,7 +208,7 @@ public static class EditorTheme
 
 
     // ─────────────────────────────────────────────────────────────
-    //  RED — Danger / error / destructive ramp
+    //  RED Danger / error / destructive ramp
     //  ★ Primary = Red400 (#CB594F)
     //
     //  Button states:
@@ -218,84 +218,84 @@ public static class EditorTheme
     // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Red100 — #1C0E0E  "Char"
+    /// Red100 #1C0E0E  "Char"
     /// Darkest error tint. Background for critical error surfaces or severe alert panels.
     /// </summary>
     public static Color Red100 = ColorTranslator.FromHtml("#1C0E0E");
 
     /// <summary>
-    /// Red200 — #361818  "Ember"
+    /// Red200 #361818  "Ember"
     /// Error background. Use as the background of error toasts or invalid input fields.
     /// </summary>
     public static Color Red200 = ColorTranslator.FromHtml("#361818");
 
     /// <summary>
-    /// Red300 — #7A3030  "Garnet"
+    /// Red300 #7A3030  "Garnet"
     /// Pressed state. Also used for borders on error inputs and error icon backgrounds.
     /// </summary>
     public static Color Red300 = ColorTranslator.FromHtml("#7A3030");
 
     /// <summary>
-    /// Red400 — #CB594F  "Cinnabar"  ★
+    /// Red400 #CB594F  "Cinnabar"  ★
     /// PRIMARY DANGER COLOR. Use for delete buttons, error banners, and alert icons.
     /// </summary>
     public static Color Red400 = ColorTranslator.FromHtml("#CB594F");
 
     /// <summary>
-    /// Red500 — #E68880  "Blush"
+    /// Red500 #E68880  "Blush"
     /// Hover state. Lighter red; also readable as error message text on dark backgrounds.
     /// </summary>
     public static Color Red500 = ColorTranslator.FromHtml("#E68880");
 
     /// <summary>
-    /// Red600 — #F2B0AB  "Rose"
+    /// Red600 #F2B0AB  "Rose"
     /// Soft danger highlight. Use for muted error indications or secondary alert text.
     /// </summary>
     public static Color Red600 = ColorTranslator.FromHtml("#F2B0AB");
 
     /// <summary>
-    /// Red700 — #FDE0DE  "Petal"
+    /// Red700 #FDE0DE  "Petal"
     /// Faintest danger wash. Barely-perceptible red tint for error state backgrounds.
     /// </summary>
     public static Color Red700 = ColorTranslator.FromHtml("#FDE0DE");
 
 
     // ─────────────────────────────────────────────────────────────
-    //  INK — Text and border hierarchy
+    //  INK Text and border hierarchy
     //  Use in ascending order: 100 = borders, 500 = primary readable text.
-    //  Never use pure black or white — these stops keep the purple-dark theme cast.
+    //  Never use pure black or white these stops keep the purple-dark theme cast.
     // ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Ink100 — #2E2D35  "Graphite"
+    /// Ink100 #2E2D35  "Graphite"
     /// Default border / separator.
     /// Dividers, input outlines, card edges, and table row lines.
     /// </summary>
     public static Color Ink100 = ColorTranslator.FromHtml("#2E2D35");
 
     /// <summary>
-    /// Ink200 — #3E3D47  "Iron"
+    /// Ink200 #3E3D47  "Iron"
     /// Emphasis border.
     /// Slightly lighter border for hover states or to distinguish nested containers.
     /// </summary>
     public static Color Ink200 = ColorTranslator.FromHtml("#3E3D47");
 
     /// <summary>
-    /// Ink300 — #6C6A7A  "Pewter"
+    /// Ink300 #6C6A7A  "Pewter"
     /// Placeholder / hint text.
     /// Input placeholders, disabled labels, and lowest-priority hints.
     /// </summary>
     public static Color Ink300 = ColorTranslator.FromHtml("#6C6A7A");
 
     /// <summary>
-    /// Ink400 — #B0ADBE  "Ash"
+    /// Ink400 #B0ADBE  "Ash"
     /// Secondary text.
     /// Subtitles, metadata, and secondary labels. Recedes behind primary text.
     /// </summary>
     public static Color Ink400 = ColorTranslator.FromHtml("#B0ADBE");
 
     /// <summary>
-    /// Ink500 — #F0EEF8  "Starlight"
+    /// Ink500 #F0EEF8  "Starlight"
     /// Primary text.
     /// Headings, body copy, and all high-priority labels. Near-white with a purple cast.
     /// </summary>

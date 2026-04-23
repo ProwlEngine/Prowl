@@ -54,7 +54,7 @@ public class ViewManipulatorGizmo
             _isHovering = true;
             if (mouseClicked)
             {
-                // Snap camera to face — invert forward for Z faces
+                // Snap camera to face invert forward for Z faces
                 if (cubeFace == Float3.UnitZ || cubeFace == -Float3.UnitZ)
                     cubeFace = -cubeFace;
                 newCamForward = -cubeFace;

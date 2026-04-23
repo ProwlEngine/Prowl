@@ -151,7 +151,7 @@ public static class GameObjectInspector
             string compName = comp.GetType().Name;
             string icon = GetComponentIcon(comp);
 
-            // Component foldout header — draggable for component references
+            // Component foldout header draggable for component references
             using (paper.Row($"{compId}_header")
                 .Height(24)
                 .BackgroundColor(EditorTheme.Neutral300)
@@ -214,7 +214,7 @@ public static class GameObjectInspector
                 PropertyGrid.OverriddenFields = overridden.Count > 0 ? overridden : null;
             }
 
-            // Component body — use custom editor or default PropertyGrid
+            // Component body use custom editor or default PropertyGrid
             var customEditor = CustomEditorRegistry.GetEditor(comp.GetType());
             if (customEditor != null)
             {

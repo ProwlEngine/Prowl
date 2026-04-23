@@ -12,7 +12,7 @@ namespace Prowl.Runtime.MeshFeatures;
 /// </summary>
 /// <remarks>
 /// Mesh features are never modified after generation. To change a feature, change the
-/// parent asset's importer settings and reimport — the feature is regenerated.
+/// parent asset's importer settings and reimport the feature is regenerated.
 /// </remarks>
 public interface IMeshFeature : ISerializable
 {

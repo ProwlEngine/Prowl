@@ -10,7 +10,7 @@ using Prowl.Vector;
 namespace Prowl.Editor.GraphTools;
 
 /// <summary>
-/// Pure layout math for graph elements — node bounding rects, port positions,
+/// Pure layout math for graph elements node bounding rects, port positions,
 /// type-coloured port palette. No drawing here, no Paper dependency. The renderer
 /// and the interaction layer both consume these so they agree on geometry.
 /// </summary>
@@ -26,13 +26,13 @@ public static class GraphLayout
 
     /// <summary>Bounding rectangle of a node in graph space. Dispatches into the node's
     /// registered <see cref="NodeRenderer"/> so custom renderers (vertical / icon / etc.)
-    /// pick their own shape — the whole system (hit-test, marquee, framing) follows.</summary>
+    /// pick their own shape the whole system (hit-test, marquee, framing) follows.</summary>
     public static Rect GetNodeRect(Node node)
         => NodeRendererRegistry.GetRenderer(node).GetRect(node);
 
     /// <summary>
     /// Find a port's position in graph space by name. Returns null if the port doesn't
-    /// belong to the node (defensive — happens after rename).
+    /// belong to the node (defensive happens after rename).
     /// </summary>
     public static Float2? TryGetPortPosition(Node node, string portName, PortDirection direction)
     {
@@ -80,9 +80,9 @@ public static class GraphLayout
     // Convention close to Unity Shader Graph / Blender: flat-shaded by data category.
     private static readonly Dictionary<Type, Color32> _portColors = new()
     {
-        [typeof(float)]   = new Color32(220, 200, 80, 255),    // amber — scalar
-        [typeof(int)]     = new Color32(120, 200, 220, 255),   // cyan — integer
-        [typeof(bool)]    = new Color32(220, 90, 90, 255),     // red — boolean
+        [typeof(float)]   = new Color32(220, 200, 80, 255),    // amber scalar
+        [typeof(int)]     = new Color32(120, 200, 220, 255),   // cyan integer
+        [typeof(bool)]    = new Color32(220, 90, 90, 255),     // red boolean
         [typeof(Float2)]  = new Color32(180, 220, 100, 255),   // lime
         [typeof(Float3)]  = new Color32(110, 200, 130, 255),   // green
         [typeof(Float4)]  = new Color32(220, 120, 200, 255),   // pink
@@ -92,7 +92,7 @@ public static class GraphLayout
     // ─── Drag-context hint ────────────────────────────────────────────────────────────
     // GraphEditor writes into this before rendering each frame while the user is
     // dragging a wire. Renderers read it to dim ports that can't be a drop target —
-    // wrong direction OR type-incompatible — giving a clear "this can plug here"
+    // wrong direction OR type-incompatible giving a clear "this can plug here"
     // affordance without per-renderer plumbing.
     private static Type? _dragSourceType;
     private static PortDirection? _dragSourceDirection;
@@ -123,14 +123,14 @@ public static class GraphLayout
 
     /// <summary>
     /// True when <paramref name="port"/> on <paramref name="nodeId"/> cannot receive
-    /// the in-progress drag — wrong direction, type-incompatible, or same node
+    /// the in-progress drag wrong direction, type-incompatible, or same node
     /// (self-wire prevention). Returns false for the source port itself so it stays
     /// at full opacity. Renderers tint by this flag.
     /// </summary>
     public static bool IsDropTargetRejected(Guid nodeId, Port port)
     {
         if (_dragSourceType == null || _dragSourceDirection == null) return false;
-        // The source port itself — never dim.
+        // The source port itself never dim.
         if (nodeId == _dragSourceNodeId && port.Name == _dragSourcePortName) return false;
 
         // Must be opposite direction (output ↔ input).
@@ -138,7 +138,7 @@ public static class GraphLayout
                     ? PortDirection.Input : PortDirection.Output;
         if (port.Direction != needDir) return true;
 
-        // Type compatibility — same rules as ArePortsCompatible (exact, object, or
+        // Type compatibility same rules as ArePortsCompatible (exact, object, or
         // numeric-to-numeric).
         return !PortTypes.AreCompatible(_dragSourceType, port.DataType);
     }
@@ -153,7 +153,7 @@ public static class GraphLayout
     /// <summary>
     /// Compatibility check for connecting <paramref name="from"/>'s output to
     /// <paramref name="to"/>'s input. Allows exact match, object-typed (dynamic)
-    /// either side, and any numeric-to-numeric pair — scalar ↔ vector promotion is
+    /// either side, and any numeric-to-numeric pair scalar ↔ vector promotion is
     /// handled by the shader compiler (<c>ShaderTypeUtil.Promote</c>) so users can wire
     /// a Float into a Vec3 input.
     /// </summary>
@@ -207,7 +207,7 @@ public static class GraphLayout
 
     /// <summary>
     /// Same as <see cref="DistanceSqToWire(Float2,Float2,Float2)"/> but also returns the
-    /// closest-point-on-the-wire in graph space — used by alt+click-split to place the
+    /// closest-point-on-the-wire in graph space used by alt+click-split to place the
     /// new relay right on the wire rather than at the cursor.
     /// </summary>
     public static float DistanceSqToWire(Float2 from, Float2 to, Float2 graphPoint, out Float2 closestPoint)
@@ -219,7 +219,7 @@ public static class GraphLayout
 
         float bestSq = float.MaxValue;
         closestPoint = from;
-        // 32 samples — tighter than the 16 used originally so alt+click can land on a
+        // 32 samples tighter than the 16 used originally so alt+click can land on a
         // wire with pixel-ish precision even at modest zoom. O(32) per edge is cheap.
         const int samples = 32;
         for (int i = 0; i <= samples; i++)

@@ -8,7 +8,7 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Editor.Importers;
 
 /// <summary>
-/// Imports .mat files — Echo-serialized Material objects (native Prowl format).
+/// Imports .mat files Echo-serialized Material objects (native Prowl format).
 /// </summary>
 [ImporterFor(".mat")]
 public class MaterialImporter : AssetImporter

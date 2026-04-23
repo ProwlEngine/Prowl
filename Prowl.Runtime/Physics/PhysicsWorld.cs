@@ -60,7 +60,7 @@ public class PhysicsWorld
 
     /// <summary>
     /// When true, uses Jitter2's deterministic island-based solver instead of the regular parallel solver.
-    /// Slower but produces identical results across runs — required for networked physics, replays, or lockstep simulation.
+    /// Slower but produces identical results across runs required for networked physics, replays, or lockstep simulation.
     /// </summary>
     public bool EnhancedDeterminism = false;
 

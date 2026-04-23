@@ -1,4 +1,4 @@
-// SimplexNoise4D.glsl — Ashima Arts / Stefan Gustavson's 4D simplex noise, dropped
+// SimplexNoise4D.glsl Ashima Arts / Stefan Gustavson's 4D simplex noise, dropped
 // in unchanged (save for include guards) so it can be referenced from hand-written
 // shaders and the Simplex4D shader-graph node via `#include "SimplexNoise4D"`.
 //

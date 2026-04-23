@@ -8,7 +8,7 @@ namespace Prowl.Runtime.GraphTools;
 /// <summary>
 /// Universal "sanity" validator that runs on every graph type. Checks for cycles
 /// (which most evaluators can't handle) and flags the nodes participating in each
-/// cycle with an error message. Cheap — a standard DFS over the graph.
+/// cycle with an error message. Cheap a standard DFS over the graph.
 /// </summary>
 [GraphValidator]
 public sealed class CycleDetectorValidator : GraphValidator
@@ -37,7 +37,7 @@ public sealed class CycleDetectorValidator : GraphValidator
 
         foreach (var n in graph.Nodes)
             if (cycleNodes.Contains(n.Id))
-                n.Messages.Add(new NodeMessage { Severity = NodeMessageSeverity.Error, Text = "Node is part of a cycle — evaluation would loop." });
+                n.Messages.Add(new NodeMessage { Severity = NodeMessageSeverity.Error, Text = "Node is part of a cycle evaluation would loop." });
     }
 
     // ─── required port ──────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ public sealed class CycleDetectorValidator : GraphValidator
         Dictionary<System.Guid, byte> color,
         Stack<System.Guid> stack, HashSet<System.Guid> cycleNodes)
     {
-        // Iterative DFS — avoids stack overflow on wide graphs. Each frame = (node, next-outgoing-index).
+        // Iterative DFS avoids stack overflow on wide graphs. Each frame = (node, next-outgoing-index).
         var frames = new Stack<(System.Guid node, int i)>();
         frames.Push((start, 0));
         color[start] = 1;
@@ -96,14 +96,14 @@ public sealed class CycleDetectorValidator : GraphValidator
 /// Flag any input port marked <see cref="Port.IsRequired"/> that has no incoming wire.
 /// Ports whose default value isn't a meaningful fallback (Custom Code operands, sampler
 /// bindings, etc.) opt in by setting <c>required: true</c> on their AddInput call.
-/// Hidden ports are exempt — the owning node has chosen to make them unreachable.
+/// Hidden ports are exempt the owning node has chosen to make them unreachable.
 /// </summary>
 [GraphValidator]
 public sealed class RequiredPortValidator : GraphValidator
 {
     public override void Validate(Graph graph)
     {
-        // Build a set of (nodeId, portName) that have at least one incoming edge — one
+        // Build a set of (nodeId, portName) that have at least one incoming edge one
         // scan of Edges is cheaper than nested for-each per port.
         var connected = new HashSet<(System.Guid, string)>();
         foreach (var e in graph.Edges)

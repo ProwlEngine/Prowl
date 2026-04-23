@@ -60,7 +60,7 @@ Pass "Terrain"
             // Heightmap samples live at vertex positions (indices 0..N-1 → UV 0..1), but GPU
             // texture sampling is texel-centered (texel i center at UV (i+0.5)/N). Without this
             // remap, the rendered mesh is offset by half a texel relative to CPU-placed
-            // trees/grass that use TerrainData.GetInterpolatedHeight — the fix maps vertex UV
+            // trees/grass that use TerrainData.GetInterpolatedHeight the fix maps vertex UV
             // i/(N-1) back to texel-center UV (i+0.5)/N.
             vec2 hmSampleUV(vec2 uv)
             {

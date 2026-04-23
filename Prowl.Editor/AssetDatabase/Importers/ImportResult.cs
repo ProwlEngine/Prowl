@@ -7,7 +7,7 @@ namespace Prowl.Editor.Importers;
 
 /// <summary>
 /// Import context passed to importers. Holds the entry GUID so sub-assets get
-/// correct deterministic IDs immediately — enabling proper AssetRef serialization.
+/// correct deterministic IDs immediately enabling proper AssetRef serialization.
 /// </summary>
 public class ImportContext
 {
@@ -52,7 +52,7 @@ public class ImportContext
     /// </summary>
     public void AddSubAsset(string name, EngineObject asset)
     {
-        // Ensure unique name — append _1, _2, etc. if duplicate
+        // Ensure unique name append _1, _2, etc. if duplicate
         string uniqueName = name;
         int counter = 1;
         while (!_usedNames.Add(uniqueName))

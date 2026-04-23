@@ -16,7 +16,7 @@ internal sealed class DependencySerializationContext : SerializationContext
 /// <summary>
 /// A serializable reference to an asset. Stores a GUID for persistent identification
 /// and caches the resolved instance. When the asset is needed, it's loaded via AssetDatabase.Get().
-/// This solves the "stale reference" problem — all references to the same asset share the same
+/// This solves the "stale reference" problem all references to the same asset share the same
 /// resolved instance, and re-resolving always gets the latest version.
 /// </summary>
 public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
@@ -104,7 +104,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     }
 
     // ================================================================
-    //  Serialization — stores AssetID + inline instance for runtime resources
+    //  Serialization stores AssetID + inline instance for runtime resources
     // ================================================================
 
     public void Serialize(ref EchoObject compound, SerializationContext ctx)

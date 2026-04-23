@@ -19,7 +19,7 @@ public class MeshRenderer : MonoBehaviour
 {
     public AssetRef<Mesh> Mesh;
 
-    /// <summary>Materials array — one per submesh. Legacy single-material meshes use index 0.</summary>
+    /// <summary>Materials array one per submesh. Legacy single-material meshes use index 0.</summary>
     public List<AssetRef<Material>> Materials = new();
 
     /// <summary>Legacy single-material accessor. Gets/sets Materials[0].</summary>

@@ -14,7 +14,7 @@ namespace Prowl.Runtime.GraphTools;
 /// </summary>
 /// <remarks>
 /// All routines treat <see cref="Edge.SourceNodeId"/> → <see cref="Edge.TargetNodeId"/>
-/// as the dependency direction (output flows to input). Cycles are tolerated — the
+/// as the dependency direction (output flows to input). Cycles are tolerated the
 /// validator already flags them; here we just break the back-edge so the rest of the
 /// graph still produces a usable order.
 /// </remarks>
@@ -40,7 +40,7 @@ public static class GraphTraversal
         }
         foreach (var e in graph.Edges)
         {
-            if (!indegree.ContainsKey(e.TargetNodeId)) continue; // dangling edge — ignore
+            if (!indegree.ContainsKey(e.TargetNodeId)) continue; // dangling edge ignore
             if (!outgoing.ContainsKey(e.SourceNodeId)) continue;
             indegree[e.TargetNodeId]++;
             outgoing[e.SourceNodeId].Add(e.TargetNodeId);
@@ -61,7 +61,7 @@ public static class GraphTraversal
             }
         }
 
-        // Anything still > 0 is in a cycle — append in stable iteration order so callers
+        // Anything still > 0 is in a cycle append in stable iteration order so callers
         // get back every node, not silently a subset. Users see the cycle via the
         // validator's red badges; the evaluator can still try.
         if (result.Count < graph.Nodes.Count)
@@ -73,7 +73,7 @@ public static class GraphTraversal
     }
 
     /// <summary>
-    /// Compute the dependency depth of every node — leaves (no inputs / no incoming
+    /// Compute the dependency depth of every node leaves (no inputs / no incoming
     /// edges) are depth 0; a node's depth is 1 + max(depth of incoming sources).
     /// Useful for layered evaluation, GPU pass scheduling, layout passes, etc.
     /// Cycle nodes get depth 0 to keep them processable.
@@ -109,7 +109,7 @@ public static class GraphTraversal
     }
 
     /// <summary>
-    /// Return every node downstream of <paramref name="root"/> (transitive — not just
+    /// Return every node downstream of <paramref name="root"/> (transitive not just
     /// direct children). Excludes <paramref name="root"/> itself. Used for "what does
     /// this affect" queries (e.g. shader recompile scope when a property changes).
     /// </summary>
@@ -134,7 +134,7 @@ public static class GraphTraversal
 
     /// <summary>
     /// Return every node upstream of <paramref name="root"/> (transitive). Used for
-    /// "what does this depend on" queries — e.g. tracing inputs back to constants
+    /// "what does this depend on" queries e.g. tracing inputs back to constants
     /// when generating shader code from an output node.
     /// </summary>
     public static HashSet<Guid> GetUpstream(Graph graph, Guid root)

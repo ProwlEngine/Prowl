@@ -11,7 +11,7 @@ const float PI = 3.14159265359;
 // =============================================================
 
 // GGX/Trowbridge-Reitz Normal Distribution Function
-// Input roughness is perceptual roughness [0,1] — squared internally to get alpha.
+// Input roughness is perceptual roughness [0,1] squared internally to get alpha.
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
     float a2 = roughness * roughness; // alpha = perceptualRoughness², a2 = alpha
@@ -62,7 +62,7 @@ vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 // =============================================================
 //  Disney Diffuse (from Burley 2012)
 //  Roughness-dependent diffuse that darkens at grazing angles
-//  for rough surfaces — more physically accurate than Lambertian.
+//  for rough surfaces more physically accurate than Lambertian.
 // =============================================================
 
 float DisneyDiffuse(float NdotV, float NdotL, float LdotH, float perceptualRoughness)

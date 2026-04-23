@@ -20,7 +20,7 @@ public class InputActionMapEditor : AssetImporterEditor
     private int _selectedBindingIdx = -1; // -1 = none, 0..N-1 = binding, N..N+M-1 = composite
     private bool _dirty;
 
-    // Listening state — which binding slot we're listening for
+    // Listening state which binding slot we're listening for
     private bool _listeningForBinding;
     private string? _listenCompositePartName;
 
@@ -360,7 +360,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
             .Enter())
         {
-            // "Listen" button — press any key to rebind
+            // "Listen" button press any key to rebind
             DrawListenButton(paper, $"{id}_listen", binding, null);
 
             paper.Box($"{id}_sp").Height(4);
@@ -445,7 +445,7 @@ public class InputActionMapEditor : AssetImporterEditor
     }
 
     // ================================================================
-    //  Listen Button — "Press any key to bind"
+    //  Listen Button "Press any key to bind"
     // ================================================================
 
     private void DrawListenButton(Paper paper, string id, InputBinding binding, string? compositePartName)

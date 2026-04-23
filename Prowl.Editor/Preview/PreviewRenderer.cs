@@ -237,7 +237,7 @@ public class PreviewRenderer : IDisposable
                 float rw = (float)r.Size.X;
                 float rh = (float)r.Size.Y;
 
-                // Flip Y — OpenGL RT has Y=0 at bottom
+                // Flip Y OpenGL RT has Y=0 at bottom
                 canvas.SetBrushTexture(_rt.MainTexture);
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
@@ -251,7 +251,7 @@ public class PreviewRenderer : IDisposable
     /// Resets the root transform of <paramref name="subject"/>, measures its world-space mesh
     /// bounds (children included), then scales + translates the root so the aggregate bounds
     /// fit inside a unit cube centered at the origin. Robust to hierarchies whose root has a
-    /// saved non-identity transform (e.g. prefabs) — the reset ensures the bounds we measure
+    /// saved non-identity transform (e.g. prefabs) the reset ensures the bounds we measure
     /// are in the same frame we then apply the normalization into.
     /// </summary>
     private static void NormalizeSubjectToUnitCube(GameObject subject)
@@ -277,7 +277,7 @@ public class PreviewRenderer : IDisposable
             bounds = ComputeHierarchyBounds(subject);
 
         float maxExtent = MathF.Max(MathF.Max(bounds.Size.X, bounds.Size.Y), bounds.Size.Z);
-        if (maxExtent <= 0.001f) return; // no visuals — leave at identity
+        if (maxExtent <= 0.001f) return; // no visuals leave at identity
 
         float scale = 1f / maxExtent;
         subject.Transform.LocalScale = new Float3(scale, scale, scale);

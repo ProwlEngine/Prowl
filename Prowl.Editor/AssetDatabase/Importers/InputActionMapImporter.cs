@@ -7,7 +7,7 @@ using Prowl.Runtime;
 namespace Prowl.Editor.Importers;
 
 /// <summary>
-/// Imports .inputactions files — Echo-serialized InputActionMap objects.
+/// Imports .inputactions files Echo-serialized InputActionMap objects.
 /// </summary>
 [ImporterFor(".inputactions")]
 public class InputActionMapImporter : AssetImporter

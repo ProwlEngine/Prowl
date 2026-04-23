@@ -63,7 +63,7 @@ internal static class DefaultGameObjectCreators
         var terrainData = new TerrainData();
         terrain.Data = new AssetRef<TerrainData>(terrainData);
 
-        // Save as asset file — this assigns a GUID to the instance,
+        // Save as asset file this assigns a GUID to the instance,
         // which the AssetRef picks up automatically
         var db = EditorAssetDatabase.Instance;
         if (db != null)

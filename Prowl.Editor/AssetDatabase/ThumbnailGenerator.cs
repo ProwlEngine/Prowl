@@ -140,7 +140,7 @@ public static class ThumbnailGenerator
     public static int QueuedCount => _queue.Count;
 
     // ================================================================
-    //  Generators — all produce ThumbnailSize x ThumbnailSize RGBA, top-down
+    //  Generators all produce ThumbnailSize x ThumbnailSize RGBA, top-down
     // ================================================================
 
     internal static byte[]? GenerateForTextureFile(string? filePath)
@@ -187,7 +187,7 @@ public static class ThumbnailGenerator
             byte[] pixels = new byte[w * h * 4];
             rt.MainTexture.GetData<byte>(pixels);
 
-            // Flip vertically — OpenGL RT has Y=0 at bottom, we store top-down
+            // Flip vertically OpenGL RT has Y=0 at bottom, we store top-down
             FlipVertical(pixels, w, h);
 
             return pixels;

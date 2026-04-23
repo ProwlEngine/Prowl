@@ -245,7 +245,7 @@ public static class FileDialog
             .Layer(Layer.Overlay)
             .OnClick(0, (_, _) => { }); // block clicks
 
-        // Dialog window — centered via auto margins
+        // Dialog window centered via auto margins
         using (paper.Column("fd_window")
             .Size(DialogWidth, DialogHeight)
             .Margin(UnitValue.StretchOne)

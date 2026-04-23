@@ -9,7 +9,7 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Editor.Importers;
 
 /// <summary>
-/// Imports .prefab files — serialized GameObject hierarchies wrapped in PrefabAsset.
+/// Imports .prefab files serialized GameObject hierarchies wrapped in PrefabAsset.
 /// Dependencies are discovered by walking the raw EchoObject tree for $assetId tags
 /// and PrefabAssetId references, without deserializing the full GO hierarchy.
 /// </summary>
@@ -25,7 +25,7 @@ public class PrefabImporter : AssetImporter
             string text = File.ReadAllText(ctx.AbsolutePath);
             var goEcho = EchoObject.ReadFromString(text);
 
-            // Walk the EchoObject tree for dependencies — no deserialization needed
+            // Walk the EchoObject tree for dependencies no deserialization needed
             var dependencies = new HashSet<Guid>();
             CollectDependencies(goEcho, dependencies);
 

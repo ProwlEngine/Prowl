@@ -119,7 +119,7 @@ public static class ModalDialog
             .Layer(Layer.Overlay)
             .Enter())
         {
-            // Title bar — centered horizontally and vertically. Without explicit alignment
+            // Title bar centered horizontally and vertically. Without explicit alignment
             // the default TopLeft left the title pinned to the top-left of the 32px bar.
             if (font != null)
             {

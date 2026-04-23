@@ -105,7 +105,7 @@ public partial class PropertyState
 
     /// <summary>Yield the names of every property that has a value set on this
     /// <see cref="PropertyState"/>, regardless of type. Used by callers that need
-    /// to iterate over "all properties this state owns" — e.g. Material's
+    /// to iterate over "all properties this state owns" e.g. Material's
     /// override-tracking migration.</summary>
     public System.Collections.Generic.IEnumerable<string> EnumerateNames()
     {
@@ -121,7 +121,7 @@ public partial class PropertyState
     }
 
     /// <summary>Drop the entry for <paramref name="name"/> from every type bucket.
-    /// Idempotent — no-op for names that aren't present. Used by the material
+    /// Idempotent no-op for names that aren't present. Used by the material
     /// inspector's revert-to-default action so the next render falls back to the
     /// shader's live default value.</summary>
     public void RemoveProperty(string name)
@@ -141,7 +141,7 @@ public partial class PropertyState
     }
 
     // Getters
-    // Has* methods — check if a property exists without retrieving it
+    // Has* methods check if a property exists without retrieving it
     public bool HasFloat(string name) => _floats.ContainsKey(name);
     public bool HasInt(string name) => _ints.ContainsKey(name);
     public bool HasVector2(string name) => _vectors2.ContainsKey(name);
@@ -224,7 +224,7 @@ public partial class PropertyState
     /// but with a shader-default fallback: every property the shader declares but the
     /// material doesn't override gets bound to the shader's CURRENT default value
     /// (read live from <paramref name="shader"/>'s <see cref="Shaders.ShaderProperty"/>
-    /// list). Lets materials store only overrides — defaults always come from the
+    /// list). Lets materials store only overrides defaults always come from the
     /// shader, so editing a default in the shader graph propagates immediately to
     /// every material using it without any cached snapshot.
     /// </summary>
@@ -310,7 +310,7 @@ public partial class PropertyState
                     if (!materialProperties._matrices.ContainsKey(name))
                     {
                         // Matrices aren't value-compared in the cache (the struct is
-                        // big — compare cost > redundant-upload cost). Always set.
+                        // big compare cost > redundant-upload cost). Always set.
                         Graphics.SetUniformMatrix(program, name, false, prop.MatrixValue);
                     }
                     break;

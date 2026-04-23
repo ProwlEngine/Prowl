@@ -60,7 +60,7 @@ Pass "Grid"
 
             uniform sampler2D _CameraDepthTexture;
 
-            // Pristine grid — anti-aliased grid lines using screen-space derivatives
+            // Pristine grid anti-aliased grid lines using screen-space derivatives
             // https://bgolus.medium.com/the-best-darn-grid-shader-yet-727f9278b9d8
             float pristineGrid(vec2 uv, vec2 lineWidth)
             {
@@ -103,7 +103,7 @@ Pass "Grid"
 
                 // Discard if scene geometry is at nearly the same depth (z-fight zone)
                 float depthDiff = abs(sceneDepthLinear - gridDepthLinear);
-                float threshold = gridDepthLinear * 0.005; // 0.5% of depth — scales with distance
+                float threshold = gridDepthLinear * 0.005; // 0.5% of depth scales with distance
                 if (depthDiff < threshold)
                     discard;
 
@@ -113,7 +113,7 @@ Pass "Grid"
 
                 float gridAlpha = max(sg, bg);
 
-                // Axis highlights — constant screen-width lines
+                // Axis highlights constant screen-width lines
                 vec3 color = _GridColor.rgb;
 
                 float dzPerPx = length(vec2(dFdx(uv.y), dFdy(uv.y)));

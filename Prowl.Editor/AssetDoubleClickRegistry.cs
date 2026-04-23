@@ -13,7 +13,7 @@ namespace Prowl.Editor;
 /// <summary>
 /// Register a handler that runs when the user double-clicks an asset with a matching
 /// extension in the Project panel. Decorate a static method
-/// <c>bool Handler(string relativePath, Guid guid)</c> — return true if the asset was
+/// <c>bool Handler(string relativePath, Guid guid)</c> return true if the asset was
 /// handled, false to fall through to the default behavior.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]

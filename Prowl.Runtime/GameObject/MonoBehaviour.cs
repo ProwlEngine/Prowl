@@ -325,7 +325,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <param name="paper"></param>
     public virtual void OnGui(Paper paper) { }
 
-    /// <summary>Gated Start — only runs in play mode or with [ExecuteAlways].</summary>
+    /// <summary>Gated Start only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalStart()
     {
         if (HasStarted) return;
@@ -334,28 +334,28 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         Start();
     }
 
-    /// <summary>Gated Update — only runs in play mode or with [ExecuteAlways].</summary>
+    /// <summary>Gated Update only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalUpdate()
     {
         if (ShouldExecuteGameplay)
             Update();
     }
 
-    /// <summary>Gated LateUpdate — only runs in play mode or with [ExecuteAlways].</summary>
+    /// <summary>Gated LateUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalLateUpdate()
     {
         if (ShouldExecuteGameplay)
             LateUpdate();
     }
 
-    /// <summary>Gated FixedUpdate — only runs in play mode or with [ExecuteAlways].</summary>
+    /// <summary>Gated FixedUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalFixedUpdate()
     {
         if (ShouldExecuteGameplay)
             FixedUpdate();
     }
 
-    /// <summary>Gated OnEnable — only runs in play mode or with [ExecuteAlways].</summary>
+    /// <summary>Gated OnEnable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnEnable()
     {
         _hasBeenEnabled = true;
@@ -363,7 +363,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
             OnEnable();
     }
 
-    /// <summary>Gated OnDisable — only runs in play mode or with [ExecuteAlways].</summary>
+    /// <summary>Gated OnDisable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnDisable()
     {
         if (ShouldExecuteGameplay)
@@ -374,7 +374,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
     public void OnAfterDeserialize()
     {
-        // Always generate fresh identifier — Scene restores them after deserialization
+        // Always generate fresh identifier Scene restores them after deserialization
         _identifier = Guid.NewGuid();
     }
 

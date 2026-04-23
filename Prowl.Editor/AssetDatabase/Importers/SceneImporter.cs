@@ -9,7 +9,7 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Editor.Importers;
 
 /// <summary>
-/// Imports .scene files — Echo-serialized Scene objects (native Prowl format).
+/// Imports .scene files Echo-serialized Scene objects (native Prowl format).
 /// </summary>
 [ImporterFor(".scene")]
 public class SceneImporter : AssetImporter

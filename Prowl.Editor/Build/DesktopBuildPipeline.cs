@@ -363,7 +363,7 @@ public class DesktopBuildPipeline : BuildPipeline
             sb.AppendLine("    <SelfContained>true</SelfContained>");
         sb.AppendLine("  </PropertyGroup>");
 
-        // Reference Prowl.Runtime — Private=true forces fresh copy from HintPath
+        // Reference Prowl.Runtime Private=true forces fresh copy from HintPath
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");
         sb.AppendLine($"      <HintPath>{runtimeDll}</HintPath>");
@@ -372,7 +372,7 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("    </Reference>");
         sb.AppendLine("  </ItemGroup>");
 
-        // NuGet packages — must use PackageReference for native deps (Silk.NET GLFW, OpenAL, etc.)
+        // NuGet packages must use PackageReference for native deps (Silk.NET GLFW, OpenAL, etc.)
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine("    <PackageReference Include=\"Silk.NET\" Version=\"2.22.0\" />");
         sb.AppendLine("    <PackageReference Include=\"Silk.NET.OpenAL.Soft.Native\" Version=\"1.23.1\" />");
@@ -387,7 +387,7 @@ public class DesktopBuildPipeline : BuildPipeline
         Scripting.ScriptCompiler.AppendNuGetPackages(sb, project);
 
 
-        // Compile items — just the generated Program.cs (user scripts are a separate pre-compiled DLL)
+        // Compile items just the generated Program.cs (user scripts are a separate pre-compiled DLL)
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine($"    <Compile Include=\"Program.cs\" />");
         sb.AppendLine("  </ItemGroup>");

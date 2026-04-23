@@ -77,7 +77,7 @@ public class TreePrototype
     /// </summary>
     public List<AssetRef<Material>> Materials = [];
 
-    /// <summary>Legacy single-material accessor — reads/writes Materials[0].</summary>
+    /// <summary>Legacy single-material accessor reads/writes Materials[0].</summary>
     public AssetRef<Material> Material
     {
         get => Materials.Count > 0 ? Materials[0] : default;

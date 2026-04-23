@@ -29,7 +29,7 @@ public abstract class MeshFeatureSpec
     /// <summary>The runtime type produced by this feature.</summary>
     public abstract Type FeatureType { get; }
 
-    /// <summary>Bump when generation logic changes — forces reimport of all meshes.</summary>
+    /// <summary>Bump when generation logic changes forces reimport of all meshes.</summary>
     public abstract int Version { get; }
 
     /// <summary>

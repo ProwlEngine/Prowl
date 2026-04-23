@@ -214,7 +214,7 @@ Pass "CinematicEffects"
             // Apply gain (multiply)
             color *= (vec3(1.0) + gain);
 
-            // Apply lift (add to shadows — weighted by inverse luminance)
+            // Apply lift (add to shadows weighted by inverse luminance)
             color += lift * (1.0 - color);
 
             // Apply gamma (power curve on midtones)
@@ -294,11 +294,11 @@ Pass "CinematicEffects"
                 sampleUV -= deltaUV;
                 vec2 clampedUV = clamp(sampleUV, 0.001, 0.999);
 
-                // Depth test — sky pixels (depth ~1.0) contribute light
+                // Depth test sky pixels (depth ~1.0) contribute light
                 float depth = texture(_CameraDepthTexture, clampedUV).r;
                 float sky = step(0.9999, depth);
 
-                // Luminance threshold — only bright sky areas contribute
+                // Luminance threshold only bright sky areas contribute
                 vec3 sampleColor = texture(_MainTex, clampedUV).rgb;
                 float brightness = getLuminance(sampleColor);
                 float bright = sky * step(_GodRayThreshold, brightness);
@@ -362,7 +362,7 @@ Pass "CinematicEffects"
             color = applyFilmGrain(color, uv);
             #endif
 
-            // ── Vignette (last — applies to final image) ──
+            // ── Vignette (last applies to final image) ──
             #ifdef VIGNETTE
             color = applyVignette(color, uv);
             #endif

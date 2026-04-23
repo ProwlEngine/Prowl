@@ -181,7 +181,7 @@ public static class PropertyGrid
             return;
         }
 
-        // 6. EngineObject (fallback if not caught by registry — handles inheritance)
+        // 6. EngineObject (fallback if not caught by registry handles inheritance)
         if (typeof(EngineObject).IsAssignableFrom(type))
         {
             EngineObjectPropertyEditor.SetFieldType(type);

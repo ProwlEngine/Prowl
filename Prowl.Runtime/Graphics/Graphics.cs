@@ -20,7 +20,7 @@ public static unsafe class Graphics
     public static int MaxArrayTextureLayers { get; internal set; }
     public static int MaxFramebufferColorAttachments { get; internal set; }
 
-    // Queued rendering API removed — components return renderables directly from OnRenderCollect().
+    // Queued rendering API removed components return renderables directly from OnRenderCollect().
     // For instanced rendering, use InstancedMeshRenderable.CreateBatched().
 
     #region Graphics Backend

@@ -89,7 +89,7 @@ public abstract class Game
 
                 Scene? currentScene = Scene.Current;
 
-                // Fixed update loop — only when gameplay should run
+                // Fixed update loop only when gameplay should run
                 fixedTimeAccumulator += delta;
                 if (Application.ShouldRunGameplay)
                 {
@@ -110,7 +110,7 @@ public abstract class Game
 
                 OnUpdate(currentScene);
 
-                // Consume step request — re-pause after one frame
+                // Consume step request re-pause after one frame
                 if (Application.StepRequested)
                 {
                     Application.StepRequested = false;
@@ -259,7 +259,7 @@ public abstract class Game
     /// at native density.
     /// <para>
     /// Under this scheme a widget declared <c>Width(100)</c> occupies ~100 physical pixels at
-    /// 1× DPI and 200 physical pixels at 2× DPI — i.e. the same physical inches on the screen
+    /// 1× DPI and 200 physical pixels at 2× DPI i.e. the same physical inches on the screen
     /// regardless of display density. On non-DPI-aware platforms (Windows without the per-
     /// monitor manifest) the OS bitmap-upscales the framebuffer on top of this, which makes
     /// widgets look proportionally larger; on DPI-aware platforms (macOS retina, modern

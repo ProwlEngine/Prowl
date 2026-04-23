@@ -12,7 +12,7 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Plays AnimationClips by driving bone Transforms in the hierarchy.
-/// Simple legacy-style animation — one clip at a time.
+/// Simple legacy-style animation one clip at a time.
 /// Bones are found by path from the hierarchy root (e.g. "Armature/Hips/Spine").
 /// Paths match those stored in AnimationClip.AnimBone.BoneName.
 /// </summary>
@@ -156,7 +156,7 @@ public class AnimationComponent : MonoBehaviour
         if (_boneCache != null) return;
         _boneCache = new Dictionary<string, Transform>();
 
-        // Find the correct search root — try ancestors until bone paths resolve.
+        // Find the correct search root try ancestors until bone paths resolve.
         // This handles reparenting (model placed under another GO).
         Transform root = FindBoneCacheRoot();
 
@@ -201,7 +201,7 @@ public class AnimationComponent : MonoBehaviour
             ? t.GameObject.Name
             : parentPath + "/" + t.GameObject.Name;
 
-        // Don't overwrite — first occurrence wins
+        // Don't overwrite first occurrence wins
         _boneCache.TryAdd(path, t);
 
         foreach (var child in t.GameObject.Children)

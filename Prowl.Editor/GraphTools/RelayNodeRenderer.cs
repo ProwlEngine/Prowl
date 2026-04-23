@@ -8,7 +8,7 @@ using Prowl.Vector;
 namespace Prowl.Editor.GraphTools;
 
 /// <summary>
-/// Custom renderer for <see cref="RelayNode"/> — draws a small compact node instead
+/// Custom renderer for <see cref="RelayNode"/> draws a small compact node instead
 /// of the full card. Ports sit flush to the left/right edges of a narrow body so a
 /// relay is visibly just a "waypoint dot" that the wire passes through.
 /// </summary>
@@ -39,7 +39,7 @@ public sealed class RelayNodeRenderer : NodeRenderer
         var rect = GetRect(node);
         float x = (float)rect.Min.X, y = (float)rect.Min.Y;
 
-        // Body — rounded pill tinted by the carried port colour so users can eyeball
+        // Body rounded pill tinted by the carried port colour so users can eyeball
         // the data type at a glance without reading a label.
         Color32 dataColor = new Color32(170, 170, 170, 255);
         if (node.Outputs.Count > 0)
@@ -59,7 +59,7 @@ public sealed class RelayNodeRenderer : NodeRenderer
         canvas.SetStrokeWidth(isSelected ? 2.0f : 1.0f);
         canvas.Stroke();
 
-        // Ports (just the dots — no labels, no halo for zoomed-out simplicity).
+        // Ports (just the dots no labels, no halo for zoomed-out simplicity).
         foreach (var port in node.Inputs)
             DrawDot(canvas, GetPortPosition(node, port), dataColor, hoveredPort, node.Id, port);
         foreach (var port in node.Outputs)

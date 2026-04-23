@@ -35,7 +35,7 @@ internal static class SDFPreviewMaterial
         mat.SetVector("_BoundsMin", sdf.Bounds.Min);
         mat.SetVector("_BoundsMax", sdf.Bounds.Max);
         mat.SetVector("_VoxelSize", voxel);
-        // Surface epsilon scaled to voxel size — keeps stepping tolerance consistent across resolutions.
+        // Surface epsilon scaled to voxel size keeps stepping tolerance consistent across resolutions.
         mat.SetFloat("_SurfaceEpsilon", MathF.Max(0.00005f, MathF.Min(voxel.X, MathF.Min(voxel.Y, voxel.Z)) * 0.25f));
         mat.SetFloat("_StepScale", 0.9f);
         mat.SetFloat("_MaxSteps", 192f);

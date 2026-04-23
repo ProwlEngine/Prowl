@@ -1,4 +1,4 @@
-using Prowl.Editor.GraphTools.ShaderGraphs;
+using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -7,7 +7,7 @@ using Prowl.Runtime.GraphTools.ShaderGraphs;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
-/// Inspector for <see cref="ShaderGraph"/> assets — quick stats + a button to open the
+/// Inspector for <see cref="ShaderGraph"/> assets quick stats + a button to open the
 /// shader-graph editor window. The actual editing experience lives in
 /// <see cref="ShaderGraphEditorWindow"/>.
 /// </summary>

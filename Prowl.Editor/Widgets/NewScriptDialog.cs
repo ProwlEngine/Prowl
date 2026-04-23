@@ -23,7 +23,7 @@ public static class NewScriptDialog
     // selection index stays stable across a single session (a reload between opens is fine).
     private static IReadOnlyList<ScriptTemplate> s_templates = Array.Empty<ScriptTemplate>();
 
-    // Per-open state — reset each time Open() is called
+    // Per-open state reset each time Open() is called
     private static string s_folder = "";
     private static string s_name = "NewScript";
     private static int s_selectedIndex;
@@ -63,7 +63,7 @@ public static class NewScriptDialog
         // Template list on the left, details + name field on the right.
         using (paper.Row("scr_body").Height(bodyHeight).RowBetween(10).Enter())
         {
-            // Template list — wrapped in a ScrollView so 14+ templates don't overflow.
+            // Template list wrapped in a ScrollView so 14+ templates don't overflow.
             using (paper.Box("scr_tpls_frame")
                 .Width(listWidth).Height(bodyHeight)
                 .BackgroundColor(EditorTheme.Neutral200)
@@ -134,7 +134,7 @@ public static class NewScriptDialog
                 EditorGUI.TextField(paper, "scr_name", "Name", s_name)
                     .OnValueChanged(v => s_name = v);
 
-                // Validation hint — green when valid, red when not. Always visible so the
+                // Validation hint green when valid, red when not. Always visible so the
                 // user knows why Create is disabled.
                 if (font != null)
                 {
@@ -160,7 +160,7 @@ public static class NewScriptDialog
             }
         }
 
-        // Footer buttons — right-aligned Cancel + Create. The Create button is a real
+        // Footer buttons right-aligned Cancel + Create. The Create button is a real
         // EditorGUI.Button when valid; when invalid we render a visually-disabled Box
         // so the user sees the error hint rather than clicking a dead button.
         using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).ChildLeft(UnitValue.Stretch()).RowBetween(8).Enter())
@@ -387,7 +387,7 @@ public class {className} : MonoBehaviour
 ";
 
     [ScriptTemplate("First Person Camera",
-        "Mouse-look yaw/pitch for a camera rig. Only active while the cursor is locked — pair with a Character Controller.",
+        "Mouse-look yaw/pitch for a camera rig. Only active while the cursor is locked pair with a Character Controller.",
         EditorIcons.Video, Order = 30)]
     private static string FirstPersonCameraTemplate(string className) => $@"using System;
 
@@ -649,7 +649,7 @@ public class {className} : MonoBehaviour
     {{
         if (Instance != null && Instance != this)
         {{
-            Debug.LogWarning($""Multiple {{nameof({className})}} instances — keeping the first."");
+            Debug.LogWarning($""Multiple {{nameof({className})}} instances keeping the first."");
             return;
         }}
         Instance = this;
@@ -676,7 +676,7 @@ public class {className} : EngineObject
 ";
 
     [ScriptTemplate("Plain C# Class",
-        "A regular C# class — not a MonoBehaviour. Useful for pure-data types, services, and helpers.",
+        "A regular C# class not a MonoBehaviour. Useful for pure-data types, services, and helpers.",
         EditorIcons.File, Order = 130)]
     private static string PlainClassTemplate(string className) => $@"namespace Game;
 

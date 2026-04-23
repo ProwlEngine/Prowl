@@ -10,7 +10,7 @@ namespace Prowl.Runtime.GraphTools;
 /// deleted along with any dangling edges.
 /// </summary>
 /// <remarks>
-/// Use for nodes that have no meaning on their own — <see cref="RelayNode"/> is the
+/// Use for nodes that have no meaning on their own <see cref="RelayNode"/> is the
 /// canonical example: a wire waypoint whose purpose ends the moment both endpoints
 /// disappear. The prune pass is driven by the graph editor after every mutation so
 /// the user never needs to clean up after a Delete or Cut.

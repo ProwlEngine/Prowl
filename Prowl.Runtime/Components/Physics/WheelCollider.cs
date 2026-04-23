@@ -329,7 +329,7 @@ public sealed class WheelCollider : MonoBehaviour
         RigidBody worldBody = null;
 
         // Perform raycasts along the bottom of the wheel using the cosine offset
-        // from the original Jitter2 demo — this traces a quarter-circle arc.
+        // from the original Jitter2 demo this traces a quarter-circle arc.
         for (int i = 0; i < numberOfRays; i++)
         {
             float distFwd = deltaFwdStart + i * deltaFwd - radius;

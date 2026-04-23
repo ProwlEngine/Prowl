@@ -12,7 +12,7 @@ namespace Prowl.Editor;
 /// Manages a hidden runtime Camera that renders the scene to a RenderTexture.
 /// </summary>
 /// <summary>
-/// Cursor lock context for the scene view — locks to the center of the scene panel.
+/// Cursor lock context for the scene view locks to the center of the scene panel.
 /// Panel coordinates are in Paper-logical space; the OS cursor position expects
 /// window-logical pixels, so we multiply by Window.ContentScale on the way out.
 /// </summary>
@@ -39,7 +39,7 @@ public class EditorCamera
     private RenderTexture? _renderTarget;
     private SceneViewLockContext _lockContext = new();
 
-    // Camera state — position + euler angles (no orbit)
+    // Camera state position + euler angles (no orbit)
     private Float3 _position = new Float3(0, 5, -15);
     private float _yaw = 0f;
     private float _pitch = 15f;
@@ -160,7 +160,7 @@ public class EditorCamera
             return;
         }
 
-        // Copy the effect list — we share the same effect instances so settings
+        // Copy the effect list we share the same effect instances so settings
         // tweaked on the game camera are immediately reflected in the editor view.
         _camera.Effects.Clear();
         _camera.Effects.AddRange(sceneCamera.Effects);
@@ -333,7 +333,7 @@ public class EditorCamera
         float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
         dist = MathF.Max(dist, 0.5f);
 
-        // Look at target from the camera's current orientation — subsequent F presses
+        // Look at target from the camera's current orientation subsequent F presses
         // retighten the frame rather than being no-ops once we're "close enough".
         Float3 forward = _cameraObject.Transform.Forward;
         if (Float3.LengthSquared(forward) < 0.0001f) forward = new Float3(0, 0, 1);

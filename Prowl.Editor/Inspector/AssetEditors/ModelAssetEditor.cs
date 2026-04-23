@@ -27,7 +27,7 @@ public class ModelAssetEditor : AssetImporterEditor
     private bool _flipUVs;
     private bool _globalScale;
     private float _unitScale = 1f;
-    // Mesh feature settings — applies to every imported sub-mesh.
+    // Mesh feature settings applies to every imported sub-mesh.
     private bool _generateSDF;
     private int _sdfResolution = 64;
     private float _sdfPadding = 0.1f;
@@ -38,7 +38,7 @@ public class ModelAssetEditor : AssetImporterEditor
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        // Detect asset change — reload settings and reset state
+        // Detect asset change reload settings and reset state
         if (_currentGuid != entry.Guid)
         {
             _currentGuid = entry.Guid;
@@ -108,7 +108,7 @@ public class ModelAssetEditor : AssetImporterEditor
         EditorGUI.FloatField(paper, $"{id}_unitScale", _unitScale, label: "Unit Scale")
             .OnValueChanged(v => { _unitScale = v; _settingsDirty = true; });
 
-        // Mesh features — produces an SDF sub-asset alongside every imported mesh.
+        // Mesh features produces an SDF sub-asset alongside every imported mesh.
         EditorGUI.Separator(paper, $"{id}_sep_features");
         EditorGUI.Header(paper, $"{id}_h_features", "Mesh Features");
 

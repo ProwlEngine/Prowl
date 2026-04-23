@@ -9,6 +9,7 @@ using System.Linq;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 namespace Prowl.Editor;
 
@@ -132,7 +133,7 @@ public static class EditorSceneManager
             }
         }
 
-        // No saved scene or failed to load — create default
+        // No saved scene or failed to load create default
         NewScene();
     }
 
@@ -163,7 +164,7 @@ public static class EditorSceneManager
         var graphRef = new AssetRef<Runtime.GraphTools.Graph>(guid);
         if (graphRef.Res is Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
         {
-            Editor.GraphTools.ShaderGraphs.ShaderGraphEditorWindow.OpenFor(sg);
+            ShaderGraphEditorWindow.OpenFor(sg);
             return true;
         }
         return false;

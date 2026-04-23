@@ -368,7 +368,7 @@ Pass "FogMarch"
             float rawDepth = texture(_CameraDepthTexture, uv).r;
 
             // World distance from camera to the actual geometry (NOT eye-space Z).
-            // We march along viewDir in world space, so we need world distance — using
+            // We march along viewDir in world space, so we need world distance using
             // LinearEyeDepth here makes off-axis pixels under/overshoot the geometry,
             // causing fog to appear past surfaces (e.g. through the ground at oblique angles).
             float sceneDist = (rawDepth >= 0.9999) ? _FogMaxDistance : WorldDistFromDepth(uv, rawDepth);
@@ -403,7 +403,7 @@ Pass "FogMarch"
 
                 if (density > 0.0) {
                     vec3 lightInscatter = SampleScattering(samplePos, viewDir, volColor);
-                    // Ambient adds a constant base — keeps fog visible in shadow
+                    // Ambient adds a constant base keeps fog visible in shadow
                     // (sky bounce / GI approximation, not physically accurate).
                     vec3 ambient = _FogAmbientColor.rgb * _FogAmbientIntensity * volColor;
                     vec3 inscatter = (lightInscatter + ambient) * density;
@@ -419,7 +419,7 @@ Pass "FogMarch"
                 t += stepSize;
             }
 
-            // Color dithering — small per-pixel random shift to break up banding bands.
+            // Color dithering small per-pixel random shift to break up banding bands.
             if (_FogDithering > 0.0) {
                 float dither = (Hash13(vec3(gl_FragCoord.xy, _Time.y)) - 0.5) * _FogDithering;
                 accum += vec3(dither);
@@ -569,7 +569,7 @@ Pass "FogComposite"
         }
 
         // Depth-aware nearest-tap upsample. Picks the half-res tap whose depth is
-        // closest to the full-res depth — avoids bleeding fog across silhouettes
+        // closest to the full-res depth avoids bleeding fog across silhouettes
         // where bilinear blending would mix fog from sky pixels into ground pixels.
         vec4 BilateralUpsample(vec2 uv, float refDepth)
         {

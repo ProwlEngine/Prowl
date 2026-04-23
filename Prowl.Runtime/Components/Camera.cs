@@ -176,7 +176,7 @@ public class Camera : MonoBehaviour
     /// <summary>
     /// Called once per render tick by the render pipeline. Fires OnDisable on any
     /// effect that was active last frame but isn't in <paramref name="currentlyActive"/>
-    /// this frame — covers disabled, removed, and hot-swapped effects. Pipelines
+    /// this frame covers disabled, removed, and hot-swapped effects. Pipelines
     /// don't need to track this themselves; they just pass in whatever they're about
     /// to render.
     /// </summary>

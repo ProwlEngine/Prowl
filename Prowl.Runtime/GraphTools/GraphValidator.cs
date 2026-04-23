@@ -28,7 +28,7 @@ public sealed class GraphValidatorAttribute : Attribute
 /// <c>DefaultNodeRenderer</c> paints from <see cref="Node.Messages"/>.
 /// </summary>
 /// <remarks>
-/// <para>Implementations should be stateless — a single instance is cached and shared
+/// <para>Implementations should be stateless a single instance is cached and shared
 /// across every validation pass.</para>
 /// <para>Standard pattern: call <see cref="Graph.ClearAllMessages"/> before your first
 /// validator runs, then each validator iterates nodes/edges and appends messages.
@@ -95,7 +95,7 @@ public static class GraphValidatorRegistry
     }
 
     /// <summary>Clear every node's <see cref="Node.Messages"/> and run every validator
-    /// that applies to <paramref name="graph"/>. Idempotent — safe to call on every
+    /// that applies to <paramref name="graph"/>. Idempotent safe to call on every
     /// mutation.</summary>
     public static void Validate(Graph graph)
     {

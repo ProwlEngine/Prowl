@@ -290,7 +290,7 @@ public static class CurveEditor
                     });
             }
 
-            // Bottom bar — actions
+            // Bottom bar actions
             using (paper.Row($"{id}_bar")
                 .PositionType(PositionType.SelfDirected)
                 .Position(4, barY).Size(editorW - 8, 26)

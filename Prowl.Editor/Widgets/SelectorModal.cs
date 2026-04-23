@@ -31,8 +31,8 @@ public enum SelectorTabs
 /// <summary>
 /// Unified asset/scene selector modal. Provides two tabs:
 /// <list type="bullet">
-///   <item><b>Scene</b> — lists GameObjects and components from the current scene (list view).</item>
-///   <item><b>Assets</b> — lists project + built-in assets with thumbnails (grid view).</item>
+///   <item><b>Scene</b> lists GameObjects and components from the current scene (list view).</item>
+///   <item><b>Assets</b> lists project + built-in assets with thumbnails (grid view).</item>
 /// </list>
 /// Only one selector can be open at a time.
 /// </summary>
@@ -195,7 +195,7 @@ public static class SelectorModal
     }
 
     // ================================================================
-    //  Scene tab — list of GameObjects / Components
+    //  Scene tab list of GameObjects / Components
     // ================================================================
 
     private static void DrawSceneTab(Paper paper, Prowl.Scribe.FontFile font, float height)
@@ -217,7 +217,7 @@ public static class SelectorModal
 
         using (ScrollView.Begin(paper, "sel_scene_scroll", 380, height, paddingLeft: 4, paddingRight: 4, paddingTop: 4))
         {
-            // None option — always first
+            // None option always first
             paper.Box("sel_s_none")
                 .Height(EditorTheme.RowHeight).ChildLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()
@@ -313,7 +313,7 @@ public static class SelectorModal
     }
 
     // ================================================================
-    //  Assets tab — grid with thumbnails
+    //  Assets tab grid with thumbnails
     // ================================================================
 
     private static void DrawAssetsTab(Paper paper, Prowl.Scribe.FontFile font, float height)
@@ -344,7 +344,7 @@ public static class SelectorModal
 
         using (ScrollView.Begin(paper, "sel_asset_scroll", 380, height, paddingLeft: 4, paddingRight: 4, paddingTop: 4))
         {
-            // None option — always first
+            // None option always first
             paper.Box("sel_a_none")
                 .Height(EditorTheme.RowHeight).ChildLeft(8)
                 .Hovered.BackgroundColor(EditorTheme.Purple400).End()

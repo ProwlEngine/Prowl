@@ -7,7 +7,7 @@ using System.Reflection;
 namespace Prowl.Runtime.GraphTools;
 
 /// <summary>
-/// Marks a node as part of a subgraph's external interface — either an input port the
+/// Marks a node as part of a subgraph's external interface either an input port the
 /// containing subgraph exposes (<see cref="GraphInputNode"/>) or an output port
 /// (<see cref="GraphOutputNode"/>). <see cref="SubgraphNode"/> reads these from the
 /// referenced graph asset to build its own port list.
@@ -24,7 +24,7 @@ public interface IGraphInterfaceNode
 }
 
 /// <summary>
-/// "Input from outside" node — placed inside a subgraph asset, exposes one OUTPUT port
+/// "Input from outside" node placed inside a subgraph asset, exposes one OUTPUT port
 /// (the value flows from the parent graph into this subgraph's interior). The port
 /// type is dynamic: typed as <c>object</c> so any wire can connect, and the
 /// <see cref="SubgraphNode"/> infers the actual type from whatever's wired downstream.
@@ -50,7 +50,7 @@ public sealed class GraphInputNode : Node, IGraphInterfaceNode
 }
 
 /// <summary>
-/// "Output to outside" node — placed inside a subgraph asset, exposes one INPUT port
+/// "Output to outside" node placed inside a subgraph asset, exposes one INPUT port
 /// (the value flows from this subgraph's interior back out to the parent graph). The
 /// port is typed as <c>object</c> so any wire can feed it; the parent
 /// <see cref="SubgraphNode"/> infers the carried type from whatever's wired upstream.
@@ -73,7 +73,7 @@ public sealed class GraphOutputNode : Node, IGraphInterfaceNode
     }
 }
 
-/// <summary>Reflection helpers for declaring runtime-typed ports — used by
+/// <summary>Reflection helpers for declaring runtime-typed ports used by
 /// <see cref="SubgraphNode"/> to mirror an inner graph's interface with the resolved
 /// data types. Same generic-method-via-reflection trick <see cref="RelayNode"/> uses.</summary>
 internal static class GraphInterfaceUtil

@@ -96,7 +96,7 @@ public class GameViewPanel : DockPanel
         int rtW, rtH;
         if (targetW == 0 || targetH == 0)
         {
-            // Free — match panel size
+            // Free match panel size
             rtW = (int)MathF.Max(1, width);
             rtH = (int)MathF.Max(1, height);
         }
@@ -189,7 +189,7 @@ public class GameViewPanel : DockPanel
                     canvas.ClearBrushTexture();
                 }));
 
-            // Game view is focused when hovered — play-mode input is routed here
+            // Game view is focused when hovered play-mode input is routed here
             GameViewInputHandler.IsGameViewFocused = paper.IsParentHovered;
         }
         else

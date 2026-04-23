@@ -17,7 +17,7 @@ namespace Prowl.Editor.Inspector;
 /// <remarks>
 /// All mesh features (SDF, BVH, Prism, ...) are produced by the parent asset's importer
 /// from a single set of importer settings. To enable/configure them, edit the parent
-/// asset (e.g. the Model) — never this view.
+/// asset (e.g. the Model) never this view.
 /// </remarks>
 [CustomAssetEditor(typeof(Mesh))]
 public class MeshAssetEditor : AssetImporterEditor

@@ -14,7 +14,7 @@ using Gradient = Prowl.Runtime.Gradient;
 namespace Prowl.Editor.Inspector;
 
 // ================================================================
-//  Gradient Property Editor — visual bar with keyframe markers
+//  Gradient Property Editor visual bar with keyframe markers
 // ================================================================
 
 [CustomPropertyEditor(typeof(Gradient))]
@@ -58,7 +58,7 @@ public class GradientPropertyEditor : PropertyEditor
 
                 if (relY < MarkerAreaHeight)
                 {
-                    // Clicked in color marker area — find or add
+                    // Clicked in color marker area find or add
                     int hit = FindColorKeyAt(gradient, t, barWidth);
                     if (hit >= 0)
                     {
@@ -80,7 +80,7 @@ public class GradientPropertyEditor : PropertyEditor
                 }
                 else if (relY > MarkerAreaHeight + BarHeight)
                 {
-                    // Clicked in alpha marker area — find or add
+                    // Clicked in alpha marker area find or add
                     int hit = FindAlphaKeyAt(gradient, t, barWidth);
                     if (hit >= 0)
                     {
@@ -102,7 +102,7 @@ public class GradientPropertyEditor : PropertyEditor
                 }
                 else
                 {
-                    // Clicked on the bar itself — deselect
+                    // Clicked on the bar itself deselect
                     _selectedEditorId = null;
                     _selectedKeyIndex = -1;
                 }

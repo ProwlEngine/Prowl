@@ -25,7 +25,7 @@ public class MaterialAssetEditor : AssetImporterEditor
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        // Detect asset change — reset dirty flag and force preview refresh
+        // Detect asset change reset dirty flag and force preview refresh
         if (_currentGuid != entry.Guid)
         {
             _currentGuid = entry.Guid;
@@ -59,10 +59,10 @@ public class MaterialAssetEditor : AssetImporterEditor
                 }
             }, 0);
 
-        // Shader properties — one field per property declared by the shader. Values
+        // Shader properties one field per property declared by the shader. Values
         // are read live from the shader for non-overridden entries (see
         // DrawShaderProperty), so changes to defaults in the shader graph propagate
-        // immediately — no SyncShaderDefaults call needed.
+        // immediately no SyncShaderDefaults call needed.
         var shader = material.Shader;
         if (shader != null)
         {
@@ -77,7 +77,7 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         }
 
-        // Save button — writes material to disk then reimports
+        // Save button writes material to disk then reimports
         if (_dirty)
         {
             EditorGUI.Separator(paper, $"{id}_sep_save");

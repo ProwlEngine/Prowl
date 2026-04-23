@@ -49,7 +49,7 @@ vec4 StandardSurface(
         mat3 TBN = mat3(T, B, N);
 
         vec3 viewDirWorld = _WorldSpaceCameraPos.xyz - worldPos;
-        // Transform to tangent space, then normalize — preserves direction accuracy
+        // Transform to tangent space, then normalize preserves direction accuracy
         vec3 viewDirTS = normalize(transpose(TBN) * viewDirWorld);
 
         finalUV = ParallaxOcclusionMapping(parallaxMap, uv, viewDirTS, parallaxHeight, parallaxSteps);

@@ -127,7 +127,7 @@ public static class ShortcutManager
     }
 
     /// <summary>
-    /// The platform's "command" modifier — Cmd (Super) on macOS, Ctrl everywhere else.
+    /// The platform's "command" modifier Cmd (Super) on macOS, Ctrl everywhere else.
     /// All shortcut bindings declared with <c>ctrl: true</c> are routed through this.
     /// </summary>
     private static bool IsPlatformCtrlPressed()
@@ -315,7 +315,7 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("GraphEditor/Paste", "Paste", KeyCode.V, ctrl: true);
         ShortcutManager.Register("GraphEditor/SelectAll", "Select All", KeyCode.A, ctrl: true);
         ShortcutManager.Register("GraphEditor/FrameSelection", "Frame Selection", KeyCode.F);
-        // Space is the alt key for frame — matches the "tap to recenter" muscle memory
+        // Space is the alt key for frame matches the "tap to recenter" muscle memory
         // from Unity / Blender. Handled identically to F inside the widget.
         ShortcutManager.Register("GraphEditor/Recenter", "Recenter View", KeyCode.Space);
         ShortcutManager.Register("GraphEditor/GroupSelection", "Group Selected", KeyCode.G, ctrl: true);

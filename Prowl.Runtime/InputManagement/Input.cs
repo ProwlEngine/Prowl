@@ -112,7 +112,7 @@ public static class Input
     }
 
     /// <summary>
-    /// Lock the cursor — hides it and reports CursorLockCenter as the mouse position.
+    /// Lock the cursor hides it and reports CursorLockCenter as the mouse position.
     /// Uses the topmost lock context to determine the center position.
     /// If the topmost context disallows locking, fires OnCursorLockFailed and returns.
     /// </summary>
@@ -131,7 +131,7 @@ public static class Input
     }
 
     /// <summary>
-    /// Unlock the cursor — shows it and stops reporting the lock center.
+    /// Unlock the cursor shows it and stops reporting the lock center.
     /// </summary>
     public static void UnlockCursor()
     {

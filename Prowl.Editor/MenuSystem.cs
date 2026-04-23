@@ -15,7 +15,7 @@ public class MenuItem
     // Static enabled (set once at registration)
     private bool _enabled = true;
 
-    // Dynamic overrides — checked every frame if set
+    // Dynamic overrides checked every frame if set
     public Func<bool>? IsEnabledFunc;
     public Func<string>? DynamicLabelFunc;
 

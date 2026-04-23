@@ -25,7 +25,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     private TerrainCollisionFilter _collisionFilter;
     private bool _isRegistered;
 
-    #region ITerrainHeightProvider — samples directly from TerrainData
+    #region ITerrainHeightProvider samples directly from TerrainData
 
     public int Width => _terrain?.Data.Res?.HeightmapResolution ?? 0;
     public int Height => _terrain?.Data.Res?.HeightmapResolution ?? 0;

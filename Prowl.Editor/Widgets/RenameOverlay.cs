@@ -10,7 +10,7 @@ using Color = System.Drawing.Color;
 namespace Prowl.Editor.Widgets;
 
 /// <summary>
-/// Shared rename system. Same architecture as ContextMenuHelper — backdrop + floating field
+/// Shared rename system. Same architecture as ContextMenuHelper backdrop + floating field
 /// drawn at the call site using SelfDirected + Layer.Topmost.
 /// </summary>
 public static class RenameOverlay
@@ -76,7 +76,7 @@ public static class RenameOverlay
         if (confirm) { Confirm(); return; }
         if (cancel) { Cancel(); return; }
 
-        // Fullscreen backdrop — click to cancel
+        // Fullscreen backdrop click to cancel
         paper.Box($"{id}_backdrop")
             .PositionType(PositionType.SelfDirected)
             .Position(-9999, -9999)
@@ -87,7 +87,7 @@ public static class RenameOverlay
             .OnClick(0, (_, _) => Cancel())
             .OnRightClick(0, (_, _) => Cancel());
 
-        // Rename field — positioned at (0,0) relative to parent, on top of backdrop
+        // Rename field positioned at (0,0) relative to parent, on top of backdrop
         using (paper.Box($"{id}_field")
             .PositionType(PositionType.SelfDirected)
             .Position(0, (position == Position.Top ? 0 : UnitValue.Stretch()))

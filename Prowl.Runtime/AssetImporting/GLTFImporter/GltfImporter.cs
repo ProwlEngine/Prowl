@@ -142,7 +142,7 @@ public class GltfImporter
     }
 
     // ================================================================
-    //  Build — main pipeline
+    //  Build main pipeline
     // ================================================================
 
     private ModelImportResult Build(GltfFile gltf, string basePath, ModelImporterSettings settings)
@@ -313,7 +313,7 @@ public class GltfImporter
             anim.Clips = animations.Select(c => new AssetRef<AnimationClip>(c)).ToList();
         }
 
-        // 9. Return all live objects — the editor importer handles asset DB registration
+        // 9. Return all live objects the editor importer handles asset DB registration
         return new ModelImportResult
         {
             RootGO = rootGO,
@@ -340,7 +340,7 @@ public class GltfImporter
             sceneNodes.AddRange(root.Scenes[0].Nodes ?? []);
         else
         {
-            // No scenes — walk all nodes that aren't children of other nodes
+            // No scenes walk all nodes that aren't children of other nodes
             var childSet = new HashSet<int>();
             for (int i = 0; i < root.Nodes.Count; i++)
                 if (root.Nodes[i].Children != null)
@@ -478,7 +478,7 @@ public class GltfImporter
     }
 
     // ================================================================
-    //  Meshes — one Prowl Mesh per GLTF mesh, with submeshes per primitive
+    //  Meshes one Prowl Mesh per GLTF mesh, with submeshes per primitive
     // ================================================================
 
     private void BuildMeshes(GltfFile gltf, GltfRoot root, List<Material> materials,
@@ -645,7 +645,7 @@ public class GltfImporter
                 }
                 else
                 {
-                    // No bones for this primitive — add zero-weight entries
+                    // No bones for this primitive add zero-weight entries
                     for (int i = 0; i < primVertCount; i++)
                     {
                         allBoneIndices.Add(Float4.Zero);
@@ -692,7 +692,7 @@ public class GltfImporter
 
             if (allVertices.Count == 0)
             {
-                // All primitives were skipped — add a placeholder
+                // All primitives were skipped add a placeholder
                 meshes.Add(new Mesh { Name = meshName });
                 meshMaterials.Add(new List<Material?>());
                 meshIsSkinned.Add(false);

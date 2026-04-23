@@ -12,9 +12,9 @@ namespace Prowl.Editor.GraphTools;
 /// Per-window pan/zoom state for a graph editor viewport. Owns the view transform and
 /// converts between three coordinate spaces:
 /// <list type="bullet">
-///   <item><b>Graph space</b> — where nodes live (Node.Position units, persisted on the asset)</item>
-///   <item><b>Canvas-local pixels</b> — relative to the canvas Box's top-left, zero-indexed</item>
-///   <item><b>Screen pixels</b> — Paper's logical-pixel root frame; what <c>paper.PointerPos</c> returns</item>
+///   <item><b>Graph space</b> where nodes live (Node.Position units, persisted on the asset)</item>
+///   <item><b>Canvas-local pixels</b> relative to the canvas Box's top-left, zero-indexed</item>
+///   <item><b>Screen pixels</b> Paper's logical-pixel root frame; what <c>paper.PointerPos</c> returns</item>
 /// </list>
 /// The transform itself is two values: an integer-friendly pan offset (in canvas-local
 /// pixels) and a scalar zoom (1.0 = nodes drawn at native size). Persists to/from

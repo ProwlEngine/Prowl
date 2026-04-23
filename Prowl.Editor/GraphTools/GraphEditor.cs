@@ -16,7 +16,7 @@ using Prowl.Vector;
 namespace Prowl.Editor.GraphTools;
 
 /// <summary>
-/// Embeddable node-graph editor. Owns all the generic graph-editing behaviour — canvas
+/// Embeddable node-graph editor. Owns all the generic graph-editing behaviour canvas
 /// draw / pan / zoom, node creation popup, wire dragging, selection, marquee, undo,
 /// minimap, context menu, cut-line gesture, keyboard shortcuts. Knows nothing about
 /// what the graph represents (shader graph / visual scripting / dialogue / etc.).
@@ -24,8 +24,8 @@ namespace Prowl.Editor.GraphTools;
 /// <remarks>
 /// This class is NOT a <see cref="Docking.DockPanel"/>. Callers host it inside a panel
 /// (or any Paper layout) and invoke <see cref="DrawGraph"/> once per frame in the
-/// region where the graph should render. Panel-specific concerns — window title,
-/// sidebar, save/compile UI, serialization of which-asset-is-open — live on the
+/// region where the graph should render. Panel-specific concerns window title,
+/// sidebar, save/compile UI, serialization of which-asset-is-open live on the
 /// hosting panel. See <c>ShaderGraphEditorWindow</c> for an example host.
 /// </remarks>
 public class GraphEditor
@@ -53,7 +53,7 @@ public class GraphEditor
 
     /// <summary>Callback invoked when the user asks to open a nested graph (e.g. double-
     /// clicking a <see cref="SubgraphNode"/>). Host windows wire this to their own open
-    /// logic — the editor widget never creates windows on its own.</summary>
+    /// logic the editor widget never creates windows on its own.</summary>
     public Action<Graph>? OnOpenSubgraph;
 
     /// <summary>Fires after any mutation that goes through <see cref="RegisterMutation"/>.
@@ -61,7 +61,7 @@ public class GraphEditor
     /// widget needing to know anything about asset persistence.</summary>
     public event Action? GraphMutated;
 
-    /// <summary>Latest canvas-Box screen rect captured during draw — used by input handlers.</summary>
+    /// <summary>Latest canvas-Box screen rect captured during draw used by input handlers.</summary>
     private Rect _canvasScreenRect;
 
     // ─── Interaction state ────────────────────────────────────────────────────────────
@@ -75,15 +75,15 @@ public class GraphEditor
 
     /// <summary>Resize handle size (graph-space pixels) at the bottom-right of each sticky / group.</summary>
     private const float StickyResizeHandleSize = 16f;
-    /// <summary>Minimum sticky note size — prevents user dragging it to zero.</summary>
+    /// <summary>Minimum sticky note size prevents user dragging it to zero.</summary>
     private static readonly Float2 StickyMinSize = new Float2(120, 80);
 
     /// <summary>Height of the group title bar in graph-space units (matches DrawGroup).</summary>
     private const float GroupTitleHeight = 24f;
-    /// <summary>Minimum group size — prevents user dragging it to zero.</summary>
+    /// <summary>Minimum group size prevents user dragging it to zero.</summary>
     private static readonly Float2 GroupMinSize = new Float2(140, 80);
 
-    /// <summary>Reference to a port on a node — used as the "from" endpoint of a connecting drag.</summary>
+    /// <summary>Reference to a port on a node used as the "from" endpoint of a connecting drag.</summary>
     private struct PortRef
     {
         public Guid NodeId;
@@ -100,12 +100,12 @@ public class GraphEditor
     private Float2 _creationMenuLocal;    // popup top-left in canvas-Box-local pixels
     private Float2 _creationMenuGraph;    // graph-space point where new node lands
     private string _creationFilter = "";
-    // Expanded-category set — top-level category groups (split on '/') whose rows are
+    // Expanded-category set top-level category groups (split on '/') whose rows are
     // visible. Persisted across popup open/close so the user doesn't have to re-expand
     // their go-to group every time. Cleared when search is active (flat-list mode).
     private readonly HashSet<string> _expandedCategories = new() { "Output", "Input", "Math" };
 
-    // (Sidebar / preview / foldout state moved to ShaderGraphEditorWindow — the
+    // (Sidebar / preview / foldout state moved to ShaderGraphEditorWindow the
     // widget itself is shader-graph-agnostic.)
 
     /// <summary>Active marquee corners in graph space (start at drag start, end follows mouse).</summary>
@@ -118,19 +118,19 @@ public class GraphEditor
     private Dictionary<Guid, Float2>? _dragMoveStartPositions;
 
     /// <summary>Time (seconds since editor start) of the last left-click on a node, and
-    /// which node was clicked — used to detect double-click. Threshold below.</summary>
+    /// which node was clicked used to detect double-click. Threshold below.</summary>
     private double _lastNodeClickTime = -1;
     private Guid _lastClickedNode;
     private const double DoubleClickThresholdSeconds = 0.4;
 
     /// <summary>Cursor position in graph space at the moment node-drag began. Combined
     /// with <see cref="_dragMoveStartPositions"/> to compute the *unsnapped* target
-    /// position each frame from the absolute cursor — that way snapping is a correction
+    /// position each frame from the absolute cursor that way snapping is a correction
     /// applied on top of the raw position, not a cumulative shift that fights the cursor
     /// on every small movement.</summary>
     private Float2 _dragMoveStartCursor;
 
-    /// <summary>Mouse button currently held — captured on press so drag handlers know intent.</summary>
+    /// <summary>Mouse button currently held captured on press so drag handlers know intent.</summary>
     private PaperMouseBtn _pressedButton = PaperMouseBtn.Unknown;
 
     /// <summary>Selected nodes (Guids).</summary>
@@ -154,7 +154,7 @@ public class GraphEditor
     /// <c>Time.UnscaledTotalTime</c>-relative. Only meaningful when <see cref="IsDirty"/>.</summary>
     public double LastChangeTime { get; private set; }
 
-    /// <summary>Host clears dirty after persisting — normally called from a save hook
+    /// <summary>Host clears dirty after persisting normally called from a save hook
     /// subscribed to <see cref="GraphMutated"/>.</summary>
     public void ClearDirty() => IsDirty = false;
 
@@ -178,7 +178,7 @@ public class GraphEditor
 
     /// <summary>Wrapper around <see cref="Undo.RegisterAction"/> that also flags the
     /// graph dirty and fires <see cref="GraphMutated"/>. Every mutation in the widget
-    /// routes through here — selection-only changes skip it because they don't alter
+    /// routes through here selection-only changes skip it because they don't alter
     /// the graph's serialised state.</summary>
     private void RegisterMutation(string label, Action undo, Action redo)
     {
@@ -210,7 +210,7 @@ public class GraphEditor
     private Dictionary<Guid, Float2>? _groupContainedNodeStartPositions;
     private Dictionary<Guid, Float2>? _groupContainedStickyStartPositions;
 
-    /// <summary>Pre-drag positions for sticky notes — same pattern as node drag undo.</summary>
+    /// <summary>Pre-drag positions for sticky notes same pattern as node drag undo.</summary>
     private Dictionary<Guid, Float2>? _dragStickyStartPositions;
 
     /// <summary>Alignment guide lines in graph space, populated during a snapped node
@@ -221,7 +221,7 @@ public class GraphEditor
     /// Matches the visual grid at its base level (see GraphRendering.DrawGrid: baseStep=32).</summary>
     private const float SnapGridSize = 16f;
     /// <summary>Snap-to-other-node tolerance in graph-space pixels (scaled by zoom for
-    /// consistent feel — see SnapToolerance()).</summary>
+    /// consistent feel see SnapToolerance()).</summary>
     private const float SnapPixelTolerance = 8f;
 
     /// <summary>Node currently under the cursor (recomputed each frame).</summary>
@@ -235,7 +235,7 @@ public class GraphEditor
     /// this to brighten/thicken so users get hover feedback before clicking.</summary>
     private Guid? _hoveredEdge;
 
-    /// <summary>Cut-line gesture state — list of graph-space points sampled while the
+    /// <summary>Cut-line gesture state list of graph-space points sampled while the
     /// user is alt+right-dragging. Wires intersected by any segment of the polyline
     /// are flagged for deletion on release.</summary>
     private List<Float2>? _cutLinePoints;
@@ -249,7 +249,7 @@ public class GraphEditor
 
     /// <summary>Render the graph into the current Paper layout. Call once per frame in
     /// whichever Row/Column region the host wants the canvas to occupy. Draws the
-    /// canvas, minimap, and overlays only — host panels are responsible for any
+    /// canvas, minimap, and overlays only host panels are responsible for any
     /// surrounding toolbar / sidebar / status chrome.</summary>
     /// <param name="paper">The active Paper root.</param>
     /// <param name="width">Available width in pixels (used for overlay sizing).</param>
@@ -266,14 +266,14 @@ public class GraphEditor
         }
         _view ??= new GraphCanvasView(_graph);
 
-        // Fresh validation pass every frame — cheap (O(V+E) for our validators) and
+        // Fresh validation pass every frame cheap (O(V+E) for our validators) and
         // means the diagnostic badges always reflect the current state regardless of
         // whether the mutation came from a mouse interaction, Ctrl+Z, or an external
         // Inspector edit. If this becomes a perf concern on very large graphs we can
         // switch to a dirty-flag model.
         Prowl.Runtime.GraphTools.GraphValidatorRegistry.Validate(_graph);
 
-        // Auto-prune pass — removes IAutoPruneNode nodes that reported they're no
+        // Auto-prune pass removes IAutoPruneNode nodes that reported they're no
         // longer needed (e.g. dangling RelayNode after a disconnect). Runs before
         // hover/shortcut handling so the user never interacts with a doomed node.
         RunAutoPrune();
@@ -289,7 +289,7 @@ public class GraphEditor
     /// Collect every <see cref="IAutoPruneNode"/> that reports it should vanish, and
     /// delete the whole batch as one undo step. Runs every frame; usually does
     /// nothing. Not registered as an Undo action when the user's action that caused
-    /// the prune (Delete / Disconnect) already registered its own — we register here
+    /// the prune (Delete / Disconnect) already registered its own we register here
     /// so Ctrl+Z still restores the auto-pruned node if the user wants it back.
     /// </summary>
     private void RunAutoPrune()
@@ -347,7 +347,7 @@ public class GraphEditor
             return;
         }
 
-        // Middle-mouse pan — Paper's drag events only fire for left-mouse, so middle-button
+        // Middle-mouse pan Paper's drag events only fire for left-mouse, so middle-button
         // pan is polled manually (same pattern as EditorCamera). Anywhere on the canvas,
         // including over nodes; matches the convention used by the Scene viewport.
         // Use Paper's PointerDelta so the pan delta is in Paper-logical space (matches the
@@ -366,7 +366,7 @@ public class GraphEditor
         }
         else if (_cutLinePoints != null)
         {
-            // Released — apply the cuts (if the polyline has at least one segment).
+            // Released apply the cuts (if the polyline has at least one segment).
             if (_cutLinePoints.Count >= 2) ApplyCutLine(_cutLinePoints);
             _cutLinePoints = null;
         }
@@ -377,14 +377,14 @@ public class GraphEditor
             ? ((Guid, string, PortDirection)?) (portNode.Id, portHit.Value.port.Name, portHit.Value.port.Direction)
             : null;
         _hoveredNode = HitTestNode(graphMouse)?.Id;
-        // Wire hover only when nothing higher-priority is under the cursor — wires
+        // Wire hover only when nothing higher-priority is under the cursor wires
         // sit visually beneath nodes/stickies so highlighting them while a node is
         // also under the cursor would be noise.
         _hoveredEdge = (_hoveredNode == null && _hoveredPort == null)
             ? HitTestWire(graphMouse, 6f / _view.Zoom)?.Id
             : null;
 
-        // Shortcuts — only active while the canvas is hovered (so they don't steal typing
+        // Shortcuts only active while the canvas is hovered (so they don't steal typing
         // in the Inspector / blackboard). All IDs are registered in BuiltInShortcuts.
         // Undo/Redo are handled globally (Global/Undo, Global/Redo) → Editor.Undo.
         // Mutations below register via Undo.RegisterAction so global Ctrl+Z reaches them.
@@ -418,7 +418,7 @@ public class GraphEditor
     // ─── Hit-testing ──────────────────────────────────────────────────────────────────
     /// <summary>
     /// Find the topmost node containing <paramref name="graphPoint"/>, or null. Iterates
-    /// in reverse order because later list entries draw on top — last hit wins visually,
+    /// in reverse order because later list entries draw on top last hit wins visually,
     /// so first hit in reverse iteration wins for click handling.
     /// </summary>
     private Node? HitTestNode(Float2 graphPoint)
@@ -457,7 +457,7 @@ public class GraphEditor
 
     /// <summary>Topmost group whose title bar contains <paramref name="graphPoint"/>.
     /// Only the title bar acts as the interaction surface so clicks on a group's body
-    /// pass through to interior nodes — without this, groups would eat every click.</summary>
+    /// pass through to interior nodes without this, groups would eat every click.</summary>
     private NodeGroup? HitTestGroupTitle(Float2 graphPoint)
     {
         if (_graph == null) return null;
@@ -558,7 +558,7 @@ public class GraphEditor
     }
 
     /// <summary>Write the graph back to its asset file. Triggers the importer (via the
-    /// asset-DB file watcher) which regenerates any sub-assets — for shader graphs
+    /// asset-DB file watcher) which regenerates any sub-assets for shader graphs
     /// that's the compiled <c>Shader</c>. Blocked during Play Mode to avoid cache
     /// corruption. Clears <see cref="IsDirty"/> on success so auto-save loops stop.</summary>
     public void Save()
@@ -588,7 +588,7 @@ public class GraphEditor
         const float popupW = 280f;
         const float popupH = 360f;
 
-        // Click-outside backdrop — fullscreen invisible Box on the topmost layer that
+        // Click-outside backdrop fullscreen invisible Box on the topmost layer that
         // catches clicks outside the popup and closes the menu (standard context UX).
         paper.Box("graph_popup_backdrop")
             .PositionType(PositionType.SelfDirected)
@@ -618,19 +618,19 @@ public class GraphEditor
             EditorGUI.TextField(paper, "graph_popup_search", "", _creationFilter)
                 .OnValueChanged(v => _creationFilter = v ?? "");
 
-            // Non-node entries — only shown when no wire is being dropped (a dropped wire
+            // Non-node entries only shown when no wire is being dropped (a dropped wire
             // is asking for a compatible node, so non-node items make no sense there).
             bool showExtras = !_dragSourcePort.HasValue && string.IsNullOrEmpty(_creationFilter);
             if (showExtras)
                 DrawStickyNoteEntry(paper);
 
-            // Filtered list of node entries — grouped under top-level Category token.
+            // Filtered list of node entries grouped under top-level Category token.
             // When a search filter is active we skip grouping entirely (flat list = easier
             // to scan). Groups persist their expanded state across popup open/close via
             // _expandedCategories so the user doesn't re-expand "Math" every time.
             var entries = NodeRegistry.GetForMarker(_graph.NodeMarkerInterface);
 
-            // Shader graphs narrow further by the graph's shader type — nodes carrying
+            // Shader graphs narrow further by the graph's shader type nodes carrying
             // a [ShaderType("X")] attribute are only visible when X matches the current
             // graph's ShaderTypeId. Untagged nodes stay universal.
             string? shaderTypeId = (_graph as Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph)?.ShaderTypeId;
@@ -758,7 +758,7 @@ public class GraphEditor
 
         const float menuW = 200f;
 
-        // Backdrop — click outside dismisses.
+        // Backdrop click outside dismisses.
         paper.Box("graph_node_ctx_backdrop")
             .PositionType(PositionType.SelfDirected)
             .Position(-9999, -9999).Size(99999, 99999)
@@ -817,7 +817,7 @@ public class GraphEditor
             redo: () => { foreach (var e in removed) graph.Edges.Remove(e); });
     }
 
-    /// <summary>Top-level token of a Category path — "Math/Trig" → "Math", "" → "Misc".
+    /// <summary>Top-level token of a Category path "Math/Trig" → "Math", "" → "Misc".
     /// Used to group node-creation entries under collapsible headers.</summary>
     private static string TopLevelCategory(string category)
     {
@@ -893,7 +893,7 @@ public class GraphEditor
             _graph.AddNode(node);
 
             // Register the spawn (must come before AutoConnectFromDrop, which itself
-            // pushes a separate Connect Wire action — undo will roll back in reverse).
+            // pushes a separate Connect Wire action undo will roll back in reverse).
             var graph = _graph;
             var spawned = node;
             RegisterMutation($"Add Node ({nodeType.Name})",
@@ -954,7 +954,7 @@ public class GraphEditor
             .Enter())
         {
             // Popup declared INSIDE the canvas Box so its SelfDirected .Position(x,y) is
-            // relative to the canvas origin — we convert the stored screen-pixel cursor
+            // relative to the canvas origin we convert the stored screen-pixel cursor
             // position into canvas-local space below. Layer.Topmost + ClampToScreen keep
             // it visible even near the viewport edges.
             if (_creationMenuOpen)
@@ -1032,7 +1032,7 @@ public class GraphEditor
             GraphRendering.DrawNode(canvas, _graph, node, isSel, isHov, hovPort, _view.Zoom, font);
         }
 
-        // In-progress drag wire — graph space; source port position via GraphLayout.
+        // In-progress drag wire graph space; source port position via GraphLayout.
         if (_dragSourcePort.HasValue && _dragWireEndGraph.HasValue)
         {
             var src = _dragSourcePort.Value;
@@ -1051,14 +1051,14 @@ public class GraphEditor
             }
         }
 
-        // Marquee — graph space.
+        // Marquee graph space.
         if (_dragMode == DragMode.MarqueeSelect && _marqueeStartGraph.HasValue && _marqueeEndGraph.HasValue)
         {
             var rect = MakeMarqueeRect(_marqueeStartGraph.Value, _marqueeEndGraph.Value);
             GraphRendering.DrawMarquee(canvas, rect, _view.Zoom);
         }
 
-        // Cut-line gesture — render the polyline the user is dragging so it's clear
+        // Cut-line gesture render the polyline the user is dragging so it's clear
         // which wires are about to be sliced. Drawn in red so it doesn't blend with
         // wires of any data-type colour.
         if (_cutLinePoints != null && _cutLinePoints.Count >= 2)
@@ -1072,7 +1072,7 @@ public class GraphEditor
             canvas.Stroke();
         }
 
-        // Alignment snap guide lines — only visible while a snapped drag is active.
+        // Alignment snap guide lines only visible while a snapped drag is active.
         if (_dragMode == DragMode.MoveNodes && _alignmentGuides.Count > 0)
         {
             var guideColor = new Color32(255, 200, 80, 180);
@@ -1114,12 +1114,12 @@ public class GraphEditor
 
     /// <summary>
     /// Right-click on empty canvas opens the node-creation popup at the cursor;
-    /// right-click on a node could open a context menu (Phase 4 — for now no-op).
+    /// right-click on a node could open a context menu (Phase 4 for now no-op).
     /// </summary>
     private void HandleRightClick(ClickEvent e)
     {
         if (_view == null || _graph == null) return;
-        // Suppress the popup if the user just released an alt+right cut-line — a long
+        // Suppress the popup if the user just released an alt+right cut-line a long
         // drag that ends on empty space shouldn't also open the creation menu.
         if (Input.IsAltPressed) return;
         var graphPoint = ScreenToGraph(e.PointerPosition);
@@ -1185,7 +1185,7 @@ public class GraphEditor
                 _lastClickedNode = hit.Id;
             }
 
-            // Hit a node — selection logic.
+            // Hit a node selection logic.
             if (additive)
             {
                 if (!_selectedNodes.Add(hit.Id)) _selectedNodes.Remove(hit.Id); // toggle
@@ -1199,7 +1199,7 @@ public class GraphEditor
             return;
         }
 
-        // Sticky note hit — same selection model as nodes, so selecting one lands it in
+        // Sticky note hit same selection model as nodes, so selecting one lands it in
         // the Inspector (so users can edit Title/Body). Checked before wires so stickies
         // on top of a wire capture the click.
         var stickyHit = HitTestStickyNote(graphPoint);
@@ -1218,7 +1218,7 @@ public class GraphEditor
             return;
         }
 
-        // Group title-bar hit — only the title strip is interactive; clicks on the
+        // Group title-bar hit only the title strip is interactive; clicks on the
         // group's body fall through to wires / empty space.
         var groupHit = HitTestGroupTitle(graphPoint);
         if (groupHit != null)
@@ -1236,7 +1236,7 @@ public class GraphEditor
             return;
         }
 
-        // Empty space — but maybe near a wire? Wire hit-test uses a screen-pixel tolerance
+        // Empty space but maybe near a wire? Wire hit-test uses a screen-pixel tolerance
         // so the catch zone stays the same regardless of zoom.
         const float wireHitPixels = 6f;
         float toleranceGraph = wireHitPixels / _view.Zoom;
@@ -1263,7 +1263,7 @@ public class GraphEditor
             return;
         }
 
-        // Truly empty — clear selection unless adding.
+        // Truly empty clear selection unless adding.
         if (!additive)
         {
             ClearAllSelection();
@@ -1277,7 +1277,7 @@ public class GraphEditor
     /// <summary>
     /// Find the nearest wire within <paramref name="toleranceGraph"/> graph-units of
     /// <paramref name="graphPoint"/>, or null. Returns the closest point on the wire via
-    /// <paramref name="closestPoint"/> — used by alt+click split to place the relay
+    /// <paramref name="closestPoint"/> used by alt+click split to place the relay
     /// exactly on the wire path rather than at the (slightly off) cursor.
     /// </summary>
     private Edge? HitTestWire(Float2 graphPoint, float toleranceGraph, out Float2 closestPoint)
@@ -1371,7 +1371,7 @@ public class GraphEditor
         if (_view == null || _graph == null) return;
 
         // Pan is handled outside the Paper drag pipeline (Paper only fires drag events for
-        // the primary/left button) — see middle-mouse poll in UpdateHoverAndShortcuts.
+        // the primary/left button) see middle-mouse poll in UpdateHoverAndShortcuts.
         if (_pressedButton == PaperMouseBtn.Left)
         {
             var graphPoint = ScreenToGraph(e.StartPosition);
@@ -1391,7 +1391,7 @@ public class GraphEditor
                 _dragWireEndGraph = graphPoint;
                 _dragMode = DragMode.ConnectingWire;
                 // Hand the drag context to the renderers so incompatible ports dim
-                // out — clears when the drag ends (see ClearDragHint callsites).
+                // out clears when the drag ends (see ClearDragHint callsites).
                 GraphLayout.SetDragHint(portNode.Id, portHit.Value.port.Name,
                     portHit.Value.port.Direction, portHit.Value.port.DataType);
                 return;
@@ -1401,7 +1401,7 @@ public class GraphEditor
             var hit = HitTestNode(graphPoint);
             if (hit != null)
             {
-                // Resize handle wins over body drag — same UX as stickies/groups.
+                // Resize handle wins over body drag same UX as stickies/groups.
                 if (hit is IResizableNode rNode && IsOverNodeResizeHandle(hit, graphPoint))
                 {
                     _resizingNode = hit.Id;
@@ -1430,7 +1430,7 @@ public class GraphEditor
                 return;
             }
 
-            // Group hit-test — resize handle wins over title-bar move, which wins over
+            // Group hit-test resize handle wins over title-bar move, which wins over
             // passing clicks through to interior nodes. Checked before stickies so a
             // group containing a sticky still acts like a group on the title bar.
             var groupResizeCandidate = (NodeGroup?)null;
@@ -1474,7 +1474,7 @@ public class GraphEditor
                 return;
             }
 
-            // Sticky-note hit-test — resize corner wins over body drag so users can grab
+            // Sticky-note hit-test resize corner wins over body drag so users can grab
             // the bottom-right handle even when body-drag would otherwise capture the event.
             var sticky = HitTestStickyNote(graphPoint);
             if (sticky != null)
@@ -1579,7 +1579,7 @@ public class GraphEditor
                     var s = FindStickyNote(_resizingStickyNote.Value);
                     if (s != null)
                     {
-                        // Resize from bottom-right corner — the cursor's graph position
+                        // Resize from bottom-right corner the cursor's graph position
                         // relative to the note's fixed top-left determines the new size.
                         var cursor = ScreenToGraph(e.PointerPosition);
                         s.Size = new Float2(
@@ -1818,7 +1818,7 @@ public class GraphEditor
                 if (sRect.Intersects(rect)) _selectedStickyNotes.Add(s.Id);
             }
 
-            // Groups join the marquee when the title bar overlaps it — body-only hits
+            // Groups join the marquee when the title bar overlaps it body-only hits
             // would be noisy since groups are large and visually passive.
             foreach (var g in _graph.Groups)
             {
@@ -1886,7 +1886,7 @@ public class GraphEditor
     }
 
     /// <summary>
-    /// Core connect routine: validates direction (output→input — auto-flipped),
+    /// Core connect routine: validates direction (output→input auto-flipped),
     /// node mismatch, type compatibility; replaces any existing edge on a
     /// single-connection input. Returns true if a wire was created.
     /// </summary>
@@ -1992,7 +1992,7 @@ public class GraphEditor
     {
         if (_graph == null || _selectedNodes.Count == 0) return;
 
-        // Pick the anchor node — last inserted in the selection set iteration; stable
+        // Pick the anchor node last inserted in the selection set iteration; stable
         // enough for drag purposes since HashSet<Guid> enumeration isn't guaranteed
         // ordered, but all selected nodes shift together so the choice of anchor only
         // changes WHICH edges are considered, not the correctness of the snap.
@@ -2062,7 +2062,7 @@ public class GraphEditor
         }
 
         // Record guide lines at the matched edges so the canvas can render them. Guides
-        // span a generous range centred on the anchor — rendered behind nodes, clipped
+        // span a generous range centred on the anchor rendered behind nodes, clipped
         // by the canvas.
         if (snapLineX.HasValue)
             _alignmentGuides.Add((new Float2(snapLineX.Value, aT - 200), new Float2(snapLineX.Value, aB + 200)));
@@ -2142,7 +2142,7 @@ public class GraphEditor
     }
     private static float Sign(float v) => v > 0 ? 1 : (v < 0 ? -1 : 0);
 
-    /// <summary>Lift a colour toward white by ~30% — used for wire-hover highlight.</summary>
+    /// <summary>Lift a colour toward white by ~30% used for wire-hover highlight.</summary>
     private static Color32 Brighten(Color32 c)
         => new Color32(
             (byte)Math.Min(255, c.R + 60),
@@ -2238,7 +2238,7 @@ public class GraphEditor
     /// <summary>
     /// Push our internal selection (nodes + sticky notes) to the global
     /// <see cref="Selection"/> system so the Inspector panel shows the selected item(s).
-    /// Called whenever selection changes. No-op when nothing is selected — we don't want
+    /// Called whenever selection changes. No-op when nothing is selected we don't want
     /// to clear the Inspector just because the user clicked an empty part of the canvas.
     /// </summary>
     private void SyncSelectionSystem()
@@ -2310,7 +2310,7 @@ public class GraphEditor
             if (echo != null) nodesList.ListAdd(echo);
         }
 
-        // Only keep edges where BOTH endpoints are in the copied selection — a half-edge
+        // Only keep edges where BOTH endpoints are in the copied selection a half-edge
         // pasted into a new graph would dangle.
         var edgesList = EchoObject.NewList();
         foreach (var e in _graph.Edges)
@@ -2405,7 +2405,7 @@ public class GraphEditor
     }
 
     /// <summary>
-    /// Ctrl+D duplicate — copy the current selection then paste with a small offset.
+    /// Ctrl+D duplicate copy the current selection then paste with a small offset.
     /// Implemented as copy + paste against the selection's current bounds so it doesn't
     /// teleport to the cursor (users expect duplicate to land near the original).
     /// </summary>
@@ -2439,7 +2439,7 @@ public class GraphEditor
         }
     }
 
-    /// <summary>Ctrl+G — wrap the current selection (nodes + stickies) in a new
+    /// <summary>Ctrl+G wrap the current selection (nodes + stickies) in a new
     /// <see cref="NodeGroup"/>. Group is positioned/sized with padding so its title bar
     /// sits above the topmost selected item. Registered as a single undo step.</summary>
     private void GroupSelection()
@@ -2491,7 +2491,7 @@ public class GraphEditor
         SyncSelectionSystem();
     }
 
-    /// <summary>F shortcut — frame the selection, or the whole graph if nothing is selected.</summary>
+    /// <summary>F shortcut frame the selection, or the whole graph if nothing is selected.</summary>
     private void FrameSelectionOrAll()
     {
         if (_graph == null || _view == null) return;

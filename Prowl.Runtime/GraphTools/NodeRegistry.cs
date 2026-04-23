@@ -8,7 +8,7 @@ namespace Prowl.Runtime.GraphTools;
 
 /// <summary>
 /// Mark a Node type as available in every graph type's creation menu, regardless of
-/// the graph's <see cref="Graph.NodeMarkerInterface"/>. Use sparingly — for nodes that
+/// the graph's <see cref="Graph.NodeMarkerInterface"/>. Use sparingly for nodes that
 /// genuinely make sense in any graph (relays, subgraphs, comments, group inputs).
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]
@@ -16,7 +16,7 @@ public sealed class UniversalNodeAttribute : Attribute { }
 
 /// <summary>
 /// Hide a Node type from the node-creation menu. Used for nodes that only exist as
-/// the output of a specific gesture (e.g. <see cref="RelayNode"/> — inserted by alt+
+/// the output of a specific gesture (e.g. <see cref="RelayNode"/> inserted by alt+
 /// clicking a wire, never spawned from scratch) or for abstract/obsolete types that
 /// should still deserialize but not be manually selectable.
 /// </summary>
@@ -86,7 +86,7 @@ public readonly struct NodeRegistration
 /// Reflection-based registry of every concrete <see cref="Node"/> subclass in the
 /// AppDomain. Built lazily on first query and cached. Designed so users can drop new
 /// graph types and node types into their own assemblies and have them picked up
-/// automatically — no manual registration step.
+/// automatically no manual registration step.
 /// </summary>
 /// <remarks>
 /// Filtering by graph compatibility uses marker interfaces: a graph implementation
@@ -136,7 +136,7 @@ public static class NodeRegistry
     }
 
     /// <summary>
-    /// Force a full rescan — call after adding/removing assemblies at runtime (e.g. after
+    /// Force a full rescan call after adding/removing assemblies at runtime (e.g. after
     /// recompiling user scripts).
     /// </summary>
     public static void Reinitialize()
@@ -194,7 +194,7 @@ public static class NodeRegistry
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"NodeRegistry: skipping {t.FullName} — instantiation failed ({ex.Message}).");
+                        Debug.LogWarning($"NodeRegistry: skipping {t.FullName} instantiation failed ({ex.Message}).");
                         continue;
                     }
 
