@@ -122,7 +122,7 @@ Pass "StandardAniso"
 				}
 				else
 				{
-				    // No direction map or neutral — use mesh tangent directly
+				    // No direction map or neutral use mesh tangent directly
 				    anisoTangent = T;
 				    anisoBitangent = B;
 				}

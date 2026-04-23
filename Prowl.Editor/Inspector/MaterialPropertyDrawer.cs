@@ -16,8 +16,8 @@ namespace Prowl.Editor.Inspector;
 /// Draws material-property override rows shared between the Material asset inspector and
 /// the shader-graph editor's Properties foldout. Extracted so both call sites render
 /// identical-looking fields (purple override marker + revert button) without duplicating
-/// the per-type branching logic. Values are read live — overrides come from the material,
-/// defaults from the shader — so property changes in the graph propagate immediately to
+/// the per-type branching logic. Values are read live overrides come from the material,
+/// defaults from the shader so property changes in the graph propagate immediately to
 /// every material without a re-import step.
 /// </summary>
 public static class MaterialPropertyDrawer
@@ -36,7 +36,7 @@ public static class MaterialPropertyDrawer
             .Margin(0, EditorTheme.Spacing)
             .Enter())
         {
-            // Thin purple bar on the left edge — always present (transparent when not
+            // Thin purple bar on the left edge always present (transparent when not
             // overridden) so fields line up regardless of state.
             paper.Box($"{id}_marker")
                 .Width(3).Height(EditorTheme.RowHeight - 4)
@@ -55,7 +55,7 @@ public static class MaterialPropertyDrawer
                     .OnValueChanged(_ =>
                     {
                         material.RevertProperty(prop.Name);
-                        // Drop the stored value too — otherwise it'd still get uploaded
+                        // Drop the stored value too otherwise it'd still get uploaded
                         // by ApplyMaterialUniformsWithDefaults even though the flag is gone.
                         material._properties.RemoveProperty(prop.Name);
                         onChanged?.Invoke();

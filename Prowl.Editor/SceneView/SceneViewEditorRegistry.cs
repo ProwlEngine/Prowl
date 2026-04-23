@@ -113,7 +113,7 @@ public static class SceneViewEditorRegistry
             }
         }
 
-        // No matching editor — deactivate
+        // No matching editor deactivate
         if (ActiveEditor != null)
             Deactivate();
     }

@@ -18,7 +18,7 @@ public abstract class DockPanel
     /// can skip storing an empty blob. Called once during layout save.
     ///
     /// Avoid storing transient UI state (hover, scroll) unless it's genuinely useful to
-    /// restore — the goal is "picking up where I left off", not frame-perfect replay.
+    /// restore the goal is "picking up where I left off", not frame-perfect replay.
     /// </summary>
     public virtual bool SerializeState(JsonObject state) => false;
 

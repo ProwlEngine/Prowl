@@ -224,7 +224,7 @@ public class ConsolePanel : DockPanel
 
         using (ScrollView.Begin(paper, "con_scroll", width, height, forceScrollbar:true))
         {
-            // Single element for ALL messages — fixed height based on count
+            // Single element for ALL messages fixed height based on count
             paper.Box("con_content")
                 .Width(width - 10)
                 .Height(totalContentHeight)

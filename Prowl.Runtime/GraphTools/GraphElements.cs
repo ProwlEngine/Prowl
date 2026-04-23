@@ -9,7 +9,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime.GraphTools;
 
 /// <summary>
-/// A typed value entry on the graph's blackboard — a variable that any node can read
+/// A typed value entry on the graph's blackboard a variable that any node can read
 /// or write via dedicated "Get Variable" / "Set Variable" nodes. Behaviour trees use
 /// these heavily for shared state; shader graphs use them for material parameters.
 /// </summary>
@@ -35,7 +35,7 @@ public sealed class StickyNote
     public string Title = "Note";
     public string Body = "";
 
-    /// <summary>Background color — UI maps this to a small palette of preset hues.
+    /// <summary>Background color UI maps this to a small palette of preset hues.
     /// Layout is ABGR (matches <c>Prowl.Vector.Color32(uint)</c>): A is the high byte,
     /// R is the low byte. This default unpacks to amber (R=E5 G=C3 B=6A, A=FF).</summary>
     public uint PackedColor = 0xFF6AC3E5;

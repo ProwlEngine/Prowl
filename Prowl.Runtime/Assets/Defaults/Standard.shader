@@ -109,7 +109,7 @@ Pass "Standard"
 				    _TranslucencyMap, _TranslucencyStrength,
 				    _ScatteringPower, _ScatteringDistortion, _ScatteringScale);
 
-				// Alpha cutout — discard below threshold, output fully opaque
+				// Alpha cutout discard below threshold, output fully opaque
 				if (result.a < _AlphaCutoff)
 				    discard;
 

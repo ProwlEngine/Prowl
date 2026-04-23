@@ -136,10 +136,10 @@ public static class Undo
     // Immediate action records accumulated this frame (RegisterAction calls)
     private static readonly List<(string description, UndoRecord record)> _pendingActions = new();
 
-    // Deferred created/destroy objects — serialized at FlushFrame so components added after registration are captured
+    // Deferred created/destroy objects serialized at FlushFrame so components added after registration are captured
     private static readonly List<(GameObject go, string description, bool isCreate)> _pendingStructural = new();
 
-    // Continuous operation state (gizmo drag) — tracks by Identifier, not reference
+    // Continuous operation state (gizmo drag) tracks by Identifier, not reference
     private static bool _isContinuous;
     private static string _continuousDescription = "";
     private static List<(Guid goId, Float3 pos, Quaternion rot, Float3 scale)>? _continuousStartState;
@@ -179,7 +179,7 @@ public static class Undo
 
     /// <summary>
     /// Snapshot an object's current state for undo. Call at the TOP of PropertyGrid.Draw()
-    /// or custom editor OnGUI(), BEFORE any widgets draw — this captures the state before
+    /// or custom editor OnGUI(), BEFORE any widgets draw this captures the state before
     /// any in-place mutations (nested objects, collections, curves, etc.).
     /// No-op if already snapshotted this frame for the same target.
     /// </summary>
@@ -236,7 +236,7 @@ public static class Undo
             }
         }
 
-        // Can't coalesce — push as normal action but mark as coalescable
+        // Can't coalesce push as normal action but mark as coalescable
         _pendingActions.Add((description, new ActionRecord(undo, redo)));
     }
 
@@ -259,7 +259,7 @@ public static class Undo
 
     private static void FlushCreatedObject(GameObject go, string description)
     {
-        // Now serialize — all components have been added by this point
+        // Now serialize all components have been added by this point
         var serialized = Serializer.Serialize(typeof(object), go);
         var goId = go.Identifier;
         var parentId = go.Parent?.Identifier ?? Guid.Empty;
@@ -602,7 +602,7 @@ public static class Undo
         _pendingActions.Clear();
 
         // If explicit actions were registered this frame, discard property snapshots.
-        // The actions already handle their changes — the Snapshot diff would create duplicates
+        // The actions already handle their changes the Snapshot diff would create duplicates
         // (e.g., Component Enabled toggle: RegisterAction changes _enabled, Snapshot also detects it).
         if (hasActions)
         {
@@ -695,10 +695,10 @@ public static class Undo
             stack.RemoveAt(0);
     }
 
-    // Fields that must never be overwritten by undo — they are identity/internal state
+    // Fields that must never be overwritten by undo they are identity/internal state
     private static readonly HashSet<string> _undoSkipFields = new()
     {
-        "_identifier",        // MonoBehaviour identity — must be preserved
+        "_identifier",        // MonoBehaviour identity must be preserved
         "_instanceID",        // EngineObject instance ID
         "_enabledInHierarchy",// Derived state, not user-settable
         "_go",                // GameObject back-reference (not serialized, but just in case)
@@ -781,7 +781,7 @@ public static class Undo
                 var compIdField = compEcho.Get("_identifier");
                 if (compIdField != null)
                 {
-                    // _identifier is a Guid serialized by Echo — may be stored as string or via type wrapper
+                    // _identifier is a Guid serialized by Echo may be stored as string or via type wrapper
                     if (Guid.TryParse(compIdField.StringValue, out var compId))
                         liveComps[i].Identifier = compId;
                     else if (compIdField.TryGet("$value", out var innerVal) && Guid.TryParse(innerVal.StringValue, out var compId2))

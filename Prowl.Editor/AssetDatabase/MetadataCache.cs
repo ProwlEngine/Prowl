@@ -24,7 +24,7 @@ public static class MetadataCache
             string text = File.ReadAllText(metadataDbPath);
             var root = EchoObject.ReadFromString(text);
 
-            // Version check — reject incompatible cache
+            // Version check reject incompatible cache
             int version = 0;
             if (root.TryGet("version", out var versionTag))
                 version = versionTag.IntValue;
@@ -32,7 +32,7 @@ public static class MetadataCache
             if (version != CurrentVersion)
             {
                 Runtime.Debug.Log($"Metadata cache version mismatch (found v{version}, expected v{CurrentVersion}). Rebuilding.");
-                return result; // Return empty — caller will do a full scan
+                return result; // Return empty caller will do a full scan
             }
 
             if (root.TryGet("entries", out var entriesTag) && entriesTag.TagType == EchoType.List)

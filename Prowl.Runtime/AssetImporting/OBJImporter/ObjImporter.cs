@@ -132,7 +132,7 @@ public class ObjImporter
     }
 
     // ================================================================
-    //  OBJ parse — first pass collects raw positions/uvs/normals and
+    //  OBJ parse first pass collects raw positions/uvs/normals and
     //  face vertex tuples grouped by active material.
     // ================================================================
 
@@ -253,7 +253,7 @@ public class ObjImporter
                         p.MtlLibs.Add(parts[i]);
                     break;
 
-                // o / g / s / l are intentionally ignored — the OBJ de-facto convention is that
+                // o / g / s / l are intentionally ignored the OBJ de-facto convention is that
                 // material boundaries (usemtl) are what split a file into renderable submeshes,
                 // so that's what we honour. Smoothing groups are replaced by the normal-gen
                 // settings in ModelImporterSettings.
@@ -284,7 +284,7 @@ public class ObjImporter
     private static float ParseF(string s) => float.Parse(s, CultureInfo.InvariantCulture);
 
     // ================================================================
-    //  Mesh assembly — de-dupe vertex tuples, build submeshes
+    //  Mesh assembly de-dupe vertex tuples, build submeshes
     // ================================================================
 
     private static Mesh AssembleMesh(ParsedObj parsed, string meshName, ModelImporterSettings settings)
@@ -295,7 +295,7 @@ public class ObjImporter
         var outColors = new List<Color>();
         var outIndices = new List<uint>();
 
-        // Unique vertex tuples — keeps the final buffer tight.
+        // Unique vertex tuples keeps the final buffer tight.
         var vertexMap = new Dictionary<(int v, int t, int n), uint>();
         uint GetOrCreateVertex((int v, int t, int n) key)
         {
@@ -303,7 +303,7 @@ public class ObjImporter
             idx = (uint)outPositions.Count;
             vertexMap[key] = idx;
 
-            // Positions — scale by UnitScale at assembly time (match GltfImporter's behavior).
+            // Positions scale by UnitScale at assembly time (match GltfImporter's behavior).
             var pos = key.v >= 0 && key.v < parsed.Positions.Count ? parsed.Positions[key.v] : Float3.Zero;
             outPositions.Add(pos * settings.UnitScale);
 
@@ -351,7 +351,7 @@ public class ObjImporter
         mesh.IndexFormat = outPositions.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16;
         mesh.Indices = outIndices.ToArray();
 
-        // Only register submesh ranges when there's more than one material group — otherwise
+        // Only register submesh ranges when there's more than one material group otherwise
         // SubMeshCount==1 (the default) draws the full index buffer just fine.
         if (subMeshDescriptors.Count > 1)
         {
@@ -400,13 +400,13 @@ public class ObjImporter
         public string Name = "";
         public Color BaseColor = Color.White;      // Kd + d
         public Color EmissiveColor = Color.Black;  // Ke
-        public float Metallic = 0f;                // Pm (PBR extension) — defaults 0 if absent
+        public float Metallic = 0f;                // Pm (PBR extension) defaults 0 if absent
         public bool MetallicSet;
         public float Roughness = 1f;               // Pr (PBR extension)
         public bool RoughnessSet;
-        public float SpecularExponent = 32f;       // Ns — used as roughness fallback
+        public float SpecularExponent = 32f;       // Ns used as roughness fallback
         public bool SpecularExponentSet;
-        public Float3 KsLuminance = new(0.5f, 0.5f, 0.5f); // Ks — used as metallic fallback
+        public Float3 KsLuminance = new(0.5f, 0.5f, 0.5f); // Ks used as metallic fallback
 
         public string? MapBaseColor;     // map_Kd
         public string? MapNormal;        // map_Bump / bump / map_bump / norm
@@ -462,7 +462,7 @@ public class ObjImporter
                     current.BaseColor = new Color(current.BaseColor.R, current.BaseColor.G, current.BaseColor.B, ParseF(parts[1]));
                     break;
                 case "tr" when parts.Length >= 2:
-                    // Transparency — inverse of d.
+                    // Transparency inverse of d.
                     current.BaseColor = new Color(current.BaseColor.R, current.BaseColor.G, current.BaseColor.B, 1f - ParseF(parts[1]));
                     break;
 
@@ -508,14 +508,14 @@ public class ObjImporter
                 else i += 1;                                            // single operand
                 continue;
             }
-            // Texture paths may contain spaces — rejoin everything from here on.
+            // Texture paths may contain spaces rejoin everything from here on.
             return string.Join(' ', parts, i, parts.Length - i);
         }
         return null;
     }
 
     // ================================================================
-    //  Material build — from parsed MTL info onto Prowl's Standard shader
+    //  Material build from parsed MTL info onto Prowl's Standard shader
     // ================================================================
 
     private static Material BuildMaterial(string name, MtlMaterial? src, string mtlDir, bool canReadDisk)
@@ -527,7 +527,7 @@ public class ObjImporter
 
         if (src == null)
         {
-            // No MTL match — leave the material at defaults and stamp the standard slots so
+            // No MTL match leave the material at defaults and stamp the standard slots so
             // the shader gets the usual white/grey/flat-normal textures instead of garbage.
             mat.SetColor("_MainColor", Color.White);
             mat.SetTexture("_MainTex", Texture2D.LoadDefault(DefaultTexture.Grid));

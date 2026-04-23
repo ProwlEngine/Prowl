@@ -26,7 +26,7 @@ public static class CreateAssetMenuRegistry
         public string Extension;
         public string Icon;
         public int Order;
-        /// <summary>Optional factory — when set, used in place of Activator.CreateInstance.
+        /// <summary>Optional factory when set, used in place of Activator.CreateInstance.
         /// Lets manually-registered templates seed initial state on creation.</summary>
         public Func<EngineObject>? Factory;
     }
@@ -65,7 +65,7 @@ public static class CreateAssetMenuRegistry
         if (_initialized) return;
         _initialized = true;
 
-        // Preserve manual factory entries — they're registered separately (e.g.
+        // Preserve manual factory entries they're registered separately (e.g.
         // shader-graph templates) and shouldn't be wiped by a re-scan of attribute
         // entries on script reload.
         var manuals = _entries.FindAll(e => e.Factory != null);
@@ -141,7 +141,7 @@ public static class CreateAssetMenuRegistry
         }
         foreach (var (head, list) in branches)
         {
-            // Capture for closure — submenu builder runs lazily.
+            // Capture for closure submenu builder runs lazily.
             var subPrefix = prefix + head + "/";
             var subList = list;
             builder.Submenu(head, sub => BuildMenuRecursive(sub, subList, subPrefix, currentFolder, onCreated));
@@ -199,7 +199,7 @@ public static class CreateAssetMenuRegistry
         if (!Directory.Exists(absFolder)) return null;
 
         // Submenu entries (Name = "Shader Graph/Surface") must use only the LAST
-        // segment as the file basename — otherwise the menu hierarchy bleeds into
+        // segment as the file basename otherwise the menu hierarchy bleeds into
         // the file path and Path.Combine creates an "intermediate folder/file" that
         // fails. The full Name is still used for the menu label.
         int lastSlash = entry.Name.LastIndexOf('/');
@@ -210,7 +210,7 @@ public static class CreateAssetMenuRegistry
 
         try
         {
-            // Manual factory wins over Activator — lets template entries seed initial state.
+            // Manual factory wins over Activator lets template entries seed initial state.
             object? instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
             var echo = Serializer.Serialize(typeof(object), instance);
             if (echo != null)

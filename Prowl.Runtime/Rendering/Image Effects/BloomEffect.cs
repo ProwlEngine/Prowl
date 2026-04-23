@@ -35,12 +35,12 @@ public sealed class BloomEffect : ImageEffect
         int h = context.Height / 2;
         var format = context.SceneColor.MainTexture.ImageFormat;
 
-        // Pass 0: Threshold — extract bright pixels into half-res
+        // Pass 0: Threshold extract bright pixels into half-res
         RenderTexture thresholdRT = RenderTexture.GetTemporaryRT(w, h, false, [format]);
         _mat.SetFloat("_Threshold", Threshold);
         RenderPipeline.Blit(context.SceneColor, thresholdRT, _mat, 0);
 
-        // Downsample chain — each iteration halves resolution
+        // Downsample chain each iteration halves resolution
         var mipChain = new List<RenderTexture>();
         mipChain.Add(thresholdRT);
 
@@ -56,7 +56,7 @@ public sealed class BloomEffect : ImageEffect
             current = downRT;
         }
 
-        // Upsample chain — walk back up, each iteration doubles resolution
+        // Upsample chain walk back up, each iteration doubles resolution
         for (int i = mipChain.Count - 1; i > 0; i--)
         {
             RenderTexture src = mipChain[i];
@@ -65,7 +65,7 @@ public sealed class BloomEffect : ImageEffect
             RenderPipeline.Blit(src, dst, _mat, 2); // Pass 2: Upsample (overwrites dst)
         }
 
-        // Pass 3: Composite — add bloom to original scene
+        // Pass 3: Composite add bloom to original scene
         _mat.SetTexture("_BloomTex", mipChain[0].MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);

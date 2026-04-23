@@ -23,7 +23,7 @@ public class InspectorPanel : DockPanel
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
         // Selection is global, so the Inspector is the natural owner of its persistence.
-        // Only GameObjects round-trip here — arbitrary objects (assets, etc.) would need
+        // Only GameObjects round-trip here arbitrary objects (assets, etc.) would need
         // their own addressing scheme and currently aren't stable enough to restore.
         var arr = new System.Text.Json.Nodes.JsonArray();
         foreach (var go in Selection.GetSelected<GameObject>())
@@ -73,7 +73,7 @@ public class InspectorPanel : DockPanel
                 return;
             }
 
-            // Draw based on type — GameObject has its own header
+            // Draw based on type GameObject has its own header
             if (active is GameObject gameObject)
             {
                 GameObjectInspector.Draw(paper, font, gameObject);
@@ -475,7 +475,7 @@ public class InspectorPanel : DockPanel
 
         EditorGUI.Separator(paper, "insp_sub_sep3");
 
-        // Extract button — clone sub-asset to a standalone file
+        // Extract button clone sub-asset to a standalone file
         EditorGUI.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  Extract as Asset")
             .OnValueChanged(_ => ExtractSubAsset(item, parentEntry, subEntry, asset));
     }
@@ -487,7 +487,7 @@ public class InspectorPanel : DockPanel
         var db = EditorAssetDatabase.Instance;
         if (db == null) return;
 
-        // Determine target path — same folder as parent, with sub-asset name
+        // Determine target path same folder as parent, with sub-asset name
         string parentDir = Path.GetDirectoryName(parentEntry.Path)?.Replace('\\', '/') ?? "";
         string ext = asset switch
         {

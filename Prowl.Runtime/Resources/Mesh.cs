@@ -548,7 +548,7 @@ public class Mesh : EngineObject, ISerializable
 
             float det = deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y;
             if (MathF.Abs(det) < 1e-8f)
-                continue; // Degenerate UV triangle — skip to avoid NaN
+                continue; // Degenerate UV triangle skip to avoid NaN
 
             float f = 1.0f / det;
 
@@ -1603,7 +1603,7 @@ public class Mesh : EngineObject, ISerializable
                         _subMeshes.Add(new SubMeshDescriptor(start, count, topo));
                     }
                 }
-                catch { /* Old format without submeshes — ignore */ }
+                catch { /* Old format without submeshes ignore */ }
             }
 
             changed = true;

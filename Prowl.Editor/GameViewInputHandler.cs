@@ -36,14 +36,14 @@ public class GameViewInputHandler : IInputHandler
         set => _real.Clipboard = value;
     }
 
-    // Keyboard — filtered only during gameplay execution outside game view
+    // Keyboard filtered only during gameplay execution outside game view
     public bool IsAnyKeyDown => ShouldFilter ? false : _real.IsAnyKeyDown;
     public char? GetPressedChar() => ShouldFilter ? null : _real.GetPressedChar();
     public bool GetKey(KeyCode key) => ShouldFilter ? false : _real.GetKey(key);
     public bool GetKeyDown(KeyCode key) => ShouldFilter ? false : _real.GetKeyDown(key);
     public bool GetKeyUp(KeyCode key) => ShouldFilter ? false : _real.GetKeyUp(key);
 
-    // Mouse — filtered only during gameplay execution outside game view
+    // Mouse filtered only during gameplay execution outside game view
     public Int2 PrevMousePosition => _real.PrevMousePosition;
     public Int2 MousePosition
     {
@@ -60,7 +60,7 @@ public class GameViewInputHandler : IInputHandler
         _real.SetCursorVisible(visible, miceIndex);
     }
 
-    // Events — always forward (editor needs these for its own input processing)
+    // Events always forward (editor needs these for its own input processing)
     public event Action<KeyCode, bool> OnKeyEvent
     {
         add => _real.OnKeyEvent += value;
@@ -72,7 +72,7 @@ public class GameViewInputHandler : IInputHandler
         remove => _real.OnMouseEvent -= value;
     }
 
-    // Gamepads — always pass through (physical controllers work regardless of focus)
+    // Gamepads always pass through (physical controllers work regardless of focus)
     public int GetGamepadCount() => _real.GetGamepadCount();
     public bool IsGamepadConnected(int gamepadIndex) => _real.IsGamepadConnected(gamepadIndex);
     public bool GetGamepadButton(int gamepadIndex, GamepadButton button) => _real.GetGamepadButton(gamepadIndex, button);

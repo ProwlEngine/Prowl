@@ -7,7 +7,7 @@ namespace Prowl.Runtime.GraphTools;
 /// Implement on a Node subclass to display a custom preview area on the node's body.
 /// The default node renderer reserves a square region below the port list (or above,
 /// per the node's preference) and asks the implementer to fill it via the editor's
-/// preview-render pipeline. Concrete drawing is editor-side — Runtime only exposes the
+/// preview-render pipeline. Concrete drawing is editor-side Runtime only exposes the
 /// declarative metadata so the data model stays renderer-free.
 /// </summary>
 /// <remarks>

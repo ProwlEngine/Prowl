@@ -6,7 +6,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Defines a cursor lock context — where the cursor locks to, and whether locking is allowed.
+/// Defines a cursor lock context where the cursor locks to, and whether locking is allowed.
 /// Contexts are stacked via Input.PushLockContext / PopLockContext.
 /// The topmost context controls cursor lock behavior.
 /// </summary>

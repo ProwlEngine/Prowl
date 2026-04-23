@@ -33,19 +33,19 @@ public struct NodeMessage
 /// <para>Subclasses populate <see cref="Inputs"/>/<see cref="Outputs"/> in their
 /// <see cref="DefineNode"/> method. <c>DefineNode</c> is called once after
 /// construction (via <see cref="EnsureDefined"/>) and again after deserialization,
-/// so port lists never have to be serialized — they're derived from the node's type.</para>
+/// so port lists never have to be serialized they're derived from the node's type.</para>
 ///
 /// <para>Per-node settings (knobs the user tweaks in the inspector) should be public
-/// fields/properties on the subclass — the editor renders them through Prowl's standard
+/// fields/properties on the subclass the editor renders them through Prowl's standard
 /// <see cref="Widgets.PropertyGrid"/> just like component properties.</para>
 /// </remarks>
 public abstract class Node
 {
-    // ─── Persisted data — must be public fields (Echo doesn't serialise properties) ──
+    // ─── Persisted data must be public fields (Echo doesn't serialise properties) ──
     // [HideInInspector] on each so the editor's embedded PropertyGrid doesn't render
-    // them — only subclass fields (the user-facing knobs) should appear in the node body.
+    // them only subclass fields (the user-facing knobs) should appear in the node body.
 
-    /// <summary>Stable identifier — edges reference nodes by this, not by list index.</summary>
+    /// <summary>Stable identifier edges reference nodes by this, not by list index.</summary>
     [HideInInspector] public Guid Id = Guid.NewGuid();
 
     /// <summary>Position in graph coordinates (not screen pixels).</summary>
@@ -54,7 +54,7 @@ public abstract class Node
     /// <summary>Diagnostic messages attached to this node (set by graph processors).</summary>
     [HideInInspector] public List<NodeMessage> Messages = new();
 
-    // ─── Computed / display-only — properties are fine because Echo skips them ───────
+    // ─── Computed / display-only properties are fine because Echo skips them ───────
 
     /// <summary>Human-readable label shown in the title bar. Default = type name.</summary>
     public virtual string Title => GetType().Name;
@@ -62,19 +62,19 @@ public abstract class Node
     /// <summary>Category used by the node-creation menu (e.g. "Math/Trig", "Input").</summary>
     public virtual string Category => "Misc";
 
-    /// <summary>Optional accent color for the title bar — subclasses can theme by category.</summary>
+    /// <summary>Optional accent color for the title bar subclasses can theme by category.</summary>
     public virtual System.Drawing.Color AccentColor => System.Drawing.Color.FromArgb(255, 90, 110, 140);
 
-    // ─── Derived data rebuilt by DefineNode() each load — explicitly NOT serialised ──
+    // ─── Derived data rebuilt by DefineNode() each load explicitly NOT serialised ──
 
     [SerializeIgnore] private List<Port> _inputs = new();
     [SerializeIgnore] private List<Port> _outputs = new();
     [SerializeIgnore] private bool _defined;
 
-    /// <summary>Input ports — populated lazily by <see cref="DefineNode"/>. Not serialised.</summary>
+    /// <summary>Input ports populated lazily by <see cref="DefineNode"/>. Not serialised.</summary>
     public List<Port> Inputs { get { EnsureDefined(); return _inputs; } }
 
-    /// <summary>Output ports — populated lazily by <see cref="DefineNode"/>. Not serialised.</summary>
+    /// <summary>Output ports populated lazily by <see cref="DefineNode"/>. Not serialised.</summary>
     public List<Port> Outputs { get { EnsureDefined(); return _outputs; } }
 
     /// <summary>
@@ -101,7 +101,7 @@ public abstract class Node
     /// <summary>
     /// Declare a typed input port with an optional fallback value used when the port
     /// has no incoming wire. For user-editable defaults, expose a public field on the
-    /// subclass instead — it'll appear in the Inspector's PropertyGrid automatically.
+    /// subclass instead it'll appear in the Inspector's PropertyGrid automatically.
     /// </summary>
     protected Port AddInput<T>(string name, T? defaultValue = default,
         bool acceptsMultiple = false,
@@ -122,7 +122,7 @@ public abstract class Node
             Tooltip = tooltip,
             IsHidden = hidden,
         };
-        _inputs.Add(p); // Use backing field — Inputs property would re-enter EnsureDefined.
+        _inputs.Add(p); // Use backing field Inputs property would re-enter EnsureDefined.
         return p;
     }
 
@@ -176,7 +176,7 @@ public sealed class MissingNode : Node
 
     /// <summary>
     /// Echo blob preserving the original node's serialised payload so it survives a
-    /// re-save round-trip — once the missing type is restored, the user can re-bind
+    /// re-save round-trip once the missing type is restored, the user can re-bind
     /// without losing data. Echo serializes/deserializes EchoObject natively.
     /// </summary>
     public Prowl.Echo.EchoObject? SerializedPayload;
@@ -187,7 +187,7 @@ public sealed class MissingNode : Node
 
     protected override void DefineNode()
     {
-        // No ports — we don't know what they were. The user has to either re-create
+        // No ports we don't know what they were. The user has to either re-create
         // the type or manually clean up.
     }
 }

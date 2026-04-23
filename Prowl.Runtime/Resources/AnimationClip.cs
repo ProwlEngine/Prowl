@@ -20,7 +20,7 @@ public enum AnimationWrapMode
 /// <summary>
 /// An animation clip containing per-bone animation curves.
 /// The Animation component evaluates these curves and applies them to bone Transforms by name.
-/// No Skeleton reference needed — bones are resolved by name at runtime.
+/// No Skeleton reference needed bones are resolved by name at runtime.
 /// </summary>
 public sealed class AnimationClip : EngineObject, ISerializable
 {

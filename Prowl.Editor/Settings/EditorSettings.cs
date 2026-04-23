@@ -38,7 +38,7 @@ public class EditorSettings
 
     public bool WindowMaximized { get; set; } = false;
 
-    // Shortcuts — only user-overridden bindings are stored
+    // Shortcuts only user-overridden bindings are stored
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();
 
     // Theme

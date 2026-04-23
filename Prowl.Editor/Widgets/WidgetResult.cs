@@ -4,7 +4,7 @@ namespace Prowl.Editor.Widgets;
 
 /// <summary>
 /// Returned by widgets to allow chaining callbacks.
-/// The widget has already been drawn — this just holds the callback registration.
+/// The widget has already been drawn this just holds the callback registration.
 /// </summary>
 public struct WidgetResult<T>
 {

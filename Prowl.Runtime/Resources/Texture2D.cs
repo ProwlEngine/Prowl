@@ -331,7 +331,7 @@ public sealed class Texture2D : Texture, ISerializable
 
     /// <summary>
     /// Get the shared instance of a default embedded texture. Returns the same GPU
-    /// texture across the whole app — callers that need a unique mutable copy should
+    /// texture across the whole app callers that need a unique mutable copy should
     /// call <see cref="FromImage"/>/<see cref="FromStream"/> directly.
     /// </summary>
     public static Texture2D LoadDefault(DefaultTexture texture)
@@ -342,7 +342,7 @@ public sealed class Texture2D : Texture, ISerializable
     }
 
     /// <summary>
-    /// Raw load of a default embedded texture — invoked by <see cref="BuiltInAssets"/>
+    /// Raw load of a default embedded texture invoked by <see cref="BuiltInAssets"/>
     /// on first cache miss. Public callers should use <see cref="LoadDefault"/>.
     /// </summary>
     internal static Texture2D ParseDefault(DefaultTexture texture)

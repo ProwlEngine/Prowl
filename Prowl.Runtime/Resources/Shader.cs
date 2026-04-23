@@ -149,19 +149,19 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     /// <summary>
     /// Get the shared instance of a default embedded shader. Returns the same instance
     /// across the whole app so ShaderPass variant caches aren't defeated by repeated
-    /// re-parsing — the parse happens exactly once per shader enum value.
+    /// re-parsing the parse happens exactly once per shader enum value.
     /// </summary>
     public static Shader LoadDefault(DefaultShader shader)
     {
         if (BuiltInAssets.Get(BuiltInAssets.GuidFor(shader)) is Shader cached)
             return cached;
-        // BuiltInAssets.Initialize() hasn't run, or the loader errored — parse directly
+        // BuiltInAssets.Initialize() hasn't run, or the loader errored parse directly
         // as a last resort so this method never silently returns null.
         return ParseDefault(shader);
     }
 
     /// <summary>
-    /// Raw parse of a default embedded shader — invoked by <see cref="BuiltInAssets"/>
+    /// Raw parse of a default embedded shader invoked by <see cref="BuiltInAssets"/>
     /// on the first cache miss. Public callers should use <see cref="LoadDefault"/>.
     /// </summary>
     internal static Shader ParseDefault(DefaultShader shader)
@@ -191,7 +191,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
             throw new System.Exception($"Default shader parsing returned null: {shader}");
 
         // AssetID/AssetPath/Name are set by BuiltInAssets.Get after the loader returns,
-        // so we don't set them here — keeping the raw parse free of registry coupling.
+        // so we don't set them here keeping the raw parse free of registry coupling.
         return result;
     }
 

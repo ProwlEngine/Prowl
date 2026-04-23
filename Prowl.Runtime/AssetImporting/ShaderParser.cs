@@ -474,7 +474,7 @@ public static class ShaderParser
             ExpectToken("property", tokenizer, ShaderToken.Comma);
             ExpectToken("property", tokenizer, ShaderToken.Identifier);
 
-            // Range(min, max) — a Float with inspector-slider bounds. Parse + swap
+            // Range(min, max) a Float with inspector-slider bounds. Parse + swap
             // the effective type to Float so the rest of the pipeline treats it
             // uniformly.
             Float2 rangeBounds = default;

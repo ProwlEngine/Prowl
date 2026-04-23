@@ -19,7 +19,7 @@ namespace Prowl.Runtime.MeshFeatures.Generation;
 /// reject so far-away triangles never reach the exact closest-point computation.
 /// </summary>
 /// <remarks>
-/// The field is unsigned — values are always &gt;= 0. Sufficient for sphere tracing from
+/// The field is unsigned values are always &gt;= 0. Sufficient for sphere tracing from
 /// outside the surface (the use case for raymarched previews and proximity queries).
 /// </remarks>
 public static class SDFGenerator
@@ -226,7 +226,7 @@ public static class SDFGenerator
         if (p.Z > max.Z) max.Z = p.Z;
     }
 
-    /// <summary>Closest point on triangle (a,b,c) to p — Ericson's Voronoi-region method.</summary>
+    /// <summary>Closest point on triangle (a,b,c) to p Ericson's Voronoi-region method.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Float3 ClosestPointOnTriangle(Float3 p, Float3 a, Float3 b, Float3 c)
     {

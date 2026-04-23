@@ -45,7 +45,7 @@ public class AssetWatcher : IDisposable
         _watcher.Renamed += (_, e) => QueueEvent(FileEventType.Renamed, e.FullPath, e.OldFullPath);
         _watcher.Error += (_, e) =>
         {
-            Runtime.Debug.LogError($"AssetWatcher buffer overflow — some file changes may have been missed. Consider reimporting. Error: {e.GetException().Message}");
+            Runtime.Debug.LogError($"AssetWatcher buffer overflow some file changes may have been missed. Consider reimporting. Error: {e.GetException().Message}");
         };
 
         // Enable after all handlers attached
@@ -85,7 +85,7 @@ public class AssetWatcher : IDisposable
                 return new List<FileEvent>();
 
             // Coalesce: for each path, determine the net effect.
-            // Renames are special — they track OldPath.
+            // Renames are special they track OldPath.
             // For everything else, we just care about the final state:
             //   - If a Delete was the last event, it's deleted.
             //   - If Created or Modified was last, it needs import/reimport.
@@ -94,7 +94,7 @@ public class AssetWatcher : IDisposable
 
             foreach (var evt in _pendingEvents)
             {
-                // Renames always win — they're the most specific
+                // Renames always win they're the most specific
                 if (evt.Type == FileEventType.Renamed)
                 {
                     // Remove any pending event on the old path

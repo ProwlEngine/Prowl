@@ -118,7 +118,7 @@ public sealed class VolumetricFogEffect : ImageEffect
 
         var format = context.SceneColor.MainTexture.ImageFormat;
 
-        // Drop history if the low-res size changed — reprojecting against a
+        // Drop history if the low-res size changed reprojecting against a
         // differently-sized history is garbage and a one-frame flash is fine.
         if (_history != null && (_history.Width != lowW || _history.Height != lowH))
         {
@@ -127,7 +127,7 @@ public sealed class VolumetricFogEffect : ImageEffect
             _historyValid = false;
         }
 
-        // Pass 0 — Ray march into low-res.
+        // Pass 0 Ray march into low-res.
         var currentLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
         RenderPipeline.Blit(context.SceneColor, currentLow, _mat, 0);
 
@@ -136,7 +136,7 @@ public sealed class VolumetricFogEffect : ImageEffect
         {
             _history ??= new RenderTexture(lowW, lowH, false, [format]);
 
-            // Pass 1 — Temporal blend of current against reprojected history.
+            // Pass 1 Temporal blend of current against reprojected history.
             blendedLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
             _mat.SetTexture("_FogCurrentTex", currentLow.MainTexture);
             _mat.SetTexture("_FogHistoryTex", _history.MainTexture);
@@ -150,14 +150,14 @@ public sealed class VolumetricFogEffect : ImageEffect
         }
         else
         {
-            // Temporal disabled — just composite the raw march, and invalidate
+            // Temporal disabled just composite the raw march, and invalidate
             // any stale history so re-enabling doesn't reproject against a
             // frame from however long ago the user last turned it off.
             blendedLow = currentLow;
             _historyValid = false;
         }
 
-        // Pass 2 — Bilateral upsample + composite onto scene color.
+        // Pass 2 Bilateral upsample + composite onto scene color.
         _mat.SetTexture("_FogTex", blendedLow.MainTexture);
         var fullRes = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [format]);
         RenderPipeline.Blit(context.SceneColor, fullRes, _mat, 2);
@@ -265,7 +265,7 @@ public sealed class VolumetricFogEffect : ImageEffect
             }
         }
 
-        // Sort by distance — globals (negative) come first, then nearest shapes.
+        // Sort by distance globals (negative) come first, then nearest shapes.
         collected.Sort((a, b) => a.distSq.CompareTo(b.distSq));
 
         int count = Math.Min(collected.Count, MaxFogVolumes);

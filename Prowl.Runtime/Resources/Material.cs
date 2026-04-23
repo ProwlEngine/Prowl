@@ -33,7 +33,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Load a default embedded material — returns a fresh clone every call so callers
+    /// Load a default embedded material returns a fresh clone every call so callers
     /// can freely mutate (SetTexture, SetFloat, ...) without stepping on each other.
     /// The underlying template is cached in <see cref="BuiltInAssets"/> so the .mat file
     /// is only deserialized once, but the returned instance is always yours to own.
@@ -41,17 +41,17 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public static Material LoadDefault(DefaultMaterial material)
     {
         // Pull the shared template from the cache, then clone. Clone is a cheap deep-copy
-        // of the property dictionaries + a shared shader reference — materials are
+        // of the property dictionaries + a shared shader reference materials are
         // configuration objects, not heavy resources.
         if (BuiltInAssets.Get(BuiltInAssets.GuidFor(material)) is Material template)
             return new Material(template);
-        // Fallback if BuiltInAssets isn't initialized — ParseDefault already returns a
+        // Fallback if BuiltInAssets isn't initialized ParseDefault already returns a
         // fresh instance, no clone needed.
         return ParseDefault(material);
     }
 
     /// <summary>
-    /// Raw deserialize of a default embedded material — invoked by <see cref="BuiltInAssets"/>
+    /// Raw deserialize of a default embedded material invoked by <see cref="BuiltInAssets"/>
     /// on first cache miss. Public callers should use <see cref="LoadDefault"/>.
     /// </summary>
     internal static Material ParseDefault(DefaultMaterial material)
@@ -89,7 +89,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     /// <summary>Names of properties the user has explicitly set (vs auto-filled
     /// shader defaults). When the shader's defaults change, only NON-overridden
-    /// entries get refreshed — user customizations are preserved. Without this,
+    /// entries get refreshed user customizations are preserved. Without this,
     /// stale defaults stick around forever (the Unity-style override pattern).</summary>
     [SerializeField]
     public HashSet<string> _overrides = new();
@@ -130,7 +130,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Copy constructor — deep-clone every property value + a fresh keyword dict. The
+    /// Copy constructor deep-clone every property value + a fresh keyword dict. The
     /// <see cref="Shader"/> reference is shared (shaders are immutable after parse).
     /// Use this when you need a mutable material seeded from <see cref="LoadDefault"/>
     /// or any other shared material so your mutations don't leak to other callers.
@@ -162,13 +162,13 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetTexture(string name, AssetRef<Texture2D> value) { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
     public void SetTexture3D(string name, Texture3D value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
 
-    /// <summary>Forget the user override for <paramref name="name"/> — next sync
+    /// <summary>Forget the user override for <paramref name="name"/> next sync
     /// will refill it from the shader's current default. Useful for an inspector
     /// "revert to default" button.</summary>
     /// <remarks>
     /// Removes from BOTH the override set AND the backing <c>_properties</c> dict.
     /// If we only cleared <c>_overrides</c>, <c>ApplyMaterialUniforms</c> would still
-    /// see the stale value in <c>_properties</c> and upload it anyway — the defaults
+    /// see the stale value in <c>_properties</c> and upload it anyway the defaults
     /// fill-in path only runs for keys not already in the property dict. This was a
     /// silent "revert does nothing" bug before.
     /// </remarks>
@@ -248,7 +248,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             return;
 
         _shader = new AssetRef<Shader>(shader);
-        // Intentionally do NOT pre-fill _properties with shader defaults — defaults
+        // Intentionally do NOT pre-fill _properties with shader defaults defaults
         // are read live from the shader at access time (see DrawShaderProperty
         // fallback + ApplyMaterialUniformsWithDefaults). Pre-filling would mark
         // every default as an "override" once the material is serialized.
@@ -294,7 +294,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             foreach (var name in _properties.EnumerateNames())
                 _overrides.Add(name);
         }
-        // No SyncShaderDefaults — defaults are read live from the shader at access
+        // No SyncShaderDefaults defaults are read live from the shader at access
         // time (see PropertyState.ApplyMaterialUniformsWithDefaults + the inspector's
         // DrawShaderProperty fallback). Materials only ever store overrides.
     }
@@ -313,7 +313,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
         foreach (ShaderProperty prop in shader.Properties)
         {
-            // User-set values are sacred — leave them alone.
+            // User-set values are sacred leave them alone.
             if (_overrides.Contains(prop.Name)) continue;
             UpdatePropertyState(prop);
         }

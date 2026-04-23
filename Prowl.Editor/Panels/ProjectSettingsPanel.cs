@@ -19,7 +19,7 @@ public class ProjectSettingsPanel : DockPanel
 
     private int _selectedIndex;
 
-    // Shared with ProjectSettingsRegistry.Save — keeping the serializer options identical
+    // Shared with ProjectSettingsRegistry.Save keeping the serializer options identical
     // means the before/after JSON comparison is stable field-by-field.
     private static readonly JsonSerializerOptions s_jsonOpts = new()
     {
@@ -31,7 +31,7 @@ public class ProjectSettingsPanel : DockPanel
     /// <summary>
     /// Register an undo record if <paramref name="instance"/> changed between the captured
     /// JSON and its current state. Used by the panel to wrap a settings OnGUI call so any
-    /// widget mutation becomes undoable — without each settings class needing to know
+    /// widget mutation becomes undoable without each settings class needing to know
     /// about Undo.
     /// </summary>
     private static void DiffAndRegisterUndo(ProjectSettingsRegistry.SettingsEntry entry, string beforeJson)
@@ -87,7 +87,7 @@ public class ProjectSettingsPanel : DockPanel
 
         using (paper.Row("ps_root").Size(width, height).Enter())
         {
-            // Left sidebar — category list
+            // Left sidebar category list
             float sidebarW = 220f;
             using (paper.Column("ps_sidebar")
                 .Border(new UnitValue(Units.Pixels, EditorTheme.SidePixelPadding))
@@ -125,7 +125,7 @@ public class ProjectSettingsPanel : DockPanel
             // Separator
             paper.Box("ps_divider").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
-            // Right content — selected settings.
+            // Right content selected settings.
             // Wrap the draw with a JSON snapshot: System.Text.Json is the same serializer
             // used to persist settings, so it handles properties, fields, lists, arrays
             // uniformly (unlike Echo which is fields-only). Anything the user changes in

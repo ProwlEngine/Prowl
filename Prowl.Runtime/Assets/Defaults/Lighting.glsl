@@ -90,7 +90,7 @@ uniform float _AmbientStrength;
 // ============================================================
 
 // Unit direction FROM a surface point TO light i. For directionals the world-space
-// position is ignored — only the stored facing direction matters.
+// position is ignored only the stored facing direction matters.
 vec3 GetLightDirection(int i, vec3 worldPos)
 {
     if (_LightType[i] == 0) return normalize(-_LightDirections[i]);
@@ -167,7 +167,7 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
         cascadeMatrix = _CascadeShadowMatrix3;
         cascadeParams = _CascadeAtlasParams3;
     } else {
-        // Beyond all cascades — use last
+        // Beyond all cascades use last
         if (_CascadeCount == 1)      { cascadeMatrix = _CascadeShadowMatrix0; cascadeParams = _CascadeAtlasParams0; }
         else if (_CascadeCount == 2) { cascadeMatrix = _CascadeShadowMatrix1; cascadeParams = _CascadeAtlasParams1; }
         else if (_CascadeCount == 3) { cascadeMatrix = _CascadeShadowMatrix2; cascadeParams = _CascadeAtlasParams2; }
@@ -318,7 +318,7 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
     vec3 diffuse = kD * albedo * diffuseTerm;
 
-    // Shadow — shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
+    // Shadow shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
     // include. With the define set, shadowFactor stays at 1.0 and no atlas samples are
     // performed, so the surface receives full direct lighting regardless of occluders.
     float shadowFactor;
@@ -410,7 +410,7 @@ vec3 CalculateSingleLightAniso(int i, vec3 worldPos, vec3 worldNormal, vec3 view
     // Disney Diffuse with averaged perceptual roughness
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, perceptualRoughness) * NdotL;
 
-    // Shadow — shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
+    // Shadow shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
     // include. With the define set, shadowFactor stays at 1.0 and no atlas samples are
     // performed, so the surface receives full direct lighting regardless of occluders.
     float shadowFactor;

@@ -10,7 +10,7 @@ using Prowl.Vector;
 namespace Prowl.Editor.GraphTools;
 
 /// <summary>
-/// All static draw helpers for the graph canvas — grid, groups, wires, nodes, ports,
+/// All static draw helpers for the graph canvas grid, groups, wires, nodes, ports,
 /// sticky notes, drag-overlay. Stateless and Paper-free; takes a Quill <see cref="Canvas"/>
 /// already transformed into graph space.
 /// </summary>
@@ -21,7 +21,7 @@ namespace Prowl.Editor.GraphTools;
 /// </remarks>
 public static class GraphRendering
 {
-    // ─── Common colors (grid / background only — node colors live in DefaultNodeRenderer) ─
+    // ─── Common colors (grid / background only node colors live in DefaultNodeRenderer) ─
     private static readonly Color32 BgColor  = new Color32(22, 22, 26, 255);
     private static readonly Color32 GridLine = new Color32(40, 42, 50, 255);
 
@@ -64,7 +64,7 @@ public static class GraphRendering
             canvas.Stroke();
         }
 
-        // Major intersection dots disabled for now — they were sliding too aggressively
+        // Major intersection dots disabled for now they were sliding too aggressively
         // with pan/zoom relative to the lines, looked janky.
         // float dotR = MathF.Max(1.5f / zoom, 0.5f);
         // for (float y = y0; y <= y1; y += majorEvery)
@@ -145,7 +145,7 @@ public static class GraphRendering
         // Body.
         canvas.RoundedRectFilled(x, y, w, h, 8f, 8f, 8f, 8f, fill);
 
-        // Title strip — rounded corners match the body's top.
+        // Title strip rounded corners match the body's top.
         canvas.RoundedRectFilled(x, y, w, titleHeight, 8f, 8f, 0f, 0f, titleFill);
 
         // Outline.
@@ -190,7 +190,7 @@ public static class GraphRendering
 
         canvas.RoundedRectFilled(x, y, w, h, 6f, 6f, 6f, 6f, bg);
 
-        // Title strip — darker tint of the body colour.
+        // Title strip darker tint of the body colour.
         var titleBg = new Color32(
             (byte)Math.Max(0, bg.R - 30),
             (byte)Math.Max(0, bg.G - 30),
@@ -209,7 +209,7 @@ public static class GraphRendering
                 canvas.DrawText(note.Body, x + 6, y + 28, ink, 12f, font);
         }
 
-        // Selection border — matches the amber outline used on selected nodes so the
+        // Selection border matches the amber outline used on selected nodes so the
         // selection convention stays consistent across element types.
         if (isSelected)
         {
@@ -220,7 +220,7 @@ public static class GraphRendering
             canvas.Stroke();
         }
 
-        // Resize handle — small triangular grip in the bottom-right corner. Drawn on
+        // Resize handle small triangular grip in the bottom-right corner. Drawn on
         // top of the body so it's always visible. The hit-test uses the same 16×16
         // corner region (see GraphEditorWindow.IsOverStickyResizeHandle).
         float hx1 = x + w, hy1 = y + h;

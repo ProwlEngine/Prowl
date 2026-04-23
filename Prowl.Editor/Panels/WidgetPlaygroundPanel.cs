@@ -38,7 +38,7 @@ public class WidgetPlaygroundPanel : DockPanel
     private Prowl.Runtime.AnimationCurve _curve = new();
     private TestComponent _testObject = new();
 
-    // Test class for property grid — exercises every type the grid supports
+    // Test class for property grid exercises every type the grid supports
     public class TestComponent
     {
         // Primitives

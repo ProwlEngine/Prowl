@@ -46,7 +46,7 @@ public sealed class DefaultNodeRenderer : NodeRenderer
         float h = GraphLayout.HeaderHeight + bodyHeight;
 
         // Reserve preview area below the body when the node opts in. Only counts when
-        // both the node says HasPreview AND a drawer is registered — otherwise the
+        // both the node says HasPreview AND a drawer is registered otherwise the
         // node stays its compact size.
         if (node is INodePreview p && p.HasPreview && p.PreviewHeight > 0
             && NodePreviewRegistry.GetDrawer(node.GetType()) != null)
@@ -161,7 +161,7 @@ public sealed class DefaultNodeRenderer : NodeRenderer
         if (node.Messages.Count > 0)
             DrawNodeMessages(canvas, node, rect);
 
-        // Resize grip — small triangular tab in the bottom-right corner. Same
+        // Resize grip small triangular tab in the bottom-right corner. Same
         // visual / hit area as sticky notes / groups so the gesture is consistent.
         if (node is IResizableNode)
         {
@@ -177,7 +177,7 @@ public sealed class DefaultNodeRenderer : NodeRenderer
             canvas.Fill();
         }
 
-        // Custom preview region — drawn AFTER ports so the preview can extend down past
+        // Custom preview region drawn AFTER ports so the preview can extend down past
         // the natural body. Sized by the node, drawn by the registered drawer.
         if (node is INodePreview p && p.HasPreview && p.PreviewHeight > 0)
         {
@@ -215,7 +215,7 @@ public sealed class DefaultNodeRenderer : NodeRenderer
         }
 
         float r = isHovered && !dim ? GraphLayout.PortDotRadius + 1.5f : GraphLayout.PortDotRadius;
-        // Two stacked filled circles — outer ring + inner coloured fill. Crisper than
+        // Two stacked filled circles outer ring + inner coloured fill. Crisper than
         // a Stroke at small radii with less aliasing.
         var ring = NodeBorder; ring.A = DimA(ring.A);
         var fill = color;      fill.A = DimA(fill.A);

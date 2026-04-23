@@ -92,7 +92,7 @@ public class Project
 
         rootPath = Path.GetFullPath(rootPath);
 
-        // Validate it's a project — must have Assets/ folder
+        // Validate it's a project must have Assets/ folder
         string assetsDir = Path.Combine(rootPath, "Assets");
         if (!Directory.Exists(assetsDir))
             throw new InvalidOperationException($"Not a valid Prowl project: missing Assets/ folder in '{rootPath}'");

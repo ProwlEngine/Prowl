@@ -13,7 +13,7 @@ namespace Prowl.Runtime.MeshFeatures;
 /// </summary>
 /// <remarks>
 /// Created by <see cref="Prowl.Runtime.MeshFeatures.Generation.SDFGenerator"/> during asset
-/// import. Treat as read-only once imported — to change it, edit the parent asset's importer
+/// import. Treat as read-only once imported to change it, edit the parent asset's importer
 /// settings and reimport.
 ///
 /// Volume sampling (GPU shader):

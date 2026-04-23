@@ -34,11 +34,11 @@ public class EditorModelImporter : AssetImporter
                 };
             }
 
-            // 1. Import — creates live meshes, materials, animations, GO hierarchy
+            // 1. Import creates live meshes, materials, animations, GO hierarchy
             var importer = new ModelImporter();
             var data = importer.Import(new FileInfo(ctx.AbsolutePath), importSettings);
 
-            // 2. Register sub-assets — assigns deterministic GUIDs immediately
+            // 2. Register sub-assets assigns deterministic GUIDs immediately
             for (int i = 0; i < data.Meshes.Count; i++)
                 ctx.AddSubAsset(data.Meshes[i].Name ?? $"Mesh_{i}", data.Meshes[i]);
 
@@ -55,7 +55,7 @@ public class EditorModelImporter : AssetImporter
             // 3. Resolve inline textures to asset DB references
             ResolveTextures(data, ctx);
 
-            // 4. Serialize GO hierarchy — sub-assets have correct IDs, AssetRefs serialize as GUIDs
+            // 4. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs
             var model = new Model(Path.GetFileNameWithoutExtension(ctx.AbsolutePath));
             if (data.RootGO != null)
                 model.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO);
@@ -115,7 +115,7 @@ public class EditorModelImporter : AssetImporter
         var entry = db.GetEntry(relativePath);
         if (entry == null) return;
 
-        // Don't load the texture — just set the AssetRef by GUID.
+        // Don't load the texture just set the AssetRef by GUID.
         // The texture may not be imported yet, but the GUID is assigned.
         // At runtime, AssetRef lazy-loads via AssetDatabase.Get().
         mat.SetTexture(slot, new AssetRef<Texture2D>(entry.Guid));

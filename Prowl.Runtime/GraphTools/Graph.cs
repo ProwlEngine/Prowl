@@ -12,7 +12,7 @@ namespace Prowl.Runtime.GraphTools;
 /// <summary>How wires are visually routed between two ports.</summary>
 public enum WireRoutingStyle
 {
-    /// <summary>Cubic bezier with horizontal tangents — the default. Smooth curves.</summary>
+    /// <summary>Cubic bezier with horizontal tangents the default. Smooth curves.</summary>
     Bezier,
     /// <summary>Straight line from source to target.</summary>
     Linear,
@@ -23,7 +23,7 @@ public enum WireRoutingStyle
 
 /// <summary>
 /// Abstract base for any node-based asset (shader graphs, behaviour trees, visual scripts, ...).
-/// Holds the graph topology — nodes, edges, blackboard variables, sticky notes, groups —
+/// Holds the graph topology nodes, edges, blackboard variables, sticky notes, groups —
 /// and is serialized as a regular Prowl asset via Echo. Subclasses register themselves
 /// with <see cref="CreateAssetMenuAttribute"/> for a specific file extension and provide
 /// graph-type-specific node libraries.
@@ -31,12 +31,12 @@ public enum WireRoutingStyle
 /// <remarks>
 /// Echo serializes the polymorphic <see cref="Nodes"/> list automatically (each entry's
 /// concrete type is recorded), the same way <c>List&lt;MonoBehaviour&gt;</c> works on
-/// <c>GameObject</c>. All persisted state lives in public fields — Echo doesn't see
+/// <c>GameObject</c>. All persisted state lives in public fields Echo doesn't see
 /// properties.
 /// </remarks>
 public abstract class Graph : EngineObject, ISerializable
 {
-    /// <summary>All nodes in the graph. Polymorphic — subclasses live in this list.</summary>
+    /// <summary>All nodes in the graph. Polymorphic subclasses live in this list.</summary>
     public List<Node> Nodes = new();
 
     /// <summary>All wires connecting node ports.</summary>
@@ -51,11 +51,11 @@ public abstract class Graph : EngineObject, ISerializable
     /// <summary>Visual groups that contain nodes (titled coloured regions).</summary>
     public List<NodeGroup> Groups = new();
 
-    /// <summary>Last view state — pan offset and zoom — so the editor reopens where you left off.</summary>
+    /// <summary>Last view state pan offset and zoom so the editor reopens where you left off.</summary>
     public Float2 ViewportPan = Float2.Zero;
     public float ViewportZoom = 1f;
 
-    /// <summary>Visual style for wire routing — applies to every wire in this graph.
+    /// <summary>Visual style for wire routing applies to every wire in this graph.
     /// User-settable from the editor toolbar.</summary>
     public WireRoutingStyle WireStyle = WireRoutingStyle.Bezier;
 
@@ -70,7 +70,7 @@ public abstract class Graph : EngineObject, ISerializable
     /// every <see cref="Node"/> subclass.
     /// </summary>
     /// <remarks>
-    /// Discovery + caching happens in <see cref="NodeRegistry"/> — purely reflection-based
+    /// Discovery + caching happens in <see cref="NodeRegistry"/> purely reflection-based
     /// so users can add new graph types and node types in their own assemblies without
     /// touching the framework.
     /// </remarks>
@@ -88,7 +88,7 @@ public abstract class Graph : EngineObject, ISerializable
 
     /// <summary>
     /// Add a node with a fresh Id (assigns one if Id is empty). The framework expects
-    /// every node to have a unique non-empty Id — Edges reference nodes by Id, not index,
+    /// every node to have a unique non-empty Id Edges reference nodes by Id, not index,
     /// so reordering / inserting is safe.
     /// </summary>
     public T AddNode<T>(T node) where T : Node
@@ -107,7 +107,7 @@ public abstract class Graph : EngineObject, ISerializable
 
     /// <summary>
     /// Returns true if there's an edge between the given source-port and target-port.
-    /// Cheap — used by the renderer to skip drawing unconnected default-value editors.
+    /// Cheap used by the renderer to skip drawing unconnected default-value editors.
     /// </summary>
     public bool IsPortConnected(Guid nodeId, string portName, PortDirection direction)
     {
@@ -148,7 +148,7 @@ public abstract class Graph : EngineObject, ISerializable
 
     // ─── Custom Serialization (MissingNode fallback) ─────────────────────────────────
     // We own Serialize/Deserialize so we can intercept each Node tag, look up its
-    // $type, and — if the type no longer resolves — wrap the raw EchoObject in a
+    // $type, and if the type no longer resolves wrap the raw EchoObject in a
     // MissingNode that preserves the original payload for recovery on re-save. Same
     // pattern GameObject uses for MissingMonobehaviour.
 
@@ -156,7 +156,7 @@ public abstract class Graph : EngineObject, ISerializable
     {
         SerializeHeader(compound);
 
-        // Nodes are polymorphic — Serializer writes the $type tag that Deserialize
+        // Nodes are polymorphic Serializer writes the $type tag that Deserialize
         // uses below to detect unresolvable types.
         var nodesTag = EchoObject.NewList();
         foreach (var n in Nodes)
@@ -182,7 +182,7 @@ public abstract class Graph : EngineObject, ISerializable
         {
             foreach (var nodeTag in nodesTag.List)
             {
-                // Missing-type fallback — same shape as GameObject's component handling.
+                // Missing-type fallback same shape as GameObject's component handling.
                 var typeProperty = nodeTag.Get("$type");
                 if (typeProperty != null && !string.IsNullOrWhiteSpace(typeProperty.StringValue))
                 {
@@ -226,7 +226,7 @@ public abstract class Graph : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// Drop edges whose endpoints can no longer be resolved — the node doesn't
+    /// Drop edges whose endpoints can no longer be resolved the node doesn't
     /// exist (deleted or couldn't be revived from a MissingNode), the referenced
     /// port name no longer appears on the node (renamed / removed by a code
     /// change), or the port types are no longer compatible (semantic change).
@@ -248,12 +248,12 @@ public abstract class Graph : EngineObject, ISerializable
             // 1. Node missing entirely.
             if (!byId.TryGetValue(e.SourceNodeId, out var src))
             {
-                Debug.LogWarning($"Graph '{Name}': edge dropped — source node missing (id={e.SourceNodeId}).");
+                Debug.LogWarning($"Graph '{Name}': edge dropped source node missing (id={e.SourceNodeId}).");
                 return true;
             }
             if (!byId.TryGetValue(e.TargetNodeId, out var dst))
             {
-                Debug.LogWarning($"Graph '{Name}': edge dropped — target node missing (id={e.TargetNodeId}).");
+                Debug.LogWarning($"Graph '{Name}': edge dropped target node missing (id={e.TargetNodeId}).");
                 return true;
             }
 
@@ -261,7 +261,7 @@ public abstract class Graph : EngineObject, ISerializable
             // preserve the payload but the edges to/from it can't route anywhere.
             if (src is MissingNode || dst is MissingNode)
             {
-                Debug.LogWarning($"Graph '{Name}': edge dropped — endpoint is a MissingNode (restore the node's type to recover).");
+                Debug.LogWarning($"Graph '{Name}': edge dropped endpoint is a MissingNode (restore the node's type to recover).");
                 return true;
             }
 
@@ -272,20 +272,20 @@ public abstract class Graph : EngineObject, ISerializable
             var tp = dst.GetInput(e.TargetPortName);
             if (sp == null)
             {
-                Debug.LogWarning($"Graph '{Name}': edge dropped — source output '{src.GetType().Name}.{e.SourcePortName}' no longer exists.");
+                Debug.LogWarning($"Graph '{Name}': edge dropped source output '{src.GetType().Name}.{e.SourcePortName}' no longer exists.");
                 return true;
             }
             if (tp == null)
             {
-                Debug.LogWarning($"Graph '{Name}': edge dropped — target input '{dst.GetType().Name}.{e.TargetPortName}' no longer exists.");
+                Debug.LogWarning($"Graph '{Name}': edge dropped target input '{dst.GetType().Name}.{e.TargetPortName}' no longer exists.");
                 return true;
             }
 
-            // 3. Port types incompatible (respects numeric promotion — a Float
+            // 3. Port types incompatible (respects numeric promotion a Float
             // wire into a Vec3 input is still valid).
             if (!PortTypes.AreCompatible(sp.DataType, tp.DataType))
             {
-                Debug.LogWarning($"Graph '{Name}': edge dropped — types no longer match ({src.GetType().Name}.{e.SourcePortName}:{sp.DataType.Name} → {dst.GetType().Name}.{e.TargetPortName}:{tp.DataType.Name}).");
+                Debug.LogWarning($"Graph '{Name}': edge dropped types no longer match ({src.GetType().Name}.{e.SourcePortName}:{sp.DataType.Name} → {dst.GetType().Name}.{e.TargetPortName}:{tp.DataType.Name}).");
                 return true;
             }
 
@@ -294,7 +294,7 @@ public abstract class Graph : EngineObject, ISerializable
     }
 
     /// <summary>Try to rehydrate a previously-saved <see cref="MissingNode"/> back into
-    /// its original concrete type — happens when the user restores the assembly that
+    /// its original concrete type happens when the user restores the assembly that
     /// defines the type after saving the graph with a placeholder.</summary>
     private void HandleMissingNode(EchoObject nodeTag, SerializationContext ctx)
     {
@@ -315,7 +315,7 @@ public abstract class Graph : EngineObject, ISerializable
                 }
             }
         }
-        // Still unresolved — keep the MissingNode so payload isn't lost.
+        // Still unresolved keep the MissingNode so payload isn't lost.
         Nodes.Add(missing);
     }
 }

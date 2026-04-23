@@ -63,7 +63,7 @@ public static class MainMenuBar
             var openItem = items[_openMenuIndex];
             if (openItem.HasSubItems)
             {
-                // Backdrop — click anywhere outside to close
+                // Backdrop click anywhere outside to close
                 paper.Box("menubar_backdrop")
                     .PositionType(PositionType.SelfDirected)
                     .Position(0, 0)

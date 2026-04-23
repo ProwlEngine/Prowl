@@ -163,7 +163,7 @@ public class SceneViewPanel : DockPanel
 
         if (scene == null)
         {
-            // No scene — show message and create button
+            // No scene show message and create button
             using (paper.Column("sv_no_scene")
                 .Size(width, height)
                 .BackgroundColor(Color.FromArgb(255, 30, 30, 35))
@@ -240,7 +240,7 @@ public class SceneViewPanel : DockPanel
                     float rw = (float)r.Size.X;
                     float rh = (float)r.Size.Y;
 
-                    // Draw RT with flipped Y — OpenGL RT has Y=0 at bottom
+                    // Draw RT with flipped Y OpenGL RT has Y=0 at bottom
                     canvas.SetBrushTexture(rt.MainTexture);
                     // TextureTransform maps screen rect to UV: flip V by translating +1 and scaling -1 on Y
                     canvas.SetBrushTextureTransform(
@@ -370,7 +370,7 @@ public class SceneViewPanel : DockPanel
                 }
             }
 
-            // View manipulator (orientation cube) — drawn as 2D overlay on top-right
+            // View manipulator (orientation cube) drawn as 2D overlay on top-right
             DrawViewManipulator(paper, font, width, height);
         }
     }
@@ -657,7 +657,7 @@ public class SceneViewPanel : DockPanel
         rotation = firstGO.Transform.Rotation;
         scale = firstGO.Transform.LossyScale;
 
-        // Update gizmo — use absolute screen rect so coordinates match DrawForeground
+        // Update gizmo use absolute screen rect so coordinates match DrawForeground
         var cam = _editorCamera.Camera;
         var camGo = cam.GameObject;
 
@@ -732,7 +732,7 @@ public class SceneViewPanel : DockPanel
         _viewManipulator.SetCamera(_editorCamera.Camera.GameObject.Transform.Forward,
             _editorCamera.Camera.GameObject.Transform.Up);
 
-        // Draw as overlay on top of the scene — use SelfDirected + DrawForeground
+        // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
             .PositionType(PositionType.SelfDirected)
             .Position(width - cubeSize - 8, 8)

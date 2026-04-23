@@ -140,7 +140,7 @@ public static class GameObjectClipboard
     }
 
     /// <summary>
-    /// Filter a selection to only include root-level objects — objects whose
+    /// Filter a selection to only include root-level objects objects whose
     /// ancestors are NOT also in the selection. This prevents duplicating a child
     /// that's already included inside a selected parent's hierarchy.
     /// </summary>

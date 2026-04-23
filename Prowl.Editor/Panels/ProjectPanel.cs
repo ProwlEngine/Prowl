@@ -26,7 +26,7 @@ public class ProjectPanel : DockPanel
     private float _thumbnailSize = 64f;
     private Paper? _paper; // Cached for modifier key checks in callbacks
 
-    // Drag-hover tracking — the mouse's current drop target while a drag is active. Tree
+    // Drag-hover tracking the mouse's current drop target while a drag is active. Tree
     // nodes and folder items in the grid/list set this via OnHover (same pattern the
     // HierarchyPanel uses). Reset each frame before the body draws.
     //   null   → mouse not over any folder drop target
@@ -77,7 +77,7 @@ public class ProjectPanel : DockPanel
                     string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
                     _currentFolder = folder;
 
-                    // Reset the content scroll so the pinged item lands in view — stored scroll
+                    // Reset the content scroll so the pinged item lands in view stored scroll
                     // from a previous folder can otherwise leave the row off-screen.
                     ScrollView.ScrollTo("proj_content", 0f);
                 }
@@ -96,7 +96,7 @@ public class ProjectPanel : DockPanel
             DrawBody(paper, font, width, height - ToolbarHeight);
         }
 
-        // Process drops at the end of the frame — after every OnHover callback from the
+        // Process drops at the end of the frame after every OnHover callback from the
         // tree and content panels has fired. Uses the captured drop target (_dragHoverFolder)
         // or falls back to the currently-open folder when the drop lands on empty space in
         // the content area.
@@ -205,13 +205,13 @@ public class ProjectPanel : DockPanel
     /// Build an <see cref="AssetDragPayload"/> for starting a drag from <paramref name="item"/>.
     /// If the item is part of the current selection, the payload includes every selected
     /// item so a multi-select drag moves the whole set. Returns null for undraggable items
-    /// (sub-assets — they live inside a parent asset and can't be moved independently).
+    /// (sub-assets they live inside a parent asset and can't be moved independently).
     /// </summary>
     private static AssetDragPayload? BuildAssetDragPayload(ContentItem item)
     {
         if (item.IsSubAsset) return null;
 
-        // Primary lookup — the item the user actually grabbed.
+        // Primary lookup the item the user actually grabbed.
         Type? primaryType = null;
         if (!item.IsFolder && item.Guid != Guid.Empty)
             primaryType = EditorAssetDatabase.Instance?.GetEntry(item.RelativePath)?.MainAssetType;
@@ -262,7 +262,7 @@ public class ProjectPanel : DockPanel
             string srcName = Path.GetFileName(src);
             string srcDir = Path.GetDirectoryName(src)?.Replace('\\', '/') ?? "";
 
-            // Already in target folder — nothing to do.
+            // Already in target folder nothing to do.
             if (srcDir.Equals(destRelFolder, StringComparison.OrdinalIgnoreCase)) continue;
 
             string srcAbs = Path.Combine(Project.Current.AssetsPath, src);
@@ -270,7 +270,7 @@ public class ProjectPanel : DockPanel
 
             if (isFolder)
             {
-                // Can't drop a folder on itself or into one of its descendants — that would
+                // Can't drop a folder on itself or into one of its descendants that would
                 // delete the folder mid-move.
                 string srcWithSlash = src + "/";
                 if (destRelFolder.Equals(src, StringComparison.OrdinalIgnoreCase)
@@ -296,7 +296,7 @@ public class ProjectPanel : DockPanel
 
         if (moved > 0)
         {
-            _thumbnailCache.Clear(); // paths changed — thumbnail lookup may be stale
+            _thumbnailCache.Clear(); // paths changed thumbnail lookup may be stale
             Runtime.Debug.Log($"Moved {moved} item(s) to '{(string.IsNullOrEmpty(destRelFolder) ? "Assets" : destRelFolder)}'.");
         }
     }
@@ -320,7 +320,7 @@ public class ProjectPanel : DockPanel
 
     /// <summary>
     /// True when an <see cref="AssetDragPayload"/> could meaningfully land in
-    /// <paramref name="destRelFolder"/> — used to gate the hover highlight so folders that
+    /// <paramref name="destRelFolder"/> used to gate the hover highlight so folders that
     /// would no-op (already the parent) or cycle (self/descendant) don't light up.
     /// </summary>
     private static bool CanAcceptAssetDropInto(string destRelFolder)
@@ -373,7 +373,7 @@ public class ProjectPanel : DockPanel
             .OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
-            // Right-click background — show create/explorer menu
+            // Right-click background show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_tree_bg_ctx");
 
             using (ScrollView.Begin(paper, "proj_tree", FolderTreeWidth, height, 4, 4, 4, 4))
@@ -424,7 +424,7 @@ public class ProjectPanel : DockPanel
             })
             .OnHover(relativePath, (path, _) =>
             {
-                // Track drag hover here instead of reading paper.IsParentHovered — the
+                // Track drag hover here instead of reading paper.IsParentHovered the
                 // latter was unreliable for items inside the scroll view while a drag is
                 // active (same workaround HierarchyPanel uses).
                 if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolder = path;
@@ -478,7 +478,7 @@ public class ProjectPanel : DockPanel
             // Right-click context menu on folder tree
             BuildFolderTreeContextMenu(paper, $"proj_ft_ctx_{relativePath.GetHashCode()}", relativePath);
 
-            // Drop-target highlight — painted when the cursor is over this node during a
+            // Drop-target highlight painted when the cursor is over this node during a
             // valid drag. Actual drop handling is centralized in OnGUI after the body
             // finishes drawing; see DispatchProjectDrop.
             if (_dragHoverFolder == relativePath
@@ -526,13 +526,13 @@ public class ProjectPanel : DockPanel
             .OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
-            // Remember that the mouse is over the content background — the central drop
+            // Remember that the mouse is over the content background the central drop
             // dispatcher uses this as a fallback ("drop on empty content area" means drop
             // into the currently-open folder).
             if (DragDrop.IsDragging || DragDrop.IsDropFrame)
                 _contentBgHovered = paper.IsParentHovered;
 
-            // Right-click background — show create/explorer menu
+            // Right-click background show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_content_bg_ctx");
 
             // Project keyboard shortcuts
@@ -549,7 +549,7 @@ public class ProjectPanel : DockPanel
 
             // While any drag is active, show a banner at the top of the content area
             // summarizing what the user will get by dropping on the background. This is a
-            // visual hint only — the actual Accept runs AFTER the items are drawn so per-item
+            // visual hint only the actual Accept runs AFTER the items are drawn so per-item
             // drop targets (folders in the grid) can win before the background fallback.
             if (DragDrop.IsDraggingType<GameObjectDragPayload>() && paper.IsParentHovered)
             {
@@ -803,7 +803,7 @@ public class ProjectPanel : DockPanel
                 // Right-click context menu
                 BuildItemContextMenu(paper, $"proj_li_ctx_{i}", item);
 
-                // Folder list items are drop targets — highlight during a valid drag hover.
+                // Folder list items are drop targets highlight during a valid drag hover.
                 if (item.IsFolder && _dragHoverFolder == item.RelativePath
                     && (DragDrop.IsDraggingType<GameObjectDragPayload>()
                         || (DragDrop.IsDraggingType<AssetDragPayload>() && CanAcceptAssetDropInto(item.RelativePath))))
@@ -1193,7 +1193,7 @@ public class ProjectPanel : DockPanel
 
             BuildItemContextMenu(paper, $"{id}_ctx", item);
 
-            // Folder grid items are drop targets — highlight overlay painted when the cursor
+            // Folder grid items are drop targets highlight overlay painted when the cursor
             // is over this item during a valid drag. Central dispatch in OnGUI.
             if (item.IsFolder && _dragHoverFolder == item.RelativePath
                 && (DragDrop.IsDraggingType<GameObjectDragPayload>()
@@ -1306,7 +1306,7 @@ public class ProjectPanel : DockPanel
         if (_thumbnailCache.TryGetValue(guid, out var cached))
             return cached;
 
-        // Try loading from disk — don't cache null so we retry when thumbnail is generated
+        // Try loading from disk don't cache null so we retry when thumbnail is generated
         var db = EditorAssetDatabase.Instance;
         if (db == null) return null;
 

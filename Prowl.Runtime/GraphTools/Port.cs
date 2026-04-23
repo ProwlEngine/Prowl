@@ -20,7 +20,7 @@ public enum PortLayout { Above, Below }
 /// wire a Float output to a Float input, or to compatible types via implicit conversion).
 /// </summary>
 /// <remarks>
-/// Ports are NOT serialised — they're rebuilt by <see cref="Node.DefineNode"/> after
+/// Ports are NOT serialised they're rebuilt by <see cref="Node.DefineNode"/> after
 /// each load. Edges reference ports by (NodeId, PortName) so renaming a port invalidates
 /// existing connections, but reordering them in the source code is safe.
 ///
@@ -37,7 +37,7 @@ public sealed class Port
 
     /// <summary>
     /// Fallback for unconnected inputs. Type matches <see cref="DataType"/>. Stored as
-    /// object — evaluators box/unbox to the actual type. Declared in
+    /// object evaluators box/unbox to the actual type. Declared in
     /// <see cref="Node.DefineNode"/>; for user-editable defaults, expose a public field
     /// on the node subclass (edited via the Inspector) and read it in the evaluator.
     /// </summary>
@@ -55,23 +55,23 @@ public sealed class Port
     /// hit-testing and wire endpoint resolution. Lets nodes show or hide ports based
     /// on their own state (e.g. an "If" node that hides the "Else" input when in
     /// unary mode) without having to rebuild the port list.
-    /// Not persisted — Ports are rebuilt by <see cref="Node.DefineNode"/> on each load,
+    /// Not persisted Ports are rebuilt by <see cref="Node.DefineNode"/> on each load,
     /// so visibility is driven by the node's own state.
     /// </summary>
     public bool IsHidden;
 
     /// <summary>
     /// When true, validators flag the node with an error if the port has no incoming wire.
-    /// Applies only to input ports — output ports don't have the concept of "required".
+    /// Applies only to input ports output ports don't have the concept of "required".
     /// Use for ports whose default value isn't a meaningful fallback (e.g. Custom Code
-    /// node operands). Not persisted — rebuilt by <see cref="Node.DefineNode"/>.
+    /// node operands). Not persisted rebuilt by <see cref="Node.DefineNode"/>.
     /// </summary>
     public bool IsRequired;
 
     /// <summary>
     /// Optional hover-tooltip text shown next to the port in the editor. Supports
     /// single-line explanatory content; longer descriptions should live on the node's
-    /// Title/Category docs instead. Not persisted — rebuilt by <see cref="Node.DefineNode"/>.
+    /// Title/Category docs instead. Not persisted rebuilt by <see cref="Node.DefineNode"/>.
     /// </summary>
     public string? Tooltip;
 }

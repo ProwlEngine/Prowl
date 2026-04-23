@@ -23,7 +23,7 @@ public abstract class DragPayload
 /// </summary>
 public class AssetDragPayload : DragPayload
 {
-    /// <summary>GUID of the primary (first) asset — for drop targets that only consume one.</summary>
+    /// <summary>GUID of the primary (first) asset for drop targets that only consume one.</summary>
     public Guid AssetGuid { get; }
     /// <summary>Primary asset display name.</summary>
     public string AssetName { get; }
@@ -33,7 +33,7 @@ public class AssetDragPayload : DragPayload
     /// <summary>All asset GUIDs in the drag. Length ≥ 1; first element matches <see cref="AssetGuid"/>.</summary>
     public Guid[] AssetGuids { get; }
     /// <summary>Assets-relative paths of dragged items; aligned with <see cref="AssetGuids"/>.
-    /// May contain folder paths (no associated GUID — empty Guid in that slot).</summary>
+    /// May contain folder paths (no associated GUID empty Guid in that slot).</summary>
     public string[] AssetPaths { get; }
     /// <summary>True when more than one asset is being dragged.</summary>
     public bool IsMulti => AssetGuids.Length > 1;
@@ -106,7 +106,7 @@ public static class DragDrop
 
     public static void UpdateDrag()
     {
-        // Clear stale payload — if drag ended last frame and nobody consumed it, clear now
+        // Clear stale payload if drag ended last frame and nobody consumed it, clear now
         if (!IsDragging && Payload != null)
         {
             Payload = null;

@@ -749,7 +749,7 @@ public abstract class RenderPipeline : EngineObject
         // Set render state
         Graphics.SetState(pass.State);
 
-        // Draw with TRUE GPU instancing — honoring the submesh range when the renderable
+        // Draw with TRUE GPU instancing honoring the submesh range when the renderable
         // specifies one, so multi-material meshes can be drawn in separate instanced calls.
         unsafe
         {

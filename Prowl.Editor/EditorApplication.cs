@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 using Prowl.Editor.Docking;
+using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.Panels;
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -73,7 +74,7 @@ public class EditorApplication : Game
         _dockSpace = new DockSpace(CreateDefaultLayout());
 
         // If launched with --project arg, open the project and load assemblies
-        // BEFORE registries scan — so user types are visible to all registries
+        // BEFORE registries scan so user types are visible to all registries
         bool projectAlreadyInitialized = false;
         if (Program.StartupProjectPath != null)
         {
@@ -104,7 +105,7 @@ public class EditorApplication : Game
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
         CreateAssetMenuRegistry.Initialize();
-        GraphTools.ShaderGraphs.ShaderTypeCreateMenu.Register();
+        ShaderTypeCreateMenu.Register();
         ThumbnailGeneratorRegistry.Initialize();
         SceneDropHandlerRegistry.Initialize();
         CreateGameObjectMenuRegistry.Initialize();
@@ -151,7 +152,7 @@ public class EditorApplication : Game
             ProjectLauncher.Close();
             _launcherWasOpen = false;
             _introClosing = false;
-            _introTime = IntroDuration + 1; // past the end — no animation
+            _introTime = IntroDuration + 1; // past the end no animation
         }
         else
         {
@@ -199,7 +200,7 @@ public class EditorApplication : Game
 
     public void InitializeFont()
     {
-        // Pick a good system font — prefer Segoe UI (Windows), then Arial, then any Regular font
+        // Pick a good system font prefer Segoe UI (Windows), then Arial, then any Regular font
         if (EditorTheme.DefaultFontName != _curDefaultFont)
         {
             EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
@@ -262,7 +263,7 @@ public class EditorApplication : Game
 
     public override void BeginGui(Paper paper)
     {
-        // Flush undo system FIRST — Paper callbacks fired in the previous frame's EndFrame(),
+        // Flush undo system FIRST Paper callbacks fired in the previous frame's EndFrame(),
         // so mutations from OnValueChanged are now visible. FlushFrame compares the Snapshot
         // (taken last frame) against the current state to detect changes.
         Undo.FlushFrame();
@@ -278,7 +279,7 @@ public class EditorApplication : Game
         {
             if (ShortcutManager.IsPressed("Global/Save"))
             {
-                // Block any save while the game is running — scene state changes every frame
+                // Block any save while the game is running scene state changes every frame
                 // during play mode, and writing that to disk silently overwrites the user's
                 // authoring state. Toast once per press so the shortcut isn't silent.
                 if (Application.IsPlaying)
@@ -361,7 +362,7 @@ public class EditorApplication : Game
             }
         }
 
-        // Process file changes — optionally only when window is focused
+        // Process file changes optionally only when window is focused
         bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || Window.IsFocused;
         if (canProcessAssets)
         {
@@ -370,7 +371,7 @@ public class EditorApplication : Game
             // Check for script recompilation
             Scripting.ScriptAssemblyManager.Update();
 
-            // Lazy thumbnail generation — one per frame
+            // Lazy thumbnail generation one per frame
             ThumbnailGenerator.ProcessOne();
 
             // Periodically scan for missing thumbnails (every ~120 frames)
@@ -473,7 +474,7 @@ public class EditorApplication : Game
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Version label — goes to the right side of the menu bar
+        // Version label goes to the right side of the menu bar
         string version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.1";
@@ -564,7 +565,7 @@ public class EditorApplication : Game
                 canvas.Stroke();
             }));
 
-        // Interactive content inside flap — centered row: Project | Buttons | FPS
+        // Interactive content inside flap centered row: Project | Buttons | FPS
         float flapCenterX = (w - contentW) / 2f;
         float flapContentY = 2f;
         float btnSize = 20f;
@@ -899,7 +900,7 @@ public class EditorApplication : Game
         {
             if (!EditorSceneManager.Save())
             {
-                // No path yet — prompt Save As
+                // No path yet prompt Save As
                 if (Project.Current == null) return;
                 Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
                 {
@@ -948,10 +949,10 @@ public class EditorApplication : Game
         // Assets menu
         AssetCreateMenu.RegisterMenus();
 
-        // GameObject menu — auto-populated from [CreateGameObjectMenu] attributes
+        // GameObject menu auto-populated from [CreateGameObjectMenu] attributes
         CreateGameObjectMenuRegistry.RegisterMenuBarItems();
 
-        // Window menu — auto-populated from [EditorWindow] attributes
+        // Window menu auto-populated from [EditorWindow] attributes
         foreach (var (type, path) in _registeredPanels)
         {
             var capturedType = type;
@@ -979,7 +980,7 @@ public class EditorApplication : Game
         Importers.ImporterRegistry.Reinitialize();
         ProjectSettingsRegistry.Reinitialize();
         CreateAssetMenuRegistry.Reinitialize();
-        GraphTools.ShaderGraphs.ShaderTypeCreateMenu.Register();
+        ShaderTypeCreateMenu.Register();
         ThumbnailGeneratorRegistry.Reinitialize();
         SceneDropHandlerRegistry.Reinitialize();
         CreateGameObjectMenuRegistry.Reinitialize();
@@ -1064,7 +1065,7 @@ public class EditorApplication : Game
         if (Project.Current == null) return;
         SaveEditorWindowState();
 
-        // Skip layout persistence while the game is running — panel state snapshots
+        // Skip layout persistence while the game is running panel state snapshots
         // (selection, scene-view camera) would capture the transient playmode state
         // and overwrite authoring state on next open.
         if (!Application.IsPlaying)
@@ -1283,7 +1284,7 @@ public class EditorApplication : Game
     }
 
     // ================================================================
-    //  Scene Control — Editor overrides Game's default scene lifecycle
+    //  Scene Control Editor overrides Game's default scene lifecycle
     // ================================================================
 
     /// <summary>
@@ -1291,7 +1292,7 @@ public class EditorApplication : Game
     /// </summary>
     public override void OnUpdate(Runtime.Resources.Scene? scene)
     {
-        // Always update — lifecycle gating is per-component via ShouldExecuteGameplay.
+        // Always update lifecycle gating is per-component via ShouldExecuteGameplay.
         // Components only run Start/Update/LateUpdate if IsPlaying or [ExecuteAlways].
         if (Application.ShouldRunGameplay)
             Application.IsGameplayExecuting = true;
@@ -1310,7 +1311,7 @@ public class EditorApplication : Game
     /// </summary>
     public override void OnRender(Runtime.Resources.Scene? scene)
     {
-        // Don't render — SceneView panel renders the editor camera to its own RT.
+        // Don't render SceneView panel renders the editor camera to its own RT.
     }
 
     /// <summary>
@@ -1318,7 +1319,7 @@ public class EditorApplication : Game
     /// </summary>
     public override void OnGui(Runtime.Resources.Scene? scene, PaperUI.Paper paper)
     {
-        // Don't call scene.OnGui — editor controls all UI.
+        // Don't call scene.OnGui editor controls all UI.
     }
 
     // ================================================================

@@ -50,7 +50,7 @@ public static class BuiltInAssets
         if (_initialized) return;
         _initialized = true;
 
-        // Shaders — loader calls the raw parse so LoadDefault can route through the cache
+        // Shaders loader calls the raw parse so LoadDefault can route through the cache
         // without recursing through itself.
         foreach (DefaultShader s in Enum.GetValues<DefaultShader>())
         {
@@ -87,7 +87,7 @@ public static class BuiltInAssets
                 });
         }
 
-        // Materials — register the raw parse so LoadDefault routes through this cache.
+        // Materials register the raw parse so LoadDefault routes through this cache.
         foreach (DefaultMaterial m in Enum.GetValues<DefaultMaterial>())
         {
             var mat = m;
@@ -95,7 +95,7 @@ public static class BuiltInAssets
                 () => Material.ParseDefault(mat));
         }
 
-        // Textures — same: raw load, shared instance.
+        // Textures same: raw load, shared instance.
         foreach (DefaultTexture t in Enum.GetValues<DefaultTexture>())
         {
             var tex = t;

@@ -13,7 +13,7 @@ namespace Prowl.Runtime.GraphTools;
 /// </summary>
 /// <remarks>
 /// Port list is rebuilt from the referenced asset every time <see cref="DefineNode"/>
-/// runs — so editing the inner graph's interface (renaming a GraphInput, adding a
+/// runs so editing the inner graph's interface (renaming a GraphInput, adding a
 /// GraphOutput) reflects in the outer graph after re-loading. Wires that reference a
 /// no-longer-existing port name will be dropped by <see cref="Graph.OnAfterDeserialize"/>'s
 /// dangling-edge cleanup.

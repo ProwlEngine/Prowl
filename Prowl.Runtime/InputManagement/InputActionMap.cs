@@ -107,7 +107,7 @@ public class InputActionMap : EngineObject, ISerializable
     public override string ToString() => $"{Name} ({_actions.Count} actions)";
 
     // ================================================================
-    //  Serialization — save/load the action map structure as an asset
+    //  Serialization save/load the action map structure as an asset
     // ================================================================
 
     public void Serialize(ref EchoObject compound, SerializationContext ctx)

@@ -17,7 +17,7 @@ using Color = System.Drawing.Color;
 namespace Prowl.Editor;
 
 /// <summary>
-/// Scene view editor for terrain — provides toolbar with terrain brush tools
+/// Scene view editor for terrain provides toolbar with terrain brush tools
 /// and handles brush input (raycast, preview, application).
 /// </summary>
 [SceneViewEditorFor(typeof(TerrainComponent))]
@@ -27,7 +27,7 @@ public class TerrainSceneEditor : ISceneViewEditor
     private bool _isPainting;
     private bool _useTransformTool;
 
-    // Temporary full snapshot taken at stroke start — used to extract the changed region at stroke end
+    // Temporary full snapshot taken at stroke start used to extract the changed region at stroke end
     private float[]? _preStrokeHeights;
     private float[]? _preStrokeSplats;
     private List<float[]>? _preStrokeDetails;
@@ -88,7 +88,7 @@ public class TerrainSceneEditor : ISceneViewEditor
             DrawSimpleToolBtn(paper, $"{id}_tplace", EditorIcons.Leaf, font);
         }
 
-        // Suppress default toolbar — we're providing our own
+        // Suppress default toolbar we're providing our own
         return true;
     }
 

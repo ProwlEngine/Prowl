@@ -10,7 +10,7 @@ public class DefaultImporter : AssetImporter
 
     public override bool Import(ImportContext ctx)
     {
-        // Default importer just tracks the file — no runtime asset produced
+        // Default importer just tracks the file no runtime asset produced
         return true;
     }
 }

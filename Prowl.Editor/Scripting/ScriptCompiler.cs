@@ -43,7 +43,7 @@ public static class ScriptCompiler
         var errors = new StringBuilder();
 
         // Compile Game assembly first. `-t:Rebuild` forces a full recompile even when
-        // MSBuild thinks inputs are unchanged — avoids the stale-DLL bug where users
+        // MSBuild thinks inputs are unchanged avoids the stale-DLL bug where users
         // edit a script, see "compilation successful", restart, and the old code runs.
         // Incremental build can miss changes when the engine's Prowl.Runtime.dll is
         // updated but user sources weren't touched (cache references old symbols).
@@ -142,7 +142,7 @@ public static class ScriptCompiler
         sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{versionDefine}</DefineConstants>");
         sb.AppendLine("  </PropertyGroup>");
 
-        // References — Game assembly can reference Editor when compiling in-editor (PROWL_EDITOR)
+        // References Game assembly can reference Editor when compiling in-editor (PROWL_EDITOR)
         // Private=true forces MSBuild to use HintPath instead of probing local directories
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");

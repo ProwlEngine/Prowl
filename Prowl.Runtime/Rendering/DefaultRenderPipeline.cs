@@ -188,7 +188,7 @@ public class DefaultRenderPipeline : RenderPipeline
         AssignCameraMatrices(css.View, css.Projection);
 
         // =======================================================
-        // 6. Forward Light Setup — select 8 most relevant lights, upload as globals
+        // 6. Forward Light Setup select 8 most relevant lights, upload as globals
         ForwardLightManager.SelectAndUploadLights(css.CameraPosition, lights, css.CullingMask);
 
         // Upload fog parameters as globals for forward shaders
@@ -262,7 +262,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 break;
 
             case CameraClearFlags.Nothing:
-                // Keep everything from the previous camera — copy color from target.
+                // Keep everything from the previous camera copy color from target.
                 if (target.IsValid())
                 {
                     Graphics.BindFramebuffer(target.frameBuffer, FBOTarget.Read);
@@ -276,7 +276,7 @@ public class DefaultRenderPipeline : RenderPipeline
         }
 
         // =======================================================
-        // 10. Forward Opaque Rendering — shaders do PBR lighting inline
+        // 10. Forward Opaque Rendering shaders do PBR lighting inline
         //     Depth test is LEqual against pre-pass depth (same geometry = equal depth = passes)
         DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
 
@@ -421,7 +421,7 @@ public class DefaultRenderPipeline : RenderPipeline
             }
 
             case Scene.SkyboxMode.SolidColor:
-                // Camera clear already fills with color — just need to write unlit to GBuffer
+                // Camera clear already fills with color just need to write unlit to GBuffer
                 // The camera clear handles the solid color via ClearColor override
                 break;
 

@@ -55,7 +55,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     /// <summary>
     /// Loads a scene as Current without calling Enable().
-    /// Kept for backward compatibility — now just calls Load() since lifecycle gating
+    /// Kept for backward compatibility now just calls Load() since lifecycle gating
     /// is handled per-component via ShouldExecuteGameplay.
     /// </summary>
     [Obsolete("Use Scene.Load() instead. Lifecycle gating is now per-component via [ExecuteAlways].")]
@@ -78,7 +78,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     private GameObject[] serializeObj = null;
 
     /// <summary>
-    /// Parallel to serializeObj — stores the original identifier for each GO.
+    /// Parallel to serializeObj stores the original identifier for each GO.
     /// </summary>
     [SerializeField]
     private Guid[] _goIdentifiers = null;
@@ -518,7 +518,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (serializeObj == null) return;
 
-        // Restore identifiers — GOs and components got fresh IDs during deserialization
+        // Restore identifiers GOs and components got fresh IDs during deserialization
         if (_goIdentifiers != null && _goIdentifiers.Length == serializeObj.Length)
         {
             for (int i = 0; i < serializeObj.Length; i++)

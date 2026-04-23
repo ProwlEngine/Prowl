@@ -186,7 +186,7 @@ public class Transform
         if (d >= 1f - float.Epsilon) return Quaternion.Identity;
         if (d <= -1f + float.Epsilon)
         {
-            // 180° — pick any perpendicular axis
+            // 180° pick any perpendicular axis
             Float3 axis = Float3.Cross(a, Float3.UnitX);
             if (Float3.LengthSquared(axis) < float.Epsilon)
                 axis = Float3.Cross(a, Float3.UnitY);
@@ -465,7 +465,7 @@ public class Transform
     #region Atomic Setters
 
     /// <summary>
-    /// Set world position and rotation in one call — bumps Version once instead of twice
+    /// Set world position and rotation in one call bumps Version once instead of twice
     /// so change detection fires a single time.
     /// </summary>
     public void SetPositionAndRotation(Float3 position, Quaternion rotation)
@@ -630,7 +630,7 @@ public class Transform
 
     /// <summary>
     /// Transform a local-space AABB into a world-space AABB. Equivalent to
-    /// <c>bounds.TransformBy(LocalToWorldMatrix)</c> — provided here for discoverability.
+    /// <c>bounds.TransformBy(LocalToWorldMatrix)</c> provided here for discoverability.
     /// </summary>
     public AABB TransformAABB(AABB localBounds) => localBounds.TransformBy(LocalToWorldMatrix);
 

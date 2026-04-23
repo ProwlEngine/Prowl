@@ -16,7 +16,7 @@ public class TextureImporter : AssetImporter
         // Settings are guaranteed to have defaults merged by EditorAssetDatabase.RunImport
         bool generateMipmaps = ctx.Settings?.TryGet("generateMipmaps", out var mipTag) == true && mipTag.BoolValue;
 
-        // Load texture WITHOUT mipmaps first — we'll generate them after applying settings
+        // Load texture WITHOUT mipmaps first we'll generate them after applying settings
         var texture = Texture2D.FromFile(ctx.AbsolutePath, false);
         texture.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
 

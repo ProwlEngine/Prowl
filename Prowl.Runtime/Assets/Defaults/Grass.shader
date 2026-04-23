@@ -57,7 +57,7 @@ Pass "Grass"
                 float scaleX = length(instanceModelRow0.xyz); // width
                 float scaleY = length(instanceModelRow1.xyz); // height
 
-                // Distance fade — shrink blades to zero between _GrassFadeStart and _GrassDistance
+                // Distance fade shrink blades to zero between _GrassFadeStart and _GrassDistance
                 // so patches that the CPU-side culler is about to drop don't pop out suddenly.
                 // Horizontal camera distance matches the CPU's XZ-plane patch cull.
                 vec3 camFlat = vec3(_WorldSpaceCameraPos.x, bladePosition.y, _WorldSpaceCameraPos.z);
@@ -163,7 +163,7 @@ Pass "Grass"
                 vec3 baseColor = gammaToLinearSpace(finalColor.rgb);
                 vec3 normal = normalize(vNormal);
 
-                // Forward lighting — grass is rough, non-metallic
+                // Forward lighting grass is rough, non-metallic
                 vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
                 vec3 lighting = CalculateForwardLighting(worldPos, normal, viewDir,
                                                          baseColor, 0.0, 0.9, 1.0);

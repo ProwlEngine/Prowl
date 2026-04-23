@@ -11,7 +11,7 @@ namespace Prowl.Runtime.GraphTools;
 /// writes the new size back via <see cref="SetSize"/>.
 /// </summary>
 /// <remarks>
-/// The node owns its own size storage — implementers expose serialised width/height
+/// The node owns its own size storage implementers expose serialised width/height
 /// fields (or whatever shape they want). Returning Float2.Zero means "use the default
 /// auto-fit size"; returning a positive value forces that explicit size.
 /// </remarks>

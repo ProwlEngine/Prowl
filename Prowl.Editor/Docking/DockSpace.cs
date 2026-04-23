@@ -182,7 +182,7 @@ public class DockSpace
         if (fw == null)
             _leafRects[node] = new Rect(new Float2(x, y), new Float2(x + w, y + h));
 
-        // Single container for the whole leaf — we draw the merged tab+panel shape via canvas
+        // Single container for the whole leaf we draw the merged tab+panel shape via canvas
         using (paper.Box($"leaf_{node.GetHashCode()}")
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
             .Enter())
@@ -364,7 +364,7 @@ public class DockSpace
 
         if (activeIdx < 0 || activeIdx >= tabWidths.Length)
         {
-            // No active tab — just draw panel body
+            // No active tab just draw panel body
             canvas.RoundedRectFilled(x, panelTop, w, h - tabH, 0, rad, rad, rad, panelColor);
             return;
         }
@@ -389,7 +389,7 @@ public class DockSpace
         float tw = tabWidths[activeIdx];
 
         bool isFirst = activeIdx == 0;
-        float k = 0.5522847498f; // Kappa — cubic bezier approximation of quarter circle
+        float k = 0.5522847498f; // Kappa cubic bezier approximation of quarter circle
 
         float bottom = y + h;
         float right = x + w;
@@ -423,7 +423,7 @@ public class DockSpace
         // Top-right of panel body rounded corner
         canvas.BezierCurveTo(right, panelTop + rad * (1 - k), right - rad * (1 - k), panelTop, right - rad, panelTop);
 
-        // Panel top edge — right of tab to right scoop
+        // Panel top edge right of tab to right scoop
         canvas.LineTo(tabX + tw + ir, panelTop);
 
         // Right inverse scoop (down from panel surface into tab right side)
@@ -458,7 +458,7 @@ public class DockSpace
                                   tabX - ir * (1 - k), panelTop,
                                   tabX - ir, panelTop);
 
-            // Panel top edge — left of tab to left side
+            // Panel top edge left of tab to left side
             canvas.LineTo(x, panelTop);
 
             // Left edge down to start
@@ -717,7 +717,7 @@ public class DockSpace
             target = new Rect(new Float2(hx, hy), new Float2(hx + hw, hy + hh));
         }
 
-        // Exponential smoothing — frame-rate independent. `tMove` follows the target rect;
+        // Exponential smoothing frame-rate independent. `tMove` follows the target rect;
         // `tAlpha` fades the preview in/out. The chosen rates feel snappy (~120ms to settle)
         // without the perceptible lag of a slower interpolation.
         float dt = MathF.Max(0f, (float)Runtime.Time.DeltaTime);

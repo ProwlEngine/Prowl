@@ -26,11 +26,11 @@ public class NodeRendererAttribute : Attribute
 
 /// <summary>
 /// Pluggable renderer for a single <see cref="Node"/>. Owns its node's shape, port
-/// layout, and drawing — allowing nodes to be rendered as vertical strips, icons,
+/// layout, and drawing allowing nodes to be rendered as vertical strips, icons,
 /// diamonds, or anything else rather than the default left-to-right card.
 /// </summary>
 /// <remarks>
-/// A renderer is stateless — one instance is shared across every node of its target
+/// A renderer is stateless one instance is shared across every node of its target
 /// type, so it MUST NOT cache per-node state on itself. Geometry methods return values
 /// in graph-space coordinates; <see cref="Draw"/> paints through a Quill canvas that's
 /// already been transformed into graph space by <see cref="GraphRendering"/>.
@@ -42,7 +42,7 @@ public abstract class NodeRenderer
     public abstract Rect GetRect(Node node);
 
     /// <summary>Centre point of <paramref name="port"/>'s connection circle in graph
-    /// space — where wires attach. <paramref name="port"/> belongs to
+    /// space where wires attach. <paramref name="port"/> belongs to
     /// <paramref name="node"/>'s Inputs or Outputs list.</summary>
     public abstract Float2 GetPortPosition(Node node, Port port);
 
@@ -105,7 +105,7 @@ public static class NodeRendererRegistry
     /// Resolve the renderer for <paramref name="nodeType"/>. Walks base types so a
     /// renderer registered for a common base (e.g. a "MathNode" abstract) covers every
     /// concrete subclass that doesn't register its own. Always returns a usable renderer
-    /// — falls back to <see cref="DefaultNodeRenderer"/>.
+    /// falls back to <see cref="DefaultNodeRenderer"/>.
     /// </summary>
     public static NodeRenderer GetRenderer(Type nodeType)
     {

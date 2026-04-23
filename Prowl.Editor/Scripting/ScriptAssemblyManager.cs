@@ -75,7 +75,7 @@ public static class ScriptAssemblyManager
         _isCompiling = true;
         Runtime.Debug.Log("[ScriptAssemblyManager] Starting compilation...");
 
-        // Run on background thread — result polled on main thread via _pendingResult
+        // Run on background thread result polled on main thread via _pendingResult
         Task.Run(() =>
         {
             try
@@ -111,11 +111,11 @@ public static class ScriptAssemblyManager
 
             // Purge ALL leftover files from previous sessions (dll + pdb + anything). The
             // per-GUID unique naming scheme means these can't be loaded against, but they
-            // pile up on disk across restarts — and on Windows leftovers can be the very
+            // pile up on disk across restarts and on Windows leftovers can be the very
             // same DLL the previous (dying) process still has mmap'd which can cause the
             // CLR to resolve to a stale copy if another code path loads by simple name.
             foreach (var f in Directory.EnumerateFiles(tempDir))
-                try { File.Delete(f); } catch { /* held open by a dying process — harmless */ }
+                try { File.Delete(f); } catch { /* held open by a dying process harmless */ }
 
             string stem = Path.GetFileNameWithoutExtension(dllPath);
             string tempPath = Path.Combine(tempDir, $"{stem}_{Guid.NewGuid():N}.dll");
@@ -159,7 +159,7 @@ public static class ScriptAssemblyManager
             return;
         }
 
-        // Build command-line args (same format on every platform — only the launcher differs)
+        // Build command-line args (same format on every platform only the launcher differs)
         string args = $"--project \"{project.RootPath}\"";
         if (File.Exists(project.AutoSaveScenePath))
             args += $" --restore-scene \"{project.AutoSaveScenePath}\"";
@@ -174,7 +174,7 @@ public static class ScriptAssemblyManager
                 // macOS: route through `open -n -a` so LaunchServices activates the new
                 // instance properly (Dock icon, focus, app-nap). Directly Process.Start'ing
                 // the Mach-O inside the bundle often spawns a process that never presents
-                // a window — the classic "restart silently does nothing" symptom.
+                // a window the classic "restart silently does nothing" symptom.
                 string openArgs = $"-n -a \"{appBundle}\" --args {args}";
                 Runtime.Debug.Log($"[ScriptAssemblyManager] Restarting via open: {openArgs}");
                 child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo

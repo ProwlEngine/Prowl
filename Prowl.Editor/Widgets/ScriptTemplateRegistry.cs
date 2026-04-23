@@ -20,7 +20,7 @@ public sealed class ScriptTemplateAttribute : Attribute
     public string Name { get; }
     public string Description { get; }
     public string Icon { get; }
-    /// <summary>Sort order — lower appears first. Built-ins use 0..100.</summary>
+    /// <summary>Sort order lower appears first. Built-ins use 0..100.</summary>
     public int Order { get; set; }
 
     public ScriptTemplateAttribute(string name, string description, string icon)

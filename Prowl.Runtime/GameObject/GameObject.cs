@@ -280,7 +280,7 @@ public class GameObject : EngineObject, ISerializable
             {
                 Transform.LocalPosition = worldPosition;
                 Transform.LocalRotation = Quaternion.NormalizeSafe(worldRotation);
-                // No parent — local scale = world scale
+                // No parent local scale = world scale
                 Transform.LocalScale = worldLossyScale;
             }
         }
@@ -1124,7 +1124,7 @@ public class GameObject : EngineObject, ISerializable
     {
         DeserializeHeader(value);
 
-        // Always generate fresh identifier — Scene restores them after deserialization
+        // Always generate fresh identifier Scene restores them after deserialization
         _identifier = Guid.NewGuid();
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;

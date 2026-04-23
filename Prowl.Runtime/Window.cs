@@ -58,7 +58,7 @@ public static class Window
     /// Silk.NET.GLFW 2.22 does not expose <c>glfwGetWindowContentScale</c> as a managed method,
     /// so this resolves the symbol via <see cref="INativeContext.GetProcAddress"/> and calls it
     /// directly. If that fails (non-GLFW backend, older GLFW, or the symbol isn't reachable),
-    /// we fall back to the <c>FramebufferSize / Size</c> ratio — which is also the correct
+    /// we fall back to the <c>FramebufferSize / Size</c> ratio which is also the correct
     /// value on macOS retina and on DPI-aware Windows (FB in physical pixels, Size in points).
     /// </para>
     /// </summary>

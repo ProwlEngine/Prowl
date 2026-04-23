@@ -14,7 +14,7 @@ namespace Prowl.Runtime.GraphTools;
 /// Intended to be created by alt+clicking an existing wire in the editor: the wire is
 /// split at the click point, a relay is inserted, and the two halves reconnect through
 /// it. <see cref="CarriedTypeName"/> is set to the wire's data type at creation time so
-/// the relay's ports match. Not bound to any specific marker interface — relay nodes
+/// the relay's ports match. Not bound to any specific marker interface relay nodes
 /// are useful in every graph type, so they implement every registered marker via
 /// runtime-type-check (handled in <see cref="NodeRegistry"/>'s marker filter).
 /// </remarks>
@@ -22,7 +22,7 @@ namespace Prowl.Runtime.GraphTools;
 [HiddenFromMenu]
 public sealed class RelayNode : Node, IAutoPruneNode
 {
-    /// <summary>A relay is a wire waypoint — the moment it has no incoming AND no
+    /// <summary>A relay is a wire waypoint the moment it has no incoming AND no
     /// outgoing wire, it's just clutter. Auto-prune removes it and the editor cleans
     /// up any lingering dangling edges on the next validation pass.</summary>
     public bool ShouldPrune(Graph graph)
@@ -71,7 +71,7 @@ public sealed class RelayNode : Node, IAutoPruneNode
         }
         if (t == null)
         {
-            // Type used to exist but no longer does — relay degrades to object and will
+            // Type used to exist but no longer does relay degrades to object and will
             // accept any wire. Surface it so the user knows their graph lost fidelity.
             Debug.LogWarning($"RelayNode: carried type '{CarriedTypeName}' no longer exists; relay will act as an untyped passthrough.");
             return typeof(object);

@@ -218,7 +218,7 @@ public class PhysicsSettings : ProjectSettingsBase
                 {
                     if (j < i)
                     {
-                        // Below diagonal — mirror, don't show
+                        // Below diagonal mirror, don't show
                         paper.Box($"phys_cmc_{i}_{j}").Size(cellSize, cellSize);
                         continue;
                     }

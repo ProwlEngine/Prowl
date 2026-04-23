@@ -9,7 +9,7 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Editor.Importers;
 
 /// <summary>
-/// Imports .mesh files — Echo-serialized Mesh objects (native Prowl format).
+/// Imports .mesh files Echo-serialized Mesh objects (native Prowl format).
 /// Feature sub-assets (SDF, BVH, Prism) are generated here based on importer settings.
 /// </summary>
 [ImporterFor(".mesh")]

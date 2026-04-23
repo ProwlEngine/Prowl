@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Resources;
 
 /// <summary>
 /// A Model asset stores a serialized GameObject hierarchy produced by importing a 3D model.
-/// Like PrefabAsset — call Instantiate() to create a live GO tree.
+/// Like PrefabAsset call Instantiate() to create a live GO tree.
 /// Sub-assets (meshes, materials, animations) are tracked by the asset database, not by Model.
 /// </summary>
 public class Model : EngineObject, ISerializable
@@ -62,7 +62,7 @@ public class Model : EngineObject, ISerializable
         var result = new Model(model.ToString());
 
         // Import via the OBJ importer. Embedded defaults have no companion .mtl, so the
-        // resulting GO just has a MeshRenderer with an empty Materials list — callers that
+        // resulting GO just has a MeshRenderer with an empty Materials list callers that
         // use these meshes (e.g. BuiltInAssets, primitive creators) assign their own material.
         var importResult = new AssetImporting.Obj.ObjImporter().Import(stream, fileName);
         if (importResult.RootGO != null)

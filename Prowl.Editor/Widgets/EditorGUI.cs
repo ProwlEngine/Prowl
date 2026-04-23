@@ -15,7 +15,7 @@ namespace Prowl.Editor.Widgets;
 /// <summary>
 /// Core editor widget library. Immediate-mode drawing, callback-based state updates.
 /// Each widget draws itself and returns a WidgetResult for chaining OnValueChanged callbacks.
-/// State is managed via Paper element storage — values persist across frames automatically.
+/// State is managed via Paper element storage values persist across frames automatically.
 /// </summary>
 public static class EditorGUI
 {
@@ -694,7 +694,7 @@ public static class EditorGUI
 
     public static void Foldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
     {
-        // Header button — storage lives on the header element itself
+        // Header button storage lives on the header element itself
         var header = paper
             .Row($"{id}_header")
             .Height(EditorTheme.RowHeight)

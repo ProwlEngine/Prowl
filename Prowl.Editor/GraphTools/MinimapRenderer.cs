@@ -16,7 +16,7 @@ namespace Prowl.Editor.GraphTools;
 /// </summary>
 public static class MinimapRenderer
 {
-    // Sized at ~65% of earlier dimensions — users found the larger minimap too dominant
+    // Sized at ~65% of earlier dimensions users found the larger minimap too dominant
     // on smaller windows. Kept the padding/margin proportional so corner spacing still
     // reads cleanly.
     public const float MinimapWidth  = 143f;
@@ -51,7 +51,7 @@ public static class MinimapRenderer
         canvas.Stroke();
 
         if (!GraphLayout.ComputeGraphBounds(graph, out var minG, out var maxG))
-            return miniRect; // empty graph — just the box
+            return miniRect; // empty graph just the box
 
         // Pad graph bounds slightly so dots don't sit right on the minimap edge.
         float padG = 50f;
@@ -80,7 +80,7 @@ public static class MinimapRenderer
         canvas.SaveState();
         canvas.IntersectScissor(innerX, innerY, innerW, innerH);
 
-        // Groups — outline only (no fill) so node dots inside are still visible. The
+        // Groups outline only (no fill) so node dots inside are still visible. The
         // outline uses the group's full-alpha colour so it stays legible against the
         // dark minimap background.
         foreach (var g in graph.Groups)
@@ -97,7 +97,7 @@ public static class MinimapRenderer
             canvas.Stroke();
         }
 
-        // Sticky notes — tinted by their packed colour, slightly more opaque than
+        // Sticky notes tinted by their packed colour, slightly more opaque than
         // groups so they stay visible against group fills.
         foreach (var s in graph.StickyNotes)
         {
@@ -109,7 +109,7 @@ public static class MinimapRenderer
             canvas.RectFilled(p1.X, p1.Y, w, h, c);
         }
 
-        // Node dots — drawn last so they sit on top of groups/stickies, matching
+        // Node dots drawn last so they sit on top of groups/stickies, matching
         // the main canvas layer order.
         foreach (var n in graph.Nodes)
         {
@@ -124,7 +124,7 @@ public static class MinimapRenderer
         }
 
         // Viewport rectangle: where the user's currently looking. When the user is
-        // zoomed out far the viewport rect can extend past the inner area — the
+        // zoomed out far the viewport rect can extend past the inner area the
         // scissor above clips it cleanly to the minimap edge.
         Float2 vp0 = view.CanvasToGraph(Float2.Zero);
         Float2 vp1 = view.CanvasToGraph(new Float2((float)canvasViewport.Size.X, (float)canvasViewport.Size.Y));

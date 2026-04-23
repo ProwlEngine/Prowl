@@ -37,7 +37,7 @@ public static class PrefabEditingMode
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab == null)
         {
-            Debug.LogWarning("[Prefab] Cannot edit — prefab asset not found.");
+            Debug.LogWarning("[Prefab] Cannot edit prefab asset not found.");
             return;
         }
 
@@ -65,7 +65,7 @@ public static class PrefabEditingMode
             return;
         }
 
-        // Clear prefab instance data — we're editing the source, not an instance
+        // Clear prefab instance data we're editing the source, not an instance
         go.ClearPrefabDataRecursive();
 
         editScene.Add(go);

@@ -25,7 +25,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// <summary>The mesh to render (may contain submeshes).</summary>
     public AssetRef<Mesh> SharedMesh;
 
-    /// <summary>Materials array — one per submesh. If fewer materials than submeshes, last material is reused.</summary>
+    /// <summary>Materials array one per submesh. If fewer materials than submeshes, last material is reused.</summary>
     public List<AssetRef<Material>> Materials = new();
 
     /// <summary>Path to the root bone, relative to this GO's hierarchy root.</summary>
@@ -47,7 +47,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
     [System.NonSerialized] private Float4x4[]? _skinMatrices;
     [System.NonSerialized] private bool _resolved;
 
-    // Bone matrix texture — each bone is 4 RGBA32F texels (one per matrix row)
+    // Bone matrix texture each bone is 4 RGBA32F texels (one per matrix row)
     [System.NonSerialized] private Texture2D? _boneTexture;
     [System.NonSerialized] private int _boneTextureSize; // number of bones the texture was allocated for
 
@@ -69,7 +69,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// </summary>
     public void SetBones(Transform[] boneTransforms, Transform? rootBone)
     {
-        // During import, hierarchy is not yet reparented — root is correct
+        // During import, hierarchy is not yet reparented root is correct
         Transform hierarchyRoot = Transform;
         while (hierarchyRoot.Parent != null) hierarchyRoot = hierarchyRoot.Parent;
 
@@ -217,7 +217,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
         // Float4x4 is column-major (c0,c1,c2,c3). We store columns as texels.
         // Shader reconstructs: mat4(col0, col1, col2, col3)
         // Each Float4x4 is 4 Float4 columns laid out contiguously in memory (c0, c1, c2, c3)
-        // So we can upload the whole array directly — 4 texels per matrix, boneCount*4 texels total
+        // So we can upload the whole array directly 4 texels per matrix, boneCount*4 texels total
         fixed (Float4x4* ptr = matrices)
         {
             _boneTexture!.SetDataPtr(ptr, 0, 0, (uint)(boneCount * 4), 1);

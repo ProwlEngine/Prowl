@@ -34,7 +34,7 @@ public struct ModelImporterSettings
 }
 
 /// <summary>
-/// Result of a model import — live objects ready for the asset database to process.
+/// Result of a model import live objects ready for the asset database to process.
 /// </summary>
 public class ModelImportResult
 {
