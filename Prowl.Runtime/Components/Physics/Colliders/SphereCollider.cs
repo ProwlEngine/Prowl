@@ -25,4 +25,12 @@ public sealed class SphereCollider : Collider
     }
 
     public override RigidBodyShape[] CreateShapes() => [new SphereShape(Maths.Max(radius, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireSphere(Center, radius, Color.Green);
+        Debug.PopMatrix();
+    }
 }

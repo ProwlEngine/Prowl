@@ -8,6 +8,7 @@ using Jitter2.LinearMath;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -94,6 +95,41 @@ public sealed class MeshCollider : Collider
             else
                 Debug.LogWarning("MeshCollider could not find a MeshRenderer to get the mesh from.");
         }
+    }
+
+    public override void DrawGizmos()
+    {
+        var m = mesh.Res;
+        if (m == null)
+        {
+            var mr = GetComponent<MeshRenderer>();
+            if (mr != null) m = mr.Mesh.Res;
+        }
+        if (m == null) return;
+
+        Float3[] vertices = m.Vertices;
+        uint[] indices = m.Indices;
+        if (vertices == null || indices == null) return;
+
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+
+        for (int i = 0; i + 2 < indices.Length; i += 3)
+        {
+            uint i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2];
+            if (i0 >= vertices.Length || i1 >= vertices.Length || i2 >= vertices.Length)
+                continue;
+
+            Float3 v0 = vertices[i0] + Center;
+            Float3 v1 = vertices[i1] + Center;
+            Float3 v2 = vertices[i2] + Center;
+
+            Debug.DrawLine(v0, v1, Color.Green);
+            Debug.DrawLine(v1, v2, Color.Green);
+            Debug.DrawLine(v2, v0, Color.Green);
+        }
+
+        Debug.PopMatrix();
     }
 
     private static List<JTriangle> ToTriangleList(Mesh mesh)
