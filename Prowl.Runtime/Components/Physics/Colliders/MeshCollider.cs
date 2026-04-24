@@ -46,8 +46,9 @@ public sealed class MeshCollider : Collider
         }
     }
 
-    // Cached convex hull shape for gizmo drawing — rebuilt when mesh or convex flag changes.
+    // Cached convex hull shape and its tessellation for gizmo drawing — rebuilt when mesh or convex flag changes.
     [SerializeIgnore] private ConvexHullShape? _cachedConvexShape;
+    [SerializeIgnore] private List<JTriangle>? _cachedHullTris;
 
     public override RigidBodyShape[] CreateShapes()
     {
@@ -89,6 +90,7 @@ public sealed class MeshCollider : Collider
     public override void OnValidate()
     {
         _cachedConvexShape = null;
+        _cachedHullTris = null;
         base.OnValidate();
         Debug.Log("OnInvalidate called");
     }
@@ -163,13 +165,10 @@ public sealed class MeshCollider : Collider
             _cachedConvexShape = new ConvexHullShape(triangles);
         }
 
-        // ShapeHelper.Tessellate is the same API Jitter uses in RigidBody.DebugDraw.
-        // It generates an approximation of the shape surface via spherical subdivision
-        // projected onto the support function — no reflection required.
-        List<JTriangle> hullTris = ShapeHelper.Tessellate(_cachedConvexShape, 2);
+        _cachedHullTris ??= ShapeHelper.Tessellate(_cachedConvexShape, 2);
         JVector shift = _cachedConvexShape.Shift;
 
-        foreach (var tri in hullTris)
+        foreach (JTriangle tri in _cachedHullTris)
         {
             // Hull vertices are CoM-centered; add Shift to convert back to mesh-local space.
             Float3 a = new Float3(tri.V0.X + shift.X, tri.V0.Y + shift.Y, tri.V0.Z + shift.Z) + Center;
