@@ -600,7 +600,6 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("    <PackageReference Include=\"Magick.NET-Q16-AnyCPU\" Version=\"14.11.1\" />");
         sb.AppendLine("    <PackageReference Include=\"Prowl.Echo\" Version=\"2.1.2\" />");
         sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.5.1\" />");
-        sb.AppendLine("    <PackageReference Include=\"Vortex\" Version=\"1.0.4\" />");
         sb.AppendLine("  </ItemGroup>");
     }
 
