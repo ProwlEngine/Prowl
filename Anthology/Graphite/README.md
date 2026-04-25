@@ -1,7 +1,7 @@
 ![NeoVeldrid](https://raw.githubusercontent.com/jhm-ciberman/neo-veldrid/main/art/logo-horizontal.svg)
 
 [![Tests](https://github.com/jhm-ciberman/neo-veldrid/actions/workflows/ci.yml/badge.svg)](https://github.com/jhm-ciberman/neo-veldrid/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/vpre/NeoVeldrid)](https://www.nuget.org/packages/NeoVeldrid)
+[![NuGet](https://img.shields.io/nuget/v/NeoVeldrid)](https://www.nuget.org/packages/NeoVeldrid)
 
 A low-level, high-performance, cross-platform graphics library for .NET. Build 2D and 3D games, simulations, and tools with a single portable API across Vulkan, Direct3D 11, OpenGL, and OpenGL ES.
 
@@ -36,9 +36,9 @@ NeoVeldrid is a maintained fork of [Veldrid](https://github.com/mellinoe/veldrid
 ```
 dotnet new console -n MyGame
 cd MyGame
-dotnet add package NeoVeldrid --prerelease
-dotnet add package NeoVeldrid.StartupUtilities --prerelease
-dotnet add package NeoVeldrid.SPIRV --prerelease
+dotnet add package NeoVeldrid
+dotnet add package NeoVeldrid.StartupUtilities
+dotnet add package NeoVeldrid.SPIRV
 ```
 
 See the [documentation](https://jhm-ciberman.github.io/neo-veldrid/) for tutorials, API reference, and the [samples directory](https://github.com/jhm-ciberman/neo-veldrid/tree/main/samples).

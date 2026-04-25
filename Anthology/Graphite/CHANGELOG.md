@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-04-25
 
 First release of NeoVeldrid. A maintained, drop-in replacement for [Veldrid](https://github.com/mellinoe/veldrid) with every native binding replaced by [Silk.NET](https://github.com/dotnet/Silk.NET). If you have a Veldrid project today, migrating is roughly a 5 minute find-and-replace. See the [Migration Guide](docs/articles/prologue/migration.md) for the exact steps.
 
