@@ -7,7 +7,7 @@ namespace Prowl.Editor;
 [ProjectSettings("Audio", EditorIcons.VolumeHigh, order: 25)]
 public class AudioSettings : ProjectSettingsBase
 {
-    public float GlobalVolume { get; set; } = 1.0f;
+    public float GlobalVolume = 1.0f;
 
     public override void Apply()
     {

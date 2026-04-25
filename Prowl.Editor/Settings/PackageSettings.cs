@@ -16,12 +16,12 @@ namespace Prowl.Editor;
 [ProjectSettings("Packages", EditorIcons.Cubes, order: 30, exportToBuild: false)]
 public class PackageSettings : ProjectSettingsBase
 {
-    public List<PackageEntry> Packages { get; set; } = new();
+    public List<PackageEntry> Packages = new();
 
     public class PackageEntry
     {
-        public string Name { get; set; } = "";
-        public string Version { get; set; } = "";
+        public string Name = "";
+        public string Version = "";
     }
 
     private string _newName = "";

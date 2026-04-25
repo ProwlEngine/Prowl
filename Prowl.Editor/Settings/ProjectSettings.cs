@@ -44,8 +44,6 @@ public enum SerializerType
 /// </summary>
 public abstract class ProjectSettingsBase
 {
-    public virtual SerializerType SerializerType => SerializerType.Standard;
-
     public virtual bool DrawInProjectSettingsPanel => true;
 
     /// <summary>Called after settings are loaded or reset. Override to apply values to runtime systems.</summary>
@@ -128,34 +126,41 @@ public static class ProjectSettingsRegistry
 
         foreach (var entry in _entries)
         {
-            string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json");
+            string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.yaml");
             if (File.Exists(path))
             {
                 try
                 {
-                    string json = File.ReadAllText(path);
+                    string yaml = File.ReadAllText(path);
 
-                    if (entry.Instance.SerializerType == SerializerType.Standard)
+                    EchoObject serialized = EchoObject.ReadFromYaml(yaml);
+                    var loaded = (ProjectSettingsBase?)Serializer.Deserialize(serialized, entry.Type);
+                    if (loaded != null)
                     {
-                        var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true, IncludeFields = true });
-                        if (loaded != null)
-                        {
-                            // Copy fields from loaded to singleton
-                            CopyFields(loaded, entry.Instance);
-                            Debug.Log($"Loaded settings: {entry.Name}");
-                        }
+                        // Copy fields from loaded to singleton
+                        CopyFields(loaded, entry.Instance);
+                        Debug.Log($"Loaded settings: {entry.Name}");
                     }
-                    else
+
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Failed to load settings '{entry.Name}': {ex.Message}");
+                }
+            }
+            // If loading up the YAML fails, try loading up the JSON instead.
+            else if (File.Exists(Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json")))
+            {
+                try
+                {
+                    string json = File.ReadAllText(path);
+                    var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true, IncludeFields = true });
+                    if (loaded != null)
                     {
-                        EchoObject serialized = EchoObject.ReadFromString(json);
-                        var loaded = (ProjectSettingsBase?)Prowl.Echo.Serializer.Deserialize(serialized, entry.Type);
-                        if (loaded != null)
-                        {
-                            // Copy fields from loaded to singleton
-                            CopyFields(loaded, entry.Instance);
-                            Debug.Log($"Loaded settings: {entry.Name}");
-                        }
+                        // Copy fields from loaded to singleton
+                        CopyFields(loaded, entry.Instance);
+                        Debug.Log($"Loaded settings: {entry.Name}");
                     }
                 }
                 catch (Exception ex)
@@ -192,22 +197,12 @@ public static class ProjectSettingsRegistry
         var project = Project.Current;
         if (project == null) return;
 
-        string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json");
+        string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.yaml");
         try
         {
-            if (entry.Instance.SerializerType == SerializerType.Standard)
-            {
-                string json = JsonSerializer.Serialize(entry.Instance, entry.Type,
-                    new JsonSerializerOptions { WriteIndented = true, IncludeFields = true });
-                File.WriteAllText(path, json);
-            }
-            else if (entry.Instance.SerializerType == SerializerType.Echo)
-            {
-                var echoObject = Prowl.Echo.Serializer.Serialize(entry.Instance, TypeMode.Auto);
-                string json = echoObject.WriteToJson();
-                Console.WriteLine(echoObject.WriteToString());
-                File.WriteAllText(path, json);
-            }
+            var echoObject = Prowl.Echo.Serializer.Serialize(entry.Instance, TypeMode.Auto);
+            string yaml = echoObject.WriteToYaml();
+            File.WriteAllText(path, yaml);
         }
         catch (Exception ex)
         {

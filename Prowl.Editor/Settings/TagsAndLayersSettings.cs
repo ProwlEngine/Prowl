@@ -13,8 +13,8 @@ namespace Prowl.Editor;
 [ProjectSettings("Tags & Layers", EditorIcons.Tags, order: 10)]
 public class TagsAndLayersSettings : ProjectSettingsBase
 {
-    public List<string> Tags { get; set; } = new(TagLayerManager.tags);
-    public string[] Layers { get; set; } = (string[])TagLayerManager.layers.Clone();
+    public List<string> Tags = new(TagLayerManager.tags);
+    public string[] Layers = (string[])TagLayerManager.layers.Clone();
 
     public override void Apply()
     {

@@ -24,8 +24,6 @@ public class SceneBuildEntry
 [ProjectSettings("Build", EditorIcons.Hammer, order: 50, exportToBuild: false)]
 public sealed class BuildSettings : ProjectSettingsBase
 {
-    public override SerializerType SerializerType => SerializerType.Echo;
-
     public override bool DrawInProjectSettingsPanel => false;
 
     public List<SceneBuildEntry> Scenes = new();
