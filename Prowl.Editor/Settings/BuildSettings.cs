@@ -78,7 +78,6 @@ public sealed class BuildSettings : ProjectSettingsBase
         // If the profile is null, create the profile
         if (profile == null)
         {
-            Debug.Log($"CREATED BUILD PROFILE! {PlatformProfiles.Count}");
             Type targetType = null;
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -100,7 +99,6 @@ public sealed class BuildSettings : ProjectSettingsBase
             {
                 profile = (PlatformBuildProfile)System.Activator.CreateInstance(targetType);
                 PlatformProfiles.Add(profile);
-                Debug.Log($"AFTER CREATING BUILD PROFILE! {PlatformProfiles.Count}");
                 ProjectSettingsRegistry.SaveAll();
             }
         }
