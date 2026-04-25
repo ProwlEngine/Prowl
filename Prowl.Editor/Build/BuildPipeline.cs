@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Runtime;
@@ -20,16 +24,32 @@ public abstract class BuildPipeline
     public abstract string[] SupportedRuntimeIdentifiers { get; }
 
     /// <summary>Execute the full build. Override for platform-specific steps.</summary>
-    public abstract BuildResult Build(BuildSettings settings, Action<string, float> progress);
+    public abstract BuildResult Build(BuildSettings settings, BuildProgress? progress);
+
+    /// <summary>
+    /// Executes a build with a Task for async status reporting back to the engine.
+    /// </summary>
+    /// <param name="projectPath">The path of the project to build</param>
+    /// <param name="settings">The settings to use for the build</param>
+    /// <param name="outputDirectory">The path for the build output. Can be null.</param>
+    /// <param name="progress">The <see cref="BuildProgress"/> object that stores the build progress for UI updates. Can be null.</param>
+    /// <param name="cancellation">The cancellation token to stop the build midway.</param>
+    /// <returns></returns>
+    public abstract Task<BuildResult> BuildAsync(
+        string projectPath,
+        BuildSettings settings,
+        string? outputDirectory = null,
+        BuildProgress? progress = null,
+        CancellationToken cancellation = default);
 
     // ================================================================
     //  Shared utilities for all pipelines
     // ================================================================
 
-    /// <summary>Collect assets based on build settings.</summary>
-    protected AssetCollector.CollectionResult CollectAssets(BuildSettings settings, Action<string, float> progress)
+        /// <summary>Collect assets based on build settings.</summary>
+    protected AssetCollector.CollectionResult CollectAssets(BuildSettings settings, BuildProgress? progress)
     {
-        progress("Collecting assets...", 0.1f);
+        progress?.Log("Collecting assets...", 0.1f);
 
         var sceneGuids = settings.Scenes
             .Where(s => s.Enabled)
@@ -42,7 +62,7 @@ public abstract class BuildPipeline
     }
 
     /// <summary>Copy binary cache files to output as loose files.</summary>
-    protected int CopyLooseAssets(HashSet<Guid> assets, string outputAssetsDir, Action<string, float> progress)
+    protected int CopyLooseAssets(HashSet<Guid> assets, string outputAssetsDir, BuildProgress? progress)
     {
         var project = Project.Current!;
         Directory.CreateDirectory(outputAssetsDir);
@@ -59,14 +79,14 @@ public abstract class BuildPipeline
             }
 
             if (count % 50 == 0)
-                progress($"Copying assets... ({count}/{assets.Count})", 0.2f + 0.3f * count / assets.Count);
+                progress?.Log($"Copying assets... ({count}/{assets.Count})", 0.2f + 0.3f * count / assets.Count);
         }
 
         return count;
     }
 
     /// <summary>Pack assets into .prowlpak ZipArchive files, auto-splitting at maxSizeMB.</summary>
-    protected int PackAssets(HashSet<Guid> assets, string outputAssetsDir, int maxSizeMB, Action<string, float> progress)
+    protected int PackAssets(HashSet<Guid> assets, string outputAssetsDir, int maxSizeMB, BuildProgress? progress)
     {
         var project = Project.Current!;
         Directory.CreateDirectory(outputAssetsDir);
@@ -107,7 +127,7 @@ public abstract class BuildPipeline
                 count++;
 
                 if (count % 50 == 0)
-                    progress($"Packing assets... ({count}/{assets.Count})", 0.2f + 0.3f * count / assets.Count);
+                    progress?.Log($"Packing assets... ({count}/{assets.Count})", 0.2f + 0.3f * count / assets.Count);
             }
         }
         finally
@@ -116,6 +136,24 @@ public abstract class BuildPipeline
         }
 
         return count;
+    }
+
+    public abstract string GetExecutablePath(string outputPath, BuildSettings settings);
+
+    internal static string FinalizeDefineString(BuildSettings settings, BuildPipeline pipeline)
+    {
+        var profile = settings.GetProfile(pipeline.GetType());
+        var symbols = new List<string>(profile.ScriptingDefineSymbols);
+
+        profile.ModifyDefines(symbols);
+
+        var config = settings.Config;
+
+        // For when profiling will be implemented
+        if (config == BuildConfiguration.Debug)
+            symbols.Add("PROWL_PROFILING");
+
+        return string.Join(";", symbols.Where(s => !string.IsNullOrWhiteSpace(s)));
     }
 
     /// <summary>Generate the asset manifest as Echo binary.</summary>
@@ -139,9 +177,9 @@ public abstract class BuildPipeline
     }
 
     /// <summary>Export only build-relevant project settings as JSON files.</summary>
-    protected void ExportSettings(string outputSettingsDir, Action<string, float> progress)
+    protected void ExportSettings(string outputSettingsDir, BuildProgress? progress)
     {
-        progress("Exporting settings...", 0.6f);
+        progress?.Log("Exporting settings...", 0.6f);
         Directory.CreateDirectory(outputSettingsDir);
 
         var project = Project.Current!;
@@ -178,5 +216,70 @@ public abstract class BuildPipeline
             $"--self-contained {selfContained.ToString().ToLower()} -o \"{outputDir}\"";
 
         return Scripting.ScriptCompiler.RunDotnetCommand(args, Path.GetDirectoryName(csprojPath)!);
+    }
+
+    protected static async Task<(int exitCode, string stdout, string stderr)> RunDotnetAsync(
+        string arguments,
+        BuildProgress? progress = null,
+        CancellationToken cancellation = default)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start dotnet process.");
+
+        var stdoutBuilder = new StringBuilder();
+        var stderrBuilder = new StringBuilder();
+
+        // Stream output line-by-line so the UI can show live progress
+        var stdoutTask = Task.Run(async () =>
+        {
+            while (await process.StandardOutput.ReadLineAsync(cancellation).ConfigureAwait(false) is { } line)
+            {
+                stdoutBuilder.AppendLine(line);
+                progress?.Log(line, ClassifyDotnetLine(line));
+            }
+        }, cancellation);
+
+        var stderrTask = Task.Run(async () =>
+        {
+            while (await process.StandardError.ReadLineAsync(cancellation).ConfigureAwait(false) is { } line)
+            {
+                stderrBuilder.AppendLine(line);
+                progress?.Log(line, Runtime.LogSeverity.Error);
+            }
+        }, cancellation);
+
+        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+        await process.WaitForExitAsync(cancellation).ConfigureAwait(false);
+
+        if (cancellation.IsCancellationRequested && !process.HasExited)
+        {
+            process.Kill(entireProcessTree: true);
+        }
+
+        return (process.ExitCode, stdoutBuilder.ToString(), stderrBuilder.ToString());
+    }
+
+    /// <summary>
+    /// Classifies a line of dotnet build output by severity.
+    /// </summary>
+    private static Runtime.LogSeverity ClassifyDotnetLine(string line)
+    {
+        if (line.Contains(": error ", StringComparison.OrdinalIgnoreCase))
+            return Runtime.LogSeverity.Error;
+        if (line.Contains(": warning ", StringComparison.OrdinalIgnoreCase))
+            return Runtime.LogSeverity.Warning;
+        if (line.Contains("Build succeeded", StringComparison.OrdinalIgnoreCase))
+            return Runtime.LogSeverity.Success;
+        return Runtime.LogSeverity.Normal;
     }
 }

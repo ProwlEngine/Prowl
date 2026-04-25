@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 
+using Prowl.Echo;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -31,12 +32,20 @@ public class ProjectSettingsAttribute : Attribute
     }
 }
 
+public enum SerializerType
+{
+    Standard,
+    Echo
+}
+
 /// <summary>
 /// Base class for all project settings. Subclass and add [ProjectSettings] attribute.
 /// Settings are automatically discovered, created as singletons, and saved/loaded per project.
 /// </summary>
 public abstract class ProjectSettingsBase
 {
+    public virtual SerializerType SerializerType => SerializerType.Standard;
+
     public virtual bool DrawInProjectSettingsPanel => true;
 
     /// <summary>Called after settings are loaded or reset. Override to apply values to runtime systems.</summary>
@@ -125,13 +134,28 @@ public static class ProjectSettingsRegistry
                 try
                 {
                     string json = File.ReadAllText(path);
-                    var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type,
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true, IncludeFields = true });
-                    if (loaded != null)
+
+                    if (entry.Instance.SerializerType == SerializerType.Standard)
                     {
-                        // Copy fields from loaded to singleton
-                        CopyFields(loaded, entry.Instance);
-                        Debug.Log($"Loaded settings: {entry.Name}");
+                        var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type,
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true, IncludeFields = true });
+                        if (loaded != null)
+                        {
+                            // Copy fields from loaded to singleton
+                            CopyFields(loaded, entry.Instance);
+                            Debug.Log($"Loaded settings: {entry.Name}");
+                        }
+                    }
+                    else
+                    {
+                        EchoObject serialized = EchoObject.ReadFromString(json);
+                        var loaded = (ProjectSettingsBase?)Prowl.Echo.Serializer.Deserialize(serialized, entry.Type);
+                        if (loaded != null)
+                        {
+                            // Copy fields from loaded to singleton
+                            CopyFields(loaded, entry.Instance);
+                            Debug.Log($"Loaded settings: {entry.Name}");
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -171,9 +195,19 @@ public static class ProjectSettingsRegistry
         string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json");
         try
         {
-            string json = JsonSerializer.Serialize(entry.Instance, entry.Type,
-                new JsonSerializerOptions { WriteIndented = true, IncludeFields = true });
-            File.WriteAllText(path, json);
+            if (entry.Instance.SerializerType == SerializerType.Standard)
+            {
+                string json = JsonSerializer.Serialize(entry.Instance, entry.Type,
+                    new JsonSerializerOptions { WriteIndented = true, IncludeFields = true });
+                File.WriteAllText(path, json);
+            }
+            else if (entry.Instance.SerializerType == SerializerType.Echo)
+            {
+                var echoObject = Prowl.Echo.Serializer.Serialize(entry.Instance, TypeMode.Auto);
+                string json = echoObject.WriteToJson();
+                Console.WriteLine(echoObject.WriteToString());
+                File.WriteAllText(path, json);
+            }
         }
         catch (Exception ex)
         {

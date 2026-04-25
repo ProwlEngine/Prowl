@@ -23,7 +23,7 @@ public class BuildSettingsPanel : DockPanel
 {
 
     public static BuildSettingsPanel Instance { get; set; }
-        
+
     public class BuildStatusReport
     {
         public enum BuildStatusReportType
@@ -59,6 +59,8 @@ public class BuildSettingsPanel : DockPanel
 
     private BuildSettings _buildSettings;
 
+    private BuildProgress _activeProgress;
+
     private int _selectedIndex;
 
     private List<BuildPipelineInfo> _buildPlatforms;
@@ -72,6 +74,21 @@ public class BuildSettingsPanel : DockPanel
         _buildPlatforms ??= GetBuildPlatforms();
         Instance ??= this;
 
+        if (_activeProgress != null)
+        {
+            BuildProgress = _activeProgress.ProgressValue;
+            var state = _activeProgress.GetState();
+            if (state != null)
+            {
+                BuildState = state.Message.Contains("\n") ? state.Message.Split('\n')[0] : state.Message;
+                BuildState = BuildState.Trim();
+            }
+        }
+        else
+        {
+            BuildProgress = 0f;
+            BuildState = "Ready";
+        }
 
         // The height of the build settings
 
@@ -135,7 +152,14 @@ public class BuildSettingsPanel : DockPanel
                 {
                     paper.Box("bp_content_pad").Height(8);
                     _buildSettings.OnGUI(paper, contentW - 16);
-                    //entries[_selectedIndex].Instance.OnGUI(paper, contentW - 16);
+                    if (_buildPlatforms.Count >= _selectedIndex && _selectedIndex >= 0)
+                    {
+                        var profile = _buildSettings.GetOrCreateProfile(_buildPlatforms[_selectedIndex].BuildPipelineType);
+                        if (profile != null)
+                        {
+                            profile.OnGUI(paper);
+                        }
+                    }
                     paper.Box("bp_content_pad2").Height(16);
                 }
             }
@@ -144,7 +168,7 @@ public class BuildSettingsPanel : DockPanel
 
             using (paper
                 .Column("bp_buildmenu")
-                .Margin(24,24)
+                .Margin(24, 24)
                 .Enter())
             {
                 EditorGUI.ProgressBar(paper, "bp_progressBar", "", BuildProgress, 10);
@@ -152,6 +176,7 @@ public class BuildSettingsPanel : DockPanel
 
                 paper.Box("bp_sidebar_header")
                     .Height(28).ChildLeft(8)
+                    .Clip()
                     .Text(BuildState, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
@@ -163,10 +188,15 @@ public class BuildSettingsPanel : DockPanel
                         .Width(UnitValue.StretchOne);
 
                     EditorGUI.Button(paper, "bld_build", $"{EditorIcons.Hammer}  Build", width: 120)
-                        .OnValueChanged(_ => BuildSettings.StartBuildProcess(false));
+                        .OnValueChanged(_ => {
+                            _activeProgress = ProjectBuilder.StartBuildAsync(false, _buildSettings.OutputDirectory);
+                        });
 
-                    EditorGUI.Button(paper, "bld_buildrun", $"{EditorIcons.Play}  Build & Run", width: 140);
-                        //.OnValueChanged(_ => BuildSettings.StartBuildProcess(true));
+                    EditorGUI.Button(paper, "bld_buildrun", $"{EditorIcons.Play}  Build & Run", width: 140)
+                        .OnValueChanged(_ =>
+                        {
+                            _activeProgress = ProjectBuilder.StartBuildAsync(true, _buildSettings.OutputDirectory);
+                        });
                 }
             }
 

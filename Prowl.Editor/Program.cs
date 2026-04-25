@@ -39,6 +39,7 @@ public static class Program
             System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
             System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
 
+            ProjectSettingsRegistry.Initialize();
 
             var project = Project.Open(StartupProjectPath);
             project.SetActive();
@@ -46,7 +47,6 @@ public static class Program
             // Load user script assemblies before registry scanning
             Scripting.ScriptAssemblyManager.LoadAssemblies(project);
 
-            ProjectSettingsRegistry.Initialize();
 
             // Initialize asset database for the already-opened project
             var db = new EditorAssetDatabase(Project.Current!);
@@ -56,7 +56,7 @@ public static class Program
             ProjectSettingsRegistry.OnProjectOpened();
 
 
-            BuildSettings.StartBuild(false, BuildOutputPath ?? StartupProjectPath+"/../Builds");
+            Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath+"/../Builds");
             return;
         }
 
