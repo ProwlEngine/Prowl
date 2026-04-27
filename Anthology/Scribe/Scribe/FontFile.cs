@@ -384,6 +384,7 @@ namespace Prowl.Scribe
 				xAdvance += GetGlyphGPOSInfoAdvance(g1, g2);
 			else if (this.kern != 0)
 				xAdvance += GetGlyphKernInfoAdvance(g1, g2);
+			kerningMapCache[key] = xAdvance;
 			return xAdvance;
 		}
 
