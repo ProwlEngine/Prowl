@@ -1,4 +1,4 @@
-> [!NOTE]
+﻿> [!NOTE]
 > Prowl is currently in early development and not yet stable for production use. While the core functionality is in place, expect frequent changes, missing features, and potential bugs. Enthusiasts and contributors are welcome to explore and help shape the engine, but we recommend waiting for a more stable release before using it for serious game projects.
 
 <img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
@@ -76,8 +76,9 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Collision Layers & Filtering
         - Raycasting & Shape Casting
     - Audio via MiniAudio
-        - Spatial 3D Audio with Attenuation
+        - Spatial 3D Audio with Attenuation & Doppler
         - Supports WAV, MP3, OGG, FLAC
+        - Effect chain (Delay, Distortion, Biquad Filter, Reverb, Phaser) + custom `IAudioEffect`
     - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo)
         - Graph → Custom Text Format
         - Graph → Binary
@@ -88,6 +89,13 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
     - Projects & Project Settings
     - Script Compilation via dotnet build (Game & Editor Assemblies)
     - Input Action System with Composites & Processors
+        - `.inputactions` assets with a dedicated editor
+        - Action phases (Disabled / Started / Performed / Cancelled)
+        - Composite bindings (WASD → Float2, D-pad, etc.) for keyboard, mouse & gamepad
+    - Math via [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector)
+        - Matrices (`Float4x4`), Quaternions, Transform2D
+        - Shapes: AABB, Bounds, Frustum, Cone, Ray, Plane, LineSegment, Rect
+        - Random distributions (OnUnitCircle, InUnitSphere, Rotation, etc.)
     - Build System - Build to Standalone Application
         - Packed Asset Files (.prowlpak)
         - Only exports used assets
@@ -96,8 +104,18 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
 -   **Graphics Rendering:**
     - OpenGL Backend via [Silk.NET](https://github.com/dotnet/Silk.NET)
     - Extensible Render Pipeline (Custom Pipelines Supported)
-    - Deferred Rendering Pipeline with GBuffer
+    - Forward-Lit Pipeline with Depth + Normals Pre-Pass
     - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
+    - Node-Based **Shader Graph**
+        - 150+ nodes across 14 categories (Math, Vector, Color, UV, Geometry, Scene Data, Lighting, Noise, Post-Effect, Utility, …)
+        - Vertex-stage support (Position offset for wind / wobble / displacement)
+        - Fragment + Vertex + DepthNormals + Shadow pass emission from one graph
+        - Alpha cutout + vertex offset forwarded into shadow & depth passes automatically
+        - Lighting modes: Unlit / PBR / Lambert / Blinn-Phong
+        - Template seed graphs (Lit Basic / Transparent / Terrain / Grass / Particle / Sky / Post Effect / Custom Lighting)
+        - Inline **Custom Code** (raw GLSL) node
+        - Control flow (Branch), Local Get/Set variables
+        - Noise nodes (FastNoiseLite): OpenSimplex2 / OpenSimplex2S / Perlin / Value / Cellular (Voronoi) / Domain Warp, with FBM / Ridged / PingPong fractal variants
     - HDR & PBR (Physically Based Rendering) - Metallic Workflow
         - Albedo, Normal, Surface (AO / Roughness / Metallic), Emission Maps
     - Mesh Renderer & Skinned Mesh Renderer with Bone Animation
@@ -110,14 +128,17 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Cubemap Shadows for Point Lights
         - Shadow Atlas with Dynamic Packing
     - Post Processing
-        - HDR Tonemapping
-        - Bloom
+        - HDR Tonemapping (ACES / Reinhard / Uncharted / Filmic / Melon)
+        - Bloom (dual-filter downsample/upsample)
         - FXAA (Fast Approximate Anti-Aliasing)
         - Screen Space Reflections (SSR)
         - Ground-Truth Ambient Occlusion (GTAO)
         - Bokeh Depth of Field
+        - Volumetric Fog
+        - Cinematic Effects (grain, vignette, chromatic aberration)
     - Forward-Rendered Transparency with Depth-Sorted Blending
-    - Procedural Skybox
+    - Grab Pass (depth-aware) for refraction / heat-haze / frosted glass
+    - Procedural / Cubemap / Gradient Skybox
     - Terrain System
         - Quadtree LOD
         - Heightmap & Splatmap Painting
@@ -201,6 +222,8 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 - [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo) - Serialization
 - [Prowl.Paper](https://github.com/ProwlEngine/Prowl.Paper) - UI Framework
 - [Prowl.Quill](https://github.com/ProwlEngine/Prowl.Quill) - Vector Graphics & Text Rendering
+- [Prowl.Scribe](https://github.com/ProwlEngine/Prowl.Scribe) - TrueType font parsing, glyph rasterization & markdown layout
+- [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector) - 64-bit Math Library
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
