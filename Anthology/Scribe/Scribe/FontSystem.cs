@@ -398,6 +398,11 @@ namespace Prowl.Scribe
             int leftGlyph = fontInfo.FindGlyphIndex(leftCodepoint);
             int rightGlyph = fontInfo.FindGlyphIndex(rightCodepoint);
 
+            return GetKerningByGlyph(fontInfo, leftGlyph, rightGlyph, pixelSize);
+        }
+
+        public float GetKerningByGlyph(FontFile fontInfo, int leftGlyph, int rightGlyph, float pixelSize)
+        {
             float scale = fontInfo.ScaleForPixelHeight(pixelSize);
             int kernAdvance = fontInfo.GetGlyphKerningAdvance(leftGlyph, rightGlyph);
 

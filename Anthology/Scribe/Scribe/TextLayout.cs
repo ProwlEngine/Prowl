@@ -86,8 +86,11 @@ namespace Prowl.Scribe
             bool wrapEnabled = Settings.WrapMode == TextWrapMode.Wrap && Settings.MaxWidth > 0f;
             float maxWidth = Settings.MaxWidth;
 
-            // Kerning baseline: do NOT kern across whitespace
-            int lastCodepointForKerning = 0;
+            // Kerning baseline: do NOT kern across whitespace.
+            // Track the previous glyph's index + font so we can call the by-glyph kerning
+            // overload (no FindGlyphIndex re-lookups) and only kern within a single font.
+            int lastGlyphForKerning = 0;
+            FontFile lastFontForKerning = null;
 
             // Ascender cache per font object; we only need 'a' to place the glyph vertically
             var ascenderCache = new Dictionary<object, float>(8);
@@ -106,7 +109,8 @@ namespace Prowl.Scribe
                 var gi = new GlyphInstance(glyph, new Float2(x + offsetX, offsetY + a), c, advanceBase, charIndex);
                 outList.Add(gi);
                 x += advanceBase;
-                lastCodepointForKerning = c; // kerning only continues within the current word/run
+                lastGlyphForKerning = glyph.GlyphIndex; // kerning only continues within the current word/run
+                lastFontForKerning = font;
             }
 
             while (i < len)
@@ -121,7 +125,8 @@ namespace Prowl.Scribe
                     currentY += lineHeight;
                     i++;
                     line = new Line(new Float2(0, currentY), i);
-                    lastCodepointForKerning = 0;
+                    lastGlyphForKerning = 0;
+                    lastFontForKerning = null;
                     hasTrailingNewline = true;
                     continue;
                 }
@@ -132,7 +137,8 @@ namespace Prowl.Scribe
                     float tabStop = ((int)(currentX / tabWidth) + 1) * tabWidth;
                     currentX = tabStop;
                     i++;
-                    lastCodepointForKerning = 0; // do not kern across whitespace
+                    lastGlyphForKerning = 0; // do not kern across whitespace
+                    lastFontForKerning = null;
                     continue;
                 }
 
@@ -158,7 +164,8 @@ namespace Prowl.Scribe
                         currentX += runAdvance;
                     }
 
-                    lastCodepointForKerning = 0; // break kerning chain
+                    lastGlyphForKerning = 0; // break kerning chain
+                    lastFontForKerning = null;
                     continue;
                 }
 
@@ -173,8 +180,8 @@ namespace Prowl.Scribe
                 float wordWidthNoLeadingKerning = 0f;
                 float firstLeadingKerning = 0f;   // kerning against previous non-whitespace glyph (we'll apply only if not at line start)
                 bool hadFirstGlyph = false;
-                int firstGlyphCodepoint = 0;
-                int prevCodepoint = 0;
+                int prevGlyphIndex = 0;
+                FontFile prevGlyphFont = null;
 
                 for (int j = wordStart; j < wordEnd; j++)
                 {
@@ -185,35 +192,35 @@ namespace Prowl.Scribe
                         font = Settings.FontSelector(j);
                     var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
 
-                    //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                     if (g == null) continue;
 
                     var adv = g.Metrics.AdvanceWidth + Settings.LetterSpacing;
 
-                    // internal kerning (within the word)
-                    if (prevCodepoint != 0)
-                        wordWidthNoLeadingKerning += fontSystem.GetKerning(g.Font, prevCodepoint, c, pixelSize);
+                    // internal kerning (within the word) — only kern within a single font
+                    if (prevGlyphIndex != 0 && ReferenceEquals(prevGlyphFont, g.Font))
+                        wordWidthNoLeadingKerning += fontSystem.GetKerningByGlyph(g.Font, prevGlyphIndex, g.GlyphIndex, pixelSize);
 
                     wordWidthNoLeadingKerning += adv;
 
                     if (!hadFirstGlyph)
                     {
                         hadFirstGlyph = true;
-                        firstGlyphCodepoint = c;
 
                         // kerning between previous run (if any) and first glyph of this word
-                        if (lastCodepointForKerning != 0)
-                            firstLeadingKerning = fontSystem.GetKerning(g.Font, lastCodepointForKerning, c, pixelSize);
+                        if (lastGlyphForKerning != 0 && ReferenceEquals(lastFontForKerning, g.Font))
+                            firstLeadingKerning = fontSystem.GetKerningByGlyph(g.Font, lastGlyphForKerning, g.GlyphIndex, pixelSize);
                     }
 
-                    prevCodepoint = c;
+                    prevGlyphIndex = g.GlyphIndex;
+                    prevGlyphFont = g.Font;
                 }
 
                 // Word may be empty if all codepoints were missing; just skip it
                 if (!hadFirstGlyph)
                 {
                     i = wordEnd;
-                    lastCodepointForKerning = 0;
+                    lastGlyphForKerning = 0;
+                    lastFontForKerning = null;
                     continue;
                 }
 
@@ -229,7 +236,8 @@ namespace Prowl.Scribe
                         currentX = 0f;
                         currentY += lineHeight;
                         line = new Line(new Float2(0, currentY), wordStart);
-                        lastCodepointForKerning = 0; // new line: no leading kerning
+                        lastGlyphForKerning = 0; // new line: no leading kerning
+                        lastFontForKerning = null;
                     }
 
                     // If the word itself is too long for an empty line, split it (char-level)
@@ -237,7 +245,8 @@ namespace Prowl.Scribe
                     {
                         i = LayoutLongWordFast(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
                                                wordStart, wordEnd, tabWidth, spaceAdvance, wrapEnabled, maxWidth, GetAscender);
-                        lastCodepointForKerning = 0;
+                        lastGlyphForKerning = 0;
+                        lastFontForKerning = null;
                         continue;
                     }
                 }
@@ -251,6 +260,7 @@ namespace Prowl.Scribe
                 // We still fetch glyphs here, but (a) only once total for the common no-wrap path,
                 // and (b) we cache ascender per font, not per glyph.
                 int prevForKern = 0;
+                FontFile prevFontForKern = null;
                 for (int j = wordStart; j < wordEnd; j++)
                 {
                     char c = text[j];
@@ -260,12 +270,11 @@ namespace Prowl.Scribe
                         font = Settings.FontSelector(j);
                     var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
 
-                    //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                     if (g == null) continue;
 
-                    if (prevForKern != 0)
+                    if (prevForKern != 0 && ReferenceEquals(prevFontForKern, g.Font))
                     {
-                        float k = fontSystem.GetKerning(g.Font, prevForKern, c, pixelSize);
+                        float k = fontSystem.GetKerningByGlyph(g.Font, prevForKern, g.GlyphIndex, pixelSize);
                         if (k != 0f) currentX += k;
                     }
 
@@ -273,7 +282,8 @@ namespace Prowl.Scribe
                               g.Metrics.AdvanceWidth + Settings.LetterSpacing,
                               ref currentX, line.Glyphs, j);
 
-                    prevForKern = c;
+                    prevForKern = g.GlyphIndex;
+                    prevFontForKern = g.Font;
                 }
 
                 // Move i past this word
@@ -303,7 +313,8 @@ namespace Prowl.Scribe
         {
             float pixelSize = Settings.PixelSize;
 
-            int lastKernCode = 0;
+            int lastKernGlyph = 0;
+            FontFile lastKernFont = null;
 
             for (int i = start; i < end; i++)
             {
@@ -314,15 +325,14 @@ namespace Prowl.Scribe
                     font = Settings.FontSelector(i);
                 var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
 
-                //var g = fontSystem.GetOrCreateGlyph(c, pixelSize, Settings.PreferredFont);
                 if (g == null) continue;
 
                 float adv = g.Metrics.AdvanceWidth + Settings.LetterSpacing;
 
                 // If next char doesn't fit, wrap (but not before placing at least one glyph)
                 float k = 0f;
-                if (lastKernCode != 0)
-                    k = fontSystem.GetKerning(g.Font, lastKernCode, c, pixelSize);
+                if (lastKernGlyph != 0 && ReferenceEquals(lastKernFont, g.Font))
+                    k = fontSystem.GetKerningByGlyph(g.Font, lastKernGlyph, g.GlyphIndex, pixelSize);
 
                 if (wrapEnabled && line.Glyphs.Count > 0 && currentX + k + adv > maxWidth)
                 {
@@ -330,7 +340,8 @@ namespace Prowl.Scribe
                     currentX = 0f;
                     currentY += lineHeight;
                     line = new Line(new Float2(0, currentY), i);
-                    lastKernCode = 0; // break kerning across lines
+                    lastKernGlyph = 0; // break kerning across lines
+                    lastKernFont = null;
                 }
                 else if (wrapEnabled && line.Glyphs.Count == 0 && currentX + k + adv > maxWidth)
                 {
@@ -347,7 +358,8 @@ namespace Prowl.Scribe
                 var gi = new GlyphInstance(g, new Float2(currentX + g.Metrics.OffsetX, g.Metrics.OffsetY + a), c, adv, i);
                 line.Glyphs.Add(gi);
                 currentX += adv;
-                lastKernCode = c;
+                lastKernGlyph = g.GlyphIndex;
+                lastKernFont = g.Font;
             }
 
             return end;
