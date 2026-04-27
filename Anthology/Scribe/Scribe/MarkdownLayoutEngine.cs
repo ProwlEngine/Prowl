@@ -9,6 +9,7 @@ using Prowl.Scribe.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Prowl.Vector;
 
 namespace Prowl.Scribe
@@ -217,7 +218,7 @@ namespace Prowl.Scribe
 
             if (verts.Count > 0)
             {
-                renderer.DrawQuads(fontSystem.Texture, verts.ToArray(), idx.ToArray());
+                FlushQuads(renderer, fontSystem.Texture, verts, idx);
             }
 
             // Draw text and images in submission order
@@ -750,7 +751,7 @@ namespace Prowl.Scribe
             }
 
             if (verts.Count > 0)
-                renderer.DrawQuads(fontSystem.Texture, verts.ToArray(), idx.ToArray());
+                FlushQuads(renderer, fontSystem.Texture, verts, idx);
         }
 
         private static void DrawDecorations(DrawText t, Float2 position, FontSystem fontSystem, IFontRenderer renderer, MarkdownLayoutSettings settings)
@@ -855,7 +856,16 @@ namespace Prowl.Scribe
             }
 
             if (verts.Count > 0)
-                renderer.DrawQuads(fontSystem.Texture, verts.ToArray(), idx.ToArray());
+                FlushQuads(renderer, fontSystem.Texture, verts, idx);
+        }
+
+        private static void FlushQuads(IFontRenderer renderer, object texture, List<IFontRenderer.Vertex> verts, List<int> idx)
+        {
+#if NET5_0_OR_GREATER
+            renderer.DrawQuads(texture, CollectionsMarshal.AsSpan(verts), CollectionsMarshal.AsSpan(idx));
+#else
+            renderer.DrawQuads(texture, verts.ToArray(), idx.ToArray());
+#endif
         }
 
         private static void AddLinkHitBoxes(MarkdownDisplayList dl, DrawText t, List<LinkSpan> links)
