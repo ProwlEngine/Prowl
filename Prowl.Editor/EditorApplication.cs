@@ -234,20 +234,22 @@ public class EditorApplication : Game
 
     protected override void PreparePaperFrame()
     {
-        var winSize = Window.InternalWindow.Size;
+        var fbSize = Window.InternalWindow.FramebufferSize;
         float cs = Math.Max(0.01f, Window.ContentScale);
         float us = Math.Max(0.01f, EditorTheme.UserScale);
-        // Resolution is divided only by UserScale (UI zoom), not by ContentScale.
-        // cs * us together form DisplayFramebufferScale so vertices reach [0, fbSize].
-        PaperInstance.SetResolution(winSize.X / us, winSize.Y / us);
+        PaperInstance.SetResolution(fbSize.X / (cs * us), fbSize.Y / (cs * us));
         PaperInstance.DisplayFramebufferScale = new Float2(cs * us, cs * us);
     }
 
     protected override Float2 GetPaperMousePosition()
     {
         var p = Input.MousePosition;
+        var fb = Window.InternalWindow.FramebufferSize;
+        var win = Window.InternalWindow.Size;
+        float cs = Math.Max(0.01f, Window.ContentScale);
+        float csFbWin = win.X > 0 ? (float)fb.X / win.X : 1f;
         float us = Math.Max(0.01f, EditorTheme.UserScale);
-        return new Float2(p.X / us, p.Y / us);
+        return new Float2(p.X * csFbWin / (cs * us), p.Y * csFbWin / (cs * us));
     }
 
     private void ApplyDarkTitleBar()
