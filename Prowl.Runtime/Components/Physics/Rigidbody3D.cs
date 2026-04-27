@@ -364,9 +364,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void DrawGizmos()
     {
-        if (_body == null || _body.Handle.IsZero) return;
-
-        _body.DebugDraw(JitterGizmosDrawer.Instance);
+        // TODO DrawGizmos
     }
 
     public override void OnEnable()

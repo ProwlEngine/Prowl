@@ -73,16 +73,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
 
     public override void DrawGizmos()
     {
-        Constraint constraint = GetConstraint();
-        if (constraint != null && GameObject?.Scene?.Physics?.World != null)
-        {
-            try
-            {
-                constraint.DebugDraw(JitterGizmosDrawer.Instance);
-            }
-            catch (NotImplementedException)
-            { }
-        }
+        // TODO DrawGizmos
     }
 
     /// <summary>
