@@ -5,7 +5,9 @@ using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Vector.Geometry
+using Prowl.Vector.Geometry;
+
+namespace Prowl.Vector
 {
     /// <summary>
     /// Represents a 3D cone defined by an apex point, a base center, and a base radius.
@@ -14,13 +16,13 @@ namespace Prowl.Vector.Geometry
     public struct Cone : IEquatable<Cone>, IFormattable, IBoundingShape
     {
         /// <summary>The apex (tip) of the cone.</summary>
-        public Double3 Apex;
+        public Float3 Apex;
 
         /// <summary>The center of the base circle.</summary>
-        public Double3 BaseCenter;
+        public Float3 BaseCenter;
 
         /// <summary>The radius of the base circle.</summary>
-        public double BaseRadius;
+        public float BaseRadius;
 
         /// <summary>
         /// Initializes a new cone with the specified apex, base center, and base radius.
@@ -29,7 +31,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="baseCenter">The center of the base circle.</param>
         /// <param name="baseRadius">The radius of the base circle.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Cone(Double3 apex, Double3 baseCenter, double baseRadius)
+        public Cone(Float3 apex, Float3 baseCenter, float baseRadius)
         {
             Apex = apex;
             BaseCenter = baseCenter;
@@ -40,50 +42,50 @@ namespace Prowl.Vector.Geometry
         /// Initializes a new cone with the specified apex, base center, base radius using individual coordinate components.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Cone(double apexX, double apexY, double apexZ,
-                    double baseCenterX, double baseCenterY, double baseCenterZ,
-                    double baseRadius)
+        public Cone(float apexX, float apexY, float apexZ,
+                    float baseCenterX, float baseCenterY, float baseCenterZ,
+                    float baseRadius)
         {
-            Apex = new Double3(apexX, apexY, apexZ);
-            BaseCenter = new Double3(baseCenterX, baseCenterY, baseCenterZ);
+            Apex = new Float3(apexX, apexY, apexZ);
+            BaseCenter = new Float3(baseCenterX, baseCenterY, baseCenterZ);
             BaseRadius = baseRadius;
         }
 
         /// <summary>
         /// Gets the height of the cone (distance from apex to base).
         /// </summary>
-        public double Height
+        public float Height
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Double3.Length(BaseCenter - Apex);
+            get => Float3.Length(BaseCenter - Apex);
         }
 
         /// <summary>
         /// Gets the axis direction of the cone (normalized vector from apex to base center).
         /// </summary>
-        public Double3 AxisDirection
+        public Float3 AxisDirection
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => Double3.Normalize(BaseCenter - Apex);
+            get => Float3.Normalize(BaseCenter - Apex);
         }
 
         /// <summary>
         /// Gets the volume of the cone.
         /// </summary>
-        public double Volume
+        public float Volume
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (Maths.PI * BaseRadius * BaseRadius * Height) / 3.0;
+            get => (Maths.PI * BaseRadius * BaseRadius * Height) / 3.0f;
         }
 
         /// <summary>
         /// Gets the lateral surface area of the cone (excluding the base).
         /// </summary>
-        public double LateralSurfaceArea
+        public float LateralSurfaceArea
         {
             get
             {
-                double slantHeight = Maths.Sqrt(Height * Height + BaseRadius * BaseRadius);
+                float slantHeight = Maths.Sqrt(Height * Height + BaseRadius * BaseRadius);
                 return Maths.PI * BaseRadius * slantHeight;
             }
         }
@@ -91,11 +93,11 @@ namespace Prowl.Vector.Geometry
         /// <summary>
         /// Gets the total surface area of the cone (including the base).
         /// </summary>
-        public double TotalSurfaceArea
+        public float TotalSurfaceArea
         {
             get
             {
-                double slantHeight = Maths.Sqrt(Height * Height + BaseRadius * BaseRadius);
+                float slantHeight = Maths.Sqrt(Height * Height + BaseRadius * BaseRadius);
                 return Maths.PI * BaseRadius * (BaseRadius + slantHeight);
             }
         }
@@ -105,30 +107,30 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="point">The point to test.</param>
         /// <returns>True if the point is inside the cone.</returns>
-        public bool Contains(Double3 point)
+        public bool Contains(Float3 point)
         {
-            Double3 axis = BaseCenter - Apex;
-            double height = Double3.Length(axis);
+            Float3 axis = BaseCenter - Apex;
+            float height = Float3.Length(axis);
 
-            if (height < double.Epsilon)
+            if (height < float.Epsilon)
                 return false; // Degenerate cone
 
-            Double3 axisNorm = axis / height;
-            Double3 apexToPoint = point - Apex;
+            Float3 axisNorm = axis / height;
+            Float3 apexToPoint = point - Apex;
 
             // Project point onto cone axis
-            double projectionLength = Double3.Dot(apexToPoint, axisNorm);
+            float projectionLength = Float3.Dot(apexToPoint, axisNorm);
 
             // Check if point is within height bounds
             if (projectionLength < 0.0 || projectionLength > height)
                 return false;
 
             // Calculate the radius at this height
-            double radiusAtHeight = (projectionLength / height) * BaseRadius;
+            float radiusAtHeight = (projectionLength / height) * BaseRadius;
 
             // Calculate perpendicular distance from axis
-            Double3 projectionPoint = Apex + axisNorm * projectionLength;
-            double perpDistance = Double3.Length(point - projectionPoint);
+            Float3 projectionPoint = Apex + axisNorm * projectionLength;
+            float perpDistance = Float3.Length(point - projectionPoint);
 
             return perpDistance <= radiusAtHeight;
         }
@@ -140,23 +142,23 @@ namespace Prowl.Vector.Geometry
         /// <param name="matrix">The transformation matrix.</param>
         /// <returns>The transformed cone.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Cone Transform(Double4x4 matrix)
+        public Cone Transform(Float4x4 matrix)
         {
-            Double3 transformedApex = Double4x4.TransformPoint(Apex, matrix);
-            Double3 transformedBaseCenter = Double4x4.TransformPoint(BaseCenter, matrix);
+            Float3 transformedApex = Float4x4.TransformPoint(Apex, matrix);
+            Float3 transformedBaseCenter = Float4x4.TransformPoint(BaseCenter, matrix);
 
             // For radius, we need to account for scaling
             // Calculate a point on the base circle and see how it transforms
-            Double3 axis = BaseCenter - Apex;
-            Double3 perpendicular = Maths.Abs(axis.X) < 0.9 ?
-                Double3.Cross(axis, new Double3(1, 0, 0)) :
-                Double3.Cross(axis, new Double3(0, 1, 0));
-            perpendicular = Double3.Normalize(perpendicular);
+            Float3 axis = BaseCenter - Apex;
+            Float3 perpendicular = Maths.Abs(axis.X) < 0.9 ?
+                Float3.Cross(axis, new Float3(1, 0, 0)) :
+                Float3.Cross(axis, new Float3(0, 1, 0));
+            perpendicular = Float3.Normalize(perpendicular);
 
-            Double3 baseEdgePoint = BaseCenter + perpendicular * BaseRadius;
-            Double3 transformedBaseEdge = Double4x4.TransformPoint(baseEdgePoint, matrix);
+            Float3 baseEdgePoint = BaseCenter + perpendicular * BaseRadius;
+            Float3 transformedBaseEdge = Float4x4.TransformPoint(baseEdgePoint, matrix);
 
-            double transformedRadius = Double3.Length(transformedBaseEdge - transformedBaseCenter);
+            float transformedRadius = Float3.Length(transformedBaseEdge - transformedBaseCenter);
 
             return new Cone(transformedApex, transformedBaseCenter, transformedRadius);
         }
@@ -170,10 +172,10 @@ namespace Prowl.Vector.Geometry
         /// <param name="baseRadius">The radius of the base.</param>
         /// <returns>The created cone.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Cone FromAxisDirection(Double3 apex, Double3 axisDirection, double height, double baseRadius)
+        public static Cone FromAxisDirection(Float3 apex, Float3 axisDirection, float height, float baseRadius)
         {
-            Double3 normalizedAxis = Double3.Normalize(axisDirection);
-            Double3 baseCenter = apex + normalizedAxis * height;
+            Float3 normalizedAxis = Float3.Normalize(axisDirection);
+            Float3 baseCenter = apex + normalizedAxis * height;
             return new Cone(apex, baseCenter, baseRadius);
         }
 
@@ -185,50 +187,50 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         /// <param name="direction">The direction to search in.</param>
         /// <returns>The farthest point on the cone in the given direction.</returns>
-        public Double3 SupportMap(Double3 direction)
+        public Float3 SupportMap(Float3 direction)
         {
-            double dirLength = Double3.Length(direction);
-            if (dirLength < double.Epsilon)
+            float dirLength = Float3.Length(direction);
+            if (dirLength < float.Epsilon)
                 return Apex;
 
-            Double3 normalizedDir = direction / dirLength;
+            Float3 normalizedDir = direction / dirLength;
 
             // Calculate the cone's axis direction
-            Double3 axis = BaseCenter - Apex;
-            double height = Double3.Length(axis);
+            Float3 axis = BaseCenter - Apex;
+            float height = Float3.Length(axis);
 
-            if (height < double.Epsilon)
+            if (height < float.Epsilon)
                 return Apex; // Degenerate cone
 
-            Double3 axisNorm = axis / height;
+            Float3 axisNorm = axis / height;
 
             // Check if the apex is the farthest point
-            double apexDot = Double3.Dot(Apex, normalizedDir);
+            float apexDot = Float3.Dot(Apex, normalizedDir);
 
             // Calculate a perpendicular direction to the axis within the base plane
             // Project the search direction onto the base plane
-            double projOnAxis = Double3.Dot(normalizedDir, axisNorm);
-            Double3 dirInBasePlane = normalizedDir - axisNorm * projOnAxis;
+            float projOnAxis = Float3.Dot(normalizedDir, axisNorm);
+            Float3 dirInBasePlane = normalizedDir - axisNorm * projOnAxis;
 
-            double basePlaneDirLength = Double3.Length(dirInBasePlane);
+            float basePlaneDirLength = Float3.Length(dirInBasePlane);
 
-            Double3 baseEdgePoint;
-            if (basePlaneDirLength < double.Epsilon)
+            Float3 baseEdgePoint;
+            if (basePlaneDirLength < float.Epsilon)
             {
                 // Direction is parallel to the axis
                 // Choose the base center or apex based on which is farther
-                double baseCenterDot = Double3.Dot(BaseCenter, normalizedDir);
+                float baseCenterDot = Float3.Dot(BaseCenter, normalizedDir);
                 return apexDot >= baseCenterDot ? Apex : BaseCenter;
             }
             else
             {
                 // Find the point on the base circle edge in the direction of dirInBasePlane
-                Double3 radialDir = dirInBasePlane / basePlaneDirLength;
+                Float3 radialDir = dirInBasePlane / basePlaneDirLength;
                 baseEdgePoint = BaseCenter + radialDir * BaseRadius;
             }
 
             // Compare apex vs base edge point
-            double baseEdgeDot = Double3.Dot(baseEdgePoint, normalizedDir);
+            float baseEdgeDot = Float3.Dot(baseEdgePoint, normalizedDir);
 
             return apexDot >= baseEdgeDot ? Apex : baseEdgePoint;
         }
@@ -239,136 +241,65 @@ namespace Prowl.Vector.Geometry
         /// <param name="mode">Wireframe for outline, Solid for filled cone.</param>
         /// <param name="resolution">Number of segments around the base circle.</param>
         /// <returns>Mesh data for rendering.</returns>
-        public GeometryData GetMeshData(MeshMode mode, int resolution = 16)
+        public GeometryData GetGeometryData(int resolution = 16)
         {
             resolution = Maths.Max(resolution, 3);
+            var geometryData = new GeometryData();
 
-            if (mode == MeshMode.Wireframe)
+            Float3 axis = BaseCenter - Apex;
+            float height = Float3.Length(axis);
+
+            if (height < float.Epsilon)
             {
-                return GetWireframeMesh(resolution);
+                geometryData.AddVertex(Apex);
+                return geometryData;
             }
-            else
-            {
-                return GetSolidMesh(resolution);
-            }
-        }
 
-        private GeometryData GetWireframeMesh(int segments)
-        {
-            var vertices = new System.Collections.Generic.List<Double3>();
-
-            Double3 axis = BaseCenter - Apex;
-            double height = Double3.Length(axis);
-
-            if (height < double.Epsilon)
-                return new GeometryData(new Double3[] { Apex }, MeshTopology.LineList);
-
-            Double3 axisNorm = axis / height;
+            Float3 axisNorm = axis / height;
 
             // Find two perpendicular vectors to the axis
-            Double3 perpendicular1 = Maths.Abs(axisNorm.X) < 0.9 ?
-                Double3.Cross(axisNorm, new Double3(1, 0, 0)) :
-                Double3.Cross(axisNorm, new Double3(0, 1, 0));
-            perpendicular1 = Double3.Normalize(perpendicular1);
+            Float3 perpendicular1 = Maths.Abs(axisNorm.X) < 0.9 ?
+                Float3.Cross(axisNorm, new Float3(1, 0, 0)) :
+                Float3.Cross(axisNorm, new Float3(0, 1, 0));
+            perpendicular1 = Float3.Normalize(perpendicular1);
 
-            Double3 perpendicular2 = Double3.Cross(axisNorm, perpendicular1);
-
-            // Generate base circle points
-            Double3[] basePoints = new Double3[segments];
-            for (int i = 0; i < segments; i++)
-            {
-                double angle = i * 2.0 * Maths.PI / segments;
-                double cosAngle = Maths.Cos(angle);
-                double sinAngle = Maths.Sin(angle);
-
-                basePoints[i] = BaseCenter +
-                              perpendicular1 * (BaseRadius * cosAngle) +
-                              perpendicular2 * (BaseRadius * sinAngle);
-            }
-
-            // Draw base circle
-            for (int i = 0; i < segments; i++)
-            {
-                int next = (i + 1) % segments;
-                vertices.Add(basePoints[i]);
-                vertices.Add(basePoints[next]);
-            }
-
-            // Draw lines from apex to base circle (evenly spaced)
-            int lineCount = Maths.Min(8, segments);
-            for (int i = 0; i < lineCount; i++)
-            {
-                int index = (i * segments) / lineCount;
-                vertices.Add(Apex);
-                vertices.Add(basePoints[index]);
-            }
-
-            return new GeometryData(vertices.ToArray(), MeshTopology.LineList);
-        }
-
-        private GeometryData GetSolidMesh(int segments)
-        {
-            var vertices = new System.Collections.Generic.List<Double3>();
-            var indices = new System.Collections.Generic.List<uint>();
-
-            Double3 axis = BaseCenter - Apex;
-            double height = Double3.Length(axis);
-
-            if (height < double.Epsilon)
-                return new GeometryData(new Double3[] { Apex }, MeshTopology.TriangleList);
-
-            Double3 axisNorm = axis / height;
-
-            // Find two perpendicular vectors to the axis
-            Double3 perpendicular1 = Maths.Abs(axisNorm.X) < 0.9 ?
-                Double3.Cross(axisNorm, new Double3(1, 0, 0)) :
-                Double3.Cross(axisNorm, new Double3(0, 1, 0));
-            perpendicular1 = Double3.Normalize(perpendicular1);
-
-            Double3 perpendicular2 = Double3.Cross(axisNorm, perpendicular1);
+            Float3 perpendicular2 = Float3.Cross(axisNorm, perpendicular1);
 
             // Add apex vertex
-            vertices.Add(Apex); // index 0
+            var apex = geometryData.AddVertex(Apex);
 
             // Add base center vertex
-            vertices.Add(BaseCenter); // index 1
+            var baseCenter = geometryData.AddVertex(BaseCenter);
 
             // Generate base circle vertices
-            for (int i = 0; i < segments; i++)
+            var baseVerts = new GeometryData.Vertex[resolution];
+            for (int i = 0; i < resolution; i++)
             {
-                double angle = i * 2.0 * Maths.PI / segments;
-                double cosAngle = Maths.Cos(angle);
-                double sinAngle = Maths.Sin(angle);
+                float angle = i * 2.0f * Maths.PI / resolution;
+                float cosAngle = Maths.Cos(angle);
+                float sinAngle = Maths.Sin(angle);
 
-                Double3 point = BaseCenter +
+                Float3 point = BaseCenter +
                               perpendicular1 * (BaseRadius * cosAngle) +
                               perpendicular2 * (BaseRadius * sinAngle);
-                vertices.Add(point); // indices 2 to segments+1
+                baseVerts[i] = geometryData.AddVertex(point);
             }
 
             // Generate lateral surface triangles (apex to base edge)
-            for (int i = 0; i < segments; i++)
+            for (int i = 0; i < resolution; i++)
             {
-                uint current = (uint)(2 + i);
-                uint next = (uint)(2 + (i + 1) % segments);
-
-                indices.Add(0); // apex
-                indices.Add(current);
-                indices.Add(next);
+                int next = (i + 1) % resolution;
+                geometryData.AddFace(apex, baseVerts[i], baseVerts[next]);
             }
 
             // Generate base triangles (base center to edge)
-            for (int i = 0; i < segments; i++)
+            for (int i = 0; i < resolution; i++)
             {
-                uint current = (uint)(2 + i);
-                uint next = (uint)(2 + (i + 1) % segments);
-
-                indices.Add(1); // base center
-                indices.Add(next);
-                indices.Add(current);
+                int next = (i + 1) % resolution;
+                geometryData.AddFace(baseCenter, baseVerts[next], baseVerts[i]);
             }
 
-            return new GeometryData(vertices.ToArray(), indices.ToArray(), MeshTopology.TriangleList);
+            return geometryData;
         }
 
         // --- IEquatable & IFormattable Implementation ---
@@ -378,7 +309,7 @@ namespace Prowl.Vector.Geometry
         {
             return Apex.Equals(other.Apex) &&
                    BaseCenter.Equals(other.BaseCenter) &&
-                   Maths.Abs(BaseRadius - other.BaseRadius) < double.Epsilon;
+                   Maths.Abs(BaseRadius - other.BaseRadius) < float.Epsilon;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

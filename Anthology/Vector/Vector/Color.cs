@@ -436,11 +436,11 @@ namespace Prowl.Vector
 
         #endregion
 
-        public double R, G, B, A;
+        public float R, G, B, A;
 
-        public double Grayscale => 0.299 * R + 0.587 * G + 0.114 * B;
+        public float Grayscale => 0.299f * R + 0.587f * G + 0.114f * B;
 
-        public double this[int index]
+        public float this[int index]
         {
             get
             {
@@ -467,7 +467,7 @@ namespace Prowl.Vector
             }
         }
 
-        public Color(double r, double g, double b, double a)
+        public Color(float r, float g, float b, float a)
         {
             this.R = r;
             this.G = g;
@@ -475,7 +475,7 @@ namespace Prowl.Vector
             this.A = a;
         }
 
-        public Color(double r, double g, double b)
+        public Color(float r, float g, float b)
         {
             this.R = r;
             this.G = g;
@@ -503,7 +503,7 @@ namespace Prowl.Vector
 
         #region Static Functions
 
-        public static Color Lerp(Color a, Color b, double t)
+        public static Color Lerp(Color a, Color b, float t)
         {
             t = Maths.Min(Maths.Max(t, 0), 1);
             return new Color(a.R + (b.R - a.R) * t, a.G + (b.G - a.G) * t, a.B + (b.B - a.B) * t, a.A + (b.A - a.A) * t);
@@ -515,21 +515,21 @@ namespace Prowl.Vector
         }
 
         /// <summary>Performs color-space aware linear interpolation between two RGB colors.</summary>
-        public static Color LerpColorSpace(Color from, Color to, double t)
+        public static Color LerpColorSpace(Color from, Color to, float t)
         {
             // Convert to HSV for more natural color interpolation
             var hsvFrom = RGBToHSV(from);
             var hsvTo = RGBToHSV(to);
 
             // Handle hue wrapping for shortest path interpolation
-            double deltaHue = hsvTo.X - hsvFrom.X;
+            float deltaHue = hsvTo.X - hsvFrom.X;
             if (deltaHue > 180f)
                 hsvFrom.X += 360f;
             else if (deltaHue < -180f)
                 hsvTo.X += 360f;
 
             // Interpolate in HSV space
-            var hsvResult = new Double4(
+            var hsvResult = new Float4(
                 hsvFrom.X + (hsvTo.X - hsvFrom.X) * t,
                 hsvFrom.Y + (hsvTo.Y - hsvFrom.Y) * t,
                 hsvFrom.Z + (hsvTo.Z - hsvFrom.Z) * t,
@@ -545,7 +545,7 @@ namespace Prowl.Vector
         }
 
         /// <summary>Adjusts the brightness of a color.</summary>
-        public static Color Brightness(Color color, double brightness)
+        public static Color Brightness(Color color, float brightness)
         {
             return new Color(
                 Maths.Max(0f, color.R * brightness),
@@ -555,9 +555,9 @@ namespace Prowl.Vector
         }
 
         /// <summary>Adjusts the contrast of a color.</summary>
-        public static Color Contrast(Color color, double contrast)
+        public static Color Contrast(Color color, float contrast)
         {
-            const double midpoint = 0.5f;
+            const float midpoint = 0.5f;
             return new Color(
                 Maths.Clamp((color.R - midpoint) * contrast + midpoint, 0f, 1f),
                 Maths.Clamp((color.G - midpoint) * contrast + midpoint, 0f, 1f),
@@ -567,17 +567,17 @@ namespace Prowl.Vector
 
 
         /// <summary>Desaturates a color by blending it towards grayscale.</summary>
-        public static Color Desaturate(Color color, double amount = 1f)
+        public static Color Desaturate(Color color, float amount = 1f)
         {
             // Standard luminance weights for RGB
-            double luminance = 0.299f * color.R + 0.587f * color.G + 0.114f * color.B;
+            float luminance = 0.299f * color.R + 0.587f * color.G + 0.114f * color.B;
             var gray = new Color(luminance, luminance, luminance, color.A);
             amount = Maths.Clamp(amount, 0f, 1f);
             return color + (gray - color) * amount;
         }
 
         /// <summary>Applies gamma correction to a color.</summary>
-        public static Color Gamma(Color color, double gamma = 2.2f)
+        public static Color Gamma(Color color, float gamma = 2.2f)
         {
             return new Color(
                 Maths.Pow(Maths.Max(0f, color.R), 1f / gamma),
@@ -605,19 +605,19 @@ namespace Prowl.Vector
         /// <summary>Converts HSL to RGB color space.</summary>
         public static Color HSLToRGB(Color hsla)
         {
-            double h = hsla.R, s = hsla.G, l = hsla.B;
+            float h = hsla.R, s = hsla.G, l = hsla.B;
 
             if (s <= 0f)
             {
-                double gray = l;
+                float gray = l;
                 return new Color(gray, gray, gray, hsla.A);
             }
 
-            double c = (1f - Maths.Abs(2f * l - 1f)) * s;
-            double x = c * (1f - Maths.Abs((h / 60f) % 2f - 1f));
-            double m = l - c / 2f;
+            float c = (1f - Maths.Abs(2f * l - 1f)) * s;
+            float x = c * (1f - Maths.Abs((h / 60f) % 2f - 1f));
+            float m = l - c / 2f;
 
-            double r = 0f, g = 0f, b = 0f;
+            float r = 0f, g = 0f, b = 0f;
 
             if (h >= 0f && h < 60f)
                 (r, g, b) = (c, x, 0f);
@@ -638,14 +638,14 @@ namespace Prowl.Vector
         }
 
         /// <summary>Converts RGB to HSL color space.</summary>
-        public static Double4 RGBToHSL(Color rgba)
+        public static Float4 RGBToHSL(Color rgba)
         {
-            double r = rgba.R, g = rgba.G, b = rgba.B;
-            double max = Maths.Max(r, Maths.Max(g, b));
-            double min = Maths.Min(r, Maths.Min(g, b));
-            double delta = max - min;
+            float r = rgba.R, g = rgba.G, b = rgba.B;
+            float max = Maths.Max(r, Maths.Max(g, b));
+            float min = Maths.Min(r, Maths.Min(g, b));
+            float delta = max - min;
 
-            double h = 0f, s = 0f, l = (max + min) / 2f;
+            float h = 0f, s = 0f, l = (max + min) / 2f;
 
             if (delta > 0f)
             {
@@ -661,25 +661,25 @@ namespace Prowl.Vector
                 if (h < 0f) h += 360f;
             }
 
-            return new Double4(h, s, l, rgba.A);
+            return new Float4(h, s, l, rgba.A);
         }
 
         /// <summary>Converts HSV to RGB color space.</summary>
         public static Color HSVToRGB(Color hsva)
         {
-            double h = hsva.R, s = hsva.G, v = hsva.B;
+            float h = hsva.R, s = hsva.G, v = hsva.B;
 
             if (s <= 0f)
             {
-                double gray = v;
+                float gray = v;
                 return new Color(gray, gray, gray, hsva.A);
             }
 
-            double c = v * s;
-            double x = c * (1f - Maths.Abs((h / 60f) % 2f - 1f));
-            double m = v - c;
+            float c = v * s;
+            float x = c * (1f - Maths.Abs((h / 60f) % 2f - 1f));
+            float m = v - c;
 
-            double r = 0f, g = 0f, b = 0f;
+            float r = 0f, g = 0f, b = 0f;
 
             if (h >= 0f && h < 60f)
                 (r, g, b) = (c, x, 0f);
@@ -700,14 +700,14 @@ namespace Prowl.Vector
         }
 
         /// <summary>Converts RGB to HSV color space.</summary>
-        public static Double4 RGBToHSV(Color rgba)
+        public static Float4 RGBToHSV(Color rgba)
         {
-            double r = rgba.R, g = rgba.G, b = rgba.B;
-            double max = Maths.Max(r, Maths.Max(g, b));
-            double min = Maths.Min(r, Maths.Min(g, b));
-            double delta = max - min;
+            float r = rgba.R, g = rgba.G, b = rgba.B;
+            float max = Maths.Max(r, Maths.Max(g, b));
+            float min = Maths.Min(r, Maths.Min(g, b));
+            float delta = max - min;
 
-            double h = 0f, s = 0f, v = max;
+            float h = 0f, s = 0f, v = max;
 
             if (delta > 0f)
             {
@@ -723,23 +723,23 @@ namespace Prowl.Vector
                 if (h < 0f) h += 360f;
             }
 
-            return new Double4(h, s, v, rgba.A);
+            return new Float4(h, s, v, rgba.A);
         }
 
         #endregion
 
-        public static implicit operator Double4(Color c) => new Double4(c.R, c.G, c.B, c.A);
+        public static implicit operator Float4(Color c) => new Float4(c.R, c.G, c.B, c.A);
         public static implicit operator System.Numerics.Vector4(Color c) => new System.Numerics.Vector4((float)c.R, (float)c.G, (float)c.B, (float)c.A);
         public static implicit operator System.Drawing.Color(Color c) => System.Drawing.Color.FromArgb((int)(c.A * 255), (int)(c.R * 255), (int)(c.G * 255), (int)(c.B * 255));
 
-        public static implicit operator Color(Double4 v) => new Color(v.X, v.Y, v.Z, v.W);
+        public static implicit operator Color(Float4 v) => new Color(v.X, v.Y, v.Z, v.W);
         public static implicit operator Color(System.Numerics.Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
         public static implicit operator Color(System.Drawing.Color c) => new Color(c.R, c.G, c.B, c.A);
 
-        public static Color operator +(Color a, double b) => new Color(a.R + b, a.G + b, a.B + b, a.A + b);
-        public static Color operator -(Color a, double b) => new Color(a.R - b, a.G - b, a.B - b, a.A - b);
-        public static Color operator *(Color a, double b) => new Color(a.R * b, a.G * b, a.B * b, a.A * b);
-        public static Color operator /(Color a, double b) => new Color(a.R / b, a.G / b, a.B / b, a.A / b);
+        public static Color operator +(Color a, float b) => new Color(a.R + b, a.G + b, a.B + b, a.A + b);
+        public static Color operator -(Color a, float b) => new Color(a.R - b, a.G - b, a.B - b, a.A - b);
+        public static Color operator *(Color a, float b) => new Color(a.R * b, a.G * b, a.B * b, a.A * b);
+        public static Color operator /(Color a, float b) => new Color(a.R / b, a.G / b, a.B / b, a.A / b);
 
         public static Color operator +(Color a, Color b) => new Color(a.R + b.R, a.G + b.G, a.B + b.B, a.A + b.A);
         public static Color operator -(Color a, Color b) => new Color(a.R - b.R, a.G - b.G, a.B - b.B, a.A - b.A);

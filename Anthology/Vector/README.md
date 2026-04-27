@@ -95,14 +95,9 @@ var scaled = v3 * 2.0;
 var normalized = Double3.Normalize(v3);
 
 // Vector operations
-double dot = Double3.Dot(v3, normalized);
-Double3 cross = Double3.Cross(v3, normalized);
-double distance = Double3.Distance(v3, normalized);
-double angle = Double3.AngleBetween(v3, normalized);
-
-// Component-wise operations via Maths
-var clamped = Maths.Clamp(v3, Double3.Zero, Double3.One);
-var lerped = Maths.Lerp(v3, Double3.One, 0.5);
+float dot = Vector3.Dot(v3, normalized);
+Vector3 cross = Vector3.Cross(v3, normalized);
+float distance = Vector3.Distance(v3, normalized);
 ```
 
 ### Matrix Transformations
@@ -183,14 +178,15 @@ float gaussian = rng.NextGaussian(mean: 0f, standardDeviation: 1f);
 ### Angle Conversions
 
 ```csharp
-// Static methods on Maths
-double degrees = Maths.ToDegrees(Maths.PI);   // 180.0
-double radians = Maths.ToRadians(90.0);        // π/2
+// Generate random values
+float value = Random.Value;                // Range [0,1]
+Vector2 circle = Random.OnUnitCircle;       // Point on circle
+Vector3 sphere = Random.InUnitSphere;       // Point in sphere
+Quaternion rotation = Random.Rotation;      // Random rotation
 
-// Works on vectors too
-Double3 inDegrees = Maths.ToDegrees(eulerRadians);
-Double3 inRadians = Maths.ToRadians(eulerDegrees);
-```
+// Quick conversions between Radiens and Degrees
+float degree = radian.ToDeg();
+float radian = degree.ToRad();
 
 ### Intersection Tests
 

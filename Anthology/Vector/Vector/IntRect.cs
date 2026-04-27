@@ -5,7 +5,7 @@ using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Vector.Geometry
+namespace Prowl.Vector
 {
     /// <summary>
     /// Represents an axis-aligned rectangle in 2D space.
