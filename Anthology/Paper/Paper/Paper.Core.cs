@@ -43,6 +43,13 @@ namespace Prowl.PaperUI
 
         // Public properties
         public Rect ScreenRect => new Rect(0, 0, _canvas?.Width ?? _width, _canvas?.Height ?? _height);
+
+        /// <summary>Viewport width in logical units (matches <see cref="ScreenRect"/>.Width).</summary>
+        public float Width => _canvas?.Width ?? _width;
+
+        /// <summary>Viewport height in logical units (matches <see cref="ScreenRect"/>.Height).</summary>
+        public float Height => _canvas?.Height ?? _height;
+
         public ElementHandle RootElement => _rootElementHandle;
         public Canvas Canvas => _canvas;
         public ICanvasRenderer Renderer => _renderer;
