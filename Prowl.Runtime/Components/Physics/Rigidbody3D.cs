@@ -362,14 +362,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         interpTimer = 0;
     }
 
-    
-    // public override void DrawGizmos()
-    // {
-    //     if (_body == null || _body.Handle.IsZero) return;
-
-    //     _body.DebugDraw(JitterGizmosDrawer.Instance);
-    // }
-
     public override void OnEnable()
     {
         if (_body == null || _body.Handle.IsZero)
