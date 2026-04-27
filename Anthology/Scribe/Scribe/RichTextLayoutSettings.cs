@@ -28,6 +28,15 @@ namespace Prowl.Scribe
         public TextWrapMode WrapMode = TextWrapMode.NoWrap;
         public TextAlignment Alignment = TextAlignment.Left;
 
+        /// <summary>
+        /// Multiplier applied to absolute pixel-size tag values (e.g. <c>&lt;size=24&gt;</c>) at
+        /// layout time. Lets host code keep tag values in logical units when the engine itself runs
+        /// in physical pixels (e.g. for HiDPI). Default 1.
+        /// Percent sizes (e.g. <c>&lt;size=200%&gt;</c>) are unaffected — they're already relative
+        /// to <see cref="PixelSize"/>, which the host scales separately.
+        /// </summary>
+        public float AbsoluteSizeScale = 1f;
+
         // --- Default effect parameters (used when a tag omits the attribute) ---
         public float DefaultShakeAmp = 1.5f;
         public float DefaultShakeFreq = 22f;

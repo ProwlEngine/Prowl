@@ -153,8 +153,11 @@ namespace Prowl.Scribe
                 if (s.Color.HasValue) cs.Color = s.Color.Value;
                 if (!float.IsNaN(s.PixelSize))
                 {
-                    // Negative value encodes "percent of base".
-                    cs.PixelSize = s.PixelSize >= 0 ? s.PixelSize : basePx * (-s.PixelSize) * 0.01f;
+                    // Negative value encodes "percent of base". Absolute values are scaled by
+                    // AbsoluteSizeScale so hosts can treat tag values as logical units.
+                    cs.PixelSize = s.PixelSize >= 0
+                        ? s.PixelSize * _settings.AbsoluteSizeScale
+                        : basePx * (-s.PixelSize) * 0.01f;
                 }
                 if (s.LinkHref != null) cs.LinkHref = s.LinkHref;
             }
