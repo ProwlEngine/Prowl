@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.IO;
 
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -9,26 +10,25 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
-/// Generates a 2D BRDF Integration LUT for split-sum IBL approximation.
+/// Loads a pre-computed 2D BRDF Integration LUT for split-sum IBL approximation.
 /// The LUT is indexed by (NdotV, roughness) and stores (scale, bias) for
 /// the Fresnel split-sum: F0 * scale + bias.
-/// This is pre-computed once and set as a global texture "_BRDFLut".
+/// The LUT is loaded from an embedded resource and set as a global texture "_BRDFLut".
 /// </summary>
 public static class BRDFLutGenerator
 {
     private static Texture2D? _lut;
     private const int Size = 256;
-    private const int SampleCount = 1024;
 
     /// <summary>
-    /// Get or generate the BRDF LUT texture.
+    /// Get or load the pre-computed BRDF LUT texture from embedded resources.
     /// </summary>
     public static Texture2D GetLut()
     {
         if (_lut != null && _lut.IsValid())
             return _lut;
 
-        _lut = Generate(Size, SampleCount);
+        _lut = LoadPrecomputed();
         return _lut;
     }
 
@@ -40,6 +40,38 @@ public static class BRDFLutGenerator
     {
         PropertyState.SetGlobalTexture("_BRDFLut", GetLut());
     }
+
+    /// <summary>
+    /// Load the pre-computed BRDF LUT from embedded resources.
+    /// The LUT is generated offline by the BRDFGen tool and embedded into the runtime.
+    /// </summary>
+    private static Texture2D LoadPrecomputed()
+    {
+        using Stream stream = EmbeddedResources.GetStream("Assets/brdf_lut.brdf");
+
+        // Read the raw RGBA8 pixel data (256x256x4 = 262144 bytes)
+        int expectedSize = Size * Size * 4;
+        byte[] pixels = new byte[expectedSize];
+
+        int bytesRead = stream.Read(pixels, 0, expectedSize);
+        if (bytesRead != expectedSize)
+            throw new InvalidDataException($"BRDF LUT file size mismatch. Expected {expectedSize} bytes, got {bytesRead}.");
+
+        var tex = new Texture2D((uint)Size, (uint)Size, false, TextureImageFormat.Color4b);
+        tex.SetData<byte>(pixels);
+        tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+        tex.SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
+        tex.Name = "BRDF LUT";
+        return tex;
+    }
+
+    #region Legacy Generation Code (Kept for Reference / Regeneration Tool)
+    // The code below was used to generate the brdf_lut.brdf file.
+    // It's kept here for reference and for potential regeneration needs.
+    // The actual runtime now loads the pre-computed file above.
+
+    /*
+    private const int SampleCount = 1024;
 
     private static Texture2D Generate(int size, int sampleCount)
     {
@@ -149,4 +181,6 @@ public static class BRDFLutGenerator
 
         return Float3.Normalize(H);
     }
+    */
+    #endregion
 }
