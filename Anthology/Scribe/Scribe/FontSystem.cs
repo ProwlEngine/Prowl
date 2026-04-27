@@ -537,7 +537,13 @@ namespace Prowl.Scribe
 
             if (vertices.Count > 0)
             {
+#if NET5_0_OR_GREATER
+                renderer.DrawQuads(atlasTexture,
+                    CollectionsMarshal.AsSpan(vertices),
+                    CollectionsMarshal.AsSpan(indices));
+#else
                 renderer.DrawQuads(atlasTexture, vertices.ToArray(), indices.ToArray());
+#endif
             }
         }
 
