@@ -18,6 +18,12 @@
     <OutputPath>../Build/Editor/Release/</OutputPath>
   </PropertyGroup>
 
+  <!-- MacOS Retina display fix -->
+  <PropertyGroup>
+    <NSPrincipalClass>NSApplication</NSPrincipalClass>
+    <NSHighResolutionCapable>true</NSHighResolutionCapable>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
   </ItemGroup>
