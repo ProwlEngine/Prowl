@@ -471,13 +471,29 @@ namespace Prowl.Scribe
             float[] minCol = new float[cols];
             float wAvail = widthOverride ?? settings.Width;
 
+            // Cache pass-1 work so pass-2 can skip the FlattenInlines re-walk and reuse the
+            // NoWrap layout when the cell's measured width already fits its column.
+            int rowCount = t.Rows.Count;
+            var cellInlines = new (string text, List<DecorationSpan> decos, List<LinkSpan> links, List<StyleSpan> styles)[rowCount][];
+            var cellNoWrapLayouts = new TextLayout[rowCount][];
+            var cellMinWidths = new float[rowCount][];
+
             // pass 1: min widths via NoWrap measure
-            foreach (var row in t.Rows)
+            for (int r = 0; r < rowCount; r++)
             {
-                for (int c = 0; c < row.Cells.Count; c++)
+                var row = t.Rows[r];
+                int rcells = row.Cells.Count;
+                cellInlines[r] = new (string, List<DecorationSpan>, List<LinkSpan>, List<StyleSpan>)[rcells];
+                cellNoWrapLayouts[r] = new TextLayout[rcells];
+                cellMinWidths[r] = new float[rcells];
+
+                for (int c = 0; c < rcells; c++)
                 {
-                    var cell = row.Cells[c]; 
-                    var (text, _, _, styles) = FlattenInlines(cell.Inlines);
+                    var cell = row.Cells[c];
+                    var inlines = FlattenInlines(cell.Inlines);
+                    cellInlines[r][c] = inlines;
+
+                    var styles = inlines.styles;
                     var tls = TextLayoutSettings.Default;
                     tls.PixelSize = settings.BaseSize;
                     tls.LineHeight = settings.LineHeight;
@@ -487,7 +503,9 @@ namespace Prowl.Scribe
                     tls.Font = settings.ParagraphFont;
                     tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, settings.ParagraphFont, styles, settings);
 
-                    var tl = fontSystem.CreateLayout(text, tls);
+                    var tl = fontSystem.CreateLayout(inlines.text, tls);
+                    cellNoWrapLayouts[r][c] = tl;
+                    cellMinWidths[r][c] = tl.Size.X;
                     minCol[c] = MathF.Max(minCol[c], tl.Size.X);
                 }
             }
@@ -517,7 +535,7 @@ namespace Prowl.Scribe
             var perRowHeights = new float[t.Rows.Count];
 
             // Pass 2: layout rows (we'll emit text now and draw grid after we know full height)
-            for (int r = 0; r < t.Rows.Count; r++)
+            for (int r = 0; r < rowCount; r++)
             {
                 var row = t.Rows[r];
                 float rowHeight = 0f;
@@ -526,18 +544,27 @@ namespace Prowl.Scribe
                 for (int c = 0; c < row.Cells.Count; c++)
                 {
                     var cell = row.Cells[c];
-                    var (text, decos, linkSpans, styles) = FlattenInlines(cell.Inlines);
+                    var (text, decos, linkSpans, styles) = cellInlines[r][c];
 
-                    var tls = TextLayoutSettings.Default;
-                    tls.PixelSize = settings.BaseSize;
-                    tls.LineHeight = settings.LineHeight;
-                    tls.WrapMode = TextWrapMode.Wrap;
-                    tls.MaxWidth = colW[c];
-                    tls.Alignment = AlignToText(cell.Align);
-                    tls.Font = settings.ParagraphFont;
-                    tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, settings.ParagraphFont, styles, settings);
+                    TextLayout tl;
+                    if (cellMinWidths[r][c] <= colW[c])
+                    {
+                        // No wrapping needed — pass-1 NoWrap layout matches what Wrap would produce.
+                        tl = cellNoWrapLayouts[r][c];
+                    }
+                    else
+                    {
+                        var tls = TextLayoutSettings.Default;
+                        tls.PixelSize = settings.BaseSize;
+                        tls.LineHeight = settings.LineHeight;
+                        tls.WrapMode = TextWrapMode.Wrap;
+                        tls.MaxWidth = colW[c];
+                        tls.Alignment = AlignToText(cell.Align);
+                        tls.Font = settings.ParagraphFont;
+                        tls.FontSelector = (charIndex) => ResolveFontForIndex(charIndex, fontSystem, settings.ParagraphFont, styles, settings);
 
-                    var tl = fontSystem.CreateLayout(text, tls);
+                        tl = fontSystem.CreateLayout(text, tls);
+                    }
 
                     var linkRanges = new List<IntRange>();
                     foreach (var ls in linkSpans) linkRanges.Add(ls.Range);
@@ -555,14 +582,17 @@ namespace Prowl.Scribe
 
             float tableBottom = rowY;
 
-            // Draw grid lines UNDER the text (borders 1px)
+            // Draw grid lines UNDER the text (borders 1px). Build them into a local list and
+            // InsertRange once at index 0 — repeated Insert(0, ...) was O(n) per call → O(n²) for
+            // tables with many rows/cols.
             float th = 1f; // thickness
+            var gridOps = new List<IDrawOp>(t.Rows.Count + 1 + colX.Length);
             // Horizontal lines: at each row boundary including top/bottom
             {
                 float yCursor = tableTop;
                 for (int r = 0; r <= t.Rows.Count; r++)
                 {
-                    dl.Ops.Insert(0, new DrawQuad {
+                    gridOps.Add(new DrawQuad {
                         Rect = new RectangleF(x, yCursor - th * 0.5f, wAvail, th),
                         Color = settings.ColorRule
                     });
@@ -572,11 +602,12 @@ namespace Prowl.Scribe
             // Vertical lines: at each column boundary
             for (int c = 0; c < colX.Length; c++)
             {
-                dl.Ops.Insert(0, new DrawQuad {
+                gridOps.Add(new DrawQuad {
                     Rect = new RectangleF(colX[c] - th * 0.5f, tableTop, th, tableBottom - tableTop),
                     Color = settings.ColorRule
                 });
             }
+            dl.Ops.InsertRange(0, gridOps);
 
             return tableBottom + settings.ParagraphSpacing;
         }

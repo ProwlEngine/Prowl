@@ -263,8 +263,7 @@ namespace Prowl.Scribe
             hr = default;
             if (!AtLineStart(text, pos)) return false;
             int lineEnd = LineEnd(text, pos);
-            var line = text.Substring(pos, lineEnd - pos).Trim();
-            if (Regex.IsMatch(line, "^(?:===+|---+)$"))
+            if (IsSetextRule(text, pos, lineEnd))
             {
                 pos = NextLineStart(text, lineEnd);
                 return true;
@@ -373,11 +372,11 @@ namespace Prowl.Scribe
                 while (j < text.Length)
                 {
                     int le2 = LineEnd(text, j);
-                    string l2 = text.Substring(j, le2 - j);
-                    if (string.IsNullOrWhiteSpace(l2)) break;
-                    // stop if the line begins a new list item
-                    if (Regex.IsMatch(l2, "^(?:[+*-]|\\d+\\.)\\s+")) break;
-                    cont.AppendLine(l2);
+                    if (IsBlankLine(text, j, le2)) break;
+                    // stop if the line begins a new list item (+, -, *, or "<digits>.")
+                    if (IsAnyListMarker(text, j, le2)) break;
+                    cont.Append(text, j, le2 - j);
+                    cont.Append('\n');
                     j = NextLineStart(text, le2);
                 }
 
@@ -504,15 +503,126 @@ namespace Prowl.Scribe
         {
             if (!AtLineStart(text, pos)) return false;
             int le = LineEnd(text, pos);
-            var line = text.Substring(pos, le - pos);
-            if (line.StartsWith("```")) return true;
-            if (Regex.IsMatch(line, "^(?:#{1,6} )")) return true;
-            if (Regex.IsMatch(line.Trim(), "^(?:===+|---+)$")) return true;
-            if (line.StartsWith(">")) return true;
-            if (line.TrimStart().StartsWith("|")) return true;
-            if (Regex.IsMatch(line, "^(?:[+-]|\\d+\\.)\\s+")) return true;
-            if (Regex.IsMatch(line.Trim(), "^#\\[[^\\]]+\\]$")) return true;
+            // Hot path — called per line during paragraph parsing. We avoid Substring + Regex by
+            // operating on (text, pos, le) index ranges with hand-rolled predicates.
+            if (StartsWithAt(text, pos, le, "```")) return true;
+            if (IsHeadingStart(text, pos, le)) return true;
+            if (IsSetextRule(text, pos, le)) return true;
+            if (pos < le && text[pos] == '>') return true;
+            if (FirstNonSpace(text, pos, le) is int ns && ns >= 0 && text[ns] == '|') return true;
+            if (IsListMarker(text, pos, le)) return true;
+            if (IsAnchorLine(text, pos, le)) return true;
             return false;
+        }
+
+        // --- Cheap hand-rolled predicates for StartsBlock (avoid Substring + Regex) ---
+
+        private static bool StartsWithAt(string text, int pos, int le, string s)
+        {
+            if (le - pos < s.Length) return false;
+            for (int i = 0; i < s.Length; i++)
+                if (text[pos + i] != s[i]) return false;
+            return true;
+        }
+
+        private static int FirstNonSpace(string text, int pos, int le)
+        {
+            for (int i = pos; i < le; i++)
+            {
+                char c = text[i];
+                if (c != ' ' && c != '\t') return i;
+            }
+            return -1;
+        }
+
+        // ^#{1,6} (heading: 1–6 hashes followed by a space)
+        private static bool IsHeadingStart(string text, int pos, int le)
+        {
+            if (pos >= le || text[pos] != '#') return false;
+            int hashes = 0;
+            int i = pos;
+            while (i < le && text[i] == '#' && hashes < 7) { hashes++; i++; }
+            return hashes >= 1 && hashes <= 6 && i < le && text[i] == ' ';
+        }
+
+        // ^(?:===+|---+)$  on the trimmed line (setext underline / hr)
+        private static bool IsSetextRule(string text, int pos, int le)
+        {
+            // trim leading whitespace
+            int i = pos;
+            while (i < le && (text[i] == ' ' || text[i] == '\t')) i++;
+            if (i >= le) return false;
+            char marker = text[i];
+            if (marker != '=' && marker != '-') return false;
+            // trim trailing whitespace
+            int end = le;
+            while (end > i && (text[end - 1] == ' ' || text[end - 1] == '\t')) end--;
+            int run = end - i;
+            if (run < 3) return false;
+            for (int k = i; k < end; k++)
+                if (text[k] != marker) return false;
+            return true;
+        }
+
+        // ^(?:[+-]|\d+\.)\s+  list marker at line start (StartsBlock variant: '+' or '-' only)
+        private static bool IsListMarker(string text, int pos, int le)
+        {
+            if (pos >= le) return false;
+            char c0 = text[pos];
+            if (c0 == '+' || c0 == '-')
+            {
+                return pos + 1 < le && IsAsciiSpace(text[pos + 1]);
+            }
+            if (c0 >= '0' && c0 <= '9')
+            {
+                int i = pos;
+                while (i < le && text[i] >= '0' && text[i] <= '9') i++;
+                return i + 1 < le && text[i] == '.' && IsAsciiSpace(text[i + 1]);
+            }
+            return false;
+        }
+
+        // ^#\[[^\]]+\]$ on the trimmed line
+        private static bool IsAnchorLine(string text, int pos, int le)
+        {
+            int i = pos;
+            while (i < le && (text[i] == ' ' || text[i] == '\t')) i++;
+            int end = le;
+            while (end > i && (text[end - 1] == ' ' || text[end - 1] == '\t')) end--;
+            if (end - i < 4) return false;            // need at least #[x]
+            if (text[i] != '#' || text[i + 1] != '[') return false;
+            if (text[end - 1] != ']') return false;
+            for (int k = i + 2; k < end - 1; k++)
+                if (text[k] == ']') return false;
+            return true;
+        }
+
+        private static bool IsAsciiSpace(char c) => c == ' ' || c == '\t';
+
+        // Like IsListMarker but also accepts '*' (used by inner list-continuation parsing).
+        private static bool IsAnyListMarker(string text, int pos, int le)
+        {
+            if (pos >= le) return false;
+            char c0 = text[pos];
+            if (c0 == '+' || c0 == '-' || c0 == '*')
+                return pos + 1 < le && IsAsciiSpace(text[pos + 1]);
+            if (c0 >= '0' && c0 <= '9')
+            {
+                int i = pos;
+                while (i < le && text[i] >= '0' && text[i] <= '9') i++;
+                return i + 1 < le && text[i] == '.' && IsAsciiSpace(text[i + 1]);
+            }
+            return false;
+        }
+
+        private static bool IsBlankLine(string text, int pos, int le)
+        {
+            for (int i = pos; i < le; i++)
+            {
+                char c = text[i];
+                if (c != ' ' && c != '\t' && c != '\r') return false;
+            }
+            return true;
         }
 
         #endregion
