@@ -82,6 +82,11 @@ public static class Window
     {
         scale = 1f;
 
+        if (RuntimeUtils.GetOSPlatform() == Platform.MacOS)
+        {
+            return true;
+        }
+
         if (!s_contentScaleResolved)
         {
             s_contentScaleResolved = true;
