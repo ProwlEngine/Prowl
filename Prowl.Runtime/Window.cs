@@ -49,60 +49,26 @@ public static class Window
     public static event Action<WindowState>? StateChanged;
     public static event Action<string[]>? FileDrop;
 
-    private static nint s_contentScaleProc;
-    private static bool s_contentScaleResolved;
-
     /// <summary>
-    /// System content scale factor (1.0 = 100%, 1.25 = 125%, 1.5 = 150%, 2.0 = retina, etc.).
+    /// Physical-to-logical pixel ratio for the window's current display.
+    /// Computed as <c>FramebufferSize / Size</c> — the only value that is
+    /// always correct regardless of platform or DPI-awareness mode.
     /// <para>
-    /// Silk.NET.GLFW 2.22 does not expose <c>glfwGetWindowContentScale</c> as a managed method,
-    /// so this resolves the symbol via <see cref="INativeContext.GetProcAddress"/> and calls it
-    /// directly. If that fails (non-GLFW backend, older GLFW, or the symbol isn't reachable),
-    /// we fall back to the <c>FramebufferSize / Size</c> ratio which is also the correct
-    /// value on macOS retina and on DPI-aware Windows (FB in physical pixels, Size in points).
+    /// On macOS Retina this is 2 (3024 fb / 1512 logical points).
+    /// On a 1× display or a DPI-unaware Windows process (where the OS virtualises
+    /// the framebuffer so fb == win) this is 1, even if the system DPI is higher.
+    /// On a DPI-aware Windows process at 150% this is 1.5 (1800 fb / 1200 points).
     /// </para>
     /// </summary>
-    public static unsafe float ContentScale
+    public static float ContentScale
     {
         get
         {
             if (InternalWindow == null) return 1f;
-
-            nint? nativeGlfw = InternalWindow.Native?.Glfw;
-            if (nativeGlfw.HasValue && nativeGlfw.Value != 0 && TryGetContentScaleViaProc(nativeGlfw.Value, out float scale))
-                return scale;
-
             var fb = InternalWindow.FramebufferSize;
             var win = InternalWindow.Size;
             return win.X > 0 ? (float)fb.X / win.X : 1f;
         }
-    }
-
-    private static unsafe bool TryGetContentScaleViaProc(nint glfwWindow, out float scale)
-    {
-        scale = 1f;
-
-        if (!s_contentScaleResolved)
-        {
-            s_contentScaleResolved = true;
-            try
-            {
-                // Silk.NET's INativeContext GetProcAddress falls through to the GLFW shared
-                // library's own symbol table when glfwGetProcAddress returns null (i.e. for
-                // non-GL symbols). Works on Windows in our testing; on macOS / Linux this path
-                // may return 0 and we'll use the FB/Size fallback in the caller.
-                s_contentScaleProc = Silk.NET.GLFW.GlfwProvider.GLFW.Value.Context.GetProcAddress("glfwGetWindowContentScale");
-            }
-            catch { }
-        }
-
-        if (s_contentScaleProc == 0) return false;
-
-        float x, y;
-        ((delegate* unmanaged[Cdecl]<nint, float*, float*, void>)s_contentScaleProc)(glfwWindow, &x, &y);
-        if (x <= 0) return false;
-        scale = x;
-        return true;
     }
 
     public static Vector2D<int> Position
