@@ -497,6 +497,52 @@ public sealed class ReflectNode : Node, IShaderNode, IShaderGraphNode
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// RefractNode
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// <c>refract(I, N, eta)</c> bends incident vector I through surface normal N by
+/// the ratio of refractive indices <c>eta = n_in / n_out</c>. Returns the zero
+/// vector under total internal reflection (when 1 - eta² · (1 - dot(N,I)²) is
+/// negative); pair with a Reflect path if you need the standard "TIR fallback".
+/// </summary>
+/// <remarks>
+/// Typical eta values: <c>1/1.33</c> (air → water), <c>1/1.45</c> (air → glass),
+/// <c>1/2.42</c> (air → diamond). I should be normalised; N must be normalised.
+/// </remarks>
+public sealed class RefractNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Refract";
+    public override string Category => "Vector";
+    public override System.Drawing.Color AccentColor => VectorAccents.Vector;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float3>("I",   Float3.Zero,         required: true, tooltip: "Incident vector (normalised).");
+        AddInput<Float3>("N",   new Float3(0, 0, 1), required: true, tooltip: "Surface normal (normalised).");
+        // 1/1.45 ≈ 0.6897 air → glass. Most common starting point.
+        AddInput<float>("Eta",  0.6897f,             required: true,
+            tooltip: "Ratio of refractive indices (n_in / n_out). 1/1.33 water, 1/1.45 glass, 1/2.42 diamond.");
+        AddOutput<Float3>("Out");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        // GLSL refract requires the I/N pair to share a vector type and Eta is a
+        // scalar. Match the I/N width to the wider operand so float-promoted
+        // wires still compile cleanly.
+        var t = ShaderEmit.MaxChannel(ctx.GetSourceType(GetInput("I")!), ctx.GetSourceType(GetInput("N")!));
+        var i = ctx.EvaluateInputAs(GetInput("I")!,   t);
+        var n = ctx.EvaluateInputAs(GetInput("N")!,   t);
+        var e = ctx.EvaluateInputAs(GetInput("Eta")!, ShaderType.Float);
+        return $"refract({i}, {n}, {e})";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx)
+        => ShaderEmit.TypeFromInputs(this, "I", "N", ctx);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // TransformNode
 // ═════════════════════════════════════════════════════════════════════════════
 
