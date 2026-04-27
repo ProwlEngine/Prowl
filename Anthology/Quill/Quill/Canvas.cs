@@ -2759,6 +2759,147 @@ namespace Prowl.Quill
 
         #endregion
 
+        #region Rich Text
+
+        /// <summary>
+        /// A parsed and laid-out rich-text block ready for animated rendering.
+        /// Wraps a Scribe <see cref="RichTextLayout"/> with the framebuffer scale captured at
+        /// creation, so <see cref="Size"/> and hit testing report values in logical units.
+        /// </summary>
+        public struct QuillRichText
+        {
+            internal RichTextLayout Layout;
+            internal float CreationScale;
+
+            /// <summary>Layout size in logical units.</summary>
+            public readonly Float2 Size => CreationScale > 0f ? Layout.Size / CreationScale : Layout.Size;
+
+            /// <summary>Visible text with all tags stripped (useful for accessibility / clipboard).</summary>
+            public readonly string VisibleText => Layout?.VisibleText ?? string.Empty;
+
+            /// <summary>Re-anchors animation start time on the next draw — replays typewriter etc.</summary>
+            public readonly void Reset() => Layout?.Reset();
+        }
+
+        /// <summary>
+        /// Clones a <see cref="RichTextLayoutSettings"/> and scales its dimensional fields from
+        /// logical units to physical pixels. Tag values like <c>&lt;size=24&gt;</c> are scaled via
+        /// <see cref="RichTextLayoutSettings.AbsoluteSizeScale"/> so source text stays in logical
+        /// units. Frequencies / speeds / phases are unitless and pass through unchanged.
+        /// </summary>
+        private RichTextLayoutSettings ScaleRichSettings(RichTextLayoutSettings src)
+        {
+            return new RichTextLayoutSettings {
+                RegularFont = src.RegularFont,
+                BoldFont = src.BoldFont,
+                ItalicFont = src.ItalicFont,
+                BoldItalicFont = src.BoldItalicFont,
+                MonoFont = src.MonoFont,
+
+                PixelSize = src.PixelSize * _framebufferScale,
+                LineHeight = src.LineHeight,
+                LetterSpacing = src.LetterSpacing * _framebufferScale,
+                WordSpacing = src.WordSpacing * _framebufferScale,
+                TabSize = src.TabSize,
+                DefaultColor = src.DefaultColor,
+
+                MaxWidth = src.MaxWidth > 0 ? src.MaxWidth * _framebufferScale : 0f,
+                WrapMode = src.WrapMode,
+                Alignment = src.Alignment,
+                AbsoluteSizeScale = _framebufferScale,
+
+                // Pixel-valued effect amplitudes scale; time/relative ones don't.
+                DefaultShakeAmp = src.DefaultShakeAmp * _framebufferScale,
+                DefaultShakeFreq = src.DefaultShakeFreq,
+                DefaultWaveAmp = src.DefaultWaveAmp * _framebufferScale,
+                DefaultWaveFreq = src.DefaultWaveFreq,
+                DefaultWavePhase = src.DefaultWavePhase,
+                DefaultRainbowSpeed = src.DefaultRainbowSpeed,
+                DefaultRainbowSpread = src.DefaultRainbowSpread,
+                DefaultRainbowSat = src.DefaultRainbowSat,
+                DefaultRainbowValue = src.DefaultRainbowValue,
+                DefaultPulseSpeed = src.DefaultPulseSpeed,
+                DefaultPulseAmp = src.DefaultPulseAmp, // relative scale, not pixels
+                DefaultFadeSpeed = src.DefaultFadeSpeed,
+                DefaultJitterAmp = src.DefaultJitterAmp * _framebufferScale,
+                DefaultJitterFreq = src.DefaultJitterFreq,
+                DefaultTypewriterSpeed = src.DefaultTypewriterSpeed,
+                DefaultTypewriterFadeIn = src.DefaultTypewriterFadeIn,
+            };
+        }
+
+        /// <summary>
+        /// Parses a Unity-style rich-text source and lays it out for animated rendering. All
+        /// dimensional fields in <paramref name="settings"/> are in logical units and are
+        /// scaled internally for HiDPI. The returned object is reusable across frames.
+        /// </summary>
+        public QuillRichText CreateRichText(string source, RichTextLayoutSettings settings)
+        {
+            var scaled = ScaleRichSettings(settings);
+            var rt = new RichTextLayout(source, scaled);
+            rt.Update(_scribeRenderer.FontEngine);
+            return new QuillRichText { Layout = rt, CreationScale = _framebufferScale };
+        }
+
+        /// <summary>
+        /// Measures a rich-text source. Returns size in logical units. Convenience for laying out
+        /// once just to get the size; if you'll also draw, prefer
+        /// <see cref="CreateRichText"/> + <see cref="QuillRichText.Size"/>.
+        /// </summary>
+        public Float2 MeasureRichText(string source, RichTextLayoutSettings settings)
+            => CreateRichText(source, settings).Size;
+
+        /// <summary>
+        /// Draws a rich-text block at the given logical-space position.
+        /// <paramref name="currentTime"/> is in seconds; the first draw after creation or
+        /// <see cref="QuillRichText.Reset"/> anchors animation start to that value.
+        /// </summary>
+        public void DrawRichText(QuillRichText text, Float2 position, double currentTime, Float2? origin = null)
+        {
+            if (text.Layout == null) return;
+
+            Float2 pos = position;
+            if (origin.HasValue)
+            {
+                var sz = text.Size;
+                pos.X -= sz.X * origin.Value.X;
+                pos.Y -= sz.Y * origin.Value.Y;
+            }
+            Float2 pixelPos = pos * _framebufferScale;
+            text.Layout.Draw(_scribeRenderer.FontEngine, _scribeRenderer, pixelPos, currentTime);
+        }
+
+        /// <summary>
+        /// Hit-tests a logical-space point against link spans in the rich text.
+        /// </summary>
+        /// <param name="text">The rich text block to query.</param>
+        /// <param name="renderOffset">The logical position passed to the matching <c>DrawRichText</c> call.</param>
+        /// <param name="point">The query point in logical units.</param>
+        /// <param name="useScissor">If true, return false when the point is outside the active scissor.</param>
+        /// <param name="href">When the method returns true, contains the href of the link.</param>
+        public bool GetRichTextLinkAt(QuillRichText text, Float2 renderOffset, Float2 point, bool useScissor, out string href)
+        {
+            href = null;
+            if (text.Layout == null) return false;
+
+            if (useScissor && _state.scissorExtent.X > 0)
+            {
+                var transformedPoint = _state.scissor.Inverse().TransformPoint(point);
+                var distanceFromEdges = new Float2(
+                    Maths.Abs(transformedPoint.X) - _state.scissorExtent.X,
+                    Maths.Abs(transformedPoint.Y) - _state.scissorExtent.Y
+                );
+                if (distanceFromEdges.X > 0.5 || distanceFromEdges.Y > 0.5) return false;
+            }
+
+            // Layout coordinates are in physical pixels; convert the logical query point.
+            Float2 local = (point - renderOffset) * _framebufferScale;
+            href = text.Layout.HitLink(local);
+            return href != null;
+        }
+
+        #endregion
+
         #endregion
 
         #region Helpers
