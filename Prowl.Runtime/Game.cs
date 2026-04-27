@@ -251,41 +251,41 @@ public abstract class Game
     public virtual void Closing() { }
 
     /// <summary>
-    /// Called each frame right before <c>Paper.BeginFrame</c>. Compresses Paper's logical
-    /// window by <see cref="Window.ContentScale"/> so widgets sit in "points" (1 unit =
-    /// 1 logical dot at 1× density, matching the OS convention), and sets
-    /// <c>DisplayFramebufferScale</c> to <see cref="Window.ContentScale"/> so the canvas emits
-    /// pixel-space vertices that land correctly in the framebuffer and font atlases rasterize
-    /// at native density.
+    /// Called each frame right before <c>Paper.BeginFrame</c>. Sets Paper's logical resolution
+    /// to the window's logical size (OS points) and <c>DisplayFramebufferScale</c> to
+    /// <see cref="Window.ContentScale"/>. Quill's <c>TransformPoint</c> multiplies every vertex
+    /// by <c>DisplayFramebufferScale</c>, so vertices span <c>[0, winSize × cs]</c> =
+    /// <c>[0, fbSize]</c>, exactly matching the orthographic projection set up by
+    /// <see cref="PaperRenderer.UpdateProjection"/>.
     /// <para>
-    /// Under this scheme a widget declared <c>Width(100)</c> occupies ~100 physical pixels at
-    /// 1× DPI and 200 physical pixels at 2× DPI i.e. the same physical inches on the screen
-    /// regardless of display density. On non-DPI-aware platforms (Windows without the per-
-    /// monitor manifest) the OS bitmap-upscales the framebuffer on top of this, which makes
-    /// widgets look proportionally larger; on DPI-aware platforms (macOS retina, modern
-    /// Windows) the app renders straight into the physical framebuffer and sizes match native
-    /// apps.
+    /// A widget declared <c>Width(100)</c> occupies 100 logical points = 100 physical pixels at
+    /// 1× DPI and 200 physical pixels at 2× (Retina) DPI — the same physical size on screen
+    /// regardless of display density, with higher pixel quality on HiDPI displays.
     /// </para>
     /// </summary>
     protected virtual void PreparePaperFrame()
     {
-        var winSize = Window.InternalWindow.Size;
+        var fbSize = Window.InternalWindow.FramebufferSize;
         float cs = Math.Max(0.01f, Window.ContentScale);
-        _paper.SetResolution(winSize.X / cs, winSize.Y / cs);
+        // resolution × cs = fbSize, so vertices always span exactly [0, fbSize].
+        // Using fbSize (not winSize) handles DPI-unaware Windows where winSize == fbSize
+        // but glfwGetWindowContentScale still returns the system DPI factor (e.g. 1.25).
+        _paper.SetResolution(fbSize.X / cs, fbSize.Y / cs);
         _paper.DisplayFramebufferScale = new Float2(cs, cs);
     }
 
-    /// <summary>
-    /// Returns the current mouse position in Paper-logical units. Because
-    /// <see cref="PreparePaperFrame"/> compresses Paper's logical space by <see cref="Window.ContentScale"/>,
-    /// the mouse (reported in window-logical pixels by Silk.NET on every platform) is divided
-    /// by the same factor so clicks land on widgets in the same space.
-    /// </summary>
     protected virtual Float2 GetPaperMousePosition()
     {
         var p = Input.MousePosition;
+        var fb = Window.InternalWindow.FramebufferSize;
+        var win = Window.InternalWindow.Size;
         float cs = Math.Max(0.01f, Window.ContentScale);
-        return new Float2(p.X / cs, p.Y / cs);
+        // Mouse is in winSize coords; paper space is [0, fbSize/cs].
+        // csFbWin converts winSize → fbSize; dividing by cs then lands in paper space.
+        // On macOS cs == csFbWin so the ratio is 1. On DPI-unaware Windows csFbWin == 1
+        // and cs is the system DPI, so we divide mouse by cs.
+        float csFbWin = win.X > 0 ? (float)fb.X / win.X : 1f;
+        return new Float2(p.X * csFbWin / cs, p.Y * csFbWin / cs);
     }
 
     [RequiresDynamicCode("Calls System.Enum.GetValues(Type)")]
