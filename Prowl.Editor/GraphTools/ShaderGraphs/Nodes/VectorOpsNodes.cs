@@ -446,15 +446,18 @@ public sealed class NormalBlendNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        var baseExpr   = ctx.EvaluateInputAs(GetInput("Base")!,   ShaderType.Vec3);
-        var detailExpr = ctx.EvaluateInputAs(GetInput("Detail")!, ShaderType.Vec3);
-
-        // Emit into BodyPrelude so the three temp variables are computed once
-        // even if the output port is consumed by multiple downstream nodes.
-        string tName = ctx.FreshLocal("_nb_t");
-        string uName = ctx.FreshLocal("_nb_u");
-        ctx.BodyPrelude.AppendLine($"    vec3 {tName} = ({baseExpr}) + vec3(0.0, 0.0, 1.0);");
-        ctx.BodyPrelude.AppendLine($"    vec3 {uName} = ({detailExpr}) * vec3(-1.0, -1.0, 1.0);");
+        // Emit-once keyed on node id so multi-fanout doesn't duplicate the temp
+        // declarations into BodyPrelude. Per-instance suffixes keep multiple
+        // NormalBlend nodes in the same graph isolated.
+        string tName = $"_nb_t_{Id:N}";
+        string uName = $"_nb_u_{Id:N}";
+        ctx.EmitOnce("normalblend:" + tName, () =>
+        {
+            var baseExpr   = ctx.EvaluateInputAs(GetInput("Base")!,   ShaderType.Vec3);
+            var detailExpr = ctx.EvaluateInputAs(GetInput("Detail")!, ShaderType.Vec3);
+            ctx.BodyPrelude.AppendLine($"    vec3 {tName} = ({baseExpr}) + vec3(0.0, 0.0, 1.0);");
+            ctx.BodyPrelude.AppendLine($"    vec3 {uName} = ({detailExpr}) * vec3(-1.0, -1.0, 1.0);");
+        });
 
         return $"normalize({tName} * dot({tName}, {uName}) / {tName}.z - {uName})";
     }

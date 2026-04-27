@@ -67,6 +67,8 @@ public sealed class CustomCodeNode : Node, IShaderNode, IShaderGraphNode
             ? ctx.GetSourceType(GetInput(name)!) : ShaderType.Float;
         var t0 = T("In0"); var t1 = T("In1"); var t2 = T("In2"); var t3 = T("In3");
 
+        ValidateBody(Code, ctx);
+
         // Emit the function body exactly once per compile.
         ctx.EmitOnce("cc:" + fnName, () =>
         {
@@ -97,6 +99,51 @@ public sealed class CustomCodeNode : Node, IShaderNode, IShaderGraphNode
     }
 
     ShaderType IShaderNode.GetOutputType(Port outputPort, ShaderGenContext ctx) => OutputType;
+
+    /// <summary>
+    /// Cheap pre-flight check on the user's GLSL body before it gets handed to the
+    /// driver. Catches the obvious mistakes (no return, mismatched braces, empty
+    /// body) and surfaces them as node diagnostics so the message lands ON the
+    /// CustomCode node instead of as an opaque shader-compile error elsewhere.
+    /// Real GLSL typing / syntax is still the driver's job this only filters out
+    /// the most common authoring mistakes.
+    /// </summary>
+    private void ValidateBody(string body, ShaderGenContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            ctx.Diagnostics.Add((Id, "Custom Code body is empty must contain at least a 'return' statement.", NodeMessageSeverity.Error));
+            return;
+        }
+
+        // Strip line + block comments first so braces/return inside comments don't
+        // count toward the check.
+        var stripped = StripComments(body);
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(stripped, @"\breturn\b"))
+            ctx.Diagnostics.Add((Id, "Custom Code body must contain a 'return' statement that produces the function's output.", NodeMessageSeverity.Error));
+
+        int depth = 0;
+        bool inString = false; // GLSL has no strings, but be defensive against pasted shader-graph snippets.
+        foreach (var ch in stripped)
+        {
+            if (ch == '"') inString = !inString;
+            if (inString) continue;
+            if (ch == '{') depth++;
+            else if (ch == '}') { depth--; if (depth < 0) break; }
+        }
+        if (depth != 0)
+            ctx.Diagnostics.Add((Id, $"Custom Code body has mismatched braces (delta={depth}). Each '{{' must be paired with '}}'.", NodeMessageSeverity.Error));
+    }
+
+    private static string StripComments(string src)
+    {
+        // Remove /* ... */ blocks, then // ... line comments. Order matters block
+        // comments may contain // sequences, so block comments come first.
+        src = System.Text.RegularExpressions.Regex.Replace(src, @"/\*[\s\S]*?\*/", " ");
+        src = System.Text.RegularExpressions.Regex.Replace(src, @"//[^\r\n]*", " ");
+        return src;
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

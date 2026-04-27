@@ -178,7 +178,10 @@ public abstract class Noise2DNodeBase : Node, IShaderNode, IShaderGraphNode
             var sb = new StringBuilder();
             sb.Append("float ").Append(fn).AppendLine("(vec2 p, float freq) {");
             sb.Append("    fnl_state s = fnlCreateState(").Append(Seed).AppendLine(");");
-            sb.AppendLine("    s.frequency = freq;");
+            // Guard against zero / negative frequency NaN propagates through the fractal
+    // octaves and pollutes the entire output. 1e-4 is small enough to act as
+    // "off" while staying numerically valid.
+    sb.AppendLine("    s.frequency = max(freq, 0.0001);");
             sb.Append("    s.noise_type = ").Append(NoiseTypeMacro).AppendLine(";");
             NoiseEmit.EmitFractalState(sb, Fractal, Octaves, Lacunarity, Gain, WeightedStrength, PingPongStrength);
             sb.AppendLine("    return fnlGetNoise2D(s, p.x, p.y);");
@@ -237,7 +240,10 @@ public abstract class Noise3DNodeBase : Node, IShaderNode, IShaderGraphNode
             var sb = new StringBuilder();
             sb.Append("float ").Append(fn).AppendLine("(vec3 p, float freq) {");
             sb.Append("    fnl_state s = fnlCreateState(").Append(Seed).AppendLine(");");
-            sb.AppendLine("    s.frequency = freq;");
+            // Guard against zero / negative frequency NaN propagates through the fractal
+    // octaves and pollutes the entire output. 1e-4 is small enough to act as
+    // "off" while staying numerically valid.
+    sb.AppendLine("    s.frequency = max(freq, 0.0001);");
             sb.Append("    s.noise_type = ").Append(NoiseTypeMacro).AppendLine(";");
             NoiseEmit.EmitFractalState(sb, Fractal, Octaves, Lacunarity, Gain, WeightedStrength, PingPongStrength);
             sb.AppendLine("    return fnlGetNoise3D(s, p.x, p.y, p.z);");
@@ -320,7 +326,10 @@ public sealed class CellularNoise2DNode : Node, IShaderNode, IShaderGraphNode
             var sb = new StringBuilder();
             sb.Append("float ").Append(fn).AppendLine("(vec2 p, float freq, float jit) {");
             sb.Append("    fnl_state s = fnlCreateState(").Append(Seed).AppendLine(");");
-            sb.AppendLine("    s.frequency = freq;");
+            // Guard against zero / negative frequency NaN propagates through the fractal
+    // octaves and pollutes the entire output. 1e-4 is small enough to act as
+    // "off" while staying numerically valid.
+    sb.AppendLine("    s.frequency = max(freq, 0.0001);");
             sb.AppendLine("    s.noise_type = FNL_NOISE_CELLULAR;");
             sb.Append("    s.cellular_distance_func = ").Append(NoiseEmit.CellularDistanceMacro(DistanceFunction)).AppendLine(";");
             sb.Append("    s.cellular_return_type = ").Append(NoiseEmit.CellularReturnMacro(ReturnType)).AppendLine(";");
@@ -379,7 +388,10 @@ public sealed class CellularNoise3DNode : Node, IShaderNode, IShaderGraphNode
             var sb = new StringBuilder();
             sb.Append("float ").Append(fn).AppendLine("(vec3 p, float freq, float jit) {");
             sb.Append("    fnl_state s = fnlCreateState(").Append(Seed).AppendLine(");");
-            sb.AppendLine("    s.frequency = freq;");
+            // Guard against zero / negative frequency NaN propagates through the fractal
+    // octaves and pollutes the entire output. 1e-4 is small enough to act as
+    // "off" while staying numerically valid.
+    sb.AppendLine("    s.frequency = max(freq, 0.0001);");
             sb.AppendLine("    s.noise_type = FNL_NOISE_CELLULAR;");
             sb.Append("    s.cellular_distance_func = ").Append(NoiseEmit.CellularDistanceMacro(DistanceFunction)).AppendLine(";");
             sb.Append("    s.cellular_return_type = ").Append(NoiseEmit.CellularReturnMacro(ReturnType)).AppendLine(";");
@@ -446,7 +458,7 @@ public sealed class DomainWarp2DNode : Node, IShaderNode, IShaderGraphNode
             sb.AppendLine("    {");
             sb.AppendLine($"        vec2 _p = {coord};");
             sb.AppendLine($"        fnl_state _s = fnlCreateState({Seed});");
-            sb.AppendLine($"        _s.frequency = {freq};");
+            sb.AppendLine($"        _s.frequency = max(({freq}), 0.0001);");
             sb.AppendLine($"        _s.domain_warp_type = {NoiseEmit.DomainWarpMacro(WarpType)};");
             sb.AppendLine($"        _s.domain_warp_amp = {amp};");
             if (Fractal != DomainWarpFractal.None)
@@ -575,7 +587,7 @@ public sealed class DomainWarp3DNode : Node, IShaderNode, IShaderGraphNode
             sb.AppendLine("    {");
             sb.AppendLine($"        vec3 _p = {coord};");
             sb.AppendLine($"        fnl_state _s = fnlCreateState({Seed});");
-            sb.AppendLine($"        _s.frequency = {freq};");
+            sb.AppendLine($"        _s.frequency = max(({freq}), 0.0001);");
             sb.AppendLine($"        _s.domain_warp_type = {NoiseEmit.DomainWarpMacro(WarpType)};");
             sb.AppendLine($"        _s.domain_warp_amp = {amp};");
             if (Fractal != DomainWarpFractal.None)

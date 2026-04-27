@@ -276,16 +276,14 @@ public sealed class IfNode : Node, IShaderNode, IShaderGraphNode
         var staName = $"_if{Id:N}_sta";
         var stbName = $"_if{Id:N}_stb";
 
-        if (!ctx.HelperFunctions.Contains(staName))
+        ctx.EmitOnce("if:" + staName, () =>
         {
-            ctx.HelperFunctions.Add(staName);
-
             // A and B are compared as scalars evaluate at Float.
             var a = ctx.EvaluateInputAs(GetInput("A")!, ShaderType.Float);
             var b = ctx.EvaluateInputAs(GetInput("B")!, ShaderType.Float);
             ctx.BodyPrelude.AppendLine($"    float {staName} = step({a}, {b});");
             ctx.BodyPrelude.AppendLine($"    float {stbName} = step({b}, {a});");
-        }
+        });
 
         // GT / EQ / LT evaluated at the unified output type.
         var t  = ((IShaderNode)this).GetOutputType(p, ctx);

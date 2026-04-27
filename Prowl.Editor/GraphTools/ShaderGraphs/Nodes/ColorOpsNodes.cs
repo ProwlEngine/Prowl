@@ -321,16 +321,21 @@ public sealed class BlendNode : Node, IShaderNode, IShaderGraphNode
         PhotoshopBlendMode.LinearDodge => $"({a} + {b})",
 
         // Overlay / Light family ────────────────────────────────────────────
+        // mix(F, T, step(0.5, x)) instead of `(x > 0.5) ? T : F` so the
+        // formulas evaluate per-component on vectors (vec3/vec4). The bool
+        // form would emit a bvec → ternary, which is not legal GLSL; this
+        // version compiles for both float and vector inputs and produces the
+        // same scalar result as the original.
         PhotoshopBlendMode.Overlay =>
-            $"(({b} > 0.5) ? (1.0 - (1.0 - 2.0*({b} - 0.5)) * (1.0 - {a})) : (2.0 * {b} * {a}))",
+            $"mix((2.0 * {b} * {a}), (1.0 - (1.0 - 2.0*({b} - 0.5)) * (1.0 - {a})), step(0.5, {b}))",
         PhotoshopBlendMode.HardLight =>
-            $"(({a} > 0.5) ? (1.0 - (1.0 - 2.0*({a} - 0.5)) * (1.0 - {b})) : (2.0 * {a} * {b}))",
+            $"mix((2.0 * {a} * {b}), (1.0 - (1.0 - 2.0*({a} - 0.5)) * (1.0 - {b})), step(0.5, {a}))",
         PhotoshopBlendMode.VividLight =>
-            $"(({a} > 0.5) ? ({b} / ((1.0 - {a}) * 2.0)) : (1.0 - (((1.0 - {b}) * 0.5) / {a})))",
+            $"mix((1.0 - (((1.0 - {b}) * 0.5) / {a})), ({b} / ((1.0 - {a}) * 2.0)), step(0.5, {a}))",
         PhotoshopBlendMode.LinearLight =>
-            $"(({a} > 0.5) ? ({b} + 2.0*{a} - 1.0) : ({b} + 2.0*({a} - 0.5)))",
+            $"mix(({b} + 2.0*({a} - 0.5)), ({b} + 2.0*{a} - 1.0), step(0.5, {a}))",
         PhotoshopBlendMode.PinLight =>
-            $"(({a} > 0.5) ? max({b}, 2.0*({a} - 0.5)) : min({b}, 2.0*{a}))",
+            $"mix(min({b}, 2.0*{a}), max({b}, 2.0*({a} - 0.5)), step(0.5, {a}))",
         PhotoshopBlendMode.HardMix =>
             $"round(0.5 * ({a} + {b}))",
 

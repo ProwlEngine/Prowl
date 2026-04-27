@@ -45,6 +45,12 @@ public sealed class PBRLightingNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        // Forward lighting reads the per-fragment world-space view dir and the
+        // tangent-space TBN basis both fragment-only. Bail with a zero fallback
+        // (and a node-attached warning) if a vertex-stage subtree wires through.
+        if (ctx.RequireFragmentStage(Id, Title))
+            return "vec3(0.0)";
+
         ctx.Includes.Add("Lighting");
         ctx.Includes.Add("ShaderVariables");
         ctx.Varyings.Add(("worldPos", "vec3"));
@@ -105,6 +111,9 @@ public sealed class AnisotropicLightingNode : Node, IShaderNode, IShaderGraphNod
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title))
+            return "vec3(0.0)";
+
         ctx.Includes.Add("Lighting");
         ctx.Includes.Add("ShaderVariables");
         ctx.Varyings.Add(("worldPos",   "vec3"));
@@ -179,6 +188,9 @@ public sealed class TranslucencyNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title))
+            return "vec3(0.0)";
+
         ctx.Includes.Add("Lighting");
         ctx.Includes.Add("PBR");
         ctx.Includes.Add("ShaderVariables");
@@ -238,6 +250,12 @@ public sealed class CalculateAmbientNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        // CalculateAmbient uses EmitTBN which references vTangent / vBitangent /
+        // vNormal varyings populated by the fragment stage; vertex use would emit
+        // an undefined-symbol error.
+        if (ctx.RequireFragmentStage(Id, Title))
+            return "vec3(0.0)";
+
         ctx.Includes.Add("Lighting");
         var normalTS = ctx.EvaluateInputAs(GetInput("Normal")!, ShaderType.Vec3);
         var tbn = ShaderEmit.EmitTBN(ctx);
@@ -276,6 +294,9 @@ public sealed class ApplyFogNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title))
+            return ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
+
         ctx.Includes.Add("Lighting");
         ctx.Varyings.Add(("worldPos", "vec3"));
         var color = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
@@ -314,6 +335,9 @@ public sealed class NormalMapNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
+        if (ctx.RequireFragmentStage(Id, Title))
+            return "vec3(0.0, 0.0, 1.0)";
+
         ctx.Includes.Add("Fragment");
         ctx.Varyings.Add(("vNormal",    "vec3"));
         ctx.Varyings.Add(("vTangent",   "vec3"));

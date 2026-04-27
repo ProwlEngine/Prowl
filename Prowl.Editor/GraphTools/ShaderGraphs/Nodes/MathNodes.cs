@@ -177,7 +177,8 @@ public sealed class Log10Node : Node, IShaderNode, IShaderGraphNode
     {
         var t = ShaderEmit.TypeFromInput(this, "In", ctx);
         var inExpr = ctx.EvaluateInputAs(GetInput("In")!, t);
-        return $"(log({inExpr}) / 2.302585093)"; // ln(10) constant saves a runtime log.
+        // 1/ln(10) prefer mul over div so the GPU can fuse this with surrounding ALU.
+        return $"(log({inExpr}) * 0.4342944819)";
     }
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderEmit.TypeFromInput(this, "In", ctx);
 }
@@ -452,6 +453,9 @@ public sealed class ClampSimpleNode : Node, IShaderNode, IShaderGraphNode
 
 public sealed class LerpSimpleNode : Node, IShaderNode, IShaderGraphNode
 {
+    // Public fields, not properties Echo's serializer is fields-only and silently
+    // drops property-backed values across save/load. Keep these as fields so the
+    // user-edited endpoints survive a graph reload.
     public float A = 0f;
     public float B = 1f;
 
@@ -474,6 +478,8 @@ public sealed class LerpSimpleNode : Node, IShaderNode, IShaderGraphNode
 
 public sealed class InverseLerpSimpleNode : Node, IShaderNode, IShaderGraphNode
 {
+    // See LerpSimpleNode public fields are required by Echo's fields-only
+    // serializer; converting to properties silently drops the values.
     public float A = 0f;
     public float B = 1f;
 

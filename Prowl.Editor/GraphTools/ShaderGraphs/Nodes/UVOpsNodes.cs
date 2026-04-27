@@ -136,13 +136,25 @@ public sealed class ParallaxNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage stage, ShaderGenContext ctx)
     {
+        // GetTangentViewDir reads worldPos / vNormal / vTangent / vBitangent
+        // varyings populated by the fragment stage. Vertex use returns the raw
+        // UV unmodified (no view direction available there).
+        if (ctx.RequireFragmentStage(Id, Title))
+        {
+            return ctx.IsConnected(GetInput("UV")!)
+                ? ctx.EvaluateInputAs(GetInput("UV")!, ShaderType.Vec2)
+                : "vec2(0.0)";
+        }
+
         ctx.Includes.Add("Lighting");
         ctx.Varyings.Add(("worldPos",   "vec3"));
         ctx.Varyings.Add(("vNormal",    "vec3"));
         ctx.Varyings.Add(("vTangent",   "vec3"));
         ctx.Varyings.Add(("vBitangent", "vec3"));
 
-        // UV: fall back to texCoord0 when unconnected.
+        // UV: fall back to texCoord0 when unconnected. The varying name matches
+        // VertexAttributes.glsl's standard UV0 emission; if that convention ever
+        // changes, this fallback (and every UV-defaulting node) needs to follow.
         string uv;
         if (ctx.IsConnected(GetInput("UV")!))
             uv = ctx.EvaluateInputAs(GetInput("UV")!, ShaderType.Vec2);
@@ -265,16 +277,36 @@ public sealed class RotatorNode : Node, IShaderNode, IShaderGraphNode
 
 /// <summary>
 /// Selects a single cell from a sprite-sheet / flipbook texture by remapping
-/// UV coordinates to the cell at a given 0-based tile index.
+/// UV coordinates to the cell at a given 0-based tile index. Doubles as a
+/// time-driven flipbook when the optional <c>Time</c> input is wired the node
+/// then drives the index from <c>Time * FrameRate</c> and exposes a
+/// <c>NextOut</c> + <c>Blend</c> pair so downstream samplers can cross-fade.
 /// </summary>
 /// <remarks>
 /// Tiles are laid out row-major (left to right, top to bottom) and indexed
-/// from 0.  The Width and Height inputs are the number of columns and rows
-/// in the sprite sheet respectively.
-/// UV defaults to texCoord0 when unconnected.
+/// from 0. <c>Width</c> / <c>Height</c> are columns / rows in the sheet. <c>UV</c>
+/// defaults to <c>texCoord0</c> when unconnected.
+///
+/// <para><b>Static use</b> (<c>Time</c> unconnected): the explicit <c>Tile</c>
+/// input picks the cell. <c>NextOut</c> mirrors <c>Out</c> and <c>Blend</c> is 0,
+/// so a downstream cross-fade collapses to a no-op.</para>
+///
+/// <para><b>Animated use</b> (<c>Time</c> connected, e.g. wire a Time node into
+/// it): the index becomes <c>Time * FrameRate</c>, optionally wrapped via
+/// <c>Loop</c>. <c>Blend</c> is the fractional progress to the next frame, and
+/// <c>NextOut</c> is the UV for that next frame so:
+/// <code>color = mix(texture(t, Out), texture(t, NextOut), Blend);</code>
+/// gives smooth flipbook cross-fades.</para>
 /// </remarks>
 public sealed class UVTileNode : Node, IShaderNode, IShaderGraphNode
 {
+    /// <summary>Frames per second when <c>Time</c> is wired. Ignored otherwise.</summary>
+    public float FrameRate = 12f;
+
+    /// <summary>When true (default) the time-driven index wraps via <c>mod</c> at
+    /// <c>Width*Height</c>; when false it clamps at the last frame.</summary>
+    public bool Loop = true;
+
     public override string Title => "UV Tile";
     public override string Category => "UV";
     public override System.Drawing.Color AccentColor => UVAccents.UV;
@@ -284,45 +316,105 @@ public sealed class UVTileNode : Node, IShaderNode, IShaderGraphNode
         AddInput<Float2>("UV",     Float2.Zero); // optional defaults to texCoord0
         AddInput<float>("Width",   4f, required: true);   // number of columns
         AddInput<float>("Height",  4f, required: true);   // number of rows
-        AddInput<float>("Tile",    0f, required: true);   // 0-based tile index
-        AddOutput<Float2>("Out");
+        AddInput<float>("Tile",    0f, required: true,
+            tooltip: "Static tile index. Ignored when Time is wired.");
+        AddInput<float>("Time",    0f,
+            tooltip: "When connected, drives the tile index via Time * FrameRate. Wire _Time.y for auto-play.");
+        AddOutput<Float2>("Out",
+            tooltip: "UV for the current frame.");
+        AddOutput<Float2>("NextOut",
+            tooltip: "UV for the next frame. Equals Out when Time is unwired.");
+        AddOutput<float>("Blend",
+            tooltip: "Fractional progress to NextOut [0, 1). Always 0 when Time is unwired.");
     }
 
     string IShaderNode.Evaluate(Port p, ShaderStage stage, ShaderGenContext ctx)
     {
-        // UV: fall back to texCoord0 when unconnected.
-        string uv;
-        if (ctx.IsConnected(GetInput("UV")!))
-            uv = ctx.EvaluateInputAs(GetInput("UV")!, ShaderType.Vec2);
-        else
+        // All three outputs share the same tile-math preamble. Emit-once keyed on
+        // the node id so wiring multiple outputs doesn't duplicate the temps.
+        string baseUV   = $"_uvt_uv_{Id:N}";
+        string recip    = $"_uvt_r_{Id:N}";
+        string total    = $"_uvt_n_{Id:N}";
+        string idx      = $"_uvt_i_{Id:N}";
+        string nextIdx  = $"_uvt_in_{Id:N}";
+        string blend    = $"_uvt_b_{Id:N}";
+
+        ctx.EmitOnce("uvtile:" + idx, () =>
         {
-            uv = "texCoord0";
-            ctx.Varyings.Add(("texCoord0", "vec2"));
+            // UV fallback to texCoord0 when nothing wired.
+            string uv;
+            if (ctx.IsConnected(GetInput("UV")!))
+                uv = ctx.EvaluateInputAs(GetInput("UV")!, ShaderType.Vec2);
+            else
+            {
+                uv = "texCoord0";
+                ctx.Varyings.Add(("texCoord0", "vec2"));
+            }
+
+            string wdt  = ctx.EvaluateInputAs(GetInput("Width")!,  ShaderType.Float);
+            string hgt  = ctx.EvaluateInputAs(GetInput("Height")!, ShaderType.Float);
+
+            ctx.BodyPrelude.AppendLine($"    vec2 {baseUV} = {uv};");
+            ctx.BodyPrelude.AppendLine($"    vec2 {recip}  = vec2(1.0) / vec2({wdt}, {hgt});");
+            ctx.BodyPrelude.AppendLine($"    float {total} = {wdt} * {hgt};");
+
+            if (ctx.IsConnected(GetInput("Time")!))
+            {
+                // Time-driven: index = Time * FrameRate, optionally wrapped.
+                // Frame's fractional part is the cross-fade alpha to the next index.
+                string timeExpr = ctx.EvaluateInputAs(GetInput("Time")!, ShaderType.Float);
+                string fr = ShaderGenContext.Fmt(FrameRate);
+                string frameLocal = $"_uvt_f_{Id:N}";
+                ctx.BodyPrelude.AppendLine($"    float {frameLocal} = {timeExpr} * {fr};");
+
+                if (Loop)
+                {
+                    ctx.BodyPrelude.AppendLine($"    float {idx}     = mod(floor({frameLocal}),       {total});");
+                    ctx.BodyPrelude.AppendLine($"    float {nextIdx} = mod(floor({frameLocal}) + 1.0, {total});");
+                }
+                else
+                {
+                    // Clamp to the last valid index and freeze blend at 0 once we
+                    // hit the end so the surface doesn't snap back to frame 0.
+                    ctx.BodyPrelude.AppendLine($"    float {idx}     = clamp(floor({frameLocal}),       0.0, {total} - 1.0);");
+                    ctx.BodyPrelude.AppendLine($"    float {nextIdx} = clamp(floor({frameLocal}) + 1.0, 0.0, {total} - 1.0);");
+                }
+                ctx.BodyPrelude.AppendLine($"    float {blend} = fract({frameLocal}) * step({idx} + 0.5, {nextIdx});");
+            }
+            else
+            {
+                // Static: the user-supplied Tile picks one frame. NextOut mirrors
+                // Out and Blend = 0 so any downstream cross-fade collapses cleanly.
+                string tile = ctx.EvaluateInputAs(GetInput("Tile")!, ShaderType.Float);
+                ctx.BodyPrelude.AppendLine($"    float {idx}     = {tile};");
+                ctx.BodyPrelude.AppendLine($"    float {nextIdx} = {tile};");
+                ctx.BodyPrelude.AppendLine($"    float {blend}   = 0.0;");
+            }
+        });
+
+        // Per-output expression: convert the linear index back to (col, row) and
+        // remap the UV into that cell. Matches the original formulation exactly:
+        //   tileY = floor(idx / width); tileX = idx - width * tileY
+        //   out   = (uv + vec2(tileX, tileY)) * recip
+        string CellExpr(string cellIdx)
+        {
+            string wdt = $"(1.0 / {recip}.x)"; // width recovered from recip; avoids re-eval of Width.
+            return $"(({baseUV} + vec2({cellIdx} - {wdt} * floor({cellIdx} * {recip}.x), floor({cellIdx} * {recip}.x))) * {recip})";
         }
 
-        string wdt  = ctx.EvaluateInputAs(GetInput("Width")!,  ShaderType.Float);
-        string hgt  = ctx.EvaluateInputAs(GetInput("Height")!, ShaderType.Float);
-        string tile = ctx.EvaluateInputAs(GetInput("Tile")!,   ShaderType.Float);
-
-        // Emit intermediate values into temp vars to avoid code duplication.
-        // tileCountRecip avoids repeating the division in both X and Y.
-        string localRecip = ctx.FreshLocal("_uvtRecip");
-        string localTY    = ctx.FreshLocal("_uvtTY");
-        string localTX    = ctx.FreshLocal("_uvtTX");
-
-        // Formulas in GLSL:
-        //   tileCountRecip = vec2(1.0) / vec2(width, height)
-        //   tileY          = floor(tile * tileCountRecip.x)   -- which row
-        //   tileX          = tile - width * tileY             -- which column
-        ctx.BodyPrelude.AppendLine($"vec2 {localRecip} = vec2(1.0) / vec2({wdt}, {hgt});");
-        ctx.BodyPrelude.AppendLine($"float {localTY} = floor({tile} * {localRecip}.x);");
-        ctx.BodyPrelude.AppendLine($"float {localTX} = {tile} - {wdt} * {localTY};");
-
-        // Output: (uv + float2(tileX, tileY)) * tileCountRecip
-        return $"(({uv} + vec2({localTX}, {localTY})) * {localRecip})";
+        return p.Name switch
+        {
+            "NextOut" => CellExpr(nextIdx),
+            "Blend"   => blend,
+            _         => CellExpr(idx),
+        };
     }
 
-    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec2;
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => p.Name switch
+    {
+        "Blend" => ShaderType.Float,
+        _       => ShaderType.Vec2,
+    };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
