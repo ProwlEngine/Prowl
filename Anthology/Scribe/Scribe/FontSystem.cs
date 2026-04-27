@@ -22,6 +22,10 @@ namespace Prowl.Scribe
         private int atlasWidth;
         private int atlasHeight;
 
+        // Reusable scratch buffers for DrawLayout — avoid per-frame List/array allocations.
+        private readonly List<IFontRenderer.Vertex> drawVertices = new List<IFontRenderer.Vertex>(1024);
+        private readonly List<int> drawIndices = new List<int>(1536);
+
         private bool useWhiteRect;
         private float whiteU0, whiteV0, whiteU1, whiteV1;
 
@@ -493,8 +497,10 @@ namespace Prowl.Scribe
             // would be stale. Re-layout in place so glyphs repopulate against the current atlas.
             layout.EnsureUpToDate(this);
 
-            var vertices = new List<IFontRenderer.Vertex>();
-            var indices = new List<int>();
+            var vertices = drawVertices;
+            var indices = drawIndices;
+            vertices.Clear();
+            indices.Clear();
             int vertexCount = 0;
 
             foreach (var line in layout.Lines)
@@ -518,8 +524,13 @@ namespace Prowl.Scribe
                     vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY + glyphH, 0), color, new Float2(glyph.U0, glyph.V1)));
                     vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX + glyphW, glyphY + glyphH, 0), color, new Float2(glyph.U1, glyph.V1)));
 
-                    // Create quad indices
-                    indices.AddRange(new[] { vertexCount, vertexCount + 1, vertexCount + 2, vertexCount + 1, vertexCount + 3, vertexCount + 2 });
+                    // Create quad indices (six Add calls — no per-quad array allocation)
+                    indices.Add(vertexCount);
+                    indices.Add(vertexCount + 1);
+                    indices.Add(vertexCount + 2);
+                    indices.Add(vertexCount + 1);
+                    indices.Add(vertexCount + 3);
+                    indices.Add(vertexCount + 2);
                     vertexCount += 4;
                 }
             }
