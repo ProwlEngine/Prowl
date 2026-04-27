@@ -357,6 +357,13 @@ public sealed class Rigidbody3D : MonoBehaviour
         Transform.Rotation = new Quaternion(predictedOrientation.X, predictedOrientation.Y, predictedOrientation.Z, predictedOrientation.W);
     }
 
+    public override void DrawGizmos()
+    {
+        if (_body == null || _body.Handle.IsZero) return;
+
+        _body.DebugDraw(JitterGizmosDrawer.Instance);
+    }
+
     public override void FixedUpdate()
     {
         interpTimer = 0;

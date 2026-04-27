@@ -595,6 +595,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void DrawGizmos()
     {
+        // Draw physics gizmos
+        _physics.DrawStaticRigidbodyGizmos();
+
         List<GameObject> activeGOs = [.. ActiveObjects];
         ForeachComponent(activeGOs, (x) =>
         {

@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.ComponentModel;
 
 using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
@@ -338,13 +337,6 @@ public abstract class Collider : MonoBehaviour
                 AttachToStatic();
             }
         }
-    }
-
-    public override void DrawGizmos()
-    {
-        if (_attachedBody == null || _attachedBody.Handle.IsZero) return;
-
-        _attachedBody.DebugDraw(JitterGizmosDrawer.Instance);
     }
 
     public override void OnValidate()

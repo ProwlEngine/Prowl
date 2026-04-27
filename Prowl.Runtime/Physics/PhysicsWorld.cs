@@ -181,6 +181,16 @@ public class PhysicsWorld
         World.Step(Time.FixedDeltaTime, UseMultithreading);
     }
 
+    public void DrawStaticRigidbodyGizmos()
+    {
+        foreach (var body in _staticRigidbodiesByLayer.Values)
+        {
+            if (body.Handle.IsZero) continue;
+
+            body.DebugDraw(JitterGizmosDrawer.Instance);
+        }
+    }
+
     /// <summary>
     /// Casts a ray against all colliders in this physics world.
     /// </summary>
