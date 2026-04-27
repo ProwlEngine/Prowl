@@ -176,89 +176,97 @@ namespace Prowl.Scribe
                 // We're processing actual content, so clear the trailing newline flag
                 hasTrailingNewline = false;
 
-                // -------- First pass for the word: measure cheaply (no vmetrics per glyph) --------
+                // -------- First pass: measure the word (only when wrapping is enabled) --------
+                // When wrap is off the per-word width is unused, so we skip the measure pass
+                // entirely and let the place pass resolve glyphs once.
                 float wordWidthNoLeadingKerning = 0f;
-                float firstLeadingKerning = 0f;   // kerning against previous non-whitespace glyph (we'll apply only if not at line start)
+                float firstLeadingKerning = 0f;
+                bool measured = false;
                 bool hadFirstGlyph = false;
-                int prevGlyphIndex = 0;
-                FontFile prevGlyphFont = null;
 
-                for (int j = wordStart; j < wordEnd; j++)
+                if (wrapEnabled)
                 {
-                    char c = text[j];
+                    int prevGlyphIndex = 0;
+                    FontFile prevGlyphFont = null;
 
-                    FontFile font = Settings.Font;
-                    if (Settings.FontSelector != null)
-                        font = Settings.FontSelector(j);
-                    var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
+                    for (int j = wordStart; j < wordEnd; j++)
+                    {
+                        char c = text[j];
 
-                    if (g == null) continue;
+                        FontFile font = Settings.Font;
+                        if (Settings.FontSelector != null)
+                            font = Settings.FontSelector(j);
+                        var g = fontSystem.GetOrCreateGlyph(c, pixelSize, font);
 
-                    var adv = g.Metrics.AdvanceWidth + Settings.LetterSpacing;
+                        if (g == null) continue;
 
-                    // internal kerning (within the word) — only kern within a single font
-                    if (prevGlyphIndex != 0 && ReferenceEquals(prevGlyphFont, g.Font))
-                        wordWidthNoLeadingKerning += fontSystem.GetKerningByGlyph(g.Font, prevGlyphIndex, g.GlyphIndex, pixelSize);
+                        var adv = g.Metrics.AdvanceWidth + Settings.LetterSpacing;
 
-                    wordWidthNoLeadingKerning += adv;
+                        // internal kerning (within the word) — only kern within a single font
+                        if (prevGlyphIndex != 0 && ReferenceEquals(prevGlyphFont, g.Font))
+                            wordWidthNoLeadingKerning += fontSystem.GetKerningByGlyph(g.Font, prevGlyphIndex, g.GlyphIndex, pixelSize);
 
+                        wordWidthNoLeadingKerning += adv;
+
+                        if (!hadFirstGlyph)
+                        {
+                            hadFirstGlyph = true;
+
+                            // kerning between previous run (if any) and first glyph of this word
+                            if (lastGlyphForKerning != 0 && ReferenceEquals(lastFontForKerning, g.Font))
+                                firstLeadingKerning = fontSystem.GetKerningByGlyph(g.Font, lastGlyphForKerning, g.GlyphIndex, pixelSize);
+                        }
+
+                        prevGlyphIndex = g.GlyphIndex;
+                        prevGlyphFont = g.Font;
+                    }
+
+                    measured = true;
+
+                    // Word may be empty if all codepoints were missing; just skip it
                     if (!hadFirstGlyph)
                     {
-                        hadFirstGlyph = true;
-
-                        // kerning between previous run (if any) and first glyph of this word
-                        if (lastGlyphForKerning != 0 && ReferenceEquals(lastFontForKerning, g.Font))
-                            firstLeadingKerning = fontSystem.GetKerningByGlyph(g.Font, lastGlyphForKerning, g.GlyphIndex, pixelSize);
-                    }
-
-                    prevGlyphIndex = g.GlyphIndex;
-                    prevGlyphFont = g.Font;
-                }
-
-                // Word may be empty if all codepoints were missing; just skip it
-                if (!hadFirstGlyph)
-                {
-                    i = wordEnd;
-                    lastGlyphForKerning = 0;
-                    lastFontForKerning = null;
-                    continue;
-                }
-
-                float prospective = currentX + (line.Glyphs.Count > 0 ? firstLeadingKerning : 0f) + wordWidthNoLeadingKerning;
-
-                // -------- Wrapping decisions --------
-                if (wrapEnabled && prospective > maxWidth)
-                {
-                    // If current line has content, wrap before placing the word
-                    if (line.Glyphs.Count > 0)
-                    {
-                        FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
-                        currentX = 0f;
-                        currentY += lineHeight;
-                        line = new Line(new Float2(0, currentY), wordStart);
-                        lastGlyphForKerning = 0; // new line: no leading kerning
-                        lastFontForKerning = null;
-                    }
-
-                    // If the word itself is too long for an empty line, split it (char-level)
-                    if (wordWidthNoLeadingKerning > maxWidth)
-                    {
-                        i = LayoutLongWordFast(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
-                                               wordStart, wordEnd, tabWidth, spaceAdvance, wrapEnabled, maxWidth, GetAscender);
+                        i = wordEnd;
                         lastGlyphForKerning = 0;
                         lastFontForKerning = null;
                         continue;
                     }
+
+                    // -------- Wrapping decisions --------
+                    float prospective = currentX + (line.Glyphs.Count > 0 ? firstLeadingKerning : 0f) + wordWidthNoLeadingKerning;
+                    if (prospective > maxWidth)
+                    {
+                        // If current line has content, wrap before placing the word
+                        if (line.Glyphs.Count > 0)
+                        {
+                            FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
+                            currentX = 0f;
+                            currentY += lineHeight;
+                            line = new Line(new Float2(0, currentY), wordStart);
+                            lastGlyphForKerning = 0; // new line: no leading kerning
+                            lastFontForKerning = null;
+                            firstLeadingKerning = 0f;
+                        }
+
+                        // If the word itself is too long for an empty line, split it (char-level)
+                        if (wordWidthNoLeadingKerning > maxWidth)
+                        {
+                            i = LayoutLongWordFast(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
+                                                   wordStart, wordEnd, tabWidth, spaceAdvance, wrapEnabled, maxWidth, GetAscender);
+                            lastGlyphForKerning = 0;
+                            lastFontForKerning = null;
+                            continue;
+                        }
+                    }
                 }
 
                 // -------- Second pass for the word: actually place glyphs --------
-                // leading kerning only if not at line start
-                float leading = (line.Glyphs.Count > 0) ? firstLeadingKerning : 0f;
+                // When measure ran, leading kerning was already computed (and reset to 0 if we wrapped).
+                // When measure was skipped, defer leading kerning to the first emitted glyph.
+                if (measured && firstLeadingKerning != 0f && line.Glyphs.Count > 0)
+                    currentX += firstLeadingKerning;
 
-                if (leading != 0f) currentX += leading;
-
-                // We still fetch glyphs here, but (a) only once total for the common no-wrap path,
-                // and (b) we cache ascender per font, not per glyph.
+                bool placedAnyThisWord = false;
                 int prevForKern = 0;
                 FontFile prevFontForKern = null;
                 for (int j = wordStart; j < wordEnd; j++)
@@ -272,6 +280,13 @@ namespace Prowl.Scribe
 
                     if (g == null) continue;
 
+                    // Cross-word leading kerning (computed lazily when measure pass was skipped)
+                    if (!placedAnyThisWord && !measured && line.Glyphs.Count > 0
+                        && lastGlyphForKerning != 0 && ReferenceEquals(lastFontForKerning, g.Font))
+                    {
+                        currentX += fontSystem.GetKerningByGlyph(g.Font, lastGlyphForKerning, g.GlyphIndex, pixelSize);
+                    }
+
                     if (prevForKern != 0 && ReferenceEquals(prevFontForKern, g.Font))
                     {
                         float k = fontSystem.GetKerningByGlyph(g.Font, prevForKern, g.GlyphIndex, pixelSize);
@@ -284,6 +299,15 @@ namespace Prowl.Scribe
 
                     prevForKern = g.GlyphIndex;
                     prevFontForKern = g.Font;
+                    placedAnyThisWord = true;
+                }
+
+                // If we skipped the measure pass and the word turned out to be all-missing, behave
+                // the same as the wrap-enabled path so cross-run kerning resets.
+                if (!measured && !placedAnyThisWord)
+                {
+                    lastGlyphForKerning = 0;
+                    lastFontForKerning = null;
                 }
 
                 // Move i past this word
