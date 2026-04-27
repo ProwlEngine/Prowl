@@ -12,22 +12,21 @@ namespace Prowl.Editor;
 /// Manages a hidden runtime Camera that renders the scene to a RenderTexture.
 /// </summary>
 /// <summary>
-/// Cursor lock context for the scene view locks to the center of the scene panel.
-/// Panel coordinates are in Paper-logical space; the OS cursor position expects
-/// window-logical pixels, so we multiply by Window.ContentScale on the way out.
+/// Cursor lock context for the scene view, locks to the center of the scene panel.
+/// Paper-logical coordinates now equal window-logical pixels (winSize space), which
+/// is also what the OS expects for cursor position on all platforms, so no scaling needed.
 /// </summary>
 public class SceneViewLockContext : CursorLockContext
 {
-    /// <summary>Panel origin in Paper-logical coordinates.</summary>
+    /// <summary>Panel origin in Paper-logical (= window-logical) coordinates.</summary>
     public Float2 PanelOrigin;
-    /// <summary>Panel size in Paper-logical coordinates.</summary>
+    /// <summary>Panel size in Paper-logical (= window-logical) coordinates.</summary>
     public Float2 PanelSize;
 
     public override Int2 GetLockCenter()
     {
-        float cs = Window.ContentScale;
-        float centerX = (PanelOrigin.X + PanelSize.X / 2) * cs;
-        float centerY = (PanelOrigin.Y + PanelSize.Y / 2) * cs;
+        float centerX = PanelOrigin.X + PanelSize.X / 2;
+        float centerY = PanelOrigin.Y + PanelSize.Y / 2;
         return new Int2((int)centerX, (int)centerY);
     }
 }
