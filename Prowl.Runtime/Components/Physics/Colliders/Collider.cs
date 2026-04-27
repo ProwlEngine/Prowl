@@ -340,6 +340,13 @@ public abstract class Collider : MonoBehaviour
         }
     }
 
+    public override void DrawGizmos()
+    {
+        if (_attachedBody == null || _attachedBody.Handle.IsZero) return;
+
+        _attachedBody.DebugDraw(JitterGizmosDrawer.Instance);
+    }
+
     public override void OnValidate()
     {
         // If we're attached to a Rigidbody3D, refresh it
