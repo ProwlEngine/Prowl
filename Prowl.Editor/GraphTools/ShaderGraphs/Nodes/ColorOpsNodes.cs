@@ -574,7 +574,8 @@ public sealed class LinearToGammaNode : Node, IShaderNode, IShaderGraphNode
 // FLOAT ↔ RGBA PACKING
 // Pack a [0, 1) float across all four 8-bit channels of a vec4 so it survives
 // a round-trip through an LDR render target. Standard "encode shadow depth
-// into an RGBA8 buffer" trick same magic numbers used by Unity's UnityCG.
+// into an RGBA8 buffer" trick: the constants below distribute precision so
+// each successive channel holds the next 8 bits of the source float.
 // Lossy beyond the 32-bit precision an RGBA8 can carry, but distributes the
 // bits across channels rather than crushing into one.
 // ═════════════════════════════════════════════════════════════════════════════

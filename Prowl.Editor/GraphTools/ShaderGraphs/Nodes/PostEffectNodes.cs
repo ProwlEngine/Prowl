@@ -17,18 +17,108 @@ internal static class PostEffectAccents
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// Surface Depth
+// View-space (linear) depth of the current fragment. Two modes:
+//   EyeSpace  view-space Z in world units. Distance from camera plane to
+//               the fragment along the view axis. NOT the same as the existing
+//               DepthNode which returns Euclidean distance length(cam-pos).
+//   Linear01  same value scaled by 1/far so 0 = camera, 1 = far plane.
+// Both modes work in vertex (via prowl_MatV) and fragment (via the linearised
+// gl_FragCoord.z fast path).
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// <summary>Selects between the eye-space and 0..1 linear-depth conventions.</summary>
+public enum SurfaceDepthMode
+{
+    /// <summary>View-space depth in world units. 0 at the camera plane, growing
+    /// linearly with distance along the view axis.</summary>
+    EyeSpace = 0,
+    /// <summary>Eye-space depth scaled by <c>1 / farPlane</c>. 0 at camera plane,
+    /// 1 at the far plane. Useful as a UV / fade alpha without per-camera tuning.</summary>
+    Linear01 = 1,
+}
+
+/// <summary>
+/// Linear (view-space) depth of the current fragment. <see cref="Mode"/> picks
+/// between raw eye-space units and the normalised 0..1 form. This is distinct
+/// from <c>DepthNode</c>, which computes Euclidean distance from the camera
+/// that distance grows faster off-axis. Use this node whenever you'd compare
+/// against <c>_CameraDepthTexture</c> or want a perspective-correct fade.
+/// </summary>
+public sealed class SurfaceDepthNode : Node, IShaderNode, IShaderGraphNode
+{
+    public SurfaceDepthMode Mode = SurfaceDepthMode.EyeSpace;
+
+    public override string Title    => Mode == SurfaceDepthMode.Linear01
+        ? "Surface Depth · 0-1"
+        : "Surface Depth · Eye";
+    public override string Category => "Scene Data";
+    public override System.Drawing.Color AccentColor => PostEffectAccents.PostEffect;
+
+    protected override void DefineNode()
+    {
+        AddOutput<float>("Depth",
+            tooltip: "Linear view-space depth. EyeSpace = world units; Linear01 = scaled by 1/far.");
+    }
+
+    string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
+    {
+        ctx.Includes.Add("ShaderVariables");
+
+        string eye;
+        if (stage == ShaderStage.Fragment)
+        {
+            // Fast path the depth buffer already encodes this; linearise the
+            // perspective Z back to view-space units. Keeps the math identical
+            // to whatever the depth pre-pass writes, so depth comparisons line
+            // up exactly.
+            ctx.Includes.Add("Fragment");
+            eye = "linearizeDepthFromProjection(gl_FragCoord.z)";
+        }
+        else
+        {
+            // Vertex / tessellation pull the world position through the view
+            // matrix and negate the Z to recover view-space depth.
+            ctx.Includes.Add("VertexAttributes");
+            eye = "-(prowl_MatV * vec4(TransformPosition(vertexPosition), 1.0)).z";
+        }
+
+        // _ProjectionParams.w is 1/far (set in RenderPipeline.cs:251), so the
+        // Linear01 scaling is one mul rather than a divide.
+        return Mode == SurfaceDepthMode.Linear01
+            ? $"({eye} * _ProjectionParams.w)"
+            : eye;
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port outputPort, ShaderGenContext ctx) => ShaderType.Float;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // Camera Depth Fade
 // 0 at the near plane → 1 at (near + Length). Useful for fading objects out as
 // they approach the camera (e.g. FPS weapon held too close, first-person body).
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// <summary>
-/// Returns a 0..1 gradient that grows with the surface's distance from the
-/// camera near plane. 0 at the near plane, 1 at <c>near + Length</c>.
-/// Use as an alpha modulator to dissolve out close-to-camera geometry.
+/// Gradient based on the fragment's distance from the camera near plane:
+/// 0 at <c>near + Offset</c>, 1 at <c>near + Offset + Length</c>. <c>Saturate</c>
+/// (default true) clamps the output to [0, 1] so the node reads as a drop-in
+/// fade alpha; flip it off when you want the unclamped slope so values past
+/// the fade range keep growing above 1.
 /// </summary>
+/// <remarks>
+/// <para>The default WorldPos comes from the <c>worldPos</c> varying in
+/// fragment, or from the vertex-stage <c>TransformPosition(vertexPosition)</c>
+/// when used in vertex / tessellation. Wiring something into <c>WorldPos</c>
+/// lets you fade against a custom origin (e.g. a billboard's pivot rather than
+/// each pixel).</para>
+/// </remarks>
 public sealed class CameraDepthFadeNode : Node, IShaderNode, IShaderGraphNode
 {
+    /// <summary>Clamp the result to [0, 1]. Default true preserves the
+    /// historic behaviour; turn off for the raw signed/unbounded slope.</summary>
+    public bool Saturate = true;
+
     public override string Title => "Camera Depth Fade";
     public override string Category => "Scene Data";
     public override System.Drawing.Color AccentColor => PostEffectAccents.PostEffect;
@@ -39,6 +129,8 @@ public sealed class CameraDepthFadeNode : Node, IShaderNode, IShaderGraphNode
             tooltip: "World-space distance from the near plane over which the fade ramps from 0 to 1.");
         AddInput<float>("Offset", 0f,
             tooltip: "Extra bias added to the near plane before the fade starts (world-space units).");
+        AddInput<Float3>("WorldPos", Float3.Zero,
+            tooltip: "Optional override world-space position. Defaults to this fragment's worldPos.");
         AddOutput<float>("Out");
     }
 
@@ -46,9 +138,16 @@ public sealed class CameraDepthFadeNode : Node, IShaderNode, IShaderGraphNode
     {
         ctx.Includes.Add("ShaderVariables");
         ctx.Includes.Add("Lighting");
-        // Works in both stages compute worldPos inline in vertex.
+
+        // Position resolution: explicit wire wins; fragment falls back to the
+        // worldPos varying; vertex / tessellation compute the world position
+        // inline since the varying isn't populated until the fragment stage.
         string posExpr;
-        if (s == ShaderStage.Vertex)
+        if (ctx.IsConnected(GetInput("WorldPos")!))
+        {
+            posExpr = ctx.EvaluateInputAs(GetInput("WorldPos")!, ShaderType.Vec3);
+        }
+        else if (s == ShaderStage.Vertex)
         {
             ctx.Includes.Add("VertexAttributes");
             posExpr = "TransformPosition(vertexPosition)";
@@ -61,63 +160,11 @@ public sealed class CameraDepthFadeNode : Node, IShaderNode, IShaderGraphNode
 
         var len = ctx.EvaluateInputAs(GetInput("Length")!, ShaderType.Float);
         var off = ctx.EvaluateInputAs(GetInput("Offset")!, ShaderType.Float);
-        // _ProjectionParams.y = near plane. distance(camera, surface) is the eye-space depth.
-        return $"clamp((length(_WorldSpaceCameraPos.xyz - {posExpr}) - (_ProjectionParams.y + {off})) / {len}, 0.0, 1.0)";
-    }
-
-    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Depth Fade (soft-particle)
-// 0 when the surface coincides with the scene geometry behind, 1 when it is
-// `FadeDistance` world-units in front. Feed into alpha to soften particle /
-// billboard intersections with solid geometry.
-// ═════════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Soft-particle style depth fade returns a 0..1 gradient based on how far
-/// this fragment is in front of the geometry written into the depth pre-pass.
-/// Requires the camera to have a depth texture enabled (DepthTextureMode != None),
-/// otherwise reads zeros and the fade is uniformly 0.
-/// </summary>
-public sealed class DepthFadeNode : Node, IShaderNode, IShaderGraphNode
-{
-    public override string Title => "Depth Fade";
-    public override string Category => "Scene Data";
-    public override System.Drawing.Color AccentColor => PostEffectAccents.PostEffect;
-
-    protected override void DefineNode()
-    {
-        AddInput<float>("Fade Distance", 1f, required: true,
-            tooltip: "World-space distance over which the fade ramps from 0 at the scene surface to 1.");
-        AddOutput<float>("Out");
-    }
-
-    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
-    {
-        if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
-        ctx.Includes.Add("Fragment"); // for linearizeDepthFromProjection
-        ctx.Includes.Add("ShaderVariables");
-        ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
-
-        var dist = ctx.EvaluateInputAs(GetInput("Fade Distance")!, ShaderType.Float);
-
-        // Compute once per node the same value is typically wired into Alpha,
-        // Emission, and maybe a dissolve so re-evaluating would be wasteful.
-        var local = $"_depFade{Id:N}";
-        ctx.EmitOnce("depfade:" + local, () =>
-        {
-            ctx.BodyPrelude.AppendLine(
-                $"    vec2 {local}_suv = gl_FragCoord.xy / _ScreenParams.xy;");
-            ctx.BodyPrelude.AppendLine(
-                $"    float {local}_sd  = linearizeDepthFromProjection(texture(_CameraDepthTexture, {local}_suv).r);");
-            ctx.BodyPrelude.AppendLine(
-                $"    float {local}_pd  = linearizeDepthFromProjection(gl_FragCoord.z);");
-            ctx.BodyPrelude.AppendLine(
-                $"    float {local} = clamp(({local}_sd - {local}_pd) / max({dist}, 1e-5), 0.0, 1.0);");
-        });
-        return local;
+        // _ProjectionParams.y = near plane. length(...) is the world-space
+        // distance from the camera origin (Euclidean, not view-space Z), so
+        // the fade is symmetric around the camera regardless of view direction.
+        var raw = $"((length(_WorldSpaceCameraPos.xyz - {posExpr}) - (_ProjectionParams.y + {off})) / max({len}, 1e-5))";
+        return Saturate ? $"clamp({raw}, 0.0, 1.0)" : raw;
     }
 
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;

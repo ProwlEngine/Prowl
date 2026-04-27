@@ -339,31 +339,37 @@ public sealed class EyeDepthNode : Node, IShaderNode, IShaderGraphNode
 // ─── Depth Blend ──────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Soft-particle / depth-fade blend factor: <c>saturate((sceneDepth - fragDepth) / Dist)</c>.
-///
-/// IMPLEMENTATION STATUS PARTIAL:
-///   The depth comparison requires reading the pre-pass depth buffer.  Prowl exposes
-///   <c>_CameraDepthTexture</c> as a global sampler2D when the camera's
-///   <c>DepthTextureMode</c> is set to <c>Depth</c> (verified in
-///   DefaultRenderPipeline.cs line 211 and Camera.cs line 64-66).
-///
-///   However, the shader-graph system does NOT currently have a mechanism to
-///   declare a per-pass <c>GrabDepth</c> directive from inside a node that
-///   directive must appear in the raw .shader file.  This node emits a self-contained
-///   expression that samples <c>_CameraDepthTexture</c> and adds a uniform declaration
-///   for it, but authors using this node in a shader-graph shader must ALSO ensure the
-///   camera has DepthTextureMode.Depth enabled; otherwise the sampler will be unbound
-///   and the sample will return 0.
-///
-///   The screen-UV is derived from gl_FragCoord + _ScreenParams (no grab-pass UV input
-///   needed this always samples the full-screen depth buffer).
-///
-///   FLAG: If _CameraDepthTexture is not available at runtime (camera DepthTextureMode
-///   is None) the blend factor will be 0.0 instead of 1.0, causing soft-particles to
-///   disappear. A future enhancement could add a fallback path or a compile-time warning.
+/// Soft-particle depth fade returns a gradient based on how far this fragment
+/// is in front of the geometry written into the depth pre-pass:
+/// <list type="bullet">
+/// <item><description><c>Mirror</c>: <c>abs()</c> the result so geometry behind
+/// AND in front of the surface fades symmetrically (force-field /
+/// double-sided intersection highlights).</description></item>
+/// <item><description><c>Saturate</c> (default true): clamp to [0, 1] for use
+/// as an alpha. Disable to keep the raw signed slope.</description></item>
+/// </list>
 /// </summary>
+/// <remarks>
+/// <para>Reads the camera's depth pre-pass via the globally-bound
+/// <c>_CameraDepthTexture</c>. The pipeline binds this whenever the camera's
+/// <c>DepthTextureMode</c> includes Depth (DefaultRenderPipeline.cs:211); if
+/// the pre-pass is disabled the sampler is unbound and the node reads zeros,
+/// collapsing the fade to 0.</para>
+///
+/// <para>The screen UV is derived from <c>gl_FragCoord</c> + <c>_ScreenParams</c>
+/// (no grab-pass directive needed, this always samples the full-screen depth
+/// buffer). Fragment-stage only.</para>
+/// </remarks>
 public sealed class DepthBlendNode : Node, IShaderNode, IShaderGraphNode
 {
+    /// <summary>Take <c>abs()</c> of the difference so the fade is symmetric
+    /// around the scene surface.</summary>
+    public bool Mirror = false;
+
+    /// <summary>Clamp the result to [0, 1]. Defaults to true so the node reads
+    /// as a drop-in alpha; flip off when you want the raw signed slope.</summary>
+    public bool Saturate = true;
+
     public override string Title => "Depth Blend";
     public override string Category => "Scene Data";
     public override System.Drawing.Color AccentColor => SceneAccents.Scene;
@@ -371,31 +377,43 @@ public sealed class DepthBlendNode : Node, IShaderNode, IShaderGraphNode
     protected override void DefineNode()
     {
         AddInput<float>("Dist", 1.0f,
-            tooltip: "Blend distance in world units wider values give a softer transition");
+            tooltip: "Blend distance in world units wider values give a softer transition.");
         AddOutput<float>("Out",
-            tooltip: "Saturated (sceneDepth - fragDepth) / Dist use to fade soft particles");
+            tooltip: "(sceneDepth - fragDepth) / Dist, optionally mirrored / saturated.");
     }
 
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
         if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
         ctx.Includes.Add("ShaderVariables");
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("Fragment"); // for linearizeDepthFromProjection
 
-        // Declare the depth sampler as a uniform the pipeline binds it globally when
-        // Camera.DepthTextureMode includes Depth.
+        // Pipeline binds this globally when the camera's DepthTextureMode includes Depth.
         ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
 
-        var dist = ctx.EvaluateInput(GetInput("Dist")!);
+        var dist = ctx.EvaluateInputAs(GetInput("Dist")!, ShaderType.Float);
 
-        // Emit into body-prelude to avoid repeating the expensive linearisation twice
-        // (once for the depth comparison, once if the expression is re-used by a later
-        // node that references the same port but since this node has a single output
-        // the cache handles deduplication; we just keep the expression self-contained).
-        //
-        // Screen UV from gl_FragCoord always available in fragment stage.
-        // linearizeDepthFromProjection() is defined in Fragment.glsl.
-        return $"clamp((linearizeDepthFromProjection(texture(_CameraDepthTexture, gl_FragCoord.xy / _ScreenParams.xy).r) - linearizeDepthFromProjection(gl_FragCoord.z)) / max({dist}, 0.0001), 0.0, 1.0)";
+        // Cache the linearised samples in temps so the same value can drive
+        // alpha + emission + dissolve without re-evaluating linearizeDepth twice.
+        var local = $"_depBlend{Id:N}";
+        ctx.EmitOnce("depblend:" + local, () =>
+        {
+            ctx.BodyPrelude.AppendLine(
+                $"    vec2 {local}_suv = gl_FragCoord.xy / _ScreenParams.xy;");
+            ctx.BodyPrelude.AppendLine(
+                $"    float {local}_sd  = linearizeDepthFromProjection(texture(_CameraDepthTexture, {local}_suv).r);");
+            ctx.BodyPrelude.AppendLine(
+                $"    float {local}_pd  = linearizeDepthFromProjection(gl_FragCoord.z);");
+
+            // Compose the toggles so each one wraps the previous expression
+            // without re-evaluating the inner depth math.
+            string expr = $"(({local}_sd - {local}_pd) / max({dist}, 1e-5))";
+            if (Mirror)   expr = $"abs({expr})";
+            if (Saturate) expr = $"clamp({expr}, 0.0, 1.0)";
+
+            ctx.BodyPrelude.AppendLine($"    float {local} = {expr};");
+        });
+        return local;
     }
 
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
