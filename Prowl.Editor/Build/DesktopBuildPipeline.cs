@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 using Prowl.Runtime;
 
@@ -18,11 +20,20 @@ public class DesktopBuildPipeline : BuildPipeline
     public override string DisplayName => "Desktop";
     public override string[] SupportedRuntimeIdentifiers => ["win-x64", "linux-x64", "osx-x64", "osx-arm64"];
 
-    public override BuildResult Build(BuildSettings settings, Action<string, float> progress)
+    public override BuildResult Build(BuildSettings settings, BuildProgress? progress)
+    {
+        return BuildAsync(Project.Current!.RootPath, settings, settings.OutputDirectory).GetAwaiter().GetResult();
+    }
+
+
+    public override async Task<BuildResult> BuildAsync(
+        string projectPath,
+        BuildSettings settings,
+        string? outputDirectory = null,
+        BuildProgress? progress = null,
+        CancellationToken cancellation = default)
     {
         var sw = Stopwatch.StartNew();
-        var log = new StringBuilder();
-        var errors = new StringBuilder();
 
         var project = Project.Current;
         if (project == null)
@@ -31,30 +42,38 @@ public class DesktopBuildPipeline : BuildPipeline
         try
         {
             // 0. Compile user scripts if needed
-            progress("Compiling scripts...", 0.0f);
+            progress?.Log("Compiling scripts...");
             var (gameScripts, _) = Scripting.ScriptCompiler.ClassifyScripts(project);
             if (gameScripts.Count > 0)
             {
                 var compileResult = Scripting.ScriptCompiler.CompileAll(project);
                 if (!compileResult.Success)
                     return new BuildResult { Success = false, Errors = $"Script compilation failed:\n{compileResult.Errors}" };
-                log.AppendLine("Scripts compiled successfully.");
+                progress?.Log("Scripts compiled successfully.");
             }
 
             // 1. Validate
-            progress("Validating...", 0.05f);
+            progress?.Log("Validating project...", 0.05f);
             var enabledScenes = settings.Scenes.Where(s => s.Enabled && s.SceneGuid != Guid.Empty).ToList();
             if (enabledScenes.Count == 0)
             {
                 return new BuildResult { Success = false, Errors = "No scenes in build. Add at least one scene." };
             }
 
-            string outputDir = Path.IsPathRooted(settings.OutputDirectory)
+            DesktopBuildProfile desktopProfile = settings.GetProfile<DesktopBuildProfile>(this.GetType());
+
+            outputDirectory = Path.IsPathRooted(settings.OutputDirectory)
                 ? settings.OutputDirectory
                 : Path.Combine(project.RootPath, settings.OutputDirectory);
-            Directory.CreateDirectory(outputDir);
 
-            string contentDir = Path.Combine(outputDir, "Content");
+            // Clean destination so previous build artefacts don't linger
+            if (Directory.Exists(outputDirectory))
+                Directory.Delete(outputDirectory, recursive: true);
+            Directory.CreateDirectory(outputDirectory);
+
+
+
+            string contentDir = Path.Combine(outputDirectory, "Content");
             string settingsDir = Path.Combine(contentDir, "Settings");
 
             // Clean previous build output
@@ -65,7 +84,7 @@ public class DesktopBuildPipeline : BuildPipeline
             if (EditorSceneManager.CurrentScenePath != null)
             {
                 EditorSceneManager.Save();
-                log.AppendLine("Auto-saved current scene.");
+                progress?.Log("Auto-saved current scene.");
             }
             else
             {
@@ -80,12 +99,14 @@ public class DesktopBuildPipeline : BuildPipeline
                     db.Reimport(sceneEntry.SceneGuid);
             }
 
+            progress?.Log("Start collecting assets...");
+
             // 2. Collect assets and ensure all caches exist
             var collection = CollectAssets(settings, progress);
-            log.AppendLine($"Collected {collection.AllAssets.Count} assets, {collection.ResourcesMap.Count} resources.");
+            progress?.Log($"Collected {collection.AllAssets.Count} assets, {collection.ResourcesMap.Count} resources.");
 
             // Reimport any collected assets missing their cache file
-            progress("Verifying asset caches...", 0.15f);
+            progress?.Log("Verifying asset caches...", 0.15f);
             int reimported = 0;
             foreach (var guid in collection.AllAssets)
             {
@@ -97,10 +118,10 @@ public class DesktopBuildPipeline : BuildPipeline
                 }
             }
             if (reimported > 0)
-                log.AppendLine($"Reimported {reimported} assets with missing caches.");
+                progress?.Log($"Reimported {reimported} assets with missing caches.");
 
             // 3. Clean and generate player source
-            progress("Generating player...", 0.3f);
+            progress?.Log("Generating player...", 0.3f);
             string buildTempDir = project.BuildTempPath;
             if (Directory.Exists(buildTempDir))
                 try { Directory.Delete(buildTempDir, true); } catch { }
@@ -113,7 +134,7 @@ public class DesktopBuildPipeline : BuildPipeline
             List<string>? embeddedAssetPaths = null;
             if (settings.PackagingMode == AssetPackagingMode.Embedded)
             {
-                progress("Preparing embedded assets...", 0.35f);
+                progress?.Log("Preparing embedded assets...", 0.35f);
                 string embeddedDir = Path.Combine(buildTempDir, "Assets");
                 Directory.CreateDirectory(embeddedDir);
                 CopyLooseAssets(collection.AllAssets, embeddedDir, progress);
@@ -126,24 +147,30 @@ public class DesktopBuildPipeline : BuildPipeline
                     embeddedAssetPaths.Add(f);
             }
 
-            GeneratePlayerSource(project, settings, defaultScene, buildTempDir);
-            GeneratePlayerCsproj(project, settings, buildTempDir, embeddedAssetPaths);
-            log.AppendLine("Generated player source and project.");
+            GeneratePlayerSource(project, settings, desktopProfile, defaultScene, buildTempDir);
+            GeneratePlayerCsproj(project, settings, desktopProfile, buildTempDir, embeddedAssetPaths);
+            progress?.Log("Generated player source and project.");
 
             // 4. Compile
 
-            progress("Compiling player...", 0.7f);
-            string csprojPath = Path.Combine(buildTempDir, $"{project.Name}.Player.csproj");
-            var (exitCode, stdout, stderr) = RunDotnetPublish(
-                csprojPath,
-                settings.Config.ToString(),
-                settings.RuntimeIdentifier,
-                settings.SelfContained,
-                outputDir);
+            progress?.Log("Compiling player...", 0.7f);
 
-            log.AppendLine(stdout);
+            string csprojPath = Path.Combine(buildTempDir, $"{project.Name}.Player.csproj");
+
+            var args = new StringBuilder();
+            args.Append($"publish \"{csprojPath}\"");
+            args.Append($" -c {settings.Config.ToString()}");
+            args.Append($" -r {desktopProfile.RuntimeIdentifier}");
+            args.Append($" -o \"{outputDirectory}\"");
+            args.Append($" --self-contained {desktopProfile.SelfContained.ToString().ToLowerInvariant()}");
+
+            var (exitCode, stdout, stderr) = await RunDotnetAsync(args.ToString(),
+                progress,
+                cancellation).ConfigureAwait(false);
+
+            progress?.Log(stdout);
             if (!string.IsNullOrEmpty(stderr))
-                errors.AppendLine(stderr);
+                progress?.Log(stderr);
 
             if (exitCode != 0)
             {
@@ -151,9 +178,9 @@ public class DesktopBuildPipeline : BuildPipeline
                 return new BuildResult
                 {
                     Success = false,
-                    OutputPath = outputDir,
-                    Log = log.ToString(),
-                    Errors = errors.ToString(),
+                    OutputPath = outputDirectory,
+                    Log = progress?.ToString(LogSeverity.Normal),
+                    Errors = progress?.ToString(LogSeverity.Error),
                     Duration = sw.Elapsed,
                     AssetCount = 0
                 };
@@ -162,13 +189,16 @@ public class DesktopBuildPipeline : BuildPipeline
             // 4b. Copy pre-compiled game scripts assembly
             if (File.Exists(project.GameAssemblyPath))
             {
-                File.Copy(project.GameAssemblyPath, Path.Combine(outputDir, Path.GetFileName(project.GameAssemblyPath)), true);
-                log.AppendLine($"Copied game assembly: {Path.GetFileName(project.GameAssemblyPath)}");
+                File.Copy(project.GameAssemblyPath, Path.Combine(outputDirectory, Path.GetFileName(project.GameAssemblyPath)), true);
+                progress?.Log($"Copied game assembly: {Path.GetFileName(project.GameAssemblyPath)}");
             }
+
+            // 4c. Organize assemblies — move dependency DLLs to runtimes/ subfolder
+            OrganizePublishOutput(outputDirectory, project.Name);
 
             // 5. Package assets AFTER publish (publish may clean the output dir)
             // For embedded mode, assets were already baked into the assembly at compile time
-            progress("Packaging assets...", 0.8f);
+            progress?.Log("Packaging assets...", 0.8f);
             int assetCount = collection.AllAssets.Count;
             if (settings.PackagingMode != AssetPackagingMode.Embedded)
             {
@@ -185,25 +215,27 @@ public class DesktopBuildPipeline : BuildPipeline
                 GenerateManifest(Path.Combine(contentDir, "asset_manifest.bin"),
                     collection.AllAssets, collection.ResourcesMap, defaultScene);
             }
-            log.AppendLine($"Packaged {assetCount} assets ({settings.PackagingMode}).");
+            progress?.Log($"Packaged {assetCount} assets ({settings.PackagingMode}).");
 
             // 6. Export settings
             ExportSettings(settingsDir, progress);
-            log.AppendLine("Exported project settings.");
+            progress?.Log("Exported project settings.");
 
-            // 7. Copy engine's native runtimes (miniaudioex etc.) that aren't from NuGet
-            progress("Copying native libraries...", 0.9f);
+            // 7. Copy engine-custom native libraries (e.g. miniaudioex) that aren't provided by NuGet.
+            //    NuGet-provided natives (glfw3, soft_oal, Magick.Native) are already handled by dotnet publish.
+            progress?.Log("Copying native libraries...", 0.9f);
             string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
             string engineRuntimes = Path.Combine(engineDir, "runtimes");
             if (Directory.Exists(engineRuntimes))
             {
                 foreach (var file in Directory.EnumerateFiles(engineRuntimes, "*.*", SearchOption.AllDirectories))
                 {
+                    //if (!IsEngineNativeLib(Path.GetFileName(file))) continue;
+
                     string relative = Path.GetRelativePath(engineRuntimes, file);
-                    string dest = Path.Combine(outputDir, "runtimes", relative);
+                    string dest = Path.Combine(outputDirectory, "runtimes", relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                    if (!File.Exists(dest))
-                        File.Copy(file, dest, true);
+                    File.Copy(file, dest, true);
                 }
             }
 
@@ -212,16 +244,16 @@ public class DesktopBuildPipeline : BuildPipeline
                 try { Directory.Delete(buildTempDir, true); } catch { }
 
             // Done
-            progress("Build complete!", 1.0f);
+            progress?.Log("Build complete!", 1.0f);
             sw.Stop();
 
-            Runtime.Debug.Log($"[Build] Desktop build completed in {sw.Elapsed.TotalSeconds:F1}s → {outputDir}");
+            Runtime.Debug.Log($"[Build] Desktop build completed in {sw.Elapsed.TotalSeconds:F1}s → {outputDirectory}");
 
             return new BuildResult
             {
                 Success = true,
-                OutputPath = outputDir,
-                Log = log.ToString(),
+                OutputPath = outputDirectory,
+                Log = progress?.ToString(),
                 Duration = sw.Elapsed,
                 AssetCount = assetCount
             };
@@ -237,7 +269,7 @@ public class DesktopBuildPipeline : BuildPipeline
         }
     }
 
-    private void GeneratePlayerSource(Project project, BuildSettings settings, Guid defaultSceneGuid, string outputDir)
+    private void GeneratePlayerSource(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile, Guid defaultSceneGuid, string outputDir)
     {
         string productName = "Prowl Game";
         try { productName = ProjectSettingsRegistry.Get<GeneralSettings>().ProductName; } catch { }
@@ -246,63 +278,222 @@ public class DesktopBuildPipeline : BuildPipeline
         File.WriteAllText(Path.Combine(outputDir, "Program.cs"), $$"""
             using System;
             using System.IO;
+            using System.Linq;
+            using System.Collections;
+            using System.Collections.Generic;
             using System.Reflection;
+            using System.Runtime.CompilerServices;
             using System.Runtime.InteropServices;
-            using Prowl.Runtime;
+            using System.Runtime.Loader;
 
-            // Register a native library resolver that probes runtimes/{rid}/native/ next to exe
-            NativeLibrary.SetDllImportResolver(typeof(Prowl.Runtime.Game).Assembly, (name, asm, paths) =>
+            new DesktopPlayer().Run("{{productName}}", {{desktopProfile.WindowWidth}}, {{desktopProfile.WindowHeight}});
+
+            internal static class ModuleInitializer
             {
-                string baseDir = AppContext.BaseDirectory;
-                string rid = RuntimeInformation.RuntimeIdentifier;
-                string[] rids = [rid];
-                if (rid.Contains('-')) rids = [rid, rid[..rid.IndexOf('-')]];
-
-                string[] exts = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? [".dll", ""]
-                    : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? [".dylib", ""]
-                    : [".so", ".so.1", ""];
-
-                foreach (var r in rids)
+                [ModuleInitializer]
+                public static void Initialize()
                 {
+                    // 1. Managed assembly resolver
+                    AssemblyLoadContext.Default.Resolving += (context, assemblyName) =>
+                    {
+                        string dllName = assemblyName.Name + ".dll";
+                        string probePath = Path.Combine(AppContext.BaseDirectory, "runtimes", dllName);
+
+                        // Log to file or debug output (Console may not be ready yet)
+                        Log($"[Resolver] Probing: {probePath}");
+
+                        if (File.Exists(probePath))
+                        {
+                            Log($"[Resolver] Found! Loading {probePath}");
+                            return context.LoadFromAssemblyPath(probePath);
+                        }
+                            Log($"[Resolver] Not Found {probePath}!");
+                        return null;
+                    };
+
+                    // 2. Native resolver (optional, but register early as well)
+                    NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), ResolveNativeLibrary);
+                    //NativeLibrary.SetDllImportResolver(typeof(Prowl.Runtime.Game).Assembly, ResolveNativeLibrary);
+
+                    AssemblyLoadContext.Default.ResolvingUnmanagedDll += (assembly, libraryName) =>
+                    {
+                        Log($"[Native] Global resolver: {libraryName} requested by {assembly?.GetName()?.Name ?? "unknown"}");
+
+                        string baseDir = AppContext.BaseDirectory;
+                        string rid = RuntimeInformation.RuntimeIdentifier;
+
+                        // Build RID fallback chain
+                        List<string> rids = new();
+                        if (!string.IsNullOrEmpty(rid))
+                        {
+                            rids.Add(rid);
+                            int dash = rid.IndexOf('-');
+                            while (dash > 0)
+                            {
+                                rid = rid.Substring(0, dash);
+                                rids.Add(rid);
+                                dash = rid.IndexOf('-');
+                            }
+                        }
+                        rids.Add("any");
+                        rids.Add("");
+
+                        string[] exts = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                            ? new[] { ".dll", "" }
+                            : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                                ? new[] { ".dylib", "" }
+                                : new[] { ".so", ".so.1", "" };
+
+                        foreach (var r in rids)
+                        {
+                            string nativeSubDir = string.IsNullOrEmpty(r)
+                                ? Path.Combine("runtimes", "native")
+                                : Path.Combine("runtimes", r, "native");
+
+                            foreach (var ext in exts)
+                            {
+                                string fullPath = Path.Combine(baseDir, nativeSubDir, libraryName + ext);
+                                Log($"[Native] Probing: {fullPath}");
+
+                                if (File.Exists(fullPath))
+                                {
+                                    if (NativeLibrary.TryLoad(fullPath, out IntPtr handle))
+                                    {
+                                        Log($"[Native] SUCCESS: {fullPath}");
+                                        return handle;
+                                    }
+                                    else
+                                    {
+                                        Log($"[Native] TryLoad FAILED (missing dependency?): {fullPath}");
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fallback to root directory
+                        foreach (var ext in exts)
+                        {
+                            string rootPath = Path.Combine(baseDir, libraryName + ext);
+                            Log($"[Native] Root probe: {rootPath}");
+                            if (File.Exists(rootPath) && NativeLibrary.TryLoad(rootPath, out IntPtr handle))
+                            {
+                                Log($"[Native] SUCCESS from root: {rootPath}");
+                                return handle;
+                            }
+                        }
+
+                        Log($"[Native] NOT FOUND: {libraryName}");
+                        return IntPtr.Zero;
+                    };
+                }
+
+                public static IntPtr ResolveNativeLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+                {
+                    Log($"[Native] Resolving: {libraryName} for {assembly.GetName().Name}");
+
+                    string baseDir = AppContext.BaseDirectory;
+                    string rid = RuntimeInformation.RuntimeIdentifier;
+
+                    // Build RID fallback chain
+                    List<string> rids = new();
+                    if (!string.IsNullOrEmpty(rid))
+                    {
+                        rids.Add(rid);
+                        int dash = rid.IndexOf('-');
+                        while (dash > 0)
+                        {
+                            rid = rid.Substring(0, dash);
+                            rids.Add(rid);
+                            dash = rid.IndexOf('-');
+                        }
+                    }
+                    rids.Add("any");
+                    rids.Add("");
+
+                    string[] exts = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                        ? new[] { ".dll", "" }
+                        : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                            ? new[] { ".dylib", "" }
+                            : new[] { ".so", ".so.1", "" };
+
+                    foreach (var r in rids)
+                    {
+                        string nativeSubDir = string.IsNullOrEmpty(r)
+                            ? Path.Combine("runtimes", "native")
+                            : Path.Combine("runtimes", r, "native");
+
+                        foreach (var ext in exts)
+                        {
+                            string fullPath = Path.Combine(baseDir, nativeSubDir, libraryName + ext);
+                            Log($"[Native] Probing: {fullPath}");
+
+                            if (File.Exists(fullPath))
+                            {
+                                if (NativeLibrary.TryLoad(fullPath, out IntPtr handle))
+                                {
+                                    Log($"[Native] SUCCESS: {fullPath}");
+                                    return handle;
+                                }
+                                else
+                                {
+                                    Log($"[Native] TryLoad FAILED (missing dependency?): {fullPath}");
+                                }
+                            }
+                        }
+                    }
+
+                    // Last chance: root directory
                     foreach (var ext in exts)
                     {
-                        string path = Path.Combine(baseDir, "runtimes", r, "native", name + ext);
-                        if (File.Exists(path) && NativeLibrary.TryLoad(path, out var handle))
+                        string rootPath = Path.Combine(baseDir, libraryName + ext);
+                        if (File.Exists(rootPath) && NativeLibrary.TryLoad(rootPath, out IntPtr handle))
+                        {
+                            Log($"[Native] SUCCESS from root: {rootPath}");
                             return handle;
+                        }
                     }
+
+                    Log($"[Native] NOT FOUND: {libraryName}");
+                    return IntPtr.Zero;
                 }
-                return IntPtr.Zero;
-            });
 
-            new DesktopPlayer().Run("{{productName}}", {{settings.WindowWidth}}, {{settings.WindowHeight}});
+                private static void Log(string message)
+                {
+                    // Write to a file since Console may not be available yet.
+                    File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "resolver.log"), $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}");
+                }
+            }
 
-            class DesktopPlayer : Game
+            class DesktopPlayer : Prowl.Runtime.Game
             {
                 public override void Initialize()
                 {
-                    Application.IsPlaying = true;
-                    Application.IsEditor = false;
-                    Application.DataPath = System.AppContext.BaseDirectory;
+                    Prowl.Runtime.Application.IsPlaying = true;
+                    Prowl.Runtime.Application.IsEditor = false;
+                    Prowl.Runtime.Application.DataPath = System.AppContext.BaseDirectory;
+
+                    NativeLibrary.SetDllImportResolver(typeof(Prowl.Runtime.Game).Assembly, ModuleInitializer.ResolveNativeLibrary);
 
                     // Load user game scripts assembly
-                    string gameAssembly = Path.Combine(Application.DataPath, "{{project.Name}}.Game.dll");
+                    string gameAssembly = Path.Combine(Prowl.Runtime.Application.DataPath, "{{project.Name}}.Game.dll");
                     if (File.Exists(gameAssembly))
                         Assembly.LoadFrom(gameAssembly);
 
                     // Initialize asset database
-                    var db = new PlayerAssetDatabase(AssetPackagingMode.{{settings.PackagingMode}}, "Content");
-                    AssetDatabase.Current = db;
-                    GameResources.Initialize(db.ResourcesMap);
+                    var db = new Prowl.Runtime.PlayerAssetDatabase(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
+                    Prowl.Runtime.AssetDatabase.Current = db;
+                    Prowl.Runtime.GameResources.Initialize(db.ResourcesMap);
 
                     // Load default scene
                     var scene = db.LoadScene(Guid.Parse("{{defaultSceneGuid}}"));
                     if (scene != null)
                         Prowl.Runtime.Resources.Scene.Load(scene);
                     else
-                        Debug.LogError("Failed to load default scene.");
+                        Prowl.Runtime.Debug.LogError("Failed to load default scene.");
 
                     // Apply project settings (physics needs scene loaded first)
-                    PlayerSettingsLoader.Apply(Path.Combine(Application.DataPath, "Content", "Settings"));
+                    Prowl.Runtime.PlayerSettingsLoader.Apply(Path.Combine(Prowl.Runtime.Application.DataPath, "Content", "Settings"));
+
                 }
 
                 public override void OnUpdate(Prowl.Runtime.Resources.Scene? scene) => scene?.Update();
@@ -312,7 +503,7 @@ public class DesktopBuildPipeline : BuildPipeline
             """);
     }
 
-    private void GeneratePlayerCsproj(Project project, BuildSettings settings, string outputDir, List<string>? embeddedAssetPaths = null)
+    private void GeneratePlayerCsproj(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile, string outputDir, List<string>? embeddedAssetPaths = null)
     {
         string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         string runtimeDll = Path.Combine(engineDir, "Prowl.Runtime.dll");
@@ -327,11 +518,33 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
         sb.AppendLine("    <Nullable>enable</Nullable>");
         sb.AppendLine($"    <AssemblyName>{project.Name}</AssemblyName>");
-        sb.AppendLine($"    <DefineConstants>PROWL;{versionDefine}</DefineConstants>"); // NO PROWL_EDITOR
-        sb.AppendLine($"    <RuntimeIdentifier>{settings.RuntimeIdentifier}</RuntimeIdentifier>");
-        if (settings.SelfContained)
+        sb.AppendLine($"    <DefineConstants>PROWL;{versionDefine};{FinalizeDefineString(settings, this)}</DefineConstants>"); // NO PROWL_EDITOR
+        sb.AppendLine($"    <RuntimeIdentifier>{desktopProfile.RuntimeIdentifier}</RuntimeIdentifier>");
+
+
+        sb.AppendLine("    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>");
+
+        if (desktopProfile.SelfContained)
+        {
             sb.AppendLine("    <SelfContained>true</SelfContained>");
+
+        }
         sb.AppendLine("  </PropertyGroup>");
+
+        // PublishTrimmed should still be regarded as experimental.
+        // Using Partial as TrimMode should keep the engine from trimming the wrong assemblies,
+        // But at this time it's unknown if it breaks anything with different build configurations
+        // Forcing TrimmerRootAssembly to Prowl.Runtime prevents unexpected trimming from core assembly as well.
+        if (desktopProfile.PublishTrimmed)
+        {
+            sb.AppendLine("  <PropertyGroup>");
+            sb.AppendLine("    <PublishTrimmed>true</PublishTrimmed>");
+            sb.AppendLine("    <TrimMode>partial</TrimMode>");
+            sb.AppendLine("  </PropertyGroup>");
+            sb.AppendLine("  <ItemGroup>");
+            sb.AppendLine("     <TrimmerRootAssembly Include=\"Prowl.Runtime\" />");
+            sb.AppendLine("  </ItemGroup>");
+        }
 
         // Reference Prowl.Runtime Private=true forces fresh copy from HintPath
         sb.AppendLine("  <ItemGroup>");
@@ -342,15 +555,7 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("    </Reference>");
         sb.AppendLine("  </ItemGroup>");
 
-        // NuGet packages must use PackageReference for native deps (Silk.NET GLFW, OpenAL, etc.)
-        sb.AppendLine("  <ItemGroup>");
-        sb.AppendLine("    <PackageReference Include=\"Jitter2\" Version=\"2.8.3\" />");
-        sb.AppendLine("    <PackageReference Include=\"Magick.NET-Q16-AnyCPU\" Version=\"14.11.1\" />");
-        sb.AppendLine("    <PackageReference Include=\"Prowl.Echo\" Version=\"2.1.2\" />");
-        sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.5.1\" />");
-        sb.AppendLine("    <PackageReference Include=\"Silk.NET\" Version=\"2.22.0\" />");
-        sb.AppendLine("    <PackageReference Include=\"Silk.NET.OpenAL.Soft.Native\" Version=\"1.23.1\" />");
-        sb.AppendLine("  </ItemGroup>");
+        ListDependencies(sb);
 
         // User NuGet packages from ProjectSettings/Packages.json
         Scripting.ScriptCompiler.AppendNuGetPackages(sb, project);
@@ -383,5 +588,77 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("</Project>");
 
         File.WriteAllText(Path.Combine(outputDir, $"{project.Name}.Player.csproj"), sb.ToString());
+    }
+
+    public void ListDependencies(StringBuilder sb)
+    {
+        // NuGet packages must use PackageReference for native deps (Silk.NET GLFW, OpenAL, etc.)
+        sb.AppendLine("  <ItemGroup>");
+        sb.AppendLine("    <PackageReference Include=\"Silk.NET\" Version=\"2.22.0\" />");
+        sb.AppendLine("    <PackageReference Include=\"Silk.NET.OpenAL.Soft.Native\" Version=\"1.23.1\" />");
+        sb.AppendLine("    <PackageReference Include=\"Jitter2\" Version=\"2.8.3\" />");
+        sb.AppendLine("    <PackageReference Include=\"Magick.NET-Q16-AnyCPU\" Version=\"14.11.1\" />");
+        sb.AppendLine("    <PackageReference Include=\"Prowl.Echo\" Version=\"2.1.2\" />");
+        sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.5.1\" />");
+        sb.AppendLine("  </ItemGroup>");
+    }
+
+    public override string GetExecutablePath(string outputPath, BuildSettings settings)
+    {
+        var profile = settings.GetProfile<DesktopBuildProfile>(GetType());
+        string exe = Path.Combine(outputPath,
+            Project.Current!.Name + (profile.Platform == BuildTarget.Windows ? ".exe" : ""));
+        return exe;
+    }
+
+    /// <summary>
+    /// Moves DLLs from the publish root into a runtimes/ subfolder,
+    /// keeping only the player executable, game assembly, and core runtime in the root.
+    /// </summary>
+    private static void OrganizePublishOutput(string outputDir, string projectName)
+    {
+        string libsDir = Path.Combine(outputDir, "runtimes");
+        Directory.CreateDirectory(libsDir);
+
+        // Files that must remain in the root for the app to start
+        var keepInRoot = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            $"{projectName}.dll",
+            $"{projectName}.exe",
+            $"{projectName}.pdb",
+            $"{projectName}.Game.dll",
+            $"{projectName}.Game.pdb",
+            "System.Private.CoreLib.dll",
+            "System.Runtime.dll",
+            "System.Runtime.InteropServices.dll",
+            "System.Runtime.Loader.dll",
+            "System.Runtime.dll",
+            "Prowl.Runtime.dll",
+            "Prowl.Runtime.pdb",
+        };
+
+        foreach (var file in Directory.GetFiles(outputDir, "*.dll"))
+        {
+            string fileName = Path.GetFileName(file);
+            if (keepInRoot.Contains(fileName)) continue;
+
+            // Skip native (unmanaged) DLLs — only move managed assemblies
+            try { AssemblyName.GetAssemblyName(file); }
+            catch (BadImageFormatException) { continue; }
+
+
+
+            string dest = Path.Combine(libsDir, fileName);
+            //Runtime.Debug.Log($"WillMove to: {dest}");
+            File.Move(file, dest, true);
+
+            // Also move corresponding PDB if present
+            string pdbPath = Path.ChangeExtension(file, ".pdb");
+            if (File.Exists(pdbPath))
+            {
+                string pdbDest = Path.Combine(libsDir, Path.GetFileName(pdbPath));
+                File.Move(pdbPath, pdbDest, true);
+            }
+        }
     }
 }

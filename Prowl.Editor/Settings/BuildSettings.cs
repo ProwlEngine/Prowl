@@ -1,15 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
-using Prowl.Editor.Build;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
-using Color = System.Drawing.Color;
 
 namespace Prowl.Editor;
 
@@ -19,33 +15,92 @@ public enum AssetExportMode { AllAssets, DependenciesOnly }
 
 public class SceneBuildEntry
 {
-    public string Path { get; set; } = "";
-    public Guid SceneGuid { get; set; }
-    public bool Enabled { get; set; } = true;
+    public string Path = "";
+    public Guid SceneGuid;
+    public bool Enabled = true;
 }
 
-[ProjectSettings("Build", EditorIcons.Hammer, order: 50, exportToBuild: false)]
-public class BuildSettings : ProjectSettingsBase
-{
-    public List<SceneBuildEntry> Scenes { get; set; } = new();
-    public BuildTarget Platform { get; set; } = BuildTarget.Windows;
-    public BuildConfiguration Config { get; set; } = BuildConfiguration.Release;
-    public string OutputDirectory { get; set; } = "Builds";
-    public AssetPackagingMode PackagingMode { get; set; } = AssetPackagingMode.ProwlPak;
-    public AssetExportMode AssetMode { get; set; } = AssetExportMode.DependenciesOnly;
-    public int MaxPakSizeMB { get; set; } = 2048;
-    public bool SelfContained { get; set; } = false;
-    public int WindowWidth { get; set; } = 1280;
-    public int WindowHeight { get; set; } = 720;
 
-    public string RuntimeIdentifier
+[ProjectSettings("Build", EditorIcons.Hammer, order: 50, exportToBuild: false)]
+public sealed class BuildSettings : ProjectSettingsBase
+{
+    public override bool DrawInProjectSettingsPanel => false;
+
+    public List<SceneBuildEntry> Scenes = new();
+
+
+    public BuildConfiguration Config = BuildConfiguration.Release;
+    public string OutputDirectory = "Builds";
+    public AssetPackagingMode PackagingMode = AssetPackagingMode.ProwlPak;
+    public AssetExportMode AssetMode = AssetExportMode.DependenciesOnly;
+    public int MaxPakSizeMB = 2048;
+
+    /// <summary>
+    /// Per-platform profiles.  Missing entries will be created with
+    /// defaults on first access.
+    /// </summary>
+    public List<PlatformBuildProfile> PlatformProfiles = new();
+
+    /// <summary>
+    /// Returns (or lazily creates) the profile for the given target.
+    /// </summary>
+    public T GetProfile<T>(Type pipelineType) where T : PlatformBuildProfile
     {
-        get => Platform switch
+        var profile = PlatformProfiles.FirstOrDefault(profile => pipelineType == profile.GetPipelineType());
+        if (profile == null)
         {
-            BuildTarget.Linux => "linux-x64",
-            BuildTarget.MacOS => "osx-x64",
-            _ => "win-x64",
-        };
+            profile = System.Activator.CreateInstance<T>();
+            PlatformProfiles.Add(profile);
+        }
+        return (T)profile;
+    }
+
+    /// <summary>
+    /// Returns the profile for the given target.
+    /// If not present, returns null.
+    /// </summary>
+    public PlatformBuildProfile GetProfile(Type pipelineType)
+    {
+        var profile = PlatformProfiles.FirstOrDefault(profile => pipelineType == profile.GetPipelineType());
+        return profile;
+    }
+
+    /// <summary>
+    /// Returns or creates the profile for the given target.
+    /// If not present, returns null.
+    /// </summary>
+    public PlatformBuildProfile GetOrCreateProfile(Type pipelineType)
+    {
+        var profile = PlatformProfiles.FirstOrDefault(profile => pipelineType == profile.GetPipelineType());
+
+        // If the profile is null, create the profile
+        if (profile == null)
+        {
+            Type targetType = null;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                foreach (var type in asm.GetTypes())
+                {
+                    if (type.IsSubclassOf(typeof(PlatformBuildProfile)) && type != typeof(PlatformBuildProfile))
+                    {
+                        var check = Activator.CreateInstance(type) as PlatformBuildProfile;
+                        if (check.GetPipelineType() == pipelineType)
+                        {
+                            targetType = type;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (targetType != null)
+            {
+                profile = (PlatformBuildProfile)System.Activator.CreateInstance(targetType);
+                PlatformProfiles.Add(profile);
+                ProjectSettingsRegistry.SaveAll();
+            }
+        }
+        return profile;
     }
 
     public override void OnGUI(Paper paper, float width)
@@ -138,9 +193,6 @@ public class BuildSettings : ProjectSettingsBase
         EditorGUI.Header(paper, "bld_config_h", $"{EditorIcons.Gear}  Configuration");
         EditorGUI.Separator(paper, "bld_config_sep");
 
-        EditorGUI.EnumDropdown(paper, "bld_platform", "Platform", Platform)
-            .OnValueChanged(v => { Platform = v; ProjectSettingsRegistry.SaveAll(); });
-
         EditorGUI.EnumDropdown(paper, "bld_config", "Configuration", Config)
             .OnValueChanged(v => { Config = v; ProjectSettingsRegistry.SaveAll(); });
 
@@ -159,92 +211,14 @@ public class BuildSettings : ProjectSettingsBase
                 .OnValueChanged(v => { MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); });
         }
 
-        EditorGUI.Toggle(paper, "bld_selfcontained", "Self-Contained", SelfContained)
-            .OnValueChanged(v => { SelfContained = v; ProjectSettingsRegistry.SaveAll(); });
-
-        paper.Box("bld_sp2").Height(8);
-        EditorGUI.Header(paper, "bld_window_h", "Window");
-        EditorGUI.Separator(paper, "bld_window_sep");
-
-        EditorGUI.IntField(paper, "bld_width", WindowWidth, "Width")
-            .OnValueChanged(v => { WindowWidth = Math.Max(320, v); ProjectSettingsRegistry.SaveAll(); });
-
-        EditorGUI.IntField(paper, "bld_height", WindowHeight, "Height")
-            .OnValueChanged(v => { WindowHeight = Math.Max(240, v); ProjectSettingsRegistry.SaveAll(); });
 
         paper.Box("bld_sp3").Height(12);
 
-        // Build buttons
-        using (paper.Row("bld_buttons").Height(32).RowBetween(8).ChildLeft(4).Enter())
-        {
-            EditorGUI.Button(paper, "bld_build", $"{EditorIcons.Hammer}  Build", width: 120)
-                .OnValueChanged(_ => StartBuild(false));
-
-            EditorGUI.Button(paper, "bld_buildrun", $"{EditorIcons.Play}  Build & Run", width: 140)
-                .OnValueChanged(_ => StartBuild(true));
-        }
-    }
-
-    private static void StartBuild(bool andRun)
-    {
-        BuildSettings? settings;
-        try { settings = ProjectSettingsRegistry.Get<BuildSettings>(); }
-        catch { Runtime.Debug.LogError("BuildSettings not found."); return; }
-
-        // Ask for output folder
-        Widgets.FileDialog.Open(Widgets.FileDialogMode.SelectFolder, outputPath =>
-        {
-            if (string.IsNullOrEmpty(outputPath)) return;
-
-            settings.OutputDirectory = outputPath;
-            ProjectSettingsRegistry.SaveAll();
-
-            var pipeline = new DesktopBuildPipeline();
-
-            Runtime.Debug.Log($"[Build] Starting build to {outputPath}...");
-            var result = pipeline.Build(settings, (stage, progress) =>
-            {
-                Runtime.Debug.Log($"[Build] {stage} ({progress * 100:F0}%)");
-            });
-
-            HandleBuildResult(result, settings, andRun);
-        }, Project.Current?.RootPath);
-    }
-
-    private static void HandleBuildResult(BuildResult result, BuildSettings settings, bool andRun)
-    {
-        if (result.Success)
-        {
-            Runtime.Debug.Log($"[Build] SUCCESS: {result.AssetCount} assets → {result.OutputPath} ({result.Duration.TotalSeconds:F1}s)");
-
-            if (andRun)
-            {
-                string exe = Path.Combine(result.OutputPath,
-                    Project.Current!.Name + (settings.Platform == BuildTarget.Windows ? ".exe" : ""));
-                if (File.Exists(exe))
-                {
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true }); }
-                    catch (Exception ex) { Runtime.Debug.LogError($"[Build] Failed to launch: {ex.Message}"); }
-                }
-            }
-        }
-        else
-        {
-            Runtime.Debug.LogError($"[Build] FAILED: {result.Errors}");
-        }
     }
 
     public override void ResetToDefaults()
     {
         Scenes.Clear();
-        Platform = BuildTarget.Windows;
-        Config = BuildConfiguration.Release;
-        OutputDirectory = "Builds";
-        PackagingMode = AssetPackagingMode.ProwlPak;
-        AssetMode = AssetExportMode.DependenciesOnly;
-        MaxPakSizeMB = 2048;
-        SelfContained = true;
-        WindowWidth = 1280;
-        WindowHeight = 720;
+        PlatformProfiles.ForEach(p => p.ToDefault());
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 
+using Prowl.Echo;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -31,12 +32,20 @@ public class ProjectSettingsAttribute : Attribute
     }
 }
 
+public enum SerializerType
+{
+    Standard,
+    Echo
+}
+
 /// <summary>
 /// Base class for all project settings. Subclass and add [ProjectSettings] attribute.
 /// Settings are automatically discovered, created as singletons, and saved/loaded per project.
 /// </summary>
 public abstract class ProjectSettingsBase
 {
+    public virtual bool DrawInProjectSettingsPanel => true;
+
     /// <summary>Called after settings are loaded or reset. Override to apply values to runtime systems.</summary>
     public virtual void Apply() { }
 
@@ -117,8 +126,30 @@ public static class ProjectSettingsRegistry
 
         foreach (var entry in _entries)
         {
-            string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json");
+            string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.yaml");
             if (File.Exists(path))
+            {
+                try
+                {
+                    string yaml = File.ReadAllText(path);
+
+                    EchoObject serialized = EchoObject.ReadFromYaml(yaml);
+                    var loaded = (ProjectSettingsBase?)Serializer.Deserialize(serialized, entry.Type);
+                    if (loaded != null)
+                    {
+                        // Copy fields from loaded to singleton
+                        CopyFields(loaded, entry.Instance);
+                        Debug.Log($"Loaded settings: {entry.Name}");
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Failed to load settings '{entry.Name}': {ex.Message}");
+                }
+            }
+            // If loading up the YAML fails, try loading up the JSON instead.
+            else if (File.Exists(Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json")))
             {
                 try
                 {
@@ -166,12 +197,12 @@ public static class ProjectSettingsRegistry
         var project = Project.Current;
         if (project == null) return;
 
-        string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json");
+        string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.yaml");
         try
         {
-            string json = JsonSerializer.Serialize(entry.Instance, entry.Type,
-                new JsonSerializerOptions { WriteIndented = true, IncludeFields = true });
-            File.WriteAllText(path, json);
+            var echoObject = Prowl.Echo.Serializer.Serialize(entry.Instance, TypeMode.Auto);
+            string yaml = echoObject.WriteToYaml();
+            File.WriteAllText(path, yaml);
         }
         catch (Exception ex)
         {

@@ -1211,7 +1211,7 @@ public static class EditorGUI
     // ================================================================
     //  Progress Bar
     // ================================================================
-    public static void ProgressBar(Paper paper, string id, string label, float progress)
+    public static void ProgressBar(Paper paper, string id, string label, float progress, float? height = null)
     {
         progress = Math.Clamp(progress, 0, 1);
 
@@ -1239,7 +1239,7 @@ public static class EditorGUI
                     float rw = (float)r.Size.X;
                     float rh = (float)r.Size.Y;
 
-                    float trackH = 4f;
+                    float trackH = height ?? 4f;
                     float trackY = ry + rh * 0.5f - trackH * 0.5f;
                     float trackR = trackH * 0.5f;
 
@@ -1258,6 +1258,7 @@ public static class EditorGUI
                     .Width(40).Height(EditorTheme.RowHeight)
                     .IsNotInteractable()
                     .Text($"{(int)(progress * 100)}%", Font)
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .TextColor(EditorTheme.Ink500).FontSize(FontSz);
         }
     }

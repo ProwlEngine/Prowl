@@ -14,29 +14,29 @@ namespace Prowl.Editor;
 public class PhysicsSettings : ProjectSettingsBase
 {
     // Gravity
-    public float GravityX { get; set; } = 0f;
-    public float GravityY { get; set; } = -9.81f;
-    public float GravityZ { get; set; } = 0f;
+    public float GravityX = 0f;
+    public float GravityY = -9.81f;
+    public float GravityZ = 0f;
 
     // Solver
-    public int SolverIterations { get; set; } = 8;
-    public int RelaxIterations { get; set; } = 4;
-    public int SubSteps { get; set; } = 2;
+    public int SolverIterations = 8;
+    public int RelaxIterations = 4;
+    public int SubSteps = 2;
 
     // Behavior
-    public bool AllowSleep { get; set; } = true;
-    public bool UseMultithreading { get; set; } = true;
-    public bool AutoSyncTransforms { get; set; } = true;
+    public bool AllowSleep = true;
+    public bool UseMultithreading = true;
+    public bool AutoSyncTransforms = true;
 
     // Advanced
-    public bool EnhancedDeterminism { get; set; } = false;
-    public PhysicsThreadModel ThreadModel { get; set; } = PhysicsThreadModel.Regular;
-    public bool EnableAuxiliaryContactPoints { get; set; } = true;
-    public bool PersistentContactManifold { get; set; } = true;
-    public float SpeculativeRelaxationFactor { get; set; } = 0.9f;
+    public bool EnhancedDeterminism = false;
+    public PhysicsThreadModel ThreadModel = PhysicsThreadModel.Regular;
+    public bool EnableAuxiliaryContactPoints = true;
+    public bool PersistentContactManifold = true;
+    public float SpeculativeRelaxationFactor = 0.9f;
 
     // Collision matrix stored as 32 uints (bit rows)
-    public uint[] CollisionMatrixRows { get; set; } = CreateDefaultCollisionMatrix();
+    public uint[] CollisionMatrixRows = CreateDefaultCollisionMatrix();
 
     private static bool s_sceneHookRegistered;
 

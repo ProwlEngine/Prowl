@@ -13,21 +13,21 @@ namespace Prowl.Editor;
 [ProjectSettings("Editor", EditorIcons.Palette, order: 5, exportToBuild: false)]
 public class ProjectsEditorSettings : ProjectSettingsBase
 {
-    public List<string> ColorPalette { get; set; } = DefaultColorPalette();
-    public List<CurvePreset> CurvePalette { get; set; } = DefaultCurvePalette();
+    public List<string> ColorPalette = DefaultColorPalette();
+    public List<CurvePreset> CurvePalette = DefaultCurvePalette();
 
     public class CurvePreset
     {
-        public string Name { get; set; } = "";
-        public List<KeyFrameData> Keys { get; set; } = new();
+        public string Name = "";
+        public List<KeyFrameData> Keys = new();
     }
 
     public class KeyFrameData
     {
-        public float Position { get; set; }
-        public float Value { get; set; }
-        public float TangentIn { get; set; }
-        public float TangentOut { get; set; }
+        public float Position;
+        public float Value;
+        public float TangentIn;
+        public float TangentOut;
 
         public KeyFrame ToKeyFrame() => new(Position, Value, TangentIn, TangentOut);
 

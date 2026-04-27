@@ -9,9 +9,9 @@ namespace Prowl.Editor;
 [ProjectSettings("Time", EditorIcons.Clock, order: 22)]
 public class TimeSettings : ProjectSettingsBase
 {
-    public float FixedTimestep { get; set; } = 1f / 60f;
-    public int MaxFixedIterations { get; set; } = 3;
-    public float DefaultTimeScale { get; set; } = 1f;
+    public float FixedTimestep = 1f / 60f;
+    public int MaxFixedIterations = 3;
+    public float DefaultTimeScale = 1f;
 
     public override void Apply()
     {

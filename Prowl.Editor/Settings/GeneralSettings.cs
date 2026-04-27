@@ -6,12 +6,12 @@ namespace Prowl.Editor;
 [ProjectSettings("General", EditorIcons.Gear, order: 0)]
 public class GeneralSettings : ProjectSettingsBase
 {
-    public string CompanyName { get; set; } = "DefaultCompany";
-    public string ProductName { get; set; } = "My Game";
-    public string Version { get; set; } = "0.1.0";
+    public string CompanyName = "DefaultCompany";
+    public string ProductName = "My Game";
+    public string Version = "0.1.0";
 
     /// <summary>Relative path to the last loaded scene. Restored on project open.</summary>
-    public string? LastScenePath { get; set; }
+    public string? LastScenePath;
 
     public override void OnGUI(Paper paper, float width)
     {

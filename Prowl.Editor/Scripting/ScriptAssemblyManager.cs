@@ -1,11 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
-using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -22,6 +23,9 @@ public static class ScriptAssemblyManager
     private static bool _isCompiling;
     private static ScriptCompiler.CompileResult? _pendingResult;
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromSeconds(1);
+
+    private static readonly List<Assembly> s_scriptAssemblies = [];
+    private static readonly object s_lock = new();
 
     /// <summary>Signal that scripts have changed and need recompilation.</summary>
     public static void RequestRecompile()
@@ -89,6 +93,39 @@ public static class ScriptAssemblyManager
             }
         });
     }
+
+
+    /// <summary>
+    /// Returns all assemblies that registries should scan:
+    /// default-context assemblies (engine, BCL) plus any loaded script assemblies.
+    /// </summary>
+    public static IEnumerable<Assembly> GetAllRelevantAssemblies()
+    {
+        foreach (var asm in AssemblyLoadContext.Default.Assemblies)
+            yield return asm;
+    }
+
+    /// <summary>
+    /// Enumerates all types from all relevant assemblies (engine + scripts).
+    /// Safely handles <see cref="ReflectionTypeLoadException"/>.
+    /// </summary>
+    public static IEnumerable<Type> GetAllTypes()
+    {
+        foreach (var assembly in GetAllRelevantAssemblies())
+        {
+            Type[] types;
+            try { types = assembly.GetTypes(); }
+            catch (ReflectionTypeLoadException ex)
+            {
+                types = ex.Types.Where(t => t != null).ToArray()!;
+            }
+            catch { continue; }
+
+            foreach (var type in types)
+                yield return type;
+        }
+    }
+
 
     /// <summary>Load pre-built script assemblies from Library/ScriptAssemblies/.
     /// Copies to a temp path first so the original DLL stays unlocked for recompilation.</summary>
