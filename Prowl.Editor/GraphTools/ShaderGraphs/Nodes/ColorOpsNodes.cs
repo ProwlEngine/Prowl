@@ -435,3 +435,277 @@ public sealed class BlendOverNode : Node, IShaderNode, IShaderGraphNode
 
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec4;
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LUMINANCE
+// Rec. 709 perceptual brightness via Fragment.glsl's luminance(vec3). Returns
+// a single float DesaturateNode inlines the same coefficients but its output
+// is a vec3 mix; this node is the canonical "how bright is this pixel" probe.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Rec. 709 luminance of an RGB colour single float, weights
+/// (0.2126, 0.7152, 0.0722). Use for HDR exposure, FXAA edge detection, bloom
+/// thresholds, or driving any single-channel effect off perceived brightness.
+/// </summary>
+public sealed class LuminanceNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Luminance";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float3>("Color", Float3.Zero, required: true, tooltip: "RGB colour.");
+        AddOutput<float>("Out", tooltip: "Rec. 709 luminance.");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        ctx.Includes.Add("Fragment");
+        var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
+        return $"luminance({c})";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GRAYSCALE
+// Replicates Rec. 709 luminance into all three RGB channels. Equivalent to
+// DesaturateNode at Amount=1, but exposed separately so authoring stays
+// obvious and the graph doesn't look like it's "doing math" when it's really
+// just collapsing colour.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Returns a colour with all three channels set to its Rec. 709 luminance the
+/// shader-graph idiom for "make this gray". For partial desaturation use
+/// <c>DesaturateNode</c>.
+/// </summary>
+public sealed class GrayscaleNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Grayscale";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float3>("Color", Float3.Zero, required: true);
+        AddOutput<Float3>("Out");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        ctx.Includes.Add("Fragment");
+        var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
+        return $"vec3(luminance({c}))";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GAMMA → LINEAR / LINEAR → GAMMA
+// Wraps Fragment.glsl's gammaToLinearSpace / linearToGammaSpace exposes them
+// as nodes so authors don't have to drop a CustomCode block to mark a colour
+// as sRGB-encoded. Matches what the Surface master does internally for
+// material colour inputs.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Converts an sRGB-encoded (gamma 2.2) colour to linear light. Standard
+/// pre-pass for any sampled texture that lives in sRGB but participates in
+/// arithmetic before shading mirrors what the Surface master applies to
+/// gamma-flagged Albedo inputs.
+/// </summary>
+public sealed class GammaToLinearNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Gamma → Linear";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float3>("Color", Float3.Zero, required: true,
+            tooltip: "sRGB-encoded colour (gamma 2.2).");
+        AddOutput<Float3>("Out", tooltip: "Linear-light colour.");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        ctx.Includes.Add("Fragment");
+        var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
+        return $"gammaToLinearSpace({c})";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
+}
+
+/// <summary>
+/// Converts linear-light colour to sRGB (gamma 2.2). Use when writing colours
+/// to an sRGB target manually, or when previewing values that came from a
+/// physically-correct compute path on a gamma display.
+/// </summary>
+public sealed class LinearToGammaNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Linear → Gamma";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float3>("Color", Float3.Zero, required: true,
+            tooltip: "Linear-light colour.");
+        AddOutput<Float3>("Out", tooltip: "sRGB-encoded colour (gamma 2.2).");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        ctx.Includes.Add("Fragment");
+        var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
+        return $"linearToGammaSpace({c})";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FLOAT ↔ RGBA PACKING
+// Pack a [0, 1) float across all four 8-bit channels of a vec4 so it survives
+// a round-trip through an LDR render target. Standard "encode shadow depth
+// into an RGBA8 buffer" trick same magic numbers used by Unity's UnityCG.
+// Lossy beyond the 32-bit precision an RGBA8 can carry, but distributes the
+// bits across channels rather than crushing into one.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Packs a scalar in [0, 1) across the RGBA channels of a vec4 so it
+/// survives storage in an 8-bit-per-channel render target. Round-trip with
+/// <see cref="DecodeFloatRGBANode"/>.
+/// </summary>
+public sealed class EncodeFloatRGBANode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Encode Float → RGBA";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<float>("In", 0f, required: true, tooltip: "Scalar in [0, 1).");
+        AddOutput<Float4>("Out");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        // Encode = enc - enc.yzww * (1/256). The bit-shift into successive
+        // channels is what spreads precision out of one byte into four.
+        ctx.EmitOnce("encFloatRGBA", () =>
+        {
+            ctx.TopLevelHelpers.AppendLine(
+                "        vec4 _encodeFloatRGBA(float v) {\n" +
+                "            const vec4 kEncMul = vec4(1.0, 255.0, 65025.0, 16581375.0);\n" +
+                "            const vec4 kEncBit = vec4(1.0/255.0);\n" +
+                "            vec4 enc = kEncMul * v;\n" +
+                "            enc = fract(enc);\n" +
+                "            enc -= enc.yzww * kEncBit;\n" +
+                "            return enc;\n" +
+                "        }");
+        });
+        var v = ctx.EvaluateInputAs(GetInput("In")!, ShaderType.Float);
+        return $"_encodeFloatRGBA({v})";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec4;
+}
+
+/// <summary>
+/// Inverse of <see cref="EncodeFloatRGBANode"/> reads back a packed float
+/// from a vec4 sample.
+/// </summary>
+public sealed class DecodeFloatRGBANode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Decode RGBA → Float";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float4>("In", Float4.Zero, required: true, tooltip: "Packed RGBA value.");
+        AddOutput<float>("Out");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        var v = ctx.EvaluateInputAs(GetInput("In")!, ShaderType.Vec4);
+        // Mirror coefficients of the encode pass.
+        return $"dot(({v}), vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0))";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// NORMAL XYZ ↔ XY
+// Standard 2-channel normal map encoding. Stores only X and Y; reconstructs
+// Z = sqrt(1 - X² - Y²) on decode (only valid for normals pointing into the
+// hemisphere, which is what tangent-space normal maps always are). Lets a
+// BC5 / RG normal map skip the wasted blue channel.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Discards Z from a tangent-space normal so the XY pair fits in a two-channel
+/// texture. Unpacks via <see cref="DecodeNormalXYNode"/>. Output is in the same
+/// [-1, 1] convention as the input both nodes assume already-unpacked normals.
+/// </summary>
+public sealed class EncodeNormalXYNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Encode Normal → XY";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float3>("Normal", new Float3(0, 0, 1), required: true,
+            tooltip: "Tangent-space normal in [-1, 1].");
+        AddOutput<Float2>("Out");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        var v = ctx.EvaluateInputAs(GetInput("Normal")!, ShaderType.Vec3);
+        return $"({v}).xy";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec2;
+}
+
+/// <summary>
+/// Reconstructs a unit-length tangent-space normal from a two-channel (XY)
+/// sample by computing <c>Z = sqrt(1 - X² - Y²)</c>. The classic BC5 / RG
+/// normal-map decode. Inputs are already in the [-1, 1] convention if your
+/// sample is in [0, 1] feed it through <c>x*2-1</c> first.
+/// </summary>
+public sealed class DecodeNormalXYNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Decode XY → Normal";
+    public override string Category => "Color";
+    public override System.Drawing.Color AccentColor => ColorAccents.Color;
+
+    protected override void DefineNode()
+    {
+        AddInput<Float2>("XY", Float2.Zero, required: true,
+            tooltip: "Packed XY normal in [-1, 1].");
+        AddOutput<Float3>("Out", tooltip: "Reconstructed unit-length tangent-space normal.");
+    }
+
+    string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
+    {
+        // max(.., 0) guards against floating-point underflow when |XY| ≥ 1
+        // (a denormalised XY pair would otherwise produce NaN under sqrt).
+        var xy = ctx.EvaluateInputAs(GetInput("XY")!, ShaderType.Vec2);
+        return $"vec3({xy}, sqrt(max(1.0 - dot({xy}, {xy}), 0.0)))";
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
+}
