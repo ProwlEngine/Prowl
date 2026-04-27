@@ -520,7 +520,12 @@ namespace Prowl.PaperUI
             // FramebufferScale for crispness). Convert back to logical units for alignment math.
             float invScale = 1.0f / canvas.FramebufferScale;
 
-            if (handle.Data.IsMarkdown == false)
+            if (handle.Data.IsRichText)
+            {
+                if (handle.Data._quillRichText == null) throw new InvalidOperationException("Rich text layout is not processed.");
+                textSize = handle.Data._quillRichText.Value.Size; // already in logical units
+            }
+            else if (handle.Data.IsMarkdown == false)
             {
                 if (handle.Data._textLayout == null) throw new InvalidOperationException("Text layout is not processed.");
 
@@ -560,7 +565,12 @@ namespace Prowl.PaperUI
             // Apply the calculated offset to the y position
             float finalY = y + yOffset;
 
-            if (handle.Data.IsMarkdown == false)
+            if (handle.Data.IsRichText)
+            {
+                var rt = handle.Data._quillRichText.Value;
+                canvas.DrawRichText(rt, new Float2(x, finalY), Time);
+            }
+            else if (handle.Data.IsMarkdown == false)
             {
                 canvas.DrawLayout(handle.Data._textLayout, x, finalY, color);
             }
@@ -771,6 +781,42 @@ namespace Prowl.PaperUI
 
             storage[key] = value;
         }
+
+        internal T GetElementStorageById<T>(int id, string key, T defaultValue = default)
+        {
+            if (!_storage.TryGetValue(id, out var storage)) return defaultValue;
+            if (storage.ContainsKey(key)) return (T)storage[key]!;
+            return defaultValue;
+        }
+
+        internal void SetElementStorageById<T>(int id, string key, T value)
+        {
+            if (!_storage.TryGetValue(id, out var storage))
+                _storage[id] = storage = new Hashtable();
+            storage[key] = value;
+        }
+
+        internal void ClearElementStorageKey(int id, string key)
+        {
+            if (_storage.TryGetValue(id, out var storage))
+                storage.Remove(key);
+        }
+
+        /// <summary>
+        /// Resets animation start time on a rich-text element — replays typewriter / shake / etc.
+        /// from the next frame's draw. No-op if the element has no rich-text layout cached yet.
+        /// </summary>
+        public void ResetRichText(ElementHandle el)
+        {
+            ClearElementStorageKey(el.Data.ID, RichTextLayoutKey);
+            ClearElementStorageKey(el.Data.ID, RichTextSourceKey);
+            ClearElementStorageKey(el.Data.ID, RichTextWidthKey);
+        }
+
+        // Storage keys for the per-element rich-text layout cache.
+        internal const string RichTextLayoutKey = "_pp_rt_layout";
+        internal const string RichTextSourceKey = "_pp_rt_source";
+        internal const string RichTextWidthKey = "_pp_rt_width";
 
         private void EndOfFrameCleanupStorage()
         {

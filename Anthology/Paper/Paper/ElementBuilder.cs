@@ -989,6 +989,32 @@ namespace Prowl.PaperUI
         public ElementBuilder Markdown(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
         {
             _handle.Data.IsMarkdown = true;
+            _handle.Data.IsRichText = false;
+            _handle.Data.Paragraph = text;
+            _handle.Data.Font = font;
+            _handle.Data.FontBold = bold;
+            _handle.Data.FontItalic = italic;
+            _handle.Data.FontBoldItalic = boldItalic;
+            _handle.Data.FontMono = mono;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the element's content to a tagged rich-text source. Supported tags include
+        /// styling (<c>&lt;b&gt;</c>, <c>&lt;i&gt;</c>, <c>&lt;u&gt;</c>, <c>&lt;s&gt;</c>,
+        /// <c>&lt;color=...&gt;</c>, <c>&lt;size=...&gt;</c>, <c>&lt;font=mono&gt;</c>,
+        /// <c>&lt;link=...&gt;</c>) and animations (<c>&lt;shake&gt;</c>, <c>&lt;wave&gt;</c>,
+        /// <c>&lt;rainbow&gt;</c>, <c>&lt;pulse&gt;</c>, <c>&lt;fade&gt;</c>, <c>&lt;jitter&gt;</c>,
+        /// <c>&lt;typewriter&gt;</c>).
+        ///
+        /// <para>The laid-out text is cached across frames so that animation start time and the
+        /// typewriter reveal survive between frames. Use <see cref="Paper.ResetRichText"/> to
+        /// replay the animation.</para>
+        /// </summary>
+        public ElementBuilder RichText(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
+        {
+            _handle.Data.IsMarkdown = false;
+            _handle.Data.IsRichText = true;
             _handle.Data.Paragraph = text;
             _handle.Data.Font = font;
             _handle.Data.FontBold = bold;

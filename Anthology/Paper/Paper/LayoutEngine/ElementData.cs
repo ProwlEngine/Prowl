@@ -62,6 +62,7 @@ namespace Prowl.PaperUI.LayoutEngine
 
         // Text properties
         public bool IsMarkdown;
+        public bool IsRichText;
         public string Paragraph;
         public FontFile Font;
         public FontFile FontBold;
@@ -72,8 +73,10 @@ namespace Prowl.PaperUI.LayoutEngine
         public TextWrapMode WrapMode;
         public TextAlignment TextAlignment;
 
-        // Cached text layout objects
+        // Cached text layout objects (RichText is persisted across frames via element storage so
+        // animation start time survives — see Paper.Core.cs ProcessText / DrawText paths.)
         internal Quill.Canvas.QuillMarkdown? _quillMarkdown;
+        internal Quill.Canvas.QuillRichText? _quillRichText;
         internal TextLayout _textLayout;
 
         // Rendering
@@ -116,12 +119,14 @@ namespace Prowl.PaperUI.LayoutEngine
                 LayoutType = LayoutType.Column,
                 PositionType = PositionType.ParentDirected,
                 IsMarkdown = false,
+                IsRichText = false,
                 Paragraph = null,
                 Font = null,
                 FontStyle = FontStyle.Regular,
                 WrapMode = TextWrapMode.NoWrap,
                 TextAlignment = TextAlignment.Left,
                 _quillMarkdown = null,
+                _quillRichText = null,
                 _textLayout = null,
                 _renderCommands = null,
                 _foregroundRenderCommands = null,

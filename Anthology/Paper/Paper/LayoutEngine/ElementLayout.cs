@@ -1307,6 +1307,47 @@ namespace Prowl.PaperUI.LayoutEngine
             // (scaled by FramebufferScale). The layout engine works in logical units.
             float invScale = 1.0f / canvas.FramebufferScale;
 
+            if (element.IsRichText)
+            {
+                var settings = new RichTextLayoutSettings {
+                    RegularFont = element.Font,
+                    BoldFont = element.FontBold,
+                    ItalicFont = element.FontItalic,
+                    BoldItalicFont = element.FontBoldItalic,
+                    MonoFont = element.FontMono,
+                    PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize)),
+                    LineHeight = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LineHeight)),
+                    LetterSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LetterSpacing)),
+                    WordSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.WordSpacing)),
+                    TabSize = (int)element._elementStyle.GetValue(GuiProp.TabSize),
+                    WrapMode = element.WrapMode,
+                    MaxWidth = element.WrapMode == TextWrapMode.Wrap ? availableWidth : 0f,
+                    Alignment = ToScribeAlignment(element.TextAlignment),
+                };
+
+                // Reuse the cached layout when source + width haven't changed so the layout's
+                // animation start time (set on first Draw) survives across frames.
+                var cached = gui.GetElementStorageById<Quill.Canvas.QuillRichText?>(element.ID, Paper.RichTextLayoutKey, null);
+                var cachedSrc = gui.GetElementStorageById<string>(element.ID, Paper.RichTextSourceKey, null);
+                float cachedWidth = gui.GetElementStorageById<float>(element.ID, Paper.RichTextWidthKey, -1f);
+
+                Quill.Canvas.QuillRichText richText;
+                if (cached.HasValue && cachedSrc == element.Paragraph && cachedWidth == settings.MaxWidth)
+                {
+                    richText = cached.Value;
+                }
+                else
+                {
+                    richText = canvas.CreateRichText(element.Paragraph, settings);
+                    gui.SetElementStorageById<Quill.Canvas.QuillRichText?>(element.ID, Paper.RichTextLayoutKey, richText);
+                    gui.SetElementStorageById<string>(element.ID, Paper.RichTextSourceKey, element.Paragraph);
+                    gui.SetElementStorageById<float>(element.ID, Paper.RichTextWidthKey, settings.MaxWidth);
+                }
+                element._quillRichText = richText;
+
+                return richText.Size; // QuillRichText.Size is already in logical units.
+            }
+
             if (element.IsMarkdown == false)
             {
                 var settings = TextLayoutSettings.Default;
@@ -1317,12 +1358,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 settings.TabSize = (int)element._elementStyle.GetValue(GuiProp.TabSize);
                 settings.PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize));
 
-                if(element.TextAlignment == TextAlignment.Left || element.TextAlignment == TextAlignment.MiddleLeft || element.TextAlignment == TextAlignment.BottomLeft)
-                    settings.Alignment = Scribe.TextAlignment.Left;
-                else if (element.TextAlignment == TextAlignment.Center || element.TextAlignment == TextAlignment.MiddleCenter || element.TextAlignment == TextAlignment.BottomCenter)
-                    settings.Alignment = Scribe.TextAlignment.Center;
-                else if(element.TextAlignment == TextAlignment.Right || element.TextAlignment == TextAlignment.MiddleRight || element.TextAlignment == TextAlignment.BottomRight)
-                    settings.Alignment = Scribe.TextAlignment.Right;
+                settings.Alignment = ToScribeAlignment(element.TextAlignment);
 
                 settings.Font = element.Font;
                 settings.WrapMode = element.WrapMode;
@@ -1346,6 +1382,17 @@ namespace Prowl.PaperUI.LayoutEngine
                 var markdownResult = element._quillMarkdown;
                 return (markdownResult?.Size ?? Float2.Zero) * invScale;
             }
+        }
+
+        private static Scribe.TextAlignment ToScribeAlignment(TextAlignment a)
+        {
+            if (a == TextAlignment.Left || a == TextAlignment.MiddleLeft || a == TextAlignment.BottomLeft)
+                return Scribe.TextAlignment.Left;
+            if (a == TextAlignment.Center || a == TextAlignment.MiddleCenter || a == TextAlignment.BottomCenter)
+                return Scribe.TextAlignment.Center;
+            if (a == TextAlignment.Right || a == TextAlignment.MiddleRight || a == TextAlignment.BottomRight)
+                return Scribe.TextAlignment.Right;
+            return Scribe.TextAlignment.Left;
         }
 
         private static void ComputeAbsolutePositions(ref ElementData element, Paper gui, float parentX = 0f, float parentY = 0f)
