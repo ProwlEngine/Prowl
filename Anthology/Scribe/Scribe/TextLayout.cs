@@ -11,6 +11,33 @@ namespace Prowl.Scribe
         public TextLayoutSettings Settings { get; private set; }
         public string Text { get; private set; }
 
+        // Per-layout ascender cache — instance fields so LayoutText / LayoutLongWordFast can
+        // share state without allocating a closure or a Func<,> per call. Reset at the top of
+        // UpdateLayout. Most layouts only ever touch one font, so we keep two single-slot caches
+        // and only fall back to a Dictionary if a third font appears.
+        private FontFile _asc1Font;
+        private float _asc1Value;
+        private FontFile _asc2Font;
+        private float _asc2Value;
+        private Dictionary<FontFile, float> _ascenderCache;
+
+        private float GetAscender(FontSystem fontSystem, FontFile font, float pixelSize)
+        {
+            if (ReferenceEquals(font, _asc1Font)) return _asc1Value;
+            if (ReferenceEquals(font, _asc2Font)) return _asc2Value;
+            if (_ascenderCache != null && _ascenderCache.TryGetValue(font, out var hit)) return hit;
+
+            fontSystem.GetScaledVMetrics(font, pixelSize, out var asc, out _, out _);
+            if (_asc1Font == null) { _asc1Font = font; _asc1Value = asc; }
+            else if (_asc2Font == null) { _asc2Font = font; _asc2Value = asc; }
+            else
+            {
+                if (_ascenderCache == null) _ascenderCache = new Dictionary<FontFile, float>(4);
+                _ascenderCache[font] = asc;
+            }
+            return asc;
+        }
+
         /// <summary>
         /// Snapshot of <see cref="FontSystem.AtlasVersion"/> taken when the layout was built.
         /// If the atlas grows or fallback fonts change later, this will be less than the font
@@ -92,26 +119,10 @@ namespace Prowl.Scribe
             int lastGlyphForKerning = 0;
             FontFile lastFontForKerning = null;
 
-            // Ascender cache per font object; we only need 'a' to place the glyph vertically
-            var ascenderCache = new Dictionary<object, float>(8);
-            float GetAscender(FontFile font)
-            {
-                if (ascenderCache.TryGetValue(font, out var a)) return a;
-                fontSystem.GetScaledVMetrics(font, pixelSize, out var asc, out _, out _);
-                ascenderCache[font] = asc;
-                return asc;
-            }
-
-            // Local to place a single glyph (no cross-line kerning)
-            void EmitGlyph(AtlasGlyph glyph, FontFile font, char c, float offsetX, float offsetY, float advanceBase, ref float x, List<GlyphInstance> outList, int charIndex)
-            {
-                float a = GetAscender(font);
-                var gi = new GlyphInstance(glyph, new Float2(x + offsetX, offsetY + a), c, advanceBase, charIndex);
-                outList.Add(gi);
-                x += advanceBase;
-                lastGlyphForKerning = glyph.GlyphIndex; // kerning only continues within the current word/run
-                lastFontForKerning = font;
-            }
+            // Reset the per-layout ascender cache (instance fields — see top of class).
+            _asc1Font = null; _asc1Value = 0f;
+            _asc2Font = null; _asc2Value = 0f;
+            _ascenderCache?.Clear();
 
             while (i < len)
             {
@@ -252,7 +263,7 @@ namespace Prowl.Scribe
                         if (wordWidthNoLeadingKerning > maxWidth)
                         {
                             i = LayoutLongWordFast(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
-                                                   wordStart, wordEnd, tabWidth, spaceAdvance, wrapEnabled, maxWidth, GetAscender);
+                                                   wordStart, wordEnd, tabWidth, spaceAdvance, wrapEnabled, maxWidth);
                             lastGlyphForKerning = 0;
                             lastFontForKerning = null;
                             continue;
@@ -293,9 +304,18 @@ namespace Prowl.Scribe
                         if (k != 0f) currentX += k;
                     }
 
-                    EmitGlyph(g, g.Font, c, g.Metrics.OffsetX, g.Metrics.OffsetY,
-                              g.Metrics.AdvanceWidth + Settings.LetterSpacing,
-                              ref currentX, line.Glyphs, j);
+                    // Inlined glyph emit (was EmitGlyph local function — removed to avoid closure alloc)
+                    {
+                        float advanceBase = g.Metrics.AdvanceWidth + Settings.LetterSpacing;
+                        float a = GetAscender(fontSystem, g.Font, pixelSize);
+                        line.Glyphs.Add(new GlyphInstance(
+                            g,
+                            new Float2(currentX + g.Metrics.OffsetX, g.Metrics.OffsetY + a),
+                            c, advanceBase, j));
+                        currentX += advanceBase;
+                        lastGlyphForKerning = g.GlyphIndex;
+                        lastFontForKerning = g.Font;
+                    }
 
                     prevForKern = g.GlyphIndex;
                     prevFontForKern = g.Font;
@@ -332,8 +352,7 @@ namespace Prowl.Scribe
             float tabWidth,
             float spaceAdvance,
             bool wrapEnabled,
-            float maxWidth,
-            Func<FontFile, float> getAscender)
+            float maxWidth)
         {
             float pixelSize = Settings.PixelSize;
 
@@ -378,7 +397,7 @@ namespace Prowl.Scribe
                 }
 
                 // Emit glyph
-                float a = getAscender(g.Font);
+                float a = GetAscender(fontSystem, g.Font, pixelSize);
                 var gi = new GlyphInstance(g, new Float2(currentX + g.Metrics.OffsetX, g.Metrics.OffsetY + a), c, adv, i);
                 line.Glyphs.Add(gi);
                 currentX += adv;
@@ -544,15 +563,18 @@ namespace Prowl.Scribe
                 return 0;
 
             Line line = Lines[0];
+            int lineIndex = 0;
             for (int li = 0; li < Lines.Count; li++)
             {
                 var l = Lines[li];
                 if (position.Y < l.Position.Y + l.Height)
                 {
                     line = l;
+                    lineIndex = li;
                     break;
                 }
                 line = l;
+                lineIndex = li;
             }
 
             float currentX = 0f;
@@ -595,7 +617,7 @@ namespace Prowl.Scribe
                 
                 // Special case: if this is the last line and we're hitting at/after the line width,
                 // return the text length to handle trailing special characters properly
-                bool isLastLine = Lines.IndexOf(line) == Lines.Count - 1;
+                bool isLastLine = lineIndex == Lines.Count - 1;
                 if (isLastLine && position.X >= line.Width)
                 {
                     return Math.Max(result, Text.Length);
@@ -605,7 +627,7 @@ namespace Prowl.Scribe
             }
 
             // If no trailing spaces but we're past the end of visible content on the last line
-            bool isLastLine2 = Lines.IndexOf(line) == Lines.Count - 1;
+            bool isLastLine2 = lineIndex == Lines.Count - 1;
             if (isLastLine2 && position.X >= currentX)
             {
                 return Text.Length;
