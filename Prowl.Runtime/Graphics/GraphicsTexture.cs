@@ -137,7 +137,7 @@ public unsafe class GraphicsTexture : IDisposable
         IsDisposed = true;
     }
 
-    public string ToString()
+    public override string ToString()
     {
         return Handle.ToString();
     }
