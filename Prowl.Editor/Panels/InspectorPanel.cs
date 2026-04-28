@@ -290,8 +290,6 @@ public class InspectorPanel : DockPanel
                         EditorGUI.Separator(paper, "insp_sep_settings");
                         EditorGUI.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  Import Settings");
 
-                        bool changed = false;
-
                         foreach (var kvp in settings.Tags.ToList())
                         {
                             string key = kvp.Key;
@@ -301,22 +299,22 @@ public class InspectorPanel : DockPanel
                             {
                                 case Echo.EchoType.Bool:
                                     EditorGUI.Toggle(paper, $"insp_set_{key}", NicifySettingName(key), val.BoolValue)
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
                                     break;
 
                                 case Echo.EchoType.Int:
                                     EditorGUI.IntField(paper, $"insp_set_{key}", val.IntValue, NicifySettingName(key))
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
                                     break;
 
                                 case Echo.EchoType.Float:
                                     EditorGUI.FloatField(paper, $"insp_set_{key}", val.FloatValue, NicifySettingName(key))
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
                                     break;
 
                                 case Echo.EchoType.String:
                                     EditorGUI.TextField(paper, $"insp_set_{key}", NicifySettingName(key), val.StringValue)
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); changed = true; });
+                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
                                     break;
                             }
                         }

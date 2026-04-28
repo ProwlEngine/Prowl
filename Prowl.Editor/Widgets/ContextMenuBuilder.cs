@@ -100,10 +100,6 @@ public class ContextMenuBuilder
         public Action? OnClick;
         public bool IsSeparator;
 
-        // Toggle support
-        public bool IsToggle;
-        public Func<bool>? ToggleValue;
-
         public bool ShouldCloseOnClick { get; set; }
         public bool IsEnabled { get; set; }
         public ContextMenuBuilder? SubMenu;

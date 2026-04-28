@@ -32,7 +32,6 @@ internal class Program
 public sealed class MyGame : Game
 {
     private GameObject? cameraGO;
-    private GameObject? bananaManGO;
     private Scene? scene;
 
     // Input Actions
@@ -140,9 +139,9 @@ public sealed class MyGame : Game
         else
         {
             Debug.LogWarning("No animations found in BananaMan.fbx - will display static model");
-        }*/
+        }
 
-        scene.Add(bananaManGO);
+        scene.Add(bananaManGO);*/
     }
 
     private void SetupInputActions()
@@ -206,12 +205,6 @@ public sealed class MyGame : Game
         if (lookEnableAction.IsPressed())
         {
             cameraGO.Transform.LocalEulerAngles += new Float3(lookInput.Y, lookInput.X, 0);
-        }
-
-        // Slowly rotate BananaMan for better viewing
-        if (bananaManGO != null)
-        {
-            //bananaManGO.Transform.LocalEulerAngles += new Float3(0, 30 * (float)Time.DeltaTime, 0);
         }
 
         if (Input.GetKeyDown(KeyCode.Escape))

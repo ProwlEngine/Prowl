@@ -41,7 +41,7 @@ public static class FileDialog
     private static bool _sortAscending = true;
     private static string _newFolderName = "";
     private static bool _creatingFolder;
-    private static bool _showHidden;
+    private static bool _showHidden = false;
 
     // Quick access locations
     private static readonly (string label, string icon, Func<string> path)[] QuickAccess =

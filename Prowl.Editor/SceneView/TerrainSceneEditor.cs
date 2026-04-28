@@ -31,7 +31,6 @@ public class TerrainSceneEditor : ISceneViewEditor
     private float[]? _preStrokeHeights;
     private float[]? _preStrokeSplats;
     private List<float[]>? _preStrokeDetails;
-    private List<TreeInstance>? _preStrokeTrees;
 
     public int Priority => 0;
 
