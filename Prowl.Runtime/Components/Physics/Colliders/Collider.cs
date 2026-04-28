@@ -104,7 +104,7 @@ public abstract class Collider : MonoBehaviour
             {
                 foreach (var shape in _attachedShapes)
                 {
-                    _attachedBody.RemoveShape(shape, false);
+                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Update);
                 }
             }
             catch (System.InvalidOperationException)
@@ -143,7 +143,7 @@ public abstract class Collider : MonoBehaviour
         {
             foreach (var shape in _attachedShapes)
             {
-                _attachedBody.AddShape(shape, false);
+                _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Update);
             }
         }
 

@@ -11,14 +11,14 @@ namespace Prowl.Runtime.ParticleSystem.Modules;
 [Serializable]
 public class SizeOverLifetimeModule : ParticleSystemModule
 {
-    public MinMaxCurve SizeCurve = new(1.0f);
+    public AnimationCurve SizeCurve = new([new KeyFrame(0f, 1f), new KeyFrame(1f, 1f)]);
 
     public override void OnParticleUpdate(ref Particle particle, float deltaTime)
     {
         if (!Enabled) return;
 
         float normalizedTime = particle.NormalizedLifetime;
-        float sizeMultiplier = SizeCurve.Evaluate(normalizedTime, null);
+        float sizeMultiplier = (float)SizeCurve.Evaluate(normalizedTime);
 
         particle.Size = particle.StartSize * sizeMultiplier;
     }

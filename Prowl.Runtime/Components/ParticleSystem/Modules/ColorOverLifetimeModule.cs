@@ -11,14 +11,14 @@ namespace Prowl.Runtime.ParticleSystem.Modules;
 [Serializable]
 public class ColorOverLifetimeModule : ParticleSystemModule
 {
-    public MinMaxGradient ColorGradient = new();
+    public Gradient ColorGradient = new();
 
     public override void OnParticleUpdate(ref Particle particle, float deltaTime)
     {
         if (!Enabled) return;
 
         float normalizedTime = particle.NormalizedLifetime;
-        var color = ColorGradient.Evaluate(normalizedTime, null);
+        var color = ColorGradient.Evaluate(normalizedTime);
         particle.Color = particle.StartColor * color;
     }
 }

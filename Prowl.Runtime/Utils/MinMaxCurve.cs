@@ -41,8 +41,10 @@ public class MinMaxCurve
     /// <summary>
     /// Evaluates the curve at the given normalized time (0-1).
     /// </summary>
-    public float Evaluate(float normalizedTime, Random random)
+    public float Evaluate(float normalizedTime, Random? random)
     {
+        // Null random falls back to the Min side of Random mode (deterministic).
+        float t = random?.NextSingle() ?? 0f;
         return Mode switch
         {
             MinMaxCurveMode.Constant => ConstantValue,
@@ -50,7 +52,7 @@ public class MinMaxCurve
             MinMaxCurveMode.Random => Lerp(
                 (float)MinCurve.Evaluate(normalizedTime),
                 (float)MaxCurve.Evaluate(normalizedTime),
-                (float)random.NextDouble()
+                t
             ),
             _ => ConstantValue
         };
@@ -59,13 +61,14 @@ public class MinMaxCurve
     /// <summary>
     /// Evaluates the curve for initial particle spawn.
     /// </summary>
-    public float EvaluateInitial(Random random)
+    public float EvaluateInitial(Random? random)
     {
+        float t = random?.NextSingle() ?? 0f;
         return Mode switch
         {
             MinMaxCurveMode.Constant => ConstantValue,
             MinMaxCurveMode.Curve => (float)Curve.Evaluate(0),
-            MinMaxCurveMode.Random => Lerp(MinValue, MaxValue, (float)random.NextDouble()),
+            MinMaxCurveMode.Random => Lerp(MinValue, MaxValue, t),
             _ => ConstantValue
         };
     }

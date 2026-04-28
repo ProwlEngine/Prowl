@@ -33,8 +33,8 @@ public class UVModule : ParticleSystemModule
     public bool RandomStartFrame = false; // Start from random frame
 
     // Curve animation settings
-    public MinMaxCurve UOffsetCurve = new(0.0f);
-    public MinMaxCurve VOffsetCurve = new(0.0f);
+    public AnimationCurve UOffsetCurve = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
+    public AnimationCurve VOffsetCurve = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
 
     // UV scrolling
     public Float2 ScrollSpeed = Float2.Zero;
@@ -109,7 +109,7 @@ public class UVModule : ParticleSystemModule
 
         // The UV offset is stored in UVFrame (X) and we can extend Particle if needed
         // For now, just store the U offset
-        particle.UVFrame = UOffsetCurve.Evaluate(lifetime, null);
+        particle.UVFrame = (float)UOffsetCurve.Evaluate(lifetime);
     }
 
     /// <summary>

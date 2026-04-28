@@ -43,17 +43,19 @@ public class MinMaxGradient
     /// <summary>
     /// Evaluates the gradient at the given normalized time (0-1).
     /// </summary>
-    public Color Evaluate(float normalizedTime, Random random)
+    public Color Evaluate(float normalizedTime, Random? random)
     {
+        // Null random falls back to the Min side of any random mode (deterministic).
+        float t = random?.NextSingle() ?? 0f;
         return Mode switch
         {
             MinMaxGradientMode.Color => ConstantColor,
             MinMaxGradientMode.Gradient => Gradient.Evaluate(normalizedTime),
-            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, (float)random.NextDouble()),
+            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, t),
             MinMaxGradientMode.RandomBetweenTwoGradients => Color.Lerp(
                 MinGradient.Evaluate(normalizedTime),
                 MaxGradient.Evaluate(normalizedTime),
-                (float)random.NextDouble()
+                t
             ),
             _ => ConstantColor
         };
@@ -62,17 +64,18 @@ public class MinMaxGradient
     /// <summary>
     /// Evaluates the gradient for initial particle spawn.
     /// </summary>
-    public Color EvaluateInitial(Random random)
+    public Color EvaluateInitial(Random? random)
     {
+        float t = random?.NextSingle() ?? 0f;
         return Mode switch
         {
             MinMaxGradientMode.Color => ConstantColor,
             MinMaxGradientMode.Gradient => Gradient.Evaluate(0),
-            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, (float)random.NextDouble()),
+            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, t),
             MinMaxGradientMode.RandomBetweenTwoGradients => Color.Lerp(
                 MinGradient.Evaluate(0),
                 MaxGradient.Evaluate(0),
-                (float)random.NextDouble()
+                t
             ),
             _ => ConstantColor
         };

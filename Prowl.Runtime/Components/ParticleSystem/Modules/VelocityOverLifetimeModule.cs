@@ -12,18 +12,18 @@ namespace Prowl.Runtime.ParticleSystem.Modules;
 [Serializable]
 public class VelocityOverLifetimeModule : ParticleSystemModule
 {
-    public MinMaxCurve VelocityX = new(0.0f);
-    public MinMaxCurve VelocityY = new(0.0f);
-    public MinMaxCurve VelocityZ = new(0.0f);
+    public AnimationCurve VelocityX = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
+    public AnimationCurve VelocityY = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
+    public AnimationCurve VelocityZ = new([new KeyFrame(0f, 0f), new KeyFrame(1f, 0f)]);
 
     public override void OnParticleUpdate(ref Particle particle, float deltaTime)
     {
         if (!Enabled) return;
 
         float normalizedTime = particle.NormalizedLifetime;
-        float vx = VelocityX.Evaluate(normalizedTime, null);
-        float vy = VelocityY.Evaluate(normalizedTime, null);
-        float vz = VelocityZ.Evaluate(normalizedTime, null);
+        float vx = (float)VelocityX.Evaluate(normalizedTime);
+        float vy = (float)VelocityY.Evaluate(normalizedTime);
+        float vz = (float)VelocityZ.Evaluate(normalizedTime);
 
         Float3 velocityChange = new Float3(vx, vy, vz);
         particle.Velocity += velocityChange * deltaTime;

@@ -172,26 +172,18 @@ public sealed class PhysicsDemo : Game
        // Configure Size over Lifetime
        // Size starts at 1.0, grows to 1.5 at middle, then shrinks to 0 at end
        particleSystem.SizeOverLifetime.Enabled = true;
-       particleSystem.SizeOverLifetime.SizeCurve = new MinMaxCurve
-       {
-           Mode = MinMaxCurveMode.Curve,
-           Curve = new AnimationCurve([new KeyFrame(0.0f, 1.0f), new KeyFrame(0.5f, 1.5f), new KeyFrame(1.0f, 0.0f)])
-       };
-       
+       particleSystem.SizeOverLifetime.SizeCurve = new AnimationCurve(
+           [new KeyFrame(0.0f, 1.0f), new KeyFrame(0.5f, 1.5f), new KeyFrame(1.0f, 0.0f)]);
+
        // Configure Color over Lifetime (fade out)
-       // Fade from full alpha to transparent
        particleSystem.ColorOverLifetime.Enabled = true;
-       particleSystem.ColorOverLifetime.ColorGradient = new MinMaxGradient
+       particleSystem.ColorOverLifetime.ColorGradient = new Gradient
        {
-           Mode = MinMaxGradientMode.Gradient,
-           Gradient = new Gradient()
-           {
-               ColorKeys = [new (Color.White, 0.0f), new (new Color(1, 0.8f, 0.6f, 1), 0.5f), new (new Color(0.5f, 0.3f, 0.2f, 1), 1.0f)],
-               AlphaKeys = [new (1.0f, 0.0f), new (0.8f, 0.5f), new (0.0f, 1.0f)]
-           }
+           ColorKeys = [new (Color.White, 0.0f), new (new Color(1, 0.8f, 0.6f, 1), 0.5f), new (new Color(0.5f, 0.3f, 0.2f, 1), 1.0f)],
+           AlphaKeys = [new (1.0f, 0.0f), new (0.8f, 0.5f), new (0.0f, 1.0f)]
        };
-       
-       // Configure Rotation over Lifetime
+
+       // Configure Rotation over Lifetime (still MinMaxCurve evaluated at spawn)
        particleSystem.RotationOverLifetime.Enabled = true;
        particleSystem.RotationOverLifetime.AngularVelocity = new MinMaxCurve
        {
@@ -199,14 +191,11 @@ public sealed class PhysicsDemo : Game
            MinValue = -180.0f,
            MaxValue = 180.0f
        };
-       
+
        // Configure Velocity over Lifetime (simulate wind/drift)
        particleSystem.VelocityOverLifetime.Enabled = true;
-       particleSystem.VelocityOverLifetime.VelocityX = new MinMaxCurve
-       {
-           Mode = MinMaxCurveMode.Curve,
-           Curve = new AnimationCurve([new KeyFrame(0.0f, 0.0f), new KeyFrame(1.0f, 20.0f)])
-       };
+       particleSystem.VelocityOverLifetime.VelocityX = new AnimationCurve(
+           [new KeyFrame(0.0f, 0.0f), new KeyFrame(1.0f, 20.0f)]);
 
         particleSystem.Collision.Enabled = true;
         particleSystem.Collision.Quality = CollisionQuality.Medium;

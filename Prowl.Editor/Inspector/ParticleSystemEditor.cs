@@ -128,18 +128,18 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Size Over Lifetime
         DrawModule(paper, $"{id}_sol", "Size over Lifetime", EditorIcons.ArrowsLeftRight, ps.SizeOverLifetime, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_sol_c", "Size", typeof(MinMaxCurve), ps.SizeOverLifetime.SizeCurve,
-                v => ps.SizeOverLifetime.SizeCurve = v as MinMaxCurve ?? new MinMaxCurve(1f), 0);
+            PropertyGrid.DrawField(paper, $"{id}_sol_c", "Size", typeof(AnimationCurve), ps.SizeOverLifetime.SizeCurve,
+                v => ps.SizeOverLifetime.SizeCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
         });
 
         // Color Over Lifetime
         DrawModule(paper, $"{id}_col", "Color over Lifetime", EditorIcons.Palette, ps.ColorOverLifetime, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_col_g", "Color", typeof(MinMaxGradient), ps.ColorOverLifetime.ColorGradient,
-                v => ps.ColorOverLifetime.ColorGradient = v as MinMaxGradient ?? new MinMaxGradient(), 0);
+            PropertyGrid.DrawField(paper, $"{id}_col_g", "Color", typeof(Gradient), ps.ColorOverLifetime.ColorGradient,
+                v => ps.ColorOverLifetime.ColorGradient = v as Gradient ?? new Gradient(), 0);
         });
 
-        // Rotation Over Lifetime
+        // Rotation Over Lifetime (still MinMaxCurve evaluated at spawn)
         DrawModule(paper, $"{id}_rol", "Rotation over Lifetime", EditorIcons.ArrowsSpin, ps.RotationOverLifetime, font, () =>
         {
             PropertyGrid.DrawField(paper, $"{id}_rol_av", "Angular Velocity", typeof(MinMaxCurve), ps.RotationOverLifetime.AngularVelocity,
@@ -149,12 +149,12 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Velocity Over Lifetime
         DrawModule(paper, $"{id}_vol", "Velocity over Lifetime", EditorIcons.Gauge, ps.VelocityOverLifetime, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_vol_x", "Velocity X", typeof(MinMaxCurve), ps.VelocityOverLifetime.VelocityX,
-                v => ps.VelocityOverLifetime.VelocityX = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
-            PropertyGrid.DrawField(paper, $"{id}_vol_y", "Velocity Y", typeof(MinMaxCurve), ps.VelocityOverLifetime.VelocityY,
-                v => ps.VelocityOverLifetime.VelocityY = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
-            PropertyGrid.DrawField(paper, $"{id}_vol_z", "Velocity Z", typeof(MinMaxCurve), ps.VelocityOverLifetime.VelocityZ,
-                v => ps.VelocityOverLifetime.VelocityZ = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+            PropertyGrid.DrawField(paper, $"{id}_vol_x", "Velocity X", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityX,
+                v => ps.VelocityOverLifetime.VelocityX = v as AnimationCurve ?? new AnimationCurve(), 0);
+            PropertyGrid.DrawField(paper, $"{id}_vol_y", "Velocity Y", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityY,
+                v => ps.VelocityOverLifetime.VelocityY = v as AnimationCurve ?? new AnimationCurve(), 0);
+            PropertyGrid.DrawField(paper, $"{id}_vol_z", "Velocity Z", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityZ,
+                v => ps.VelocityOverLifetime.VelocityZ = v as AnimationCurve ?? new AnimationCurve(), 0);
         });
 
         // Collision
@@ -208,10 +208,10 @@ public class ParticleSystemComponentEditor : CustomEditor
             }
             else
             {
-                PropertyGrid.DrawField(paper, $"{id}_uv_uo", "U Offset", typeof(MinMaxCurve), ps.UV.UOffsetCurve,
-                    v => ps.UV.UOffsetCurve = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
-                PropertyGrid.DrawField(paper, $"{id}_uv_vo", "V Offset", typeof(MinMaxCurve), ps.UV.VOffsetCurve,
-                    v => ps.UV.VOffsetCurve = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
+                PropertyGrid.DrawField(paper, $"{id}_uv_uo", "U Offset", typeof(AnimationCurve), ps.UV.UOffsetCurve,
+                    v => ps.UV.UOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
+                PropertyGrid.DrawField(paper, $"{id}_uv_vo", "V Offset", typeof(AnimationCurve), ps.UV.VOffsetCurve,
+                    v => ps.UV.VOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
                 EditorGUI.Vector2Field(paper, $"{id}_uv_ss", "Scroll Speed", ps.UV.ScrollSpeed)
                     .OnValueChanged(v => { ps.UV.ScrollSpeed = v; });
             }
