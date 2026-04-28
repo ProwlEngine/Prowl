@@ -57,11 +57,11 @@ namespace Prowl.PaperUI
         RowBetween,
         ColBetween,
 
-        // Border spacing
-        BorderLeft,
-        BorderRight,
-        BorderTop,
-        BorderBottom,
+        // Padding (parent-side inset; pure layout, no visual)
+        PaddingLeft,
+        PaddingRight,
+        PaddingTop,
+        PaddingBottom,
         #endregion
 
         #region Transform Properties
@@ -711,10 +711,10 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.ChildBottom] = UnitValue.Auto;
             _defaultValues[(int)GuiProp.RowBetween] = UnitValue.Auto;
             _defaultValues[(int)GuiProp.ColBetween] = UnitValue.Auto;
-            _defaultValues[(int)GuiProp.BorderLeft] = UnitValue.Pixels(0);
-            _defaultValues[(int)GuiProp.BorderRight] = UnitValue.Pixels(0);
-            _defaultValues[(int)GuiProp.BorderTop] = UnitValue.Pixels(0);
-            _defaultValues[(int)GuiProp.BorderBottom] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.PaddingLeft] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.PaddingRight] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.PaddingTop] = UnitValue.Pixels(0);
+            _defaultValues[(int)GuiProp.PaddingBottom] = UnitValue.Pixels(0);
 
             // Transform Properties
             _defaultValues[(int)GuiProp.TranslateX] = 0.0f;

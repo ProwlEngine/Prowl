@@ -176,14 +176,30 @@ namespace Prowl.PaperUI
         /// <summary>Sets the maximum bottom position of the element.</summary>
         public T MaxBottom(in UnitValue maxBottom) => SetStyleProperty(GuiProp.MaxBottom, maxBottom);
 
-        /// <summary>Sets uniform margin on all sides.</summary>
+        /// <summary>
+        /// The element's own outer spacing on each side. Each side maps to the corresponding
+        /// <see cref="GuiProp.Left"/>/<see cref="GuiProp.Right"/>/<see cref="GuiProp.Top"/>/<see cref="GuiProp.Bottom"/>
+        /// style property, which the layout engine treats as MainBefore / MainAfter / CrossBefore / CrossAfter
+        /// depending on the parent's row/column direction.
+        /// <para>
+        /// Default per side is <see cref="UnitValue.Auto"/>, which means "no preference" and lets the parent's
+        /// <see cref="ChildLeft(in UnitValue)"/>/<see cref="ChildRight(in UnitValue)"/>/<see cref="ChildTop(in UnitValue)"/>/<see cref="ChildBottom(in UnitValue)"/>
+        /// fill in for the first/last child, or the parent's <see cref="RowBetween(in UnitValue)"/>/<see cref="ColBetween(in UnitValue)"/>
+        /// fill in between two siblings whose adjacent margins are both Auto. Setting a concrete value here
+        /// opts that side out of parent-side defaulting.
+        /// </para>
+        /// <para>
+        /// Stretch values (e.g. <c>Stretch(1)</c>) on a margin make the element compete with siblings for
+        /// leftover space on that axis > useful for centering or pushing.
+        /// </para>
+        /// </summary>
         public T Margin(in UnitValue all) => Margin(all, all, all, all);
 
-        /// <summary>Sets horizontal and vertical margins.</summary>
+        /// <inheritdoc cref="Margin(in UnitValue)"/>
         public T Margin(in UnitValue horizontal, in UnitValue vertical) =>
             Margin(horizontal, horizontal, vertical, vertical);
 
-        /// <summary>Sets individual margins for each side.</summary>
+        /// <inheritdoc cref="Margin(in UnitValue)"/>
         public T Margin(in UnitValue left, in UnitValue right, in UnitValue top, in UnitValue bottom)
         {
             SetStyleProperty(GuiProp.Left, left);
@@ -192,50 +208,110 @@ namespace Prowl.PaperUI
             return SetStyleProperty(GuiProp.Bottom, bottom);
         }
 
-        /// <summary>Sets the left padding for child elements.</summary>
+        /// <summary>
+        /// Default left-side spacing filled into any child whose own <see cref="Margin(in UnitValue)"/> left side
+        /// is still <see cref="UnitValue.Auto"/>. Together with <see cref="ChildRight(in UnitValue)"/>,
+        /// <see cref="ChildTop(in UnitValue)"/>, <see cref="ChildBottom(in UnitValue)"/>,
+        /// <see cref="RowBetween(in UnitValue)"/>, and <see cref="ColBetween(in UnitValue)"/>, this is how the
+        /// engine expresses CSS-style <c>justify-content</c> alignment > by putting <see cref="UnitValue.Stretch(float)"/>
+        /// values into the slots between or around children, the layout engine grows those slots to consume leftover space.
+        /// <para>
+        /// Common alignment recipes (set on the parent, with default-margin children):
+        /// <list type="table">
+        ///   <listheader><term>Effect</term><description>Recipe</description></listheader>
+        ///   <item><term>Pack at start (default)</term><description>no parent setting needed</description></item>
+        ///   <item><term>Pack at end</term><description><c>.ChildLeft()</c> (or <c>.ChildTop()</c> for column layout)</description></item>
+        ///   <item><term>Center</term><description><c>.ChildLeft().ChildRight()</c> (or top/bottom)</description></item>
+        ///   <item><term>Space between siblings</term><description><c>.ColBetween()</c> (row layout) or <c>.RowBetween()</c> (column layout)</description></item>
+        ///   <item><term>Space around siblings</term><description><c>.ChildLeft().ChildRight().ColBetween()</c></description></item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// The no-argument overload defaults to <see cref="UnitValue.StretchOne"/> > the alignment use case > because
+        /// that is the value users almost always want here. A pixel value (e.g. <c>.ChildLeft(8)</c>) acts as a default
+        /// margin the child can still override; for the more common case of guaranteed inner spacing that does not
+        /// depend on child settings, prefer <see cref="Padding(in UnitValue)"/> instead.
+        /// </para>
+        /// </summary>
         public T ChildLeft(in UnitValue childLeft) => SetStyleProperty(GuiProp.ChildLeft, childLeft);
 
-        /// <summary>Sets the right padding for child elements.</summary>
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildLeft() => ChildLeft(UnitValue.StretchOne);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
         public T ChildRight(in UnitValue childRight) => SetStyleProperty(GuiProp.ChildRight, childRight);
 
-        /// <summary>Sets the top padding for child elements.</summary>
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildRight() => ChildRight(UnitValue.StretchOne);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
         public T ChildTop(in UnitValue childTop) => SetStyleProperty(GuiProp.ChildTop, childTop);
 
-        /// <summary>Sets the bottom padding for child elements.</summary>
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildTop() => ChildTop(UnitValue.StretchOne);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
         public T ChildBottom(in UnitValue childBottom) => SetStyleProperty(GuiProp.ChildBottom, childBottom);
 
-        /// <summary>Sets the spacing between rows in a container.</summary>
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildBottom() => ChildBottom(UnitValue.StretchOne);
+
+        /// <summary>
+        /// Default spacing inserted between two adjacent children in a column-direction container, but only
+        /// when both adjacent margins (the upper child's bottom and the lower child's top) are still
+        /// <see cref="UnitValue.Auto"/>. The no-argument overload defaults to <see cref="UnitValue.StretchOne"/>
+        /// for space-between-style alignment; pass an explicit pixel value for a fixed gap. See
+        /// <see cref="ChildLeft(in UnitValue)"/> for the full alignment recipe table.
+        /// </summary>
         public T RowBetween(in UnitValue rowBetween) => SetStyleProperty(GuiProp.RowBetween, rowBetween);
 
-        /// <summary>Sets the spacing between columns in a container.</summary>
+        /// <inheritdoc cref="RowBetween(in UnitValue)"/>
+        public T RowBetween() => RowBetween(UnitValue.StretchOne);
+
+        /// <summary>
+        /// Default spacing inserted between two adjacent children in a row-direction container, under the
+        /// same conditions as <see cref="RowBetween(in UnitValue)"/>. The no-argument overload defaults to
+        /// <see cref="UnitValue.StretchOne"/> for space-between-style alignment. See
+        /// <see cref="ChildLeft(in UnitValue)"/> for the full alignment recipe table.
+        /// </summary>
         public T ColBetween(in UnitValue colBetween) => SetStyleProperty(GuiProp.ColBetween, colBetween);
 
-        /// <summary>Sets the left border width.</summary>
-        public T BorderLeft(in UnitValue borderLeft) => SetStyleProperty(GuiProp.BorderLeft, borderLeft);
+        /// <inheritdoc cref="ColBetween(in UnitValue)"/>
+        public T ColBetween() => ColBetween(UnitValue.StretchOne);
 
-        /// <summary>Sets the right border width.</summary>
-        public T BorderRight(in UnitValue borderRight) => SetStyleProperty(GuiProp.BorderRight, borderRight);
+        /// <summary>
+        /// Inner padding on the left side of the parent's content area > unconditional inset that always
+        /// applies. Children are positioned starting after this inset, stretch competition fights only over
+        /// the remaining inner space, and an auto-sized parent grows to include this thickness in its outer size.
+        /// </summary>
+        public T PaddingLeft(in UnitValue paddingLeft) => SetStyleProperty(GuiProp.PaddingLeft, paddingLeft);
 
-        /// <summary>Sets the top border width.</summary>
-        public T BorderTop(in UnitValue borderTop) => SetStyleProperty(GuiProp.BorderTop, borderTop);
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T PaddingRight(in UnitValue paddingRight) => SetStyleProperty(GuiProp.PaddingRight, paddingRight);
 
-        /// <summary>Sets the bottom border width.</summary>
-        public T BorderBottom(in UnitValue borderBottom) => SetStyleProperty(GuiProp.BorderBottom, borderBottom);
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T PaddingTop(in UnitValue paddingTop) => SetStyleProperty(GuiProp.PaddingTop, paddingTop);
 
-        /// <summary>Sets uniform border width on all sides.</summary>
-        public T Border(in UnitValue all) => Border(all, all, all, all);
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T PaddingBottom(in UnitValue paddingBottom) => SetStyleProperty(GuiProp.PaddingBottom, paddingBottom);
 
-        /// <summary>Sets horizontal and vertical border widths.</summary>
-        public T Border(in UnitValue horizontal, in UnitValue vertical) =>
-            Border(horizontal, horizontal, vertical, vertical);
+        /// <summary>Uniform inner padding on all four sides.</summary>
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T Padding(in UnitValue all) => Padding(all, all, all, all);
 
-        /// <summary>Sets individual border widths for each side.</summary>
-        public T Border(in UnitValue left, in UnitValue right, in UnitValue top, in UnitValue bottom)
+        /// <summary>Inner padding split into horizontal (left/right) and vertical (top/bottom).</summary>
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T Padding(in UnitValue horizontal, in UnitValue vertical) =>
+            Padding(horizontal, horizontal, vertical, vertical);
+
+        /// <summary>Inner padding specified per side.</summary>
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T Padding(in UnitValue left, in UnitValue right, in UnitValue top, in UnitValue bottom)
         {
-            SetStyleProperty(GuiProp.BorderLeft, left);
-            SetStyleProperty(GuiProp.BorderRight, right);
-            SetStyleProperty(GuiProp.BorderTop, top);
-            return SetStyleProperty(GuiProp.BorderBottom, bottom);
+            SetStyleProperty(GuiProp.PaddingLeft, left);
+            SetStyleProperty(GuiProp.PaddingRight, right);
+            SetStyleProperty(GuiProp.PaddingTop, top);
+            return SetStyleProperty(GuiProp.PaddingBottom, bottom);
         }
 
         #endregion

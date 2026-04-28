@@ -9,7 +9,7 @@ namespace Prowl.PaperUI.LayoutEngine
     {
         private const float DEFAULT_MIN = float.MinValue;
         private const float DEFAULT_MAX = float.MaxValue;
-        private const float DEFAULT_BORDER_WIDTH = 0f;
+        private const float DEFAULT_PADDING = 0f;
 
         internal static UISize Layout(ElementHandle elementHandle, Paper gui)
         {
@@ -67,10 +67,10 @@ namespace Prowl.PaperUI.LayoutEngine
         private static UnitValue GetMaxCrossBefore(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.MaxTop, GuiProp.MaxLeft);
         private static UnitValue GetMinCrossAfter(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.MinBottom, GuiProp.MinRight);
         private static UnitValue GetMaxCrossAfter(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.MaxBottom, GuiProp.MaxRight);
-        private static UnitValue GetBorderMainBefore(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.BorderLeft, GuiProp.BorderTop);
-        private static UnitValue GetBorderMainAfter(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.BorderRight, GuiProp.BorderBottom);
-        private static UnitValue GetBorderCrossBefore(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.BorderTop, GuiProp.BorderLeft);
-        private static UnitValue GetBorderCrossAfter(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.BorderBottom, GuiProp.BorderRight);
+        private static UnitValue GetPaddingMainBefore(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.PaddingLeft, GuiProp.PaddingTop);
+        private static UnitValue GetPaddingMainAfter(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.PaddingRight, GuiProp.PaddingBottom);
+        private static UnitValue GetPaddingCrossBefore(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.PaddingTop, GuiProp.PaddingLeft);
+        private static UnitValue GetPaddingCrossAfter(ref ElementData element, LayoutType parentLayoutType) => GetProp(ref element, parentLayoutType, GuiProp.PaddingBottom, GuiProp.PaddingRight);
 
         private static (float, float)? ContentSizing(ElementHandle elementHandle, LayoutType parentLayoutType, float? parentMain, float? parentCross)
         {
@@ -196,14 +196,14 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
             }
 
-            var borderMainBeforeUnit = GetBorderMainBefore(ref element, parentLayoutType);
-            float borderMainBefore = borderMainBeforeUnit.ToPx(computedMain, DEFAULT_BORDER_WIDTH);
-            var borderMainAfterUnit = GetBorderMainAfter(ref element, parentLayoutType);
-            float borderMainAfter = borderMainAfterUnit.ToPx(computedMain, DEFAULT_BORDER_WIDTH);
-            var borderCrossBeforeUnit = GetBorderCrossBefore(ref element, parentLayoutType);
-            float borderCrossBefore = borderCrossBeforeUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
-            var borderCrossAfterUnit = GetBorderCrossAfter(ref element, parentLayoutType);
-            float borderCrossAfter = borderCrossAfterUnit.ToPx(computedCross, DEFAULT_BORDER_WIDTH);
+            var paddingMainBeforeUnit = GetPaddingMainBefore(ref element, parentLayoutType);
+            float paddingMainBefore = paddingMainBeforeUnit.ToPx(computedMain, DEFAULT_PADDING);
+            var paddingMainAfterUnit = GetPaddingMainAfter(ref element, parentLayoutType);
+            float paddingMainAfter = paddingMainAfterUnit.ToPx(computedMain, DEFAULT_PADDING);
+            var paddingCrossBeforeUnit = GetPaddingCrossBefore(ref element, parentLayoutType);
+            float paddingCrossBefore = paddingCrossBeforeUnit.ToPx(computedCross, DEFAULT_PADDING);
+            var paddingCrossAfterUnit = GetPaddingCrossAfter(ref element, parentLayoutType);
+            float paddingCrossAfter = paddingCrossAfterUnit.ToPx(computedCross, DEFAULT_PADDING);
 
             // Pre-allocate and filter in single pass to avoid LINQ overhead
             var visibleChildren = new List<int>();
@@ -442,12 +442,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 {
                     if (parentLayoutType == layoutType)
                     {
-                        minMain = mainSum + borderMainBefore + borderMainAfter;
+                        minMain = mainSum + paddingMainBefore + paddingMainAfter;
                         actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     }
                     else
                     {
-                        minMain = crossMax + borderMainBefore + borderMainAfter;
+                        minMain = crossMax + paddingMainBefore + paddingMainAfter;
                         actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
                     }
                 }
@@ -456,12 +456,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 {
                     if (parentLayoutType == layoutType)
                     {
-                        minCross = crossMax + borderCrossBefore + borderCrossAfter;
+                        minCross = crossMax + paddingCrossBefore + paddingCrossAfter;
                         actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
                     }
                     else
                     {
-                        minCross = mainSum + borderCrossBefore + borderCrossAfter;
+                        minCross = mainSum + paddingCrossBefore + paddingCrossAfter;
                         actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
                     }
                 }
@@ -554,8 +554,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 while (unfrozenCrossCount > 0)
                 {
                     float childCrossFreeSpace = actualParentCross
-                        - borderCrossBefore
-                        - borderCrossAfter
+                        - paddingCrossBefore
+                        - paddingCrossAfter
                         - child.CrossBefore
                         - child.Cross
                         - child.CrossAfter;
@@ -629,12 +629,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 {
                     if (parentLayoutType == layoutType)
                     {
-                        minMain = mainSum + borderMainBefore + borderMainAfter;
+                        minMain = mainSum + paddingMainBefore + paddingMainAfter;
                         actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     }
                     else
                     {
-                        minMain = crossMax + borderMainBefore + borderMainAfter;
+                        minMain = crossMax + paddingMainBefore + paddingMainAfter;
                         actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
                     }
                 }
@@ -643,12 +643,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 {
                     if (parentLayoutType == layoutType)
                     {
-                        minCross = crossMax + borderCrossBefore + borderCrossAfter;
+                        minCross = crossMax + paddingCrossBefore + paddingCrossAfter;
                         actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
                     }
                     else
                     {
-                        minCross = mainSum + borderCrossBefore + borderCrossAfter;
+                        minCross = mainSum + paddingCrossBefore + paddingCrossAfter;
                         actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
                     }
                 }
@@ -663,7 +663,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 int unfrozenMainCount = mainAxis.Count;
                 while (unfrozenMainCount > 0)
                 {
-                    float freeMainSpace = actualParentMain - mainSum - borderMainBefore - borderMainAfter;
+                    float freeMainSpace = actualParentMain - mainSum - paddingMainBefore - paddingMainAfter;
                     float totalViolation = 0f;
 
                     foreach (var item in mainAxis)
@@ -736,12 +736,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 {
                     if (parentLayoutType == layoutType)
                     {
-                        minMain = mainSum + borderMainBefore + borderMainAfter;
+                        minMain = mainSum + paddingMainBefore + paddingMainAfter;
                         actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     }
                     else
                     {
-                        minMain = crossMax + borderMainBefore + borderMainAfter;
+                        minMain = crossMax + paddingMainBefore + paddingMainAfter;
                         actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
                     }
                 }
@@ -750,12 +750,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 {
                     if (parentLayoutType == layoutType)
                     {
-                        minCross = crossMax + borderCrossBefore + borderCrossAfter;
+                        minCross = crossMax + paddingCrossBefore + paddingCrossAfter;
                         actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
                     }
                     else
                     {
-                        minCross = mainSum + borderCrossBefore + borderCrossAfter;
+                        minCross = mainSum + paddingCrossBefore + paddingCrossAfter;
                         actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
                     }
                 }
@@ -821,7 +821,7 @@ namespace Prowl.PaperUI.LayoutEngine
             {
                 var child = children[i];
                 ProcessChildCrossStretching(child, layoutType, actualParentCross, actualParentMain,
-                    borderCrossBefore, borderCrossAfter, elementChildCrossBefore, elementChildCrossAfter, i);
+                    paddingCrossBefore, paddingCrossAfter, elementChildCrossBefore, elementChildCrossAfter, i);
             }
 
             // Process main-axis stretching for self-directed children
@@ -829,14 +829,14 @@ namespace Prowl.PaperUI.LayoutEngine
             {
                 var child = children[i];
                 ProcessChildMainStretching(child, layoutType, actualParentMain, actualParentCross,
-                    borderMainBefore, borderMainAfter, elementChildMainBefore, elementChildMainAfter, i);
+                    paddingMainBefore, paddingMainAfter, elementChildMainBefore, elementChildMainAfter, i);
             }
 
             // Compute stretch cross spacing for auto-sized children
             foreach (var child in children)
             {
                 ProcessChildCrossSpacing(child, layoutType, actualParentCross,
-                    borderCrossBefore, borderCrossAfter, elementChildCrossBefore, elementChildCrossAfter);
+                    paddingCrossBefore, paddingCrossAfter, elementChildCrossBefore, elementChildCrossAfter);
             }
 
             if (aspectRatio >= 0)
@@ -883,8 +883,8 @@ namespace Prowl.PaperUI.LayoutEngine
                     SetElementBounds(
                         child.Element,
                         layoutType,
-                        child.MainBefore + borderMainBefore,
-                        child.CrossBefore + borderCrossBefore,
+                        child.MainBefore + paddingMainBefore,
+                        child.CrossBefore + paddingCrossBefore,
                         child.Main,
                         child.Cross
                     );
@@ -895,8 +895,8 @@ namespace Prowl.PaperUI.LayoutEngine
                     SetElementBounds(
                         child.Element,
                         layoutType,
-                        mainPos + borderMainBefore,
-                        child.CrossBefore + borderCrossBefore,
+                        mainPos + paddingMainBefore,
+                        child.CrossBefore + paddingCrossBefore,
                         child.Main,
                         child.Cross
                     );
@@ -912,8 +912,8 @@ namespace Prowl.PaperUI.LayoutEngine
             LayoutType layoutType,
             float parentCross,
             float parentMain,
-            float borderCrossBefore,
-            float borderCrossAfter,
+            float paddingCrossBefore,
+            float paddingCrossAfter,
             UnitValue elementChildCrossBefore,
             UnitValue elementChildCrossAfter,
             int childIndex)
@@ -968,7 +968,7 @@ namespace Prowl.PaperUI.LayoutEngine
             int unfrozenCrossCount = crossAxis.Count;
             while (unfrozenCrossCount > 0)
             {
-                float crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
+                float crossFreeSpace = parentCross - paddingCrossBefore - paddingCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
 
                 float totalViolation = 0f;
@@ -1032,8 +1032,8 @@ namespace Prowl.PaperUI.LayoutEngine
             LayoutType layoutType,
             float parentMain,
             float parentCross,
-            float borderMainBefore,
-            float borderMainAfter,
+            float paddingMainBefore,
+            float paddingMainAfter,
             UnitValue elementChildMainBefore,
             UnitValue elementChildMainAfter,
             int childIndex)
@@ -1082,7 +1082,7 @@ namespace Prowl.PaperUI.LayoutEngine
             int unfrozenMainCount = mainAxis.Count;
             while (unfrozenMainCount > 0)
             {
-                float mainFreeSpace = parentMain - borderMainBefore - borderMainAfter
+                float mainFreeSpace = parentMain - paddingMainBefore - paddingMainAfter
                     - child.MainBefore - child.Main - child.MainAfter;
 
                 float totalViolation = 0f;
@@ -1149,8 +1149,8 @@ namespace Prowl.PaperUI.LayoutEngine
             ChildElementInfo child,
             LayoutType layoutType,
             float parentCross,
-            float borderCrossBefore,
-            float borderCrossAfter,
+            float paddingCrossBefore,
+            float paddingCrossAfter,
             UnitValue elementChildCrossBefore,
             UnitValue elementChildCrossAfter)
         {
@@ -1197,7 +1197,7 @@ namespace Prowl.PaperUI.LayoutEngine
             int unfrozenCrossCount = crossAxis.Count;
             while (unfrozenCrossCount > 0)
             {
-                float crossFreeSpace = parentCross - borderCrossBefore - borderCrossAfter
+                float crossFreeSpace = parentCross - paddingCrossBefore - paddingCrossAfter
                     - child.CrossBefore - child.Cross - child.CrossAfter;
 
                 float totalViolation = 0f;
