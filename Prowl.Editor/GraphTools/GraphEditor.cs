@@ -635,11 +635,13 @@ public class GraphEditor
             // graph's ShaderTypeId. Untagged nodes stay universal.
             string? shaderTypeId = (_graph as Prowl.Runtime.GraphTools.ShaderGraphs.ShaderGraph)?.ShaderTypeId;
             bool flatList = !string.IsNullOrEmpty(_creationFilter);
-            using (paper.Column("graph_popup_list")
-                .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
-                .Clip()
-                .ColBetween(2)
-                .Enter())
+
+            // Scroll region for the node list. Height = popup minus
+            // pad(12) + title(20) + search(26) + ColBetween gaps, and the sticky
+            // note row(20 + gap) when showExtras is on.
+            float listW = popupW - 12;
+            float listH = popupH - 12 - 20 - 26 - 8 - (showExtras ? 24 : 0);
+            using (ScrollView.Begin(paper, "graph_popup_list", listW, listH, colSpacing: 2))
             {
                 // Filter once, share between both render paths. The wire-drop compatibility
                 // filter is port-type-driven; the text filter is fuzzy-ish matching on
