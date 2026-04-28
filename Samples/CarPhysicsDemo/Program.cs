@@ -50,7 +50,7 @@ public sealed class CarPhysicsGame : Game
         camera.Effects =
         [
             new FXAAEffect(),
-            new KawaseBloomEffect(),
+            new BloomEffect(),
             new TonemapperEffect(),
         ];
 

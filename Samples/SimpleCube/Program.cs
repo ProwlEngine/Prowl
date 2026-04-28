@@ -77,7 +77,7 @@ public sealed class MyGame : Game
         camera.Effects =
         [
             new FXAAEffect(),
-            new KawaseBloomEffect(),
+            new BloomEffect(),
             new TonemapperEffect(),
         ];
         scene.Add(cameraGO);

@@ -244,13 +244,10 @@ public sealed class VoxelPlanet : MonoBehaviour
         }
     }
 
-    public override void LateUpdate()
+    public override void OnRenderCollect(Camera renderCamera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        if (camera != null && camera.GameObject != null && rootNode != null)
-        {
-            Float3 cameraPos = camera.GameObject.Transform.Position;
-            rootNode.LateUpdate(cameraPos);
-        }
+        if (rootNode != null)
+            rootNode.Collect(renderables);
     }
 
     public override void DrawGizmos()
@@ -325,23 +322,23 @@ public sealed class PlanetNode
         }
     }
 
-    public void LateUpdate(Float3 cameraPos)
+    public void Collect(List<IRenderable> renderables)
     {
         if (children == null)
         {
             // Leaf node
-            TryDraw();
+            TryDraw(renderables);
         }
         else
         {
             for (int i = 0; i < 8; i++)
             {
-                children[i].LateUpdate(cameraPos);
+                children[i].Collect(renderables);
             }
         }
     }
 
-    private void TryDraw()
+    private void TryDraw(List<IRenderable> renderables)
     {
         if (mesh == null)
         {
@@ -375,7 +372,7 @@ public sealed class PlanetNode
 
         if (mesh != null && mesh.VertexCount > 0)
         {
-            this.planet.GameObject.Scene.PushRenderable(new MeshRenderable(mesh, this.planet.material, Float4x4.Identity, this.planet.GameObject.LayerIndex));
+            renderables.Add(new MeshRenderable(mesh, this.planet.material, Float4x4.Identity, this.planet.GameObject.LayerIndex));
         }
     }
 
