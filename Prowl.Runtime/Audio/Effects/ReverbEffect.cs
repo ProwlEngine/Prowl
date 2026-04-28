@@ -4,11 +4,11 @@
 using System;
 using Prowl.Runtime.Audio.Native;
 
-namespace Prowl.Runtime.Audio.Effects
+namespace Prowl.Runtime.Audio.Effects;
+
+public sealed class ReverbEffect: IAudioEffect
 {
-    public sealed class ReverbEffect: IAudioEffect
-    {
-        private Reverb reverb;
+    private Reverb reverb;
 		
 		public float RoomSize
 		{
@@ -57,7 +57,7 @@ namespace Prowl.Runtime.Audio.Effects
 			get => reverb.DecayTimeInFrames;
 		}
 
-        public ReverbEffect(UInt32 sampleRate, UInt32 channels)
+    public ReverbEffect(UInt32 sampleRate, UInt32 channels)
 		{
 			reverb = new Reverb(sampleRate, channels);
 		}
@@ -67,6 +67,5 @@ namespace Prowl.Runtime.Audio.Effects
 			reverb.Process(framesIn, framesOut, frameCountIn);
 		}
 
-        public void OnDestroy() { }
+    public void OnDestroy() { }
 	}
-}

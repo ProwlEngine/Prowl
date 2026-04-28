@@ -22,8 +22,8 @@ using System;
 
 using Prowl.Vector;
 
-namespace Prowl.Runtime.Audio.Effects
-{
+namespace Prowl.Runtime.Audio.Effects;
+
 	public sealed class Phaser
 	{
 		private float zm1;
@@ -177,4 +177,3 @@ namespace Prowl.Runtime.Audio.Effects
 			}
 		}
 	}
-}

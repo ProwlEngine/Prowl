@@ -6,8 +6,8 @@ using System.Runtime.CompilerServices;
 using Prowl.Runtime.Audio.Native;
 using Prowl.Vector;
 
-namespace Prowl.Runtime.Audio.Effects
-{
+namespace Prowl.Runtime.Audio.Effects;
+
 	public sealed class DelayEffect : IAudioEffect
 	{
 		private Int32 channels;
@@ -180,4 +180,3 @@ namespace Prowl.Runtime.Audio.Effects
 			return value;
 		}
 	}
-}

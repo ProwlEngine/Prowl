@@ -4,8 +4,8 @@
 using System;
 using Prowl.Runtime.Audio.Native;
 
-namespace Prowl.Runtime.Audio.Effects
-{
+namespace Prowl.Runtime.Audio.Effects;
+
 	public sealed class PhaserEffect : IAudioEffect
 	{
 		private Phaser phaser;
@@ -53,16 +53,15 @@ namespace Prowl.Runtime.Audio.Effects
 
 		public void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels)
 		{
-            for (UInt32 i = 0; i < frameCountIn; i++)
+        for (UInt32 i = 0; i < frameCountIn; i++)
+        {
+            for (UInt32 ch = 0; ch < channels; ch++)
             {
-                for (UInt32 ch = 0; ch < channels; ch++)
-                {
-                    int index = (int)(i * channels + ch);
-                    framesOut[index] = phaser.Process(framesIn[index]);
-                }
+                int index = (int)(i * channels + ch);
+                framesOut[index] = phaser.Process(framesIn[index]);
             }
+        }
 		}
 		
 		public void OnDestroy() {}
 	}
-}

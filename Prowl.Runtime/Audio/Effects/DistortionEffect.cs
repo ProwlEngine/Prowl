@@ -6,14 +6,14 @@ using System.Runtime.CompilerServices;
 using Prowl.Runtime.Audio.Native;
 using Prowl.Vector;
 
-namespace Prowl.Runtime.Audio.Effects
-{
+namespace Prowl.Runtime.Audio.Effects;
+
 	public sealed class DistortionEffect : IAudioEffect
 	{
-        private float drive;
-        private float range;
-        private float blend;
-        private float volume;
+    private float drive;
+    private float range;
+    private float blend;
+    private float volume;
 
 		public float Drive
 		{
@@ -68,4 +68,3 @@ namespace Prowl.Runtime.Audio.Effects
 		
 		public void OnDestroy() { }
 	}
-}

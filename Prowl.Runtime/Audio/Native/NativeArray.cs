@@ -3,75 +3,74 @@
 
 using System;
 
-namespace Prowl.Runtime.Audio.Native
+namespace Prowl.Runtime.Audio.Native;
+
+public unsafe ref struct NativeArray<T> where T : unmanaged
 {
-    public unsafe ref struct NativeArray<T> where T : unmanaged
+    internal void* _pointer;
+    /// <summary>The number of elements this NativeArray contains.</summary>
+    private readonly int _length;
+
+    public int Length
     {
-        internal void* _pointer;
-        /// <summary>The number of elements this NativeArray contains.</summary>
-        private readonly int _length;
-
-        public int Length
+        get
         {
-            get
-            {
-                return _length;
-            }
+            return _length;
         }
+    }
 
-        public bool IsEmpty
+    public bool IsEmpty
+    {
+        get
         {
-            get
-            {
-                return 0 >= (uint)_length;
-            }
+            return 0 >= (uint)_length;
         }
+    }
 
-        public IntPtr Pointer
+    public IntPtr Pointer
+    {
+        get
         {
-            get
-            {
-                return new IntPtr(_pointer);
-            }
+            return new IntPtr(_pointer);
         }
+    }
 
-        public ref T this[int index]
-        {
-            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                if (index >= _length || index < 0)
-                    new System.IndexOutOfRangeException();
-                return ref ((T*)_pointer)[index];
-            }
-        }
-
+    public ref T this[int index]
+    {
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public NativeArray(void* pointer, int length)
+        get
         {
-            _pointer = pointer;
-            _length = length;
+            if (index >= _length || index < 0)
+                new System.IndexOutOfRangeException();
+            return ref ((T*)_pointer)[index];
         }
+    }
 
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public NativeArray(System.IntPtr pointer, int length)
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public NativeArray(void* pointer, int length)
+    {
+        _pointer = pointer;
+        _length = length;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public NativeArray(System.IntPtr pointer, int length)
+    {
+        _pointer = pointer.ToPointer();
+        _length = length;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public void CopyTo(NativeArray<T> destination)
+    {
+        if ((uint)_length <= (uint)destination.Length)
         {
-            _pointer = pointer.ToPointer();
-            _length = length;
+            long byteCount = _length * System.Runtime.InteropServices.Marshal.SizeOf<T>();
+            Buffer.MemoryCopy(_pointer, (void*)destination.Pointer, byteCount, byteCount);
         }
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public void CopyTo(NativeArray<T> destination)
+        else
         {
-            if ((uint)_length <= (uint)destination.Length)
-            {
-                long byteCount = _length * System.Runtime.InteropServices.Marshal.SizeOf<T>();
-                Buffer.MemoryCopy(_pointer, (void*)destination.Pointer, byteCount, byteCount);
-            }
-            else
-            {
-                throw new ArgumentException("Destination is too short.", "destination");
-            }
+            throw new ArgumentException("Destination is too short.", "destination");
         }
     }
 }

@@ -4,8 +4,8 @@
 using System;
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Runtime.Audio.Effects
-{
+namespace Prowl.Runtime.Audio.Effects;
+
 	public sealed class DelayLine
 	{
 		private UInt32 inPoint;
@@ -128,4 +128,3 @@ namespace Prowl.Runtime.Audio.Effects
 			return nextOutput;
 		}
 	}
-}

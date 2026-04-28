@@ -14,8 +14,8 @@ using System.Runtime.CompilerServices;
 using Prowl.Runtime.Audio.Native;
 using Prowl.Vector;
 
-namespace Prowl.Runtime.Audio.Effects
-{
+namespace Prowl.Runtime.Audio.Effects;
+
 	public class Reverb
 	{
 		private const int MAX_SAMPLERATE_MULTIPLIER = 4;
@@ -562,4 +562,3 @@ namespace Prowl.Runtime.Audio.Effects
 			}
 		}
 	}
-}

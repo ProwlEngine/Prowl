@@ -4,66 +4,65 @@
 using System;
 using Prowl.Runtime.Audio.Native;
 
-namespace Prowl.Runtime.Audio.Effects
+namespace Prowl.Runtime.Audio.Effects;
+
+public sealed class FilterEffect: IAudioEffect
 {
-    public sealed class FilterEffect: IAudioEffect
+    private Filter filter;
+
+    public FilterType Type
     {
-        private Filter filter;
-
-        public FilterType Type
+        get
         {
-            get
-            {
-                return filter.Type;
-            }
+            return filter.Type;
         }
-        
-        public float Frequency
+    }
+    
+    public float Frequency
+    {
+        get
         {
-            get
-            {
-                return filter.Frequency;
-            }
-            set
-            {
-                filter.Frequency = value;
-            }
+            return filter.Frequency;
         }
-
-        public float Q
+        set
         {
-            get
-            {
-                return filter.Q;
-            }
-            set
-            {
-                filter.Q = value;
-            }
+            filter.Frequency = value;
         }
+    }
 
-        public float GainDB
+    public float Q
+    {
+        get
         {
-            get
-            {
-                return filter.GainDB;
-            }
-            set
-            {
-                filter.GainDB = value;
-            }
+            return filter.Q;
         }
-
-        public FilterEffect(FilterType type, float frequency, float q, float gainDB)
+        set
         {
-            filter = new Filter(type, frequency, q, gainDB, AudioContext.SampleRate);
+            filter.Q = value;
         }
+    }
 
-        public void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    public float GainDB
+    {
+        get
         {
-            filter.Process(framesIn, framesOut, frameCountIn, (int)channels);
+            return filter.GainDB;
+        }
+        set
+        {
+            filter.GainDB = value;
+        }
+    }
+
+    public FilterEffect(FilterType type, float frequency, float q, float gainDB)
+    {
+        filter = new Filter(type, frequency, q, gainDB, AudioContext.SampleRate);
+    }
+
+    public void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    {
+        filter.Process(framesIn, framesOut, frameCountIn, (int)channels);
 		}
 
-        public void OnDestroy() { }
+    public void OnDestroy() { }
 	}
-}
