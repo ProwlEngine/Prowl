@@ -25,7 +25,7 @@ public static class AssetCreateMenu
             var task = new Tasks.CreateAssetTask();
 
             task.TaskType = Tasks.CreateAssetTask.AssetType.Folder;
-            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Folder", Extension = "", Icon = ProjectPanel.GetFileIcon("") }, currentFolder);
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Folder", Extension = "", Icon = FileIconRegistry.GetIconForExtension("") }, currentFolder);
 
         });
         builder.Separator();
@@ -38,7 +38,7 @@ public static class AssetCreateMenu
             var task = new Tasks.CreateAssetTask();
 
             task.TaskType = Tasks.CreateAssetTask.AssetType.Shader;
-            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = ProjectPanel.GetFileIcon(".shader") }, currentFolder);
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = FileIconRegistry.GetIconForExtension(".shader") }, currentFolder);
 
         });
         builder.Separator();
@@ -46,7 +46,7 @@ public static class AssetCreateMenu
 
             var task = new Tasks.CreateAssetTask();
             task.TaskType = Tasks.CreateAssetTask.AssetType.Script;
-            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = ProjectPanel.GetFileIcon(".cs") }, currentFolder);
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = FileIconRegistry.GetIconForExtension(".cs") }, currentFolder);
 
         });
     }
