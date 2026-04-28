@@ -1167,6 +1167,9 @@ public class PhysicsWorld
     /// </summary>
     /// <param name="heightmapProxy">The terrain heightmap proxy for raycasting.</param>
     /// <param name="collisionFilter">The terrain collision filter for broad phase collision detection.</param>
+    /// <param name="heightProvider">Sampler used to query terrain height at arbitrary points during contact resolution.</param>
+    /// <param name="terrainOrigin">World-space origin (corner) of the terrain grid.</param>
+    /// <param name="cellSize">World-space spacing between height samples in the grid.</param>
     public void RegisterTerrain(TerrainHeightmapProxy heightmapProxy, TerrainCollisionFilter collisionFilter,
         ITerrainHeightProvider heightProvider, JVector terrainOrigin, float cellSize)
     {

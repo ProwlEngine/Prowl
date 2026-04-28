@@ -252,7 +252,7 @@ public sealed class Texture2D : Texture, ISerializable
 
 
     /// <summary>
-    /// Creates a <see cref="Texture2D"/> from an <see cref="Image{Rgba32}"/>.
+    /// Creates a <see cref="Texture2D"/> from a <see cref="MagickImage"/>.
     /// </summary>
     /// <param name="image">The image to create the <see cref="Texture2D"/> with.</param>
     /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>

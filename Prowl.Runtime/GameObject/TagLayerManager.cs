@@ -113,9 +113,7 @@ public static class TagLayerManager
             "Game Controller"
         ];
 
-        /// <summary>
-        /// Array of available layers for GameObjects.
-        /// </summary>
+        // Array of available layers for GameObjects.
         layers =
         [
             "Default",

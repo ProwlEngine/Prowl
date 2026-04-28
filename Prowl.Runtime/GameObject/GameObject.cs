@@ -107,9 +107,9 @@ public class GameObject : EngineObject, ISerializable
 
 
     /// <summary>
-    /// The GameObjects parent <see cref="Prowl.Runtime.Scene"/>. Each GameObject can belong to
-    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Scene.Add(GameObject)"/> and
-    /// <see cref="Prowl.Runtime.Scene.Remove(GameObject)"/> methods.
+    /// The GameObjects parent <see cref="Prowl.Runtime.Resources.Scene"/>. Each GameObject can belong to
+    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Resources.Scene.Add(GameObject)"/> and
+    /// <see cref="Prowl.Runtime.Resources.Scene.Remove(GameObject)"/> methods.
     /// </summary>
     public Scene? Scene
     {

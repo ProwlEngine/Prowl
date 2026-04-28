@@ -167,7 +167,7 @@ public unsafe class GraphicsTexture : IDisposable
     }
 
     /// <summary>
-    /// Turns a value from the <see cref="Texture.TextureImageFormat"/> enum into the necessary
+    /// Turns a value from the <see cref="TextureImageFormat"/> enum into the necessary
     /// enums to create a <see cref="Texture"/>'s image/storage.
     /// </summary>
     /// <param name="imageFormat">The requested image format.</param>

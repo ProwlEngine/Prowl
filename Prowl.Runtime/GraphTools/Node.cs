@@ -37,7 +37,7 @@ public struct NodeMessage
 ///
 /// <para>Per-node settings (knobs the user tweaks in the inspector) should be public
 /// fields/properties on the subclass the editor renders them through Prowl's standard
-/// <see cref="Widgets.PropertyGrid"/> just like component properties.</para>
+/// PropertyGrid just like component properties.</para>
 /// </remarks>
 public abstract class Node
 {

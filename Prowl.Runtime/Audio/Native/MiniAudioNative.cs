@@ -5678,7 +5678,7 @@ namespace Prowl.Runtime.Audio.Native
         /// </summary>
         /// <typeparam name="TDelegate">The type of delegate to convert.</typeparam>
         /// <param name="d">The delegate to be passed to unmanaged code.</param>
-        /// <returns><A value that can be passed to unmanaged code, which, in turn, can use it to call the underlying managed delegate. Returns IntPtr.Zero if the passed delegate is null./returns>
+        /// <returns>A value that can be passed to unmanaged code, which, in turn, can use it to call the underlying managed delegate. Returns IntPtr.Zero if the passed delegate is null.</returns>
         public static IntPtr GetFunctionPointerForDelegate<TDelegate>(TDelegate d) where TDelegate : notnull
         {
             if (d == null)

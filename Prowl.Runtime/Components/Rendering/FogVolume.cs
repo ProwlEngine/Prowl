@@ -22,7 +22,7 @@ public enum FogVolumeShape
     Sphere,
     /// <summary>Cylinder along Y axis. Radius = Transform.Scale.X, height = Transform.Scale.Y * 2.</summary>
     Cylinder,
-    /// <summary>Cone along +Y axis with apex at origin. Half-angle from <see cref="ConeAngle"/>,
+    /// <summary>Cone along +Y axis with apex at origin. Half-angle from <see cref="FogVolume.ConeAngle"/>,
     /// height = Transform.Scale.Y.</summary>
     Cone,
 }

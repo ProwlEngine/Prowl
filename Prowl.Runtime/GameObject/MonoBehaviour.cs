@@ -111,10 +111,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public bool EnabledInHierarchy => _enabledInHierarchy;
 
     /// <summary>
-    /// The parent <see cref="Prowl.Runtime.Scene"/> to which this <see cref="Prowl.Runtime.MonoBehaviour"/> belongs.
-    /// 
+    /// The parent <see cref="Prowl.Runtime.Resources.Scene"/> to which this <see cref="Prowl.Runtime.MonoBehaviour"/> belongs.
+    ///
     /// Note that this property is derived from the components <see cref="GameObject"/>, as a
-    /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Scene"/> without a 
+    /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Resources.Scene"/> without a
     /// <see cref="GameObject"/>.
     /// </summary>
     public Scene? Scene => GameObject?.Scene ?? null;
@@ -136,7 +136,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public MonoBehaviour AddComponent(Type type) => GameObject.AddComponent(type);
     /// <inheritdoc cref="GameObject.RemoveComponent{T}"/>"
     public void RemoveComponent<T>(T component) where T : MonoBehaviour => GameObject.RemoveComponent(component);
-    /// <inheritdoc cref="GameObject.RemoveComponent(Type)"/>"
+    /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"
     public void RemoveComponent(MonoBehaviour component) => GameObject.RemoveComponent(component);
     /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"
     public void RemoveSelf() => GameObject.RemoveComponent(this);

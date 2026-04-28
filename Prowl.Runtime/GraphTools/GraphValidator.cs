@@ -30,9 +30,9 @@ public sealed class GraphValidatorAttribute : Attribute
 /// <remarks>
 /// <para>Implementations should be stateless a single instance is cached and shared
 /// across every validation pass.</para>
-/// <para>Standard pattern: call <see cref="Graph.ClearAllMessages"/> before your first
-/// validator runs, then each validator iterates nodes/edges and appends messages.
-/// The caller (<see cref="GraphValidatorRegistry.Validate"/>) handles the clear.</para>
+/// <para>Standard pattern: messages are cleared before the first validator runs, then each
+/// validator iterates nodes/edges and appends messages. The caller
+/// (<see cref="GraphValidatorRegistry.Validate"/>) handles the clear.</para>
 /// </remarks>
 public abstract class GraphValidator
 {

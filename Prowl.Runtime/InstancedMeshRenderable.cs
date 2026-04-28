@@ -25,7 +25,13 @@ public class InstancedMeshRenderable : IRenderable
     private readonly Float3 _sortPosition;
     private readonly int _subMeshIndex;
 
+    /// <param name="mesh">Source mesh whose vertex/index buffers are reused for every instance.</param>
+    /// <param name="material">Material applied to all instances.</param>
+    /// <param name="instanceData">Per-instance transform/colour data uploaded as the instance buffer.</param>
     /// <param name="sortPosition">World-space origin for depth sorting. Should be a stable position (e.g., particle system transform, terrain chunk center) to avoid flickering.</param>
+    /// <param name="layerIndex">Layer index used for culling/render-ordering.</param>
+    /// <param name="sharedProperties">Optional shared property block applied to the material; null creates an empty one.</param>
+    /// <param name="bounds">Optional explicit world-space AABB for culling; falls back to the mesh bounds when null.</param>
     /// <param name="subMeshIndex">Which submesh to draw (0..mesh.SubMeshCount-1), or -1 for the entire mesh.</param>
     public InstancedMeshRenderable(
         Mesh mesh,
