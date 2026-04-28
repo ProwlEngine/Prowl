@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Jitter2.Dynamics;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -92,7 +94,7 @@ public sealed class ShapeCastDemoGame : Game
         floor.Transform.Position = new Float3(0, -0.5f, 0);
 
         Rigidbody3D floorRigidbody = floor.AddComponent<Rigidbody3D>();
-        floorRigidbody.IsStatic = true;
+        floorRigidbody.MotionType = MotionType.Static;
         BoxCollider floorCollider = floor.AddComponent<BoxCollider>();
         floorCollider.Size = new Float3(40, 1, 40);
 
@@ -121,7 +123,7 @@ public sealed class ShapeCastDemoGame : Game
             );
 
             Rigidbody3D stepRb = step.AddComponent<Rigidbody3D>();
-            stepRb.IsStatic = true;
+            stepRb.MotionType = MotionType.Static;
             BoxCollider stepCollider = step.AddComponent<BoxCollider>();
             stepCollider.Size = new Float3(stepWidth, stepHeight, stepDepth);
 
@@ -141,7 +143,7 @@ public sealed class ShapeCastDemoGame : Game
         slope.Transform.LocalEulerAngles = new Float3(angleDegrees, 0, 0);
 
         Rigidbody3D slopeRb = slope.AddComponent<Rigidbody3D>();
-        slopeRb.IsStatic = true;
+        slopeRb.MotionType = MotionType.Static;
         BoxCollider slopeCollider = slope.AddComponent<BoxCollider>();
         slopeCollider.Size = new Float3(width, 0.5f, length);
 
@@ -167,7 +169,7 @@ public sealed class ShapeCastDemoGame : Game
             );
 
             Rigidbody3D boxRb = box.AddComponent<Rigidbody3D>();
-            boxRb.IsStatic = true;
+            boxRb.MotionType = MotionType.Static;
             BoxCollider boxCollider = box.AddComponent<BoxCollider>();
             boxCollider.Size = new Float3(1, height, 1);
 

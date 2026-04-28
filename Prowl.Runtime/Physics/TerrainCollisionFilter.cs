@@ -67,7 +67,8 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
             return false;
 
         // Don't collide with static or inactive bodies
-        if (rbs.RigidBody.Data.IsStaticOrInactive)
+        var bodyData = rbs.RigidBody.Data;
+        if (bodyData.MotionType != MotionType.Dynamic || !bodyData.IsActive)
             return false;
 
         // Process the terrain collision

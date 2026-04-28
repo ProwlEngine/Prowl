@@ -468,7 +468,7 @@ public sealed class WheelCollider : MonoBehaviour
             car.SetActivationState(true);
 
         // Apply force to the ground body (clamped to avoid launching small dynamic bodies)
-        if (worldBody != null && !worldBody.IsStatic)
+        if (worldBody != null && worldBody.MotionType != MotionType.Static)
         {
             const float maxOtherBodyAcc = 500.0f;
             float maxOtherBodyForce = maxOtherBodyAcc * (float)worldBody.Mass;

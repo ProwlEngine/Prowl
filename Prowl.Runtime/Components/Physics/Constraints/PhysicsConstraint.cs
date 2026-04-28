@@ -111,7 +111,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
         {
             // Create a temporary static body for world-space constraints
             body2 = world.CreateRigidBody();
-            body2.IsStatic = true;
+            body2.MotionType = MotionType.Static;
         }
         else
         {

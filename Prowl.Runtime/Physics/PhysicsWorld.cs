@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Jitter2;
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
+using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
 using Prowl.Vector;
@@ -129,7 +130,7 @@ public class PhysicsWorld
 
         // Create a new static rigidbody for this layer
         staticBody = World.CreateRigidBody();
-        staticBody.IsStatic = true;
+        staticBody.MotionType = MotionType.Static;
         staticBody.Tag = new Rigidbody3D.RigidBodyUserData()
         {
             Rigidbody = null, // No Rigidbody3D component associated with this

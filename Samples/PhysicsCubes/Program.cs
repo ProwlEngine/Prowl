@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Jitter2.Dynamics;
+
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
@@ -207,7 +209,7 @@ public sealed class PhysicsDemo : Game
         GameObject anchor = new("Chain Anchor");
         anchor.Transform.Position = startPos;
         Rigidbody3D anchorRb = anchor.AddComponent<Rigidbody3D>();
-        anchorRb.IsStatic = true;
+        anchorRb.MotionType = MotionType.Static;
         SphereCollider anchorCollider = anchor.AddComponent<SphereCollider>();
         anchorCollider.Radius = 0.2f;
         MeshRenderer anchorRenderer = anchor.AddComponent<MeshRenderer>();
@@ -246,7 +248,7 @@ public sealed class PhysicsDemo : Game
         GameObject frame = new("Door Frame");
         frame.Transform.Position = position;
         Rigidbody3D frameRb = frame.AddComponent<Rigidbody3D>();
-        frameRb.IsStatic = true;
+        frameRb.MotionType = MotionType.Static;
         BoxCollider frameCollider = frame.AddComponent<BoxCollider>();
         frameCollider.Size = new Float3(0.2f, 3, 0.2f);
         MeshRenderer frameRenderer = frame.AddComponent<MeshRenderer>();
@@ -284,7 +286,7 @@ public sealed class PhysicsDemo : Game
         GameObject rail = new("Slider Rail");
         rail.Transform.Position = position;
         Rigidbody3D railRb = rail.AddComponent<Rigidbody3D>();
-        railRb.IsStatic = true;
+        railRb.MotionType = MotionType.Static;
         BoxCollider railCollider = rail.AddComponent<BoxCollider>();
         railCollider.Size = new Float3(0.1f, 4, 0.1f);
         MeshRenderer railRenderer = rail.AddComponent<MeshRenderer>();
@@ -368,7 +370,7 @@ public sealed class PhysicsDemo : Game
         GameObject motorBase = new("Motor Base");
         motorBase.Transform.Position = position;
         Rigidbody3D baseRb = motorBase.AddComponent<Rigidbody3D>();
-        baseRb.IsStatic = true;
+        baseRb.MotionType = MotionType.Static;
         BoxCollider baseCollider = motorBase.AddComponent<BoxCollider>();
         baseCollider.Size = new Float3(0.5f, 0.5f, 0.5f);
         MeshRenderer baseRenderer = motorBase.AddComponent<MeshRenderer>();

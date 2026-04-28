@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Jitter2.Dynamics;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -257,7 +259,7 @@ public sealed class PhysicsTesterDemo : Game
             if (scene.Physics.Raycast(ray.Origin, ray.Direction, out RaycastHit hitInfo))
             {
                 // Check if we hit a rigidbody
-                if (hitInfo.Rigidbody.IsValid() && !hitInfo.Rigidbody.IsStatic)
+                if (hitInfo.Rigidbody.IsValid() && hitInfo.Rigidbody.MotionType != MotionType.Static)
                 {
                     grabbedRigidbody = hitInfo.Rigidbody;
                     grabDistance = Float3.Distance(ray.Origin, hitInfo.Point);

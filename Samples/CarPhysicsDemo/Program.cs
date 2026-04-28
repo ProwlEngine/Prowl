@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Jitter2.Dynamics;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -91,7 +93,7 @@ public sealed class CarPhysicsGame : Game
         ground.Transform.Position = new Float3(0, -0.5f, 0);
 
         Rigidbody3D groundRigidbody = ground.AddComponent<Rigidbody3D>();
-        groundRigidbody.IsStatic = true;
+        groundRigidbody.MotionType = MotionType.Static;
         BoxCollider groundCollider = ground.AddComponent<BoxCollider>();
         groundCollider.Size = new Float3(200, 1, 200);
 
@@ -130,7 +132,7 @@ public sealed class CarPhysicsGame : Game
         ramp.Transform.LocalEulerAngles = new Float3(angleDegrees, 0, 0);
 
         Rigidbody3D rampRigidbody = ramp.AddComponent<Rigidbody3D>();
-        rampRigidbody.IsStatic = true;
+        rampRigidbody.MotionType = MotionType.Static;
         BoxCollider rampCollider = ramp.AddComponent<BoxCollider>();
         rampCollider.Size = size;
 
@@ -148,7 +150,7 @@ public sealed class CarPhysicsGame : Game
         bump.Transform.Position = position + new Float3(0, radius / 2, 0);
 
         Rigidbody3D bumpRigidbody = bump.AddComponent<Rigidbody3D>();
-        bumpRigidbody.IsStatic = true;
+        bumpRigidbody.MotionType = MotionType.Static;
         SphereCollider bumpCollider = bump.AddComponent<SphereCollider>();
         bumpCollider.Radius = radius;
 
@@ -166,7 +168,7 @@ public sealed class CarPhysicsGame : Game
         wall.Transform.Position = position;
 
         Rigidbody3D wallRigidbody = wall.AddComponent<Rigidbody3D>();
-        wallRigidbody.IsStatic = true;
+        wallRigidbody.MotionType = MotionType.Static;
         BoxCollider wallCollider = wall.AddComponent<BoxCollider>();
         wallCollider.Size = size;
 

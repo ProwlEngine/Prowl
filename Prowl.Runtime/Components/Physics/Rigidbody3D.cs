@@ -26,7 +26,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         //public JVector TranslationConstraint { get; set; }
     }
 
-    [SerializeField] private bool isStatic;
+    [SerializeField] private MotionType motionType = MotionType.Dynamic;
     [SerializeField] private bool isSpeculative;
     [SerializeField] private bool useGravity = true;
     [SerializeField] private bool enableGyroscopicForces = false;
@@ -42,15 +42,16 @@ public sealed class Rigidbody3D : MonoBehaviour
     private float interpTimer = 0;
 
     /// <summary>
-    /// Gets or sets a value indicating whether this Rigidbody3D is static.
+    /// How this body participates in the simulation: <see cref="MotionType.Dynamic"/>,
+    /// <see cref="MotionType.Kinematic"/>, or <see cref="MotionType.Static"/>.
     /// </summary>
-    public bool IsStatic
+    public MotionType MotionType
     {
-        get => isStatic;
+        get => motionType;
         set
         {
-            isStatic = value;
-            if (_body != null) _body.IsStatic = value;
+            motionType = value;
+            if (_body != null) _body.MotionType = value;
         }
     }
 
@@ -423,7 +424,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     internal void UpdateProperties(RigidBody rb)
     {
-        rb.IsStatic = isStatic;
+        rb.MotionType = motionType;
         rb.EnableSpeculativeContacts = isSpeculative;
         rb.Damping = (linearDamping, angularDamping);
         rb.Friction = friction;
@@ -443,8 +444,8 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     internal void UpdateShapes(RigidBody rb)
     {
-        // Remove all shapes from this rigidbody
-        rb.RemoveShape(rb.Shapes, false);
+        // Remove all shapes from this rigidbody (Preserve mass/inertia, the rebuild below will refresh it)
+        rb.RemoveShapes(rb.Shapes, MassInertiaUpdateMode.Preserve);
 
         // Get all child colliders and have them re-attach
         var colliders = GetComponentsInChildren<Collider>();
