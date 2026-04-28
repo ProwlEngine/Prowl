@@ -1,0 +1,307 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+
+using Prowl.PaperUI;
+using Prowl.PaperUI.Events;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
+
+namespace Prowl.OrigamiUI;
+
+/// <summary>
+/// Fluent builder for an Origami scroll view. Construct via <see cref="Origami.ScrollView"/>;
+/// chain modifiers; call <see cref="Body"/> to render.
+/// </summary>
+/// <remarks>
+/// <para>Provides a clipped viewport that scrolls vertically (default) and/or horizontally.
+/// Wheel scrolls the vertical axis; <c>Shift+wheel</c> scrolls horizontal when enabled.
+/// Both scrollbar thumbs are draggable when their axis overflows.</para>
+/// <para>Programmatic positioning: <see cref="Origami.ScrollTo"/> registers a target offset
+/// keyed by ID; the next render of that scroll view applies it.</para>
+/// </remarks>
+public sealed class ScrollViewBuilder
+{
+    // ── Pending programmatic scroll requests ──────────────────────────────
+    // Static so callers can request a scroll without holding a builder.
+    // Cleared once consumed by the matching ScrollView render.
+    internal static readonly Dictionary<string, Float2> s_pendingScrollTo = new();
+
+    private readonly Paper _paper;
+    private readonly string _id;
+    private readonly float _width;
+    private readonly float _height;
+    private readonly OrigamiTheme _theme;
+
+    private OrigamiVariant _variant = OrigamiVariant.Default;
+    private float _padLeft, _padRight, _padTop, _padBottom;
+    private float _colSpacing;
+    private bool _vertical = true;
+    private bool _horizontal;
+    private bool _forceScrollbar;
+    private float _scrollbarSize = 6f;
+    private float _wheelStep = 30f;
+
+    internal ScrollViewBuilder(Paper paper, string id, float width, float height, OrigamiTheme theme)
+    {
+        _paper = paper ?? throw new ArgumentNullException(nameof(paper));
+        _id = id ?? throw new ArgumentNullException(nameof(id));
+        _width = width;
+        _height = height;
+        _theme = theme ?? throw new ArgumentNullException(nameof(theme));
+    }
+
+    // ── Variant ────────────────────────────────────────────────────────
+
+    public ScrollViewBuilder Variant(OrigamiVariant variant) { _variant = variant; return this; }
+    public ScrollViewBuilder Primary() => Variant(OrigamiVariant.Primary);
+    public ScrollViewBuilder Success() => Variant(OrigamiVariant.Success);
+    public ScrollViewBuilder Warning() => Variant(OrigamiVariant.Warning);
+    public ScrollViewBuilder Danger()  => Variant(OrigamiVariant.Danger);
+    public ScrollViewBuilder Info()    => Variant(OrigamiVariant.Info);
+    public ScrollViewBuilder Subtle()  => Variant(OrigamiVariant.Subtle);
+
+    // ── Padding ────────────────────────────────────────────────────────
+
+    public ScrollViewBuilder Padding(float all)
+    {
+        _padLeft = _padRight = _padTop = _padBottom = all;
+        return this;
+    }
+    public ScrollViewBuilder Padding(float horizontal, float vertical)
+    {
+        _padLeft = _padRight = horizontal;
+        _padTop = _padBottom = vertical;
+        return this;
+    }
+    public ScrollViewBuilder Padding(float left, float right, float top, float bottom)
+    {
+        _padLeft = left; _padRight = right;
+        _padTop = top;   _padBottom = bottom;
+        return this;
+    }
+
+    // ── Behaviour ──────────────────────────────────────────────────────
+
+    /// <summary>Spacing between stacked children. Forwarded to the content column's <c>ColBetween</c>.</summary>
+    public ScrollViewBuilder ColSpacing(float spacing) { _colSpacing = spacing; return this; }
+
+    /// <summary>Enable vertical scrolling (default <c>true</c>).</summary>
+    public ScrollViewBuilder Vertical(bool enabled = true) { _vertical = enabled; return this; }
+
+    /// <summary>
+    /// Enable horizontal scrolling (default <c>false</c>). When on, content can extend beyond
+    /// the viewport's width; the user scrolls via the bottom thumb or <c>Shift+wheel</c>.
+    /// </summary>
+    public ScrollViewBuilder Horizontal(bool enabled = true) { _horizontal = enabled; return this; }
+
+    /// <summary>Always show scrollbar tracks, even when content fits.</summary>
+    public ScrollViewBuilder ForceScrollbar(bool force = true) { _forceScrollbar = force; return this; }
+
+    /// <summary>Scrollbar thumb thickness (default 6px).</summary>
+    public ScrollViewBuilder ScrollbarSize(float size) { _scrollbarSize = MathF.Max(2f, size); return this; }
+
+    /// <summary>Scroll-wheel step in pixels per click (default 30).</summary>
+    public ScrollViewBuilder WheelStep(float step) { _wheelStep = MathF.Max(1f, step); return this; }
+
+    // ── Terminator ─────────────────────────────────────────────────────
+
+    /// <summary>Render the scroll view. <paramref name="drawContents"/> draws inside the (scrollable) content area.</summary>
+    public void Body(Action drawContents)
+    {
+        ArgumentNullException.ThrowIfNull(drawContents);
+
+        var ramp = _theme.Get(_variant);
+
+        // Apply any pending programmatic scroll requests for this id (snap; smooth-scroll later).
+        Float2? pending = null;
+        if (s_pendingScrollTo.TryGetValue(_id, out var target))
+        {
+            pending = target;
+            s_pendingScrollTo.Remove(_id);
+        }
+
+        ElementHandle outerHandle = default;
+        var outer = _paper.Box(_id)
+            .Width(_width).Height(_height)
+            .Clip()
+            .OnScroll(e =>
+            {
+                if (!outerHandle.IsValid) return;
+                bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+
+                if (_horizontal && (shift || !_vertical))
+                {
+                    float scroll = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
+                    float contentW = _paper.GetElementStorage(outerHandle, "contentW", _width);
+                    float maxScroll = MathF.Max(0f, contentW - _width);
+                    scroll -= (float)e.Delta * _wheelStep;
+                    scroll = Clamp(scroll, 0f, maxScroll);
+                    _paper.SetElementStorage(outerHandle, "scrollX", scroll);
+                }
+                else if (_vertical)
+                {
+                    float scroll = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
+                    float contentH = _paper.GetElementStorage(outerHandle, "contentH", _height);
+                    float maxScroll = MathF.Max(0f, contentH - _height);
+                    scroll -= (float)e.Delta * _wheelStep;
+                    scroll = Clamp(scroll, 0f, maxScroll);
+                    _paper.SetElementStorage(outerHandle, "scrollY", scroll);
+                }
+            });
+
+        using (outer.Enter())
+        {
+            outerHandle = _paper.CurrentParent;
+
+            // Apply pending programmatic scroll.
+            if (pending.HasValue)
+            {
+                _paper.SetElementStorage(outerHandle, "scrollX", MathF.Max(0f, (float)pending.Value.X));
+                _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, (float)pending.Value.Y));
+            }
+
+            float scrollX = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
+            float scrollY = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
+            float contentW = _paper.GetElementStorage(outerHandle, "contentW", _width);
+            float contentH = _paper.GetElementStorage(outerHandle, "contentH", _height);
+
+            bool needsV = _vertical && (contentH > _height || _forceScrollbar);
+            bool needsH = _horizontal && (contentW > _width || _forceScrollbar);
+            float vBarW = needsV ? _scrollbarSize : 0f;
+            float hBarH = needsH ? _scrollbarSize : 0f;
+
+            // Re-clamp scroll in case content shrank since last frame.
+            float maxScrollY = MathF.Max(0f, contentH - _height);
+            float maxScrollX = MathF.Max(0f, contentW - _width);
+            scrollY = Clamp(scrollY, 0f, maxScrollY);
+            scrollX = Clamp(scrollX, 0f, maxScrollX);
+            _paper.SetElementStorage(outerHandle, "scrollY", scrollY);
+            _paper.SetElementStorage(outerHandle, "scrollX", scrollX);
+
+            // Content area: SelfDirected so we can offset it by (-scrollX, -scrollY).
+            // Width is Auto when horizontal scroll is enabled (content can extend), otherwise
+            // shrunk to viewport width minus the vertical scrollbar.
+            float viewportW = _width - _padLeft - _padRight - vBarW;
+            var content = _paper.Column($"{_id}_content")
+                .PositionType(PositionType.SelfDirected)
+                .Position(_padLeft - scrollX, _padTop - scrollY)
+                .Height(UnitValue.Auto)
+                .ColBetween(_colSpacing);
+
+            if (_horizontal) content.Width(UnitValue.Auto);
+            else             content.Width(viewportW);
+
+            var capturedHandle = outerHandle;
+            content.OnPostLayout((handle, rect) =>
+            {
+                _paper.SetElementStorage(capturedHandle, "contentH", (float)rect.Size.Y + _padTop + _padBottom);
+                _paper.SetElementStorage(capturedHandle, "contentW", (float)rect.Size.X + _padLeft + _padRight);
+            });
+
+            using (content.Enter())
+            {
+                drawContents();
+            }
+
+            // ── Scrollbar tracks + thumbs ────────────────────────────
+            if (needsV) DrawVerticalScrollbar(outerHandle, ramp, scrollY, contentH, hBarH);
+            if (needsH) DrawHorizontalScrollbar(outerHandle, ramp, scrollX, contentW, vBarW);
+
+            // Corner spacer when both scrollbars are visible (so the thumbs don't overlap).
+            if (needsV && needsH)
+            {
+                _paper.Box($"{_id}_corner")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(_width - vBarW, _height - hBarH)
+                    .Width(vBarW).Height(hBarH)
+                    .BackgroundColor(ramp.C200)
+                    .IsNotInteractable();
+            }
+        }
+    }
+
+    private void DrawVerticalScrollbar(ElementHandle outerHandle, OrigamiRamp ramp, float scrollY, float contentH, float hBarH)
+    {
+        float trackH = _height - hBarH;
+        float effContentH = MathF.Max(_height, contentH);
+        float maxScroll = MathF.Max(0f, contentH - _height);
+        float ratio = _height / effContentH;
+        float thumbH = MathF.Max(20f, trackH * ratio);
+        float thumbY = maxScroll > 0f ? (scrollY / maxScroll) * (trackH - thumbH) : 0f;
+
+        // Track (subtle column on the right edge so the thumb has somewhere to sit).
+        _paper.Box($"{_id}_vtrack")
+            .PositionType(PositionType.SelfDirected)
+            .Position(_width - _scrollbarSize, 0)
+            .Width(_scrollbarSize).Height(trackH)
+            .BackgroundColor(ramp.C200)
+            .IsNotInteractable();
+
+        var thumb = _paper.Box($"{_id}_vthumb")
+            .PositionType(PositionType.SelfDirected)
+            .Position(_width - _scrollbarSize, thumbY)
+            .Width(_scrollbarSize).Height(thumbH)
+            .BackgroundColor(ramp.C500)
+            .Hovered.BackgroundColor(ramp.C600).End()
+            .Rounded(_scrollbarSize / 2f);
+
+        // Drag the thumb to scroll. Capture starting scrollY when drag begins, then derive
+        // new scrollY from total drag delta.
+        var capturedHandle = outerHandle;
+        thumb.OnDragStart(_ =>
+            _paper.SetElementStorage(capturedHandle, "vDragStart", scrollY));
+        thumb.OnDragging(e =>
+        {
+            float dragRange = trackH - thumbH;
+            if (dragRange <= 0f) return;
+            float startScroll = _paper.GetElementStorage(capturedHandle, "vDragStart", 0f);
+            float ns = startScroll + (float)e.TotalDelta.Y * (maxScroll / dragRange);
+            ns = Clamp(ns, 0f, maxScroll);
+            _paper.SetElementStorage(capturedHandle, "scrollY", ns);
+        });
+    }
+
+    private void DrawHorizontalScrollbar(ElementHandle outerHandle, OrigamiRamp ramp, float scrollX, float contentW, float vBarW)
+    {
+        float trackW = _width - vBarW;
+        float effContentW = MathF.Max(_width, contentW);
+        float maxScroll = MathF.Max(0f, contentW - _width);
+        float ratio = _width / effContentW;
+        float thumbW = MathF.Max(20f, trackW * ratio);
+        float thumbX = maxScroll > 0f ? (scrollX / maxScroll) * (trackW - thumbW) : 0f;
+
+        _paper.Box($"{_id}_htrack")
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, _height - _scrollbarSize)
+            .Width(trackW).Height(_scrollbarSize)
+            .BackgroundColor(ramp.C200)
+            .IsNotInteractable();
+
+        var thumb = _paper.Box($"{_id}_hthumb")
+            .PositionType(PositionType.SelfDirected)
+            .Position(thumbX, _height - _scrollbarSize)
+            .Width(thumbW).Height(_scrollbarSize)
+            .BackgroundColor(ramp.C500)
+            .Hovered.BackgroundColor(ramp.C600).End()
+            .Rounded(_scrollbarSize / 2f);
+
+        var capturedHandle = outerHandle;
+        thumb.OnDragStart(_ =>
+            _paper.SetElementStorage(capturedHandle, "hDragStart", scrollX));
+        thumb.OnDragging(e =>
+        {
+            float dragRange = trackW - thumbW;
+            if (dragRange <= 0f) return;
+            float startScroll = _paper.GetElementStorage(capturedHandle, "hDragStart", 0f);
+            float ns = startScroll + (float)e.TotalDelta.X * (maxScroll / dragRange);
+            ns = Clamp(ns, 0f, maxScroll);
+            _paper.SetElementStorage(capturedHandle, "scrollX", ns);
+        });
+    }
+
+    private static float Clamp(float v, float lo, float hi) => MathF.Max(lo, MathF.Min(hi, v));
+}
