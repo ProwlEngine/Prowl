@@ -90,7 +90,7 @@ public class ProjectSettingsPanel : DockPanel
             // Left sidebar category list
             float sidebarW = 220f;
             using (paper.Column("ps_sidebar")
-                .Border(new UnitValue(Units.Pixels, EditorTheme.SidePixelPadding))
+                .Padding(new UnitValue(EditorTheme.SidePixelPadding))
                 .Width(sidebarW).Height(height)
                 .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
