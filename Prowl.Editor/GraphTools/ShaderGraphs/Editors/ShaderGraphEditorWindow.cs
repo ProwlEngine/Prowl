@@ -161,13 +161,13 @@ public class ShaderGraphEditorWindow : DockPanel
             using (ScrollView.Begin(paper, "sg_foldout_scroll", _sidebarWidth - 16, scrollH))
             {
                 EditorGUI.Foldout(paper, "sg_fold_props", "Properties",
-                    () => DrawPropertiesFoldout(paper, sg), defaultValue: false);
+                    () => DrawPropertiesFoldout(paper, sg));
                 EditorGUI.Foldout(paper, "sg_fold_light", "Lighting",
-                    () => DrawLightingFoldout(paper, sg),   defaultValue: false);
+                    () => DrawLightingFoldout(paper, sg));
                 EditorGUI.Foldout(paper, "sg_fold_blend", "Blending",
-                    () => DrawBlendingFoldout(paper, sg),   defaultValue: false);
+                    () => DrawBlendingFoldout(paper, sg));
                 EditorGUI.Foldout(paper, "sg_fold_geo", "Geometry",
-                    () => DrawGeometryFoldout(paper, sg),   defaultValue: false);
+                    () => DrawGeometryFoldout(paper, sg));
             }
         }
     }

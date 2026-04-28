@@ -100,10 +100,6 @@ public class GraphEditor
     private Float2 _creationMenuLocal;    // popup top-left in canvas-Box-local pixels
     private Float2 _creationMenuGraph;    // graph-space point where new node lands
     private string _creationFilter = "";
-    // Expanded-category set top-level category groups (split on '/') whose rows are
-    // visible. Persisted across popup open/close so the user doesn't have to re-expand
-    // their go-to group every time. Cleared when search is active (flat-list mode).
-    private readonly HashSet<string> _expandedCategories = new() { "Output", "Input", "Math" };
 
     // (Sidebar / preview / foldout state moved to ShaderGraphEditorWindow the
     // widget itself is shader-graph-agnostic.)
@@ -589,18 +585,20 @@ public class GraphEditor
         const float popupH = 360f;
 
         // Click-outside backdrop catches clicks outside the popup and closes the menu (standard context UX).
-        EditorGUI.Backdrop(paper, "graph_popup_backdrop", CloseCreationMenu, dim: false);
+        EditorGUI.Backdrop(paper, "graph_popup_backdrop", CloseCreationMenu);
 
         using (paper.Column("graph_popup")
             .PositionType(PositionType.SelfDirected)
             .Position(_creationMenuLocal.X, _creationMenuLocal.Y)
             .Width(popupW).Height(popupH)
-            .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 40, 48))
-            .BorderColor(System.Drawing.Color.FromArgb(255, 80, 84, 96))
-            .BorderWidth(1)
+            .BackgroundColor(EditorTheme.Purple200)
+            .BorderColor(EditorTheme.Ink200)
+            .BorderWidth(1.25f)
             .Rounded(6)
             .Layer(Layer.Topmost)
             .ClampToScreen()
+            .StopEventPropagation()
+            .BoxShadow(0, 0, 40, -25, System.Drawing.Color.FromArgb(155, System.Drawing.Color.Black))
             .ChildLeft(6).ChildRight(6).ChildTop(6).ChildBottom(6).ColBetween(4)
             .Enter())
         {
@@ -620,8 +618,8 @@ public class GraphEditor
 
             // Filtered list of node entries grouped under top-level Category token.
             // When a search filter is active we skip grouping entirely (flat list = easier
-            // to scan). Groups persist their expanded state across popup open/close via
-            // _expandedCategories so the user doesn't re-expand "Math" every time.
+            // to scan). Group expansion state is persisted in EditorGUI.Foldout's element
+            // storage so the user doesn't have to re-expand the same group each time.
             var entries = NodeRegistry.GetForMarker(_graph.NodeMarkerInterface);
 
             // Shader graphs narrow further by the graph's shader type nodes carrying
@@ -679,14 +677,17 @@ public class GraphEditor
 
                     foreach (var (groupName, regs) in groups)
                     {
-                        DrawCategoryHeader(paper, groupName, regs.Count);
-                        if (!_expandedCategories.Contains(groupName)) continue;
-
-                        foreach (var reg in regs)
+                        var groupRegs = regs;
+                        EditorGUI.Foldout(paper, $"graph_popup_group_{groupName}", groupName, () =>
                         {
-                            if (shown++ >= 200) break;
-                            DrawCreationEntry(paper, reg);
-                        }
+                            foreach (var reg in groupRegs)
+                            {
+                                if (shown++ >= 200) break;
+                                DrawCreationEntry(paper, reg);
+                            }
+                        },
+                        defaultValue: true,
+                        badge: groupRegs.Count.ToString());
                         if (shown >= 200) break;
                     }
                     shown = visible.Count;
@@ -766,6 +767,7 @@ public class GraphEditor
             .BorderWidth(1).Rounded(6)
             .Layer(Layer.Topmost)
             .ClampToScreen()
+            .StopEventPropagation()
             .ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4).ColBetween(2)
             .Enter())
         {
@@ -818,42 +820,12 @@ public class GraphEditor
         return slash < 0 ? category : category.Substring(0, slash);
     }
 
-    private void DrawCategoryHeader(Paper paper, string groupName, int count)
-    {
-        bool expanded = _expandedCategories.Contains(groupName);
-        string arrow = expanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight;
-        string id = $"graph_popup_group_{groupName}";
-        using (paper.Row(id).Height(20)
-            .ChildLeft(4).ChildRight(6).RowBetween(6)
-            .BackgroundColor(System.Drawing.Color.FromArgb(255, 44, 46, 54))
-            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(255, 58, 62, 74)).End()
-            .Rounded(3)
-            .OnClick(_ => ToggleCategoryExpanded(groupName))
-            .Enter())
-        {
-            paper.Box($"{id}_lbl").Height(20)
-                .Text($"{arrow}  {groupName}", EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
-                .Alignment(TextAlignment.MiddleLeft);
-            paper.Box($"{id}_cnt").Width(UnitValue.Auto).Height(20)
-                .Text(count.ToString(), EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 3)
-                .Alignment(TextAlignment.MiddleRight);
-        }
-    }
-
-    private void ToggleCategoryExpanded(string groupName)
-    {
-        if (!_expandedCategories.Add(groupName)) _expandedCategories.Remove(groupName);
-    }
-
     private void DrawCreationEntry(Paper paper, NodeRegistration reg)
     {
         string id = $"graph_popup_entry_{reg.Type.FullName}";
         using (paper.Row(id).Height(20)
             .ChildLeft(6).ChildRight(6).RowBetween(6)
-            .BackgroundColor(System.Drawing.Color.FromArgb(255, 48, 50, 58))
-            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(255, 64, 70, 90)).End()
+            .Hovered.BackgroundColor(EditorTheme.Purple400).End()
             .Rounded(3)
             .OnClick(reg, (cap, _) => SpawnNode(cap.Type))
             .Enter())

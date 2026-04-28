@@ -36,8 +36,17 @@ public class ParticleSystemComponentEditor : CustomEditor
 
         paper.Box($"{id}_sp0").Height(4);
 
-        // Main properties
-        DrawModuleHeader(paper, $"{id}_main_h", "Particle System", null, font, true);
+        // Main properties header
+        paper.Box($"{id}_main_h")
+            .Height(EditorTheme.RowHeight)
+            .ChildLeft(8)
+            .BackgroundColor(EditorTheme.Neutral300)
+            .Rounded(2)
+            .Margin(UnitValue.Auto, EditorTheme.Spacing)
+            .Text("Particle System", font)
+            .TextColor(EditorTheme.Ink500)
+            .FontSize(EditorTheme.FontSize)
+            .Alignment(TextAlignment.MiddleLeft);
 
         PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), ps.Material,
             v => ps.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
@@ -258,65 +267,11 @@ public class ParticleSystemComponentEditor : CustomEditor
         }
     }
 
-    // ================================================================
-    //  Module Header (collapsible with enable toggle)
-    // ================================================================
-
-    private static bool DrawModuleHeader(Paper paper, string id, string label, ParticleSystemModule? module, Prowl.Scribe.FontFile font, bool forceEnabled)
-    {
-        var header = paper
-            .Row(id)
-            .Height(EditorTheme.RowHeight)
-            .ChildLeft(4).RowBetween(4)
-            .BackgroundColor(EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Rounded(3);
-
-        bool expanded = paper.GetElementStorage(header._handle, "exp", false);
-
-        header.OnClick(e => paper.SetElementStorage(header._handle, "exp", !expanded));
-
-        using (header.Enter())
-        {
-            // Expand arrow
-            paper.Box($"{id}_arr")
-                .Width(14).Height(EditorTheme.RowHeight)
-                .Text(EditorGUI.FoldoutIcon(expanded), font)
-                .TextColor(EditorTheme.Ink400).FontSize(9f).Alignment(TextAlignment.MiddleCenter);
-
-            // Enable toggle (if module, not main)
-            if (module != null && !forceEnabled)
-            {
-                EditorGUI.Toggle(paper, $"{id}_en", "", module.Enabled)
-                    .OnValueChanged(v => { module.Enabled = v; });
-            }
-
-            // Label
-            paper.Box($"{id}_lbl")
-                .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                .Text(label, font)
-                .TextColor(module != null && !module.Enabled && !forceEnabled ? EditorTheme.Ink300 : EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
-        }
-
-        return expanded;
-    }
-
     private static void DrawModule(Paper paper, string id, string label, string icon, ParticleSystemModule module, Prowl.Scribe.FontFile font, Action drawContents)
-    {
-        bool expanded = DrawModuleHeader(paper, $"{id}_h", $"{icon}  {label}", module, font, false);
-
-        if (expanded)
-        {
-            using (paper.Column($"{id}_body")
-                .Height(UnitValue.Auto)
-                .Margin(8, 0, 4, 4)
-                .Enter())
-            {
-                drawContents();
-            }
-        }
-    }
+        => EditorGUI.Foldout(paper, id, $"{icon}  {label}", drawContents,
+            defaultValue: false,
+            enabled: module.Enabled,
+            setEnabled: v => module.Enabled = v);
 
     // ================================================================
     //  Burst List Editor

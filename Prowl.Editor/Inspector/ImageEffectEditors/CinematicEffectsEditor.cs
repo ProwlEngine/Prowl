@@ -136,19 +136,6 @@ public class CinematicEffectsEditor : CustomEditor
 
     private static void DrawSection(Paper paper, string id, string icon, string title,
         bool enabled, System.Action<bool> setEnabled, System.Action drawContent)
-    {
-        EditorGUI.Separator(paper, $"{id}_sep");
-
-        EditorGUI.Toggle(paper, $"{id}_tog", $"{icon}  {title}", enabled)
-            .OnValueChanged(v => setEnabled(v));
-
-        if (enabled)
-        {
-            using (paper.Column($"{id}_body").Height(UnitValue.Auto).Enter())
-            {
-                drawContent();
-            }
-        }
-    }
+        => EditorGUI.ToggleSection(paper, id, $"{icon}  {title}", enabled, setEnabled, drawContent);
 }
 

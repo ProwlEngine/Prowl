@@ -36,21 +36,21 @@ public static class EditorGUI
     /// </summary>
     public static void Backdrop(Paper paper, string id, Action? onClose = null, bool dim = true)
     {
-        var box = paper.Box(id).PositionType(PositionType.SelfDirected);
+        // Both flavours use a huge SelfDirected rectangle so the backdrop covers the entire
+        // screen regardless of where in the layout tree it's emitted from. Size(Stretch)
+        // would only fill the parent, which can be just a panel (e.g. the graph editor).
+        var box = paper.Box(id)
+            .PositionType(PositionType.SelfDirected)
+            .Position(-9999, -9999)
+            .Size(99999, 99999)
+            .Layer(dim ? Layer.Overlay : Layer.Topmost);
 
         if (dim)
-        {
-            box.Position(0, 0)
-               .Size(UnitValue.Stretch(), UnitValue.Stretch())
-               .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
-               .Layer(Layer.Overlay);
-        }
-        else
-        {
-            box.Position(-9999, -9999)
-               .Size(99999, 99999)
-               .Layer(Layer.Topmost);
-        }
+            box.BackgroundColor(Color.FromArgb(120, 0, 0, 0));
+
+        // Backdrops absorb interaction with whatever is behind them — stop events from
+        // bubbling to ancestors, so e.g. scrolling over a popup doesn't pan the canvas.
+        box.StopEventPropagation();
 
         if (onClose != null)
             box.OnClick(0, (_, _) => onClose());
@@ -734,7 +734,7 @@ public static class EditorGUI
     /// <param name="setEnabled">Required when <paramref name="enabled"/> is non-null. Receives the new toggle state.</param>
     /// <param name="badge">Optional right-aligned text rendered after the label (e.g. an item count).</param>
     public static void Foldout(Paper paper, string id, string label, Action drawContents,
-        bool defaultValue = true,
+        bool defaultValue = false,
         bool? enabled = null,
         Action<bool>? setEnabled = null,
         string? badge = null)
