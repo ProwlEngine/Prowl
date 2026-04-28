@@ -15,7 +15,7 @@ namespace Prowl.Runtime.Resources
     public sealed class AudioClip : EngineObject, ISerializable
     {
         private string filePath;
-        private string name;
+        private string clipName;
         private IntPtr handle;
         private UInt64 dataSize;
         private UInt64 hashCode;
@@ -34,10 +34,10 @@ namespace Prowl.Runtime.Resources
         /// The name of this AudioClip. If the filepath constructor is used it will contain the filepath, otherwise the string is empty.
         /// </summary>
         /// <value></value>
-        public string Name
+        public string ClipName
         {
-            get => name;
-            set => name = value;
+            get => clipName;
+            set => clipName = value;
         }
 
         /// <summary>
@@ -96,7 +96,7 @@ namespace Prowl.Runtime.Resources
             this.AssetPath = filePath;
 
             this.filePath = filePath;
-            this.name = filePath;
+            this.clipName = filePath;
             this.streamFromDisk = streamFromDisk;
             this.handle = IntPtr.Zero;
             this.hashCode = 0;
@@ -113,7 +113,7 @@ namespace Prowl.Runtime.Resources
                 throw new System.ArgumentException("Can't create AudioClip because the data is null");
 
             this.filePath = string.Empty;
-            this.name = string.Empty;
+            this.clipName = string.Empty;
             this.streamFromDisk = false;
             this.dataSize = (UInt64)data.Length;
 
@@ -164,7 +164,7 @@ namespace Prowl.Runtime.Resources
         public void Serialize(ref EchoObject compound, SerializationContext ctx)
         {
             // Save the name
-            compound.Add("Name", new EchoObject(name ?? string.Empty));
+            compound.Add("Name", new EchoObject(clipName ?? string.Empty));
 
             // Check if this is a file-based clip
             bool isFileBased = !string.IsNullOrEmpty(filePath);
@@ -208,7 +208,7 @@ namespace Prowl.Runtime.Resources
         public void Deserialize(EchoObject value, SerializationContext ctx)
         {
             // Restore the name
-            name = value["Name"].StringValue;
+            clipName = value["Name"].StringValue;
 
             bool isFileBased = value["IsFileBased"].BoolValue;
 

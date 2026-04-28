@@ -18,7 +18,7 @@ public class AudioImporter : AssetImporter
         try
         {
             var clip = new AudioClip(ctx.AbsolutePath, streamFromDisk: false);
-            clip.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+            clip.ClipName = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
             ctx.SetMainAsset(clip);
         }
         catch (System.Exception ex)
