@@ -382,6 +382,6 @@ internal struct Int3 : IEquatable<Int3>
     }
 
     public bool Equals(Int3 other) => X == other.X && Y == other.Y && Z == other.Z;
-    public override bool Equals(object obj) => obj is Int3 other && Equals(other);
+    public override bool Equals(object? obj) => obj is Int3 other && Equals(other);
     public override int GetHashCode() => HashCode.Combine(X, Y, Z);
 }
