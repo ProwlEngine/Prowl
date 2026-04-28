@@ -36,4 +36,12 @@ public sealed class CapsuleCollider : Collider
     }
 
     public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(Maths.Max(radius, 0.01f), Maths.Max(height, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireCapsule(Center + new Float3(0, -height * 0.5f, 0), Center + new Float3(0, height * 0.5f, 0), radius, Color.Green);
+        Debug.PopMatrix();
+    }
 }

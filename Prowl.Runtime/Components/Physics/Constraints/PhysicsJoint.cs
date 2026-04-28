@@ -36,14 +36,6 @@ public abstract class PhysicsJoint : PhysicsConstraint
 
     public override void DrawGizmos()
     {
-        if (joint != null && GameObject?.Scene?.Physics?.World != null)
-        {
-            try
-            {
-                joint.DebugDraw(JitterGizmosDrawer.Instance);
-            }
-            catch (NotImplementedException)
-            { }
-        }
+        // TODO DrawGizmos
     }
 }

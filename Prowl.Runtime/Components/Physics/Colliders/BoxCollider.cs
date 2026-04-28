@@ -27,4 +27,12 @@ public sealed class BoxCollider : Collider
     }
 
     public override RigidBodyShape[] CreateShapes() => [new BoxShape(Maths.Max(size.X, 0.01f), Maths.Max(size.Y, 0.01f), Maths.Max(size.Z, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireCube(Center, size * 0.5f, Color.Green);
+        Debug.PopMatrix();
+    }
 }
