@@ -88,7 +88,7 @@ public abstract class Texture : EngineObject
         Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
     }
 
-    public void Dispose()
+    public override void OnDispose()
     {
         Handle.Dispose();
     }
