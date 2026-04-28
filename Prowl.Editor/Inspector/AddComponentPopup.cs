@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -100,8 +101,9 @@ public static class AddComponentPopup
             }
 
             // Component list
-            using (ScrollView.Begin(paper, "acp_scroll", 320, 450 - 32 - 28 - 4,
-                paddingLeft: 4, paddingRight: 4, paddingTop: 4))
+            Origami.ScrollView(paper, "acp_scroll", 320, 450 - 32 - 28 - 4)
+                .Padding(4, 4, 4, 0)
+                .Body(() =>
             {
                 var components = _cachedComponents ?? new List<ComponentEntry>();
                 bool hasSearch = !string.IsNullOrEmpty(_searchText);
@@ -158,7 +160,7 @@ public static class AddComponentPopup
                             .BackgroundColor(EditorTheme.Ink200);
                     }
                 }
-            }
+            });
         }
     }
 

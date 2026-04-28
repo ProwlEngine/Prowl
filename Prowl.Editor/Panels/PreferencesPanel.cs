@@ -53,7 +53,7 @@ public class PreferencesPanel : DockPanel
             paper.Box("pref_div").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
             float contentW = width - sideW - 1;
-            using (ScrollView.Begin(paper, "pref_content", contentW, height))
+            Origami.ScrollView(paper, "pref_content", contentW, height).Body(() =>
             {
                 paper.Box("pref_pad").Height(8);
                 switch (_tab)
@@ -63,7 +63,7 @@ public class PreferencesPanel : DockPanel
                     case Tab.Shortcuts: DrawShortcuts(paper, font, contentW); break;
                 }
                 paper.Box("pref_pad2").Height(16);
-            }
+            });
         }
     }
 

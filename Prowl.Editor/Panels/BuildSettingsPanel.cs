@@ -10,6 +10,7 @@ using Prowl.Editor.Build;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Scripting;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -147,8 +148,9 @@ public class BuildSettingsPanel : DockPanel
 
                 // Right content — selected settings
                 float contentW = width - sidebarW - 1;
-                using (ScrollView.Begin(paper, "bp_content", contentW, bsHeight,
-                    EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding))
+                Origami.ScrollView(paper, "bp_content", contentW, bsHeight)
+                    .Padding(EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding)
+                    .Body(() =>
                 {
                     paper.Box("bp_content_pad").Height(8);
                     _buildSettings.OnGUI(paper, contentW - 16);
@@ -161,7 +163,7 @@ public class BuildSettingsPanel : DockPanel
                         }
                     }
                     paper.Box("bp_content_pad2").Height(16);
-                }
+                });
             }
 
             paper.Box("bp_divider").Width(width).Height(1).BackgroundColor(EditorTheme.Ink200);

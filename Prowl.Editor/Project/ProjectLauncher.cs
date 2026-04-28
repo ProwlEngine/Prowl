@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -282,7 +283,7 @@ public static class ProjectLauncher
     {
         var entries = RecentProjects.Entries;
 
-        using (ScrollView.Begin(paper, "pl_scroll", width, height, colSpacing: 8, paddingLeft: 8, paddingRight: 8))
+        Origami.ScrollView(paper, "pl_scroll", width, height).Padding(8, 8, 0, 0).ColSpacing(8).Body(() =>
         {
             if (entries.Count == 0)
             {
@@ -372,7 +373,7 @@ public static class ProjectLauncher
             }
 
             paper.Box("spacer").Height(6);
-        }
+        });
     }
 
     private static void TryOpenProject(string path)

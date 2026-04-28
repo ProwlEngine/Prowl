@@ -249,18 +249,24 @@ public sealed class ScrollViewBuilder
             .Hovered.BackgroundColor(ramp.C600).End()
             .Rounded(_scrollbarSize / 2f);
 
-        // Drag the thumb to scroll. Capture starting scrollY when drag begins, then derive
-        // new scrollY from total drag delta.
+        // Drag the thumb to scroll. Snapshot both scrollY *and* the pointer Y at drag start;
+        // during the drag we recompute scrollY from absolute pointer position rather than
+        // TotalDelta. The thumb itself moves with scroll each frame, which can confuse
+        // delta-based tracking — pointer-anchored math is robust against that.
         var capturedHandle = outerHandle;
-        thumb.OnDragStart(_ =>
-            _paper.SetElementStorage(capturedHandle, "vDragStart", scrollY));
+        thumb.OnDragStart(e =>
+        {
+            _paper.SetElementStorage(capturedHandle, "vDragStartScroll", scrollY);
+            _paper.SetElementStorage(capturedHandle, "vDragStartY", (float)e.PointerPosition.Y);
+        });
         thumb.OnDragging(e =>
         {
             float dragRange = trackH - thumbH;
-            if (dragRange <= 0f) return;
-            float startScroll = _paper.GetElementStorage(capturedHandle, "vDragStart", 0f);
-            float ns = startScroll + (float)e.TotalDelta.Y * (maxScroll / dragRange);
-            ns = Clamp(ns, 0f, maxScroll);
+            if (dragRange <= 0.001f) return;
+            float startScroll = _paper.GetElementStorage(capturedHandle, "vDragStartScroll", 0f);
+            float startY = _paper.GetElementStorage(capturedHandle, "vDragStartY", 0f);
+            float deltaY = (float)e.PointerPosition.Y - startY;
+            float ns = Clamp(startScroll + deltaY * (maxScroll / dragRange), 0f, maxScroll);
             _paper.SetElementStorage(capturedHandle, "scrollY", ns);
         });
     }
@@ -290,15 +296,19 @@ public sealed class ScrollViewBuilder
             .Rounded(_scrollbarSize / 2f);
 
         var capturedHandle = outerHandle;
-        thumb.OnDragStart(_ =>
-            _paper.SetElementStorage(capturedHandle, "hDragStart", scrollX));
+        thumb.OnDragStart(e =>
+        {
+            _paper.SetElementStorage(capturedHandle, "hDragStartScroll", scrollX);
+            _paper.SetElementStorage(capturedHandle, "hDragStartX", (float)e.PointerPosition.X);
+        });
         thumb.OnDragging(e =>
         {
             float dragRange = trackW - thumbW;
-            if (dragRange <= 0f) return;
-            float startScroll = _paper.GetElementStorage(capturedHandle, "hDragStart", 0f);
-            float ns = startScroll + (float)e.TotalDelta.X * (maxScroll / dragRange);
-            ns = Clamp(ns, 0f, maxScroll);
+            if (dragRange <= 0.001f) return;
+            float startScroll = _paper.GetElementStorage(capturedHandle, "hDragStartScroll", 0f);
+            float startX = _paper.GetElementStorage(capturedHandle, "hDragStartX", 0f);
+            float deltaX = (float)e.PointerPosition.X - startX;
+            float ns = Clamp(startScroll + deltaX * (maxScroll / dragRange), 0f, maxScroll);
             _paper.SetElementStorage(capturedHandle, "scrollX", ns);
         });
     }

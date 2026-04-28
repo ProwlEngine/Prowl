@@ -4,6 +4,7 @@ using System.Linq;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -72,7 +73,7 @@ public class ComponentPopoutPanel : DockPanel
         // Update title with GO name
         _displayTitle = $"{comp.GetType().Name} ({go!.Name})";
 
-        using (ScrollView.Begin(paper, "cpop_scroll", width, height))
+        Origami.ScrollView(paper, "cpop_scroll", width, height).Body(() =>
         {
             // Component header
             string compName = comp.GetType().Name;
@@ -114,7 +115,7 @@ public class ComponentPopoutPanel : DockPanel
 
             // Draw [Button] methods
             GameObjectInspector.DrawButtonMethods(paper, $"{compId}_btns", comp);
-        }
+        });
     }
 
     private (GameObject? go, MonoBehaviour? comp) FindComponent()

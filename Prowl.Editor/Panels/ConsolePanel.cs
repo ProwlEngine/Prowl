@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -222,7 +223,7 @@ public class ConsolePanel : DockPanel
         int visibleCount = _filteredIndices.Count;
         float totalContentHeight = visibleCount * FullRowHeight;
 
-        using (ScrollView.Begin(paper, "con_scroll", width, height, forceScrollbar:true))
+        Origami.ScrollView(paper, "con_scroll", width, height).ForceScrollbar().Body(() =>
         {
             // Single element for ALL messages fixed height based on count
             paper.Box("con_content")
@@ -345,7 +346,7 @@ public class ConsolePanel : DockPanel
                         }
                     });
                 });
-        }
+        });
     }
 
     private void RebuildFilteredList()

@@ -149,8 +149,10 @@ public class WidgetPlaygroundPanel : DockPanel
 
     public override void OnGUI(Paper paper, float width, float height)
     {
-        using (ScrollView.Begin(paper, "playground_scroll", width, height,
-            paddingLeft: 8, paddingRight: 8, paddingTop: 8, colSpacing: 4))
+        Origami.ScrollView(paper, "playground_scroll", width, height)
+            .Padding(8, 8, 8, 0)
+            .ColSpacing(4)
+            .Body(() =>
         {
             // === Color Field (at top for testing) ===
             EditorGUI.Header(paper, "h_col_top", "Color Field");
@@ -468,7 +470,7 @@ public class WidgetPlaygroundPanel : DockPanel
             EditorGUI.Separator(paper, "sep_filedialog");
 
             paper.Box("bottom_pad").Height(20);
-        }
+        });
     }
 
     private void ResetAll()

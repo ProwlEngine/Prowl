@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -142,13 +143,14 @@ public class ProjectSettingsPanel : DockPanel
                 catch { beforeJson = null; }
             }
 
-            using (ScrollView.Begin(paper, "ps_content", contentW, height,
-                EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding))
+            Origami.ScrollView(paper, "ps_content", contentW, height)
+                .Padding(EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding)
+                .Body(() =>
             {
                 paper.Box("ps_content_pad").Height(8);
                 currentEntry.Instance.OnGUI(paper, contentW - 16);
                 paper.Box("ps_content_pad2").Height(16);
-            }
+            });
 
             if (beforeJson != null) DiffAndRegisterUndo(currentEntry, beforeJson);
         }

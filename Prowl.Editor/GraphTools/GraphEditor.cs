@@ -634,7 +634,7 @@ public class GraphEditor
             // note row(20 + gap) when showExtras is on.
             float listW = popupW - 12;
             float listH = popupH - 12 - 20 - 26 - 8 - (showExtras ? 24 : 0);
-            using (ScrollView.Begin(paper, "graph_popup_list", listW, listH, colSpacing: 2))
+            Origami.ScrollView(paper, "graph_popup_list", listW, listH).ColSpacing(2).Body(() =>
             {
                 // Filter once, share between both render paths. The wire-drop compatibility
                 // filter is port-type-driven; the text filter is fuzzy-ish matching on
@@ -701,7 +701,7 @@ public class GraphEditor
                         .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2)
                         .Alignment(TextAlignment.MiddleLeft);
                 }
-            }
+            });
         }
     }
 
