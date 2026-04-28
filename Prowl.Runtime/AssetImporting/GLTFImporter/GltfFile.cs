@@ -2,8 +2,16 @@ using System;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Prowl.Runtime.AssetImporting.Gltf;
+
+// Source-generated JSON context for trim/AOT safety. JsonSerializer overloads that
+// take a JsonTypeInfo / JsonSerializerContext are statically analyzable, unlike the
+// reflection-based ones.
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = false)]
+[JsonSerializable(typeof(GltfRoot))]
+internal partial class GltfJsonContext : JsonSerializerContext { }
 
 public class GltfFile
 {
@@ -62,8 +70,7 @@ public class GltfFile
             throw new InvalidDataException($"Expected JSON chunk type (0x4E4F534A), got 0x{jsonChunkType:X8}.");
 
         byte[] jsonBytes = reader.ReadBytes((int)jsonChunkLength);
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = false };
-        var root = JsonSerializer.Deserialize<GltfRoot>(jsonBytes, options)
+        var root = JsonSerializer.Deserialize(jsonBytes, GltfJsonContext.Default.GltfRoot)
             ?? throw new InvalidDataException("Failed to deserialize GLB JSON chunk.");
 
         // --- BIN chunk (optional) ---
@@ -107,8 +114,7 @@ public class GltfFile
             json = sr.ReadToEnd();
         }
 
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = false };
-        var root = JsonSerializer.Deserialize<GltfRoot>(json, options)
+        var root = JsonSerializer.Deserialize(json, GltfJsonContext.Default.GltfRoot)
             ?? throw new InvalidDataException("Failed to deserialize GLTF JSON.");
 
         var buffers = new byte[root.Buffers.Count][];

@@ -133,7 +133,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <inheritdoc cref="GameObject.AddComponent{T}"/>"
     public T AddComponent<T>() where T : MonoBehaviour, new() => (T)AddComponent(typeof(T));
     /// <inheritdoc cref="GameObject.AddComponent(Type)"/>"
-    public MonoBehaviour AddComponent(Type type) => GameObject.AddComponent(type);
+    public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type) => GameObject.AddComponent(type);
     /// <inheritdoc cref="GameObject.RemoveComponent{T}"/>"
     public void RemoveComponent<T>(T component) where T : MonoBehaviour => GameObject.RemoveComponent(component);
     /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"

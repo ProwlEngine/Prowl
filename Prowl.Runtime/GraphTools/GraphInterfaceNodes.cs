@@ -78,6 +78,8 @@ public sealed class GraphOutputNode : Node, IGraphInterfaceNode
 /// data types. Same generic-method-via-reflection trick <see cref="RelayNode"/> uses.</summary>
 internal static class GraphInterfaceUtil
 {
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2057:Type.GetType",
+        Justification = "Subgraph/relay infrastructure resolves carried types by serialized name; user types must be preserved by the consuming application's trim configuration.")]
     public static Type ResolveType(string typeName)
     {
         if (string.IsNullOrEmpty(typeName)) return typeof(object);
@@ -95,6 +97,8 @@ internal static class GraphInterfaceUtil
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
+        Justification = "Subgraph/relay ports require runtime generic instantiation. NOT AOT-compatible — AOT consumers must avoid SubgraphNode/RelayNode (TODO: replace with dispatcher table).")]
     public static void AddInput(Node node, Type type, string name)
     {
         var m = typeof(Node).GetMethod("AddInput", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -102,6 +106,8 @@ internal static class GraphInterfaceUtil
             new object?[] { name, /*defaultValue*/ null, /*acceptsMultiple*/ false, /*layout*/ PortLayout.Above });
     }
 
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
+        Justification = "Subgraph/relay ports require runtime generic instantiation. NOT AOT-compatible — AOT consumers must avoid SubgraphNode/RelayNode (TODO: replace with dispatcher table).")]
     public static void AddOutput(Node node, Type type, string name)
     {
         var m = typeof(Node).GetMethod("AddOutput", BindingFlags.Instance | BindingFlags.NonPublic)!;

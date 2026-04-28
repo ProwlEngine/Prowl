@@ -288,7 +288,6 @@ public abstract class Game
         return new Float2(p.X * csFbWin / cs, p.Y * csFbWin / cs);
     }
 
-    [RequiresDynamicCode("Calls System.Enum.GetValues(Type)")]
     private void UpdatePaperInput()
     {
         // Mouse position in Paper-logical space.
@@ -326,7 +325,7 @@ public abstract class Game
         // Handle key states for keys
         // Fortunately Papers key enums have almost all the same names
         // So we only need to map a few keys manually, the rest we can use reflection
-        foreach (KeyCode k in Enum.GetValues(typeof(KeyCode)))
+        foreach (KeyCode k in Enum.GetValues<KeyCode>())
             if (k != KeyCode.Unknown)
                 if (Enum.TryParse(k.ToString(), out PaperKey paperKey))
                     HandleKey(k, paperKey);

@@ -490,7 +490,7 @@ public class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <param name="type">The type of component to add.</param>
     /// <returns>The newly added MonoBehaviour component.</returns>
-    public MonoBehaviour AddComponent(Type type)
+    public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
     {
         if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
 
@@ -506,8 +506,10 @@ public class GameObject : EngineObject, ISerializable
                 if (GetComponent(requiredComponentType).IsValid())
                     continue;
 
-                // Recursive call to attempt to add the new component
+                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
+#pragma warning disable IL2072
                 AddComponent(requiredComponentType);
+#pragma warning restore IL2072
             }
         }
 
@@ -549,8 +551,10 @@ public class GameObject : EngineObject, ISerializable
                 if (GetComponent(requiredComponentType).IsValid())
                     continue;
 
-                // Recursive call to attempt to add the new component
+                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
+#pragma warning disable IL2072
                 AddComponent(requiredComponentType);
+#pragma warning restore IL2072
             }
         }
 
@@ -926,6 +930,8 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "GetExecutionOrder reads [DefaultExecutionOrder] from the live component types, which are kept alive by their attribute references.")]
     private void SortComponents()
     {
         _components.Sort((a, b) =>
@@ -1120,6 +1126,8 @@ public class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <param name="value">The SerializedProperty containing the GameObject's data.</param>
     /// <param name="ctx">The serialization context.</param>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Deserialization needs to map a serialized $type string back to a concrete component type. User game types must be preserved by the consuming application's trim configuration.")]
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         DeserializeHeader(value);
@@ -1199,6 +1207,8 @@ public class GameObject : EngineObject, ISerializable
     /// </summary>
     /// <param name="compTag">The SerializedProperty containing the component data.</param>
     /// <param name="ctx">The serialization context.</param>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
     private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx)
     {
         // Were missing! see if we can recover

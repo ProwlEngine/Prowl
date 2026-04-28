@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Prowl.Runtime.GraphTools;
@@ -56,6 +57,10 @@ public static class GraphValidatorRegistry
         Initialize();
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Engine bootstrap: scans loaded assemblies for GraphValidator subclasses. Validator types must be preserved by the consuming application's trim configuration.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2072:DynamicallyAccessedMembers",
+        Justification = "GraphValidator subclasses are required to expose a parameterless constructor by contract; the trimmer preserves them via the same trim configuration as above.")]
     public static void Initialize()
     {
         if (_initialized) return;

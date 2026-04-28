@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Prowl.Runtime.GraphTools;
 
@@ -148,6 +149,12 @@ public static class NodeRegistry
         }
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Engine bootstrap: scans loaded assemblies for Node subclasses. Node types must be preserved by the consuming application's trim configuration.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2072:DynamicallyAccessedMembers",
+        Justification = "Node subclasses are required to expose a parameterless constructor by contract; the trimmer preserves them via the same trim configuration as above.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Same: Node subclasses are required to expose a parameterless constructor by contract.")]
     private static void EnsureBuilt()
     {
         if (s_all != null) return;

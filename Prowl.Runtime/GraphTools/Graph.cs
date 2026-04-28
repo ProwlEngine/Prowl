@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 using Prowl.Echo;
 using Prowl.Vector;
@@ -172,6 +173,8 @@ public abstract class Graph : EngineObject, ISerializable
         compound.Add("ViewportZoom", new EchoObject(ViewportZoom));
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Deserialization needs to map a serialized $type string back to a concrete Node type. User node types must be preserved by the consuming application's trim configuration.")]
     public virtual void Deserialize(EchoObject value, SerializationContext ctx)
     {
         DeserializeHeader(value);
@@ -296,6 +299,8 @@ public abstract class Graph : EngineObject, ISerializable
     /// <summary>Try to rehydrate a previously-saved <see cref="MissingNode"/> back into
     /// its original concrete type happens when the user restores the assembly that
     /// defines the type after saving the graph with a placeholder.</summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Recovery path: looks up a previously-missing node type by its serialized name. User node types must be preserved by the consuming application's trim configuration.")]
     private void HandleMissingNode(EchoObject nodeTag, SerializationContext ctx)
     {
         var missing = Serializer.Deserialize<MissingNode>(nodeTag, ctx);

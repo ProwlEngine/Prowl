@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -43,6 +44,8 @@ public record DebugStackFrame(string FileName, int? Line = null, int? Column = n
 
 public record DebugStackTrace(params DebugStackFrame[] StackFrames)
 {
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Diagnostic-only path: in a trimmed build, missing method metadata gracefully degrades to a stack frame without method info.")]
     public static explicit operator DebugStackTrace(StackTrace stackTrace)
     {
         DebugStackFrame[] stackFrames = new DebugStackFrame[stackTrace.FrameCount];
