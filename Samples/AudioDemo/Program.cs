@@ -12,8 +12,6 @@
 //   Sprint:    Left Shift / Gamepad Left Stick Click
 //
 
-using Prowl.Runtime.Audio;
-
 using Prowl.Runtime;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.Rendering;
