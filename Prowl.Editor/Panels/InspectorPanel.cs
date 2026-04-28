@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
