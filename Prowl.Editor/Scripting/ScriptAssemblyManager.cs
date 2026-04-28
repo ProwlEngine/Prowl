@@ -62,6 +62,9 @@ public static class ScriptAssemblyManager
         // Only compile when the editor window is focused (don't spam while user is editing externally)
         if (!Window.IsFocused) return;
 
+        // Only compile when not Playing
+        if (Application.IsPlaying) return;
+
         // Wait for debounce
         if (DateTime.UtcNow - _lastScriptChange < DebounceDelay) return;
 
