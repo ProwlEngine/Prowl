@@ -281,7 +281,7 @@ public class ParticleSystemComponentEditor : CustomEditor
             // Expand arrow
             paper.Box($"{id}_arr")
                 .Width(14).Height(EditorTheme.RowHeight)
-                .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                .Text(EditorGUI.FoldoutIcon(expanded), font)
                 .TextColor(EditorTheme.Ink400).FontSize(9f).Alignment(TextAlignment.MiddleCenter);
 
             // Enable toggle (if module, not main)

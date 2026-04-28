@@ -437,7 +437,7 @@ public class ProjectPanel : DockPanel
                 bool isOpen = _folderOpenState.GetValueOrDefault(stateKey, depth < 2);
                 paper.Box($"proj_fa_{relativePath.GetHashCode()}")
                     .Width(16).Height(22)
-                    .Text(isOpen ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                    .Text(EditorGUI.FoldoutIcon(isOpen), font)
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(stateKey, (key, e) =>
@@ -757,7 +757,7 @@ public class ProjectPanel : DockPanel
                     bool expanded = _expandedAssets.Contains(item.Guid);
                     paper.Box($"proj_li_arrow_{i}")
                         .Width(14).Height(22)
-                        .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                        .Text(EditorGUI.FoldoutIcon(expanded), font)
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(item.Guid, (guid, _) =>
@@ -1166,7 +1166,7 @@ public class ProjectPanel : DockPanel
                     .Position(2, 2)
                     .Size(16, 16).Rounded(3)
                     .BackgroundColor(Color.FromArgb(160, 30, 30, 30))
-                    .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                    .Text(EditorGUI.FoldoutIcon(expanded), font)
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(8f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(item.Guid, (guid, _) =>

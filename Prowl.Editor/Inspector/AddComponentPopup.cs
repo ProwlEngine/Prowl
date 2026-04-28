@@ -58,12 +58,7 @@ public static class AddComponentPopup
         if (font == null) return;
 
         // Fullscreen blocker
-        paper.Box("acp_overlay")
-            .PositionType(PositionType.SelfDirected).Position(0, 0)
-            .Size(UnitValue.Stretch(), UnitValue.Stretch())
-            .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
-            .Layer(Layer.Overlay)
-            .OnClick(0, (_, _) => Close());
+        EditorGUI.Backdrop(paper, "acp_overlay", Close);
 
         // Modal window
         using (paper.Column("acp_modal")

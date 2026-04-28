@@ -52,11 +52,10 @@ public class ImportContext
     /// </summary>
     public void AddSubAsset(string name, EngineObject asset)
     {
-        // Ensure unique name append _1, _2, etc. if duplicate
-        string uniqueName = name;
-        int counter = 1;
-        while (!_usedNames.Add(uniqueName))
-            uniqueName = $"{name}_{counter++}";
+        // Ensure unique name; appends _1, _2, etc. if duplicate.
+        string uniqueName = Utils.UniqueNames.MakeUnique(name, n => _usedNames.Contains(n),
+            openSeparator: "_", closeSeparator: "", stripExistingSuffix: false);
+        _usedNames.Add(uniqueName);
 
         if (string.IsNullOrEmpty(asset.Name))
             asset.Name = uniqueName;

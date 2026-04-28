@@ -211,6 +211,20 @@ public static class Undo
     }
 
     /// <summary>
+    /// Records a property change on a GameObject, looking the GO back up by Identifier on undo/redo
+    /// so the record survives destroy/recreate cycles. Apply receives the live GO and the value to assign.
+    /// Caller is still responsible for the immediate write — this only registers the undo entry.
+    /// </summary>
+    public static void RecordGameObjectChange<T>(GameObject go, string description, T oldValue, T newValue, Action<GameObject, T> apply, bool coalesce = false)
+    {
+        Guid id = go.Identifier;
+        Action undo = () => { var g = FindGO(id); if (g != null) apply(g, oldValue); };
+        Action redo = () => { var g = FindGO(id); if (g != null) apply(g, newValue); };
+        if (coalesce) RegisterCoalescableAction(description, undo, redo);
+        else RegisterAction(description, undo, redo);
+    }
+
+    /// <summary>
     /// Register an undoable action that coalesces with the previous action if it has the
     /// same description and is within the time window. Use for continuous text input (Name fields, etc.).
     /// The undo lambda is kept from the FIRST action; the redo lambda is updated to the LATEST.

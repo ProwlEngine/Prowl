@@ -714,11 +714,6 @@ public class InputActionMapEditor : AssetImporterEditor
     }
 
     private static string FindUniqueName(InputActionMap map, string baseName)
-    {
-        string name = baseName;
-        int counter = 1;
-        while (map.FindAction(name) != null)
-            name = $"{baseName}{counter++}";
-        return name;
-    }
+        => Utils.UniqueNames.MakeUnique(baseName, n => map.FindAction(n) != null,
+            openSeparator: "", closeSeparator: "", stripExistingSuffix: false);
 }

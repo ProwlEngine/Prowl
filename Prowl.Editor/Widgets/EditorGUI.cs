@@ -23,6 +23,39 @@ public static class EditorGUI
     private static float FontSz => EditorTheme.FontSize;
     private static float LabelW => EditorTheme.LabelWidth;
 
+    /// <summary>Foldout disclosure icon: AngleDown when expanded, AngleRight when collapsed.</summary>
+    public static string FoldoutIcon(bool expanded) => expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight;
+
+    /// <summary>
+    /// Fullscreen backdrop element. Two flavours:
+    /// <list type="bullet">
+    /// <item><description><paramref name="dim"/>=true (default): semi-transparent black on <c>Layer.Overlay</c> — modal-style darken.</description></item>
+    /// <item><description><paramref name="dim"/>=false: invisible click-blocker on <c>Layer.Topmost</c> — popup-style click-outside-to-close.</description></item>
+    /// </list>
+    /// <paramref name="onClose"/> fires on click; pass <c>null</c> for a non-dismissable backdrop (e.g. a modal that requires a button).
+    /// </summary>
+    public static void Backdrop(Paper paper, string id, Action? onClose = null, bool dim = true)
+    {
+        var box = paper.Box(id).PositionType(PositionType.SelfDirected);
+
+        if (dim)
+        {
+            box.Position(0, 0)
+               .Size(UnitValue.Stretch(), UnitValue.Stretch())
+               .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
+               .Layer(Layer.Overlay);
+        }
+        else
+        {
+            box.Position(-9999, -9999)
+               .Size(99999, 99999)
+               .Layer(Layer.Topmost);
+        }
+
+        if (onClose != null)
+            box.OnClick(0, (_, _) => onClose());
+    }
+
     // Char filters for numeric inputs
     private static readonly Func<char, string, bool> IntFilter = (c, current) =>
         char.IsDigit(c) || (c == '-' && !current.Contains('-'));
@@ -692,8 +725,23 @@ public static class EditorGUI
     //  Foldout (self-contained state + content callback)
     // ================================================================
 
-    public static void Foldout(Paper paper, string id, string label, Action drawContents, bool defaultValue = true)
+    /// <summary>
+    /// Collapsible section. Header is a clickable row (chevron + label) and content
+    /// is rendered via <paramref name="drawContents"/> when expanded. Expand state is
+    /// persisted in element storage on the header.
+    /// </summary>
+    /// <param name="enabled">Optional enable toggle next to the chevron. When non-null, a checkbox is drawn and the label dims while disabled. Pass <paramref name="setEnabled"/> alongside to receive change notifications.</param>
+    /// <param name="setEnabled">Required when <paramref name="enabled"/> is non-null. Receives the new toggle state.</param>
+    /// <param name="badge">Optional right-aligned text rendered after the label (e.g. an item count).</param>
+    public static void Foldout(Paper paper, string id, string label, Action drawContents,
+        bool defaultValue = true,
+        bool? enabled = null,
+        Action<bool>? setEnabled = null,
+        string? badge = null)
     {
+        bool hasToggle = enabled.HasValue;
+        bool isEnabled = enabled ?? true;
+
         // Header button storage lives on the header element itself
         var header = paper
             .Row($"{id}_header")
@@ -713,42 +761,66 @@ public static class EditorGUI
         {
             using (header.Enter())
             {
-                if (expanded)
+                paper.Box($"{id}_arrow")
+                    .Margin(expanded ? EditorTheme.RowHeight / 4 : EditorTheme.RowHeight / 3,
+                            expanded ? EditorTheme.RowHeight / 4 : EditorTheme.RowHeight / 6,
+                            UnitValue.Auto, UnitValue.Auto)
+                    .Width(16).MaxWidth(16)
+                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
+                    .Text(expanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight, Font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(FontSz * 0.7f);
+
+                if (hasToggle)
                 {
-                    paper.Box("{id}_arrow")
-                        //.Margin(EditorTheme.RowHeight / 4, 0, EditorTheme.RowHeight / 22, 0)
-                        .Margin(EditorTheme.RowHeight / 4, EditorTheme.RowHeight / 4, UnitValue.Auto, UnitValue.Auto)
-                        .Width(16)
-                        .MaxWidth(16)
-                        .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                        // .Text("\u25BC", Font)
-                        .Text(EditorIcons.ChevronDown, Font)
-                        .TextColor(EditorTheme.Ink400)
-                        .FontSize(FontSz * 0.7f);
+                    EditorGUI.Toggle(paper, $"{id}_en", "", isEnabled)
+                        .OnValueChanged(v => setEnabled?.Invoke(v));
                 }
-                else
-                {
-                    paper.Box("{id}_arrow")
-                        //.Margin(EditorTheme.RowHeight / 3, (EditorTheme.RowHeight / 4) - (EditorTheme.RowHeight / 3), EditorTheme.RowHeight / 10, 0)
-                        .Margin(EditorTheme.RowHeight / 3, EditorTheme.RowHeight / 6, UnitValue.Auto, UnitValue.Auto)
-                        .Width(16)
-                        .MaxWidth(16)
-                        .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                        .Text(EditorIcons.ChevronRight, Font)
-                        .TextColor(EditorTheme.Ink400)
-                        .FontSize(FontSz * 0.7f);
-                }
+
                 paper.Box($"{id}_header_lbl")
+                    .Width(UnitValue.Stretch())
                     .Text(label, Font)
-                    .TextColor(EditorTheme.Ink500)
+                    .TextColor(hasToggle && !isEnabled ? EditorTheme.Ink300 : EditorTheme.Ink500)
                     .Alignment(PaperUI.TextAlignment.MiddleLeft)
                     .FontSize(FontSz);
+
+                if (!string.IsNullOrEmpty(badge))
+                {
+                    paper.Box($"{id}_badge")
+                        .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).Margin(0, 6, 0, 0)
+                        .Text(badge, Font)
+                        .TextColor(EditorTheme.Ink400)
+                        .FontSize(FontSz - 1f)
+                        .Alignment(PaperUI.TextAlignment.MiddleRight);
+                }
             }
         }
 
         if (expanded)
         {
             using (paper.Column($"{id}_content").Height(UnitValue.Auto).Enter())
+            {
+                drawContents();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Section gated by an enable toggle, with no separate expand state.
+    /// Body is drawn whenever <paramref name="enabled"/> is true.
+    /// Useful for "feature flag"-style groups where collapsed-but-enabled doesn't make sense.
+    /// </summary>
+    public static void ToggleSection(Paper paper, string id, string label,
+        bool enabled, Action<bool> setEnabled, Action drawContents)
+    {
+        Separator(paper, $"{id}_sep");
+
+        Toggle(paper, $"{id}_tog", label, enabled)
+            .OnValueChanged(v => setEnabled(v));
+
+        if (enabled)
+        {
+            using (paper.Column($"{id}_body").Height(UnitValue.Auto).Enter())
             {
                 drawContents();
             }

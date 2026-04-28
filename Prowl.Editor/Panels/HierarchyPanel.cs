@@ -482,7 +482,7 @@ public class HierarchyPanel : DockPanel
                 paper.Box($"hier_arr_{goId}")
                     .Width(14)
                     .Height(EditorTheme.RowHeight)
-                    .Text(isExpanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                    .Text(EditorGUI.FoldoutIcon(isExpanded), font)
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(goId, (id, _) =>
@@ -525,7 +525,7 @@ public class HierarchyPanel : DockPanel
                 .TextColor(go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                 .StopEventPropagation()
-                .OnClick(go, (g, _) => { var old = g.Enabled; var id = g.Identifier; Undo.RegisterAction("Toggle Visibility", () => { var r = Undo.FindGO(id); if (r != null) r.Enabled = old; }, () => { var r = Undo.FindGO(id); if (r != null) r.Enabled = !old; }); g.Enabled = !old; });
+                .OnClick(go, (g, _) => { Undo.RecordGameObjectChange(g, "Toggle Visibility", g.Enabled, !g.Enabled, (x, e) => x.Enabled = e); g.Enabled = !g.Enabled; });
 
 
             // Per-GameObject right-click menu
@@ -813,9 +813,8 @@ public class HierarchyPanel : DockPanel
                 builder.Separator();
                 builder.Item(go.Enabled ? "Disable" : "Enable", () =>
                 {
-                    var old = go.Enabled; var id = go.Identifier;
-                    Undo.RegisterAction("Toggle Visibility", () => { var r = Undo.FindGO(id); if (r != null) r.Enabled = old; }, () => { var r = Undo.FindGO(id); if (r != null) r.Enabled = !old; });
-                    go.Enabled = !old;
+                    Undo.RecordGameObjectChange(go, "Toggle Visibility", go.Enabled, !go.Enabled, (g, e) => g.Enabled = e);
+                    go.Enabled = !go.Enabled;
                 }, icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
             }
         });

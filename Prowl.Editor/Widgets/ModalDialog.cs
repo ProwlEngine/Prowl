@@ -88,13 +88,8 @@ public static class ModalDialog
         float w = paper.ScreenRect.Size.X;
         float h = paper.ScreenRect.Size.Y;
 
-        // Fullscreen overlay (blocks input to everything behind)
-        paper.Box("modal_overlay")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, 0)
-            .Size(w, h)
-            .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
-            .Layer(Layer.Overlay);
+        // Fullscreen overlay (blocks input to everything behind, no click-to-close)
+        EditorGUI.Backdrop(paper, "modal_overlay");
 
         // Dialog box centered
         float dialogW = modal.Width;

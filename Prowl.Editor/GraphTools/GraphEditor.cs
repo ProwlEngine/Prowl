@@ -588,14 +588,8 @@ public class GraphEditor
         const float popupW = 280f;
         const float popupH = 360f;
 
-        // Click-outside backdrop fullscreen invisible Box on the topmost layer that
-        // catches clicks outside the popup and closes the menu (standard context UX).
-        paper.Box("graph_popup_backdrop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(-9999, -9999)
-            .Size(99999, 99999)
-            .Layer(Layer.Topmost)
-            .OnClick(_ => CloseCreationMenu());
+        // Click-outside backdrop catches clicks outside the popup and closes the menu (standard context UX).
+        EditorGUI.Backdrop(paper, "graph_popup_backdrop", CloseCreationMenu, dim: false);
 
         using (paper.Column("graph_popup")
             .PositionType(PositionType.SelfDirected)
@@ -761,11 +755,7 @@ public class GraphEditor
         const float menuW = 200f;
 
         // Backdrop click outside dismisses.
-        paper.Box("graph_node_ctx_backdrop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(-9999, -9999).Size(99999, 99999)
-            .Layer(Layer.Topmost)
-            .OnClick(_ => _contextMenuNode = null);
+        EditorGUI.Backdrop(paper, "graph_node_ctx_backdrop", () => _contextMenuNode = null, dim: false);
 
         using (paper.Column("graph_node_ctx")
             .PositionType(PositionType.SelfDirected)

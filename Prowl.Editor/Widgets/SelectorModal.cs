@@ -89,12 +89,7 @@ public static class SelectorModal
         if (font == null) return;
 
         // Fullscreen blocker
-        paper.Box("sel_overlay")
-            .PositionType(PositionType.SelfDirected).Position(0, 0)
-            .Size(UnitValue.Stretch(), UnitValue.Stretch())
-            .BackgroundColor(Color.FromArgb(120, 0, 0, 0))
-            .Layer(Layer.Overlay)
-            .OnClick(0, (_, _) => Close());
+        EditorGUI.Backdrop(paper, "sel_overlay", Close);
 
         // Modal window
         using (paper.Column("sel_modal")

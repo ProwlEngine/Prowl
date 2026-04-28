@@ -80,19 +80,9 @@ public static class AssetCreateMenu
             : Path.Combine(Project.Current.AssetsPath, relativeFolder);
     }
 
+    /// <inheritdoc cref="Utils.UniqueNames.ForFile" />
     public static string FindUniqueName(string folder, string baseName, string ext)
-    {
-        string path = Path.Combine(folder, baseName + ext);
-        if (!File.Exists(path) && !Directory.Exists(path)) return baseName + ext;
-
-        for (int i = 1; i < 999; i++)
-        {
-            string name = $"{baseName} ({i}){ext}";
-            path = Path.Combine(folder, name);
-            if (!File.Exists(path) && !Directory.Exists(path)) return name;
-        }
-        return baseName + ext;
-    }
+        => Utils.UniqueNames.ForFile(folder, baseName, ext);
 
     public static string? CreateFolder(string relativeFolder)
     {
