@@ -334,7 +334,6 @@ public class CarController : MonoBehaviour
     public float BrakeTorque = 100.0f;
 
     private Rigidbody3D? rigidbody;
-    private bool wheelsAdjusted = false;
 
     public override void OnEnable()
     {

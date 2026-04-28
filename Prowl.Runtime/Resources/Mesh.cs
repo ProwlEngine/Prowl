@@ -809,7 +809,7 @@ public class Mesh : EngineObject, ISerializable
 
     public static Mesh CreateCylinder(float radius, float length, int sliceCount)
     {
-#warning TODO: Test, This hasent been tested like at all just assumed it will work
+        // TODO: Test — this hasn't been tested at all, just assumed it will work.
         Mesh mesh = new();
 
         List<Float3> vertices = [];

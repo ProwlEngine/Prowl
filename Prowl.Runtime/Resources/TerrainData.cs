@@ -129,7 +129,10 @@ public sealed class TerrainData : EngineObject, ISerializable
     [NonSerialized] private Texture2D? _splatmapTexture;
     [NonSerialized] private bool _heightmapDirty = true;
     [NonSerialized] private bool _splatmapDirty = true;
+    // TODO: wire up a GPU details rebuild path that consumes _detailsDirty (see _heightmapDirty/_splatmapDirty for the pattern).
+#pragma warning disable CS0414
     [NonSerialized] private bool _detailsDirty = true;
+#pragma warning restore CS0414
 
     public TerrainData() : base("New TerrainData")
     {

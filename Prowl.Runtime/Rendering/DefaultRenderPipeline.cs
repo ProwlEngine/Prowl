@@ -488,7 +488,7 @@ public class DefaultRenderPipeline : RenderPipeline
             if (solid.IsValid()) DrawMeshNow(solid, s_gizmo);
         }
 
-#warning TODO: Implement Gizmo Icons rendering
+        // TODO: Implement Gizmo Icons rendering
 
         //List<GizmoBuilder.IconDrawCall> icons = Debug.GetGizmoIcons();
         //if (icons != null)
