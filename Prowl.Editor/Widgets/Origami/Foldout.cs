@@ -90,10 +90,10 @@ public sealed class FoldoutBuilder
     {
         ArgumentNullException.ThrowIfNull(drawContents);
 
-        var ramp    = _theme.Get(_variant);
-        var ink     = _theme.Ink;
+        var ramp = _theme.Get(_variant);
+        var ink = _theme.Ink;
         var metrics = _theme.Metrics;
-        var icons   = _theme.Icons;
+        var icons = _theme.Icons;
         float rounding = _roundingOverride ?? metrics.Rounding;
         bool hasToggle = _toggleValue.HasValue;
         bool isEnabled = _toggleValue ?? true;
@@ -111,10 +111,18 @@ public sealed class FoldoutBuilder
 
         bool expanded = _paper.GetElementStorage(header._handle, "exp", _defaultExpanded);
 
+        // First we need the animation value, lets grab it here so we can skip creating the body at all if animation is 0
+        // But also since the Header needs rounded at the bottom to stay 0 while the body exists
+        float anim = 0f;
+        using (header.Enter())
+        {
+            anim = _paper.AnimateBool(expanded, 0.2f);
+        }
+
         // Header rounding: full when collapsed, top-only when expanded so it reads as
         // continuous with the body wrapper below it. Bottom margin removed when expanded
         // so the body sits flush against the header (no visual gap).
-        if (expanded)
+        if (expanded || anim > float.Epsilon)
         {
             header.Rounded(rounding, rounding, 0, 0);
             header.Margin(UnitValue.Auto, UnitValue.Auto, 2, 0);
@@ -199,6 +207,10 @@ public sealed class FoldoutBuilder
         }
 
         // ── Body ──────────────────────────────────────────────────
+
+        if (!expanded && anim <= float.Epsilon)
+            return;
+
         // Outer wrapper: same surface as the header (so the two read as one card),
         // bottom-rounded only, with small inner padding so the inset panel doesn't
         // hug the rounded corner. No top margin/padding — sits flush with the header.
@@ -217,18 +229,14 @@ public sealed class FoldoutBuilder
             // children; callers wrap content in a ScrollView themselves if they want one.
             var inner = _paper.Box($"{_id}_inner")
                 .Width(UnitValue.Stretch())
-                .Height(UnitValue.Lerp(0, UnitValue.Auto, 1f))
+                .Height(UnitValue.Lerp(0, UnitValue.Auto, anim))
                 .Margin(4)
                 .BackgroundColor(ramp.C100)
                 .Rounded(rounding);
 
-            if (expanded)
+            using (inner.Enter())
             {
-
-                using (inner.Enter())
-                {
-                    drawContents();
-                }
+                drawContents();
             }
         }
     }

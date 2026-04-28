@@ -107,7 +107,7 @@ public class BuildSettingsPanel : DockPanel
                 // Left sidebar — category list
                 float sidebarW = 220f;
                 using (paper.Column("bp_sidebar")
-                    .Border(new UnitValue(Units.Pixels, EditorTheme.SidePixelPadding))
+                    .Padding(new UnitValue(EditorTheme.SidePixelPadding))
                     .Width(sidebarW).Height(bsHeight)
                     .BackgroundColor(EditorTheme.Neutral200)
                     .Clip()
