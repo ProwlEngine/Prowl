@@ -76,8 +76,8 @@ public static class StatusBar
 
         using (paper.Row("statusbar")
             .PositionType(PositionType.SelfDirected)
-            .Position(0, Window.InternalWindow.Size.Y - EditorTheme.StatusBarHeight)
-            .Size(paper.Percent(100), EditorTheme.StatusBarHeight)
+            .Position(0, paper.Height - EditorTheme.MenuBarHeight)
+            .Size(paper.Percent(100), EditorTheme.MenuBarHeight)
             .BackgroundColor(EditorTheme.Neutral200)
             .ChildLeft(10)
             .RowBetween(10)
@@ -86,7 +86,7 @@ public static class StatusBar
 
             paper.Box("status_icon")
                 .Position(12, 0)
-                .Size(UnitValue.Auto, EditorTheme.StatusBarHeight)
+                .Size(UnitValue.Auto, EditorTheme.MenuBarHeight)
                 .IsNotInteractable()
                 .Text($"{_lastStatusInfo?.Icon ?? EditorIcons.CircleInfo}", font)
                 .TextColor(_lastStatusInfo?.Color ?? EditorTheme.Ink400)
@@ -95,7 +95,7 @@ public static class StatusBar
 
             paper.Box("status_label")
                 .Position(12, 0)
-                .Size(UnitValue.StretchOne, EditorTheme.StatusBarHeight)
+                .Size(UnitValue.StretchOne, EditorTheme.MenuBarHeight)
                 .IsNotInteractable()
                 .Text($"{(_lastStatusInfo?.Message ?? CurrentStatus)}", font)
                 .TextColor(_lastStatusInfo?.Color ?? EditorTheme.Ink400)
