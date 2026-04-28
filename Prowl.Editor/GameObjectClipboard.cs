@@ -72,7 +72,7 @@ public static class GameObjectClipboard
                 var go = Serializer.Deserialize<GameObject>(item);
                 if (go == null) continue;
 
-                go.Name += " (Copy)";
+                go.Name = MakeUniqueSiblingName(go.Name, parent, scene);
                 scene.Add(go);
                 if (parent != null)
                     go.SetParent(parent);
@@ -116,7 +116,7 @@ public static class GameObjectClipboard
                 var clone = Serializer.Deserialize<GameObject>(echo);
                 if (clone == null) continue;
 
-                clone.Name = source.Name + " (Copy)";
+                clone.Name = MakeUniqueSiblingName(source.Name, source.Parent, scene);
                 scene.Add(clone);
                 if (source.Parent != null)
                     clone.SetParent(source.Parent);
@@ -137,6 +137,49 @@ public static class GameObjectClipboard
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Returns a name that doesn't collide with any of <paramref name="parent"/>'s children
+    /// (or <paramref name="scene"/>'s root objects when <paramref name="parent"/> is null).
+    /// Strips a trailing " (N)" from <paramref name="desired"/> and increments N instead of
+    /// stacking suffixes — e.g. "Cube" → "Cube (1)", "Cube (3)" → "Cube (4)".
+    /// </summary>
+    private static string MakeUniqueSiblingName(string desired, GameObject? parent, Scene scene)
+    {
+        string baseName = desired;
+        int startNum = 1;
+
+        // Parse a trailing " (N)" so we increment rather than appending again.
+        if (desired.EndsWith(")"))
+        {
+            int openIdx = desired.LastIndexOf(" (");
+            if (openIdx > 0)
+            {
+                string numStr = desired.Substring(openIdx + 2, desired.Length - openIdx - 3);
+                if (int.TryParse(numStr, out int parsed) && parsed > 0)
+                {
+                    baseName = desired.Substring(0, openIdx);
+                    startNum = parsed + 1;
+                }
+            }
+        }
+
+        var taken = new HashSet<string>(StringComparer.Ordinal);
+        IEnumerable<GameObject> siblings = parent != null ? parent.Children : scene.RootObjects;
+        foreach (var s in siblings)
+            taken.Add(s.Name);
+
+        // Bare base name is good if it's free (e.g. pasting into a different parent).
+        if (!taken.Contains(baseName)) return baseName;
+
+        int n = startNum;
+        while (true)
+        {
+            string candidate = $"{baseName} ({n})";
+            if (!taken.Contains(candidate)) return candidate;
+            n++;
+        }
     }
 
     /// <summary>
