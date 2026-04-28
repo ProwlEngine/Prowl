@@ -159,13 +159,13 @@ public class ShaderGraphEditorWindow : DockPanel
             // stays usable even on very short windows.
             float fixedConsumed = 26f + 22f + (_sidebarWidth - 20f) + 14f + 12f;
             float scrollH = MathF.Max(80f, _lastWindowHeight - fixedConsumed);
-            using (ScrollView.Begin(paper, "sg_foldout_scroll", _sidebarWidth - 16, scrollH))
+            Origami.ScrollView(paper, "sg_foldout_scroll", _sidebarWidth - 16, scrollH).Body(() =>
             {
                 Origami.Foldout(paper, "sg_fold_props", "Properties").Body(() => DrawPropertiesFoldout(paper, sg));
                 Origami.Foldout(paper, "sg_fold_light", "Lighting").Body(() => DrawLightingFoldout(paper, sg));
                 Origami.Foldout(paper, "sg_fold_blend", "Blending").Body(() => DrawBlendingFoldout(paper, sg));
                 Origami.Foldout(paper, "sg_fold_geo",   "Geometry").Body(() => DrawGeometryFoldout(paper, sg));
-            }
+            });
         }
     }
 

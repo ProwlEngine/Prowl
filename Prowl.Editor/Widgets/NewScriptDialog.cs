@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -71,8 +72,10 @@ public static class NewScriptDialog
                 .Rounded(4)
                 .Enter())
             {
-                using (ScrollView.Begin(paper, "scr_tpls_scroll", listWidth, bodyHeight,
-                    paddingLeft: 4, paddingRight: 4, paddingTop: 4, paddingBottom: 4, colSpacing: 2))
+                Origami.ScrollView(paper, "scr_tpls_scroll", listWidth, bodyHeight)
+                    .Padding(4, 4, 4, 4)
+                    .ColSpacing(2)
+                    .Body(() =>
                 {
                     for (int i = 0; i < s_templates.Count; i++)
                     {
@@ -103,7 +106,7 @@ public static class NewScriptDialog
                             }
                         }
                     }
-                }
+                });
             }
 
             // Details / inputs

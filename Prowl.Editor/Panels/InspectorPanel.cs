@@ -5,6 +5,7 @@ using System.Linq;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -57,7 +58,7 @@ public class InspectorPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        using (ScrollView.Begin(paper, "insp_scroll", width, height, paddingLeft: 8, paddingRight: 0, paddingTop: 8))
+        Origami.ScrollView(paper, "insp_scroll", width, height).Padding(8, 0, 8, 0).Body(() =>
         {
             if (Selection.Count == 0)
             {
@@ -116,7 +117,7 @@ public class InspectorPanel : DockPanel
             }
 
             paper.Box("insp_bottom_pad").Height(20);
-        }
+        });
     }
 
     private void DrawEmpty(Paper paper, Prowl.Scribe.FontFile font, float width)

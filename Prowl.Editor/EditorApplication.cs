@@ -473,7 +473,7 @@ public class EditorApplication : Game
 
         float pad = EditorTheme.DockPadding;
         float dockY = EditorTheme.MenuBarHeight + pad;
-        float dockH = h - dockY - pad - EditorTheme.StatusBarHeight;
+        float dockH = h - dockY - pad - EditorTheme.MenuBarHeight;
         _dockSpace.Draw(paper, pad, dockY, w - pad * 2, dockH);
 
         StatusBar.Draw(paper);

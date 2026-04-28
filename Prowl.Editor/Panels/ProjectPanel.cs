@@ -7,9 +7,11 @@ using System.Runtime.InteropServices;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
@@ -87,7 +89,7 @@ public class ProjectPanel : DockPanel
 
                     // Reset the content scroll so the pinged item lands in view stored scroll
                     // from a previous folder can otherwise leave the row off-screen.
-                    ScrollView.ScrollTo("proj_content", 0f);
+                    Origami.ScrollTo("proj_content", new Float2(0, 0));
                 }
             }
         }
@@ -384,7 +386,7 @@ public class ProjectPanel : DockPanel
             // Right-click background show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_tree_bg_ctx");
 
-            using (ScrollView.Begin(paper, "proj_tree", FolderTreeWidth, height, 4, 4, 4, 4))
+            Origami.ScrollView(paper, "proj_tree", FolderTreeWidth, height).Padding(4, 4, 4, 4).Body(() =>
             {
                 // Root "Assets" node
                 using (paper.Column("proj_tree_inner")
@@ -394,7 +396,7 @@ public class ProjectPanel : DockPanel
                 {
                     DrawFolderNode(paper, font, Project.Current!.AssetsPath, "Assets", 0);
                 }
-            }
+            });
         }
     }
 
@@ -586,7 +588,7 @@ public class ProjectPanel : DockPanel
             // Breadcrumb
             DrawBreadcrumb(paper, font, width, 20);
 
-            using (ScrollView.Begin(paper, "proj_content", width, height - 31))
+            Origami.ScrollView(paper, "proj_content", width, height - 31).Body(() =>
             {
                 using (paper.Column("proj_content_inner")
                     .Margin(6, 0, 0, 6)
@@ -611,7 +613,7 @@ public class ProjectPanel : DockPanel
                         DrawGridView(paper, font, entries, width);
                     }
                 }
-            }
+            });
 
         }
     }

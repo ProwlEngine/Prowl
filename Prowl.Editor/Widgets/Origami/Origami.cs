@@ -131,4 +131,24 @@ public static class Origami
     /// <summary>Begin building a foldout. Terminate with <c>.Body(...)</c> to render.</summary>
     public static FoldoutBuilder Foldout(Paper paper, string id, string label)
         => new FoldoutBuilder(paper, id, label, Current);
+
+    /// <summary>
+    /// Begin building a scroll view of the given fixed viewport size. Terminate with
+    /// <c>.Body(...)</c> to render. State (scroll offsets, content dims) is persisted in
+    /// element storage on the outer box, keyed by <paramref name="id"/>.
+    /// </summary>
+    public static ScrollViewBuilder ScrollView(Paper paper, string id, float width, float height)
+        => new ScrollViewBuilder(paper, id, width, height, Current);
+
+    /// <summary>
+    /// Programmatically request a scroll view to scroll to the given offset on its next render.
+    /// Useful for "jump to selection" interactions where the caller doesn't have a builder handle.
+    /// </summary>
+    /// <param name="scrollViewId">The id passed to <see cref="ScrollView"/>.</param>
+    /// <param name="offset">Target offset in pixels — X for horizontal, Y for vertical.</param>
+    public static void ScrollTo(string scrollViewId, Prowl.Vector.Float2 offset)
+    {
+        ArgumentNullException.ThrowIfNull(scrollViewId);
+        ScrollViewBuilder.s_pendingScrollTo[scrollViewId] = offset;
+    }
 }

@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -210,7 +211,7 @@ public static class SelectorModal
         bool isGameObject = typeof(GameObject).IsAssignableFrom(_targetType);
         bool isComponent = typeof(MonoBehaviour).IsAssignableFrom(_targetType);
 
-        using (ScrollView.Begin(paper, "sel_scene_scroll", 380, height, paddingLeft: 4, paddingRight: 4, paddingTop: 4))
+        Origami.ScrollView(paper, "sel_scene_scroll", 380, height).Padding(4, 4, 4, 0).Body(() =>
         {
             // None option always first
             paper.Box("sel_s_none")
@@ -270,7 +271,7 @@ public static class SelectorModal
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
             }
-        }
+        });
     }
 
     private static void DrawSceneItem(Paper paper, Prowl.Scribe.FontFile font,
@@ -337,7 +338,7 @@ public static class SelectorModal
         const float totalCellH = cellSize + labelH;
         float gridWidth = 380 - 12;
 
-        using (ScrollView.Begin(paper, "sel_asset_scroll", 380, height, paddingLeft: 4, paddingRight: 4, paddingTop: 4))
+        Origami.ScrollView(paper, "sel_asset_scroll", 380, height).Padding(4, 4, 4, 0).Body(() =>
         {
             // None option always first
             paper.Box("sel_a_none")
@@ -377,7 +378,7 @@ public static class SelectorModal
                     row++;
                 }
             }
-        }
+        });
     }
 
     private static void DrawAssetGridItem(Paper paper, Prowl.Scribe.FontFile font,

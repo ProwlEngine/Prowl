@@ -4,6 +4,7 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -227,12 +228,12 @@ public class HierarchyPanel : DockPanel
                     {
                         float rowTotal = EditorTheme.RowHeight + 2f; // row + vertical spacing
                         float targetY = pingIndex * rowTotal - (scrollHeight * 0.5f) + rowTotal * 0.5f;
-                        ScrollView.ScrollTo("hier_scroll", targetY);
+                        Origami.ScrollTo("hier_scroll", new Float2(0, targetY));
                     }
                 }
 
                 // Tree view
-                using (ScrollView.Begin(paper, "hier_scroll", width, scrollHeight))
+                Origami.ScrollView(paper, "hier_scroll", width, scrollHeight).Body(() =>
                 {
                     if (roots.Count == 0)
                     {
@@ -248,7 +249,7 @@ public class HierarchyPanel : DockPanel
                     {
                         DrawGameObjectNode(paper, font, root, 0, flatObjects, ref drawIndex);
                     }
-                }
+                });
 
                 // --- All drop handling uses hier_bg (the stable outer background) ---
 

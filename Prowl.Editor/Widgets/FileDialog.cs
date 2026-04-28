@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
@@ -433,7 +434,7 @@ public static class FileDialog
         float listWidth = DialogWidth - SidebarWidth;
         float listHeight = DialogHeight - ToolbarHeight - HeaderHeight - BottomBarHeight;
 
-        using (ScrollView.Begin(paper, "fd_scroll", listWidth, listHeight))
+        Origami.ScrollView(paper, "fd_scroll", listWidth, listHeight).Body(() =>
         {
             // New folder entry
             if (_creatingFolder)
@@ -536,7 +537,7 @@ public static class FileDialog
                     .Text("This folder is empty", font).TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
             }
-        }
+        });
     }
 
     private static void DrawBottomBar(Paper paper, Prowl.Scribe.FontFile font)
