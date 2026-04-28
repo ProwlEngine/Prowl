@@ -438,32 +438,50 @@ namespace Prowl.PaperUI.LayoutEngine
             // Determine auto sizes from children
             if (numParentDirectedChildren != 0)
             {
-                if (main.HasAuto || GetMinMain(ref element, parentLayoutType).HasAuto)
+                // Children-derived size on each axis (account for layout direction).
+                float childrenMain = (parentLayoutType == layoutType ? mainSum : crossMax)
+                                     + paddingMainBefore + paddingMainAfter;
+                float childrenCross = (parentLayoutType == layoutType ? crossMax : mainSum)
+                                      + paddingCrossBefore + paddingCrossAfter;
+
+                // main.HasAuto: parent's size IS Floor + AutoFactor * children. Replaces computedMain.
+                if (main.HasAuto)
                 {
+                    computedMain = main.Floor(parentMain) + main.AutoFactor * childrenMain;
                     if (parentLayoutType == layoutType)
-                    {
-                        minMain = mainSum + paddingMainBefore + paddingMainAfter;
-                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
-                    }
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
                     else
-                    {
-                        minMain = crossMax + paddingMainBefore + paddingMainAfter;
-                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
-                    }
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
                 }
 
-                if (cross.HasAuto || GetMinCross(ref element, parentLayoutType).HasAuto)
+                // MinMain.HasAuto: lifts the floor only. Pure Auto min => content-size minimum (today's behaviour).
+                var autoMinMainUnit = GetMinMain(ref element, parentLayoutType);
+                if (autoMinMainUnit.HasAuto)
                 {
+                    minMain = autoMinMainUnit.Floor(parentMain) + autoMinMainUnit.AutoFactor * childrenMain;
                     if (parentLayoutType == layoutType)
-                    {
-                        minCross = crossMax + paddingCrossBefore + paddingCrossAfter;
-                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
-                    }
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     else
-                    {
-                        minCross = mainSum + paddingCrossBefore + paddingCrossAfter;
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
+                }
+
+                if (cross.HasAuto)
+                {
+                    computedCross = cross.Floor(parentCross) + cross.AutoFactor * childrenCross;
+                    if (parentLayoutType == layoutType)
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+                    else
+                        actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+                }
+
+                var autoMinCrossUnit = GetMinCross(ref element, parentLayoutType);
+                if (autoMinCrossUnit.HasAuto)
+                {
+                    minCross = autoMinCrossUnit.Floor(parentCross) + autoMinCrossUnit.AutoFactor * childrenCross;
+                    if (parentLayoutType == layoutType)
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
+                    else
                         actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
-                    }
                 }
             }
 
@@ -625,32 +643,50 @@ namespace Prowl.PaperUI.LayoutEngine
             // Update auto sizes based on children
             if (numParentDirectedChildren != 0)
             {
-                if (main.HasAuto || GetMinMain(ref element, parentLayoutType).HasAuto)
+                // Children-derived size on each axis (account for layout direction).
+                float childrenMain = (parentLayoutType == layoutType ? mainSum : crossMax)
+                                     + paddingMainBefore + paddingMainAfter;
+                float childrenCross = (parentLayoutType == layoutType ? crossMax : mainSum)
+                                      + paddingCrossBefore + paddingCrossAfter;
+
+                // main.HasAuto: parent's size IS Floor + AutoFactor * children. Replaces computedMain.
+                if (main.HasAuto)
                 {
+                    computedMain = main.Floor(parentMain) + main.AutoFactor * childrenMain;
                     if (parentLayoutType == layoutType)
-                    {
-                        minMain = mainSum + paddingMainBefore + paddingMainAfter;
-                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
-                    }
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
                     else
-                    {
-                        minMain = crossMax + paddingMainBefore + paddingMainAfter;
-                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
-                    }
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
                 }
 
-                if (cross.HasAuto || GetMinCross(ref element, parentLayoutType).HasAuto)
+                // MinMain.HasAuto: lifts the floor only. Pure Auto min => content-size minimum (today's behaviour).
+                var autoMinMainUnit = GetMinMain(ref element, parentLayoutType);
+                if (autoMinMainUnit.HasAuto)
                 {
+                    minMain = autoMinMainUnit.Floor(parentMain) + autoMinMainUnit.AutoFactor * childrenMain;
                     if (parentLayoutType == layoutType)
-                    {
-                        minCross = crossMax + paddingCrossBefore + paddingCrossAfter;
-                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
-                    }
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     else
-                    {
-                        minCross = mainSum + paddingCrossBefore + paddingCrossAfter;
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
+                }
+
+                if (cross.HasAuto)
+                {
+                    computedCross = cross.Floor(parentCross) + cross.AutoFactor * childrenCross;
+                    if (parentLayoutType == layoutType)
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+                    else
+                        actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+                }
+
+                var autoMinCrossUnit = GetMinCross(ref element, parentLayoutType);
+                if (autoMinCrossUnit.HasAuto)
+                {
+                    minCross = autoMinCrossUnit.Floor(parentCross) + autoMinCrossUnit.AutoFactor * childrenCross;
+                    if (parentLayoutType == layoutType)
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
+                    else
                         actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
-                    }
                 }
             }
 
@@ -732,32 +768,50 @@ namespace Prowl.PaperUI.LayoutEngine
             // Final update of auto sizes
             if (numParentDirectedChildren != 0)
             {
-                if (main.HasAuto || GetMinMain(ref element, parentLayoutType).HasAuto)
+                // Children-derived size on each axis (account for layout direction).
+                float childrenMain = (parentLayoutType == layoutType ? mainSum : crossMax)
+                                     + paddingMainBefore + paddingMainAfter;
+                float childrenCross = (parentLayoutType == layoutType ? crossMax : mainSum)
+                                      + paddingCrossBefore + paddingCrossAfter;
+
+                // main.HasAuto: parent's size IS Floor + AutoFactor * children. Replaces computedMain.
+                if (main.HasAuto)
                 {
+                    computedMain = main.Floor(parentMain) + main.AutoFactor * childrenMain;
                     if (parentLayoutType == layoutType)
-                    {
-                        minMain = mainSum + paddingMainBefore + paddingMainAfter;
-                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
-                    }
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
                     else
-                    {
-                        minMain = crossMax + paddingMainBefore + paddingMainAfter;
-                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
-                    }
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
                 }
 
-                if (cross.HasAuto || GetMinCross(ref element, parentLayoutType).HasAuto)
+                // MinMain.HasAuto: lifts the floor only. Pure Auto min => content-size minimum (today's behaviour).
+                var autoMinMainUnit = GetMinMain(ref element, parentLayoutType);
+                if (autoMinMainUnit.HasAuto)
                 {
+                    minMain = autoMinMainUnit.Floor(parentMain) + autoMinMainUnit.AutoFactor * childrenMain;
                     if (parentLayoutType == layoutType)
-                    {
-                        minCross = crossMax + paddingCrossBefore + paddingCrossAfter;
-                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
-                    }
+                        actualParentMain = Maths.Min(maxMain, Maths.Max(minMain, actualParentMain));
                     else
-                    {
-                        minCross = mainSum + paddingCrossBefore + paddingCrossAfter;
+                        actualParentCross = Maths.Min(maxMain, Maths.Max(minMain, actualParentCross));
+                }
+
+                if (cross.HasAuto)
+                {
+                    computedCross = cross.Floor(parentCross) + cross.AutoFactor * childrenCross;
+                    if (parentLayoutType == layoutType)
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+                    else
+                        actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+                }
+
+                var autoMinCrossUnit = GetMinCross(ref element, parentLayoutType);
+                if (autoMinCrossUnit.HasAuto)
+                {
+                    minCross = autoMinCrossUnit.Floor(parentCross) + autoMinCrossUnit.AutoFactor * childrenCross;
+                    if (parentLayoutType == layoutType)
+                        actualParentCross = Maths.Min(maxCross, Maths.Max(minCross, actualParentCross));
+                    else
                         actualParentMain = Maths.Min(maxCross, Maths.Max(minCross, actualParentMain));
-                    }
                 }
             }
 
