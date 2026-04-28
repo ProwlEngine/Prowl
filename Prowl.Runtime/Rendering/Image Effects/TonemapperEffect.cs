@@ -26,7 +26,7 @@ public sealed class TonemapperEffect : ImageEffect
 {
     public override bool TransformsToLDR => true;
 
-    public TonemapperType Type = TonemapperType.Melon;
+    public TonemapperType Type = TonemapperType.AgX;
     public float Contrast = 1.1f;
     public float Saturation = 1.1f;
 
