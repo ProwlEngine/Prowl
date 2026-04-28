@@ -351,7 +351,7 @@ public class ConsolePanel : DockPanel
     private void RebuildFilteredList()
     {
         _filteredIndices.Clear();
-        for (int i = 0; i < _messages.Count; i++)
+        for (int i = _messages.Count - 1; i >= 0; i--)
         {
             var msg = _messages[i];
             if (!ShouldShow(msg.Severity)) continue;
