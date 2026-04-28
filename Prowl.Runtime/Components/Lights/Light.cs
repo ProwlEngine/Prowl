@@ -20,7 +20,7 @@ public abstract class Light : MonoBehaviour, IRenderableLight
 {
 
     public Color Color = Color.White;
-    public float Intensity = 8.0f;
+    public float Intensity = 1.0f;
     public float ShadowStrength = 1.0f;
     public float ShadowBias = 0.001f;
     public float ShadowNormalBias = 0.0f;
