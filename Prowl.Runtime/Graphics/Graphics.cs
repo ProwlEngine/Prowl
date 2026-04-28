@@ -223,19 +223,19 @@ public static unsafe class Graphics
 
     public static Dictionary<ulong, uint> cachedBlockLocations = [];
 
-    public static GraphicsBuffer CreateBuffer<T>(BufferType bufferType, T[] data, bool dynamic = false)
+    public static GraphicsBuffer CreateBuffer<T>(BufferType bufferType, T[] data, bool dynamic = false) where T : unmanaged
     {
         fixed (void* dat = data)
             return new GraphicsBuffer(bufferType, (uint)(data.Length * sizeof(T)), dat, dynamic);
     }
 
-    public static void SetBuffer<T>(GraphicsBuffer buffer, T[] data, bool dynamic = false)
+    public static void SetBuffer<T>(GraphicsBuffer buffer, T[] data, bool dynamic = false) where T : unmanaged
     {
         fixed (void* dat = data)
             buffer!.Set((uint)(data.Length * sizeof(T)), dat, dynamic);
     }
 
-    public static void UpdateBuffer<T>(GraphicsBuffer buffer, uint offsetInBytes, T[] data)
+    public static void UpdateBuffer<T>(GraphicsBuffer buffer, uint offsetInBytes, T[] data) where T : unmanaged
     {
         fixed (void* dat = data)
             buffer!.Update(offsetInBytes, (uint)(data.Length * sizeof(T)), dat);

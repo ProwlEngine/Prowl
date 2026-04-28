@@ -29,6 +29,7 @@ namespace Prowl.Runtime;
 /// <typeparam name="TValue">The type of the value.</typeparam>
 public class MultiValueDictionary<TKey, TValue> :
     IReadOnlyDictionary<TKey, IReadOnlyCollection<TValue>>
+    where TKey : notnull
 {
     #region Variables
     /*======================================================================

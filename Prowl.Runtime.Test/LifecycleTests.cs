@@ -604,7 +604,7 @@ public class LifecycleTests : IDisposable
         childComp.ClearEvents();
 
         // Unparent child - it stays in the scene, just loses its parent
-        child.SetParent(null);
+        child.SetParent(null!);
 
         // No lifecycle events are triggered - child stays in scene
         Assert.DoesNotContain("OnDisable", childComp.Events);

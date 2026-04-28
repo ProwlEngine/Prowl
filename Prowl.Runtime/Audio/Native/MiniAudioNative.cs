@@ -2113,7 +2113,7 @@ namespace Prowl.Runtime.Audio.Native
             return value.ToUInt32();
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (obj is size_t)
             {
@@ -5679,7 +5679,7 @@ namespace Prowl.Runtime.Audio.Native
         /// <typeparam name="TDelegate">The type of delegate to convert.</typeparam>
         /// <param name="d">The delegate to be passed to unmanaged code.</param>
         /// <returns><A value that can be passed to unmanaged code, which, in turn, can use it to call the underlying managed delegate. Returns IntPtr.Zero if the passed delegate is null./returns>
-        public static IntPtr GetFunctionPointerForDelegate<TDelegate>(TDelegate d)
+        public static IntPtr GetFunctionPointerForDelegate<TDelegate>(TDelegate d) where TDelegate : notnull
         {
             if (d == null)
                 return IntPtr.Zero;

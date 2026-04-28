@@ -107,6 +107,7 @@ public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordSt
 
     // From https://stackoverflow.com/questions/670063/getting-hash-of-a-list-of-strings-regardless-of-order
     public static int OrderlessHash<T>(IEnumerable<T> source, IEqualityComparer<T>? comparer = null)
+        where T : notnull
     {
         comparer ??= EqualityComparer<T>.Default;
 
@@ -115,7 +116,7 @@ public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordSt
 
         var valueCounts = new Dictionary<T, int>();
 
-        foreach (T? element in source)
+        foreach (T element in source)
         {
             curHash = comparer.GetHashCode(element);
 
