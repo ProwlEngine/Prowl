@@ -266,6 +266,9 @@ public static class ScriptAssemblyManager
 
     private static void SaveSceneForRestart(Project project)
     {
+        if (Prefabs.PrefabEditingMode.IsEditing)
+            Prefabs.PrefabEditingMode.Exit();
+
         var scene = Scene.Current;
         if (scene == null) return;
 
