@@ -1,256 +1,168 @@
-﻿using System;
-using Prowl.PaperUI;
+using System;
+using System.Collections.Generic;
 using Prowl.Vector;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
     /// <summary>
-    /// Represents a value with a unit type for UI layout measurements.
-    /// Supports pixels, percentages, auto-sizing, and stretch units with interpolation capabilities.
+    /// A composite layout value built from four independent components:
+    /// <c>Px + Pct% + Grow * remainderShare + AutoFactor * contentSize</c>.
+    /// Lerping interpolates each component linearly. Arithmetic combines components
+    /// so things like <c>Stretch(1) + Pixels(10)</c> ("10px floor plus a share of the leftover")
+    /// or <c>Percentage(50) + Pixels(-8)</c> ("50% minus 8px") fall out naturally.
     /// </summary>
-    public struct UnitValue
+    public struct UnitValue : IEquatable<UnitValue>
     {
-        /// <summary>
-        /// Helper class for interpolation between two UnitValue instances.
-        /// Using a simplified class approach to avoid struct cycles.
-        /// </summary>
-        private class LerpData
+        /// <summary>Raw pixel offset.</summary>
+        public float Px;
+
+        /// <summary>Percent of parent (0-100).</summary>
+        public float Pct;
+
+        /// <summary>Stretch factor: share of leftover space, weighted against sibling stretches.</summary>
+        public float Grow;
+
+        /// <summary>Content-size multiplier. 1 = use full content size; 0 = ignore content.</summary>
+        public float AutoFactor;
+
+        public UnitValue(float px, float pct = 0f, float grow = 0f, float autoFactor = 0f)
         {
-            public readonly UnitValue Start;
-            public readonly UnitValue End;
-            public readonly float Progress;
-
-            public LerpData(UnitValue start, UnitValue end, float progress)
-            {
-                Start = start;
-                End = end;
-                Progress = progress;
-            }
-        }
-
-        /// <summary>The unit type of this value</summary>
-        public Units Type { get; set; }
-
-        /// <summary>The numeric value in the specified units</summary>
-        public float Value { get; set; }
-
-        /// <summary>Additional pixel offset when using percentage units</summary>
-        public float PercentPixelOffset { get; set; }
-
-        /// <summary>Data for interpolation between two UnitValues (null when not interpolating)</summary>
-        private LerpData? _lerpData;
-
-        /// <summary>
-        /// Creates a UnitValue with the specified type and value.
-        /// </summary>
-        /// <param name="type">The unit type</param>
-        /// <param name="value">The numeric value</param>
-        /// <param name="offset">Additional pixel offset for percentage units</param>
-        public UnitValue(Units type, float value = 0f, float offset = 0f)
-        {
-            Type = type;
-            Value = value;
-            PercentPixelOffset = offset;
-            
-            _lerpData = null;
+            Px = px;
+            Pct = pct;
+            Grow = grow;
+            AutoFactor = autoFactor;
         }
 
         #region Factory Methods
 
-        /// <summary>Pre-allocated common values to avoid allocations</summary>
-        public static readonly UnitValue Auto = new UnitValue(Units.Auto);
-        public static readonly UnitValue ZeroPixels = new UnitValue(Units.Pixels, 0);
-        public static readonly UnitValue StretchOne = new UnitValue(Units.Stretch, 1);
+        /// <summary>Pre-allocated common values to avoid repeating the constructor.</summary>
+        public static readonly UnitValue Auto = new UnitValue(0f, 0f, 0f, 1f);
+        public static readonly UnitValue ZeroPixels = new UnitValue(0f, 0f, 0f, 0f);
+        public static readonly UnitValue StretchOne = new UnitValue(0f, 0f, 1f, 0f);
 
-        /// <summary>
-        /// Creates a Stretch unit value with the specified factor.
-        /// </summary>
-        /// <param name="factor">Stretch factor (relative to other stretch elements)</param>
-        public static UnitValue Stretch(float factor = 1f) => new UnitValue(Units.Stretch, factor);
+        /// <summary>A stretch factor with no pixel/percent floor.</summary>
+        public static UnitValue Stretch(float factor = 1f) => new UnitValue(0f, 0f, factor, 0f);
 
-        /// <summary>
-        /// Creates a Pixel unit value.
-        /// </summary>
-        /// <param name="value">Size in pixels</param>
-        public static UnitValue Pixels(float value) => new UnitValue(Units.Pixels, value);
+        /// <summary>A pure pixel length.</summary>
+        public static UnitValue Pixels(float value) => new UnitValue(value, 0f, 0f, 0f);
 
-        /// <summary>
-        /// Creates a Percentage unit value.
-        /// </summary>
-        /// <param name="value">Percentage value (0-100)</param>
-        /// <param name="offset">Additional pixel offset</param>
-        public static UnitValue Percentage(float value, float offset = 0f) => new UnitValue(Units.Percentage, value, offset);
+        /// <summary>A percentage of the parent, optionally combined with a pixel offset.</summary>
+        public static UnitValue Percentage(float value, float offset = 0f) => new UnitValue(offset, value, 0f, 0f);
 
         #endregion
 
-        #region Type Checking Properties
+        #region Predicates
 
-        /// <summary>Returns true if this value is using Auto units</summary>
-        public bool IsAuto => Type == Units.Auto;
+        /// <summary>True when this value participates in stretch (flex-grow) distribution.</summary>
+        public readonly bool HasGrow => Grow > 0f;
 
-        /// <summary>Returns true if this value is using Stretch units</summary>
-        public bool IsStretch => Type == Units.Stretch;
+        /// <summary>True when this value contributes a content-size component.</summary>
+        public readonly bool HasAuto => AutoFactor > 0f;
 
-        /// <summary>Returns true if this value is using Pixel units</summary>
-        public bool IsPixels => Type == Units.Pixels;
+        /// <summary>True when this value resolves to a length without needing stretch competition or content measurement.</summary>
+        public readonly bool IsFixed => Grow == 0f && AutoFactor == 0f;
 
-        /// <summary>Returns true if this value is using Percentage units</summary>
-        public bool IsPercentage => Type == Units.Percentage;
+        /// <summary>True when this value is exactly the Auto sentinel. Useful for default-detection ("user didn't set this").</summary>
+        public readonly bool IsAuto => Px == 0f && Pct == 0f && Grow == 0f && AutoFactor == 1f;
+
+        /// <summary>True when this value is purely a stretch factor with no other components.</summary>
+        public readonly bool IsStretch => Px == 0f && Pct == 0f && AutoFactor == 0f && Grow > 0f;
+
+        /// <summary>True when this value is purely a pixel length (no percent / grow / auto).</summary>
+        public readonly bool IsPixels => Pct == 0f && Grow == 0f && AutoFactor == 0f;
+
+        /// <summary>True when this value carries a percentage component (with no grow / auto).</summary>
+        public readonly bool IsPercentage => Grow == 0f && AutoFactor == 0f && Pct != 0f;
 
         #endregion
 
         /// <summary>
-        /// Converts this unit value to pixels based on the parent's size.
+        /// The fixed-length floor: <c>Px + (Pct/100) * parentValue</c>. Excludes stretch and content contributions.
         /// </summary>
-        /// <param name="parentValue">The parent element's size in pixels</param>
-        /// <param name="defaultValue">Default value to use for Auto and Stretch units</param>
-        /// <returns>Size in pixels</returns>
+        public readonly float Floor(float parentValue) => Px + (Pct * 0.01f) * parentValue;
+
+        /// <summary>
+        /// Resolves this value to pixels.
+        /// <paramref name="defaultValue"/> is multiplied by the Grow and AutoFactor components, mirroring
+        /// the legacy "default" fallback for stretch/auto units. Most layout sites pass 0 here so only the
+        /// fixed floor is returned; the layout engine then layers stretch and content contributions on top.
+        /// </summary>
         public readonly float ToPx(float parentValue, float defaultValue)
-        {
-            // Handle interpolation if active
-            if (_lerpData != null)
-            {
-                var startPx = _lerpData.Start.ToPx(parentValue, defaultValue);
-                var endPx = _lerpData.End.ToPx(parentValue, defaultValue);
-                return startPx + (endPx - startPx) * _lerpData.Progress;
-            }
+            => Px + (Pct * 0.01f) * parentValue + (Grow + AutoFactor) * defaultValue;
 
-            // Convert based on unit type
-            return Type switch {
-                Units.Pixels => Value,
-                Units.Percentage => ((Value / 100f) * parentValue) + PercentPixelOffset,
-                _ => defaultValue
-            };
-        }
-
-        /// <summary>
-        /// Converts this unit value to pixels and clamps it between minimum and maximum values.
-        /// </summary>
-        /// <param name="parentValue">The parent element's size in pixels</param>
-        /// <param name="defaultValue">Default value to use for Auto and Stretch units</param>
-        /// <param name="min">Minimum allowed value</param>
-        /// <param name="max">Maximum allowed value</param>
-        /// <returns>Size in pixels, clamped between min and max</returns>
+        /// <summary>Resolves to pixels and clamps between min and max.</summary>
         public readonly float ToPxClamped(float parentValue, float defaultValue, in UnitValue min, in UnitValue max)
         {
             float minValue = min.ToPx(parentValue, float.MinValue);
             float maxValue = max.ToPx(parentValue, float.MaxValue);
             float value = ToPx(parentValue, defaultValue);
-
             return Maths.Min(maxValue, Maths.Max(minValue, value));
         }
 
         /// <summary>
-        /// Linearly interpolates between two UnitValue instances.
-        /// In reality, it creates a new UnitValue with special interpolation data which is calculated when ToPx is called.
+        /// Component-wise linear interpolation. Result lerps each of Px / Pct / Grow / AutoFactor
+        /// independently, so Lerp(Pixels(0), Auto, 0.5f) yields {AutoFactor: 0.5} (half content size).
         /// </summary>
-        /// <param name="a">Starting value</param>
-        /// <param name="b">Ending value</param>
-        /// <param name="blendFactor">Interpolation factor (0.0 to 1.0)</param>
-        /// <returns>Interpolated UnitValue</returns>
-        public static UnitValue Lerp(in UnitValue a, in UnitValue b, float blendFactor)
+        public static UnitValue Lerp(in UnitValue a, in UnitValue b, float t)
         {
-            // Ensure blend factor is between 0 and 1
-            blendFactor = Maths.Clamp(blendFactor, 0f, 1f);
-
-            // If units are the same, we can blend directly
-            if (a.Type == b.Type)
-            {
-                return new UnitValue(
-                    a.Type,
-                    a.Value + (b.Value - a.Value) * blendFactor,
-                    a.PercentPixelOffset + (b.PercentPixelOffset - a.PercentPixelOffset) * blendFactor
-                );
-            }
-
-            // If units are different, use interpolation data
-            var result = new UnitValue {
-                Type = a.Type,
-                Value = a.Value,
-                PercentPixelOffset = a.PercentPixelOffset,
-                _lerpData = new LerpData(a, b, blendFactor)
-            };
-            return result;
+            t = Maths.Clamp(t, 0f, 1f);
+            return new UnitValue(
+                a.Px + (b.Px - a.Px) * t,
+                a.Pct + (b.Pct - a.Pct) * t,
+                a.Grow + (b.Grow - a.Grow) * t,
+                a.AutoFactor + (b.AutoFactor - a.AutoFactor) * t
+            );
         }
 
-        /// <summary>
-        /// Creates a deep copy of this UnitValue.
-        /// </summary>
-        /// <returns>A new UnitValue with the same properties</returns>
-        public readonly UnitValue Clone() => new UnitValue {
-            Type = Type,
-            Value = Value,
-            PercentPixelOffset = PercentPixelOffset,
-            _lerpData = _lerpData != null ? new LerpData(_lerpData.Start, _lerpData.End, _lerpData.Progress) : null
-        };
+        /// <summary>UnitValue is a value type; Clone is provided for source compatibility.</summary>
+        public readonly UnitValue Clone() => this;
 
-        #region Implicit Conversions
+        #region Operators
 
-        /// <summary>
-        /// Implicitly converts an integer to a pixel UnitValue.
-        /// </summary>
-        public static implicit operator UnitValue(int value)
-        {
-            return new UnitValue(Units.Pixels, value);
-        }
+        public static UnitValue operator +(in UnitValue a, in UnitValue b)
+            => new UnitValue(a.Px + b.Px, a.Pct + b.Pct, a.Grow + b.Grow, a.AutoFactor + b.AutoFactor);
 
-        /// <summary>
-        /// Implicitly converts a float to a pixel UnitValue.
-        /// </summary>
-        public static implicit operator UnitValue(float value)
-        {
-            return new UnitValue(Units.Pixels, value);
-        }
+        public static UnitValue operator -(in UnitValue a, in UnitValue b)
+            => new UnitValue(a.Px - b.Px, a.Pct - b.Pct, a.Grow - b.Grow, a.AutoFactor - b.AutoFactor);
+
+        public static UnitValue operator -(in UnitValue a)
+            => new UnitValue(-a.Px, -a.Pct, -a.Grow, -a.AutoFactor);
+
+        public static UnitValue operator *(in UnitValue a, float scalar)
+            => new UnitValue(a.Px * scalar, a.Pct * scalar, a.Grow * scalar, a.AutoFactor * scalar);
+
+        public static UnitValue operator *(float scalar, in UnitValue a) => a * scalar;
+
+        public static UnitValue operator /(in UnitValue a, float scalar)
+            => new UnitValue(a.Px / scalar, a.Pct / scalar, a.Grow / scalar, a.AutoFactor / scalar);
+
+        public static implicit operator UnitValue(int value) => new UnitValue(value);
+        public static implicit operator UnitValue(float value) => new UnitValue(value);
+
+        public static bool operator ==(in UnitValue a, in UnitValue b) => a.Equals(b);
+        public static bool operator !=(in UnitValue a, in UnitValue b) => !a.Equals(b);
 
         #endregion
 
-        #region Equality and Hashing
+        #region Equality
 
-        /// <summary>
-        /// Compares this UnitValue with another object for equality.
-        /// </summary>
-        public override readonly bool Equals(object? obj)
-        {
-            if (obj is UnitValue other)
-            {
-                // First, check the basic properties
-                bool basicPropertiesEqual = Type == other.Type &&
-                                           Value == other.Value &&
-                                           PercentPixelOffset == other.PercentPixelOffset;
+        public readonly bool Equals(UnitValue other)
+            => Px == other.Px && Pct == other.Pct && Grow == other.Grow && AutoFactor == other.AutoFactor;
 
-                // If either value isn't interpolating, they're equal only if both aren't
-                if (_lerpData is null || other._lerpData is null)
-                    return basicPropertiesEqual && _lerpData is null && other._lerpData is null;
+        public override readonly bool Equals(object? obj) => obj is UnitValue other && Equals(other);
 
-                // Both values are interpolating – compare their interpolation data safely
-                var thisLerp = _lerpData;
-                var otherLerp = other._lerpData;
-                bool lerpPropsEqual = thisLerp.Start.Equals(otherLerp.Start) &&
-                                      thisLerp.End.Equals(otherLerp.End) &&
-                                      thisLerp.Progress == otherLerp.Progress;
-
-                return basicPropertiesEqual && lerpPropsEqual;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Returns a hash code for this UnitValue.
-        /// </summary>
-        public override readonly int GetHashCode() => HashCode.Combine(Type, Value, PercentPixelOffset);
+        public override readonly int GetHashCode() => HashCode.Combine(Px, Pct, Grow, AutoFactor);
 
         #endregion
 
-        /// <summary>
-        /// Returns a string representation of this UnitValue.
-        /// </summary>
-        public override readonly string ToString() => Type switch {
-            Units.Pixels => $"{Value}px",
-            Units.Percentage => $"{Value}% + {PercentPixelOffset}px",
-            Units.Stretch => $"Stretch({Value})",
-            Units.Auto => "Auto",
-            _ => throw new ArgumentOutOfRangeException()
-        };
+        public override readonly string ToString()
+        {
+            var parts = new List<string>(4);
+            if (Px != 0f) parts.Add($"{Px}px");
+            if (Pct != 0f) parts.Add($"{Pct}%");
+            if (Grow != 0f) parts.Add($"{Grow}grow");
+            if (AutoFactor != 0f) parts.Add($"{AutoFactor}auto");
+            return parts.Count == 0 ? "0px" : string.Join(" + ", parts);
+        }
     }
 }
