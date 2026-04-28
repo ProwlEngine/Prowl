@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.OrigamiUI;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
@@ -160,14 +161,10 @@ public class ShaderGraphEditorWindow : DockPanel
             float scrollH = MathF.Max(80f, _lastWindowHeight - fixedConsumed);
             using (ScrollView.Begin(paper, "sg_foldout_scroll", _sidebarWidth - 16, scrollH))
             {
-                EditorGUI.Foldout(paper, "sg_fold_props", "Properties",
-                    () => DrawPropertiesFoldout(paper, sg));
-                EditorGUI.Foldout(paper, "sg_fold_light", "Lighting",
-                    () => DrawLightingFoldout(paper, sg));
-                EditorGUI.Foldout(paper, "sg_fold_blend", "Blending",
-                    () => DrawBlendingFoldout(paper, sg));
-                EditorGUI.Foldout(paper, "sg_fold_geo", "Geometry",
-                    () => DrawGeometryFoldout(paper, sg));
+                Origami.Foldout(paper, "sg_fold_props", "Properties").Body(() => DrawPropertiesFoldout(paper, sg));
+                Origami.Foldout(paper, "sg_fold_light", "Lighting").Body(() => DrawLightingFoldout(paper, sg));
+                Origami.Foldout(paper, "sg_fold_blend", "Blending").Body(() => DrawBlendingFoldout(paper, sg));
+                Origami.Foldout(paper, "sg_fold_geo",   "Geometry").Body(() => DrawGeometryFoldout(paper, sg));
             }
         }
     }

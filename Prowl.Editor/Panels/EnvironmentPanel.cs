@@ -3,6 +3,7 @@
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -45,7 +46,7 @@ public class EnvironmentPanel : DockPanel
 
     private void DrawSkyboxSection(Paper paper, string id, Prowl.Scribe.FontFile font, Scene scene)
     {
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{EditorIcons.Sun}  Skybox", () =>
+        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Sun}  Skybox").Body(() =>
         {
             var sky = scene.Skybox;
 
@@ -84,7 +85,7 @@ public class EnvironmentPanel : DockPanel
 
     private void DrawFogSection(Paper paper, string id, Prowl.Scribe.FontFile font, Scene scene)
     {
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{EditorIcons.Cloud}  Fog", () =>
+        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Cloud}  Fog").Body(() =>
         {
             var fog = scene.Fog;
 
@@ -114,7 +115,7 @@ public class EnvironmentPanel : DockPanel
 
     private void DrawAmbientSection(Paper paper, string id, Prowl.Scribe.FontFile font, Scene scene)
     {
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{EditorIcons.Lightbulb}  Ambient Lighting", () =>
+        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Lightbulb}  Ambient Lighting").Body(() =>
         {
             var ambient = scene.Ambient;
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
@@ -22,7 +23,7 @@ public class CollectionPropertyEditor : PropertyEditor
         IList? list = value as IList;
         int count = list?.Count ?? 0;
 
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count})", () =>
+        Origami.Foldout(paper, $"{id}_fold", $"{label} ({count})").Body(() =>
         {
             if (list == null)
             {
@@ -122,7 +123,7 @@ public class DictionaryPropertyEditor : PropertyEditor
         IDictionary? dict = value as IDictionary;
         int count = dict?.Count ?? 0;
 
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({count} entries)", () =>
+        Origami.Foldout(paper, $"{id}_fold", $"{label} ({count} entries)").Body(() =>
         {
             if (dict == null)
             {

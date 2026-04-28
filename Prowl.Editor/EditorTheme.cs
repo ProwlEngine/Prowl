@@ -1,11 +1,182 @@
 using System.Drawing;
 
+using Prowl.OrigamiUI;
 using Prowl.Scribe;
 
 namespace Prowl.Editor;
 
 public static class EditorTheme
 {
+    /// <summary>Default transition (seconds) when applying the editor theme to Origami. 0 = snap.</summary>
+    public const float OrigamiTransitionSeconds = 0.25f;
+
+    // ── Editor's Origami theme state ──────────────────────────────────
+    //
+    // The editor owns its own OrigamiTheme and pushes it onto Origami's stack
+    // each frame (see PushOrigami). Origami.Root is left untouched so user code
+    // running inside the editor (e.g. game UI in play mode) sees the unmodified
+    // root unless it explicitly opts into the editor theme.
+    //
+    // SyncOrigami starts a transition into a freshly-built target theme; TickOrigami
+    // advances the lerp once per frame.
+
+    private static OrigamiTheme? _origamiTheme;
+
+    /// <summary>
+    /// Live theme the editor pushes onto Origami's stack. Frame-fresh when transitioning.
+    /// Re-built on access until <see cref="DefaultFont"/> has loaded — early frames before
+    /// font initialisation would otherwise cache a Font=null theme and never recover.
+    /// <see cref="SyncOrigami"/> replaces it when the user mutates the theme.
+    /// </summary>
+    public static OrigamiTheme OrigamiTheme
+    {
+        get
+        {
+            // Rebuild while Font is still null so we eventually capture the loaded font.
+            // Once it's set, the cached theme is stable until SyncOrigami is called.
+            if (_origamiTheme == null || _origamiTheme.Font == null)
+                _origamiTheme = BuildOrigamiTheme();
+            return _origamiTheme;
+        }
+        private set => _origamiTheme = value;
+    }
+
+    private static OrigamiTheme? _origamiStart;
+    private static OrigamiTheme? _origamiTarget;
+    private static float _origamiDuration;
+    private static float _origamiElapsed;
+
+    /// <summary>True while a <see cref="SyncOrigami"/> transition is in progress.</summary>
+    public static bool IsOrigamiTransitioning => _origamiTarget != null;
+
+    /// <summary>
+    /// Build an <see cref="OrigamiTheme"/> mirroring the current editor theme tokens and start
+    /// transitioning the editor's pushed theme toward it. Called from
+    /// <c>EditorSettings.ApplyTheme</c> so user theme edits propagate live.
+    /// </summary>
+    /// <remarks>
+    /// This is the only place in the editor that bridges into Origami — Origami itself has no
+    /// reference to <see cref="EditorTheme"/> or any editor type, keeping the widget library
+    /// extractable as a standalone package. The transition runs against the editor's pushed
+    /// theme; <see cref="Origami.Root"/> is never written.
+    /// </remarks>
+    public static void SyncOrigami(float transitionSeconds = OrigamiTransitionSeconds)
+    {
+        var target = BuildOrigamiTheme();
+        if (transitionSeconds <= 0f)
+        {
+            OrigamiTheme = target;
+            _origamiStart = null;
+            _origamiTarget = null;
+            _origamiDuration = 0f;
+            _origamiElapsed = 0f;
+            return;
+        }
+
+        _origamiStart = OrigamiTheme.Clone();
+        _origamiTarget = target;
+        _origamiDuration = transitionSeconds;
+        _origamiElapsed = 0f;
+    }
+
+    /// <summary>Advance the editor's Origami theme transition. Called from the editor's frame loop.</summary>
+    public static void TickOrigami(float deltaSeconds)
+    {
+        if (_origamiTarget == null || _origamiStart == null) return;
+
+        _origamiElapsed += deltaSeconds;
+        float t = _origamiDuration > 0f ? System.Math.Clamp(_origamiElapsed / _origamiDuration, 0f, 1f) : 1f;
+
+        if (t >= 1f)
+        {
+            OrigamiTheme = _origamiTarget;
+            _origamiStart = null;
+            _origamiTarget = null;
+            _origamiDuration = 0f;
+            _origamiElapsed = 0f;
+            return;
+        }
+
+        OrigamiTheme = Prowl.OrigamiUI.OrigamiTheme.Lerp(_origamiStart, _origamiTarget, t);
+    }
+
+    /// <summary>
+    /// Push the editor's Origami theme onto Origami's stack. Wrap the editor's render in
+    /// <c>using (EditorTheme.PushOrigami()) { ... }</c> so all editor widgets see the editor
+    /// theme while user code outside the scope still sees <see cref="Origami.Root"/>.
+    /// </summary>
+    public static System.IDisposable PushOrigami() => Origami.PushTheme(OrigamiTheme);
+
+    /// <summary>Construct the editor-flavoured Origami theme without applying it (useful for preview/diff).</summary>
+    public static OrigamiTheme BuildOrigamiTheme() => new()
+    {
+        // Neutral — editor's 5-stop ramp extended to 7 by reusing Ink200/Ink300 for the lighter end,
+        // matching how the editor itself blends Neutral into Ink at the brighter range.
+        Neutral = new OrigamiRamp
+        {
+            C100 = Neutral100, C200 = Neutral200, C300 = Neutral300,
+            C400 = Neutral400, C500 = Neutral500, C600 = Ink200, C700 = Ink300,
+        },
+
+        // Editor's branded ramps map 1:1 (Purple → Primary is the only rename).
+        Primary = RampFrom(Purple100, Purple200, Purple300, Purple400, Purple500, Purple600, Purple700),
+        Blue    = RampFrom(Blue100,   Blue200,   Blue300,   Blue400,   Blue500,   Blue600,   Blue700),
+        Red     = RampFrom(Red100,    Red200,    Red300,    Red400,    Red500,    Red600,    Red700),
+
+        // Editor has no Green or Amber yet — hand-tuned. Replace once the editor adds them.
+        Green = RampFromHex("#0F1F15", "#162C20", "#1F4530", "#2D5C42", "#3D7A57", "#5DC07F", "#A6E5B7"),
+        Amber = RampFromHex("#1F1808", "#3A2A10", "#5C4017", "#7A5520", "#9B7332", "#E0A954", "#F4D8A8"),
+
+        // Ink ramp: the editor's 5 stops + 2 extra-bright headroom (white) for emphasis text.
+        Ink = new OrigamiRamp
+        {
+            C100 = Ink100, C200 = Ink200, C300 = Ink300,
+            C400 = Ink400, C500 = Ink500, C600 = Color.White, C700 = Color.White,
+        },
+
+        Metrics = new OrigamiMetrics
+        {
+            Rounding     = Roundness,
+            HeaderHeight = RowHeight,
+            HeaderPadX   = 6f,
+            IconWidth    = 16f,
+            BadgePadLeft = 6f,
+            FontSize     = FontSize,
+        },
+
+        Icons = new OrigamiIcons
+        {
+            ChevronDown  = EditorIcons.ChevronDown,
+            ChevronRight = EditorIcons.ChevronRight,
+            ChevronUp    = EditorIcons.ChevronUp,
+            ChevronLeft  = EditorIcons.ChevronLeft,
+            CheckboxOff  = EditorIcons.Square,
+            CheckboxOn   = EditorIcons.SquareCheck,
+            Check        = EditorIcons.Check,
+            Close        = EditorIcons.Xmark,
+            Search       = EditorIcons.MagnifyingGlass,
+            More         = EditorIcons.EllipsisVertical,
+            Info         = EditorIcons.CircleInfo,
+            Warning      = EditorIcons.TriangleExclamation,
+            Danger       = EditorIcons.CircleExclamation,
+            Success      = EditorIcons.CircleCheck,
+        },
+        Font = DefaultFont,
+    };
+
+    private static OrigamiRamp RampFrom(Color c1, Color c2, Color c3, Color c4, Color c5, Color c6, Color c7) => new()
+    {
+        C100 = c1, C200 = c2, C300 = c3, C400 = c4, C500 = c5, C600 = c6, C700 = c7,
+    };
+
+    private static OrigamiRamp RampFromHex(string c1, string c2, string c3, string c4, string c5, string c6, string c7) => new()
+    {
+        C100 = ColorTranslator.FromHtml(c1), C200 = ColorTranslator.FromHtml(c2),
+        C300 = ColorTranslator.FromHtml(c3), C400 = ColorTranslator.FromHtml(c4),
+        C500 = ColorTranslator.FromHtml(c5), C600 = ColorTranslator.FromHtml(c6),
+        C700 = ColorTranslator.FromHtml(c7),
+    };
+
     public static FontFile? DefaultFont;
     public static FontFile? DefaultBoldFont;
 

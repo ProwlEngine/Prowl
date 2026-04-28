@@ -6,6 +6,7 @@ using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.Inspector;
+using Prowl.OrigamiUI;
 
 using Color = System.Drawing.Color;
 using Prowl.PaperUI;
@@ -227,7 +228,7 @@ public static class PropertyGrid
         var customEditor = CustomEditorRegistry.GetEditor(actualType);
         if (customEditor != null)
         {
-            EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})", () =>
+            Origami.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})").Body(() =>
             {
                 if (type.IsAbstract || type.IsInterface)
                 {
@@ -246,7 +247,7 @@ public static class PropertyGrid
             return;
         }
 
-        EditorGUI.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})", () =>
+        Origami.Foldout(paper, $"{id}_fold", $"{label} ({actualType.Name})").Body(() =>
         {
             if (type.IsAbstract || type.IsInterface)
             {

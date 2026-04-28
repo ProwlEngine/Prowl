@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.Echo;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
@@ -678,16 +679,16 @@ public class GraphEditor
                     foreach (var (groupName, regs) in groups)
                     {
                         var groupRegs = regs;
-                        EditorGUI.Foldout(paper, $"graph_popup_group_{groupName}", groupName, () =>
-                        {
-                            foreach (var reg in groupRegs)
+                        Origami.Foldout(paper, $"graph_popup_group_{groupName}", groupName)
+                            .Badge(groupRegs.Count.ToString())
+                            .Body(() =>
                             {
-                                if (shown++ >= 200) break;
-                                DrawCreationEntry(paper, reg);
-                            }
-                        },
-                        defaultValue: true,
-                        badge: groupRegs.Count.ToString());
+                                foreach (var reg in groupRegs)
+                                {
+                                    if (shown++ >= 200) break;
+                                    DrawCreationEntry(paper, reg);
+                                }
+                            });
                         if (shown >= 200) break;
                     }
                     shown = visible.Count;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -36,7 +37,7 @@ public class GradientPropertyEditor : PropertyEditor
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        EditorGUI.Foldout(paper, $"{id}_fold", label, () =>
+        Origami.Foldout(paper, $"{id}_fold", label).Body(() =>
         {
             DrawGradientBar(paper, id, gradient, font, onChange);
         });

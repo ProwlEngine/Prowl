@@ -332,6 +332,12 @@ public class EditorApplication : Game
 
         _time += Time.UnscaledDeltaTime;
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
+        EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
+
+        // Push the editor's Origami theme for the remainder of this frame's render. User code
+        // running inside the editor (e.g. game UI in play mode) can override locally with its
+        // own PushTheme, or read Origami.Root directly for the unmodified default.
+        using var origamiScope = EditorTheme.PushOrigami();
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)

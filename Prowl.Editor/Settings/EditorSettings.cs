@@ -106,6 +106,10 @@ public class EditorSettings
         EditorTheme.TabBarHeight = t.TabBarHeight;
         EditorTheme.TabPadding = t.TabPadding;
         EditorTheme.Roundness = t.Roundness;
+
+        // Push the freshly-applied editor theme into Origami. Brief lerp so user-visible
+        // theme tweaks animate instead of snapping.
+        EditorTheme.SyncOrigami();
     }
 
     public void Save()

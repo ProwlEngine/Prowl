@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -268,10 +269,9 @@ public class ParticleSystemComponentEditor : CustomEditor
     }
 
     private static void DrawModule(Paper paper, string id, string label, string icon, ParticleSystemModule module, Prowl.Scribe.FontFile font, Action drawContents)
-        => EditorGUI.Foldout(paper, id, $"{icon}  {label}", drawContents,
-            defaultValue: false,
-            enabled: module.Enabled,
-            setEnabled: v => module.Enabled = v);
+        => Origami.Foldout(paper, id, $"{icon}  {label}")
+            .Toggle(module.Enabled, v => module.Enabled = v)
+            .Body(drawContents);
 
     // ================================================================
     //  Burst List Editor

@@ -2,6 +2,7 @@ using System;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -183,14 +184,14 @@ public class PreferencesPanel : DockPanel
         paper.Box("pref_theme_sp3").Height(12);
 
         // ── Font ──
-        EditorGUI.Foldout(paper, "pref_ft_general", "Font", () =>
+        Origami.Foldout(paper, "pref_ft_general", "Font").Body(() =>
         {
             PrefTextField(paper, s, "Font", theme.DefaultFontName, v => theme.DefaultFontName = v);
             PrefTextField(paper, s, "Bold Font", theme.DefaultBoldFontName, v => theme.DefaultBoldFontName = v);
         });
 
         // ── Sizing ──
-        EditorGUI.Foldout(paper, "pref_sz_general", "General Sizing", () =>
+        Origami.Foldout(paper, "pref_sz_general", "General Sizing").Body(() =>
         {
             SzSlider(paper, s, "User Scale", theme.UserScale, 0.5f, 2, v => theme.UserScale = v, false);
             SzSlider(paper, s, "Font Size", theme.FontSize, 8, 32, v => theme.FontSize = v);
@@ -202,13 +203,13 @@ public class PreferencesPanel : DockPanel
             SzSlider(paper, s, "Roundness", theme.Roundness, 0, 20, v => theme.Roundness = v);
         });
 
-        EditorGUI.Foldout(paper, "pref_sz_docking", "Docking", () =>
+        Origami.Foldout(paper, "pref_sz_docking", "Docking").Body(() =>
         {
             SzSlider(paper, s, "Splitter Size", theme.SplitterSize, 4, 24, v => theme.SplitterSize = v);
             SzSlider(paper, s, "Dock Padding", theme.DockPadding, 0, 24, v => theme.DockPadding = v);
         });
 
-        EditorGUI.Foldout(paper, "pref_sz_tabs", "Tabs", () =>
+        Origami.Foldout(paper, "pref_sz_tabs", "Tabs").Body(() =>
         {
             SzSlider(paper, s, "Tab Bar Height", theme.TabBarHeight, 18, 40, v => theme.TabBarHeight = v);
             SzSlider(paper, s, "Tab Padding", theme.TabPadding, 4, 24, v => theme.TabPadding = v);
@@ -217,7 +218,7 @@ public class PreferencesPanel : DockPanel
 
     private void DrawRamp(Paper paper, EditorSettings s, string name, ColorRamp ramp, string[] stopNames)
     {
-        EditorGUI.Foldout(paper, $"pref_ramp_{name}", name, () =>
+        Origami.Foldout(paper, $"pref_ramp_{name}", name).Body(() =>
         {
             var primaryColor = HexToVColor(ramp.Primary);
             EditorGUI.ColorField(paper, $"pref_ramp_{name}_primary", $"{name} Primary", primaryColor)

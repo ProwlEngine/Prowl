@@ -2,6 +2,7 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
@@ -241,7 +242,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Foldouts ===
             EditorGUI.Header(paper, "h_fold", "Foldouts");
 
-            EditorGUI.Foldout(paper, "fo_1", "Advanced Settings", () =>
+            Origami.Foldout(paper, "fo_1", "Advanced Settings").Body(() =>
             {
                 using (paper.Column("fo_1_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
@@ -252,7 +253,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 }
             });
 
-            EditorGUI.Foldout(paper, "fo_2", "Debug Options", () =>
+            Origami.Foldout(paper, "fo_2", "Debug Options").Body(() =>
             {
                 using (paper.Column("fo_2_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
