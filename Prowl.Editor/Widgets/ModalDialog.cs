@@ -131,7 +131,9 @@ public static class ModalDialog
                     .Text(modal.Title, font)
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize + 1)
-                    .Alignment(PaperUI.TextAlignment.MiddleCenter));
+                    .Alignment(PaperUI.TextAlignment.MiddleCenter)
+                    .Enter());
+
             }
 
             // Content area

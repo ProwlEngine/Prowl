@@ -42,11 +42,13 @@ public static class AssetCreateMenu
 
         });
         builder.Separator();
-        builder.Item($"{EditorIcons.FileCode}  C# Script", () => {
+        builder.Item($"{EditorIcons.FileCode}  C# Script", () =>
+        {
+            NewScriptDialog.Open(GetCurrentFolder());
 
-            var task = new Tasks.CreateAssetTask();
+            /*var task = new Tasks.CreateAssetTask();
             task.TaskType = Tasks.CreateAssetTask.AssetType.Script;
-            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = FileIconRegistry.GetIconForExtension(".cs") }, currentFolder);
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = FileIconRegistry.GetIconForExtension(".cs") }, currentFolder);*/
 
         });
     }

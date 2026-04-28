@@ -76,8 +76,8 @@ public static class StatusBar
 
         using (paper.Row("statusbar")
             .PositionType(PositionType.SelfDirected)
-            .Position(0, paper.Height - EditorTheme.StatusBarHeight)
-            .Size(paper.Percent(100), EditorTheme.StatusBarHeight)
+            .Position(0, paper.Height - EditorTheme.MenuBarHeight)
+            .Size(paper.Percent(100), EditorTheme.MenuBarHeight)
             .BackgroundColor(EditorTheme.Neutral200)
             .ChildLeft(10)
             .RowBetween(10)
