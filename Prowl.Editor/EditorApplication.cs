@@ -693,6 +693,19 @@ public class EditorApplication : Game
 
     private const int BarCount = 10;
 
+    public static string GetEmbeddedResourceText(string resource)
+    {
+        var stream = GetEmbeddedResource(resource);
+
+        string data = "";
+        using (StreamReader reader = new StreamReader(stream))
+        {
+            data = reader.ReadToEnd();
+        }
+
+        return data;
+    }
+
     public static Stream? GetEmbeddedResource(string resource)
     {
         var assembly = Assembly.GetExecutingAssembly();

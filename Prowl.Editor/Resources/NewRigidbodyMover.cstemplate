@@ -1,0 +1,41 @@
+using Prowl.Runtime;
+using Prowl.Vector;
+
+[RequireComponent(typeof(Rigidbody3D))]
+public class {[className]} : MonoBehaviour
+{
+    public float MoveSpeed = 5f;
+    public float JumpImpulse = 6f;
+
+    private Rigidbody3D _body = null!;
+    private bool _jumpQueued;
+
+    public override void Start()
+    {
+        _body = GetComponent<Rigidbody3D>()!;
+    }
+
+    public override void Update()
+    {
+        // Input is sampled every frame, then applied in FixedUpdate so physics stays stable.
+        if (Input.GetKeyDown(KeyCode.Space))
+            _jumpQueued = true;
+    }
+
+    public override void FixedUpdate()
+    {
+        Float2 wasd = Input.GetWASD();
+        Float3 wish = Transform.Right * wasd.X + Transform.Forward * wasd.Y;
+
+        Float3 v = _body.LinearVelocity;
+        v.X = wish.X * MoveSpeed;
+        v.Z = wish.Z * MoveSpeed;
+        _body.LinearVelocity = v;
+
+        if (_jumpQueued)
+        {
+            _body.ApplyImpulse(new Float3(0, JumpImpulse, 0));
+            _jumpQueued = false;
+        }
+    }
+}
