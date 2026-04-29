@@ -81,6 +81,39 @@ public class OrigamiPlaygroundPanel : DockPanel
     private Country _country = new("US", "United States", "North America");
     private Country _countryEqualityByCode = new("US", "United States v2", "North America");
 
+    // ── TextField state ────────────────────────────────────────
+    private string _txtPlain = "";
+    private string _txtSearch = "";
+    private string _txtPassword = "hunter2";
+    private string _txtMulti = "Type a few lines.\nWraps automatically when DoWrap is on.";
+    private string _txtAutoComplete = "";
+    private string _txtClearBtn = "Clear me with the X >";
+    private string _txtReadOnly = "Read-only — content can't change.";
+    private string _txtIntFilter = "";
+    private string _txtFloatFilter = "";
+    private string _txtAlphaNum = "";
+    private string _txtNoSpaces = "";
+    private string _txtError = "bad";
+    private string _txtValidator = "abc";
+    private string _txtHelper = "";
+    private string _txtLeading = "";
+    private string _txtTrailing = "";
+
+    // ── NumericField state ────────────────────────────────────
+    private float _numFloat = 1.5f;
+    private double _numDouble = 3.14159265;
+    private decimal _numDecimal = 9.99m;
+    private int _numInt = 42;
+    private uint _numUint = 100u;
+    private long _numLong = 1234567890L;
+    private short _numShort = 12;
+    private byte _numByte = 200;
+    private sbyte _numSbyte = -10;
+    private float _numClamped = 50f;
+    private float _numStep = 5f;
+    private float _numFormatted = 1234.567f;
+    private float _numInvariant = 1.5f;
+
     // ── Static datasets ────────────────────────────────────────
 
     private static readonly string[] s_fruits =
@@ -169,6 +202,13 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_Sizing(paper);
                 Section_MultiSelect(paper);
                 Section_Flags(paper);
+                Section_TextFieldBasics(paper);
+                Section_TextFieldFilters(paper);
+                Section_TextFieldValidation(paper);
+                Section_TextFieldAutoComplete(paper);
+                Section_NumericTypes(paper);
+                Section_NumericClampStep(paper);
+                Section_NumericCulture(paper);
                 Section_State(paper);
             });
     }
@@ -440,6 +480,203 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
+    // ── TextField sections ─────────────────────────────────────
+
+    private void Section_TextFieldBasics(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tf_basics", "TextField — basics").Body(() =>
+        {
+            using (paper.Column("op_tf_basics_col").Height(UnitValue.Auto).RowBetween(8).Enter())
+            {
+                LabelRow(paper, "tf_plain", "Plain TextField", () =>
+                    Origami.TextField(paper, "op_tf_plain", _txtPlain, v => _txtPlain = v)
+                        .Placeholder("Type something...")
+                        .Show());
+
+                LabelRow(paper, "tf_search", "SearchField (sugar)", () =>
+                    Origami.SearchField(paper, "op_tf_search", _txtSearch, v => _txtSearch = v).Show());
+
+                LabelRow(paper, "tf_password", "PasswordField (eye toggle)", () =>
+                    Origami.PasswordField(paper, "op_tf_pw", _txtPassword, v => _txtPassword = v).Show());
+
+                LabelRow(paper, "tf_clear", "ClearButton", () =>
+                    Origami.TextField(paper, "op_tf_clear", _txtClearBtn, v => _txtClearBtn = v)
+                        .ClearButton()
+                        .Show());
+
+                LabelRow(paper, "tf_readonly", "ReadOnly", () =>
+                    Origami.TextField(paper, "op_tf_ro", _txtReadOnly, v => _txtReadOnly = v)
+                        .ReadOnly()
+                        .Show());
+
+                LabelRow(paper, "tf_lead", "LeadingIcon", () =>
+                    Origami.TextField(paper, "op_tf_lead", _txtLeading, v => _txtLeading = v)
+                        .LeadingIcon("@")
+                        .Placeholder("user@example.com")
+                        .Show());
+
+                LabelRow(paper, "tf_trail", "TrailingIcon (clickable)", () =>
+                    Origami.TextField(paper, "op_tf_trail", _txtTrailing, v => _txtTrailing = v)
+                        .TrailingIcon("?", () => _txtTrailing = "Help clicked!")
+                        .Show());
+
+                LabelRow(paper, "tf_multi", "MultiLine / TextArea (rows: 4)", () =>
+                    Origami.TextArea(paper, "op_tf_multi", _txtMulti, v => _txtMulti = v, rows: 4).Show());
+            }
+        });
+    }
+
+    private void Section_TextFieldFilters(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tf_filters", "TextField — filter presets").Body(() =>
+        {
+            using (paper.Column("op_tf_filters_col").Height(UnitValue.Auto).RowBetween(8).Enter())
+            {
+                LabelRow(paper, "tf_int", "IntFilter (digits + leading -)", () =>
+                    Origami.TextField(paper, "op_tf_int", _txtIntFilter, v => _txtIntFilter = v)
+                        .IntFilter()
+                        .Placeholder("e.g. -42")
+                        .Show());
+
+                LabelRow(paper, "tf_float", "FloatFilter (digits, ., -, e)", () =>
+                    Origami.TextField(paper, "op_tf_float", _txtFloatFilter, v => _txtFloatFilter = v)
+                        .FloatFilter()
+                        .Placeholder("e.g. -3.14e2")
+                        .Show());
+
+                LabelRow(paper, "tf_alphanum", "AlphaNumeric", () =>
+                    Origami.TextField(paper, "op_tf_alphanum", _txtAlphaNum, v => _txtAlphaNum = v)
+                        .AlphaNumeric()
+                        .Placeholder("letters and digits only")
+                        .Show());
+
+                LabelRow(paper, "tf_nospaces", "NoSpaces", () =>
+                    Origami.TextField(paper, "op_tf_nospaces", _txtNoSpaces, v => _txtNoSpaces = v)
+                        .NoSpaces()
+                        .Placeholder("try pressing space — it's filtered")
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_TextFieldValidation(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tf_valid", "TextField — validation / helper").Body(() =>
+        {
+            using (paper.Column("op_tf_valid_col").Height(UnitValue.Auto).RowBetween(10).Enter())
+            {
+                LabelRow(paper, "tf_helper", "HelperText (muted hint below)", () =>
+                    Origami.TextField(paper, "op_tf_helper", _txtHelper, v => _txtHelper = v)
+                        .Placeholder("Username")
+                        .HelperText("3-20 characters, letters and digits")
+                        .Show());
+
+                LabelRow(paper, "tf_error", "Error (forced)", () =>
+                    Origami.TextField(paper, "op_tf_error", _txtError, v => _txtError = v)
+                        .Error("This field is invalid right now.")
+                        .Show());
+
+                LabelRow(paper, "tf_validator", "Validator (live)", () =>
+                    Origami.TextField(paper, "op_tf_validator", _txtValidator, v => _txtValidator = v)
+                        .Placeholder("Type at least 5 characters")
+                        .Validator(s => (s.Length >= 5, $"At least 5 chars, got {s.Length}"))
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_TextFieldAutoComplete(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tf_ac", "TextField — autocomplete").Body(() =>
+        {
+            using (paper.Column("op_tf_ac_col").Height(UnitValue.Auto).RowBetween(8).Enter())
+            {
+                LabelRow(paper, "tf_ac", "Country picker (substring filter)", () =>
+                    Origami.TextField(paper, "op_tf_ac", _txtAutoComplete, v => _txtAutoComplete = v)
+                        .Placeholder("Type a country name...")
+                        .AutoComplete(s_countries.Select(c => c.Name).ToArray())
+                        .Show());
+            }
+        });
+    }
+
+    // ── NumericField sections ──────────────────────────────────
+
+    private void Section_NumericTypes(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_num_types", "NumericField — every numeric type").Body(() =>
+        {
+            using (paper.Column("op_num_types_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "n_float",   "float",   () =>
+                    Origami.NumericField<float>(paper, "op_n_f",  _numFloat,  v => _numFloat = v).Show());
+                LabelRow(paper, "n_double",  "double",  () =>
+                    Origami.NumericField<double>(paper, "op_n_d", _numDouble, v => _numDouble = v).Show());
+                LabelRow(paper, "n_decimal", "decimal", () =>
+                    Origami.NumericField<decimal>(paper, "op_n_dc", _numDecimal, v => _numDecimal = v).Show());
+                LabelRow(paper, "n_int",     "int",     () =>
+                    Origami.NumericField<int>(paper, "op_n_i",   _numInt,    v => _numInt = v).Show());
+                LabelRow(paper, "n_uint",    "uint",    () =>
+                    Origami.NumericField<uint>(paper, "op_n_u",  _numUint,   v => _numUint = v).Show());
+                LabelRow(paper, "n_long",    "long",    () =>
+                    Origami.NumericField<long>(paper, "op_n_l",  _numLong,   v => _numLong = v).Show());
+                LabelRow(paper, "n_short",   "short",   () =>
+                    Origami.NumericField<short>(paper, "op_n_s", _numShort,  v => _numShort = v).Show());
+                LabelRow(paper, "n_byte",    "byte (0-255)", () =>
+                    Origami.NumericField<byte>(paper, "op_n_b",  _numByte,   v => _numByte = v).Show());
+                LabelRow(paper, "n_sbyte",   "sbyte",   () =>
+                    Origami.NumericField<sbyte>(paper, "op_n_sb", _numSbyte, v => _numSbyte = v).Show());
+            }
+        });
+    }
+
+    private void Section_NumericClampStep(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_num_clamp", "NumericField — Min / Max / Step").Body(() =>
+        {
+            using (paper.Column("op_num_clamp_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "n_clamp", "Min(0) Max(100)", () =>
+                    Origami.NumericField<float>(paper, "op_n_clamp", _numClamped, v => _numClamped = v)
+                        .Min(0f).Max(100f)
+                        .HelperText("Value is clamped to [0, 100]")
+                        .Show());
+
+                LabelRow(paper, "n_step", "Step(0.5) Min(-10) Max(10)", () =>
+                    Origami.NumericField<float>(paper, "op_n_step", _numStep, v => _numStep = v)
+                        .Min(-10f).Max(10f).Step(0.5f)
+                        .HelperText("Snaps to multiples of 0.5")
+                        .Show());
+
+                LabelRow(paper, "n_fmt", "Format(\"N2\") (thousands + 2 decimals)", () =>
+                    Origami.NumericField<float>(paper, "op_n_fmt", _numFormatted, v => _numFormatted = v)
+                        .Format("N2")
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_NumericCulture(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_num_culture", "NumericField — culture").Body(() =>
+        {
+            using (paper.Column("op_num_culture_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "n_inv", "InvariantCulture (decimal is always '.')", () =>
+                    Origami.NumericField<float>(paper, "op_n_inv", _numInvariant, v => _numInvariant = v)
+                        .Culture(System.Globalization.CultureInfo.InvariantCulture)
+                        .HelperText("Asset / code-facing values usually want this")
+                        .Show());
+
+                LabelRow(paper, "n_de", "de-DE (decimal is ',')", () =>
+                    Origami.NumericField<float>(paper, "op_n_de", _numFloat, v => _numFloat = v)
+                        .Culture(System.Globalization.CultureInfo.GetCultureInfo("de-DE"))
+                        .HelperText("Same backing field as 'float' above")
+                        .Show());
+            }
+        });
+    }
+
     private void Section_State(Paper paper)
     {
         Origami.Foldout(paper, "op_fo_state", "Live state").Body(() =>
@@ -456,6 +693,15 @@ public class OrigamiPlaygroundPanel : DockPanel
                 StateLine(paper, "st_multi",  $"Multi fruits: {string.Join(", ", _multiBasic)}");
                 StateLine(paper, "st_flags",  $"Flags: {_flags}");
                 StateLine(paper, "st_flagsA", $"Flags (all): {_flagsAll}");
+                StateLine(paper, "st_pw",     $"Password: {new string('*', _txtPassword.Length)} ({_txtPassword.Length} chars)");
+                StateLine(paper, "st_ac",     $"Country picker: {_txtAutoComplete}");
+                StateLine(paper, "st_int",    $"IntFilter: {_txtIntFilter}");
+                StateLine(paper, "st_float",  $"FloatFilter: {_txtFloatFilter}");
+                StateLine(paper, "st_nFloat", $"float: {_numFloat}");
+                StateLine(paper, "st_nInt",   $"int: {_numInt}");
+                StateLine(paper, "st_nByte",  $"byte: {_numByte}");
+                StateLine(paper, "st_nClamp", $"clamped float: {_numClamped}");
+                StateLine(paper, "st_nStep",  $"step float: {_numStep}");
             }
         });
     }

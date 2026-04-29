@@ -193,6 +193,36 @@ public static class Origami
         IEnumerable<T> selected, Action<IReadOnlyList<T>> setter, IReadOnlyList<T> items)
         => new MultiDropdownBuilder<T>(paper, id, selected, setter, items, Current);
 
+    // ── TextField factories ──────────────────────────────────────
+
+    /// <summary>Begin building a single-line text field.</summary>
+    public static TextFieldBuilder TextField(Paper paper, string id, string value, Action<string> setter)
+        => new TextFieldBuilder(paper, id, value, setter, Current);
+
+    /// <summary>Search field: leading magnifier glyph, default "Search..." placeholder, clear button.</summary>
+    public static TextFieldBuilder SearchField(Paper paper, string id, string value, Action<string> setter,
+        string placeholder = "Search...")
+        => new TextFieldBuilder(paper, id, value, setter, Current).Search(placeholder);
+
+    /// <summary>Password field: masks the value, adds a show/hide eye toggle.</summary>
+    public static TextFieldBuilder PasswordField(Paper paper, string id, string value, Action<string> setter,
+        char maskChar = '●')
+        => new TextFieldBuilder(paper, id, value, setter, Current).Password(maskChar);
+
+    /// <summary>Multi-line text area sized to <paramref name="rows"/> rows.</summary>
+    public static TextFieldBuilder TextArea(Paper paper, string id, string value, Action<string> setter, int rows = 4)
+        => new TextFieldBuilder(paper, id, value, setter, Current).MultiLine(rows);
+
+    /// <summary>
+    /// Begin building a numeric field. Generic on <typeparamref name="T"/> — works with
+    /// any <see cref="System.Numerics.INumber{T}"/> (float, double, decimal, int, uint,
+    /// long, short, byte, sbyte, etc.). Culture-aware by default
+    /// (<see cref="System.Globalization.CultureInfo.CurrentCulture"/>).
+    /// </summary>
+    public static NumericFieldBuilder<T> NumericField<T>(Paper paper, string id, T value, Action<T> setter)
+        where T : struct, System.Numerics.INumber<T>
+        => new NumericFieldBuilder<T>(paper, id, value, setter, Current);
+
     /// <summary>
     /// Convenience for a <c>[Flags]</c> enum: each non-zero flag becomes a checkbox row,
     /// and the OR of the checked flags is delivered to <paramref name="setter"/>.
