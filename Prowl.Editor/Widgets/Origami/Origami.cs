@@ -151,4 +151,76 @@ public static class Origami
         ArgumentNullException.ThrowIfNull(scrollViewId);
         ScrollViewBuilder.s_pendingScrollTo[scrollViewId] = offset;
     }
+
+    // ── Dropdown factories ───────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a single-select dropdown over a typed item list. Caller owns the value
+    /// and supplies a setter; Origami calls it when the user picks a different item. Equality
+    /// is determined by <see cref="EqualityComparer{T}.Default"/>; override via
+    /// <see cref="DropdownBuilder{T}.Comparer"/> if needed.
+    /// </summary>
+    public static DropdownBuilder<T> Dropdown<T>(Paper paper, string id, T value, Action<T> setter,
+        IReadOnlyList<T> items)
+        => new DropdownBuilder<T>(paper, id, value, setter, items, Current);
+
+    /// <summary>
+    /// String-array convenience: pick from a fixed list, with the caller tracking the index.
+    /// </summary>
+    public static DropdownBuilder<int> Dropdown(Paper paper, string id, int selectedIndex,
+        Action<int> setter, IReadOnlyList<string> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var indices = new int[options.Count];
+        for (int i = 0; i < options.Count; i++) indices[i] = i;
+        return new DropdownBuilder<int>(paper, id, selectedIndex, setter, indices, Current)
+            .Display(i => (uint)i < (uint)options.Count ? options[i] : string.Empty);
+    }
+
+    /// <summary>
+    /// Enum convenience for a single-value enum. Renders <see cref="Enum.GetNames{T}"/> as labels.
+    /// </summary>
+    public static DropdownBuilder<TEnum> EnumDropdown<TEnum>(Paper paper, string id, TEnum value,
+        Action<TEnum> setter)
+        where TEnum : struct, Enum
+        => new DropdownBuilder<TEnum>(paper, id, value, setter, Enum.GetValues<TEnum>(), Current);
+
+    /// <summary>
+    /// Begin building a multi-select dropdown. The selection set is passed in and a fresh list
+    /// is delivered to <paramref name="setter"/> on every toggle.
+    /// </summary>
+    public static MultiDropdownBuilder<T> MultiDropdown<T>(Paper paper, string id,
+        IEnumerable<T> selected, Action<IReadOnlyList<T>> setter, IReadOnlyList<T> items)
+        => new MultiDropdownBuilder<T>(paper, id, selected, setter, items, Current);
+
+    /// <summary>
+    /// Convenience for a <c>[Flags]</c> enum: each non-zero flag becomes a checkbox row,
+    /// and the OR of the checked flags is delivered to <paramref name="setter"/>.
+    /// Zero (<c>None</c>) entries are skipped — clearing the selection clears all bits.
+    /// </summary>
+    public static MultiDropdownBuilder<TEnum> FlagsDropdown<TEnum>(Paper paper, string id,
+        TEnum value, Action<TEnum> setter)
+        where TEnum : struct, Enum
+    {
+        ArgumentNullException.ThrowIfNull(setter);
+
+        var all = Enum.GetValues<TEnum>();
+        var nonZero = new List<TEnum>(all.Length);
+        var valueU = Convert.ToUInt64(value);
+        var current = new List<TEnum>(all.Length);
+        foreach (var v in all)
+        {
+            ulong u = Convert.ToUInt64(v);
+            if (u == 0) continue;
+            nonZero.Add(v);
+            if ((valueU & u) == u) current.Add(v);
+        }
+
+        return new MultiDropdownBuilder<TEnum>(paper, id, current, list =>
+        {
+            ulong combined = 0;
+            foreach (var f in list) combined |= Convert.ToUInt64(f);
+            setter((TEnum)Enum.ToObject(typeof(TEnum), combined));
+        }, nonZero, Current);
+    }
 }
