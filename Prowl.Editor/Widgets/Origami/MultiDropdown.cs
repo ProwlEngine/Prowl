@@ -163,13 +163,6 @@ public sealed class MultiDropdownBuilder<T>
             bool isOpen = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyOpen, false);
             isOpen = DropdownInternal.HandleCloseInteraction(_paper, trigHandle, isOpen);
 
-            var capturedTrig = trigHandle;
-            _paper.CurrentParent.Data.OnPostLayout += (h, rect) =>
-            {
-                _paper.SetElementStorage(capturedTrig, DropdownInternal.KeyTrigTop, (float)rect.Min.Y);
-                _paper.SetElementStorage(capturedTrig, DropdownInternal.KeyTrigBottom, (float)rect.Max.Y);
-            };
-
             if (_customTrigger != null)
             {
                 var ctx = new DropdownTriggerContext(isOpen, triggerText, isEmpty, ramp, ink, _theme);
@@ -204,17 +197,6 @@ public sealed class MultiDropdownBuilder<T>
             {
                 DropdownInternal.RenderBackdrop(_paper, $"{_id}_bd", trigHandle, dim: true);
 
-                bool flipUp = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyFlipUp, false);
-                float trigBottom = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyTrigBottom, 0f);
-                float popH = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyPopHeight, 0f);
-                float screenH = _paper.Height;
-                if (popH > 0f && trigBottom > 0f)
-                {
-                    bool wouldOverflow = trigBottom + popH > screenH - 4f;
-                    flipUp = wouldOverflow;
-                    _paper.SetElementStorage(trigHandle, DropdownInternal.KeyFlipUp, flipUp);
-                }
-
                 var p = new DropdownInternal.PopoverParams<T>
                 {
                     Paper = _paper,
@@ -248,7 +230,6 @@ public sealed class MultiDropdownBuilder<T>
                         ? (float)trigHandle.Data.LayoutRect.Size.X
                         : 200f,
                     PopoverWidth = _popoverWidth,
-                    FlipUp = flipUp,
                     TriggerHeight = _height,
                 };
                 DropdownInternal.RenderPopover(p);

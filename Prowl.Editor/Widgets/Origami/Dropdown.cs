@@ -184,14 +184,6 @@ public sealed class DropdownBuilder<T>
             bool isOpen = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyOpen, false);
             isOpen = DropdownInternal.HandleCloseInteraction(_paper, trigHandle, isOpen);
 
-            // Capture trigger position for next frame's flip-decision.
-            var capturedTrig = trigHandle;
-            _paper.CurrentParent.Data.OnPostLayout += (h, rect) =>
-            {
-                _paper.SetElementStorage(capturedTrig, DropdownInternal.KeyTrigTop, (float)rect.Min.Y);
-                _paper.SetElementStorage(capturedTrig, DropdownInternal.KeyTrigBottom, (float)rect.Max.Y);
-            };
-
             // Trigger contents
             if (_customTrigger != null)
             {
@@ -229,20 +221,6 @@ public sealed class DropdownBuilder<T>
                 // Modal backdrop dims everything behind the popover and catches outside clicks.
                 DropdownInternal.RenderBackdrop(_paper, $"{_id}_bd", trigHandle, dim: true);
 
-                // Decide flip based on previous frame's recorded trigger Y + popover height.
-                bool flipUp = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyFlipUp, false);
-                float trigBottom = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyTrigBottom, 0f);
-                float popH = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyPopHeight, 0f);
-                float screenH = _paper.Height;
-                if (popH > 0f && trigBottom > 0f)
-                {
-                    bool wouldOverflow = trigBottom + popH > screenH - 4f;
-                    flipUp = wouldOverflow;
-                    _paper.SetElementStorage(trigHandle, DropdownInternal.KeyFlipUp, flipUp);
-                }
-
-                // Ensure pop width default matches the trigger; we pass _height as trigger height since
-                // the trigger is fixed-height regardless of how Width was set.
                 var p = new DropdownInternal.PopoverParams<T>
                 {
                     Paper = _paper,
@@ -271,7 +249,6 @@ public sealed class DropdownBuilder<T>
                         ? (float)trigHandle.Data.LayoutRect.Size.X
                         : 200f,
                     PopoverWidth = _popoverWidth,
-                    FlipUp = flipUp,
                     TriggerHeight = _height,
                 };
                 DropdownInternal.RenderPopover(p);

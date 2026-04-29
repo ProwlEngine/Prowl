@@ -90,11 +90,6 @@ internal static class DropdownInternal
     internal const string KeySearch      = "drop_search";
     internal const string KeyHighlight   = "drop_hl";
     internal const string KeyPage        = "drop_page";
-    internal const string KeyTrigBottom  = "drop_trigBottom";
-    internal const string KeyTrigTop     = "drop_trigTop";
-    internal const string KeyPopHeight   = "drop_popH";
-    internal const string KeyFlipUp      = "drop_flipUp";
-    internal const string KeyPopRect     = "drop_popRect";
 
     /// <summary>
     /// Handles Esc to close. Click-outside is handled separately by the modal backdrop
@@ -166,7 +161,6 @@ internal static class DropdownInternal
         public ElementHandle TriggerHandle;
         public float TriggerWidth;
         public float? PopoverWidth;
-        public bool FlipUp;
         public float TriggerHeight;
     }
 
@@ -269,8 +263,8 @@ internal static class DropdownInternal
             }
         }
 
-        // Compute popover position. If FlipUp, render above the trigger.
-        float popY = p.FlipUp ? -1f : p.TriggerHeight - 1f;
+        // Always render below the trigger; ClampToScreen on the popover handles edges.
+        float popY = p.TriggerHeight - 1f;
         float popoverWidth = p.PopoverWidth ?? p.TriggerWidth;
 
         // Layout sizing.
@@ -287,14 +281,14 @@ internal static class DropdownInternal
         float listH = MathF.Min(listMax, visibleCount * p.ItemHeight);
         float popH = padY * 2 + searchH + searchGap + listH + paginationH + paginationGap;
 
-        // For flip detection on next frame.
-        paper.SetElementStorage(p.TriggerHandle, KeyPopHeight, popH);
-
         Color popBorder = p.Variant is OrigamiVariant.Default or OrigamiVariant.Subtle
             ? p.Theme.Neutral.C400 : ramp.C400;
+        // StopEventPropagation: the popover is logically a child of the trigger element, so
+        // without this any click inside (search bar, page button, item row) bubbles up to the
+        // trigger and re-toggles the open state — closing the dropdown unintentionally.
         var popBuilder = paper.Column($"{p.Id}_pop")
             .PositionType(PositionType.SelfDirected)
-            .Position(0, p.FlipUp ? popY - popH : popY)
+            .Position(0, popY)
             .Width(popoverWidth)
             .Height(popH)
             .BackgroundColor(p.Theme.Neutral.C200)
@@ -304,7 +298,8 @@ internal static class DropdownInternal
             .ColBetween(searchGap)
             .HookToParent()
             .Layer(Layer.Topmost)
-            .ClampToScreen();
+            .ClampToScreen()
+            .StopEventPropagation();
 
         using (popBuilder.Enter())
         {
