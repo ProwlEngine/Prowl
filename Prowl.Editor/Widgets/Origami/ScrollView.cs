@@ -189,6 +189,8 @@ public sealed class ScrollViewBuilder
             var content = _paper.Column($"{_id}_content")
                 .PositionType(PositionType.SelfDirected)
                 .Position(_padLeft - scrollX, _padTop - scrollY)
+                .Transition(GuiProp.Top, 0.33f, Easing.EaseOut)
+                .Transition(GuiProp.Left, 0.33f, Easing.EaseOut)
                 .Height(UnitValue.Auto)
                 .ColBetween(_colSpacing);
 
@@ -244,6 +246,7 @@ public sealed class ScrollViewBuilder
         var thumb = _paper.Box($"{_id}_vthumb")
             .PositionType(PositionType.SelfDirected)
             .Position(_width - _scrollbarSize, thumbY)
+            .Transition(GuiProp.Top, 0.1f, Easing.EaseOut)
             .Width(_scrollbarSize).Height(thumbH)
             .BackgroundColor(ramp.C500)
             .Hovered.BackgroundColor(ramp.C600).End()
@@ -290,6 +293,7 @@ public sealed class ScrollViewBuilder
         var thumb = _paper.Box($"{_id}_hthumb")
             .PositionType(PositionType.SelfDirected)
             .Position(thumbX, _height - _scrollbarSize)
+            .Transition(GuiProp.Left, 0.1f, Easing.EaseOut)
             .Width(thumbW).Height(_scrollbarSize)
             .BackgroundColor(ramp.C500)
             .Hovered.BackgroundColor(ramp.C600).End()
