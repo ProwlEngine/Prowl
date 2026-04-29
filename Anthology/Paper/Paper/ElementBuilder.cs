@@ -1397,14 +1397,26 @@ namespace Prowl.PaperUI
             state.IsFocused = _paper.IsElementFocused(_handle.Data.ID);
             state.IsMultiLine = isMultiLine; // Ensure consistency
 
-            // When not focused, sync to the external value so that changes
-            // from code (e.g. gizmos, undo, clamping) are reflected immediately.
-            if (!state.IsFocused)
+            // Sync to the external value whenever it diverges from our stored state. The
+            // typing path (OnTextInput / key handlers) already pushes user edits out via
+            // onChange, so for an unfocused field a divergence implies a code-side write
+            // (gizmos, undo, value clamping, etc.) — just adopt it. For a focused field,
+            // a divergence implies the same thing happened mid-edit (autocomplete pick,
+            // validator clamp, format roundtrip, paste-from-code...): adopt it AND
+            // select-all so the user can see the new value and replace it with their
+            // next keystroke if they want.
+            string expected = initialValue ?? "";
+            if (state.Value != expected)
             {
-                string expected = initialValue ?? "";
-                if (state.Value != expected)
+                state.Value = expected;
+                if (state.IsFocused)
                 {
-                    state.Value = expected;
+                    state.SelectionStart = 0;
+                    state.SelectionEnd = expected.Length;
+                    state.CursorPosition = expected.Length;
+                }
+                else
+                {
                     state.CursorPosition = expected.Length;
                     state.SelectionStart = -1;
                     state.SelectionEnd = -1;
