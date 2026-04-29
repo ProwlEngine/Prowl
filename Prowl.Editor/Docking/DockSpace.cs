@@ -343,10 +343,11 @@ public class DockSpace
             {
                 using (paper.Box($"c_{node.GetHashCode()}")
                     .PositionType(PositionType.SelfDirected).Position(0, cy).Size(w, ch)
+                    .Padding(EditorTheme.Padding)
                     .Enter())
                 {
                     if (node.ActiveTabIndex < node.Tabs.Count)
-                        node.Tabs[node.ActiveTabIndex].OnGUI(paper, w, ch);
+                        node.Tabs[node.ActiveTabIndex].OnGUI(paper, w - (EditorTheme.Padding * 2), ch - (EditorTheme.Padding * 2));
 
 
 
