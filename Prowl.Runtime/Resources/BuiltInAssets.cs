@@ -71,7 +71,6 @@ public static class BuiltInAssets
                 DefaultModel.Cylinder => "Cylinder.obj",
                 DefaultModel.Plane => "Plane.obj",
                 DefaultModel.SkyDome => "SkyDome.obj",
-                DefaultModel.UnitCube => "1mcube.obj",
                 _ => null
             };
             if (fileName == null) continue;
@@ -80,7 +79,7 @@ public static class BuiltInAssets
                 () =>
                 {
                     using var stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-                    var mesh = AssetImporting.Obj.ObjImporter.ParseMeshOnly(stream, model.ToString());
+                    var mesh = AssetImporting.Obj.ObjImporter.ParseMeshOnly(stream, model.ToString(), new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true });
                     mesh.AssetID = GuidForMesh(model);
                     mesh.AssetPath = $"$Default:Mesh/{model}";
                     return mesh;

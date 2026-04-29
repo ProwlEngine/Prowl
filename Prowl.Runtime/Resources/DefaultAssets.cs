@@ -47,7 +47,6 @@ public enum DefaultModel
     Cylinder,
     Plane,
     SkyDome,
-    UnitCube // 1mcube.obj - 1 meter cube
 }
 
 /// <summary>
