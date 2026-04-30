@@ -213,8 +213,8 @@ public class GradientPropertyEditor : PropertyEditor
                         }
                     }
 
-                    EditorGUI.Slider(paper, $"{id}_sel_time", "Time", key.Time, 0f, 1f)
-                        .OnValueChanged(v =>
+                    InspectorRow.Draw(paper, $"{id}_sel_time", "Time", () =>
+                        Origami.Slider(paper, $"{id}_sel_time_v", key.Time, v =>
                         {
                             var k = gradient.ColorKeys[idx];
                             k.Time = v;
@@ -222,7 +222,7 @@ public class GradientPropertyEditor : PropertyEditor
                             gradient.ColorKeys.Sort((a, b) => a.Time.CompareTo(b.Time));
                             _selectedKeyIndex = gradient.ColorKeys.FindIndex(k2 => MathF.Abs(k2.Time - v) < 0.001f);
                             onChange(gradient);
-                        });
+                        }, 0f, 1f).Format("F3").Show());
 
                     EditorGUI.ColorField(paper, $"{id}_sel_color", "Color", key.Color)
                         .OnValueChanged(v =>
@@ -264,8 +264,8 @@ public class GradientPropertyEditor : PropertyEditor
                         }
                     }
 
-                    EditorGUI.Slider(paper, $"{id}_sel_time", "Time", key.Time, 0f, 1f)
-                        .OnValueChanged(v =>
+                    InspectorRow.Draw(paper, $"{id}_sel_time", "Time", () =>
+                        Origami.NumericField<float>(paper, $"{id}_sel_time_v", key.Time, v =>
                         {
                             var k = gradient.AlphaKeys[idx];
                             k.Time = v;
@@ -273,16 +273,16 @@ public class GradientPropertyEditor : PropertyEditor
                             gradient.AlphaKeys.Sort((a, b) => a.Time.CompareTo(b.Time));
                             _selectedKeyIndex = gradient.AlphaKeys.FindIndex(k2 => MathF.Abs(k2.Time - v) < 0.001f);
                             onChange(gradient);
-                        });
+                        }).Min(0f).Max(1f).Show());
 
-                    EditorGUI.Slider(paper, $"{id}_sel_alpha", "Alpha", key.Alpha, 0f, 1f)
-                        .OnValueChanged(v =>
+                    InspectorRow.Draw(paper, $"{id}_sel_alpha", "Alpha", () =>
+                        Origami.Slider(paper, $"{id}_sel_alpha_v", key.Alpha, v =>
                         {
                             var k = gradient.AlphaKeys[idx];
                             k.Alpha = v;
                             gradient.AlphaKeys[idx] = k;
                             onChange(gradient);
-                        });
+                        }, 0f, 1f).Format("F2").Show());
                 }
             }
         }
@@ -320,14 +320,16 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
 
         using (paper.Column(id).Height(UnitValue.Auto).Enter())
         {
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", label, curve.Mode)
-                .OnValueChanged(v => { curve.Mode = v; onChange(curve); });
+            InspectorRow.Draw(paper, $"{id}_mode", label, () =>
+                Origami.EnumDropdown(paper, $"{id}_mode_v", curve.Mode,
+                    v => { curve.Mode = v; onChange(curve); }).Show());
 
             switch (curve.Mode)
             {
                 case MinMaxCurveMode.Constant:
-                    EditorGUI.FloatField(paper, $"{id}_val", curve.ConstantValue, "Value")
-                        .OnValueChanged(v => { curve.ConstantValue = v; onChange(curve); });
+                    InspectorRow.Draw(paper, $"{id}_val", "Value", () =>
+                        Origami.NumericField<float>(paper, $"{id}_val_v", curve.ConstantValue,
+                            v => { curve.ConstantValue = v; onChange(curve); }).Show());
                     break;
 
                 case MinMaxCurveMode.Curve:
@@ -336,10 +338,12 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
                     break;
 
                 case MinMaxCurveMode.Random:
-                    EditorGUI.FloatField(paper, $"{id}_min", curve.MinValue, "Min")
-                        .OnValueChanged(v => { curve.MinValue = v; onChange(curve); });
-                    EditorGUI.FloatField(paper, $"{id}_max", curve.MaxValue, "Max")
-                        .OnValueChanged(v => { curve.MaxValue = v; onChange(curve); });
+                    InspectorRow.Draw(paper, $"{id}_min", "Min", () =>
+                        Origami.NumericField<float>(paper, $"{id}_min_v", curve.MinValue,
+                            v => { curve.MinValue = v; onChange(curve); }).Show());
+                    InspectorRow.Draw(paper, $"{id}_max", "Max", () =>
+                        Origami.NumericField<float>(paper, $"{id}_max_v", curve.MaxValue,
+                            v => { curve.MaxValue = v; onChange(curve); }).Show());
                     break;
             }
         }
@@ -359,8 +363,9 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
 
         using (paper.Column(id).Height(UnitValue.Auto).Enter())
         {
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", label, gradient.Mode)
-                .OnValueChanged(v => { gradient.Mode = v; onChange(gradient); });
+            InspectorRow.Draw(paper, $"{id}_mode", label, () =>
+                Origami.EnumDropdown(paper, $"{id}_mode_v", gradient.Mode,
+                    v => { gradient.Mode = v; onChange(gradient); }).Show());
 
             switch (gradient.Mode)
             {

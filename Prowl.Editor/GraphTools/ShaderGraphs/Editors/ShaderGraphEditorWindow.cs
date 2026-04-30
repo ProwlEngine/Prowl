@@ -312,8 +312,8 @@ public class ShaderGraphEditorWindow : DockPanel
         if (master != null)
         {
             var current = master.Lighting;
-            EditorGUI.EnumDropdown(paper, "sg_lighting_mode", "Mode", current)
-                .OnValueChanged(v =>
+            InspectorRow.Draw(paper, "sg_lighting_mode", "Mode", () =>
+                Origami.EnumDropdown(paper, "sg_lighting_mode_v", current, v =>
                 {
                     if (v == current) return;
                     var cap = master; var before = current;
@@ -323,7 +323,7 @@ public class ShaderGraphEditorWindow : DockPanel
                     cap.Lighting = v;
                     RebuildMasterPorts(cap);
                     TouchSettings();
-                });
+                }).Show());
         }
         EditorGUI.Toggle(paper, "sg_recv_ambient", "Receives Ambient", sg.RenderSettings.ReceivesAmbient)
             .OnValueChanged(v => { var s = sg.RenderSettings; s.ReceivesAmbient = v; MutateSettings(s, "Receives Ambient"); });
@@ -335,23 +335,28 @@ public class ShaderGraphEditorWindow : DockPanel
 
     private void DrawBlendingFoldout(Paper paper, ShaderGraph sg)
     {
-        EditorGUI.EnumDropdown(paper, "sg_blend", "Blend Mode", sg.RenderSettings.Blend)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.Blend = v; MutateSettings(s, "Blend"); });
+        InspectorRow.Draw(paper, "sg_blend", "Blend Mode", () =>
+            Origami.EnumDropdown(paper, "sg_blend_v", sg.RenderSettings.Blend,
+                v => { var s = sg.RenderSettings; s.Blend = v; MutateSettings(s, "Blend"); }).Show());
 
         // Custom mode unlocks the raw Src/Dst/Op pickers matching the parser's
         // { Src X; Dst Y; Mode Z; } block exactly. Hidden for presets.
         if (sg.RenderSettings.Blend == ShaderBlendMode.Custom)
         {
-            EditorGUI.EnumDropdown(paper, "sg_blend_src", "Src Factor", sg.RenderSettings.BlendSrc)
-                .OnValueChanged(v => { var s = sg.RenderSettings; s.BlendSrc = v; MutateSettings(s, "Src Factor"); });
-            EditorGUI.EnumDropdown(paper, "sg_blend_dst", "Dst Factor", sg.RenderSettings.BlendDst)
-                .OnValueChanged(v => { var s = sg.RenderSettings; s.BlendDst = v; MutateSettings(s, "Dst Factor"); });
-            EditorGUI.EnumDropdown(paper, "sg_blend_op", "Blend Op", sg.RenderSettings.BlendOp)
-                .OnValueChanged(v => { var s = sg.RenderSettings; s.BlendOp = v; MutateSettings(s, "Blend Op"); });
+            InspectorRow.Draw(paper, "sg_blend_src", "Src Factor", () =>
+                Origami.EnumDropdown(paper, "sg_blend_src_v", sg.RenderSettings.BlendSrc,
+                    v => { var s = sg.RenderSettings; s.BlendSrc = v; MutateSettings(s, "Src Factor"); }).Show());
+            InspectorRow.Draw(paper, "sg_blend_dst", "Dst Factor", () =>
+                Origami.EnumDropdown(paper, "sg_blend_dst_v", sg.RenderSettings.BlendDst,
+                    v => { var s = sg.RenderSettings; s.BlendDst = v; MutateSettings(s, "Dst Factor"); }).Show());
+            InspectorRow.Draw(paper, "sg_blend_op", "Blend Op", () =>
+                Origami.EnumDropdown(paper, "sg_blend_op_v", sg.RenderSettings.BlendOp,
+                    v => { var s = sg.RenderSettings; s.BlendOp = v; MutateSettings(s, "Blend Op"); }).Show());
         }
 
-        EditorGUI.EnumDropdown(paper, "sg_queue", "Queue", sg.RenderSettings.Queue)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.Queue = v; MutateSettings(s, "Queue"); });
+        InspectorRow.Draw(paper, "sg_queue", "Queue", () =>
+            Origami.EnumDropdown(paper, "sg_queue_v", sg.RenderSettings.Queue,
+                v => { var s = sg.RenderSettings; s.Queue = v; MutateSettings(s, "Queue"); }).Show());
 
         using (paper.Row("sg_presets").Height(22).RowBetween(4).Enter())
         {
@@ -366,14 +371,17 @@ public class ShaderGraphEditorWindow : DockPanel
 
     private void DrawGeometryFoldout(Paper paper, ShaderGraph sg)
     {
-        EditorGUI.EnumDropdown(paper, "sg_cull", "Cull", sg.RenderSettings.Cull)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.Cull = v; MutateSettings(s, "Cull"); });
-        EditorGUI.EnumDropdown(paper, "sg_winding", "Winding", sg.RenderSettings.Winding)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.Winding = v; MutateSettings(s, "Winding"); });
+        InspectorRow.Draw(paper, "sg_cull", "Cull", () =>
+            Origami.EnumDropdown(paper, "sg_cull_v", sg.RenderSettings.Cull,
+                v => { var s = sg.RenderSettings; s.Cull = v; MutateSettings(s, "Cull"); }).Show());
+        InspectorRow.Draw(paper, "sg_winding", "Winding", () =>
+            Origami.EnumDropdown(paper, "sg_winding_v", sg.RenderSettings.Winding,
+                v => { var s = sg.RenderSettings; s.Winding = v; MutateSettings(s, "Winding"); }).Show());
         EditorGUI.Toggle(paper, "sg_zwrite", "Z Write", sg.RenderSettings.ZWrite)
             .OnValueChanged(v => { var s = sg.RenderSettings; s.ZWrite = v; MutateSettings(s, "Z Write"); });
-        EditorGUI.EnumDropdown(paper, "sg_ztest", "Z Test", sg.RenderSettings.ZTest)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.ZTest = v; MutateSettings(s, "Z Test"); });
+        InspectorRow.Draw(paper, "sg_ztest", "Z Test", () =>
+            Origami.EnumDropdown(paper, "sg_ztest_v", sg.RenderSettings.ZTest,
+                v => { var s = sg.RenderSettings; s.ZTest = v; MutateSettings(s, "Z Test"); }).Show());
     }
 
     /// <summary>Floating pill shown when the sidebar is hidden, so the user can

@@ -608,8 +608,8 @@ public class GraphEditor
                 .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 1)
                 .Alignment(TextAlignment.MiddleLeft);
 
-            EditorGUI.TextField(paper, "graph_popup_search", "", _creationFilter)
-                .OnValueChanged(v => _creationFilter = v ?? "");
+            Origami.SearchField(paper, "graph_popup_search", _creationFilter,
+                v => _creationFilter = v ?? "").Width(UnitValue.Stretch()).Show();
 
             // Non-node entries only shown when no wire is being dropped (a dropped wire
             // is asking for a compatible node, so non-node items make no sense there).

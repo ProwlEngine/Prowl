@@ -111,8 +111,9 @@ public class OrmPackerPanel : DockPanel
                 {
                     using (paper.Row("orm_out_path_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
                     {
-                        EditorGUI.TextField(paper, "orm_out_path_tf", _outputPath, "Pick a file…")
-                            .OnValueChanged(v => _outputPath = v ?? "");
+                        Origami.TextField(paper, "orm_out_path_tf", _outputPath,
+                                v => _outputPath = v ?? "")
+                            .Placeholder("Pick a file…").Width(UnitValue.Stretch()).Show();
 
                         EditorGUI.Button(paper, "orm_out_browse", "Browse", width: 80)
                             .OnValueChanged(_ => OpenSaveDialog());
@@ -125,11 +126,11 @@ public class OrmPackerPanel : DockPanel
                 if (_sizeMode == SizeMode.Custom)
                 {
                     LabelRow(paper, "orm_size_w", "Width", () =>
-                        EditorGUI.IntField(paper, "orm_size_w_f", _customW, "Width")
-                            .OnValueChanged(v => _customW = Math.Clamp(v, 1, 16384)));
+                        Origami.NumericField<int>(paper, "orm_size_w_f", _customW,
+                            v => _customW = Math.Clamp(v, 1, 16384)).Min(1).Max(16384).Show());
                     LabelRow(paper, "orm_size_h", "Height", () =>
-                        EditorGUI.IntField(paper, "orm_size_h_f", _customH, "Height")
-                            .OnValueChanged(v => _customH = Math.Clamp(v, 1, 16384)));
+                        Origami.NumericField<int>(paper, "orm_size_h_f", _customH,
+                            v => _customH = Math.Clamp(v, 1, 16384)).Min(1).Max(16384).Show());
                 }
 
                 LabelRow(paper, "orm_filter", "Resample Filter", () =>
@@ -270,9 +271,9 @@ public class OrmPackerPanel : DockPanel
             }
 
             // Default value slider used when no texture is assigned
-            EditorGUI.Slider(paper, $"orm_slot_{slot.Id}_def",
-                hasTex ? "Default (unused)" : "Default", slot.DefaultValue, 0f, 1f)
-                .OnValueChanged(v => slot.DefaultValue = v);
+            LabelRow(paper, $"orm_slot_{slot.Id}_def_row", hasTex ? "Default (unused)" : "Default", () =>
+                Origami.Slider(paper, $"orm_slot_{slot.Id}_def", slot.DefaultValue,
+                    v => slot.DefaultValue = v, 0f, 1f).Format("F2").Show());
         }
     }
 

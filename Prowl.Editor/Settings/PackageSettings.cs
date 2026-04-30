@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Scripting;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
@@ -104,11 +106,11 @@ public class PackageSettings : ProjectSettingsBase
         // Add new package
         EditorGUI.Header(paper, "pkg_add_hdr", "Add Package");
 
-        EditorGUI.TextField(paper, "pkg_add_name", "Package Name", _newName)
-            .OnValueChanged(v => _newName = v);
+        InspectorRow.Draw(paper, "pkg_add_name", "Package Name", () =>
+            Origami.TextField(paper, "pkg_add_name_v", _newName, v => _newName = v).Show());
 
-        EditorGUI.TextField(paper, "pkg_add_ver", "Version", _newVersion)
-            .OnValueChanged(v => _newVersion = v);
+        InspectorRow.Draw(paper, "pkg_add_ver", "Version", () =>
+            Origami.TextField(paper, "pkg_add_ver_v", _newVersion, v => _newVersion = v).Show());
 
         EditorGUI.Toggle(paper, "pkg_add_editor_only", "Editor Only", _newEditorOnly)
             .OnValueChanged(v => _newEditorOnly = v);

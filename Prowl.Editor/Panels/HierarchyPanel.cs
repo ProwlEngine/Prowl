@@ -366,8 +366,7 @@ public class HierarchyPanel : DockPanel
             }
 
             // Search
-            EditorGUI.SearchBar(paper, "hier_search", _searchText, "Search...")
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "hier_search", _searchText, v => _searchText = v).Show();
         }
     }
 

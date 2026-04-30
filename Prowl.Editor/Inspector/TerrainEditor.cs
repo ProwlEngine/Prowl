@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -154,8 +155,9 @@ public class TerrainEditor : CustomEditor
         // Flatten target height
         if (ActiveHeightTool == HeightTool.Flatten)
         {
-            EditorGUI.Slider(paper, $"{id}_flath", "Target Height", FlattenHeight, 0f, 1f)
-                .OnValueChanged(v => FlattenHeight = v);
+            InspectorRow.Draw(paper, $"{id}_flath", "Target Height", () =>
+                Origami.Slider(paper, $"{id}_flath_v", FlattenHeight,
+                    v => FlattenHeight = v, 0f, 1f).Format("F2").Show());
         }
     }
 
@@ -213,12 +215,15 @@ public class TerrainEditor : CustomEditor
             v => { sl.Albedo = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
         PropertyGrid.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(AssetRef<Texture2D>), sl.NormalMap,
             v => { sl.NormalMap = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
-        EditorGUI.FloatField(paper, $"{id}_til", sl.Tiling, "Tiling")
-            .OnValueChanged(v => { sl.Tiling = MathF.Max(0.01f, v); _isDirty = true; });
-        EditorGUI.Slider(paper, $"{id}_rgh", "Roughness", sl.Roughness, 0f, 1f)
-            .OnValueChanged(v => { sl.Roughness = v; _isDirty = true; });
-        EditorGUI.Slider(paper, $"{id}_met", "Metallic", sl.Metallic, 0f, 1f)
-            .OnValueChanged(v => { sl.Metallic = v; _isDirty = true; });
+        InspectorRow.Draw(paper, $"{id}_til", "Tiling", () =>
+            Origami.NumericField<float>(paper, $"{id}_til_v", sl.Tiling,
+                v => { sl.Tiling = MathF.Max(0.01f, v); _isDirty = true; }).Min(0.01f).Show());
+        InspectorRow.Draw(paper, $"{id}_rgh", "Roughness", () =>
+            Origami.Slider(paper, $"{id}_rgh_v", sl.Roughness,
+                v => { sl.Roughness = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
+        InspectorRow.Draw(paper, $"{id}_met", "Metallic", () =>
+            Origami.Slider(paper, $"{id}_met_v", sl.Metallic,
+                v => { sl.Metallic = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
 
         paper.Box($"{id}_sp1").Height(6);
 
@@ -259,8 +264,9 @@ public class TerrainEditor : CustomEditor
         {
             var dp = data.DetailPrototypes[ActiveDetailIndex];
 
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", "Render Mode", dp.RenderMode)
-                .OnValueChanged(v => { dp.RenderMode = v; MarkDetailsDirty(); });
+            InspectorRow.Draw(paper, $"{id}_mode", "Render Mode", () =>
+                Origami.EnumDropdown(paper, $"{id}_mode_v", dp.RenderMode,
+                    v => { dp.RenderMode = v; MarkDetailsDirty(); }).Show());
 
             if (dp.RenderMode == DetailRenderMode.Mesh)
             {
@@ -274,18 +280,24 @@ public class TerrainEditor : CustomEditor
                     v => { dp.Texture = (AssetRef<Texture2D>)v!; MarkDetailsDirty(); }, 0);
             }
 
-            EditorGUI.Slider(paper, $"{id}_minw", "Min Width", dp.MinWidth, 0.1f, 5f)
-                .OnValueChanged(v => { dp.MinWidth = v; MarkDetailsDirty(); });
-            EditorGUI.Slider(paper, $"{id}_maxw", "Max Width", dp.MaxWidth, 0.1f, 5f)
-                .OnValueChanged(v => { dp.MaxWidth = v; MarkDetailsDirty(); });
-            EditorGUI.Slider(paper, $"{id}_minh", "Min Height", dp.MinHeight, 0.1f, 5f)
-                .OnValueChanged(v => { dp.MinHeight = v; MarkDetailsDirty(); });
-            EditorGUI.Slider(paper, $"{id}_maxh", "Max Height", dp.MaxHeight, 0.1f, 5f)
-                .OnValueChanged(v => { dp.MaxHeight = v; MarkDetailsDirty(); });
-            EditorGUI.Slider(paper, $"{id}_noise", "Noise Spread", dp.NoiseSpread, 0.01f, 1f)
-                .OnValueChanged(v => { dp.NoiseSpread = v; MarkDetailsDirty(); });
-            EditorGUI.Slider(paper, $"{id}_bend", "Bend Factor", dp.BendFactor, 0f, 1f)
-                .OnValueChanged(v => { dp.BendFactor = v; MarkDetailsDirty(); });
+            InspectorRow.Draw(paper, $"{id}_minw", "Min Width", () =>
+                Origami.Slider(paper, $"{id}_minw_v", dp.MinWidth,
+                    v => { dp.MinWidth = v; MarkDetailsDirty(); }, 0.1f, 5f).Format("F2").Show());
+            InspectorRow.Draw(paper, $"{id}_maxw", "Max Width", () =>
+                Origami.Slider(paper, $"{id}_maxw_v", dp.MaxWidth,
+                    v => { dp.MaxWidth = v; MarkDetailsDirty(); }, 0.1f, 5f).Format("F2").Show());
+            InspectorRow.Draw(paper, $"{id}_minh", "Min Height", () =>
+                Origami.Slider(paper, $"{id}_minh_v", dp.MinHeight,
+                    v => { dp.MinHeight = v; MarkDetailsDirty(); }, 0.1f, 5f).Format("F2").Show());
+            InspectorRow.Draw(paper, $"{id}_maxh", "Max Height", () =>
+                Origami.Slider(paper, $"{id}_maxh_v", dp.MaxHeight,
+                    v => { dp.MaxHeight = v; MarkDetailsDirty(); }, 0.1f, 5f).Format("F2").Show());
+            InspectorRow.Draw(paper, $"{id}_noise", "Noise Spread", () =>
+                Origami.Slider(paper, $"{id}_noise_v", dp.NoiseSpread,
+                    v => { dp.NoiseSpread = v; MarkDetailsDirty(); }, 0.01f, 1f).Format("F2").Show());
+            InspectorRow.Draw(paper, $"{id}_bend", "Bend Factor", () =>
+                Origami.Slider(paper, $"{id}_bend_v", dp.BendFactor,
+                    v => { dp.BendFactor = v; MarkDetailsDirty(); }, 0f, 1f).Format("F2").Show());
             EditorGUI.Toggle(paper, $"{id}_atn", "Align To Normal", dp.AlignToNormal)
                 .OnValueChanged(v => { dp.AlignToNormal = v; MarkDetailsDirty(); });
 
@@ -341,17 +353,20 @@ public class TerrainEditor : CustomEditor
 
             DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", proto.Mesh.Res, proto.Materials);
 
-            EditorGUI.Slider(paper, $"{id}_bend", "Bend Factor", proto.BendFactor, 0f, 2f)
-                .OnValueChanged(v => { proto.BendFactor = v; _isDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_bend", "Bend Factor", () =>
+                Origami.Slider(paper, $"{id}_bend_v", proto.BendFactor,
+                    v => { proto.BendFactor = v; _isDirty = true; }, 0f, 2f).Format("F2").Show());
         }
 
         paper.Box($"{id}_sp1").Height(6);
 
         // Tree brush settings
-        EditorGUI.Slider(paper, $"{id}_tsz", "Brush Size", TreeBrushSize, 1f, 100f)
-            .OnValueChanged(v => TreeBrushSize = v);
-        EditorGUI.IntField(paper, $"{id}_tps", TreesPerStroke, "Trees Per Stroke")
-            .OnValueChanged(v => TreesPerStroke = Math.Max(1, v));
+        InspectorRow.Draw(paper, $"{id}_tsz", "Brush Size", () =>
+            Origami.Slider(paper, $"{id}_tsz_v", TreeBrushSize,
+                v => TreeBrushSize = v, 1f, 100f).Format("F0").Show());
+        InspectorRow.Draw(paper, $"{id}_tps", "Trees Per Stroke", () =>
+            Origami.NumericField<int>(paper, $"{id}_tps_v", TreesPerStroke,
+                v => TreesPerStroke = Math.Max(1, v)).Min(1).Show());
 
         paper.Box($"{id}_hint").Height(20)
             .Text("Click to place, Shift+click to erase", font)
@@ -409,10 +424,12 @@ public class TerrainEditor : CustomEditor
 
     private void DrawSettingsTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainComponent terrain, TerrainData data)
     {
-        EditorGUI.FloatField(paper, $"{id}_size", data.Size, "Terrain Size")
-            .OnValueChanged(v => { data.Size = MathF.Max(1f, v); _isDirty = true; });
-        EditorGUI.FloatField(paper, $"{id}_height", data.Height, "Terrain Height")
-            .OnValueChanged(v => { data.Height = MathF.Max(0.1f, v); _isDirty = true; });
+        InspectorRow.Draw(paper, $"{id}_size", "Terrain Size", () =>
+            Origami.NumericField<float>(paper, $"{id}_size_v", data.Size,
+                v => { data.Size = MathF.Max(1f, v); _isDirty = true; }).Min(1f).Show());
+        InspectorRow.Draw(paper, $"{id}_height", "Terrain Height", () =>
+            Origami.NumericField<float>(paper, $"{id}_height_v", data.Height,
+                v => { data.Height = MathF.Max(0.1f, v); _isDirty = true; }).Min(0.1f).Show());
 
         paper.Box($"{id}_sp").Height(6);
 
@@ -420,33 +437,35 @@ public class TerrainEditor : CustomEditor
         string[] hmOptions = ["33", "65", "129", "257", "513", "1025"];
         int hmCurrent = Array.IndexOf(hmOptions, data.HeightmapResolution.ToString());
         if (hmCurrent < 0) hmCurrent = 4; // default 513
-        EditorGUI.Dropdown(paper, $"{id}_hmres", "Heightmap Resolution", hmCurrent, hmOptions)
-            .OnValueChanged(v =>
-            {
-                int newRes = int.Parse(hmOptions[v]);
-                if (newRes != data.HeightmapResolution)
+        InspectorRow.Draw(paper, $"{id}_hmres", "Heightmap Resolution", () =>
+            Origami.Dropdown(paper, $"{id}_hmres_v", hmCurrent,
+                v =>
                 {
-                    ModalDialog.Confirm("Reset Heightmap?",
-                        $"Changing heightmap resolution to {newRes} will reset all height data.",
-                        () => { data.ResizeHeightmap(newRes); _isDirty = true; });
-                }
-            });
+                    int newRes = int.Parse(hmOptions[v]);
+                    if (newRes != data.HeightmapResolution)
+                    {
+                        ModalDialog.Confirm("Reset Heightmap?",
+                            $"Changing heightmap resolution to {newRes} will reset all height data.",
+                            () => { data.ResizeHeightmap(newRes); _isDirty = true; });
+                    }
+                }, hmOptions).Show());
 
         // Splatmap resolution dropdown
         string[] smOptions = ["32", "64", "128", "256", "512", "1024"];
         int smCurrent = Array.IndexOf(smOptions, data.SplatmapResolution.ToString());
         if (smCurrent < 0) smCurrent = 4; // default 512
-        EditorGUI.Dropdown(paper, $"{id}_smres", "Splatmap Resolution", smCurrent, smOptions)
-            .OnValueChanged(v =>
-            {
-                int newRes = int.Parse(smOptions[v]);
-                if (newRes != data.SplatmapResolution)
+        InspectorRow.Draw(paper, $"{id}_smres", "Splatmap Resolution", () =>
+            Origami.Dropdown(paper, $"{id}_smres_v", smCurrent,
+                v =>
                 {
-                    ModalDialog.Confirm("Reset Splatmap?",
-                        $"Changing splatmap resolution to {newRes} will reset all splat data.",
-                        () => { data.ResizeSplatmap(newRes); _isDirty = true; });
-                }
-            });
+                    int newRes = int.Parse(smOptions[v]);
+                    if (newRes != data.SplatmapResolution)
+                    {
+                        ModalDialog.Confirm("Reset Splatmap?",
+                            $"Changing splatmap resolution to {newRes} will reset all splat data.",
+                            () => { data.ResizeSplatmap(newRes); _isDirty = true; });
+                    }
+                }, smOptions).Show());
 
         paper.Box($"{id}_sp2").Height(6);
 
@@ -454,26 +473,33 @@ public class TerrainEditor : CustomEditor
         string[] meshOptions = ["16", "32", "64", "128"];
         int meshCurrent = Array.IndexOf(meshOptions, terrain.MeshResolution.ToString());
         if (meshCurrent < 0) meshCurrent = 0;
-        EditorGUI.Dropdown(paper, $"{id}_meshres", "Mesh Resolution", meshCurrent, meshOptions)
-            .OnValueChanged(v => { terrain.MeshResolution = int.Parse(meshOptions[v]); });
+        InspectorRow.Draw(paper, $"{id}_meshres", "Mesh Resolution", () =>
+            Origami.Dropdown(paper, $"{id}_meshres_v", meshCurrent,
+                v => { terrain.MeshResolution = int.Parse(meshOptions[v]); }, meshOptions).Show());
 
-        EditorGUI.IntField(paper, $"{id}_lod", terrain.MaxLODLevel, "Max LOD Levels")
-            .OnValueChanged(v => { terrain.MaxLODLevel = Math.Clamp(v, 1, 8); });
+        InspectorRow.Draw(paper, $"{id}_lod", "Max LOD Levels", () =>
+            Origami.NumericField<int>(paper, $"{id}_lod_v", terrain.MaxLODLevel,
+                v => { terrain.MaxLODLevel = Math.Clamp(v, 1, 8); }).Min(1).Max(8).Show());
 
         paper.Box($"{id}_sp3").Height(10);
         EditorGUI.Label(paper, $"{id}_veg_hdr", "Vegetation");
 
-        EditorGUI.Slider(paper, $"{id}_grassdist", "Grass View Distance", terrain.GrassDistance, 10f, 1000f)
-            .OnValueChanged(v => { terrain.GrassDistance = MathF.Max(1f, v); });
+        InspectorRow.Draw(paper, $"{id}_grassdist", "Grass View Distance", () =>
+            Origami.Slider(paper, $"{id}_grassdist_v", terrain.GrassDistance,
+                v => { terrain.GrassDistance = MathF.Max(1f, v); }, 10f, 1000f).Format("F0").Show());
 
-        EditorGUI.Slider(paper, $"{id}_grassfade", "Grass Fade Start", terrain.GrassFadeStart, 0f, 0.99f)
-            .OnValueChanged(v => { terrain.GrassFadeStart = Math.Clamp(v, 0f, 0.99f); });
+        InspectorRow.Draw(paper, $"{id}_grassfade", "Grass Fade Start", () =>
+            Origami.Slider(paper, $"{id}_grassfade_v", terrain.GrassFadeStart,
+                v => { terrain.GrassFadeStart = Math.Clamp(v, 0f, 0.99f); }, 0f, 0.99f).Format("F2").Show());
 
-        EditorGUI.Slider(paper, $"{id}_grassdensity", "Grass Density", terrain.GrassDensityMultiplier, 0f, 4f)
-            .OnValueChanged(v => { terrain.GrassDensityMultiplier = MathF.Max(0f, v); terrain.InvalidateGrassCache(); });
+        InspectorRow.Draw(paper, $"{id}_grassdensity", "Grass Density", () =>
+            Origami.Slider(paper, $"{id}_grassdensity_v", terrain.GrassDensityMultiplier,
+                v => { terrain.GrassDensityMultiplier = MathF.Max(0f, v); terrain.InvalidateGrassCache(); },
+                0f, 4f).Format("F2").Show());
 
-        EditorGUI.Slider(paper, $"{id}_treedist", "Tree View Distance", terrain.TreeDistance, 50f, 2000f)
-            .OnValueChanged(v => { terrain.TreeDistance = MathF.Max(1f, v); });
+        InspectorRow.Draw(paper, $"{id}_treedist", "Tree View Distance", () =>
+            Origami.Slider(paper, $"{id}_treedist_v", terrain.TreeDistance,
+                v => { terrain.TreeDistance = MathF.Max(1f, v); }, 50f, 2000f).Format("F0").Show());
     }
 
     #endregion
@@ -482,12 +508,15 @@ public class TerrainEditor : CustomEditor
 
     private static void DrawBrushSettings(Paper paper, string id, Prowl.Scribe.FontFile font)
     {
-        EditorGUI.Slider(paper, $"{id}_size", "Brush Size", BrushSize, 1f, 500f)
-            .OnValueChanged(v => BrushSize = v);
-        EditorGUI.Slider(paper, $"{id}_str", "Brush Strength", BrushStrength, 0f, 1f)
-            .OnValueChanged(v => BrushStrength = v);
-        EditorGUI.Slider(paper, $"{id}_fall", "Brush Falloff", BrushFalloff, 0f, 1f)
-            .OnValueChanged(v => BrushFalloff = v);
+        InspectorRow.Draw(paper, $"{id}_size", "Brush Size", () =>
+            Origami.Slider(paper, $"{id}_size_v", BrushSize,
+                v => BrushSize = v, 1f, 500f).Format("F0").Show());
+        InspectorRow.Draw(paper, $"{id}_str", "Brush Strength", () =>
+            Origami.Slider(paper, $"{id}_str_v", BrushStrength,
+                v => BrushStrength = v, 0f, 1f).Format("F2").Show());
+        InspectorRow.Draw(paper, $"{id}_fall", "Brush Falloff", () =>
+            Origami.Slider(paper, $"{id}_fall_v", BrushFalloff,
+                v => BrushFalloff = v, 0f, 1f).Format("F2").Show());
     }
 
     #endregion

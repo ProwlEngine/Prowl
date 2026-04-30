@@ -182,8 +182,7 @@ public class ConsolePanel : DockPanel
                     .OnValueChanged(v => _showErrors = v);
             }
 
-            EditorGUI.SearchBar(paper, "con_search", _searchText, "Filter...")
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, "Filter...").Show();
 
             EditorGUI.ButtonSquareWithHandle(paper, "con_settingsButton", $"{EditorIcons.Gear}", out var settingsButton)
                 .OnValueChanged((clicked) =>

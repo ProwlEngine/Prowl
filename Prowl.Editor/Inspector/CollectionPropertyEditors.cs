@@ -164,8 +164,9 @@ public class DictionaryPropertyEditor : PropertyEditor
                     var addRowEl = paper.CurrentParent;
                     string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
 
-                    EditorGUI.TextField(paper, $"{id}_newkey", "Key", pendingKey)
-                        .OnValueChanged(v => paper.SetElementStorage(addRowEl, "pendingKey", v));
+                    Origami.TextField(paper, $"{id}_newkey", pendingKey,
+                            v => paper.SetElementStorage(addRowEl, "pendingKey", v))
+                        .Placeholder("Key").Width(UnitValue.Stretch()).Show();
 
                     EditorGUI.Button(paper, $"{id}_addentry", "+ Add")
                         .OnValueChanged(v =>

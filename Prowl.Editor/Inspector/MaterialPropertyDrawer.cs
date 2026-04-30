@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime.Rendering.Shaders;
@@ -82,21 +83,25 @@ public static class MaterialPropertyDrawer
                 // Non-ranged Floats still draw as plain number fields.
                 if (prop.HasRange)
                 {
-                    EditorGUI.Slider(paper, id, label, val, (float)prop.Range.X, (float)prop.Range.Y)
-                        .OnValueChanged(v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); });
+                    InspectorRow.Draw(paper, id, label, () =>
+                        Origami.Slider(paper, $"{id}_v", val,
+                            v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); },
+                            (float)prop.Range.X, (float)prop.Range.Y).Format("F2").Show());
                 }
                 else
                 {
-                    EditorGUI.FloatField(paper, id, val, label)
-                        .OnValueChanged(v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); });
+                    InspectorRow.Draw(paper, id, label, () =>
+                        Origami.NumericField<float>(paper, $"{id}_v", val,
+                            v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); }).Show());
                 }
                 break;
             }
             case ShaderPropertyType.Int:
             {
                 int val = ps.HasInt(prop.Name) ? ps.GetInt(prop.Name) : (int)prop.Value.X;
-                EditorGUI.IntField(paper, id, val, label)
-                    .OnValueChanged(v => { material.SetInt(prop.Name, v); onChanged?.Invoke(); });
+                InspectorRow.Draw(paper, id, label, () =>
+                    Origami.NumericField<int>(paper, $"{id}_v", val,
+                        v => { material.SetInt(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Color:

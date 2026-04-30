@@ -169,8 +169,8 @@ public static class ProjectLauncher
                         .RowBetween(8)
                         .Enter())
                     {
-                        // Spacer
-                        EditorGUI.SearchBar(paper, "search", "", "Search Projects");
+                        // Spacer (search input is currently visual-only — no filter wired up)
+                        Origami.SearchField(paper, "search", "", _ => { }, "Search Projects").Show();
 
                         EditorGUI.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", 130)
                             .OnValueChanged(_ =>
@@ -235,8 +235,8 @@ public static class ProjectLauncher
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
 
-                EditorGUI.TextField(paper, "pl_np_name", "", _newProjectName)
-                    .OnValueChanged(v => _newProjectName = v);
+                Origami.TextField(paper, "pl_np_name", _newProjectName, v => _newProjectName = v)
+                    .Width(UnitValue.Stretch()).Show();
             }
 
             using (paper.Row("pl_np_row2").Height(EditorTheme.RowHeight).Margin(8, 8, 0, 8).RowBetween(8).Enter())

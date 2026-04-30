@@ -4,6 +4,7 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -105,8 +106,9 @@ public class ModelAssetEditor : AssetImporterEditor
         EditorGUI.Toggle(paper, $"{id}_globalScale", "Global Scale", _globalScale)
             .OnValueChanged(v => { _globalScale = v; _settingsDirty = true; });
 
-        EditorGUI.FloatField(paper, $"{id}_unitScale", _unitScale, label: "Unit Scale")
-            .OnValueChanged(v => { _unitScale = v; _settingsDirty = true; });
+        InspectorRow.Draw(paper, $"{id}_unitScale", "Unit Scale", () =>
+            Origami.NumericField<float>(paper, $"{id}_unitScale_v", _unitScale,
+                v => { _unitScale = v; _settingsDirty = true; }).Show());
 
         // Mesh features produces an SDF sub-asset alongside every imported mesh.
         EditorGUI.Separator(paper, $"{id}_sep_features");
@@ -117,14 +119,18 @@ public class ModelAssetEditor : AssetImporterEditor
 
         if (_generateSDF)
         {
-            EditorGUI.IntField(paper, $"{id}_sdfRes", _sdfResolution, "SDF Resolution")
-                .OnValueChanged(v => { _sdfResolution = System.Math.Clamp(v, 8, 256); _settingsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_sdfRes", "SDF Resolution", () =>
+                Origami.NumericField<int>(paper, $"{id}_sdfRes_v", _sdfResolution,
+                    v => { _sdfResolution = System.Math.Clamp(v, 8, 256); _settingsDirty = true; })
+                    .Min(8).Max(256).Show());
 
-            EditorGUI.FloatField(paper, $"{id}_sdfPad", _sdfPadding, label: "SDF Padding")
-                .OnValueChanged(v => { _sdfPadding = v; _settingsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_sdfPad", "SDF Padding", () =>
+                Origami.NumericField<float>(paper, $"{id}_sdfPad_v", _sdfPadding,
+                    v => { _sdfPadding = v; _settingsDirty = true; }).Show());
 
-            EditorGUI.FloatField(paper, $"{id}_sdfMax", _sdfMaxDistance, label: "SDF Max Distance")
-                .OnValueChanged(v => { _sdfMaxDistance = v; _settingsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_sdfMax", "SDF Max Distance", () =>
+                Origami.NumericField<float>(paper, $"{id}_sdfMax_v", _sdfMaxDistance,
+                    v => { _sdfMaxDistance = v; _settingsDirty = true; }).Show());
         }
 
         // Save / Revert buttons

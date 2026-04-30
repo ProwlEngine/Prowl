@@ -449,8 +449,9 @@ public static class FileDialog
                         .Text(EditorIcons.Folder, font).TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
 
-                    EditorGUI.TextField(paper, "fd_nf_name", "Name", _newFolderName)
-                        .OnValueChanged(v => _newFolderName = v);
+                    Origami.TextField(paper, "fd_nf_name", _newFolderName,
+                            v => _newFolderName = v)
+                        .Placeholder("Name").Width(UnitValue.Stretch()).Show();
 
                     EditorGUI.Button(paper, "fd_nf_ok", "Create", width: 60)
                         .OnValueChanged(_ =>
@@ -558,14 +559,14 @@ public static class FileDialog
                     .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
 
-                EditorGUI.TextField(paper, "fd_filename", "", _fileName)
-                    .OnValueChanged(v => _fileName = v);
+                Origami.TextField(paper, "fd_filename", _fileName, v => _fileName = v)
+                    .Width(UnitValue.Stretch()).Show();
 
                 // Filter dropdown
                 if (_mode != FileDialogMode.SelectFolder && _typeFilterLabels.Length > 1)
                 {
-                    EditorGUI.Dropdown(paper, "fd_filter", "Filter", _activeFilterIndex, _typeFilterLabels)
-                        .OnValueChanged(v => { _activeFilterIndex = v; RefreshEntries(); });
+                    Origami.Dropdown(paper, "fd_filter", _activeFilterIndex,
+                        v => { _activeFilterIndex = v; RefreshEntries(); }, _typeFilterLabels).Show();
                 }
             }
 

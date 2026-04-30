@@ -167,8 +167,9 @@ public class ProjectPanel : DockPanel
                 .Text(EditorIcons.List, font).TextColor(EditorTheme.Ink400)
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
-            EditorGUI.Slider(paper, "proj_thumb_slider", "", _thumbnailSize, MinThumbSize, MaxThumbSize, false)
-                .OnValueChanged(v => _thumbnailSize = v);
+            Origami.Slider(paper, "proj_thumb_slider", _thumbnailSize, v => _thumbnailSize = v,
+                    MinThumbSize, MaxThumbSize)
+                .ShowValue(false).Width(120f).Show();
 
             paper.Box("proj_grid_ico")
                 .Size(ToolbarHeight - 6)
@@ -176,8 +177,7 @@ public class ProjectPanel : DockPanel
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
             // Search
-            EditorGUI.SearchBar(paper, "proj_search", _searchText, "Search...")
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "proj_search", _searchText, v => _searchText = v).Show();
 
             // Refresh button
             paper.Box("proj_refresh")

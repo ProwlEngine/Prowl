@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 
 using Prowl.Editor.Docking;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -214,30 +215,32 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Text Fields ===
             EditorGUI.Header(paper, "h_txt", "Text Fields");
 
-            EditorGUI.TextField(paper, "tf_text", "Message", _textValue)
-                .OnValueChanged(v => _textValue = v);
-            EditorGUI.TextField(paper, "tf_name", "Name", _nameValue)
-                .OnValueChanged(v => _nameValue = v);
+            InspectorRow.Draw(paper, "tf_text", "Message", () =>
+                Origami.TextField(paper, "tf_text_v", _textValue, v => _textValue = v).Show());
+            InspectorRow.Draw(paper, "tf_name", "Name", () =>
+                Origami.TextField(paper, "tf_name_v", _nameValue, v => _nameValue = v).Show());
 
             EditorGUI.Separator(paper, "sep3");
 
             // === Numeric Fields ===
             EditorGUI.Header(paper, "h_num", "Numeric Fields");
 
-            EditorGUI.FloatField(paper, "ff_float", _floatValue, "Speed")
-                .OnValueChanged(v => _floatValue = v);
-            EditorGUI.IntField(paper, "if_int", _intValue, "Health")
-                .OnValueChanged(v => _intValue = v);
+            InspectorRow.Draw(paper, "ff_float", "Speed", () =>
+                Origami.NumericField<float>(paper, "ff_float_v", _floatValue, v => _floatValue = v).Show());
+            InspectorRow.Draw(paper, "if_int", "Health", () =>
+                Origami.NumericField<int>(paper, "if_int_v", _intValue, v => _intValue = v).Show());
 
             EditorGUI.Separator(paper, "sep4");
 
             // === Sliders ===
             EditorGUI.Header(paper, "h_sl", "Sliders");
 
-            EditorGUI.Slider(paper, "sl_norm", "Opacity", _sliderValue, 0f, 1f)
-                .OnValueChanged(v => _sliderValue = v);
-            EditorGUI.Slider(paper, "sl_range", "Volume", _sliderRange, 0f, 100f)
-                .OnValueChanged(v => _sliderRange = v);
+            InspectorRow.Draw(paper, "sl_norm", "Opacity", () =>
+                Origami.Slider(paper, "sl_norm_v", _sliderValue, v => _sliderValue = v, 0f, 1f)
+                    .Format("F2").Show());
+            InspectorRow.Draw(paper, "sl_range", "Volume", () =>
+                Origami.Slider(paper, "sl_range_v", _sliderRange, v => _sliderRange = v, 0f, 100f)
+                    .Format("F1").Show());
 
             EditorGUI.Separator(paper, "sep5");
 
@@ -248,8 +251,8 @@ public class WidgetPlaygroundPanel : DockPanel
             {
                 using (paper.Column("fo_1_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
-                    EditorGUI.FloatField(paper, "fo_speed", _floatValue, "Speed")
-                        .OnValueChanged(v => _floatValue = v);
+                    InspectorRow.Draw(paper, "fo_speed", "Speed", () =>
+                        Origami.NumericField<float>(paper, "fo_speed_v", _floatValue, v => _floatValue = v).Show());
                     EditorGUI.Toggle(paper, "fo_tog", "Enabled", _toggleA)
                         .OnValueChanged(v => _toggleA = v);
                 }
@@ -261,8 +264,8 @@ public class WidgetPlaygroundPanel : DockPanel
                 {
                     EditorGUI.Toggle(paper, "fo_dbg", "Show Wireframe", _toggleB)
                         .OnValueChanged(v => _toggleB = v);
-                    EditorGUI.IntField(paper, "fo_iter", _intValue, "Iterations")
-                        .OnValueChanged(v => _intValue = v);
+                    InspectorRow.Draw(paper, "fo_iter", "Iterations", () =>
+                        Origami.NumericField<int>(paper, "fo_iter_v", _intValue, v => _intValue = v).Show());
                 }
             });
 
@@ -271,34 +274,33 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Dropdowns ===
             EditorGUI.Header(paper, "h_dd", "Dropdowns");
 
-            EditorGUI.Dropdown(paper, "dd_fruit", "Fruit", _dropdownIndex, Fruits)
-                .OnValueChanged(v => _dropdownIndex = v);
-            EditorGUI.Dropdown(paper, "dd_mode", "Mode", _dropdown2Index, Modes)
-                .OnValueChanged(v => _dropdown2Index = v);
+            InspectorRow.Draw(paper, "dd_fruit", "Fruit", () =>
+                Origami.Dropdown(paper, "dd_fruit_v", _dropdownIndex, v => _dropdownIndex = v, Fruits).Show());
+            InspectorRow.Draw(paper, "dd_mode", "Mode", () =>
+                Origami.Dropdown(paper, "dd_mode_v", _dropdown2Index, v => _dropdown2Index = v, Modes).Show());
 
             EditorGUI.Separator(paper, "sep7");
 
             // === Search Bar ===
             EditorGUI.Header(paper, "h_search", "Search Bar");
 
-            EditorGUI.SearchBar(paper, "sb_1", _searchText, "Type to search...")
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "sb_1", _searchText, v => _searchText = v, "Type to search...").Show();
 
             EditorGUI.Separator(paper, "sep8");
 
             // === Enum Dropdown ===
             EditorGUI.Header(paper, "h_enum", "Enum Dropdown");
 
-            EditorGUI.EnumDropdown(paper, "dd_enum", "Test Enum", _testEnum)
-                .OnValueChanged(v => _testEnum = v);
+            InspectorRow.Draw(paper, "dd_enum", "Test Enum", () =>
+                Origami.EnumDropdown(paper, "dd_enum_v", _testEnum, v => _testEnum = v).Show());
 
             EditorGUI.Separator(paper, "sep8b");
 
             // === Int Slider ===
             EditorGUI.Header(paper, "h_isl", "Int Slider");
 
-            EditorGUI.IntSlider(paper, "isl_1", "Count", _intSlider, 0, 20)
-                .OnValueChanged(v => _intSlider = v);
+            InspectorRow.Draw(paper, "isl_1", "Count", () =>
+                Origami.IntSlider(paper, "isl_1_v", _intSlider, v => _intSlider = v, 0, 20).Show());
 
             EditorGUI.Separator(paper, "sep8c");
 
@@ -323,8 +325,9 @@ public class WidgetPlaygroundPanel : DockPanel
             EditorGUI.Header(paper, "h_prog", "Progress Bar");
 
             EditorGUI.ProgressBar(paper, "pb_1", "Loading", _progress);
-            EditorGUI.Slider(paper, "pb_ctrl", "Progress", _progress, 0f, 1f)
-                .OnValueChanged(v => _progress = v);
+            InspectorRow.Draw(paper, "pb_ctrl", "Progress", () =>
+                Origami.Slider(paper, "pb_ctrl_v", _progress, v => _progress = v, 0f, 1f)
+                    .Format("F2").Show());
 
             EditorGUI.Separator(paper, "sep9");
 

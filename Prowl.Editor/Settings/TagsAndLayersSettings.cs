@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -70,8 +72,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
         }
 
         // Add tag row
-        EditorGUI.TextField(paper, "tl_new_tag", "Add new tag...", "")
-            .OnValueChanged(v =>
+        Origami.TextField(paper, "tl_new_tag", "", v =>
             {
                 if (!string.IsNullOrWhiteSpace(v) && !Tags.Contains(v))
                 {
@@ -79,7 +80,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                     Apply();
                     ProjectSettingsRegistry.SaveAll();
                 }
-            });
+            }).Placeholder("Add new tag...").Width(UnitValue.Stretch()).Show();
 
         paper.Box("tl_spacer1").Height(16);
 
@@ -111,13 +112,13 @@ public class TagsAndLayersSettings : ProjectSettingsBase
             }
             else
             {
-                EditorGUI.TextField(paper, $"tl_layer_{i}", $"Layer {i}", Layers[i])
-                    .OnValueChanged(v =>
+                InspectorRow.Draw(paper, $"tl_layer_{i}", $"Layer {i}", () =>
+                    Origami.TextField(paper, $"tl_layer_{i}_v", Layers[i], v =>
                     {
                         Layers[idx] = v;
                         Apply();
                         ProjectSettingsRegistry.SaveAll();
-                    });
+                    }).Show());
             }
         }
     }
