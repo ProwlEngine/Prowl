@@ -141,7 +141,7 @@ public static class ForwardLightManager
             PropertyState.SetGlobalVector($"_LightPositions[{i}]", data.Position);
             PropertyState.SetGlobalVector($"_LightDirections[{i}]", data.Direction);
             PropertyState.SetGlobalVector($"_LightColors[{i}]", data.Color);
-            PropertyState.SetGlobalFloat($"_LightIntensities[{i}]", data.Intensity);
+            PropertyState.SetGlobalFloat($"_LightIntensities[{i}]", data.Intensity * 8f);
             PropertyState.SetGlobalFloat($"_LightRanges[{i}]", data.Range);
             PropertyState.SetGlobalFloat($"_LightSpotAngles[{i}]", data.SpotAngle);
             PropertyState.SetGlobalFloat($"_LightInnerSpotAngles[{i}]", data.InnerSpotAngle);

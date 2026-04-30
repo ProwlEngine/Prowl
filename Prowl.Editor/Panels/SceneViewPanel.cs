@@ -472,7 +472,7 @@ public class SceneViewPanel : DockPanel
         var lightGo = new GameObject("Directional Light");
         lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
         var light = lightGo.AddComponent<DirectionalLight>();
-        light.Intensity = 8f;
+        light.Intensity = 1f;
         scene.Add(lightGo);
 
         // Floor
