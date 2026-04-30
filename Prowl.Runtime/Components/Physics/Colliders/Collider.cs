@@ -100,17 +100,24 @@ public abstract class Collider : MonoBehaviour
         {
             // Only try to remove shapes if the body is still registered with the physics world
             // (If the rigidbody was already removed, the shapes are already gone)
-            try
+            foreach (RigidBodyShape shape in _attachedShapes)
             {
-                foreach (var shape in _attachedShapes)
+                try
                 {
-                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Update);
+                    // Use Preserve: Update mode calls SetMassInertia() after each removal, which
+                    // iterates remaining shapes — this throws NotSupportedException for TriangleShape.
+                    // Mass/inertia is recalculated in full by RegisterShapes after re-attachment.
+                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
                 }
-            }
-            catch (System.InvalidOperationException)
-            {
-                // Shape was already removed (e.g., when rigidbody was removed from world)
-                // This is fine, just continue
+                catch (ArgumentException)
+                {
+                    // Shape was already removed from this body (e.g., UpdateShapes pre-cleared the
+                    // body with RemoveShapes before calling Detach). Safe to ignore.
+                }
+                catch (InvalidOperationException)
+                {
+                    // Body was removed from the physics world; its shapes are already gone.
+                }
             }
         }
 
