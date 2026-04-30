@@ -223,6 +223,38 @@ public static class Origami
         where T : struct, System.Numerics.INumber<T>
         => new NumericFieldBuilder<T>(paper, id, value, setter, Current);
 
+    // ── Toggle factories ─────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a generic toggle. Defaults to switch style — chain
+    /// <see cref="ToggleBuilder.AsCheckbox"/> / <see cref="ToggleBuilder.AsRadio"/> to switch style.
+    /// </summary>
+    public static ToggleBuilder Toggle(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current);
+
+    /// <summary>Sliding-pill switch — alias for <see cref="Toggle"/> defaults.</summary>
+    public static ToggleBuilder Switch(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current).AsSwitch();
+
+    /// <summary>Square checkbox. Use <see cref="ToggleBuilder.Indeterminate"/> for tri-state.</summary>
+    public static ToggleBuilder Checkbox(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current).AsCheckbox();
+
+    /// <summary>Single circular radio. For "pick one of N" use <see cref="RadioGroup{T}"/> instead.</summary>
+    public static ToggleBuilder Radio(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current).AsRadio();
+
+    /// <summary>Begin building a typed radio group bound to a list of items.</summary>
+    public static RadioGroupBuilder<T> RadioGroup<T>(Paper paper, string id, T value,
+        Action<T> setter, IReadOnlyList<T> items)
+        => new RadioGroupBuilder<T>(paper, id, value, setter, items, Current);
+
+    /// <summary>Enum convenience for a single-value radio group. Renders <see cref="Enum.GetNames{T}"/> as labels.</summary>
+    public static RadioGroupBuilder<TEnum> EnumRadioGroup<TEnum>(Paper paper, string id,
+        TEnum value, Action<TEnum> setter)
+        where TEnum : struct, Enum
+        => new RadioGroupBuilder<TEnum>(paper, id, value, setter, Enum.GetValues<TEnum>(), Current);
+
     /// <summary>
     /// Convenience for a <c>[Flags]</c> enum: each non-zero flag becomes a checkbox row,
     /// and the OR of the checked flags is delivered to <paramref name="setter"/>.

@@ -99,6 +99,36 @@ public class OrigamiPlaygroundPanel : DockPanel
     private string _txtLeading = "";
     private string _txtTrailing = "";
 
+    // ── Toggle state ──────────────────────────────────────────
+    public enum ShipMode { Standard, Express, Overnight }
+    public enum Theme { System, Light, Dark }
+
+    private bool _swBasic = true;
+    private bool _swDanger = false;
+    private bool _swDisabled = true;
+    private bool _swReadOnly = true;
+    private bool _swLabelLeft = true;
+    private bool _swSettings1 = true;
+    private bool _swSettings3 = true;
+    private bool _swOnOffText = true;
+    private bool _swYesNo = false;
+    private bool _swGlyph = true;
+    private bool _swSmall = true;
+    private bool _swMedium = false;
+    private bool _swLarge = true;
+    private bool _swCustom = false;
+
+    private bool _cbBasic = true;
+    private bool _cbDanger = false;
+    private bool _cbA = true, _cbB, _cbC = true;
+    private bool _cbError;
+    private bool _cbHelper;
+
+    private bool _rdSingle = false;
+    private ShipMode _rgShip = ShipMode.Express;
+    private ShipMode _rgShipH = ShipMode.Standard;
+    private Theme _rgTheme = Theme.System;
+
     // ── NumericField state ────────────────────────────────────
     private float _numFloat = 1.5f;
     private double _numDouble = 3.14159265;
@@ -209,6 +239,13 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_NumericTypes(paper);
                 Section_NumericClampStep(paper);
                 Section_NumericCulture(paper);
+                Section_ToggleBasics(paper);
+                Section_ToggleVariants(paper);
+                Section_ToggleSizes(paper);
+                Section_ToggleStates(paper);
+                Section_SwitchExtras(paper);
+                Section_CheckboxExtras(paper);
+                Section_RadioGroups(paper);
                 Section_State(paper);
             });
     }
@@ -677,6 +714,299 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
+    // ── Toggle sections ────────────────────────────────────────
+
+    private void Section_ToggleBasics(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tg_basics", "Toggle - Switch / Checkbox / Radio").Body(() =>
+        {
+            using (paper.Column("op_tg_basics_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "tg_sw", "Switch (default)", () =>
+                    Origami.Switch(paper, "op_tg_sw", _swBasic, v => _swBasic = v)
+                        .LabelRight("Enable thing")
+                        .Show());
+
+                LabelRow(paper, "tg_cb", "Checkbox", () =>
+                    Origami.Checkbox(paper, "op_tg_cb", _cbBasic, v => _cbBasic = v)
+                        .LabelRight("I agree")
+                        .Show());
+
+                LabelRow(paper, "tg_rd", "Radio (single)", () =>
+                    Origami.Radio(paper, "op_tg_rd", _rdSingle, v => _rdSingle = v)
+                        .LabelRight("Pick this option")
+                        .Show());
+
+                LabelRow(paper, "tg_settings_row", "Settings-row pattern (label + description)", () =>
+                    Origami.Switch(paper, "op_tg_settings", _swSettings1, v => _swSettings1 = v)
+                        .Primary()
+                        .LabelRight("Cloud sync")
+                        .Description("Keep your projects in sync across machines")
+                        .Stretch()
+                        .Show());
+
+                LabelRow(paper, "tg_label_left", "Label on the left (push visual right)", () =>
+                    Origami.Switch(paper, "op_tg_lleft", _swLabelLeft, v => _swLabelLeft = v)
+                        .Success()
+                        .LabelLeft("Notifications")
+                        .Stretch()
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_ToggleVariants(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tg_var", "Toggle - variants").Body(() =>
+        {
+            using (paper.Column("op_tg_var_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "v_def", "Default (Primary on-color)", () =>
+                    Origami.Switch(paper, "op_tg_v_def", true, _ => { }).LabelRight("Default").Show());
+                LabelRow(paper, "v_pri", "Primary", () =>
+                    Origami.Switch(paper, "op_tg_v_pri", true, _ => { }).Primary().LabelRight("Primary").Show());
+                LabelRow(paper, "v_suc", "Success", () =>
+                    Origami.Switch(paper, "op_tg_v_suc", true, _ => { }).Success().LabelRight("Success").Show());
+                LabelRow(paper, "v_war", "Warning", () =>
+                    Origami.Switch(paper, "op_tg_v_war", true, _ => { }).Warning().LabelRight("Warning").Show());
+                LabelRow(paper, "v_dan", "Danger", () =>
+                    Origami.Switch(paper, "op_tg_v_dan", _swDanger, v => _swDanger = v).Danger().LabelRight("Danger (live)").Show());
+                LabelRow(paper, "v_inf", "Info", () =>
+                    Origami.Switch(paper, "op_tg_v_inf", true, _ => { }).Info().LabelRight("Info").Show());
+                LabelRow(paper, "v_sub", "Subtle (whisper-quiet)", () =>
+                    Origami.Switch(paper, "op_tg_v_sub", true, _ => { }).Subtle().LabelRight("Subtle").Show());
+
+                paper.Box("op_tg_var_div").Height(8).IsNotInteractable();
+
+                LabelRow(paper, "v_cb_pri", "Checkbox - Primary", () =>
+                    Origami.Checkbox(paper, "op_tg_cb_pri", true, _ => { }).Primary().LabelRight("Primary").Show());
+                LabelRow(paper, "v_cb_suc", "Checkbox - Success", () =>
+                    Origami.Checkbox(paper, "op_tg_cb_suc", true, _ => { }).Success().LabelRight("Success").Show());
+                LabelRow(paper, "v_cb_dan", "Checkbox - Danger (live)", () =>
+                    Origami.Checkbox(paper, "op_tg_cb_dan", _cbDanger, v => _cbDanger = v).Danger().LabelRight("Danger").Show());
+            }
+        });
+    }
+
+    private void Section_ToggleSizes(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tg_sz", "Toggle - sizes").Body(() =>
+        {
+            using (paper.Column("op_tg_sz_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "sz_sm", "Small (14)", () =>
+                    Origami.Switch(paper, "op_tg_sz_sm", _swSmall, v => _swSmall = v)
+                        .Primary().Small().LabelRight("Compact").Show());
+
+                LabelRow(paper, "sz_md", "Medium (18 - default)", () =>
+                    Origami.Switch(paper, "op_tg_sz_md", _swMedium, v => _swMedium = v)
+                        .Primary().Medium().LabelRight("Medium").Show());
+
+                LabelRow(paper, "sz_lg", "Large (24)", () =>
+                    Origami.Switch(paper, "op_tg_sz_lg", _swLarge, v => _swLarge = v)
+                        .Primary().Large().LabelRight("Hero").Show());
+
+                LabelRow(paper, "sz_cb_md", "Checkbox sizes (S / M / L)", () =>
+                {
+                    using (paper.Row("op_tg_sz_cb_row").Height(28).RowBetween(12).Enter())
+                    {
+                        Origami.Checkbox(paper, "op_tg_sz_cb_s", true, _ => { }).Primary().Small().Show();
+                        Origami.Checkbox(paper, "op_tg_sz_cb_m", true, _ => { }).Primary().Medium().Show();
+                        Origami.Checkbox(paper, "op_tg_sz_cb_l", true, _ => { }).Primary().Large().Show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void Section_ToggleStates(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tg_state", "Toggle - states (disabled / read-only / errors)").Body(() =>
+        {
+            using (paper.Column("op_tg_state_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "st_dis", "Disabled (no hover, dimmed)", () =>
+                    Origami.Switch(paper, "op_tg_dis", _swDisabled, v => _swDisabled = v)
+                        .Primary()
+                        .Disabled()
+                        .LabelRight("Disabled (still on)")
+                        .Show());
+
+                LabelRow(paper, "st_ro", "Read-only (visible but inert)", () =>
+                    Origami.Switch(paper, "op_tg_ro", _swReadOnly, v => _swReadOnly = v)
+                        .Success()
+                        .ReadOnly()
+                        .LabelRight("Read-only (still on)")
+                        .Show());
+
+                LabelRow(paper, "st_helper", "Helper text", () =>
+                    Origami.Switch(paper, "op_tg_help", _swSettings3, v => _swSettings3 = v)
+                        .Primary()
+                        .LabelRight("Anonymous telemetry")
+                        .HelperText("Helps us improve the editor. No PII collected.")
+                        .Show());
+
+                LabelRow(paper, "st_err", "Error (forced)", () =>
+                    Origami.Checkbox(paper, "op_tg_err", _cbError, v => _cbError = v)
+                        .LabelRight("Accept terms")
+                        .Error("You must accept the terms to continue")
+                        .Show());
+
+                LabelRow(paper, "st_indet", "Checkbox - Indeterminate (tri-state)", () =>
+                {
+                    int onCount = (_cbA ? 1 : 0) + (_cbB ? 1 : 0) + (_cbC ? 1 : 0);
+                    bool? indet = onCount == 0 ? false : onCount == 3 ? true : (bool?)null;
+                    using (paper.Column("op_tg_indet_col").Height(UnitValue.Auto).RowBetween(2).Enter())
+                    {
+                        Origami.Checkbox(paper, "op_tg_indet_all", onCount == 3, v =>
+                        {
+                            _cbA = _cbB = _cbC = v;
+                        })
+                            .Primary()
+                            .Indeterminate(indet == null ? true : null)
+                            .LabelRight("All items")
+                            .Show();
+
+                        using (paper.Column("op_tg_indet_kids").Height(UnitValue.Auto).RowBetween(2).Margin(20, 0, 0, 0).Enter())
+                        {
+                            Origami.Checkbox(paper, "op_tg_indet_a", _cbA, v => _cbA = v).Primary().LabelRight("Item A").Show();
+                            Origami.Checkbox(paper, "op_tg_indet_b", _cbB, v => _cbB = v).Primary().LabelRight("Item B").Show();
+                            Origami.Checkbox(paper, "op_tg_indet_c", _cbC, v => _cbC = v).Primary().LabelRight("Item C").Show();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void Section_SwitchExtras(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sw_extras", "Switch - on/off text, glyphs, custom visual").Body(() =>
+        {
+            using (paper.Column("op_sw_extras_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "sw_onoff", "OnText / OffText", () =>
+                    Origami.Switch(paper, "op_sw_onoff", _swOnOffText, v => _swOnOffText = v)
+                        .Primary()
+                        .Large()
+                        .OnText("ON").OffText("OFF")
+                        .LabelRight("Power")
+                        .Show());
+
+                LabelRow(paper, "sw_yesno", "Yes / No (Success variant)", () =>
+                    Origami.Switch(paper, "op_sw_yesno", _swYesNo, v => _swYesNo = v)
+                        .Success()
+                        .Large()
+                        .OnText("YES").OffText("NO")
+                        .LabelRight("Confirm")
+                        .Show());
+
+                LabelRow(paper, "sw_glyph", "Glyph inside knob (check / x)", () =>
+                    Origami.Switch(paper, "op_sw_glyph", _swGlyph, v => _swGlyph = v)
+                        .Primary()
+                        .Large()
+                        .OnGlyph("✓").OffGlyph("✕")
+                        .LabelRight("Auto-save")
+                        .Show());
+
+                LabelRow(paper, "sw_custom", "CustomVisual (caller-drawn)", () =>
+                    Origami.Switch(paper, "op_sw_custom", _swCustom, v => _swCustom = v)
+                        .LabelRight("Bespoke visual")
+                        .CustomVisual(ctx =>
+                        {
+                            // Draw a vertical bar that fills bottom-up as it turns on.
+                            float h = ctx.Size;
+                            float fillH = h * ctx.AnimationT;
+                            paper.Box("cust_bg")
+                                .Width(h * 0.6f).Height(h)
+                                .BackgroundColor(ctx.Theme.Neutral.C300)
+                                .Rounded(2)
+                                .IsNotInteractable();
+                            if (fillH > 0.5f)
+                            {
+                                paper.Box("cust_fill")
+                                    .PositionType(PositionType.SelfDirected)
+                                    .Position(0, h - fillH)
+                                    .Width(h * 0.6f).Height(fillH)
+                                    .BackgroundColor(ctx.Theme.Primary.C500)
+                                    .Rounded(2)
+                                    .IsNotInteractable();
+                            }
+                        })
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_CheckboxExtras(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_cb_extras", "Checkbox - helper / disabled list").Body(() =>
+        {
+            using (paper.Column("op_cb_extras_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "cb_helper", "Helper text under row", () =>
+                    Origami.Checkbox(paper, "op_cb_helper", _cbHelper, v => _cbHelper = v)
+                        .Primary()
+                        .LabelRight("Subscribe to newsletter")
+                        .HelperText("We send one short email per month.")
+                        .Show());
+
+                LabelRow(paper, "cb_disabled", "Disabled (off + on)", () =>
+                {
+                    using (paper.Column("op_cb_dis_col").Height(UnitValue.Auto).RowBetween(2).Enter())
+                    {
+                        Origami.Checkbox(paper, "op_cb_dis_off", false, _ => { })
+                            .Primary().Disabled().LabelRight("Disabled (off)").Show();
+                        Origami.Checkbox(paper, "op_cb_dis_on", true, _ => { })
+                            .Primary().Disabled().LabelRight("Disabled (on)").Show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void Section_RadioGroups(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_rg", "Radio groups").Body(() =>
+        {
+            using (paper.Column("op_rg_col").Height(UnitValue.Auto).RowBetween(8).Enter())
+            {
+                LabelRow(paper, "rg_v", "Vertical EnumRadioGroup with descriptions", () =>
+                    Origami.EnumRadioGroup(paper, "op_rg_ship", _rgShip, v => _rgShip = v)
+                        .Primary()
+                        .Description(m => m switch
+                        {
+                            ShipMode.Standard => "5-7 business days. Free.",
+                            ShipMode.Express => "2-3 business days. $9.99.",
+                            ShipMode.Overnight => "Next business day. $24.99.",
+                            _ => null,
+                        })
+                        .Show());
+
+                LabelRow(paper, "rg_h", "Horizontal RadioGroup", () =>
+                    Origami.EnumRadioGroup(paper, "op_rg_ship_h", _rgShipH, v => _rgShipH = v)
+                        .Success()
+                        .Horizontal()
+                        .Gap(16)
+                        .Show());
+
+                LabelRow(paper, "rg_theme", "Theme picker (typed)", () =>
+                    Origami.RadioGroup(paper, "op_rg_theme", _rgTheme, v => _rgTheme = v,
+                        new[] { Theme.System, Theme.Light, Theme.Dark })
+                        .Info()
+                        .Display(t => t.ToString())
+                        .Description(t => t switch
+                        {
+                            Theme.System => "Follow OS preference",
+                            Theme.Light => "Always light",
+                            Theme.Dark => "Always dark",
+                            _ => null,
+                        })
+                        .Show());
+            }
+        });
+    }
+
     private void Section_State(Paper paper)
     {
         Origami.Foldout(paper, "op_fo_state", "Live state").Body(() =>
@@ -702,6 +1032,11 @@ public class OrigamiPlaygroundPanel : DockPanel
                 StateLine(paper, "st_nByte",  $"byte: {_numByte}");
                 StateLine(paper, "st_nClamp", $"clamped float: {_numClamped}");
                 StateLine(paper, "st_nStep",  $"step float: {_numStep}");
+                StateLine(paper, "st_swBasic", $"Switch basic: {_swBasic}");
+                StateLine(paper, "st_cbBasic", $"Checkbox basic: {_cbBasic}");
+                StateLine(paper, "st_cbAbc",   $"Checkbox A/B/C: {_cbA}/{_cbB}/{_cbC}");
+                StateLine(paper, "st_rgShip",  $"Ship mode: {_rgShip}");
+                StateLine(paper, "st_rgTheme", $"Theme: {_rgTheme}");
             }
         });
     }
@@ -711,7 +1046,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     private static void LabelRow(Paper paper, string id, string label, Action drawControl)
     {
         var font = EditorTheme.DefaultFont;
-        using (paper.Row($"op_lr_{id}").Height(28).RowBetween(8).Enter())
+        using (paper.Row($"op_lr_{id}").Height(UnitValue.Auto).RowBetween(8).Enter())
         {
             paper.Box($"op_lr_{id}_lbl")
                 .Width(280).Height(28)
@@ -721,7 +1056,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 .TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 1);
 
-            using (paper.Box($"op_lr_{id}_ctl").Width(UnitValue.Stretch()).Height(28).Enter())
+            using (paper.Box($"op_lr_{id}_ctl").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
             {
                 drawControl();
             }
