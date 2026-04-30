@@ -86,7 +86,12 @@ namespace Prowl.PaperUI.LayoutEngine
         internal bool _scissorEnabled;
         internal bool _clampToScreen;
 
-        public Layer Layer;
+        /// <summary>
+        /// Layer assignment. Defaults to <see cref="Layer.Base"/> (0). Higher values render later
+        /// and are hit-tested first. Use <see cref="Layer.Overlay"/> / <see cref="Layer.Topmost"/>
+        /// for the well-known tiers, or any custom <see cref="int"/> for in-between tiers.
+        /// </summary>
+        public int Layer;
 
         // Layout results
         public bool ProcessedText;
@@ -133,7 +138,9 @@ namespace Prowl.PaperUI.LayoutEngine
                 _elementStyle = new ElementStyle(),
                 _scissorEnabled = false,
                 _clampToScreen = false,
-                Layer = Layer.Base,
+                // Default to Layer.Base (0). Fully qualified because the RHS shadows the LHS
+                // field name in an object initializer when the type is a static class.
+                Layer = PaperUI.Layer.Base,
                 ProcessedText = false,
             };
         }

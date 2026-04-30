@@ -1040,9 +1040,16 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary>Places the element on a specific rendering layer.</summary>
-        /// <param name="layer">Layer on which the element should be rendered.</param>
-        public ElementBuilder Layer(Layer layer)
+        /// <summary>
+        /// Places the element on a specific rendering layer. Higher values render on top of
+        /// lower ones and are hit-tested first.
+        /// </summary>
+        /// <param name="layer">
+        /// Layer value. Use <see cref="Layer.Base"/>, <see cref="Layer.Overlay"/>,
+        /// <see cref="Layer.Topmost"/>, or any custom <see cref="int"/> (e.g. <c>Layer.Overlay + 10</c>
+        /// to wedge a new tier between the named ones).
+        /// </param>
+        public ElementBuilder Layer(int layer)
         {
             _handle.Data.Layer = layer;
             return this;

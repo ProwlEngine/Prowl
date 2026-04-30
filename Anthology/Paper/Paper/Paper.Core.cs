@@ -227,25 +227,28 @@ namespace Prowl.PaperUI
             // Input and interaction handling
             HandleInteractions();
 
-            // Render all elements
-            // Deferred elements capture the canvas transform at collection time
-            // so they render at the correct position even though they draw later.
-            List<(ElementHandle handle, Transform2D transform)> overlayElements = new List<(ElementHandle handle, Transform2D transform)>();
-            List<(ElementHandle handle, Transform2D transform)> modalElements = new List<(ElementHandle handle, Transform2D transform)>();
-            RenderElement(_rootElementHandle, Layer.Base, overlayElements, modalElements);
-            foreach (var (handle, transform) in overlayElements)
+            // Render all elements.
+            //
+            // Deferred elements capture the canvas transform at collection time so they render
+            // at the correct position even though they draw later. We bucket by layer value so
+            // any int Layer works, not just the three named tiers; a child at layer 250 inside
+            // a parent at layer 150 ends up in its own bucket and gets drained after layer 150.
+            var deferred = new SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>>();
+            RenderElement(_rootElementHandle, Layer.Base, deferred);
+
+            while (deferred.Count > 0)
             {
-                _canvas.SaveState();
-                _canvas.CurrentTransform(transform);
-                RenderElement(handle, Layer.Overlay, null, modalElements);
-                _canvas.RestoreState();
-            }
-            foreach (var (handle, transform) in modalElements)
-            {
-                _canvas.SaveState();
-                _canvas.CurrentTransform(transform);
-                RenderElement(handle, Layer.Topmost, null, null);
-                _canvas.RestoreState();
+                int nextLayer = deferred.Keys.First();
+                var list = deferred[nextLayer];
+                deferred.Remove(nextLayer);
+
+                foreach (var (handle, transform) in list)
+                {
+                    _canvas.SaveState();
+                    _canvas.CurrentTransform(transform);
+                    RenderElement(handle, nextLayer, deferred);
+                    _canvas.RestoreState();
+                }
             }
 
             // Update stats
@@ -292,35 +295,27 @@ namespace Prowl.PaperUI
         #region Rendering
 
         /// <summary>
-        /// Renders an element and its children recursively with layering support.
+        /// Renders an element and its children recursively with layering support. Elements whose
+        /// <see cref="ElementData.Layer"/> is greater than <paramref name="currentLayer"/> get
+        /// deferred into <paramref name="deferred"/> instead of rendering inline; the caller
+        /// drains the dictionary in ascending key order so higher layers always render on top.
         /// </summary>
-        private void RenderElement(in ElementHandle handle, Layer currentLayer, List<(ElementHandle, Transform2D)>? overlayElements, List<(ElementHandle, Transform2D)>? modalElements)
+        private void RenderElement(in ElementHandle handle, int currentLayer, SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>>? deferred)
         {
             ref var data = ref handle.Data;
 
             if (data.Visible == false)
                 return;
 
-            if (currentLayer == Layer.Base)
+            if (data.Layer > currentLayer && deferred != null)
             {
-                if (data.Layer == Layer.Overlay)
+                if (!deferred.TryGetValue(data.Layer, out var bucket))
                 {
-                    overlayElements?.Add((handle, _canvas.GetTransform()));
-                    return;
+                    bucket = new List<(ElementHandle handle, Transform2D transform)>();
+                    deferred[data.Layer] = bucket;
                 }
-                else if (data.Layer == Layer.Topmost)
-                {
-                    modalElements?.Add((handle, _canvas.GetTransform()));
-                    return;
-                }
-            }
-            else if (currentLayer == Layer.Overlay)
-            {
-                if (data.Layer == Layer.Topmost)
-                {
-                    modalElements?.Add((handle, _canvas.GetTransform()));
-                    return;
-                }
+                bucket.Add((handle, _canvas.GetTransform()));
+                return;
             }
 
             var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
@@ -478,7 +473,7 @@ namespace Prowl.PaperUI
             foreach (var childIndex in data.ChildIndices)
             {
                 var child = new ElementHandle(this, childIndex);
-                RenderElement(child, currentLayer, overlayElements, modalElements);
+                RenderElement(child, currentLayer, deferred);
             }
 
             // Process foreground render actions (after children)

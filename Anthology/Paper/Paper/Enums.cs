@@ -187,18 +187,22 @@ namespace Prowl.PaperUI
     }
 
     /// <summary>
-    /// Defines rendering and interaction layers for elements.
+    /// Named layer constants. Layers are <see cref="int"/>s — pass any value to
+    /// <c>ElementBuilder.Layer(int)</c>; higher numbers render later (on top of) lower numbers
+    /// and intercept input first. The named constants are spaced by 100 so callers can wedge
+    /// custom layers between them (e.g. <c>Layer.Overlay + 10</c> for "above modals but below
+    /// tooltips") without renumbering.
     /// </summary>
-    public enum Layer
+    public static class Layer
     {
-        /// <summary>Default layer rendered first.</summary>
-        Base = 0,
+        /// <summary>Default layer (0). Renders first, hit-tested last.</summary>
+        public const int Base = 0;
 
-        /// <summary>Rendered above the base layer.</summary>
-        Overlay = 1,
+        /// <summary>Modal / overlay layer (100). Sits above base content.</summary>
+        public const int Overlay = 100;
 
-        /// <summary>Topmost layer rendered last.</summary>
-        Topmost = 2
+        /// <summary>Topmost layer (200). Tooltips, popovers — sits above everything else.</summary>
+        public const int Topmost = 200;
     }
 
     /// <summary>

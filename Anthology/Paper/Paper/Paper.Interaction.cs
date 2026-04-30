@@ -286,13 +286,15 @@ namespace Prowl.PaperUI
 
         /// <summary>
         /// Collects elements with non-Base layers. Called after layout, before interaction.
+        /// Any element with <see cref="ElementData.Layer"/> &gt; <see cref="Layer.Base"/> is
+        /// stored separately for layer-aware hit-testing.
         /// </summary>
         private void CollectLayeredElements(ElementHandle handle, Transform2D parentTransform = default)
         {
             if (!handle.IsValid) return;
             ref ElementData data = ref handle.Data;
 
-            if (data.Layer == Layer.Topmost || data.Layer == Layer.Overlay)
+            if (data.Layer > Layer.Base)
             {
                 // Store the PARENT's accumulated transform (not this element's).
                 // HitTestElementTree will apply this element's own transform when testing.
@@ -315,33 +317,46 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Finds the topmost interactable element under the pointer.
-        /// First checks layered elements (Topmost, then Overlay) independently from their parents,
-        /// then falls back to the normal Base layer tree walk.
+        /// Finds the topmost interactable element under the pointer. Walks layered elements
+        /// from highest layer to lowest (last-added wins ties so DFS-front of the same layer
+        /// hits first), then falls back to the Base tree.
         /// </summary>
         private ElementHandle FindTopmostInteractableElement(ref ElementHandle handle, Transform2D parentTransform)
         {
-            // Check Topmost layered elements first (last added = front, check in reverse)
-            for (int i = _layeredElements.Count - 1; i >= 0; i--)
+            // Find the highest layer present, hit-test that tier, then step down. O(N*L)
+            // in the worst case where N = layered count and L = distinct layers, but both
+            // are tiny in practice (a handful of popovers / modals / tooltips).
+            int currentLayer = int.MinValue;
+            bool any = false;
+            foreach (var (le, _) in _layeredElements)
             {
-                var (layered, layeredTransform) = _layeredElements[i];
-                if (layered.Data.Layer != Layer.Topmost) continue;
-
-                var found = HitTestElementTree(ref layered, layeredTransform);
-                if (found.IsValid) return found;
+                if (le.Data.Layer > currentLayer) { currentLayer = le.Data.Layer; any = true; }
             }
 
-            // Then Overlay
-            for (int i = _layeredElements.Count - 1; i >= 0; i--)
+            while (any)
             {
-                var (layered, layeredTransform) = _layeredElements[i];
-                if (layered.Data.Layer != Layer.Overlay) continue;
+                // Last-added of this layer = front (DFS order), so iterate in reverse.
+                for (int i = _layeredElements.Count - 1; i >= 0; i--)
+                {
+                    var (layered, layeredTransform) = _layeredElements[i];
+                    if (layered.Data.Layer != currentLayer) continue;
 
-                var found = HitTestElementTree(ref layered, layeredTransform);
-                if (found.IsValid) return found;
+                    var found = HitTestElementTree(ref layered, layeredTransform);
+                    if (found.IsValid) return found;
+                }
+
+                // Step to the next-highest layer below the one we just tested.
+                int next = int.MinValue;
+                any = false;
+                foreach (var (le, _) in _layeredElements)
+                {
+                    int l = le.Data.Layer;
+                    if (l < currentLayer && l > next) { next = l; any = true; }
+                }
+                currentLayer = next;
             }
 
-            // Finally, Base layer (normal tree walk, skipping layered elements)
+            // Finally, Base layer tree walk (skipping anything that landed in _layeredElements).
             return HitTestBaseLayer(ref handle, parentTransform);
         }
 
@@ -422,58 +437,6 @@ namespace Prowl.PaperUI
             }
 
             if (!isPointerOver || data.IsNotInteractable)
-                return default;
-
-            return handle;
-        }
-
-        /// <summary>
-        /// Recursively finds the topmost interactable element for the specified layer.
-        /// </summary>
-        private ElementHandle FindTopmostInteractableElementForLayer(ref ElementHandle handle, Transform2D parentTransform, Layer layer, bool inLayer = false)
-        {
-            if (!handle.IsValid) return default;
-
-            ref ElementData data = ref handle.Data;
-
-            if (layer == Layer.Base && data.Layer != Layer.Base)         return default;
-            if (layer == Layer.Overlay && data.Layer == Layer.Topmost)   return default;
-
-            // Calculate the combined transform
-            Transform2D combinedTransform = parentTransform;
-            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
-            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
-            //combinedTransform.Premultiply(ref styleTransform);
-            combinedTransform = styleTransform * combinedTransform;
-
-            // Transform pointer position to element's local space
-            var inverseTransform = combinedTransform.Inverse();
-            var local = inverseTransform.TransformPoint(PointerPos);
-
-            // Check if pointer is over this element
-            bool isPointerOverElement = IsPointOverElementData(data, local.X, local.Y);
-
-            bool shouldCheckChildren = data._scissorEnabled == false || isPointerOverElement;
-
-            // Scrollbars offset the position of children
-            Transform2D childTransform = combinedTransform;
-
-            // Check children first (front to back, respecting z-order)
-            var childIndices = data.ChildIndices;
-            if (shouldCheckChildren && childIndices.Count > 0)
-            {
-                for (int i = childIndices.Count - 1; i >= 0; i--)
-                {
-                    var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
-
-                    var interactableChild = FindTopmostInteractableElementForLayer(ref childHandle, childTransform, layer, inLayer || data.Layer == layer);
-                    if (interactableChild.IsValid)
-                        return interactableChild;
-                }
-            }
-
-            bool isInLayer = inLayer || data.Layer == layer;
-            if (!isPointerOverElement || data.IsNotInteractable || !isInLayer)
                 return default;
 
             return handle;
