@@ -477,8 +477,8 @@ public class SceneViewPanel : DockPanel
 
         // Floor
         var floorGo = new GameObject("Floor");
-        floorGo.Transform.Position = new Float3(0, -0.05f, 0);
-        floorGo.Transform.LocalScale = new Float3(10, 0.1f, 10);
+        floorGo.Transform.Position = new Float3(0, 0, 0);
+        floorGo.Transform.LocalScale = new Float3(1, 1, 1);
         var floorRenderer = floorGo.AddComponent<MeshRenderer>();
         floorRenderer.Mesh = planeMesh;
         floorRenderer.Material = defaultMat;

@@ -129,6 +129,42 @@ public class OrigamiPlaygroundPanel : DockPanel
     private ShipMode _rgShipH = ShipMode.Standard;
     private Theme _rgTheme = Theme.System;
 
+    // ── Slider state ──────────────────────────────────────────
+    private float _slBasic = 0.5f;
+    private int _slIntBasic = 50;
+    private float _slStep = 0.5f;
+    private float _slLog = 100f;
+    private float _slBipolar = 0f;
+    private float _slContrast = 0f;
+    private float _slDisabled = 0.7f;
+    private float _slReadOnly = 0.3f;
+    private float _slErr = 0.4f;
+    private float _slCustom = 0.5f;
+    private float _slTicks = 25f;
+    private float _slTickLabels = 50f;
+    private float _slNoValue = 0.5f;
+    private float _slWideFmt = 1234.567f;
+    private float _slPrimary = 0.5f;
+    private float _slSuccess = 0.5f;
+    private float _slWarning = 0.5f;
+    private float _slDanger = 0.5f;
+    private float _slInfo = 0.5f;
+    private float _slSubtle = 0.5f;
+    private float _slSmall = 0.5f;
+    private float _slMedium = 0.5f;
+    private float _slLarge = 0.5f;
+    private float _slVert = 0.5f;
+    private int _slDragCount;
+    private int _slDragEndCount;
+
+    // ── RangeSlider state ─────────────────────────────────────
+    private float _rsLow = 0.25f, _rsHigh = 0.75f;
+    private int _rsIntLow = 20, _rsIntHigh = 80;
+    private float _rsStepLow = 10f, _rsStepHigh = 60f;
+    private float _rsMinDistLow = 30f, _rsMinDistHigh = 70f;
+    private float _rsNoSwapLow = 30f, _rsNoSwapHigh = 70f;
+    private float _rsTickLow = 25f, _rsTickHigh = 75f;
+
     // ── NumericField state ────────────────────────────────────
     private float _numFloat = 1.5f;
     private double _numDouble = 3.14159265;
@@ -246,6 +282,15 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_SwitchExtras(paper);
                 Section_CheckboxExtras(paper);
                 Section_RadioGroups(paper);
+                Section_SliderBasics(paper);
+                Section_SliderVariants(paper);
+                Section_SliderSizes(paper);
+                Section_SliderScale(paper);
+                Section_SliderTicks(paper);
+                Section_SliderStates(paper);
+                Section_SliderExtras(paper);
+                Section_SliderVertical(paper);
+                Section_RangeSliderShowcase(paper);
                 Section_State(paper);
             });
     }
@@ -1007,6 +1052,275 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
+    // ── Slider sections ────────────────────────────────────────
+
+    private void Section_SliderBasics(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_basics", "Slider - basics").Body(() =>
+        {
+            using (paper.Column("op_sl_b_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "sl_b_float", "Float (0..1)", () =>
+                    Origami.Slider(paper, "op_sl_b_f", _slBasic, v => _slBasic = v, 0f, 1f).Format("F2").Show());
+
+                LabelRow(paper, "sl_b_int", "IntSlider (0..100)", () =>
+                    Origami.IntSlider(paper, "op_sl_b_i", _slIntBasic, v => _slIntBasic = v, 0, 100).Show());
+
+                LabelRow(paper, "sl_b_step", "Float w/ Step(0.5)", () =>
+                    Origami.Slider(paper, "op_sl_b_step", _slStep, v => _slStep = v, 0f, 10f)
+                        .Step(0.5f).Format("F1").Show());
+
+                LabelRow(paper, "sl_b_novalue", "ShowValue(false)", () =>
+                    Origami.Slider(paper, "op_sl_b_nv", _slNoValue, v => _slNoValue = v, 0f, 1f)
+                        .ShowValue(false).Show());
+
+                LabelRow(paper, "sl_b_widefmt", "Format(\"N2\") wide-range", () =>
+                    Origami.Slider(paper, "op_sl_b_wfmt", _slWideFmt, v => _slWideFmt = v, 0f, 5000f)
+                        .Format("N2").Show());
+            }
+        });
+    }
+
+    private void Section_SliderVariants(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_var", "Slider - variants").Body(() =>
+        {
+            using (paper.Column("op_sl_v_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "v_def", "Default (Primary on-color)", () =>
+                    Origami.Slider(paper, "op_sl_v_def", _slBasic, v => _slBasic = v, 0f, 1f).Format("F2").Show());
+                LabelRow(paper, "v_pri", "Primary", () =>
+                    Origami.Slider(paper, "op_sl_v_pri", _slPrimary, v => _slPrimary = v, 0f, 1f).Primary().Format("F2").Show());
+                LabelRow(paper, "v_suc", "Success", () =>
+                    Origami.Slider(paper, "op_sl_v_suc", _slSuccess, v => _slSuccess = v, 0f, 1f).Success().Format("F2").Show());
+                LabelRow(paper, "v_war", "Warning", () =>
+                    Origami.Slider(paper, "op_sl_v_war", _slWarning, v => _slWarning = v, 0f, 1f).Warning().Format("F2").Show());
+                LabelRow(paper, "v_dan", "Danger", () =>
+                    Origami.Slider(paper, "op_sl_v_dan", _slDanger, v => _slDanger = v, 0f, 1f).Danger().Format("F2").Show());
+                LabelRow(paper, "v_inf", "Info", () =>
+                    Origami.Slider(paper, "op_sl_v_inf", _slInfo, v => _slInfo = v, 0f, 1f).Info().Format("F2").Show());
+                LabelRow(paper, "v_sub", "Subtle", () =>
+                    Origami.Slider(paper, "op_sl_v_sub", _slSubtle, v => _slSubtle = v, 0f, 1f).Subtle().Format("F2").Show());
+            }
+        });
+    }
+
+    private void Section_SliderSizes(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_sz", "Slider - sizes").Body(() =>
+        {
+            using (paper.Column("op_sl_sz_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "sz_sm", "Small (20)", () =>
+                    Origami.Slider(paper, "op_sl_sz_sm", _slSmall, v => _slSmall = v, 0f, 1f).Primary().Small().Format("F2").Show());
+                LabelRow(paper, "sz_md", "Medium (24 - default)", () =>
+                    Origami.Slider(paper, "op_sl_sz_md", _slMedium, v => _slMedium = v, 0f, 1f).Primary().Medium().Format("F2").Show());
+                LabelRow(paper, "sz_lg", "Large (32)", () =>
+                    Origami.Slider(paper, "op_sl_sz_lg", _slLarge, v => _slLarge = v, 0f, 1f).Primary().Large().Format("F2").Show());
+            }
+        });
+    }
+
+    private void Section_SliderScale(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_scale", "Slider - log + bipolar").Body(() =>
+        {
+            using (paper.Column("op_sl_sc_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "sc_log", "Logarithmic (1..10000)", () =>
+                    Origami.Slider(paper, "op_sl_sc_log", _slLog, v => _slLog = v, 1f, 10000f)
+                        .Logarithmic()
+                        .Format("F1")
+                        .HelperText("Log scale gives perceptually-linear control over wide ranges")
+                        .Show());
+
+                LabelRow(paper, "sc_bipolar", "Bipolar (-1..1, fills from 0)", () =>
+                    Origami.Slider(paper, "op_sl_sc_bp", _slBipolar, v => _slBipolar = v, -1f, 1f)
+                        .Bipolar().Format("F2").Show());
+
+                LabelRow(paper, "sc_contrast", "Bipolar w/ Variant + Format", () =>
+                    Origami.Slider(paper, "op_sl_sc_ct", _slContrast, v => _slContrast = v, -100f, 100f)
+                        .Bipolar()
+                        .Primary()
+                        .Format("+0;-0;0")
+                        .HelperText("Centered ranges (contrast / saturation / EV) read better with bipolar fill")
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_SliderTicks(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_ticks", "Slider - ticks + labels").Body(() =>
+        {
+            using (paper.Column("op_sl_tk_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "tk_simple", "Ticks(11) - no labels", () =>
+                    Origami.Slider(paper, "op_sl_tk_s", _slTicks, v => _slTicks = v, 0f, 100f)
+                        .Ticks(11).Step(10f).Format("F0").Show());
+
+                LabelRow(paper, "tk_labels", "Ticks(5) + TickLabels", () =>
+                    Origami.Slider(paper, "op_sl_tk_l", _slTickLabels, v => _slTickLabels = v, 0f, 100f)
+                        .Ticks(5)
+                        .TickLabels((i, v) => $"{(int)v}")
+                        .Step(25f)
+                        .Format("F0")
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_SliderStates(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_state", "Slider - states").Body(() =>
+        {
+            using (paper.Column("op_sl_st_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "st_disabled", "Disabled", () =>
+                    Origami.Slider(paper, "op_sl_st_dis", _slDisabled, v => _slDisabled = v, 0f, 1f)
+                        .Primary().Disabled().Format("F2").Show());
+
+                LabelRow(paper, "st_readonly", "ReadOnly", () =>
+                    Origami.Slider(paper, "op_sl_st_ro", _slReadOnly, v => _slReadOnly = v, 0f, 1f)
+                        .Success().ReadOnly().Format("F2").Show());
+
+                LabelRow(paper, "st_helper", "HelperText", () =>
+                    Origami.Slider(paper, "op_sl_st_help", _slBasic, v => _slBasic = v, 0f, 1f)
+                        .Primary()
+                        .HelperText("Tip: hold Ctrl while dragging or using arrows for 10x precision, Shift for 0.1x")
+                        .Format("F2")
+                        .Show());
+
+                LabelRow(paper, "st_error", "Error message", () =>
+                    Origami.Slider(paper, "op_sl_st_err", _slErr, v => _slErr = v, 0f, 1f)
+                        .Format("F2")
+                        .Error("Forced error - shows the danger ramp on the helper line")
+                        .Show());
+
+                LabelRow(paper, "st_validator", "Validator (must be > 0.5)", () =>
+                    Origami.Slider(paper, "op_sl_st_val", _slBasic, v => _slBasic = v, 0f, 1f)
+                        .Format("F2")
+                        .Validator(v => v > 0.5f ? (true, null) : (false, "Drag the thumb past the midpoint"))
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_SliderExtras(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_xtra", "Slider - tooltip / drag hooks / custom render").Body(() =>
+        {
+            using (paper.Column("op_sl_xt_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "xt_tooltip_off", "ShowTooltip(false)", () =>
+                    Origami.Slider(paper, "op_sl_xt_tt", _slBasic, v => _slBasic = v, 0f, 1f)
+                        .Primary().Format("F2").ShowTooltip(false).Show());
+
+                LabelRow(paper, "xt_drag_hooks", $"OnDragStart / OnDragEnd  (start: {_slDragCount}, end: {_slDragEndCount})", () =>
+                    Origami.Slider(paper, "op_sl_xt_dh", _slBasic, v => _slBasic = v, 0f, 1f)
+                        .Primary().Format("F2")
+                        .OnDragStart(() => _slDragCount++)
+                        .OnDragEnd(() => _slDragEndCount++)
+                        .Show());
+
+                LabelRow(paper, "xt_no_snap_during_drag", "SnapWhileDragging(false) + Step(0.1)", () =>
+                    Origami.Slider(paper, "op_sl_xt_snap", _slBasic, v => _slBasic = v, 0f, 1f)
+                        .Primary().Step(0.1f).SnapWhileDragging(false).Format("F2").Show());
+
+                LabelRow(paper, "xt_custom_thumb", "CustomThumb (caller-drawn)", () =>
+                    Origami.Slider(paper, "op_sl_xt_cust", _slCustom, v => _slCustom = v, 0f, 1f)
+                        .Primary().Format("F2")
+                        .CustomThumb((canvas, ctx) =>
+                        {
+                            // Diamond thumb instead of a circle.
+                            float r = ctx.Radius;
+                            canvas.SetFillColor(ctx.IsActive ? ctx.Surface.C500 : ctx.Ink.C500);
+                            canvas.BeginPath();
+                            canvas.MoveTo((float)ctx.Center.X, (float)ctx.Center.Y - r);
+                            canvas.LineTo((float)ctx.Center.X + r, (float)ctx.Center.Y);
+                            canvas.LineTo((float)ctx.Center.X, (float)ctx.Center.Y + r);
+                            canvas.LineTo((float)ctx.Center.X - r, (float)ctx.Center.Y);
+                            canvas.Fill();
+                        })
+                        .Show());
+            }
+        });
+    }
+
+    private void Section_SliderVertical(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_sl_vert", "Slider - vertical").Body(() =>
+        {
+            using (paper.Row("op_sl_vt_row").Height(160).RowBetween(20).Enter())
+            {
+                using (paper.Column("op_sl_vt_a").Width(80).Height(160).Enter())
+                {
+                    Origami.Slider(paper, "op_sl_vt_a_v", _slVert, v => _slVert = v, 0f, 1f)
+                        .Primary().Vertical().ShowValue(false).Format("F2")
+                        .Width(40f).Height(140f)
+                        .Show();
+                    paper.Box("op_sl_vt_a_lbl").Width(80).Height(20)
+                        .Alignment(TextAlignment.MiddleCenter).IsNotInteractable()
+                        .Text($"{_slVert:F2}", EditorTheme.DefaultFont)
+                        .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2);
+                }
+
+                using (paper.Column("op_sl_vt_b").Width(80).Height(160).Enter())
+                {
+                    Origami.Slider(paper, "op_sl_vt_b_v", _slBipolar, v => _slBipolar = v, -1f, 1f)
+                        .Success().Vertical().Bipolar().ShowValue(false).Format("F2")
+                        .Width(40f).Height(140f)
+                        .Show();
+                    paper.Box("op_sl_vt_b_lbl").Width(80).Height(20)
+                        .Alignment(TextAlignment.MiddleCenter).IsNotInteractable()
+                        .Text($"bipolar {_slBipolar:F2}", EditorTheme.DefaultFont)
+                        .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2);
+                }
+            }
+        });
+    }
+
+    private void Section_RangeSliderShowcase(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_rs", "RangeSlider").Body(() =>
+        {
+            using (paper.Column("op_rs_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "rs_basic", "Float (0..1)", () =>
+                    Origami.RangeSlider(paper, "op_rs_b", _rsLow, _rsHigh,
+                        (lo, hi) => { _rsLow = lo; _rsHigh = hi; }, 0f, 1f).Format("F2").Show());
+
+                LabelRow(paper, "rs_int", "IntRangeSlider (0..100)", () =>
+                    Origami.IntRangeSlider(paper, "op_rs_i", _rsIntLow, _rsIntHigh,
+                        (lo, hi) => { _rsIntLow = lo; _rsIntHigh = hi; }, 0, 100).Show());
+
+                LabelRow(paper, "rs_step", "Step(10) + Variant", () =>
+                    Origami.RangeSlider(paper, "op_rs_s", _rsStepLow, _rsStepHigh,
+                        (lo, hi) => { _rsStepLow = lo; _rsStepHigh = hi; }, 0f, 100f)
+                        .Primary().Step(10f).Format("F0").Show());
+
+                LabelRow(paper, "rs_mindist", "MinDistance(20)", () =>
+                    Origami.RangeSlider(paper, "op_rs_md", _rsMinDistLow, _rsMinDistHigh,
+                        (lo, hi) => { _rsMinDistLow = lo; _rsMinDistHigh = hi; }, 0f, 100f)
+                        .Success().MinDistance(20f).Format("F0")
+                        .HelperText("Thumbs always stay 20 apart")
+                        .Show());
+
+                LabelRow(paper, "rs_noswap", "AllowSwap(false)", () =>
+                    Origami.RangeSlider(paper, "op_rs_ns", _rsNoSwapLow, _rsNoSwapHigh,
+                        (lo, hi) => { _rsNoSwapLow = lo; _rsNoSwapHigh = hi; }, 0f, 100f)
+                        .Warning().AllowSwap(false).Format("F0")
+                        .HelperText("Drag low past high - clamps instead of swapping")
+                        .Show());
+
+                LabelRow(paper, "rs_ticks", "Ticks(5) + TickLabels", () =>
+                    Origami.RangeSlider(paper, "op_rs_tk", _rsTickLow, _rsTickHigh,
+                        (lo, hi) => { _rsTickLow = lo; _rsTickHigh = hi; }, 0f, 100f)
+                        .Info().Ticks(5).TickLabels((i, v) => $"{(int)v}").Format("F0").Show());
+            }
+        });
+    }
+
     private void Section_State(Paper paper)
     {
         Origami.Foldout(paper, "op_fo_state", "Live state").Body(() =>
@@ -1037,6 +1351,12 @@ public class OrigamiPlaygroundPanel : DockPanel
                 StateLine(paper, "st_cbAbc",   $"Checkbox A/B/C: {_cbA}/{_cbB}/{_cbC}");
                 StateLine(paper, "st_rgShip",  $"Ship mode: {_rgShip}");
                 StateLine(paper, "st_rgTheme", $"Theme: {_rgTheme}");
+                StateLine(paper, "st_slBasic", $"Slider basic: {_slBasic:F3}");
+                StateLine(paper, "st_slLog",   $"Slider log: {_slLog:F1}");
+                StateLine(paper, "st_slBp",    $"Slider bipolar: {_slBipolar:F2}");
+                StateLine(paper, "st_slDrag",  $"Drag start/end count: {_slDragCount} / {_slDragEndCount}");
+                StateLine(paper, "st_rs",      $"RangeSlider float: [{_rsLow:F2}, {_rsHigh:F2}]");
+                StateLine(paper, "st_rsInt",   $"RangeSlider int: [{_rsIntLow}, {_rsIntHigh}]");
             }
         });
     }
