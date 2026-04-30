@@ -733,7 +733,7 @@ public class SceneViewPanel : DockPanel
         // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
             .PositionType(PositionType.SelfDirected)
-            .Position(width - cubeSize - 8, 8)
+            .Position(width - cubeSize - 8, 8 + EditorTheme.MenuBarHeight)
             .Size(cubeSize, cubeSize)
             .OnPostLayout((handle, rect) => paper.DrawForeground(ref handle, (canvas, r) =>
             {
