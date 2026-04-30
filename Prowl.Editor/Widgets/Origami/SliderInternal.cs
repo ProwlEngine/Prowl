@@ -74,18 +74,28 @@ internal static class SliderInternal
         return Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    /// <summary>Converts a double back into <typeparamref name="T"/>. Integer types round; others truncate via T.CreateChecked.</summary>
+    /// <summary>Converts a double back into <typeparamref name="T"/>. Integer types round; others use CreateChecked directly.</summary>
     public static T FromDouble<T>(double value) where T : struct, INumber<T>
     {
         if (typeof(T) == typeof(decimal))
             return (T)(object)(decimal)value;
 
-        // Integer types should round-to-nearest so a slider position that lands on 4.7 gives 5,
-        // not 4. CreateChecked truncates toward zero on integer targets, which feels wrong for a
-        // continuous slider; round through Math.Round first.
-        if (T.IsInteger(T.One))
+        // Integer types should round-to-nearest so a slider position landing at 4.7 yields 5
+        // instead of CreateChecked's truncate-to-4. Detect integer T by *type*, not by
+        // T.IsInteger(value) — that asks "is this value a whole number" which is true for any
+        // whole-numbered float and would round our continuous floats. The JIT folds these
+        // typeof checks for closed generics, so no runtime cost.
+        if (IsIntegerType<T>())
             return T.CreateChecked((long)Math.Round(value, MidpointRounding.AwayFromZero));
 
         return T.CreateChecked(value);
     }
+
+    /// <summary>True when <typeparamref name="T"/> is one of the built-in integer types.</summary>
+    public static bool IsIntegerType<T>() where T : struct, INumber<T>
+        => typeof(T) == typeof(int)   || typeof(T) == typeof(uint)
+        || typeof(T) == typeof(long)  || typeof(T) == typeof(ulong)
+        || typeof(T) == typeof(short) || typeof(T) == typeof(ushort)
+        || typeof(T) == typeof(byte)  || typeof(T) == typeof(sbyte)
+        || typeof(T) == typeof(nint)  || typeof(T) == typeof(nuint);
 }

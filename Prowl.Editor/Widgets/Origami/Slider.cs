@@ -99,6 +99,8 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
     private float _height = 24f;
+    private float _thumbDiameter = 15f;
+    private float _trackThickness = 6f;
     private bool _vertical;
 
     private T _min;
@@ -162,9 +164,16 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
 
     public SliderBuilder<T> Width(UnitValue w) { _width = w; return this; }
     public SliderBuilder<T> Height(float h) { _height = MathF.Max(16, h); return this; }
-    public SliderBuilder<T> Small()  => Height(20);
-    public SliderBuilder<T> Medium() => Height(24);
-    public SliderBuilder<T> Large()  => Height(32);
+
+    /// <summary>Thumb diameter in pixels (default 19, set by Small/Medium/Large).</summary>
+    public SliderBuilder<T> ThumbSize(float diameter) { _thumbDiameter = MathF.Max(8, diameter); return this; }
+
+    /// <summary>Track thickness in pixels (default 6, set by Small/Medium/Large).</summary>
+    public SliderBuilder<T> TrackThickness(float px) { _trackThickness = MathF.Max(2, px); return this; }
+
+    public SliderBuilder<T> Small()  { _height = 20; _thumbDiameter = 11; _trackThickness = 4; return this; }
+    public SliderBuilder<T> Medium() { _height = 24; _thumbDiameter = 15; _trackThickness = 6; return this; }
+    public SliderBuilder<T> Large()  { _height = 32; _thumbDiameter = 22; _trackThickness = 8; return this; }
 
     /// <summary>Vertical track instead of horizontal. Min sits at the bottom, max at the top.</summary>
     public SliderBuilder<T> Vertical(bool vertical = true) { _vertical = vertical; return this; }
@@ -363,24 +372,33 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             }
 
             // ── Tick labels row ────────────────────────────────────────
+            // Mirror the track-row gutters so labels align under the track only — without this
+            // the labels would stretch under the inline numeric field too and skew the spacing.
             if (drawTickLabels)
             {
-                using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
+                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).RowBetween(8).Enter())
                 {
-                    for (int i = 0; i < _tickCount; i++)
+                    using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
                     {
-                        double tt = (_tickCount == 1) ? 0.5 : (double)i / (_tickCount - 1);
-                        T tv = SliderInternal.TToValue<T>(tt, _min, _max, _logarithmic);
-                        string label = _tickLabel!.Invoke(i, tv);
-                        if (string.IsNullOrEmpty(label)) continue;
+                        for (int i = 0; i < _tickCount; i++)
+                        {
+                            double tt = (_tickCount == 1) ? 0.5 : (double)i / (_tickCount - 1);
+                            T tv = SliderInternal.TToValue<T>(tt, _min, _max, _logarithmic);
+                            string label = _tickLabel!.Invoke(i, tv);
+                            if (string.IsNullOrEmpty(label)) continue;
 
-                        // Equal-width bins — labels centered above their tick.
-                        _paper.Box($"{_id}_tk_{i}")
-                            .Width(UnitValue.Stretch()).Height(tickLabelH)
-                            .Alignment(TextAlignment.MiddleCenter)
-                            .IsNotInteractable()
-                            .Text(label, font!).TextColor(ink.C300).FontSize(metrics.FontSize - 2);
+                            _paper.Box($"{_id}_tk_{i}")
+                                .Width(UnitValue.Stretch()).Height(tickLabelH)
+                                .Alignment(TextAlignment.MiddleCenter)
+                                .IsNotInteractable()
+                                .Text(label, font!).TextColor(ink.C300).FontSize(metrics.FontSize - 2);
+                        }
                     }
+
+                    // Spacer that matches the inline numeric field's footprint so tick labels
+                    // align with the track section above, not the full row.
+                    if (_showValue)
+                        _paper.Box($"{_id}_ticks_pad").Width(_valueWidth).Height(tickLabelH).IsNotInteractable();
                 }
             }
 
@@ -421,6 +439,8 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         }
 
         int tickCount = _tickCount;
+        float thumbBaseR = _thumbDiameter * 0.5f;
+        float trackThicknessLocal = _trackThickness;
         bool showCustomTrack = _customTrack != null;
         bool showCustomThumb = _customThumb != null;
         var customTrack = _customTrack;
@@ -429,10 +449,12 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         bool showTooltip = _showTooltip && (isDragging || isHovered) && font != null;
         string tooltipText = showTooltip ? FormatValue(valueT) : string.Empty;
         float fontSize = metrics.FontSize;
+        Color tooltipBg = _theme.Neutral.C500;
+        Color tooltipFg = ink.C500;
 
         // Animation hooks for hover/active.
-        float hoverAnim  = _paper.AnimateBool(isHovered && interactive, 0.12f, id: "sl_hov");
-        float activeAnim = _paper.AnimateBool(isDragging, 0.10f, id: "sl_act");
+        float hoverAnim  = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
+        float activeAnim = _paper.AnimateBool(isDragging, 0.10f, id: $"{_id}_act");
 
         _paper.Draw((canvas, rect) =>
         {
@@ -441,10 +463,12 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             float rw = (float)rect.Size.X;
             float rh = (float)rect.Size.Y;
 
-            // Track geometry (horizontal only for v1; vertical handled symmetrically below).
-            float trackThickness = MathF.Max(4f, rh * 0.22f);
+            // Both track thickness and thumb diameter are fixed per size category (set by
+            // Small / Medium / Large or ThumbSize / TrackThickness). Avoiding rect-derived
+            // sizing means vertical sliders, narrow boxes and tall boxes all paint the same.
+            float trackThickness = trackThicknessLocal;
             float trackR = trackThickness * 0.5f;
-            float thumbR = MathF.Max(6f, rh * 0.42f) * (1f + 0.10f * hoverAnim + 0.05f * activeAnim);
+            float thumbR = thumbBaseR * (1f + 0.10f * hoverAnim + 0.05f * activeAnim);
 
             float tx, ty, tw, th;
             float thumbCx, thumbCy;
@@ -571,23 +595,69 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 canvas.CircleFilled(thumbCx, thumbCy, MathF.Max(0, thumbR - 1.5f), thumbCol);
             }
 
-            // Tooltip — small rounded rect with text above the thumb.
-            if (showTooltip && font != null)
-            {
-                float fs = fontSize;
-                var ts = canvas.MeasureText(tooltipText, fs, font);
-                float padX = 6f, padY = 2f;
-                float bw = (float)ts.X + padX * 2f;
-                float bh = (float)ts.Y + padY * 2f;
-                float bx = thumbCx - bw * 0.5f;
-                float by = thumbCy - thumbR - bh - 4f;
-
-                // Drop shadow + body.
-                canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f, Color.FromArgb(80, 0, 0, 0));
-                canvas.RoundedRectFilled(bx, by, bw, bh, 3f, _theme.Neutral.C500);
-                canvas.DrawText(tooltipText, bx + padX, by + padY, ink.C500, fs, font);
-            }
         });
+
+        // ── Tooltip overlay ──────────────────────────────────────
+        // The tooltip lives on its own element on Layer.Topmost so it can render above
+        // anything that might otherwise clip or sit over the slider (popovers, modals,
+        // adjacent rows). The element itself is a 1x1 SelfDirected hook with no visual
+        // footprint; the Draw callback paints the bubble at absolute screen coords pulled
+        // from the track's post-layout rect.
+        if (showTooltip && font != null)
+        {
+            // We need the track handle inside the closure but that's the local 'this'
+            // method's parameter. Capture via a local copy so the lambda is self-contained.
+            // (PaintTrack is an instance method; trackHandle is read off the current parent
+            // which is the track itself when this method runs.)
+            var thandle = _paper.CurrentParent;
+            string tt = tooltipText;
+            bool vert = vertical;
+            double t = valueT;
+            float thumbBaseRLocal = thumbBaseR;
+
+            using (_paper.Box($"{_id}_tt")
+                .PositionType(PositionType.SelfDirected)
+                .Position(0, 0)
+                .Width(1).Height(1)
+                .Layer(Layer.Topmost)
+                .HookToParent()
+                .IsNotInteractable()
+                .Enter())
+            {
+                _paper.Draw((canvas, _) =>
+                {
+                    var tr = thandle.Data.LayoutRect;
+                    float trX = (float)tr.Min.X;
+                    float trY = (float)tr.Min.Y;
+                    float trW = (float)tr.Size.X;
+                    float trH = (float)tr.Size.Y;
+                    float thR = thumbBaseRLocal;
+
+                    float thumbCx, thumbCy;
+                    if (!vert)
+                    {
+                        thumbCx = trX + trW * (float)t;
+                        thumbCy = trY + trH * 0.5f;
+                    }
+                    else
+                    {
+                        thumbCx = trX + trW * 0.5f;
+                        thumbCy = trY + trH * (1f - (float)t);
+                    }
+
+                    var ts = canvas.MeasureText(tt, fontSize, font);
+                    float padX = 6f, padY = 2f;
+                    float bw = (float)ts.X + padX * 2f;
+                    float bh = (float)ts.Y + padY * 2f;
+                    float bx = thumbCx - bw * 0.5f;
+                    float by = thumbCy - thR - bh - 4f;
+
+                    canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f, Color.FromArgb(80, 0, 0, 0));
+                    canvas.RoundedRectFilled(bx, by, bw, bh, 3f, tooltipBg);
+                    canvas.DrawText(tt, bx + padX, by + padY, tooltipFg, fontSize, font);
+                });
+            }
+        }
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
@@ -684,7 +754,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
 
         // For integer types, the smallest meaningful step is T.One.
         T candidate = SliderInternal.FromDouble<T>(s);
-        if (T.IsInteger(T.One) && candidate == T.Zero) return T.One;
+        if (SliderInternal.IsIntegerType<T>() && candidate == T.Zero) return T.One;
         return candidate;
     }
 

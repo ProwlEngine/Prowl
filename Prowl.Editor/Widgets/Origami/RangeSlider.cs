@@ -35,6 +35,8 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
     private float _height = 24f;
+    private float _thumbDiameter = 15f;
+    private float _trackThickness = 6f;
     private bool _vertical;
 
     private T _min;
@@ -91,9 +93,11 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
     public RangeSliderBuilder<T> Width(UnitValue w) { _width = w; return this; }
     public RangeSliderBuilder<T> Height(float h) { _height = MathF.Max(16, h); return this; }
-    public RangeSliderBuilder<T> Small()  => Height(20);
-    public RangeSliderBuilder<T> Medium() => Height(24);
-    public RangeSliderBuilder<T> Large()  => Height(32);
+    public RangeSliderBuilder<T> ThumbSize(float diameter) { _thumbDiameter = MathF.Max(8, diameter); return this; }
+    public RangeSliderBuilder<T> TrackThickness(float px) { _trackThickness = MathF.Max(2, px); return this; }
+    public RangeSliderBuilder<T> Small()  { _height = 20; _thumbDiameter = 11; _trackThickness = 4; return this; }
+    public RangeSliderBuilder<T> Medium() { _height = 24; _thumbDiameter = 15; _trackThickness = 6; return this; }
+    public RangeSliderBuilder<T> Large()  { _height = 32; _thumbDiameter = 22; _trackThickness = 8; return this; }
     public RangeSliderBuilder<T> Vertical(bool vertical = true) { _vertical = vertical; return this; }
 
     // ── Range / scale ──────────────────────────────────────────────────
@@ -246,21 +250,28 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
             if (drawTickLabels)
             {
-                using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
+                using (_paper.Row($"{_id}_ticks_outer").Width(UnitValue.Stretch()).Height(tickLabelH).RowBetween(8).Enter())
                 {
-                    for (int i = 0; i < _tickCount; i++)
+                    using (_paper.Row($"{_id}_ticks").Width(UnitValue.Stretch()).Height(tickLabelH).Enter())
                     {
-                        double tt = (_tickCount == 1) ? 0.5 : (double)i / (_tickCount - 1);
-                        T tv = SliderInternal.TToValue<T>(tt, _min, _max, _logarithmic);
-                        string label = _tickLabel!.Invoke(i, tv);
-                        if (string.IsNullOrEmpty(label)) continue;
+                        for (int i = 0; i < _tickCount; i++)
+                        {
+                            double tt = (_tickCount == 1) ? 0.5 : (double)i / (_tickCount - 1);
+                            T tv = SliderInternal.TToValue<T>(tt, _min, _max, _logarithmic);
+                            string label = _tickLabel!.Invoke(i, tv);
+                            if (string.IsNullOrEmpty(label)) continue;
 
-                        _paper.Box($"{_id}_tk_{i}")
-                            .Width(UnitValue.Stretch()).Height(tickLabelH)
-                            .Alignment(TextAlignment.MiddleCenter)
-                            .IsNotInteractable()
-                            .Text(label, font!).TextColor(ink.C300).FontSize(metrics.FontSize - 2);
+                            _paper.Box($"{_id}_tk_{i}")
+                                .Width(UnitValue.Stretch()).Height(tickLabelH)
+                                .Alignment(TextAlignment.MiddleCenter)
+                                .IsNotInteractable()
+                                .Text(label, font!).TextColor(ink.C300).FontSize(metrics.FontSize - 2);
+                        }
                     }
+
+                    // Spacer matching the two-numeric-field width so labels align under the track.
+                    if (_showValue)
+                        _paper.Box($"{_id}_ticks_pad").Width(_valueWidth * 2 + 4).Height(tickLabelH).IsNotInteractable();
                 }
             }
 
@@ -299,6 +310,8 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         string tooltipText = showTooltip ? $"{Format(lo)} – {Format(hi)}" : string.Empty;
         float fontSize = metrics.FontSize;
         int tickCount = _tickCount;
+        float thumbBaseR = _thumbDiameter * 0.5f;
+        float trackThicknessLocal = _trackThickness;
 
         float hoverAnim  = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
         float activeAnim = _paper.AnimateBool(isDragging, 0.10f, id: $"{_id}_act");
@@ -310,9 +323,9 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
             float rw = (float)rect.Size.X;
             float rh = (float)rect.Size.Y;
 
-            float trackThickness = MathF.Max(4f, rh * 0.22f);
+            float trackThickness = trackThicknessLocal;
             float trackR = trackThickness * 0.5f;
-            float thumbR = MathF.Max(6f, rh * 0.42f) * (1f + 0.10f * hoverAnim + 0.05f * activeAnim);
+            float thumbR = thumbBaseR * (1f + 0.10f * hoverAnim + 0.05f * activeAnim);
 
             float tx, ty, tw, th;
             float thumbLoCx, thumbLoCy, thumbHiCx, thumbHiCy;
@@ -373,29 +386,67 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
             // Thumbs (low first, then high so high renders on top when they overlap).
             DrawThumb(canvas, thumbLoCx, thumbLoCy, thumbR, fill, thumbCol, ink, dragging == 1, activeAnim);
             DrawThumb(canvas, thumbHiCx, thumbHiCy, thumbR, fill, thumbCol, ink, dragging == 2, activeAnim);
-
-            // Tooltip — pinned above whichever thumb is being dragged, or above the midpoint when idle/hover.
-            if (showTooltip && font != null)
-            {
-                float fs = fontSize;
-                var ts = canvas.MeasureText(tooltipText, fs, font);
-                float padX = 6f, padY = 2f;
-                float bw = (float)ts.X + padX * 2f;
-                float bh = (float)ts.Y + padY * 2f;
-
-                float anchorX = dragging == 1 ? thumbLoCx
-                              : dragging == 2 ? thumbHiCx
-                              : (thumbLoCx + thumbHiCx) * 0.5f;
-                float anchorY = thumbLoCy;
-
-                float bx = anchorX - bw * 0.5f;
-                float by = anchorY - thumbR - bh - 4f;
-
-                canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f, Color.FromArgb(80, 0, 0, 0));
-                canvas.RoundedRectFilled(bx, by, bw, bh, 3f, _theme.Neutral.C500);
-                canvas.DrawText(tooltipText, bx + padX, by + padY, ink.C500, fs, font);
-            }
         });
+
+        // ── Tooltip overlay (Layer.Topmost so it can never be clipped) ────
+        if (showTooltip && font != null)
+        {
+            var thandle = _paper.CurrentParent;
+            string tt = tooltipText;
+            bool vert = vertical;
+            double tLoLocal = tLo, tHiLocal = tHi;
+            int dragLocal = dragging;
+            float thumbBaseRLocal = thumbBaseR;
+            Color ttBg = _theme.Neutral.C500;
+            Color ttFg = ink.C500;
+
+            using (_paper.Box($"{_id}_tt")
+                .PositionType(PositionType.SelfDirected)
+                .Position(0, 0)
+                .Width(1).Height(1)
+                .Layer(Layer.Topmost)
+                .HookToParent()
+                .IsNotInteractable()
+                .Enter())
+            {
+                _paper.Draw((canvas, _) =>
+                {
+                    var tr = thandle.Data.LayoutRect;
+                    float trX = (float)tr.Min.X;
+                    float trY = (float)tr.Min.Y;
+                    float trW = (float)tr.Size.X;
+                    float trH = (float)tr.Size.Y;
+                    float thR = thumbBaseRLocal;
+
+                    float loCx, loCy, hiCx, hiCy;
+                    if (!vert)
+                    {
+                        loCx = trX + trW * (float)tLoLocal; loCy = trY + trH * 0.5f;
+                        hiCx = trX + trW * (float)tHiLocal; hiCy = loCy;
+                    }
+                    else
+                    {
+                        loCx = trX + trW * 0.5f; loCy = trY + trH * (1f - (float)tLoLocal);
+                        hiCx = loCx;             hiCy = trY + trH * (1f - (float)tHiLocal);
+                    }
+
+                    var ts = canvas.MeasureText(tt, fontSize, font);
+                    float padX = 6f, padY = 2f;
+                    float bw = (float)ts.X + padX * 2f;
+                    float bh = (float)ts.Y + padY * 2f;
+
+                    float anchorX = dragLocal == 1 ? loCx
+                                  : dragLocal == 2 ? hiCx
+                                  : (loCx + hiCx) * 0.5f;
+                    float bx = anchorX - bw * 0.5f;
+                    float by = loCy - thR - bh - 4f;
+
+                    canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f, Color.FromArgb(80, 0, 0, 0));
+                    canvas.RoundedRectFilled(bx, by, bw, bh, 3f, ttBg);
+                    canvas.DrawText(tt, bx + padX, by + padY, ttFg, fontSize, font);
+                });
+            }
+        }
     }
 
     private void DrawThumb(Canvas canvas, float cx, float cy, float r, Color fill, Color body, OrigamiRamp ink,
@@ -449,7 +500,14 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
             if (newLo > newHi)
             {
-                if (_allowSwap) (newLo, newHi) = (newHi, newLo);
+                if (_allowSwap)
+                {
+                    // Crossed the high thumb > swap values AND swap dragging-role storage.
+                    // Without the role flip, the dragging-thumb logic next frame would think
+                    // it's still moving the low side and re-swap, producing flicker.
+                    (newLo, newHi) = (newHi, newLo);
+                    _paper.SetElementStorage(trackHandle, KeyDragging, 2);
+                }
                 else newLo = newHi;
             }
             EmitOrdered(SliderInternal.Clamp(newLo, _min, _max), newHi);
@@ -463,7 +521,11 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
             if (newHi < newLo)
             {
-                if (_allowSwap) (newLo, newHi) = (newHi, newLo);
+                if (_allowSwap)
+                {
+                    (newLo, newHi) = (newHi, newLo);
+                    _paper.SetElementStorage(trackHandle, KeyDragging, 1);
+                }
                 else newHi = newLo;
             }
             EmitOrdered(newLo, SliderInternal.Clamp(newHi, _min, _max));
