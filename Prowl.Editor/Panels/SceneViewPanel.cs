@@ -28,7 +28,6 @@ public class SceneViewPanel : DockPanel
     /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
     public static EditorCamera? ActiveCamera { get; private set; }
     private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
-    private const float ToolbarHeight = 28f;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
@@ -56,22 +55,17 @@ public class SceneViewPanel : DockPanel
         }
         ActiveCamera = _editorCamera;
 
-        using (paper.Box("sv_root").Size(width, height).Enter())
+        using (paper.Column("sv_root").Size(width, height).Enter())
         {
-            DrawViewport(paper, font, width, height);
-            DrawToolbar(paper, font, width);
+            DrawToolbar(paper, font);
+            DrawViewport(paper, font, width, height - EditorTheme.MenuBarHeight);
         }
     }
 
-    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
+    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Row("sv_toolbar")
-            .PositionType(PositionType.SelfDirected)
-            .Position(4, 4).Size(width - 8, ToolbarHeight)
-            .Rounded(6)
-            .IsNotInteractable()
-            .ChildLeft(4).ChildRight(4).RowBetween(4)
-            .ChildTop(2).ChildBottom(2)
+            .Height(EditorTheme.MenuBarHeight)
             .Enter())
         {
             // Let active scene view editor draw its toolbar first
@@ -249,7 +243,7 @@ public class SceneViewPanel : DockPanel
                         canvas.ClearBrushTexture();
 
                         canvas.RoundedRect(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness);
-                        canvas.SetStrokeColor(EditorTheme.Purple400);
+                        canvas.SetStrokeColor(EditorTheme.Purple500);
                         canvas.SetStrokeWidth(2);
                         canvas.Stroke();
                     });
