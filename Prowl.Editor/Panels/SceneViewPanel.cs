@@ -226,7 +226,6 @@ public class SceneViewPanel : DockPanel
         {
             paper.Box("sv_viewport")
                 .Size(width, height)
-                .Clip()
                 .OnPostLayout((handle, rect) =>
                 {
                     // Cache absolute rect for gizmo coordinate space
@@ -235,19 +234,24 @@ public class SceneViewPanel : DockPanel
                     // Draw RT
                     paper.Draw(ref handle, (canvas, r) =>
                     {
-                    float rx = (float)r.Min.X;
-                    float ry = (float)r.Min.Y;
-                    float rw = (float)r.Size.X;
-                    float rh = (float)r.Size.Y;
+                        float rx = (float)r.Min.X;
+                        float ry = (float)r.Min.Y;
+                        float rw = (float)r.Size.X;
+                        float rh = (float)r.Size.Y;
 
-                    // Draw RT with flipped Y OpenGL RT has Y=0 at bottom
-                    canvas.SetBrushTexture(rt.MainTexture);
-                    // TextureTransform maps screen rect to UV: flip V by translating +1 and scaling -1 on Y
-                    canvas.SetBrushTextureTransform(
-                        Transform2D.CreateTranslation(rx, ry + rh) *
-                        Transform2D.CreateScale(rw, -rh));
-                    canvas.RoundedRectFilled(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
-                    canvas.ClearBrushTexture();
+                        // Draw RT with flipped Y OpenGL RT has Y=0 at bottom
+                        canvas.SetBrushTexture(rt.MainTexture);
+                        // TextureTransform maps screen rect to UV: flip V by translating +1 and scaling -1 on Y
+                        canvas.SetBrushTextureTransform(
+                            Transform2D.CreateTranslation(rx, ry + rh) *
+                            Transform2D.CreateScale(rw, -rh));
+                        canvas.RoundedRectFilled(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
+                        canvas.ClearBrushTexture();
+
+                        canvas.RoundedRect(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness);
+                        canvas.SetStrokeColor(EditorTheme.Purple400);
+                        canvas.SetStrokeWidth(2);
+                        canvas.Stroke();
                     });
 
                     // Draw transform gizmo as 2D overlay (hidden when scene editor consumes input)
