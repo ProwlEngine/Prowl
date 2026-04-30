@@ -6,6 +6,7 @@ using System.Drawing;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -381,7 +382,7 @@ public sealed class ToggleBuilder
         return Color.FromArgb(alpha, c.R, c.G, c.B);
     }
 
-    // ── Switch ─────────────────────────────────────────────────────────
+    // ── Switch (single Box + Canvas Draw) ──────────────────────────────
 
     private void DrawSwitch(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
@@ -390,80 +391,82 @@ public sealed class ToggleBuilder
 
         float trackW = _size * 1.9f;
         float trackH = _size * 1.05f;
-        float pad    = MathF.Max(2f, trackH * 0.12f);
-        float knob   = trackH - pad * 2f;
 
+        // Capture every per-frame value the closure needs — the builder doesn't survive past Show().
         var onRamp = OnRamp();
-        Color offBg = _theme.Neutral.C300;
-        Color onBg  = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
+        Color offBg   = _theme.Neutral.C300;
+        Color onBg    = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color trackBg = OrigamiRamp.LerpColor(offBg, onBg, t);
-
-        Color knobFill = _theme.Ink.C500;
+        Color knobFill   = _theme.Ink.C500;
+        Color textOnFg   = _theme.Ink.C600;
+        Color textOffFg  = _theme.Ink.C500;
+        Color glyphOffFg = _theme.Ink.C300;
         if (_disabled)
         {
             trackBg  = OrigamiRamp.LerpColor(trackBg, _theme.Neutral.C400, 0.5f);
             knobFill = _theme.Ink.C300;
         }
 
-        var track = _paper.Row($"{_id}_track")
+        string? onText = _onText, offText = _offText, onGlyph = _onGlyph, offGlyph = _offGlyph;
+        float fontSize = metrics.FontSize;
+
+        using (_paper.Box($"{_id}_track")
             .Width(trackW).Height(trackH)
             .Margin(leftPad, rightPad, UnitValue.Stretch(), UnitValue.Stretch())
-            .BackgroundColor(trackBg)
-            .Rounded(trackH * 0.5f)
-            .IsNotInteractable();
-
-        using (track.Enter())
+            .IsNotInteractable()
+            .Enter())
         {
-            // OnText fades in on the left side of the track (inside, behind the knob's final position).
-            if (font != null && !string.IsNullOrEmpty(_onText) && t > 0.05f)
+            _paper.Draw((canvas, rect) =>
             {
-                _paper.Box($"{_id}_ontxt")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(pad, 0)
-                    .Width(trackW - knob - pad * 2f).Height(trackH)
-                    .Alignment(TextAlignment.MiddleCenter)
-                    .IsNotInteractable()
-                    .Text(_onText!, font)
-                    .TextColor(WithAlpha(_theme.Ink.C600, t))
-                    .FontSize(metrics.FontSize - 3);
-            }
-            // OffText fades out as t rises.
-            if (font != null && !string.IsNullOrEmpty(_offText) && t < 0.95f)
-            {
-                _paper.Box($"{_id}_offtxt")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(knob + pad, 0)
-                    .Width(trackW - knob - pad * 2f).Height(trackH)
-                    .Alignment(TextAlignment.MiddleCenter)
-                    .IsNotInteractable()
-                    .Text(_offText!, font)
-                    .TextColor(WithAlpha(_theme.Ink.C500, 1f - t))
-                    .FontSize(metrics.FontSize - 3);
-            }
+                float x = (float)rect.Min.X;
+                float y = (float)rect.Min.Y;
+                float w = (float)rect.Size.X;
+                float h = (float)rect.Size.Y;
+                float pad   = MathF.Max(2f, h * 0.12f);
+                float knob  = h - pad * 2f;
+                float knobX = x + pad + (w - knob - pad * 2f) * t;
+                float knobY = y + pad;
+                float textBoxW = w - knob - pad * 2f;
 
-            // Knob — slides between [pad] and [trackW - knob - pad].
-            float knobX = pad + (trackW - knob - pad * 2f) * t;
-            var knobBox = _paper.Box($"{_id}_knob")
-                .PositionType(PositionType.SelfDirected)
-                .Position(knobX, pad)
-                .Width(knob).Height(knob)
-                .BackgroundColor(knobFill)
-                .Rounded(knob * 0.5f)
-                .Alignment(TextAlignment.MiddleCenter)
-                .IsNotInteractable();
+                // Track — single hardware-accelerated rounded rect.
+                canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, trackBg);
 
-            string? glyph = t > 0.5f ? _onGlyph : _offGlyph;
-            if (!string.IsNullOrEmpty(glyph) && font != null)
-            {
-                Color glyphColor = t > 0.5f ? onBg : _theme.Ink.C300;
-                knobBox.Text(glyph!, font)
-                       .TextColor(glyphColor)
-                       .FontSize(metrics.FontSize - 4);
-            }
+                // OnText — visible on the left while on (the side the knob has vacated).
+                if (font != null && !string.IsNullOrEmpty(onText) && t > 0.05f)
+                {
+                    float fs = fontSize - 3;
+                    var ts = canvas.MeasureText(onText!, fs, font);
+                    float tx = x + pad + (textBoxW - (float)ts.X) * 0.5f;
+                    float ty = y + (h - (float)ts.Y) * 0.5f;
+                    canvas.DrawText(onText!, tx, ty, WithAlpha(textOnFg, t), fs, font);
+                }
+                if (font != null && !string.IsNullOrEmpty(offText) && t < 0.95f)
+                {
+                    float fs = fontSize - 3;
+                    var ts = canvas.MeasureText(offText!, fs, font);
+                    float tx = x + knob + pad + (textBoxW - (float)ts.X) * 0.5f;
+                    float ty = y + (h - (float)ts.Y) * 0.5f;
+                    canvas.DrawText(offText!, tx, ty, WithAlpha(textOffFg, 1f - t), fs, font);
+                }
+
+                // Knob — full-radius rounded rect == circle, cheaper than path Circle.
+                canvas.RoundedRectFilled(knobX, knobY, knob, knob, knob * 0.5f, knobFill);
+
+                string? glyph = t > 0.5f ? onGlyph : offGlyph;
+                if (!string.IsNullOrEmpty(glyph) && font != null)
+                {
+                    Color gc = t > 0.5f ? onBg : glyphOffFg;
+                    float fs = fontSize - 4;
+                    var ts = canvas.MeasureText(glyph!, fs, font);
+                    float gx = knobX + (knob - (float)ts.X) * 0.5f;
+                    float gy = knobY + (knob - (float)ts.Y) * 0.5f;
+                    canvas.DrawText(glyph!, gx, gy, gc, fs, font);
+                }
+            });
         }
     }
 
-    // ── Checkbox ───────────────────────────────────────────────────────
+    // ── Checkbox (single Box + Canvas Draw) ────────────────────────────
 
     private void DrawCheckbox(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
@@ -482,69 +485,82 @@ public sealed class ToggleBuilder
                      : effT > 0.5f ? onColor
                      : (_variant == OrigamiVariant.Default || _variant == OrigamiVariant.Subtle)
                          ? _theme.Neutral.C500 : ramp.C500;
-
         if (_disabled)
-        {
             fill = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.5f);
-        }
 
-        var box = _paper.Box($"{_id}_chk")
+        Color glyphFg = WithAlpha(_theme.Ink.C700, effT);
+        string glyphText = isIndet ? "−" : (!string.IsNullOrEmpty(icons.Check) ? icons.Check : "✓");
+        bool drawGlyph = effT > 0.05f && font != null;
+        float radius = MathF.Min(metrics.Rounding, _size * 0.25f);
+
+        using (_paper.Box($"{_id}_chk")
             .Width(_size).Height(_size)
             .Margin(leftPad, rightPad, UnitValue.Stretch(), UnitValue.Stretch())
-            .BackgroundColor(fill)
-            .BorderColor(border).BorderWidth(1)
-            .Rounded(MathF.Min(metrics.Rounding, _size * 0.25f))
-            .Alignment(TextAlignment.MiddleCenter)
-            .IsNotInteractable();
-
-        if (effT > 0.05f && font != null)
+            .IsNotInteractable()
+            .Enter())
         {
-            string glyph = isIndet
-                ? "−"
-                : (!string.IsNullOrEmpty(icons.Check) ? icons.Check : "✓");
+            _paper.Draw((canvas, rect) =>
+            {
+                float x = (float)rect.Min.X;
+                float y = (float)rect.Min.Y;
+                float w = (float)rect.Size.X;
+                float h = (float)rect.Size.Y;
 
-            Color glyphColor = WithAlpha(_theme.Ink.C700, effT);
-            box.Text(glyph, font)
-               .TextColor(glyphColor)
-               .FontSize(_size * 0.75f);
+                // Hairline border via two stacked filled rounded rects — no path/stroke pass.
+                canvas.RoundedRectFilled(x, y, w, h, radius, border);
+                canvas.RoundedRectFilled(x + 1, y + 1, w - 2, h - 2, MathF.Max(0, radius - 1), fill);
+
+                if (drawGlyph)
+                {
+                    float fs = h * 0.75f;
+                    var ts = canvas.MeasureText(glyphText, fs, font!);
+                    float gx = x + (w - (float)ts.X) * 0.5f;
+                    float gy = y + (h - (float)ts.Y) * 0.5f;
+                    canvas.DrawText(glyphText, gx, gy, glyphFg, fs, font!);
+                }
+            });
         }
     }
 
-    // ── Radio ──────────────────────────────────────────────────────────
+    // ── Radio (single Box + Canvas Draw) ───────────────────────────────
 
     private void DrawRadio(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
         var onRamp = OnRamp();
-        Color onColor  = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C600 : onRamp.C500;
+        Color onColor = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C600 : onRamp.C500;
         Color border = _disabled ? _theme.Neutral.C400
                      : t > 0.5f ? onColor
                      : (_variant == OrigamiVariant.Default || _variant == OrigamiVariant.Subtle)
                          ? _theme.Neutral.C500 : ramp.C500;
+        Color bg = _theme.Neutral.C200;
         Color innerColor = _disabled ? _theme.Ink.C300 : onColor;
+        float anim = t;
+        float dotMaxFrac = 0.66f;
 
-        var outer = _paper.Box($"{_id}_radio")
+        using (_paper.Box($"{_id}_radio")
             .Width(_size).Height(_size)
             .Margin(leftPad, rightPad, UnitValue.Stretch(), UnitValue.Stretch())
-            .BackgroundColor(_theme.Neutral.C200)
-            .BorderColor(border).BorderWidth(1)
-            .Rounded(_size * 0.5f)
-            .IsNotInteractable();
-
-        using (outer.Enter())
+            .IsNotInteractable()
+            .Enter())
         {
-            float maxDot = _size * 0.66f;
-            float dot = maxDot * t;
-            if (dot >= 1f)
+            _paper.Draw((canvas, rect) =>
             {
-                float p = (_size - dot) * 0.5f;
-                _paper.Box($"{_id}_dot")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(p, p)
-                    .Width(dot).Height(dot)
-                    .BackgroundColor(innerColor)
-                    .Rounded(dot * 0.5f)
-                    .IsNotInteractable();
-            }
+                float x = (float)rect.Min.X;
+                float y = (float)rect.Min.Y;
+                float w = (float)rect.Size.X;
+                float h = (float)rect.Size.Y;
+                float r = MathF.Min(w, h) * 0.5f;
+                float cx = x + w * 0.5f;
+                float cy = y + h * 0.5f;
+
+                // Outer ring + inner fill via two CircleFilled (cheap, GPU-AA, no stroke pass).
+                canvas.CircleFilled(cx, cy, r, border);
+                canvas.CircleFilled(cx, cy, MathF.Max(0, r - 1f), bg);
+
+                float dotR = r * dotMaxFrac * anim;
+                if (dotR >= 0.5f)
+                    canvas.CircleFilled(cx, cy, dotR, innerColor);
+            });
         }
     }
 }
