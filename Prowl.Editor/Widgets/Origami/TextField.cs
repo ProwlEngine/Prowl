@@ -69,6 +69,11 @@ public sealed class TextFieldBuilder
     private Action<string>? _acOnPick;
     private int _acMax = 8;
 
+    // Element-storage keys for the deferred "force-update next frame" channel. Populated by
+    // ApplyPick / clear-button click; drained at the top of the next frame's render.
+    private const string KeyForcePending = "force_pending";
+    private const string KeyForceValue   = "force_value";
+
     internal TextFieldBuilder(Paper paper, string id, string value, Action<string> setter, OrigamiTheme theme)
     {
         _paper = paper ?? throw new ArgumentNullException(nameof(paper));
@@ -284,6 +289,19 @@ public sealed class TextFieldBuilder
                 if (_isPassword && !pwShow)
                     settings.MaskChar = _passwordMask;
 
+                // Drain any pending programmatic value push (autocomplete pick, clear-button,
+                // future Validator rewrites). Paper applies this even when the field is focused;
+                // we don't otherwise sync from external while focused, because filters /
+                // formatters can round-trip in-progress chars (e.g. "0." > 0 > "0") and the
+                // string compare would fire spurious select-alls.
+                bool forcePending = _paper.GetElementStorage(rowHandle, KeyForcePending, false);
+                if (forcePending)
+                {
+                    settings.ForceValue = _paper.GetElementStorage(rowHandle, KeyForceValue, _value ?? string.Empty);
+                    settings.ForceSelectAll = true;
+                    _paper.SetElementStorage(rowHandle, KeyForcePending, false);
+                }
+
                 bool noLeftPad = _isSearch || !string.IsNullOrEmpty(_leadingIconGlyph);
                 float editLeftPad = noLeftPad ? 0 : 8;
 
@@ -313,8 +331,16 @@ public sealed class TextFieldBuilder
 
                 if (_showClearButton && !string.IsNullOrEmpty(_value) && !_readOnly && !string.IsNullOrEmpty(icons.Close))
                 {
+                    var capturedRowForClear = rowHandle;
                     DrawIcon($"{_id}_clear", icons.Close, ink.C400, leftPad: 4, rightPad: _isPassword ? 0 : 6,
-                        click: () => _setter(string.Empty), font);
+                        click: () =>
+                        {
+                            _setter(string.Empty);
+                            // Force-push so the focused field's internal value also clears
+                            // (without this, the focused-state-wins rule would leave the old
+                            // text visible until blur).
+                            QueueForceUpdate(capturedRowForClear, string.Empty);
+                        }, font);
                     drewTrailing = true;
                 }
 
@@ -497,7 +523,20 @@ public sealed class TextFieldBuilder
     {
         _setter(pick);
         _acOnPick?.Invoke(pick);
+        // Push the picked value into the focused field's internal state on the next frame.
+        QueueForceUpdate(rowHandle, pick);
         _paper.SetElementStorage(rowHandle, "acHide", true);
         _paper.SetElementStorage(rowHandle, "acHl", 0);
+    }
+
+    /// <summary>
+    /// Queue a programmatic value push for the next frame. The drain at the top of
+    /// <see cref="Show"/> turns this into a <c>TextInputSettings.ForceValue</c>, which Paper
+    /// applies to the field's internal state even when focused.
+    /// </summary>
+    private void QueueForceUpdate(ElementHandle rowHandle, string value)
+    {
+        _paper.SetElementStorage(rowHandle, KeyForceValue, value);
+        _paper.SetElementStorage(rowHandle, KeyForcePending, true);
     }
 }
