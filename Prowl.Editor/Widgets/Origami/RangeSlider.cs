@@ -307,7 +307,8 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
         bool isDragging = dragging != 0;
         bool showTooltip = _showTooltip && (isDragging || isHovered) && font != null;
-        string tooltipText = showTooltip ? $"{Format(lo)} – {Format(hi)}" : string.Empty;
+        // Always compute the text so the fade-out animation keeps showing the value.
+        string tooltipText = (font != null) ? $"{Format(lo)} – {Format(hi)}" : string.Empty;
         float fontSize = metrics.FontSize;
         int tickCount = _tickCount;
         float thumbBaseR = _thumbDiameter * 0.5f;
@@ -389,16 +390,19 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         });
 
         // ── Tooltip overlay (Layer.Topmost so it can never be clipped) ────
-        if (showTooltip && font != null)
+        // Always create the element so AnimateBool storage persists across show/hide.
+        if (font != null)
         {
             var thandle = _paper.CurrentParent;
             string tt = tooltipText;
+            bool wantTooltip = showTooltip;
             bool vert = vertical;
             double tLoLocal = tLo, tHiLocal = tHi;
             int dragLocal = dragging;
             float thumbBaseRLocal = thumbBaseR;
             Color ttBg = _theme.Neutral.C500;
             Color ttFg = ink.C500;
+            string ttId = _id;
 
             using (_paper.Box($"{_id}_tt")
                 .PositionType(PositionType.SelfDirected)
@@ -409,42 +413,56 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                 .IsNotInteractable()
                 .Enter())
             {
-                _paper.Draw((canvas, _) =>
+                float ttAnim = _paper.AnimateBool(wantTooltip, 0.14f, id: $"{ttId}_ttf");
+
+                if (ttAnim > 0.01f)
                 {
-                    var tr = thandle.Data.LayoutRect;
-                    float trX = (float)tr.Min.X;
-                    float trY = (float)tr.Min.Y;
-                    float trW = (float)tr.Size.X;
-                    float trH = (float)tr.Size.Y;
-                    float thR = thumbBaseRLocal;
-
-                    float loCx, loCy, hiCx, hiCy;
-                    if (!vert)
+                    _paper.Draw((canvas, _) =>
                     {
-                        loCx = trX + trW * (float)tLoLocal; loCy = trY + trH * 0.5f;
-                        hiCx = trX + trW * (float)tHiLocal; hiCy = loCy;
-                    }
-                    else
-                    {
-                        loCx = trX + trW * 0.5f; loCy = trY + trH * (1f - (float)tLoLocal);
-                        hiCx = loCx;             hiCy = trY + trH * (1f - (float)tHiLocal);
-                    }
+                        var tr = thandle.Data.LayoutRect;
+                        float trX = (float)tr.Min.X;
+                        float trY = (float)tr.Min.Y;
+                        float trW = (float)tr.Size.X;
+                        float trH = (float)tr.Size.Y;
+                        float thR = thumbBaseRLocal;
 
-                    var ts = canvas.MeasureText(tt, fontSize, font);
-                    float padX = 6f, padY = 2f;
-                    float bw = (float)ts.X + padX * 2f;
-                    float bh = (float)ts.Y + padY * 2f;
+                        float loCx, loCy, hiCx, hiCy;
+                        if (!vert)
+                        {
+                            loCx = trX + trW * (float)tLoLocal; loCy = trY + trH * 0.5f;
+                            hiCx = trX + trW * (float)tHiLocal; hiCy = loCy;
+                        }
+                        else
+                        {
+                            loCx = trX + trW * 0.5f; loCy = trY + trH * (1f - (float)tLoLocal);
+                            hiCx = loCx;             hiCy = trY + trH * (1f - (float)tHiLocal);
+                        }
 
-                    float anchorX = dragLocal == 1 ? loCx
-                                  : dragLocal == 2 ? hiCx
-                                  : (loCx + hiCx) * 0.5f;
-                    float bx = anchorX - bw * 0.5f;
-                    float by = loCy - thR - bh - 4f;
+                        var ts = canvas.MeasureText(tt, fontSize, font);
+                        float padX = 6f, padY = 2f;
+                        float bw = (float)ts.X + padX * 2f;
+                        float bh = (float)ts.Y + padY * 2f;
 
-                    canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f, Color.FromArgb(80, 0, 0, 0));
-                    canvas.RoundedRectFilled(bx, by, bw, bh, 3f, ttBg);
-                    canvas.DrawText(tt, bx + padX, by + padY, ttFg, fontSize, font);
-                });
+                        float anchorX = dragLocal == 1 ? loCx
+                                      : dragLocal == 2 ? hiCx
+                                      : (loCx + hiCx) * 0.5f;
+                        float slide = (1f - ttAnim) * 4f;
+                        float bx = anchorX - bw * 0.5f;
+                        float by = loCy - thR - bh - 4f + slide;
+
+                        byte aShadow = (byte)Math.Clamp((int)(80 * ttAnim), 0, 255);
+                        byte aBody   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                        byte aText   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+
+                        canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
+                            Color.FromArgb(aShadow, 0, 0, 0));
+                        canvas.RoundedRectFilled(bx, by, bw, bh, 3f,
+                            Color.FromArgb(aBody, ttBg.R, ttBg.G, ttBg.B));
+                        canvas.DrawText(tt, bx + padX, by + padY,
+                            Color.FromArgb(aText, ttFg.R, ttFg.G, ttFg.B),
+                            fontSize, font);
+                    });
+                }
             }
         }
     }

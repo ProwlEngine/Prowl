@@ -447,7 +447,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         var customThumb = _customThumb;
 
         bool showTooltip = _showTooltip && (isDragging || isHovered) && font != null;
-        string tooltipText = showTooltip ? FormatValue(valueT) : string.Empty;
+        // Always compute the formatted value when we have a font, so the fade-out animation
+        // keeps showing the last value rather than emptying the bubble mid-fade.
+        string tooltipText = (font != null) ? FormatValue(valueT) : string.Empty;
         float fontSize = metrics.FontSize;
         Color tooltipBg = _theme.Neutral.C500;
         Color tooltipFg = ink.C500;
@@ -598,22 +600,19 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         });
 
         // ── Tooltip overlay ──────────────────────────────────────
-        // The tooltip lives on its own element on Layer.Topmost so it can render above
-        // anything that might otherwise clip or sit over the slider (popovers, modals,
-        // adjacent rows). The element itself is a 1x1 SelfDirected hook with no visual
-        // footprint; the Draw callback paints the bubble at absolute screen coords pulled
-        // from the track's post-layout rect.
-        if (showTooltip && font != null)
+        // Lives on its own element on Layer.Topmost so nothing can clip or occlude it.
+        // The element is created every frame regardless of visibility — that way AnimateBool
+        // storage persists across show/hide cycles and we get a clean fade in/out instead of
+        // an instant pop. The Draw callback short-circuits when the animation is fully out.
+        if (font != null)
         {
-            // We need the track handle inside the closure but that's the local 'this'
-            // method's parameter. Capture via a local copy so the lambda is self-contained.
-            // (PaintTrack is an instance method; trackHandle is read off the current parent
-            // which is the track itself when this method runs.)
             var thandle = _paper.CurrentParent;
             string tt = tooltipText;
+            bool wantTooltip = _showTooltip && (isDragging || isHovered);
             bool vert = vertical;
             double t = valueT;
             float thumbBaseRLocal = thumbBaseR;
+            string ttId = _id;
 
             using (_paper.Box($"{_id}_tt")
                 .PositionType(PositionType.SelfDirected)
@@ -624,38 +623,56 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 .IsNotInteractable()
                 .Enter())
             {
-                _paper.Draw((canvas, _) =>
+                // 0 > 1 fade. Pinned to this element so it persists across visibility flips.
+                float ttAnim = _paper.AnimateBool(wantTooltip, 0.14f, id: $"{ttId}_ttf");
+
+                if (ttAnim > 0.01f)
                 {
-                    var tr = thandle.Data.LayoutRect;
-                    float trX = (float)tr.Min.X;
-                    float trY = (float)tr.Min.Y;
-                    float trW = (float)tr.Size.X;
-                    float trH = (float)tr.Size.Y;
-                    float thR = thumbBaseRLocal;
-
-                    float thumbCx, thumbCy;
-                    if (!vert)
+                    _paper.Draw((canvas, _) =>
                     {
-                        thumbCx = trX + trW * (float)t;
-                        thumbCy = trY + trH * 0.5f;
-                    }
-                    else
-                    {
-                        thumbCx = trX + trW * 0.5f;
-                        thumbCy = trY + trH * (1f - (float)t);
-                    }
+                        var tr = thandle.Data.LayoutRect;
+                        float trX = (float)tr.Min.X;
+                        float trY = (float)tr.Min.Y;
+                        float trW = (float)tr.Size.X;
+                        float trH = (float)tr.Size.Y;
+                        float thR = thumbBaseRLocal;
 
-                    var ts = canvas.MeasureText(tt, fontSize, font);
-                    float padX = 6f, padY = 2f;
-                    float bw = (float)ts.X + padX * 2f;
-                    float bh = (float)ts.Y + padY * 2f;
-                    float bx = thumbCx - bw * 0.5f;
-                    float by = thumbCy - thR - bh - 4f;
+                        float thumbCx, thumbCy;
+                        if (!vert)
+                        {
+                            thumbCx = trX + trW * (float)t;
+                            thumbCy = trY + trH * 0.5f;
+                        }
+                        else
+                        {
+                            thumbCx = trX + trW * 0.5f;
+                            thumbCy = trY + trH * (1f - (float)t);
+                        }
 
-                    canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f, Color.FromArgb(80, 0, 0, 0));
-                    canvas.RoundedRectFilled(bx, by, bw, bh, 3f, tooltipBg);
-                    canvas.DrawText(tt, bx + padX, by + padY, tooltipFg, fontSize, font);
-                });
+                        var ts = canvas.MeasureText(tt, fontSize, font);
+                        float padX = 6f, padY = 2f;
+                        float bw = (float)ts.X + padX * 2f;
+                        float bh = (float)ts.Y + padY * 2f;
+                        // Slide up into place: 4px below resting position when fading in.
+                        float slide = (1f - ttAnim) * 4f;
+                        float bx = thumbCx - bw * 0.5f;
+                        float by = thumbCy - thR - bh - 4f + slide;
+
+                        // Multiply each color's alpha by the animation fraction so the bubble
+                        // truly fades rather than appearing instantly.
+                        byte aShadow = (byte)Math.Clamp((int)(80 * ttAnim), 0, 255);
+                        byte aBody   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                        byte aText   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+
+                        canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
+                            Color.FromArgb(aShadow, 0, 0, 0));
+                        canvas.RoundedRectFilled(bx, by, bw, bh, 3f,
+                            Color.FromArgb(aBody, tooltipBg.R, tooltipBg.G, tooltipBg.B));
+                        canvas.DrawText(tt, bx + padX, by + padY,
+                            Color.FromArgb(aText, tooltipFg.R, tooltipFg.G, tooltipFg.B),
+                            fontSize, font);
+                    });
+                }
             }
         }
     }
