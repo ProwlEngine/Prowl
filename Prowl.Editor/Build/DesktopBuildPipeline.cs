@@ -557,8 +557,9 @@ public class DesktopBuildPipeline : BuildPipeline
 
         ListDependencies(sb);
 
-        // User NuGet packages from ProjectSettings/Packages.json
-        Scripting.ScriptCompiler.AppendNuGetPackages(sb, project);
+        // User NuGet packages from ProjectSettings/Packages.json. Desktop builds bundle the
+        // runtime / non-editor packages (EditorOnly packages live only inside the editor).
+        Scripting.ScriptCompiler.AppendNuGetPackages(sb, project, isEditorAssembly: false);
 
 
         // Compile items just the generated Program.cs (user scripts are a separate pre-compiled DLL)

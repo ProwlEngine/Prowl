@@ -22,10 +22,12 @@ public class PackageSettings : ProjectSettingsBase
     {
         public string Name = "";
         public string Version = "";
+        public bool EditorOnly = false;
     }
 
     private string _newName = "";
     private string _newVersion = "";
+    private bool _newEditorOnly = false;
 
     public override void Apply() { }
 
@@ -43,7 +45,7 @@ public class PackageSettings : ProjectSettingsBase
         EditorGUI.Separator(paper, "pkg_sep");
 
         EditorGUI.Label(paper, "pkg_info",
-            "Packages are added to both Game and Editor script assemblies.");
+            "Packages flow to both Game and Editor scripts. Mark a package Editor Only to keep it out of player builds.");
 
         paper.Box("pkg_sp1").Height(4);
 
@@ -60,6 +62,14 @@ public class PackageSettings : ProjectSettingsBase
                     .Text(pkg.Name, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
+
+                EditorGUI.ToggleButton(paper, $"pkg_eo_{i}", "Editor Only", pkg.EditorOnly, fitWidth: true)
+                    .OnValueChanged(v =>
+                    {
+                        Packages[idx].EditorOnly = v;
+                        Apply();
+                        ProjectSettingsRegistry.SaveAll();
+                    });
 
                 paper.Box($"pkg_ver_{i}")
                     .Width(80).Height(EditorTheme.RowHeight)
@@ -100,14 +110,18 @@ public class PackageSettings : ProjectSettingsBase
         EditorGUI.TextField(paper, "pkg_add_ver", "Version", _newVersion)
             .OnValueChanged(v => _newVersion = v);
 
+        EditorGUI.Toggle(paper, "pkg_add_editor_only", "Editor Only", _newEditorOnly)
+            .OnValueChanged(v => _newEditorOnly = v);
+
         EditorGUI.Button(paper, "pkg_add_btn", $"{EditorIcons.Plus}  Add Package", width: 140)
             .OnValueChanged(_ =>
             {
                 if (!string.IsNullOrWhiteSpace(_newName) && !string.IsNullOrWhiteSpace(_newVersion))
                 {
-                    Packages.Add(new PackageEntry { Name = _newName.Trim(), Version = _newVersion.Trim() });
+                    Packages.Add(new PackageEntry { Name = _newName.Trim(), Version = _newVersion.Trim(), EditorOnly = _newEditorOnly });
                     _newName = "";
                     _newVersion = "";
+                    _newEditorOnly = false;
                     Apply();
                     ProjectSettingsRegistry.SaveAll();
                 }
