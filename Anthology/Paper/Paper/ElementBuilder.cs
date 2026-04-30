@@ -923,6 +923,74 @@ namespace Prowl.PaperUI
         public ElementBuilder OnLeave<T>(T capturedValue, Action<T, ElementEvent> handler) =>
             OnLeave((e) => handler(capturedValue, e));
 
+        // ── Drag-and-drop ────────────────────────────────────────────
+
+        /// <summary>
+        /// Mark this element as a drag source. <paramref name="payloadFactory"/> is called the
+        /// first frame the pointer crosses Paper's drag threshold (~5px) after a press > a tiny
+        /// twitch won't kick off a drag, but a deliberate drag will. <paramref name="drawGhost"/>
+        /// is invoked every frame the drag is in flight, on a synthetic top-of-everything layer,
+        /// to render the ghost cursor (typically a small chip showing the payload's identity).
+        /// </summary>
+        /// <param name="payloadFactory">Produces the payload object. Return null to abort the drag.</param>
+        /// <param name="drawGhost">Optional ghost renderer. <c>(canvas, pointerPos)</c> > draw centred at pointerPos.</param>
+        public ElementBuilder DragSource<T>(Func<T> payloadFactory, Action<Canvas, Float2> drawGhost = null)
+        {
+            if (payloadFactory == null) throw new ArgumentNullException(nameof(payloadFactory));
+            _handle.Data.DragSourceFactory = () => payloadFactory();
+            _handle.Data.DragGhostDrawer = drawGhost;
+            return this;
+        }
+
+        /// <summary>
+        /// Mark this element as a drop target for payloads of type <typeparamref name="T"/>.
+        /// Per-frame: if a drag is in flight whose payload is a <typeparamref name="T"/> AND
+        /// (when supplied) <paramref name="canAccept"/> returns true, this element becomes the
+        /// active drop target under the pointer (<see cref="Paper.IsValidDropTarget"/> /
+        /// <see cref="DropTargeted"/> light up). On pointer release over the target,
+        /// <paramref name="onDrop"/> fires once with the payload and a <see cref="DropContext"/>.
+        /// <para>Multiple <c>AcceptDrop</c> calls on the same element compose additively — each
+        /// candidate is tried in registration order and the first match wins. Use this to make
+        /// a single element accept several payload types (e.g. a panel that takes both Assets
+        /// and GameObjects).</para>
+        /// </summary>
+        public ElementBuilder AcceptDrop<T>(Action<T, DropContext> onDrop, Func<T, bool> canAccept = null)
+        {
+            if (onDrop == null) throw new ArgumentNullException(nameof(onDrop));
+            _handle.Data.DropAcceptors ??= new List<DropAcceptor>(1);
+            _handle.Data.DropAcceptors.Add(new DropAcceptor
+            {
+                CanAccept = payload =>
+                {
+                    if (!(payload is T typed)) return false;
+                    return canAccept == null || canAccept(typed);
+                },
+                OnDrop = (payload, ctx) =>
+                {
+                    if (payload is T typed) onDrop(typed, ctx);
+                },
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Convenience overload of <see cref="AcceptDrop{T}(Action{T, DropContext}, Func{T, bool})"/>
+        /// for handlers that don't need the local pointer position / drop zone math.
+        /// </summary>
+        public ElementBuilder AcceptDrop<T>(Action<T> onDrop, Func<T, bool> canAccept = null)
+        {
+            if (onDrop == null) throw new ArgumentNullException(nameof(onDrop));
+            return AcceptDrop<T>((payload, _) => onDrop(payload), canAccept);
+        }
+
+        /// <summary>
+        /// Style properties applied while a drag is in flight, the pointer is over this element,
+        /// and this element's <see cref="AcceptDrop{T}(Action{T},Func{T, bool})"/> handler accepts
+        /// the current payload. Mirrors the <see cref="Hovered"/> / <see cref="Focused"/> pattern
+        /// > use it to add a highlight border / tinted background to valid drop zones.
+        /// </summary>
+        public StateDrivenStyle DropTargeted => StateDrivenStyle.Get(this, _paper.IsValidDropTarget(_handle.Data.ID));
+
         #endregion
 
         #region Behavior Configuration

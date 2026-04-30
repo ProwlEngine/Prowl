@@ -8,6 +8,13 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
+    /// <summary>One registered drop acceptor on an element. See <see cref="ElementData.DropAcceptors"/>.</summary>
+    public struct DropAcceptor
+    {
+        public Func<object, bool> CanAccept;
+        public Action<object, DropContext> OnDrop;
+    }
+
     public struct ElementData
     {
         public int ID;
@@ -39,6 +46,19 @@ namespace Prowl.PaperUI.LayoutEngine
         public Action<FocusEvent> OnFocusChange;
 
         public Action<ElementHandle, Rect> OnPostLayout;
+
+        // Drag-and-drop registration. Set via ElementBuilder.DragSource / .AcceptDrop.
+        // Object-typed under the hood; the typed builder methods cast/box.
+        public Func<object> DragSourceFactory;
+        public Action<Canvas, Float2> DragGhostDrawer;
+
+        /// <summary>
+        /// Chain of registered drop acceptors, in registration order. Each entry's
+        /// <c>canAccept</c> is invoked in order; the first match wins and its <c>onDrop</c>
+        /// fires on the eventual drop. Multiple <c>AcceptDrop&lt;T&gt;</c> calls on the same
+        /// element compose additively (e.g. a panel that takes both Assets and GameObjects).
+        /// </summary>
+        public List<DropAcceptor> DropAcceptors;
 
 
         // Hierarchy
