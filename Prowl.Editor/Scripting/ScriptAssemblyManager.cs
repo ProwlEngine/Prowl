@@ -22,6 +22,7 @@ public static class ScriptAssemblyManager
     private static DateTime _lastScriptChange;
     private static bool _isCompiling;
     private static ScriptCompiler.CompileResult? _pendingResult;
+    private static bool _restartDeferred;
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromSeconds(1);
 
     private static readonly List<Assembly> s_scriptAssemblies = [];
@@ -40,9 +41,23 @@ public static class ScriptAssemblyManager
         // Check if background compilation finished
         if (_pendingResult.HasValue)
         {
+            // A compile that kicked off during the debounce window can finish after the user
+            // has entered play mode. Restarting now would snapshot the in-play scene over
+            // the user's saved scene, so park the result until play mode ends.
+            if (Application.IsPlaying)
+            {
+                if (!_restartDeferred)
+                {
+                    _restartDeferred = true;
+                    Runtime.Debug.Log("[ScriptAssemblyManager] Compilation finished during play. Restart deferred until play mode ends.");
+                }
+                return;
+            }
+
             var result = _pendingResult.Value;
             _pendingResult = null;
             _isCompiling = false;
+            _restartDeferred = false;
 
             if (result.Success)
             {
