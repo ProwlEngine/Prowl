@@ -246,7 +246,7 @@ public sealed class TextFieldBuilder
         float helperH = (hasError || !string.IsNullOrEmpty(_helperText)) ? 16f : 0f;
         float fieldH  = _multiLine ? ComputeMultiLineHeight() : _height;
 
-        using (_paper.Column(_id).Width(_width).Height(UnitValue.Auto).Enter())
+        using (_paper.Column(_id).Width(_width).Height(fieldH).Enter())
         {
             ElementHandle rowHandle = default;
 
@@ -310,12 +310,11 @@ public sealed class TextFieldBuilder
                 // handlers (cursor placement, drag-select, keyboard) still fire via the hook.
                 var editBuilder = _paper.Box($"{_id}_tf")
                     .Width(UnitValue.Stretch())
-                    .Height(_multiLine ? UnitValue.Stretch() : (UnitValue)fieldH)
-                    .Margin(editLeftPad, 0, 0, 0)
+                    .Height(_multiLine ? UnitValue.Stretch() : _theme.Metrics.FontSize)
+                    .Margin(editLeftPad, 0, UnitValue.Stretch(), UnitValue.Stretch())
                     .HookToParent()
                     .IsNotInteractable()
-                    .FontSize(_theme.Metrics.FontSize)
-                    .Alignment(_multiLine ? TextAlignment.Left : TextAlignment.MiddleLeft);
+                    .FontSize(_theme.Metrics.FontSize);
 
                 if (_multiLine)
                     editBuilder.TextArea(_value, settings,
