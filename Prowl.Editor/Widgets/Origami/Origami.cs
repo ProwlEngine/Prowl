@@ -223,6 +223,45 @@ public static class Origami
         where T : struct, System.Numerics.INumber<T>
         => new NumericFieldBuilder<T>(paper, id, value, setter, Current);
 
+    // ── Slider factories ─────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a generic slider. Track + thumb, click / drag / wheel / keyboard,
+    /// optional log + bipolar mapping, ticks, tooltip, inline numeric. Generic on
+    /// <typeparamref name="T"/> — any <see cref="System.Numerics.INumber{T}"/> works.
+    /// </summary>
+    public static SliderBuilder<T> Slider<T>(Paper paper, string id, T value, Action<T> setter, T min, T max)
+        where T : struct, System.Numerics.INumber<T>
+        => new SliderBuilder<T>(paper, id, value, setter, min, max, Current);
+
+    /// <summary>Float convenience for the generic <see cref="Slider{T}"/>.</summary>
+    public static SliderBuilder<float> Slider(Paper paper, string id, float value, Action<float> setter, float min, float max)
+        => new SliderBuilder<float>(paper, id, value, setter, min, max, Current);
+
+    /// <summary>Int convenience.</summary>
+    public static SliderBuilder<int> IntSlider(Paper paper, string id, int value, Action<int> setter, int min, int max)
+        => new SliderBuilder<int>(paper, id, value, setter, min, max, Current);
+
+    /// <summary>
+    /// Begin building a two-thumb range slider. Caller passes in <paramref name="low"/> and
+    /// <paramref name="high"/> and gets both back through <paramref name="setter"/> on every
+    /// change, ordered low &lt;= high.
+    /// </summary>
+    public static RangeSliderBuilder<T> RangeSlider<T>(Paper paper, string id, T low, T high,
+        Action<T, T> setter, T min, T max)
+        where T : struct, System.Numerics.INumber<T>
+        => new RangeSliderBuilder<T>(paper, id, low, high, setter, min, max, Current);
+
+    /// <summary>Float convenience for the generic <see cref="RangeSlider{T}"/>.</summary>
+    public static RangeSliderBuilder<float> RangeSlider(Paper paper, string id, float low, float high,
+        Action<float, float> setter, float min, float max)
+        => new RangeSliderBuilder<float>(paper, id, low, high, setter, min, max, Current);
+
+    /// <summary>Int convenience for the range slider.</summary>
+    public static RangeSliderBuilder<int> IntRangeSlider(Paper paper, string id, int low, int high,
+        Action<int, int> setter, int min, int max)
+        => new RangeSliderBuilder<int>(paper, id, low, high, setter, min, max, Current);
+
     // ── Toggle factories ─────────────────────────────────────────
 
     /// <summary>
