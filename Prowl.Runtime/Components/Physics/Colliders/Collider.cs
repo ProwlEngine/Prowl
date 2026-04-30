@@ -139,31 +139,64 @@ public abstract class Collider : MonoBehaviour
             _attachedShapes = CreateWorldTransformedShapes();
         }
 
+        bool anyMassless = false;
         if (_attachedShapes != null)
         {
             foreach (var shape in _attachedShapes)
             {
-                _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Update);
+                // Mesh-collider triangles (and a TransformedShape wrapping them) have no volume
+                // and throw NotSupportedException from CalculateMassInertia. Add them with
+                // Preserve so AddShape doesn't try to compute inertia per-shape, and remember
+                // we have at least one massless shape so the recalc below skips the per-shape
+                // path entirely.
+                bool massless = IsMassless(shape);
+                anyMassless |= massless;
+
+                _attachedBody.AddShape(shape, massless
+                    ? Jitter2.Dynamics.MassInertiaUpdateMode.Preserve
+                    : Jitter2.Dynamics.MassInertiaUpdateMode.Update);
             }
         }
 
         if (_attachedRigidbody3D != null)
         {
-            // Set mas to itself to force inertia tensor recalculation
-            try
+            if (anyMassless)
             {
-                _attachedRigidbody3D.Mass = _attachedRigidbody3D.Mass;
+                // Triangle meshes are surface-only — no volume, no inferable inertia. Identity
+                // tensor is the safest fallback; user is expected to mark the body Static or
+                // Kinematic when using a non-convex MeshCollider on a dynamic body.
+                _attachedBody.SetMassInertia(JMatrix.Identity, _attachedRigidbody3D.Mass);
             }
-            catch (InvalidOperationException)
+            else
             {
-                // This can occur if the Shapes provided are 2D and mass cannot be calculated from them
-                _attachedBody.SetMassInertia(JMatrix.Identity, 1f);
+                // Set mass to itself to force inertia tensor recalculation
+                try
+                {
+                    _attachedRigidbody3D.Mass = _attachedRigidbody3D.Mass;
+                }
+                catch (InvalidOperationException)
+                {
+                    // This can occur if the Shapes provided are 2D and mass cannot be calculated from them
+                    _attachedBody.SetMassInertia(JMatrix.Identity, 1f);
+                }
             }
         }
         else
         {
             // Static bodies dont really need mass or inertia
         }
+    }
+
+    /// <summary>
+    /// True if the shape (or the shape wrapped inside a <see cref="TransformedShape"/>) cannot
+    /// produce mass / inertia properties. Currently <see cref="TriangleShape"/> is the only
+    /// such built-in shape.
+    /// </summary>
+    private static bool IsMassless(RigidBodyShape shape)
+    {
+        if (shape is TriangleShape) return true;
+        if (shape is TransformedShape ts && ts.OriginalShape is TriangleShape) return true;
+        return false;
     }
 
     /// <summary>
