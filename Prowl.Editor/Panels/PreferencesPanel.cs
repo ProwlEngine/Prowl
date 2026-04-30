@@ -95,11 +95,13 @@ public class PreferencesPanel : DockPanel
             Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
                 v => { s.DefaultProjectsPath = v; s.Save(); }).Show());
 
-        EditorGUI.Toggle(paper, "pref_auto_save", "Auto-Save Layout", s.AutoSaveLayout)
-            .OnValueChanged(v => { s.AutoSaveLayout = v; s.Save(); });
+        Origami.Checkbox(paper, "pref_auto_save", s.AutoSaveLayout,
+                v => { s.AutoSaveLayout = v; s.Save(); })
+            .LabelRight("Auto-Save Layout").Show();
 
-        EditorGUI.Toggle(paper, "pref_reimport_focus", "Reimport Only on Focus", s.ReimportOnFocusOnly)
-            .OnValueChanged(v => { s.ReimportOnFocusOnly = v; s.Save(); });
+        Origami.Checkbox(paper, "pref_reimport_focus", s.ReimportOnFocusOnly,
+                v => { s.ReimportOnFocusOnly = v; s.Save(); })
+            .LabelRight("Reimport Only on Focus").Show();
 
         string[] thumbOptions = ["32", "64", "128"];
         int thumbIndex = s.ThumbnailSize switch { 64 => 1, 128 => 2, _ => 0 };
@@ -232,8 +234,7 @@ public class PreferencesPanel : DockPanel
                     s.ApplyTheme();
                 });
 
-            EditorGUI.Toggle(paper, $"pref_ramp_{name}_override", "Override All Stops", ramp.OverrideAll)
-                .OnValueChanged(v =>
+            Origami.Checkbox(paper, $"pref_ramp_{name}_override", ramp.OverrideAll, v =>
                 {
                     ramp.OverrideAll = v;
                     if (v && ramp.Overrides != null)
@@ -242,7 +243,8 @@ public class PreferencesPanel : DockPanel
                             ramp.Overrides[i] = ColorRamp.ColorToHex(ramp.GetStop(i));
                     }
                     s.ApplyTheme();
-                });
+                })
+                .LabelRight("Override All Stops").Show();
 
             if (ramp.OverrideAll && ramp.Overrides != null)
             {

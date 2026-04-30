@@ -128,8 +128,9 @@ public sealed class BuildSettings : ProjectSettingsBase
                     .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
 
                 // Enable toggle
-                EditorGUI.Toggle(paper, $"bld_se_{i}", "", scene.Enabled)
-                    .OnValueChanged(v => { scene.Enabled = v; ProjectSettingsRegistry.SaveAll(); });
+                Origami.Checkbox(paper, $"bld_se_{i}", scene.Enabled,
+                        v => { scene.Enabled = v; ProjectSettingsRegistry.SaveAll(); })
+                    .NoLabel().Show();
 
                 // Scene name
                 string displayName = !string.IsNullOrEmpty(scene.Path)

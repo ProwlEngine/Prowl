@@ -143,14 +143,17 @@ public class PhysicsSettings : ProjectSettingsBase
         EditorGUI.Header(paper, "phys_h_behavior", "Behavior");
         EditorGUI.Separator(paper, "phys_sep_behavior");
 
-        EditorGUI.Toggle(paper, "phys_sleep", "Allow Sleep", AllowSleep)
-            .OnValueChanged(v => { AllowSleep = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "phys_sleep", AllowSleep,
+                v => { AllowSleep = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Allow Sleep").Show();
 
-        EditorGUI.Toggle(paper, "phys_mt", "Use Multithreading", UseMultithreading)
-            .OnValueChanged(v => { UseMultithreading = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "phys_mt", UseMultithreading,
+                v => { UseMultithreading = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Use Multithreading").Show();
 
-        EditorGUI.Toggle(paper, "phys_sync", "Auto Sync Transforms", AutoSyncTransforms)
-            .OnValueChanged(v => { AutoSyncTransforms = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "phys_sync", AutoSyncTransforms,
+                v => { AutoSyncTransforms = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Auto Sync Transforms").Show();
 
         paper.Box("phys_sp_adv").Height(8);
 
@@ -158,17 +161,21 @@ public class PhysicsSettings : ProjectSettingsBase
         EditorGUI.Header(paper, "phys_h_adv", "Advanced");
         EditorGUI.Separator(paper, "phys_sep_adv");
 
-        EditorGUI.Toggle(paper, "phys_determ", "Enhanced Determinism", EnhancedDeterminism)
-            .OnValueChanged(v => { EnhancedDeterminism = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "phys_determ", EnhancedDeterminism,
+                v => { EnhancedDeterminism = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Enhanced Determinism").Show();
 
-        EditorGUI.Toggle(paper, "phys_thread", "Persistent Thread Model", ThreadModel == PhysicsThreadModel.Persistent)
-            .OnValueChanged(v => { ThreadModel = v ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "phys_thread", ThreadModel == PhysicsThreadModel.Persistent,
+                v => { ThreadModel = v ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Persistent Thread Model").Show();
 
-        EditorGUI.Toggle(paper, "phys_auxcp", "Auxiliary Contact Points", EnableAuxiliaryContactPoints)
-            .OnValueChanged(v => { EnableAuxiliaryContactPoints = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "phys_auxcp", EnableAuxiliaryContactPoints,
+                v => { EnableAuxiliaryContactPoints = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Auxiliary Contact Points").Show();
 
-        EditorGUI.Toggle(paper, "phys_persist", "Persistent Contact Manifold", PersistentContactManifold)
-            .OnValueChanged(v => { PersistentContactManifold = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "phys_persist", PersistentContactManifold,
+                v => { PersistentContactManifold = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Persistent Contact Manifold").Show();
 
         InspectorRow.Draw(paper, "phys_specrelax", "Speculative Relaxation Factor", () =>
             Origami.Slider(paper, "phys_specrelax_v", SpeculativeRelaxationFactor,

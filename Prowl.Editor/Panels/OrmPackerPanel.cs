@@ -266,8 +266,8 @@ public class OrmPackerPanel : DockPanel
                         slot.SourceChannel, v => slot.SourceChannel = v).Show();
                 }
 
-                EditorGUI.Toggle(paper, $"orm_slot_{slot.Id}_inv", "Invert", slot.Invert)
-                    .OnValueChanged(v => slot.Invert = v);
+                Origami.Checkbox(paper, $"orm_slot_{slot.Id}_inv", slot.Invert, v => slot.Invert = v)
+                    .LabelRight("Invert").Show();
             }
 
             // Default value slider used when no texture is assigned

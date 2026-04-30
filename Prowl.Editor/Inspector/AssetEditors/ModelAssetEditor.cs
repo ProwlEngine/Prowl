@@ -91,20 +91,25 @@ public class ModelAssetEditor : AssetImporterEditor
         EditorGUI.Separator(paper, $"{id}_sep_settings");
         EditorGUI.Header(paper, $"{id}_h_settings", "Import Settings");
 
-        EditorGUI.Toggle(paper, $"{id}_genNormals", "Generate Normals", _generateNormals)
-            .OnValueChanged(v => { _generateNormals = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_genNormals", _generateNormals,
+                v => { _generateNormals = v; _settingsDirty = true; })
+            .LabelRight("Generate Normals").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_smoothNormals", "Smooth Normals", _generateSmoothNormals)
-            .OnValueChanged(v => { _generateSmoothNormals = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_smoothNormals", _generateSmoothNormals,
+                v => { _generateSmoothNormals = v; _settingsDirty = true; })
+            .LabelRight("Smooth Normals").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_tangents", "Calculate Tangents", _calculateTangents)
-            .OnValueChanged(v => { _calculateTangents = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_tangents", _calculateTangents,
+                v => { _calculateTangents = v; _settingsDirty = true; })
+            .LabelRight("Calculate Tangents").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_flipUV", "Flip UVs", _flipUVs)
-            .OnValueChanged(v => { _flipUVs = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_flipUV", _flipUVs,
+                v => { _flipUVs = v; _settingsDirty = true; })
+            .LabelRight("Flip UVs").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_globalScale", "Global Scale", _globalScale)
-            .OnValueChanged(v => { _globalScale = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_globalScale", _globalScale,
+                v => { _globalScale = v; _settingsDirty = true; })
+            .LabelRight("Global Scale").Show();
 
         InspectorRow.Draw(paper, $"{id}_unitScale", "Unit Scale", () =>
             Origami.NumericField<float>(paper, $"{id}_unitScale_v", _unitScale,
@@ -114,8 +119,9 @@ public class ModelAssetEditor : AssetImporterEditor
         EditorGUI.Separator(paper, $"{id}_sep_features");
         EditorGUI.Header(paper, $"{id}_h_features", "Mesh Features");
 
-        EditorGUI.Toggle(paper, $"{id}_genSDF", "Generate SDF (all meshes)", _generateSDF)
-            .OnValueChanged(v => { _generateSDF = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_genSDF", _generateSDF,
+                v => { _generateSDF = v; _settingsDirty = true; })
+            .LabelRight("Generate SDF (all meshes)").Show();
 
         if (_generateSDF)
         {

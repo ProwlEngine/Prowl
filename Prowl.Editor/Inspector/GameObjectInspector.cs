@@ -60,8 +60,9 @@ public static class GameObjectInspector
         {
             paper.Box("gi_icon").Margin(6, 6, 0, 6).FontSize(EditorTheme.FontSize * 1.5f).Width(UnitValue.Auto).Text(EditorIcons.Cube, font);
 
-            EditorGUI.Toggle(paper, "gi_enabled", "", go.Enabled)
-                .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Toggle Enabled", go.Enabled, v, (g, x) => g.Enabled = x); go.Enabled = v; });
+            Origami.Checkbox(paper, "gi_enabled", go.Enabled,
+                v => { Undo.RecordGameObjectChange(go, "Toggle Enabled", go.Enabled, v, (g, x) => g.Enabled = x); go.Enabled = v; })
+                .NoLabel().Show();
 
             Origami.TextField(paper, "gi_name", go.Name, v =>
                 {
@@ -74,8 +75,9 @@ public static class GameObjectInspector
                 .Width(UnitValue.Stretch())
                 .Show();
 
-            EditorGUI.Toggle(paper, "gi_static", "Static", go.IsStatic)
-                .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x); go.IsStatic = v; });
+            Origami.Checkbox(paper, "gi_static", go.IsStatic,
+                v => { Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x); go.IsStatic = v; })
+                .LabelRight("Static").Show();
         }
 
         // Tag + Layer row (dropdowns)
@@ -217,8 +219,9 @@ public static class GameObjectInspector
                 .Enter())
             {
                 // Enabled toggle
-                EditorGUI.Toggle(paper, $"{compId}_en", "", comp.Enabled)
-                    .OnValueChanged(v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = old; }, () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = v; }); comp.Enabled = v; });
+                Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
+                    v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = old; }, () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = v; }); comp.Enabled = v; })
+                    .NoLabel().Show();
 
                 // Icon + Name (click to fold)
                 paper.Box($"{compId}_label")

@@ -176,8 +176,8 @@ public class ShaderGraphEditorWindow : DockPanel
         {
             EditorGUI.Button(paper, "sg_tb_compile", $"{EditorIcons.WandMagicSparkles} Compile", width: 90)
                 .OnValueChanged(_ => _editor.Save());
-            EditorGUI.ToggleButton(paper, "sg_tb_auto", "Auto", _autoRecompile, width: 48)
-                .OnValueChanged(v => _autoRecompile = v);
+            Origami.Switch(paper, "sg_tb_auto", _autoRecompile, v => _autoRecompile = v)
+                .Primary().LabelRight("Auto").Show();
             // Recenter lives on F / Space no need for a button. Frees toolbar room
             // for the status indicator to stretch.
 
@@ -219,9 +219,9 @@ public class ShaderGraphEditorWindow : DockPanel
                         _lastPreviewMesh = null;
                     }, 0);
             }
-            EditorGUI.ToggleButton(paper, "sg_pv_grid", "Grid",
-                _preview?.ShowGrid ?? false, width: 52)
-                .OnValueChanged(v => { if (_preview != null) _preview.ShowGrid = v; });
+            Origami.Switch(paper, "sg_pv_grid", _preview?.ShowGrid ?? false,
+                    v => { if (_preview != null) _preview.ShowGrid = v; })
+                .Primary().LabelRight("Grid").Show();
         }
     }
 
@@ -325,12 +325,15 @@ public class ShaderGraphEditorWindow : DockPanel
                     TouchSettings();
                 }).Show());
         }
-        EditorGUI.Toggle(paper, "sg_recv_ambient", "Receives Ambient", sg.RenderSettings.ReceivesAmbient)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.ReceivesAmbient = v; MutateSettings(s, "Receives Ambient"); });
-        EditorGUI.Toggle(paper, "sg_recv_shadows", "Receives Shadows", sg.RenderSettings.ReceivesShadows)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.ReceivesShadows = v; MutateSettings(s, "Receives Shadows"); });
-        EditorGUI.Toggle(paper, "sg_cast_shadows", "Casts Shadows", sg.RenderSettings.CastsShadows)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.CastsShadows = v; MutateSettings(s, "Casts Shadows"); });
+        Origami.Checkbox(paper, "sg_recv_ambient", sg.RenderSettings.ReceivesAmbient,
+                v => { var s = sg.RenderSettings; s.ReceivesAmbient = v; MutateSettings(s, "Receives Ambient"); })
+            .LabelRight("Receives Ambient").Show();
+        Origami.Checkbox(paper, "sg_recv_shadows", sg.RenderSettings.ReceivesShadows,
+                v => { var s = sg.RenderSettings; s.ReceivesShadows = v; MutateSettings(s, "Receives Shadows"); })
+            .LabelRight("Receives Shadows").Show();
+        Origami.Checkbox(paper, "sg_cast_shadows", sg.RenderSettings.CastsShadows,
+                v => { var s = sg.RenderSettings; s.CastsShadows = v; MutateSettings(s, "Casts Shadows"); })
+            .LabelRight("Casts Shadows").Show();
     }
 
     private void DrawBlendingFoldout(Paper paper, ShaderGraph sg)
@@ -377,8 +380,9 @@ public class ShaderGraphEditorWindow : DockPanel
         InspectorRow.Draw(paper, "sg_winding", "Winding", () =>
             Origami.EnumDropdown(paper, "sg_winding_v", sg.RenderSettings.Winding,
                 v => { var s = sg.RenderSettings; s.Winding = v; MutateSettings(s, "Winding"); }).Show());
-        EditorGUI.Toggle(paper, "sg_zwrite", "Z Write", sg.RenderSettings.ZWrite)
-            .OnValueChanged(v => { var s = sg.RenderSettings; s.ZWrite = v; MutateSettings(s, "Z Write"); });
+        Origami.Checkbox(paper, "sg_zwrite", sg.RenderSettings.ZWrite,
+                v => { var s = sg.RenderSettings; s.ZWrite = v; MutateSettings(s, "Z Write"); })
+            .LabelRight("Z Write").Show();
         InspectorRow.Draw(paper, "sg_ztest", "Z Test", () =>
             Origami.EnumDropdown(paper, "sg_ztest_v", sg.RenderSettings.ZTest,
                 v => { var s = sg.RenderSettings; s.ZTest = v; MutateSettings(s, "Z Test"); }).Show());

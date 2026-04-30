@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
@@ -270,43 +271,7 @@ public static class EditorGUI
     }
 
 
-    // ================================================================
-    //  Toggle
-    // ================================================================
-
-    public static WidgetResult<bool> Toggle(Paper paper, string id, string label, bool value)
-    {
-        Action<bool>? userCallback = null;
-
-        using (paper.Row(id)
-            .Height(EditorTheme.RowHeight)
-            .Width(UnitValue.Auto)
-            .Alignment(PaperUI.TextAlignment.MiddleLeft)
-            .RowBetween(6)
-            .OnClick(e => userCallback?.Invoke(!value))
-            .Enter())
-        {
-            var box = paper.Box($"{id}_box")
-                .Size(18, 18)
-                .Margin(UnitValue.Auto, UnitValue.Auto,(EditorTheme.RowHeight - 18)/2f,UnitValue.Auto)
-                .BackgroundColor(value ? EditorTheme.Purple400 : EditorTheme.Neutral300)
-                .Hovered.BackgroundColor(value ? EditorTheme.Purple300 : EditorTheme.Ink200).End()
-                .Rounded(3)
-                .Alignment(PaperUI.TextAlignment.MiddleCenter)
-                .BorderColor(EditorTheme.Ink200).BorderWidth(1);
-
-            if (value && Font != null)
-                box.Text(EditorIcons.Check, Font).TextColor(EditorTheme.Ink500).FontSize(12f);
-
-            if (Font != null)
-                paper.Box($"{id}_lbl")
-                    .Width(UnitValue.Auto)
-                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
-        }
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
+    // Toggle removed (use Origami.Checkbox / Origami.Switch with .LabelRight(...)).
 
     // TextField, FloatField, IntField, Slider, IntSlider, Dropdown, EnumDropdown,
     // and SearchBar were removed in favour of the Origami widgets
@@ -445,8 +410,8 @@ public static class EditorGUI
     {
         Separator(paper, $"{id}_sep");
 
-        Toggle(paper, $"{id}_tog", label, enabled)
-            .OnValueChanged(v => setEnabled(v));
+        Origami.Checkbox(paper, $"{id}_tog", enabled, v => setEnabled(v))
+            .LabelRight(label).Show();
 
         if (enabled)
         {
@@ -463,38 +428,8 @@ public static class EditorGUI
     //  ToggleButton
     // ================================================================
 
-    public static WidgetResult<bool> ToggleButton(Paper paper, string id, string label, bool value, int? width = null, bool fitWidth = false, Color? textColorOverride = null, Color ? bgColorOverride = null)
-    {
-        Action<bool>? userCallback = null;
-
-        UnitValue widthValue = UnitValue.StretchOne;
-
-        if (fitWidth)
-        {
-            Prowl.Vector.Float2 labelLayout = paper.MeasureText(label, new Prowl.Scribe.TextLayoutSettings { Font = Font, PixelSize = FontSz });
-            widthValue = labelLayout.X + (EditorTheme.RowHeight / 4) * 2;
-        }
-
-        using (paper.Box(id)
-            .Width(width ?? widthValue)
-            .Height(EditorTheme.RowHeight)
-            .ChildLeft(EditorTheme.RowHeight/4).ChildRight(EditorTheme.RowHeight/4)
-            .BackgroundColor(value ? (bgColorOverride ?? EditorTheme.Purple400) : EditorTheme.Ink100)
-            .Hovered.BackgroundColor(value ? (bgColorOverride.HasValue ? LerpRGB(bgColorOverride.Value, Color.Black,0.25f) : EditorTheme.Purple300) : EditorTheme.Ink200).End()
-            .Rounded(3)
-            .BorderColor(EditorTheme.Ink200).BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(!value)).Enter())
-        {
-            if (Font != null)
-                paper.Box($"{id}_label")
-                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .Text(label, Font)
-                    .TextColor(textColorOverride ?? EditorTheme.Ink500)
-                    .FontSize(FontSz);
-        }
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
+    // ToggleButton removed (use Origami.Switch / Origami.Checkbox / Origami.Radio
+    // depending on the semantic — most call sites preferred a Switch-with-LabelRight).
 
     // SearchBar removed (use Origami.SearchField).
     // EnumDropdown removed (use Origami.EnumDropdown).

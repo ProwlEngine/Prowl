@@ -54,12 +54,9 @@ public class ParticleSystemComponentEditor : CustomEditor
 
         IntRow(paper, $"{id}_maxp", "Max Particles", ps.MaxParticles, v => ps.MaxParticles = Math.Max(1, v));
         FloatRow(paper, $"{id}_dur", "Duration", ps.Duration, v => ps.Duration = MathF.Max(0.1f, v));
-        EditorGUI.Toggle(paper, $"{id}_loop", "Looping", ps.Looping)
-            .OnValueChanged(v => { ps.Looping = v; });
-        EditorGUI.Toggle(paper, $"{id}_poe", "Play On Enable", ps.PlayOnEnable)
-            .OnValueChanged(v => { ps.PlayOnEnable = v; });
-        EditorGUI.Toggle(paper, $"{id}_pw", "Prewarm", ps.Prewarm)
-            .OnValueChanged(v => { ps.Prewarm = v; });
+        BoolRow(paper, $"{id}_loop", "Looping", ps.Looping, v => ps.Looping = v);
+        BoolRow(paper, $"{id}_poe", "Play On Enable", ps.PlayOnEnable, v => ps.PlayOnEnable = v);
+        BoolRow(paper, $"{id}_pw", "Prewarm", ps.Prewarm, v => ps.Prewarm = v);
         EnumRow(paper, $"{id}_sim", "Simulation Space", ps.SimulationSpace, v => ps.SimulationSpace = v);
 
         paper.Box($"{id}_sp1").Height(6);
@@ -109,8 +106,8 @@ public class ParticleSystemComponentEditor : CustomEditor
                 case EmissionShape.Sphere:
                     FloatRow(paper, $"{id}_emit_rad", "Radius", ps.Emission.Radius,
                         v => ps.Emission.Radius = MathF.Max(0.01f, v));
-                    EditorGUI.Toggle(paper, $"{id}_emit_shell", "Emit From Shell", ps.Emission.EmitFromShell)
-                        .OnValueChanged(v => { ps.Emission.EmitFromShell = v; });
+                    BoolRow(paper, $"{id}_emit_shell", "Emit From Shell", ps.Emission.EmitFromShell,
+                        v => ps.Emission.EmitFromShell = v);
                     break;
                 case EmissionShape.Box:
                     EditorGUI.Vector3Field(paper, $"{id}_emit_box", "Box Size", ps.Emission.BoxSize)
@@ -202,8 +199,8 @@ public class ParticleSystemComponentEditor : CustomEditor
                 IntRow(paper, $"{id}_uv_cc", "Cycle Count", ps.UV.CycleCount, v => ps.UV.CycleCount = Math.Max(1, v));
                 FloatRow(paper, $"{id}_uv_fot", "Frame Over Time", ps.UV.FrameOverTime,
                     v => ps.UV.FrameOverTime = MathF.Max(0f, v));
-                EditorGUI.Toggle(paper, $"{id}_uv_rsf", "Random Start Frame", ps.UV.RandomStartFrame)
-                    .OnValueChanged(v => { ps.UV.RandomStartFrame = v; });
+                BoolRow(paper, $"{id}_uv_rsf", "Random Start Frame", ps.UV.RandomStartFrame,
+                    v => ps.UV.RandomStartFrame = v);
             }
             else
             {
@@ -215,10 +212,8 @@ public class ParticleSystemComponentEditor : CustomEditor
                     .OnValueChanged(v => { ps.UV.ScrollSpeed = v; });
             }
 
-            EditorGUI.Toggle(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU)
-                .OnValueChanged(v => { ps.UV.FlipU = v; });
-            EditorGUI.Toggle(paper, $"{id}_uv_fv", "Flip V", ps.UV.FlipV)
-                .OnValueChanged(v => { ps.UV.FlipV = v; });
+            BoolRow(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU, v => ps.UV.FlipU = v);
+            BoolRow(paper, $"{id}_uv_fv", "Flip V", ps.UV.FlipV, v => ps.UV.FlipV = v);
         });
     }
 
@@ -236,6 +231,9 @@ public class ParticleSystemComponentEditor : CustomEditor
         where T : struct, Enum
         => InspectorRow.Draw(paper, id, label, () =>
             Origami.EnumDropdown<T>(paper, $"{id}_v", value, setter).Show());
+
+    private static void BoolRow(Paper paper, string id, string label, bool value, Action<bool> setter)
+        => Origami.Checkbox(paper, id, value, setter).LabelRight(label).Show();
 
     // ================================================================
     //  Playback Controls

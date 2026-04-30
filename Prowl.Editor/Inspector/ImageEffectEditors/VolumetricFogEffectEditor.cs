@@ -37,20 +37,20 @@ public class VolumetricFogEffectEditor : CustomEditor
         EditorGUI.Header(paper, $"{id}_h_lights", "Light Types");
         EditorGUI.Separator(paper, $"{id}_sep_lights");
 
-        EditorGUI.Toggle(paper, $"{id}_dir", "Directional Light", fx.EnableDirectional)
-            .OnValueChanged(v => fx.EnableDirectional = v);
-        EditorGUI.Toggle(paper, $"{id}_dir_sh", "  └ Directional Shadows", fx.EnableDirectionalShadows)
-            .OnValueChanged(v => fx.EnableDirectionalShadows = v);
+        Origami.Checkbox(paper, $"{id}_dir", fx.EnableDirectional, v => fx.EnableDirectional = v)
+            .LabelRight("Directional Light").Show();
+        Origami.Checkbox(paper, $"{id}_dir_sh", fx.EnableDirectionalShadows, v => fx.EnableDirectionalShadows = v)
+            .LabelRight("  └ Directional Shadows").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_pt", "Point Lights", fx.EnablePointLights)
-            .OnValueChanged(v => fx.EnablePointLights = v);
-        EditorGUI.Toggle(paper, $"{id}_pt_sh", "  └ Point Shadows", fx.EnablePointLightShadows)
-            .OnValueChanged(v => fx.EnablePointLightShadows = v);
+        Origami.Checkbox(paper, $"{id}_pt", fx.EnablePointLights, v => fx.EnablePointLights = v)
+            .LabelRight("Point Lights").Show();
+        Origami.Checkbox(paper, $"{id}_pt_sh", fx.EnablePointLightShadows, v => fx.EnablePointLightShadows = v)
+            .LabelRight("  └ Point Shadows").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_sp", "Spot Lights", fx.EnableSpotLights)
-            .OnValueChanged(v => fx.EnableSpotLights = v);
-        EditorGUI.Toggle(paper, $"{id}_sp_sh", "  └ Spot Shadows", fx.EnableSpotLightShadows)
-            .OnValueChanged(v => fx.EnableSpotLightShadows = v);
+        Origami.Checkbox(paper, $"{id}_sp", fx.EnableSpotLights, v => fx.EnableSpotLights = v)
+            .LabelRight("Spot Lights").Show();
+        Origami.Checkbox(paper, $"{id}_sp_sh", fx.EnableSpotLightShadows, v => fx.EnableSpotLightShadows = v)
+            .LabelRight("  └ Spot Shadows").Show();
 
         // ── Performance ──
         EditorGUI.Header(paper, $"{id}_h_perf", "Performance");

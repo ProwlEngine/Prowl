@@ -420,8 +420,9 @@ public class InputActionMapEditor : AssetImporterEditor
             // Vector2-specific options
             if (composite is Vector2CompositeBinding v2c)
             {
-                EditorGUI.Toggle(paper, $"{id}_norm", "Normalize", v2c.Normalize)
-                    .OnValueChanged(v => { v2c.Normalize = v; MarkDirty(); });
+                Origami.Checkbox(paper, $"{id}_norm", v2c.Normalize,
+                        v => { v2c.Normalize = v; MarkDirty(); })
+                    .LabelRight("Normalize").Show();
                 paper.Box($"{id}_sp").Height(4);
             }
 

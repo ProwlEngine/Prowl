@@ -298,8 +298,9 @@ public class TerrainEditor : CustomEditor
             InspectorRow.Draw(paper, $"{id}_bend", "Bend Factor", () =>
                 Origami.Slider(paper, $"{id}_bend_v", dp.BendFactor,
                     v => { dp.BendFactor = v; MarkDetailsDirty(); }, 0f, 1f).Format("F2").Show());
-            EditorGUI.Toggle(paper, $"{id}_atn", "Align To Normal", dp.AlignToNormal)
-                .OnValueChanged(v => { dp.AlignToNormal = v; MarkDetailsDirty(); });
+            Origami.Checkbox(paper, $"{id}_atn", dp.AlignToNormal,
+                    v => { dp.AlignToNormal = v; MarkDetailsDirty(); })
+                .LabelRight("Align To Normal").Show();
 
             PropertyGrid.DrawField(paper, $"{id}_hc", "Healthy Color", typeof(Prowl.Vector.Color), dp.HealthyColor,
                 v => { dp.HealthyColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);

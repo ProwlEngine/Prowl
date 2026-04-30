@@ -65,13 +65,13 @@ public class PackageSettings : ProjectSettingsBase
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
 
-                EditorGUI.ToggleButton(paper, $"pkg_eo_{i}", "Editor Only", pkg.EditorOnly, fitWidth: true)
-                    .OnValueChanged(v =>
+                Origami.Checkbox(paper, $"pkg_eo_{i}", pkg.EditorOnly, v =>
                     {
                         Packages[idx].EditorOnly = v;
                         Apply();
                         ProjectSettingsRegistry.SaveAll();
-                    });
+                    })
+                    .LabelRight("Editor Only").Show();
 
                 paper.Box($"pkg_ver_{i}")
                     .Width(80).Height(EditorTheme.RowHeight)
@@ -112,8 +112,8 @@ public class PackageSettings : ProjectSettingsBase
         InspectorRow.Draw(paper, "pkg_add_ver", "Version", () =>
             Origami.TextField(paper, "pkg_add_ver_v", _newVersion, v => _newVersion = v).Show());
 
-        EditorGUI.Toggle(paper, "pkg_add_editor_only", "Editor Only", _newEditorOnly)
-            .OnValueChanged(v => _newEditorOnly = v);
+        Origami.Checkbox(paper, "pkg_add_editor_only", _newEditorOnly, v => _newEditorOnly = v)
+            .LabelRight("Editor Only").Show();
 
         EditorGUI.Button(paper, "pkg_add_btn", $"{EditorIcons.Plus}  Add Package", width: 140)
             .OnValueChanged(_ =>

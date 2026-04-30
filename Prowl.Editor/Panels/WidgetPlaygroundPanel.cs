@@ -189,15 +189,15 @@ public class WidgetPlaygroundPanel : DockPanel
 
             EditorGUI.Separator(paper, "sep1");
 
-            // === Toggle Buttons ===
-            EditorGUI.Header(paper, "h_togbtn", "Toggle Buttons");
+            // === Toggle switches ===
+            EditorGUI.Header(paper, "h_togbtn", "Toggles");
 
-            using (paper.Row("togbtn_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+            using (paper.Row("togbtn_row").Height(EditorTheme.RowHeight).RowBetween(12).Enter())
             {
-                EditorGUI.ToggleButton(paper, "tbtn_a", "Wireframe", _toggleBtnA)
-                    .OnValueChanged(v => _toggleBtnA = v);
-                EditorGUI.ToggleButton(paper, "tbtn_b", "Grid", _toggleBtnB)
-                    .OnValueChanged(v => _toggleBtnB = v);
+                Origami.Switch(paper, "tbtn_a", _toggleBtnA, v => _toggleBtnA = v)
+                    .Primary().LabelRight("Wireframe").Show();
+                Origami.Switch(paper, "tbtn_b", _toggleBtnB, v => _toggleBtnB = v)
+                    .Primary().LabelRight("Grid").Show();
             }
 
             EditorGUI.Separator(paper, "sep1b");
@@ -205,10 +205,8 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Toggles ===
             EditorGUI.Header(paper, "h_tog", "Toggles");
 
-            EditorGUI.Toggle(paper, "tog_a", "Enable Shadows", _toggleA)
-                .OnValueChanged(v => _toggleA = v);
-            EditorGUI.Toggle(paper, "tog_b", "Cast Reflections", _toggleB)
-                .OnValueChanged(v => _toggleB = v);
+            Origami.Checkbox(paper, "tog_a", _toggleA, v => _toggleA = v).LabelRight("Enable Shadows").Show();
+            Origami.Checkbox(paper, "tog_b", _toggleB, v => _toggleB = v).LabelRight("Cast Reflections").Show();
 
             EditorGUI.Separator(paper, "sep2");
 
@@ -253,8 +251,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 {
                     InspectorRow.Draw(paper, "fo_speed", "Speed", () =>
                         Origami.NumericField<float>(paper, "fo_speed_v", _floatValue, v => _floatValue = v).Show());
-                    EditorGUI.Toggle(paper, "fo_tog", "Enabled", _toggleA)
-                        .OnValueChanged(v => _toggleA = v);
+                    Origami.Checkbox(paper, "fo_tog", _toggleA, v => _toggleA = v).LabelRight("Enabled").Show();
                 }
             });
 
@@ -262,8 +259,7 @@ public class WidgetPlaygroundPanel : DockPanel
             {
                 using (paper.Column("fo_2_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
-                    EditorGUI.Toggle(paper, "fo_dbg", "Show Wireframe", _toggleB)
-                        .OnValueChanged(v => _toggleB = v);
+                    Origami.Checkbox(paper, "fo_dbg", _toggleB, v => _toggleB = v).LabelRight("Show Wireframe").Show();
                     InspectorRow.Draw(paper, "fo_iter", "Iterations", () =>
                         Origami.NumericField<int>(paper, "fo_iter_v", _intValue, v => _intValue = v).Show());
                 }

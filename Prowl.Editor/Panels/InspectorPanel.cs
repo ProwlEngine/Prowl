@@ -298,8 +298,9 @@ public class InspectorPanel : DockPanel
                             switch (val.TagType)
                             {
                                 case Echo.EchoType.Bool:
-                                    EditorGUI.Toggle(paper, $"insp_set_{key}", NicifySettingName(key), val.BoolValue)
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
+                                    Origami.Checkbox(paper, $"insp_set_{key}", val.BoolValue,
+                                            v => { settings[key] = new Echo.EchoObject(v); })
+                                        .LabelRight(NicifySettingName(key)).Show();
                                     break;
 
                                 case Echo.EchoType.Int:
