@@ -1270,6 +1270,26 @@ namespace Prowl.PaperUI
             /// </summary>
             public char? MaskChar;
 
+            /// <summary>
+            /// Programmatic value override. When non-null, the field's internal value is forced
+            /// to this string for the current frame, even when focused. Use this for explicit
+            /// pushes from outside the field — autocomplete picks, undo/redo, code-side rewrites
+            /// — where simply comparing the external value to internal state would be unsafe
+            /// (filters / formatters can round-trip stripped characters mid-typing, e.g. a
+            /// numeric field stripping the trailing "." in "0." before the decimal lands).
+            /// <para>Set this only on the frame where you want to force the change; on
+            /// subsequent frames the field's internal state is authoritative again.</para>
+            /// </summary>
+            public string ForceValue;
+
+            /// <summary>
+            /// Companion to <see cref="ForceValue"/>: when true and a force-update lands while
+            /// focused, the new text is fully selected so the user's next keystroke replaces
+            /// it. When the field isn't focused this flag is ignored (no selection on a
+            /// non-focused field).
+            /// </summary>
+            public bool ForceSelectAll;
+
             /// <summary>Creates default text input settings</summary>
             public static TextInputSettings Default => new TextInputSettings
             {
@@ -1282,6 +1302,8 @@ namespace Prowl.PaperUI
                 DoWrap = true,
                 SelectAllOnFocus = false,
                 MaskChar = null,
+                ForceValue = null,
+                ForceSelectAll = false,
             };
         }
 
@@ -1408,42 +1430,64 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Loads state and reconciles it against the externally-provided value. Only safe to
-        /// call once per frame, at the top of CreateTextInput where `initialValue` is fresh
-        /// from user code. Inside deferred callbacks (events, OnPostLayout render lambdas) the
-        /// captured `value` is stale relative to storage that may have been mutated earlier in
-        /// the same frame, so those paths must use LoadTextInputState directly.
+        /// Loads state and reconciles it against the externally-provided value, with these rules:
+        /// <list type="bullet">
+        /// <item><description><see cref="TextInputSettings.ForceValue"/> set > apply unconditionally
+        /// (the caller explicitly asked for this push). Optionally select-all per
+        /// <see cref="TextInputSettings.ForceSelectAll"/>.</description></item>
+        /// <item><description>Field NOT focused > external value is authoritative (gizmos, undo,
+        /// code-side writes propagate in).</description></item>
+        /// <item><description>Field IS focused (no force) > internal state wins; the external
+        /// value is ignored. This avoids spurious select-alls when the caller's setter chain
+        /// round-trips through filters/formatters that strip in-progress characters (e.g. a
+        /// NumericField formatter stripping the trailing "." in "0.").</description></item>
+        /// </list>
+        /// Only safe to call once per frame, at the top of CreateTextInput where
+        /// <paramref name="initialValue"/> is fresh from user code. Inside deferred callbacks
+        /// (events, OnPostLayout render lambdas) the captured value is stale relative to storage
+        /// that may have been mutated earlier in the same frame > use LoadTextInputState there.
         /// </summary>
-        private TextInputState SyncTextInputState(string initialValue, bool isMultiLine)
+        private TextInputState SyncTextInputState(string initialValue, bool isMultiLine, in TextInputSettings settings)
         {
             var state = LoadTextInputState(initialValue, isMultiLine);
 
-            // Sync to the external value whenever it diverges from our stored state. The
-            // typing path (OnTextInput / key handlers) already pushes user edits out via
-            // onChange, so for an unfocused field a divergence implies a code-side write
-            // (gizmos, undo, value clamping, etc.) > just adopt it. For a focused field,
-            // a divergence implies the same thing happened mid-edit (autocomplete pick,
-            // validator clamp, format roundtrip, paste-from-code...): adopt it AND
-            // select-all so the user can see the new value and replace it with their
-            // next keystroke if they want.
-            string expected = initialValue ?? "";
-            if (state.Value != expected)
+            if (settings.ForceValue != null)
             {
-                state.Value = expected;
-                if (state.IsFocused)
+                // Caller explicitly pushed a value > replace internal state regardless of focus.
+                string forced = settings.ForceValue;
+                state.Value = forced;
+                if (state.IsFocused && settings.ForceSelectAll)
                 {
                     state.SelectionStart = 0;
-                    state.SelectionEnd = expected.Length;
-                    state.CursorPosition = expected.Length;
+                    state.SelectionEnd = forced.Length;
+                    state.CursorPosition = forced.Length;
                 }
                 else
                 {
-                    state.CursorPosition = expected.Length;
+                    state.CursorPosition = forced.Length;
                     state.SelectionStart = -1;
                     state.SelectionEnd = -1;
                 }
                 SaveTextInputState(state);
+                return state;
             }
+
+            if (!state.IsFocused)
+            {
+                // Unfocused: external value is authoritative. Sync if it diverged.
+                string expected = initialValue ?? "";
+                if (state.Value != expected)
+                {
+                    state.Value = expected;
+                    state.CursorPosition = expected.Length;
+                    state.SelectionStart = -1;
+                    state.SelectionEnd = -1;
+                    SaveTextInputState(state);
+                }
+            }
+            // Focused without ForceValue: leave internal state alone. Callers that genuinely
+            // need to push a new value mid-edit (autocomplete, validator rewrite) must opt in
+            // via TextInputSettings.ForceValue.
 
             return state;
         }
@@ -1927,7 +1971,7 @@ namespace Prowl.PaperUI
             }
 
             // Initialize state (sync against the freshly-provided external value once per frame)
-            var state = SyncTextInputState(value, isMultiLine);
+            var state = SyncTextInputState(value, isMultiLine, settings);
 
             if (isMultiLine)
             {
