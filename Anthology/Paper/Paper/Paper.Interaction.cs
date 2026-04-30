@@ -268,15 +268,6 @@ namespace Prowl.PaperUI
                 }
             }
 
-            // Refresh the current valid drop target under the pointer (no-op if no drag is in
-            // flight). Done before mouse events so FinalizeDragOnPointerUp sees the latest.
-            UpdateDropTargetUnderPointer();
-
-            // Esc cancels any in-flight drag. Run before HandleMouseEvents so a drop session that
-            // gets cancelled won't fire onDrop on a same-frame pointer release.
-            if (IsDragging && IsKeyPressed(PaperKey.Escape))
-                CancelDrag();
-
             // Process mouse button events
             HandleMouseEvents();
 
@@ -701,12 +692,6 @@ namespace Prowl.PaperUI
             // Handle release
             else if (IsPointerReleased(PaperMouseBtn.Left))
             {
-                // If a drag-and-drop session is in flight, finalize it on this release. Done
-                // outside the _activeElementId guard because the pointer may be released over
-                // a different element than the one that started the drag.
-                if (IsDragging)
-                    FinalizeDragOnPointerUp();
-
                 if (_activeElementId != 0)
                 {
                     ElementHandle activeElement = FindElementByID(_activeElementId);
@@ -816,11 +801,6 @@ namespace Prowl.PaperUI
                             BubbleEventToParents(activeElement, dragStartEvt);
 
                             _isDragging[_activeElementId] = true;
-
-                            // If this element is registered as a drag source, kick off a drop
-                            // session now (threshold-gated so a tiny twitch doesn't start one).
-                            if (data.DragSourceFactory != null && !IsDragging)
-                                BeginDragFromSource(activeElement);
                         }
 
                         // Handle continuous dragging

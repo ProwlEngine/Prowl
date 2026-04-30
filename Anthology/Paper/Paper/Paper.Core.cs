@@ -251,10 +251,6 @@ namespace Prowl.PaperUI
                 }
             }
 
-            // Drag ghost > drawn last so it sits above every layer (including Topmost popovers
-            // that opened during the drag). No-op when no drag is active.
-            DrawDragGhostIfActive();
-
             // Update stats
             CountOfAllElements = (uint)_createdElements.Count;
 

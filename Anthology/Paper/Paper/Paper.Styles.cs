@@ -919,8 +919,7 @@ namespace Prowl.PaperUI
             {
                 ("hovered", IsElementHovered(element.Data.ID)),
                 ("focused", IsElementFocused(element.Data.ID)),
-                ("active", IsElementActive(element.Data.ID)),
-                ("dropTargeted", IsValidDropTarget(element.Data.ID)),
+                ("active", IsElementActive(element.Data.ID))
             };
 
             foreach (var (state, isActive) in pseudoStates)
