@@ -125,22 +125,22 @@ public static class ProjectLauncher
                     {
                         EditorGUI.ButtonSquareGhost(paper, "www_link", EditorIcons.Globe).OnValueChanged((_) =>
                         {
-                            ReferenceOpenerService.OpenUrl("https://prowlengine.com");
+                            EditorUtils.OpenUrl("https://prowlengine.com");
                         });
 
                         EditorGUI.ButtonSquareGhost(paper, "ds_link", EditorIcons.Message).OnValueChanged((_) =>
                         {
-                            ReferenceOpenerService.OpenUrl("https://discord.gg/HgBsBqfSpa");
+                            EditorUtils.OpenUrl("https://discord.gg/HgBsBqfSpa");
                         });
 
                         EditorGUI.ButtonSquareGhost(paper, "yt_link", EditorIcons.Video).OnValueChanged((_) =>
                         {
-                            ReferenceOpenerService.OpenUrl("https://youtube.com/@prowlengine");
+                            EditorUtils.OpenUrl("https://youtube.com/@prowlengine");
                         });
 
                         EditorGUI.ButtonSquareGhost(paper, "gh_link", EditorIcons.Code).OnValueChanged((_) =>
                         {
-                            ReferenceOpenerService.OpenUrl("https://github.com/ProwlEngine/Prowl");
+                            EditorUtils.OpenUrl("https://github.com/ProwlEngine/Prowl");
                         });
                     }
 

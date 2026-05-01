@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace Prowl.Editor;
 
-public static class ReferenceOpenerService
+public static class EditorUtils
 {
     public static void OpenUrl(string url)
     {
