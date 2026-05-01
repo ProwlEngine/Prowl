@@ -144,7 +144,6 @@ void CleanupUnusedBinaries(string path)
         string dir = Path.GetDirectoryName(file)!;
         string newPath = Path.Combine(dir, newName);
 
-        // Console.WriteLine($"Remapping file from {file} to {newPath}");
         File.Move(file, newPath);
     }
 }
