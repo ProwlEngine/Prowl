@@ -4,6 +4,6 @@
 namespace Prowl.Slang.Native;
 
 
-internal unsafe struct Modifier
+internal struct Modifier
 {
 }

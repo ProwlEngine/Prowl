@@ -18,5 +18,5 @@ internal unsafe struct GlobalSessionDescription()
 
     public CBool EnableGLSL = false;
 
-    private unsafe fixed uint _reserved[16];
+    private fixed uint _reserved[16];
 };

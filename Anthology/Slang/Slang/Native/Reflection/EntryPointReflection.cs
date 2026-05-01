@@ -4,6 +4,6 @@
 namespace Prowl.Slang.Native;
 
 
-internal unsafe struct EntryPointReflection
+internal struct EntryPointReflection
 {
 }

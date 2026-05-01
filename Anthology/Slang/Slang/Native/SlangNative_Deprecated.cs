@@ -16,25 +16,25 @@ internal static unsafe partial class SlangNative_Deprecated
 
     // User Attribute
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionUserAttribute_GetName(Attribute* attrib);
+    public static partial ConstU8Str spReflectionUserAttribute_GetName(Attribute* attrib);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionUserAttribute_GetArgumentCount(
+    public static partial uint spReflectionUserAttribute_GetArgumentCount(
         Attribute* attrib);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionUserAttribute_GetArgumentType(
+    public static partial TypeReflection* spReflectionUserAttribute_GetArgumentType(
         Attribute* attrib,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResult spReflectionUserAttribute_GetArgumentValueInt(
+    public static partial SlangResult spReflectionUserAttribute_GetArgumentValueInt(
         Attribute* attrib,
         uint index,
         out int rs);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResult spReflectionUserAttribute_GetArgumentValueFloat(
+    public static partial SlangResult spReflectionUserAttribute_GetArgumentValueFloat(
         Attribute* attrib,
         uint index,
         out float rs);
@@ -45,7 +45,7 @@ internal static unsafe partial class SlangNative_Deprecated
        function will return nullptr.
     */
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionUserAttribute_GetArgumentValueString(
+    public static partial ConstU8Str spReflectionUserAttribute_GetArgumentValueString(
         Attribute* attrib,
         uint index,
         out nuint outSize);
@@ -53,31 +53,31 @@ internal static unsafe partial class SlangNative_Deprecated
     // Type Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeKind spReflectionType_GetKind(TypeReflection* type);
+    public static partial TypeKind spReflectionType_GetKind(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionType_GetUserAttributeCount(TypeReflection* type);
+    public static partial uint spReflectionType_GetUserAttributeCount(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Attribute* spReflectionType_GetUserAttribute(
+    public static partial Attribute* spReflectionType_GetUserAttribute(
         TypeReflection* type,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Attribute* spReflectionType_FindUserAttributeByName(
+    public static partial Attribute* spReflectionType_FindUserAttributeByName(
         TypeReflection* type,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionType_applySpecializations(
+    public static partial TypeReflection* spReflectionType_applySpecializations(
         TypeReflection* type,
         GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionType_GetFieldCount(TypeReflection* type);
+    public static partial uint spReflectionType_GetFieldCount(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionType_GetFieldByIndex(
+    public static partial VariableReflection* spReflectionType_GetFieldByIndex(
         TypeReflection* type,
         uint index);
 
@@ -92,469 +92,469 @@ If the size of a type cannot be statically computed, perhaps because it depends 
 a generic parameter that has not been bound to a specific value, this function returns zero.
 */
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflectionType_GetElementCount(TypeReflection* type);
+    public static partial nuint spReflectionType_GetElementCount(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionType_GetElementType(TypeReflection* type);
+    public static partial TypeReflection* spReflectionType_GetElementType(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionType_GetRowCount(TypeReflection* type);
+    public static partial uint spReflectionType_GetRowCount(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionType_GetColumnCount(TypeReflection* type);
+    public static partial uint spReflectionType_GetColumnCount(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ScalarType spReflectionType_GetScalarType(TypeReflection* type);
+    public static partial ScalarType spReflectionType_GetScalarType(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ResourceShape spReflectionType_GetResourceShape(TypeReflection* type);
+    public static partial ResourceShape spReflectionType_GetResourceShape(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ResourceAccess spReflectionType_GetResourceAccess(TypeReflection* type);
+    public static partial ResourceAccess spReflectionType_GetResourceAccess(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionType_GetResourceResultType(
+    public static partial TypeReflection* spReflectionType_GetResourceResultType(
         TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionType_GetName(TypeReflection* type);
+    public static partial ConstU8Str spReflectionType_GetName(TypeReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResult
+    public static partial SlangResult
     spReflectionType_GetFullName(TypeReflection* type, out ISlangBlob* outNameBlob);
 
     [LibraryImport(LibName)]
-    public static unsafe partial GenericReflection* spReflectionType_GetGenericContainer(
+    public static partial GenericReflection* spReflectionType_GetGenericContainer(
             TypeReflection* type);
 
     // Type Layout Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionTypeLayout_GetType(TypeLayoutReflection* type);
+    public static partial TypeReflection* spReflectionTypeLayout_GetType(TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeKind spReflectionTypeLayout_getKind(TypeLayoutReflection* type);
+    public static partial TypeKind spReflectionTypeLayout_getKind(TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflectionTypeLayout_GetSize(
+    public static partial nuint spReflectionTypeLayout_GetSize(
         TypeLayoutReflection* type,
         ParameterCategory category);
 
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflectionTypeLayout_GetStride(
+    public static partial nuint spReflectionTypeLayout_GetStride(
         TypeLayoutReflection* type,
         ParameterCategory category);
 
     [LibraryImport(LibName)]
-    public static unsafe partial int spReflectionTypeLayout_getAlignment(
+    public static partial int spReflectionTypeLayout_getAlignment(
         TypeLayoutReflection* type,
         ParameterCategory category);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionTypeLayout_GetFieldCount(TypeLayoutReflection* type);
+    public static partial uint spReflectionTypeLayout_GetFieldCount(TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionTypeLayout_GetFieldByIndex(
+    public static partial VariableLayoutReflection* spReflectionTypeLayout_GetFieldByIndex(
         TypeLayoutReflection* type,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_findFieldIndexByName(
+    public static partial SlangInt spReflectionTypeLayout_findFieldIndexByName(
         TypeLayoutReflection* typeLayout,
         ConstU8Str nameBegin,
         ConstU8Str nameEnd);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionTypeLayout_GetExplicitCounter(
+    public static partial VariableLayoutReflection* spReflectionTypeLayout_GetExplicitCounter(
         TypeLayoutReflection* typeLayout);
 
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflectionTypeLayout_GetElementStride(
+    public static partial nuint spReflectionTypeLayout_GetElementStride(
         TypeLayoutReflection* type,
         ParameterCategory category);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeLayoutReflection* spReflectionTypeLayout_GetElementTypeLayout(
+    public static partial TypeLayoutReflection* spReflectionTypeLayout_GetElementTypeLayout(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionTypeLayout_GetElementVarLayout(
+    public static partial VariableLayoutReflection* spReflectionTypeLayout_GetElementVarLayout(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionTypeLayout_getContainerVarLayout(
+    public static partial VariableLayoutReflection* spReflectionTypeLayout_getContainerVarLayout(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ParameterCategory spReflectionTypeLayout_GetParameterCategory(
+    public static partial ParameterCategory spReflectionTypeLayout_GetParameterCategory(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionTypeLayout_GetCategoryCount(
+    public static partial uint spReflectionTypeLayout_GetCategoryCount(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ParameterCategory spReflectionTypeLayout_GetCategoryByIndex(
+    public static partial ParameterCategory spReflectionTypeLayout_GetCategoryByIndex(
         TypeLayoutReflection* type,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial MatrixLayoutMode spReflectionTypeLayout_GetMatrixLayoutMode(
+    public static partial MatrixLayoutMode spReflectionTypeLayout_GetMatrixLayoutMode(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial int spReflectionTypeLayout_getGenericParamIndex(
+    public static partial int spReflectionTypeLayout_getGenericParamIndex(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeLayoutReflection* spReflectionTypeLayout_getPendingDataTypeLayout(
+    public static partial TypeLayoutReflection* spReflectionTypeLayout_getPendingDataTypeLayout(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionTypeLayout_getSpecializedTypePendingDataVarLayout(
+    public static partial VariableLayoutReflection* spReflectionTypeLayout_getSpecializedTypePendingDataVarLayout(
         TypeLayoutReflection* type);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getBindingRangeCount(
+    public static partial SlangInt spReflectionTypeLayout_getBindingRangeCount(
         TypeLayoutReflection* typeLayout);
 
     [LibraryImport(LibName)]
-    public static unsafe partial BindingType spReflectionTypeLayout_getBindingRangeType(
+    public static partial BindingType spReflectionTypeLayout_getBindingRangeType(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_isBindingRangeSpecializable(
+    public static partial SlangInt spReflectionTypeLayout_isBindingRangeSpecializable(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getBindingRangeBindingCount(
+    public static partial SlangInt spReflectionTypeLayout_getBindingRangeBindingCount(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeLayoutReflection* spReflectionTypeLayout_getBindingRangeLeafTypeLayout(
+    public static partial TypeLayoutReflection* spReflectionTypeLayout_getBindingRangeLeafTypeLayout(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionTypeLayout_getBindingRangeLeafVariable(
+    public static partial VariableReflection* spReflectionTypeLayout_getBindingRangeLeafVariable(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ImageFormat spReflectionTypeLayout_getBindingRangeImageFormat(
+    public static partial ImageFormat spReflectionTypeLayout_getBindingRangeImageFormat(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getFieldBindingRangeOffset(
+    public static partial SlangInt spReflectionTypeLayout_getFieldBindingRangeOffset(
         TypeLayoutReflection* typeLayout,
         SlangInt fieldIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getExplicitCounterBindingRangeOffset(
+    public static partial SlangInt spReflectionTypeLayout_getExplicitCounterBindingRangeOffset(
         TypeLayoutReflection* inTypeLayout);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getBindingRangeDescriptorSetIndex(
+    public static partial SlangInt spReflectionTypeLayout_getBindingRangeDescriptorSetIndex(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getBindingRangeFirstDescriptorRangeIndex(
+    public static partial SlangInt spReflectionTypeLayout_getBindingRangeFirstDescriptorRangeIndex(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getBindingRangeDescriptorRangeCount(
+    public static partial SlangInt spReflectionTypeLayout_getBindingRangeDescriptorRangeCount(
         TypeLayoutReflection* typeLayout,
         SlangInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getDescriptorSetCount(
+    public static partial SlangInt spReflectionTypeLayout_getDescriptorSetCount(
         TypeLayoutReflection* typeLayout);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getDescriptorSetSpaceOffset(
+    public static partial SlangInt spReflectionTypeLayout_getDescriptorSetSpaceOffset(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getDescriptorSetDescriptorRangeCount(
+    public static partial SlangInt spReflectionTypeLayout_getDescriptorSetDescriptorRangeCount(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getDescriptorSetDescriptorRangeIndexOffset(
+    public static partial SlangInt spReflectionTypeLayout_getDescriptorSetDescriptorRangeIndexOffset(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex,
         SlangInt rangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getDescriptorSetDescriptorRangeDescriptorCount(
+    public static partial SlangInt spReflectionTypeLayout_getDescriptorSetDescriptorRangeDescriptorCount(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex,
         SlangInt rangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial BindingType spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(
+    public static partial BindingType spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex,
         SlangInt rangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ParameterCategory spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(
+    public static partial ParameterCategory spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(
         TypeLayoutReflection* typeLayout,
         SlangInt setIndex,
         SlangInt rangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getSubObjectRangeCount(TypeLayoutReflection* typeLayout);
+    public static partial SlangInt spReflectionTypeLayout_getSubObjectRangeCount(TypeLayoutReflection* typeLayout);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getSubObjectRangeBindingRangeIndex(
+    public static partial SlangInt spReflectionTypeLayout_getSubObjectRangeBindingRangeIndex(
         TypeLayoutReflection* typeLayout,
         SlangInt subObjectRangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangInt spReflectionTypeLayout_getSubObjectRangeSpaceOffset(
+    public static partial SlangInt spReflectionTypeLayout_getSubObjectRangeSpaceOffset(
         TypeLayoutReflection* typeLayout,
         SlangInt subObjectRangeIndex);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionTypeLayout_getSubObjectRangeOffset(
+    public static partial VariableLayoutReflection* spReflectionTypeLayout_getSubObjectRangeOffset(
         TypeLayoutReflection* typeLayout,
         SlangInt subObjectRangeIndex);
 
     // Variable Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionVariable_GetName(VariableReflection* var);
+    public static partial ConstU8Str spReflectionVariable_GetName(VariableReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionVariable_GetType(VariableReflection* var);
+    public static partial TypeReflection* spReflectionVariable_GetType(VariableReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionVariable_GetUserAttributeCount(VariableReflection* var);
+    public static partial uint spReflectionVariable_GetUserAttributeCount(VariableReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Attribute* spReflectionVariable_GetUserAttribute(
+    public static partial Attribute* spReflectionVariable_GetUserAttribute(
         VariableReflection* var,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Attribute* spReflectionVariable_FindUserAttributeByName(
+    public static partial Attribute* spReflectionVariable_FindUserAttributeByName(
         VariableReflection* var,
         IGlobalSession* globalSession,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial CBool spReflectionVariable_HasDefaultValue(VariableReflection* inVar);
+    public static partial CBool spReflectionVariable_HasDefaultValue(VariableReflection* inVar);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResult spReflectionVariable_GetDefaultValueInt(VariableReflection* inVar, out long rs);
+    public static partial SlangResult spReflectionVariable_GetDefaultValueInt(VariableReflection* inVar, out long rs);
 
     [LibraryImport(LibName)]
-    public static unsafe partial GenericReflection* spReflectionVariable_GetGenericContainer(
+    public static partial GenericReflection* spReflectionVariable_GetGenericContainer(
         VariableReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionVariable_applySpecializations(
+    public static partial VariableReflection* spReflectionVariable_applySpecializations(
         VariableReflection* var,
         GenericReflection* generic);
 
     // Variable Layout Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionVariableLayout_GetVariable(
+    public static partial VariableReflection* spReflectionVariableLayout_GetVariable(
         VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeLayoutReflection* spReflectionVariableLayout_GetTypeLayout(
+    public static partial TypeLayoutReflection* spReflectionVariableLayout_GetTypeLayout(
         VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflectionVariableLayout_GetOffset(
+    public static partial nuint spReflectionVariableLayout_GetOffset(
         VariableLayoutReflection* var,
         ParameterCategory category);
 
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflectionVariableLayout_GetSpace(
+    public static partial nuint spReflectionVariableLayout_GetSpace(
         VariableLayoutReflection* var,
         ParameterCategory category);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ImageFormat spReflectionVariableLayout_GetImageFormat(
+    public static partial ImageFormat spReflectionVariableLayout_GetImageFormat(
         VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionVariableLayout_GetSemanticName(
+    public static partial ConstU8Str spReflectionVariableLayout_GetSemanticName(
         VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflectionVariableLayout_GetSemanticIndex(
+    public static partial nuint spReflectionVariableLayout_GetSemanticIndex(
         VariableLayoutReflection* var);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Modifier* spReflectionVariable_FindModifier(
+    public static partial Modifier* spReflectionVariable_FindModifier(
         VariableReflection* var,
         ModifierID modifierID);
 
     // Function Reflection
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionFunction_GetName(FunctionReflection* func);
+    public static partial ConstU8Str spReflectionFunction_GetName(FunctionReflection* func);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionFunction_GetUserAttributeCount(
+    public static partial uint spReflectionFunction_GetUserAttributeCount(
         FunctionReflection* func);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Attribute* spReflectionFunction_GetUserAttribute(
+    public static partial Attribute* spReflectionFunction_GetUserAttribute(
         FunctionReflection* func,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Attribute* spReflectionFunction_FindUserAttributeByName(
+    public static partial Attribute* spReflectionFunction_FindUserAttributeByName(
         FunctionReflection* func,
         IGlobalSession* globalSession,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionFunction_GetParameterCount(FunctionReflection* func);
+    public static partial uint spReflectionFunction_GetParameterCount(FunctionReflection* func);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionFunction_GetParameter(
+    public static partial VariableReflection* spReflectionFunction_GetParameter(
         FunctionReflection* func,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionFunction_GetResultType(
+    public static partial TypeReflection* spReflectionFunction_GetResultType(
         FunctionReflection* func);
 
     [LibraryImport(LibName)]
-    public static unsafe partial GenericReflection* spReflectionFunction_GetGenericContainer(
+    public static partial GenericReflection* spReflectionFunction_GetGenericContainer(
         FunctionReflection* func);
 
     [LibraryImport(LibName)]
-    public static unsafe partial FunctionReflection* spReflectionFunction_applySpecializations(
+    public static partial FunctionReflection* spReflectionFunction_applySpecializations(
         FunctionReflection* func,
         GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial FunctionReflection* spReflectionFunction_specializeWithArgTypes(
+    public static partial FunctionReflection* spReflectionFunction_specializeWithArgTypes(
         FunctionReflection* func,
         SlangInt argTypeCount,
         TypeReflection** argTypes);
 
     [LibraryImport(LibName)]
-    public static unsafe partial CBool spReflectionFunction_isOverloaded(FunctionReflection* func);
+    public static partial CBool spReflectionFunction_isOverloaded(FunctionReflection* func);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionFunction_getOverloadCount(FunctionReflection* func);
+    public static partial uint spReflectionFunction_getOverloadCount(FunctionReflection* func);
 
     [LibraryImport(LibName)]
-    public static unsafe partial FunctionReflection* spReflectionFunction_getOverload(
+    public static partial FunctionReflection* spReflectionFunction_getOverload(
         FunctionReflection* func,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial Modifier* spReflectionFunction_FindModifier(
+    public static partial Modifier* spReflectionFunction_FindModifier(
         FunctionReflection* var,
         ModifierID modifierID);
 
     // Abstract Decl Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionDecl_getChildrenCount(DeclReflection* parentDecl);
+    public static partial uint spReflectionDecl_getChildrenCount(DeclReflection* parentDecl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial DeclReflection* spReflectionDecl_getChild(
+    public static partial DeclReflection* spReflectionDecl_getChild(
         DeclReflection* parentDecl,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionDecl_getName(DeclReflection* decl);
+    public static partial ConstU8Str spReflectionDecl_getName(DeclReflection* decl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial DeclKind spReflectionDecl_getKind(DeclReflection* decl);
+    public static partial DeclKind spReflectionDecl_getKind(DeclReflection* decl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial FunctionReflection* spReflectionDecl_castToFunction(DeclReflection* decl);
+    public static partial FunctionReflection* spReflectionDecl_castToFunction(DeclReflection* decl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionDecl_castToVariable(DeclReflection* decl);
+    public static partial VariableReflection* spReflectionDecl_castToVariable(DeclReflection* decl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial GenericReflection* spReflectionDecl_castToGeneric(DeclReflection* decl);
+    public static partial GenericReflection* spReflectionDecl_castToGeneric(DeclReflection* decl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflection_getTypeFromDecl(DeclReflection* decl);
+    public static partial TypeReflection* spReflection_getTypeFromDecl(DeclReflection* decl);
 
     [LibraryImport(LibName)]
-    public static unsafe partial DeclReflection* spReflectionDecl_getParent(DeclReflection* decl);
+    public static partial DeclReflection* spReflectionDecl_getParent(DeclReflection* decl);
 
     // Generic Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial DeclReflection* spReflectionGeneric_asDecl(GenericReflection* generic);
+    public static partial DeclReflection* spReflectionGeneric_asDecl(GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionGeneric_GetName(GenericReflection* generic);
+    public static partial ConstU8Str spReflectionGeneric_GetName(GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionGeneric_GetTypeParameterCount(
+    public static partial uint spReflectionGeneric_GetTypeParameterCount(
         GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionGeneric_GetTypeParameter(
+    public static partial VariableReflection* spReflectionGeneric_GetTypeParameter(
         GenericReflection* generic,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionGeneric_GetValueParameterCount(
+    public static partial uint spReflectionGeneric_GetValueParameterCount(
         GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflectionGeneric_GetValueParameter(
+    public static partial VariableReflection* spReflectionGeneric_GetValueParameter(
         GenericReflection* generic,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionGeneric_GetTypeParameterConstraintCount(
+    public static partial uint spReflectionGeneric_GetTypeParameterConstraintCount(
         GenericReflection* generic,
         VariableReflection* typeParam);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionGeneric_GetTypeParameterConstraintType(
+    public static partial TypeReflection* spReflectionGeneric_GetTypeParameterConstraintType(
         GenericReflection* generic,
         VariableReflection* typeParam,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial DeclKind spReflectionGeneric_GetInnerKind(GenericReflection* generic);
+    public static partial DeclKind spReflectionGeneric_GetInnerKind(GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial DeclReflection* spReflectionGeneric_GetInnerDecl(
+    public static partial DeclReflection* spReflectionGeneric_GetInnerDecl(
         GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial GenericReflection* spReflectionGeneric_GetOuterGenericContainer(
+    public static partial GenericReflection* spReflectionGeneric_GetOuterGenericContainer(
         GenericReflection* generic);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionGeneric_GetConcreteType(
+    public static partial TypeReflection* spReflectionGeneric_GetConcreteType(
         GenericReflection* generic,
         VariableReflection* typeParam);
 
     [LibraryImport(LibName)]
-    public static unsafe partial long spReflectionGeneric_GetConcreteIntVal(
+    public static partial long spReflectionGeneric_GetConcreteIntVal(
         GenericReflection* generic,
         VariableReflection* valueParam);
 
     [LibraryImport(LibName)]
-    public static unsafe partial GenericReflection* spReflectionGeneric_applySpecializations(
+    public static partial GenericReflection* spReflectionGeneric_applySpecializations(
         GenericReflection* currGeneric,
         GenericReflection* generic);
 
@@ -567,170 +567,170 @@ point *or* at the global scope of a stage-specific GLSL code file (e.g.,
 an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
 */
     [LibraryImport(LibName)]
-    public static unsafe partial ShaderStage spReflectionVariableLayout_getStage(VariableLayoutReflection* var);
+    public static partial ShaderStage spReflectionVariableLayout_getStage(VariableLayoutReflection* var);
 
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionVariableLayout_getPendingDataLayout(
+    public static partial VariableLayoutReflection* spReflectionVariableLayout_getPendingDataLayout(
         VariableLayoutReflection* var);
 
     // Shader Parameter Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionParameter_GetBindingIndex(VariableLayoutReflection* parameter);
+    public static partial uint spReflectionParameter_GetBindingIndex(VariableLayoutReflection* parameter);
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionParameter_GetBindingSpace(VariableLayoutReflection* parameter);
+    public static partial uint spReflectionParameter_GetBindingSpace(VariableLayoutReflection* parameter);
 
     // Entry Point Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionEntryPoint_getName(EntryPointReflection* entryPoint);
+    public static partial ConstU8Str spReflectionEntryPoint_getName(EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionEntryPoint_getNameOverride(
+    public static partial ConstU8Str spReflectionEntryPoint_getNameOverride(
         EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial FunctionReflection* spReflectionEntryPoint_getFunction(
+    public static partial FunctionReflection* spReflectionEntryPoint_getFunction(
         EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionEntryPoint_getParameterCount(
+    public static partial uint spReflectionEntryPoint_getParameterCount(
         EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionEntryPoint_getParameterByIndex(
+    public static partial VariableLayoutReflection* spReflectionEntryPoint_getParameterByIndex(
         EntryPointReflection* entryPoint,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ShaderStage spReflectionEntryPoint_getStage(EntryPointReflection* entryPoint);
+    public static partial ShaderStage spReflectionEntryPoint_getStage(EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial void spReflectionEntryPoint_getComputeThreadGroupSize(
+    public static partial void spReflectionEntryPoint_getComputeThreadGroupSize(
         EntryPointReflection* entryPoint,
         SlangUInt axisCount,
         SlangUInt* outSizeAlongAxis);
 
     [LibraryImport(LibName)]
-    public static unsafe partial void spReflectionEntryPoint_getComputeWaveSize(
+    public static partial void spReflectionEntryPoint_getComputeWaveSize(
         EntryPointReflection* entryPoint,
         out SlangUInt outWaveSize);
 
     [LibraryImport(LibName)]
-    public static unsafe partial int spReflectionEntryPoint_usesAnySampleRateInput(
+    public static partial int spReflectionEntryPoint_usesAnySampleRateInput(
         EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionEntryPoint_getVarLayout(
+    public static partial VariableLayoutReflection* spReflectionEntryPoint_getVarLayout(
         EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflectionEntryPoint_getResultVarLayout(
+    public static partial VariableLayoutReflection* spReflectionEntryPoint_getResultVarLayout(
         EntryPointReflection* entryPoint);
 
     [LibraryImport(LibName)]
-    public static unsafe partial int spReflectionEntryPoint_hasDefaultConstantBuffer(
+    public static partial int spReflectionEntryPoint_hasDefaultConstantBuffer(
         EntryPointReflection* entryPoint);
 
     // TypeParameterReflection
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflectionTypeParameter_GetName(
+    public static partial ConstU8Str spReflectionTypeParameter_GetName(
         TypeParameterReflection* typeParam);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionTypeParameter_GetIndex(TypeParameterReflection* typeParam);
+    public static partial uint spReflectionTypeParameter_GetIndex(TypeParameterReflection* typeParam);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflectionTypeParameter_GetConstraintCount(
+    public static partial uint spReflectionTypeParameter_GetConstraintCount(
         TypeParameterReflection* typeParam);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflectionTypeParameter_GetConstraintByIndex(
+    public static partial TypeReflection* spReflectionTypeParameter_GetConstraintByIndex(
         TypeParameterReflection* typeParam,
         uint index);
 
     // Shader Reflection
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangResult spReflection_ToJson(
+    public static partial SlangResult spReflection_ToJson(
         ShaderReflection* reflection,
         void* request,
         out ISlangBlob* outBlob);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflection_GetParameterCount(ShaderReflection* reflection);
+    public static partial uint spReflection_GetParameterCount(ShaderReflection* reflection);
 
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflection_GetParameterByIndex(
+    public static partial VariableLayoutReflection* spReflection_GetParameterByIndex(
         ShaderReflection* reflection,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial uint spReflection_GetTypeParameterCount(ShaderReflection* reflection);
+    public static partial uint spReflection_GetTypeParameterCount(ShaderReflection* reflection);
 
     [LibraryImport(LibName)]
-    public static unsafe partial ISession* spReflection_GetSession(ShaderReflection* reflection);
+    public static partial ISession* spReflection_GetSession(ShaderReflection* reflection);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeParameterReflection* spReflection_GetTypeParameterByIndex(
+    public static partial TypeParameterReflection* spReflection_GetTypeParameterByIndex(
         ShaderReflection* reflection,
         uint index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeParameterReflection* spReflection_FindTypeParameter(
+    public static partial TypeParameterReflection* spReflection_FindTypeParameter(
         ShaderReflection* reflection,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflection_FindTypeByName(
+    public static partial TypeReflection* spReflection_FindTypeByName(
         ShaderReflection* reflection,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeLayoutReflection* spReflection_GetTypeLayout(
+    public static partial TypeLayoutReflection* spReflection_GetTypeLayout(
         ShaderReflection* reflection,
         TypeReflection* reflectionType,
         LayoutRules rules);
 
     [LibraryImport(LibName)]
-    public static unsafe partial FunctionReflection* spReflection_FindFunctionByName(
+    public static partial FunctionReflection* spReflection_FindFunctionByName(
         ShaderReflection* reflection,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial FunctionReflection* spReflection_FindFunctionByNameInType(
-        ShaderReflection* reflection,
-        TypeReflection* reflType,
-        ConstU8Str name);
-
-    [LibraryImport(LibName)]
-    public static unsafe partial VariableReflection* spReflection_FindVarByNameInType(
+    public static partial FunctionReflection* spReflection_FindFunctionByNameInType(
         ShaderReflection* reflection,
         TypeReflection* reflType,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangUInt spReflection_getEntryPointCount(ShaderReflection* reflection);
+    public static partial VariableReflection* spReflection_FindVarByNameInType(
+        ShaderReflection* reflection,
+        TypeReflection* reflType,
+        ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial EntryPointReflection* spReflection_getEntryPointByIndex(
+    public static partial SlangUInt spReflection_getEntryPointCount(ShaderReflection* reflection);
+
+    [LibraryImport(LibName)]
+    public static partial EntryPointReflection* spReflection_getEntryPointByIndex(
         ShaderReflection* reflection,
         SlangUInt index);
 
     [LibraryImport(LibName)]
-    public static unsafe partial EntryPointReflection* spReflection_findEntryPointByName(
+    public static partial EntryPointReflection* spReflection_findEntryPointByName(
         ShaderReflection* reflection,
         ConstU8Str name);
 
     [LibraryImport(LibName)]
-    public static unsafe partial SlangUInt spReflection_getGlobalConstantBufferBinding(ShaderReflection* reflection);
+    public static partial SlangUInt spReflection_getGlobalConstantBufferBinding(ShaderReflection* reflection);
 
     [LibraryImport(LibName)]
-    public static unsafe partial nuint spReflection_getGlobalConstantBufferSize(ShaderReflection* reflection);
+    public static partial nuint spReflection_getGlobalConstantBufferSize(ShaderReflection* reflection);
 
     [LibraryImport(LibName)]
-    public static unsafe partial TypeReflection* spReflection_specializeType(
+    public static partial TypeReflection* spReflection_specializeType(
         ShaderReflection* reflection,
         TypeReflection* type,
         SlangInt specializationArgCount,
@@ -738,7 +738,7 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
         out ISlangBlob* outDiagnostics);
 
     [LibraryImport(LibName)]
-    public static unsafe partial GenericReflection* spReflection_specializeGeneric(
+    public static partial GenericReflection* spReflection_specializeGeneric(
         ShaderReflection* inProgramLayout,
         GenericReflection* generic,
         SlangInt argCount,
@@ -747,30 +747,30 @@ an `in` parameter in a GLSL `.vs` file belongs to the vertex stage).
         out ISlangBlob* outDiagnostics);
 
     [LibraryImport(LibName)]
-    public static unsafe partial CBool spReflection_isSubType(
+    public static partial CBool spReflection_isSubType(
         ShaderReflection* reflection,
         TypeReflection* subType,
         TypeReflection* superType);
 
     /// Get the number of hashed strings
     [LibraryImport(LibName)]
-    public static unsafe partial SlangUInt spReflection_getHashedStringCount(ShaderReflection* reflection);
+    public static partial SlangUInt spReflection_getHashedStringCount(ShaderReflection* reflection);
 
     /// Get a hashed string. The number of chars is written in outCount.
     /// The count does *NOT* including terminating 0. The returned string will be 0 terminated.
     [LibraryImport(LibName)]
-    public static unsafe partial ConstU8Str spReflection_getHashedString(
+    public static partial ConstU8Str spReflection_getHashedString(
         ShaderReflection* reflection,
         SlangUInt index,
         out nuint outCount);
 
     /// Get a type layout representing reflection information for the global-scope parameters.
     [LibraryImport(LibName)]
-    public static unsafe partial TypeLayoutReflection* spReflection_getGlobalParamsTypeLayout(
+    public static partial TypeLayoutReflection* spReflection_getGlobalParamsTypeLayout(
         ShaderReflection* reflection);
 
     /// Get a variable layout representing reflection information for the global-scope parameters.
     [LibraryImport(LibName)]
-    public static unsafe partial VariableLayoutReflection* spReflection_getGlobalParamsVarLayout(
+    public static partial VariableLayoutReflection* spReflection_getGlobalParamsVarLayout(
         ShaderReflection* reflection);
 }

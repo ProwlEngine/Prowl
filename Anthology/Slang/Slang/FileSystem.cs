@@ -27,9 +27,9 @@ internal sealed unsafe class FileSystem(IFileProvider provider) : ManagedComProx
 {
     public IFileProvider Provider = provider;
 
-    public unsafe void* CastAs(ref Guid guid) => null;
+    public void* CastAs(ref Guid guid) => null;
 
-    public unsafe SlangResult LoadFile(ConstU8Str path, out ISlangBlob* outBlob)
+    public SlangResult LoadFile(ConstU8Str path, out ISlangBlob* outBlob)
     {
         Memory<byte>? memory = Provider.LoadFile(path.String);
 

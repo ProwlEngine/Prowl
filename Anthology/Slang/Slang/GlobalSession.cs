@@ -29,7 +29,7 @@ public static unsafe class GlobalSession
 {
     internal static readonly IGlobalSession s_session = CreateSession();
 
-    private static unsafe IGlobalSession CreateSession()
+    private static IGlobalSession CreateSession()
     {
         GlobalSessionDescription description;
 
