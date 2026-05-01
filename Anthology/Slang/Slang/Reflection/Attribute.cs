@@ -15,7 +15,7 @@ namespace Prowl.Slang;
 /// Represents a user-defined attribute in a shader module, typically declared using [attribute] syntax.
 /// Provides access to attribute metadata and typed argument values.
 /// </summary>
-public unsafe struct Attribute
+public unsafe struct Attribute : IEquatable<Attribute>
 {
     internal ComponentType _component;
     internal Native.Attribute* _ptr;
@@ -92,29 +92,27 @@ public unsafe struct Attribute
 
 
     /// <inheritdoc/>
-    public static bool operator ==(Attribute a, Attribute b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(Attribute a, Attribute b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(Attribute a, Attribute b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(Attribute a, Attribute b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is Attribute attr)
-            return attr._ptr == _ptr;
+            return Equals(attr);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(Attribute other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

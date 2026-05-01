@@ -13,7 +13,7 @@ namespace Prowl.Slang;
 /// <summary>
 /// Provides reflection information for shader stage input/output variables defined in a shader source module.
 /// </summary>
-public unsafe struct VariableLayoutReflection
+public unsafe struct VariableLayoutReflection : IEquatable<VariableLayoutReflection>
 {
     internal ComponentType _component;
     internal Native.VariableLayoutReflection* _ptr;
@@ -142,29 +142,27 @@ public unsafe struct VariableLayoutReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(VariableLayoutReflection a, VariableLayoutReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(VariableLayoutReflection a, VariableLayoutReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(VariableLayoutReflection a, VariableLayoutReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(VariableLayoutReflection a, VariableLayoutReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is VariableLayoutReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(VariableLayoutReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

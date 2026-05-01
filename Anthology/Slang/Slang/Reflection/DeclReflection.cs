@@ -57,7 +57,7 @@ public enum DeclKind : uint
 /// Represents reflection information for a declaration in a shader module.
 /// Provides access to declaration metadata, relationships, and specialized type conversions.
 /// </summary>
-public unsafe struct DeclReflection
+public unsafe struct DeclReflection : IEquatable<DeclReflection>
 {
     internal ComponentType _component;
     internal Native.DeclReflection* _ptr;
@@ -183,29 +183,27 @@ public unsafe struct DeclReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(DeclReflection a, DeclReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(DeclReflection a, DeclReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(DeclReflection a, DeclReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(DeclReflection a, DeclReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is DeclReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(DeclReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

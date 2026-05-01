@@ -13,7 +13,7 @@ namespace Prowl.Slang;
 /// <summary>
 /// Provides reflection information for an entry point in a shader module.
 /// </summary>
-public unsafe struct EntryPointReflection
+public unsafe struct EntryPointReflection : IEquatable<EntryPointReflection>
 {
     internal ComponentType _component;
     internal Native.EntryPointReflection* _ptr;
@@ -124,29 +124,27 @@ public unsafe struct EntryPointReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(EntryPointReflection a, EntryPointReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(EntryPointReflection a, EntryPointReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(EntryPointReflection a, EntryPointReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(EntryPointReflection a, EntryPointReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is EntryPointReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(EntryPointReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

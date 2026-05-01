@@ -13,7 +13,7 @@ namespace Prowl.Slang;
 /// <summary>
 /// Represents reflection information for a generic declaration in a shader source module.
 /// </summary>
-public unsafe struct GenericReflection
+public unsafe struct GenericReflection : IEquatable<GenericReflection>
 {
     internal ComponentType _component;
     internal Native.GenericReflection* _ptr;
@@ -142,29 +142,27 @@ public unsafe struct GenericReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(GenericReflection a, GenericReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(GenericReflection a, GenericReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(GenericReflection a, GenericReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(GenericReflection a, GenericReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is GenericReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(GenericReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

@@ -17,7 +17,7 @@ namespace Prowl.Slang;
 /// This struct exposes detailed information about how types are laid out in memory within
 /// a compiled shader, including size, alignment, field information, and binding details.
 /// </summary>
-public unsafe struct TypeLayoutReflection
+public unsafe struct TypeLayoutReflection : IEquatable<TypeLayoutReflection>
 {
     internal ComponentType _component;
     internal Native.TypeLayoutReflection* _ptr;
@@ -441,29 +441,27 @@ public unsafe struct TypeLayoutReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(TypeLayoutReflection a, TypeLayoutReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(TypeLayoutReflection a, TypeLayoutReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(TypeLayoutReflection a, TypeLayoutReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(TypeLayoutReflection a, TypeLayoutReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is TypeLayoutReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(TypeLayoutReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

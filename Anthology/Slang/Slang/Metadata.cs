@@ -1,6 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Runtime.CompilerServices;
+
 using Prowl.Slang.Native;
 
 
@@ -10,7 +13,7 @@ namespace Prowl.Slang;
 /// <summary>
 /// Metadata for compilation targets.
 /// </summary>
-public unsafe class Metadata
+public class Metadata : IEquatable<Metadata>
 {
     internal IMetadata _metadata;
 
@@ -37,4 +40,27 @@ public unsafe class Metadata
 
         return outUsed;
     }
+
+
+    /// <inheritdoc/>
+    public bool Equals(Metadata? other)
+    {
+        if (other != null)
+            return Unsafe.As<NativeComProxy>(_metadata).Equals(Unsafe.As<NativeComProxy>(other._metadata));
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is Metadata other)
+            return Equals(other);
+
+        return false;
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (int)Unsafe.As<NativeComProxy>(_metadata).ComPtr;
 }

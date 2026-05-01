@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Runtime.CompilerServices;
 
 using Prowl.Slang.Native;
 
@@ -100,7 +101,7 @@ namespace Prowl.Slang;
 /// </item>
 /// </list>
 /// </summary>
-public unsafe class ComponentType
+public unsafe class ComponentType : IEquatable<ComponentType>
 {
     // Components depend on a Session instance, but sessions dont depend on components.
     // Keep a ref to the session to prevent its underlying native ptr from being disposed while this component still exists.
@@ -383,4 +384,27 @@ public unsafe class ComponentType
 
         return new Metadata(NativeComProxy.Create(metadataPtr));
     }
+
+
+    /// <inheritdoc/>
+    public bool Equals(ComponentType? other)
+    {
+        if (other != null)
+            return Unsafe.As<NativeComProxy>(_componentType).Equals(Unsafe.As<NativeComProxy>(other._componentType));
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is ComponentType other)
+            return Equals(other);
+
+        return false;
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (int)Unsafe.As<NativeComProxy>(_componentType).ComPtr;
 }

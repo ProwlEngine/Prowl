@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Runtime.CompilerServices;
 
 using Prowl.Slang.Native;
 
@@ -28,7 +29,7 @@ namespace Prowl.Slang;
 /// A module establishes a namespace for looking up types, functions, etc.
 /// </para>
 /// </summary>
-public unsafe class Module : ComponentType
+public unsafe class Module : ComponentType, IEquatable<Module>
 {
     internal IModule _module;
 
@@ -189,4 +190,27 @@ public unsafe class Module : ComponentType
 
         return NativeComProxy.Create(blobPtr).ReadBytes();
     }
+
+
+    /// <inheritdoc/>
+    public bool Equals(Module? other)
+    {
+        if (other != null)
+            return Unsafe.As<NativeComProxy>(_module).Equals(Unsafe.As<NativeComProxy>(other._module));
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is Module other)
+            return Equals(other);
+
+        return false;
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (int)Unsafe.As<NativeComProxy>(_module).ComPtr;
 }

@@ -16,7 +16,7 @@ namespace Prowl.Slang;
 /// Provides reflection information for variables defined in a shader source module.
 /// This struct acts as a managed wrapper around the native Slang variable reflection API.
 /// </summary>
-public unsafe struct VariableReflection
+public unsafe struct VariableReflection : IEquatable<VariableReflection>
 {
     internal ComponentType _component;
     internal Native.VariableReflection* _ptr;
@@ -122,29 +122,27 @@ public unsafe struct VariableReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(VariableReflection a, VariableReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(VariableReflection a, VariableReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(VariableReflection a, VariableReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(VariableReflection a, VariableReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is VariableReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(VariableReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

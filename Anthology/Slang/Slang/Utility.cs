@@ -19,6 +19,13 @@ internal static class Utility
     }
 
 
+    public static IEnumerable<T> For<T>(int range, Func<int, T> getter)
+    {
+        for (int i = 0; i < range; i++)
+            yield return getter.Invoke(i);
+    }
+
+
     internal static unsafe void ValidatePtr<T>(T* sourcePtr, ISlangBlob* diagnosticsPtr, out DiagnosticInfo diagnostics)
     {
         diagnostics = default;

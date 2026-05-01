@@ -14,7 +14,7 @@ namespace Prowl.Slang;
 /// Represents reflection information for a type parameter in a generic shader type.
 /// Provides access to the parameter's constraints and metadata.
 /// </summary>
-public unsafe struct TypeParameterReflection
+public unsafe struct TypeParameterReflection : IEquatable<TypeParameterReflection>
 {
     internal ComponentType _component;
     internal Native.TypeParameterReflection* _ptr;
@@ -62,29 +62,27 @@ public unsafe struct TypeParameterReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(TypeParameterReflection a, TypeParameterReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(TypeParameterReflection a, TypeParameterReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(TypeParameterReflection a, TypeParameterReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(TypeParameterReflection a, TypeParameterReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is TypeParameterReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(TypeParameterReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

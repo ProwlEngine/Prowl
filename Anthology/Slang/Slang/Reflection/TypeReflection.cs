@@ -19,7 +19,7 @@ namespace Prowl.Slang;
 /// resource information, and attributes.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct TypeReflection
+public unsafe struct TypeReflection : IEquatable<TypeReflection>
 {
     internal ComponentType _component;
     internal Native.TypeReflection* _ptr;
@@ -224,29 +224,27 @@ public unsafe struct TypeReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(TypeReflection a, TypeReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(TypeReflection a, TypeReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(TypeReflection a, TypeReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(TypeReflection a, TypeReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is TypeReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(TypeReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }

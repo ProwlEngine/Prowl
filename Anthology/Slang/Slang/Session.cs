@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Slang.Native;
 
@@ -43,7 +45,7 @@ namespace Prowl.Slang;
 /// and loaded code should use multiple sessions.
 /// </para>
 /// </summary>
-public unsafe class Session
+public unsafe class Session : IEquatable<Session>
 {
     internal ISession _session;
 
@@ -311,6 +313,12 @@ public unsafe class Session
 
 
     /// <summary>
+    /// Enumerates all loaded modules
+    /// </summary>
+    public IEnumerable<Module> LoadedModules => Utility.For(GetLoadedModuleCount(), GetLoadedModule);
+
+
+    /// <summary>
     /// Gets the numer of loaded modules in this session.
     /// </summary>
     public int GetLoadedModuleCount()
@@ -365,4 +373,27 @@ public unsafe class Session
 
         return new Module(NativeComProxy.Create(modulePtr, false), this);
     }
+
+
+    /// <inheritdoc/>
+    public bool Equals(Session? other)
+    {
+        if (other != null)
+            return Unsafe.As<NativeComProxy>(_session).Equals(Unsafe.As<NativeComProxy>(other._session));
+
+        return false;
+    }
+
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+    {
+        if (obj is Session other)
+            return Equals(other);
+
+        return false;
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (int)Unsafe.As<NativeComProxy>(_session).ComPtr;
 }

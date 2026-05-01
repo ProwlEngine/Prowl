@@ -16,7 +16,7 @@ namespace Prowl.Slang;
 /// Represents reflection information for a function defined in a shader source module.
 /// Provides access to function metadata including name, parameters, return type, and attributes.
 /// </summary>
-public unsafe struct FunctionReflection
+public unsafe struct FunctionReflection : IEquatable<FunctionReflection>
 {
     internal ComponentType _component;
     internal Native.FunctionReflection* _ptr;
@@ -158,29 +158,27 @@ public unsafe struct FunctionReflection
 
 
     /// <inheritdoc/>
-    public static bool operator ==(FunctionReflection a, FunctionReflection b)
-    {
-        return a._ptr == b._ptr;
-    }
+    public static bool operator ==(FunctionReflection a, FunctionReflection b) => a.Equals(b);
 
 
     /// <inheritdoc/>
-    public static bool operator !=(FunctionReflection a, FunctionReflection b)
-    {
-        return a._ptr != b._ptr;
-    }
+    public static bool operator !=(FunctionReflection a, FunctionReflection b) => !a.Equals(b);
 
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj)
+    public override readonly bool Equals(object? obj)
     {
         if (obj is FunctionReflection other)
-            return other._ptr == _ptr;
+            return Equals(other);
 
         return false;
     }
 
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((nint)_ptr).ToInt32();
+    public readonly bool Equals(FunctionReflection other) => _ptr == other._ptr;
+
+
+    /// <inheritdoc/>
+    public override readonly int GetHashCode() => ((nint)_ptr).ToInt32();
 }
