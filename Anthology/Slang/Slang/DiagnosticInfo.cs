@@ -49,7 +49,7 @@ public struct Diagnostic : IEquatable<Diagnostic>
 
 
     /// <inheritdoc/>
-    public override bool Equals([NotNullWhen(true)] object? obj)
+    public override readonly bool Equals([NotNullWhen(true)] object? obj)
     {
         if (obj is Diagnostic other)
             return Equals(other);
