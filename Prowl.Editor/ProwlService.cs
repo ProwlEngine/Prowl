@@ -17,8 +17,10 @@ public static class ProwlService
 
     public static async Task Initialize()
     {
-        var url = "https://skkeeysnpyaevansnnah.supabase.co";
-        var key = "sb_publishable_0A-aISx-Mcyyax8l3reBog_rIh1uaNT";
+        bool isProduction = true; // Set to false to use local dev Supabase instance
+
+        var url = isProduction? "https://skkeeysnpyaevansnnah.supabase.co" : "http://127.0.0.1:54321";
+        var key = isProduction? "sb_publishable_0A-aISx-Mcyyax8l3reBog_rIh1uaNT" : "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
 
         var options = new SupabaseOptions { AutoConnectRealtime = false };
         s_instance = new Client(url, key, options);
