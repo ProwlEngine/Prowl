@@ -352,6 +352,12 @@ public class GraphEditor
         if (Input.GetMouseButton(2))
             _view.PanBy(paper.PointerDelta);
 
+        // Pan for trackpads: shift+two-finger-drag also pans the canvas. Like middle-mouse pan, polled manually
+        // because Paper's drag events are left-mouse only and trackpad drags don't trigger mouse button events at all. 
+        // Only pan when the shift key is held to avoid interfering with regular one-finger trackpad scrolling.
+        if (Input.IsShiftPressed && Input.GetMouseButton(0))
+            _view.PanBy(paper.PointerDelta);
+
         // Cut-line gesture: alt+right-drag draws a slash through wires. Like the
         // middle-mouse pan above, polled manually because Paper drag events are
         // left-only. Right-click without drag still opens the context menu (handled
