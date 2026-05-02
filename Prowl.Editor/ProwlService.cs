@@ -17,12 +17,8 @@ public static class ProwlService
 
     public static async Task Initialize()
     {
-        var url = Environment.GetEnvironmentVariable("SUPABASE_URL")
-               ?? Environment.GetEnvironmentVariable("PUBLIC_SUPABASE_URL")
-               ?? "http://127.0.0.1:54321";
-        var key = Environment.GetEnvironmentVariable("SUPABASE_KEY")
-               ?? Environment.GetEnvironmentVariable("PUBLIC_SUPABASE_PUBLISHABLE_KEY")
-               ?? "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
+        var url = "https://skkeeysnpyaevansnnah.supabase.co";
+        var key = "sb_publishable_0A-aISx-Mcyyax8l3reBog_rIh1uaNT";
 
         var options = new SupabaseOptions { AutoConnectRealtime = false };
         s_instance = new Client(url, key, options);
