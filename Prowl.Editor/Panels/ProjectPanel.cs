@@ -902,7 +902,7 @@ public class ProjectPanel : DockPanel
             builder.Item("Show in Explorer", () =>
             {
                 string absPath = Path.Combine(Project.Current!.AssetsPath, folder);
-                ReferenceOpenerService.OpenFileSystemPath(absPath);
+                EditorUtils.OpenFileSystemPath(absPath);
             }, icon: EditorIcons.FolderOpen);
 
             builder.Separator();
@@ -1022,7 +1022,7 @@ public class ProjectPanel : DockPanel
     private static void ShowInExplorer(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        ReferenceOpenerService.OpenFileSystemPath(absPath);
+        EditorUtils.OpenFileSystemPath(absPath);
     }
 
     // ================================================================
