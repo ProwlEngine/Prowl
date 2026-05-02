@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
@@ -45,6 +48,8 @@ public class MarketplacePanel : DockPanel
     private string _importTargetFolder = "";
     private readonly Dictionary<string, bool> _folderOpenState = [];
     private bool _isImporting;
+    private float _importProgress;
+    private string _importStatusText = "";
 
     private static readonly (string key, string label)[] s_categories =
     [
@@ -424,6 +429,8 @@ public class MarketplacePanel : DockPanel
         _importVersion = ver;
         _importTargetFolder = "";
         _isImporting = false;
+        _importProgress = 0f;
+        _importStatusText = "";
         _folderOpenState.Clear();
 
         ModalDialog.Show(
@@ -581,12 +588,31 @@ public class MarketplacePanel : DockPanel
 
                 if (_isImporting)
                 {
-                    paper.Box("imp_r_progress")
-                        .Height(20f)
-                        .Text($"{EditorIcons.ArrowsRotate}  Importing...", font)
-                        .TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize)
+                    paper.Box("imp_r_status")
+                        .Height(16f)
+                        .Text(_importStatusText, font)
+                        .TextColor(EditorTheme.Ink300)
+                        .FontSize(11f)
                         .Alignment(TextAlignment.MiddleLeft);
+
+                    // Progress bar
+                    float captured = _importProgress;
+                    paper.Box("imp_r_track")
+                        .Height(6f)
+                        .BackgroundColor(EditorTheme.Neutral500)
+                        .Rounded(3f)
+                        .OnPostLayout((handle, _) =>
+                        {
+                            if (captured <= 0f) return;
+                            paper.Draw(ref handle, (canvas, r) =>
+                            {
+                                float fillW = (float)r.Size.X * captured;
+                                canvas.RoundedRectFilled(
+                                    (float)r.Min.X, (float)r.Min.Y,
+                                    fillW, (float)r.Size.Y,
+                                    3f, EditorTheme.Purple400);
+                            });
+                        });
                 }
             }
         }
@@ -668,36 +694,43 @@ public class MarketplacePanel : DockPanel
 
     private async Task DoImportAsync()
     {
-        if (_importPackage == null || _importVersion == null) return;
+        if (_importPackage == null || _importVersion == null || Project.Current == null) return;
 
         _isImporting = true;
+        _importStatusText = "Downloading...";
+
+        string tempFile = Path.Combine(Path.GetTempPath(), $"prowl_pkg_{Guid.NewGuid():N}.zip");
+
         try
         {
-            ProwlPackage pkg = _importPackage;
-            PackageVersion ver = _importVersion;
-            string targetFolder = _importTargetFolder;
+            string? downloadUrl = ProwlService.GetPackagePublicUrl(_importPackage.Id, _importVersion.FilePath);
+            if (string.IsNullOrEmpty(downloadUrl))
+                throw new Exception("Could not resolve package download URL.");
 
-            // Resolve download URL (stub: would be used to download the zip)
-            string? downloadUrl = ProwlService.GetPackagePublicUrl(pkg.Id, ver.FilePath);
+            string destPath = string.IsNullOrEmpty(_importTargetFolder)
+                ? Project.Current.AssetsPath
+                : Path.Combine(Project.Current.AssetsPath, _importTargetFolder);
 
-            // Stub: simulate download + extract
-            await Task.Delay(200);
+            using (var http = new HttpClient())
+            {
+                byte[] bytes = await http.GetByteArrayAsync(downloadUrl);
+                File.WriteAllBytes(tempFile, bytes);
+            }
 
-            string destination = string.IsNullOrEmpty(targetFolder)
-                ? "Assets"
-                : $"Assets/{targetFolder}";
+            _importStatusText = "Extracting...";
+            ZipFile.ExtractToDirectory(tempFile, destPath, overwriteFiles: true);
 
-            Runtime.Debug.LogSuccess(
-                $"[Marketplace] Imported '{pkg.Name}' v{ver.Version} → {destination}  |  {downloadUrl}");
-
+            Runtime.Debug.LogSuccess($"[Marketplace] Imported '{_importPackage.Name}' v{_importVersion.Version} → {destPath}");
             ModalDialog.Close();
         }
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"[Marketplace] Import failed: {ex.Message}");
+            _importStatusText = $"Error: {ex.Message}";
         }
         finally
         {
+            try { File.Delete(tempFile); } catch { }
             _isImporting = false;
         }
     }
