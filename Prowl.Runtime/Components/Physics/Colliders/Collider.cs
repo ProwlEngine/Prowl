@@ -100,17 +100,24 @@ public abstract class Collider : MonoBehaviour
         {
             // Only try to remove shapes if the body is still registered with the physics world
             // (If the rigidbody was already removed, the shapes are already gone)
-            try
+            foreach (RigidBodyShape shape in _attachedShapes)
             {
-                foreach (var shape in _attachedShapes)
+                try
                 {
-                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Update);
+                    // Use Preserve: Update mode calls SetMassInertia() after each removal, which
+                    // iterates remaining shapes — this throws NotSupportedException for TriangleShape.
+                    // Mass/inertia is recalculated in full by RegisterShapes after re-attachment.
+                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
                 }
-            }
-            catch (System.InvalidOperationException)
-            {
-                // Shape was already removed (e.g., when rigidbody was removed from world)
-                // This is fine, just continue
+                catch (ArgumentException)
+                {
+                    // Shape was already removed from this body (e.g., UpdateShapes pre-cleared the
+                    // body with RemoveShapes before calling Detach). Safe to ignore.
+                }
+                catch (InvalidOperationException)
+                {
+                    // Body was removed from the physics world; its shapes are already gone.
+                }
             }
         }
 
@@ -139,64 +146,32 @@ public abstract class Collider : MonoBehaviour
             _attachedShapes = CreateWorldTransformedShapes();
         }
 
-        bool anyMassless = false;
         if (_attachedShapes != null)
         {
-            foreach (var shape in _attachedShapes)
+            foreach (RigidBodyShape shape in _attachedShapes)
             {
-                // Mesh-collider triangles (and a TransformedShape wrapping them) have no volume
-                // and throw NotSupportedException from CalculateMassInertia. Add them with
-                // Preserve so AddShape doesn't try to compute inertia per-shape, and remember
-                // we have at least one massless shape so the recalc below skips the per-shape
-                // path entirely.
-                bool massless = IsMassless(shape);
-                anyMassless |= massless;
-
-                _attachedBody.AddShape(shape, massless
-                    ? Jitter2.Dynamics.MassInertiaUpdateMode.Preserve
-                    : Jitter2.Dynamics.MassInertiaUpdateMode.Update);
+                // Always use Preserve: per-shape Update mode calls SetMassInertia() after every
+                // addition, which iterates ALL attached shapes. Any TriangleShape in that set
+                // throws NotSupportedException. We set mass once below, after all shapes are added.
+                _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
             }
         }
 
         if (_attachedRigidbody3D != null)
         {
-            if (anyMassless)
+            // SetMassInertia(mass) sums inertia from all shapes, then scales to the requested mass.
+            // TriangleShape has no volume so it throws NotSupportedException; fall back to an
+            // identity tensor so the body still gets a finite, usable mass.
+            try
             {
-                // Triangle meshes are surface-only — no volume, no inferable inertia. Identity
-                // tensor is the safest fallback; user is expected to mark the body Static or
-                // Kinematic when using a non-convex MeshCollider on a dynamic body.
+                _attachedBody.SetMassInertia(_attachedRigidbody3D.Mass);
+            }
+            catch (NotSupportedException)
+            {
                 _attachedBody.SetMassInertia(JMatrix.Identity, _attachedRigidbody3D.Mass);
             }
-            else
-            {
-                // Set mass to itself to force inertia tensor recalculation
-                try
-                {
-                    _attachedRigidbody3D.Mass = _attachedRigidbody3D.Mass;
-                }
-                catch (InvalidOperationException)
-                {
-                    // This can occur if the Shapes provided are 2D and mass cannot be calculated from them
-                    _attachedBody.SetMassInertia(JMatrix.Identity, 1f);
-                }
-            }
         }
-        else
-        {
-            // Static bodies dont really need mass or inertia
-        }
-    }
-
-    /// <summary>
-    /// True if the shape (or the shape wrapped inside a <see cref="TransformedShape"/>) cannot
-    /// produce mass / inertia properties. Currently <see cref="TriangleShape"/> is the only
-    /// such built-in shape.
-    /// </summary>
-    private static bool IsMassless(RigidBodyShape shape)
-    {
-        if (shape is TriangleShape) return true;
-        if (shape is TransformedShape ts && ts.OriginalShape is TriangleShape) return true;
-        return false;
+        // Static bodies don't need mass or inertia.
     }
 
     /// <summary>

@@ -439,7 +439,10 @@ public sealed class Rigidbody3D : MonoBehaviour
             InstanceID = this.InstanceID,
             Layer = GameObject.LayerIndex,
         };
-        rb.SetMassInertia(mass);
+        // Mass/inertia is set by RegisterShapes after colliders attach their shapes.
+        // Calling rb.SetMassInertia(mass) here would iterate all currently-attached shapes,
+        // which throws for TriangleShape (no volume). The fallback in UpdateShapes handles
+        // the no-collider case.
     }
 
     internal void UpdateShapes(RigidBody rb)
@@ -456,6 +459,11 @@ public sealed class Rigidbody3D : MonoBehaviour
             // Then try to attach it to this rigidbody
             collider.TryAttachTo(this);
         }
+
+        // If no colliders provided shapes, RegisterShapes was never called and mass was never set.
+        // Safe to call here because the body has no shapes attached.
+        if (rb.Shapes.Count == 0)
+            rb.SetMassInertia(mass);
     }
 
     internal void UpdateTransform(RigidBody rb)
