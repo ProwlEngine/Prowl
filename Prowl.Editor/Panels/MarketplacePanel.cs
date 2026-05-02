@@ -48,7 +48,6 @@ public class MarketplacePanel : DockPanel
     private string _importTargetFolder = "";
     private readonly Dictionary<string, bool> _folderOpenState = [];
     private bool _isImporting;
-    private float _importProgress;
     private string _importStatusText = "";
 
     private static readonly (string key, string label)[] s_categories =
@@ -429,7 +428,6 @@ public class MarketplacePanel : DockPanel
         _importVersion = ver;
         _importTargetFolder = "";
         _isImporting = false;
-        _importProgress = 0f;
         _importStatusText = "";
         _folderOpenState.Clear();
 
@@ -594,25 +592,6 @@ public class MarketplacePanel : DockPanel
                         .TextColor(EditorTheme.Ink300)
                         .FontSize(11f)
                         .Alignment(TextAlignment.MiddleLeft);
-
-                    // Progress bar
-                    float captured = _importProgress;
-                    paper.Box("imp_r_track")
-                        .Height(6f)
-                        .BackgroundColor(EditorTheme.Neutral500)
-                        .Rounded(3f)
-                        .OnPostLayout((handle, _) =>
-                        {
-                            if (captured <= 0f) return;
-                            paper.Draw(ref handle, (canvas, r) =>
-                            {
-                                float fillW = (float)r.Size.X * captured;
-                                canvas.RoundedRectFilled(
-                                    (float)r.Min.X, (float)r.Min.Y,
-                                    fillW, (float)r.Size.Y,
-                                    3f, EditorTheme.Purple400);
-                            });
-                        });
                 }
             }
         }
@@ -632,7 +611,7 @@ public class MarketplacePanel : DockPanel
         try
         {
             subDirs = Directory.GetDirectories(absolutePath)
-                .Where(d => !Path.GetFileName(d).StartsWith('.'))
+                .Where(d => !Path.GetFileName(d).StartsWith('.') && Path.GetFileName(d) != "__MACOSX")
                 .OrderBy(d => d)
                 .ToArray();
         }
@@ -719,6 +698,11 @@ public class MarketplacePanel : DockPanel
 
             _importStatusText = "Extracting...";
             ZipFile.ExtractToDirectory(tempFile, destPath, overwriteFiles: true);
+
+            // macOS zips bake in a __MACOSX metadata folder — remove it
+            string macosxDir = Path.Combine(destPath, "__MACOSX");
+            if (Directory.Exists(macosxDir))
+                Directory.Delete(macosxDir, recursive: true);
 
             Runtime.Debug.LogSuccess($"[Marketplace] Imported '{_importPackage.Name}' v{_importVersion.Version} → {destPath}");
             ModalDialog.Close();
