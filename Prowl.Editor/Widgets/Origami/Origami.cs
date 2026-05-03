@@ -223,6 +223,23 @@ public static class Origami
         where T : struct, System.Numerics.INumber<T>
         => new NumericFieldBuilder<T>(paper, id, value, setter, Current);
 
+    // ── Button factories ─────────────────────────────────────────
+
+    /// <summary>Begin building a button. Construct the click handler at the call site.</summary>
+    public static ButtonBuilder Button(Paper paper, string id, string label, Action? onClick = null)
+        => new ButtonBuilder(paper, id, label, onClick, Current);
+
+    /// <summary>Square icon-only button. Sugar for <c>Button(...).IconOnly().LeadingIcon(glyph)</c>.</summary>
+    public static ButtonBuilder IconButton(Paper paper, string id, string glyph, Action? onClick = null)
+        => new ButtonBuilder(paper, id, string.Empty, onClick, Current).IconOnly().LeadingIcon(glyph);
+
+    /// <summary>
+    /// Begin building a segmented control. Caller supplies the current selected index and a setter;
+    /// chain <see cref="ButtonGroupBuilder.Item"/> for each segment.
+    /// </summary>
+    public static ButtonGroupBuilder ButtonGroup(Paper paper, string id, int selectedIndex, Action<int> setter)
+        => new ButtonGroupBuilder(paper, id, selectedIndex, setter, Current);
+
     // ── Slider factories ─────────────────────────────────────────
 
     /// <summary>

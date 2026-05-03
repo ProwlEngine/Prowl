@@ -165,6 +165,19 @@ public class OrigamiPlaygroundPanel : DockPanel
     private float _rsNoSwapLow = 30f, _rsNoSwapHigh = 70f;
     private float _rsTickLow = 25f, _rsTickHigh = 75f;
 
+    // ── Button state ──────────────────────────────────────────
+    private int _btnClickCount;
+    private int _btnRightClickCount;
+    private int _btnDoubleClickCount;
+    private bool _btnLoading;
+    private bool _btnPulse;
+    private bool _btnShadow = true;
+    private bool _btnDisabled;
+    private int _bgViewMode;        // ButtonGroup: 0/1/2
+    private int _bgAlign;           // ButtonGroup w/ icons
+    private int _bgSize = 1;        // ButtonGroup sizes
+    private int _bgVariant = 1;     // ButtonGroup variants demo
+
     // ── NumericField state ────────────────────────────────────
     private float _numFloat = 1.5f;
     private double _numDouble = 3.14159265;
@@ -291,6 +304,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_SliderExtras(paper);
                 Section_SliderVertical(paper);
                 Section_RangeSliderShowcase(paper);
+                Section_Buttons(paper);
                 Section_State(paper);
             });
     }
@@ -1321,6 +1335,376 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
+    // ── Button showcase ────────────────────────────────────────
+
+    private void Section_Buttons(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_buttons", "Buttons").Body(() =>
+        {
+            using (paper.Column("op_btn_root").Height(UnitValue.Auto).RowBetween(4).Enter())
+            {
+                ButtonsSection_Basics(paper);
+                ButtonsSection_Variants(paper);
+                ButtonsSection_Styles(paper);
+                ButtonsSection_Sizes(paper);
+                ButtonsSection_Width(paper);
+                ButtonsSection_Icons(paper);
+                ButtonsSection_States(paper);
+                ButtonsSection_ClickKinds(paper);
+                ButtonsSection_VisualExtras(paper);
+                ButtonsSection_Custom(paper);
+                ButtonsSection_Group(paper);
+            }
+        });
+    }
+
+    private void ButtonsSection_Basics(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_basics", "Basics").Body(() =>
+        {
+            using (paper.Column("op_btn_b_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "btn_b_default", $"Default click counter ({_btnClickCount})", () =>
+                    Origami.Button(paper, "op_btn_b_def", "Click me", () => _btnClickCount++).Show());
+
+                LabelRow(paper, "btn_b_primary", "Primary CTA", () =>
+                    Origami.Button(paper, "op_btn_b_pri", "Save Changes", () => _btnClickCount++).Primary().Show());
+
+                LabelRow(paper, "btn_b_chained", "Chained variant + style", () =>
+                    Origami.Button(paper, "op_btn_b_chain", "Confirm", () => _btnClickCount++)
+                        .Success().Filled().Show());
+            }
+        });
+    }
+
+    private void ButtonsSection_Variants(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_var", "Variants").Body(() =>
+        {
+            using (paper.Column("op_btn_v_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "v_def", "Default", () =>
+                    Origami.Button(paper, "op_btn_v_def", "Default", () => _btnClickCount++).Show());
+                LabelRow(paper, "v_pri", "Primary", () =>
+                    Origami.Button(paper, "op_btn_v_pri", "Primary", () => _btnClickCount++).Primary().Show());
+                LabelRow(paper, "v_suc", "Success", () =>
+                    Origami.Button(paper, "op_btn_v_suc", "Success", () => _btnClickCount++).Success().Show());
+                LabelRow(paper, "v_war", "Warning", () =>
+                    Origami.Button(paper, "op_btn_v_war", "Warning", () => _btnClickCount++).Warning().Show());
+                LabelRow(paper, "v_dan", "Danger", () =>
+                    Origami.Button(paper, "op_btn_v_dan", "Delete", () => _btnClickCount++).Danger().Show());
+                LabelRow(paper, "v_inf", "Info", () =>
+                    Origami.Button(paper, "op_btn_v_inf", "Learn more", () => _btnClickCount++).Info().Show());
+                LabelRow(paper, "v_sub", "Subtle", () =>
+                    Origami.Button(paper, "op_btn_v_sub", "Subtle", () => _btnClickCount++).Subtle().Show());
+            }
+        });
+    }
+
+    private void ButtonsSection_Styles(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_styles", "Styles").Body(() =>
+        {
+            using (paper.Column("op_btn_st_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "st_filled", "Filled (default)", () =>
+                    Origami.Button(paper, "op_btn_st_fil", "Filled", () => _btnClickCount++).Primary().Filled().Show());
+
+                LabelRow(paper, "st_outline", "Outline", () =>
+                    Origami.Button(paper, "op_btn_st_out", "Outline", () => _btnClickCount++).Primary().Outline().Show());
+
+                LabelRow(paper, "st_ghost", "Ghost", () =>
+                    Origami.Button(paper, "op_btn_st_gho", "Ghost", () => _btnClickCount++).Primary().Ghost().Show());
+
+                LabelRow(paper, "st_soft", "Soft", () =>
+                    Origami.Button(paper, "op_btn_st_sof", "Soft", () => _btnClickCount++).Primary().Soft().Show());
+
+                LabelRow(paper, "st_link", "Link", () =>
+                    Origami.Button(paper, "op_btn_st_lnk", "Open documentation", () => _btnClickCount++).Primary().Link().Show());
+
+                LabelRow(paper, "st_row_all", "Side-by-side (Danger)", () =>
+                {
+                    using (paper.Row("op_btn_st_row").Height(UnitValue.Auto).RowBetween(8).Enter())
+                    {
+                        Origami.Button(paper, "op_btn_st_row_f", "Filled", () => _btnClickCount++).Danger().Filled().Show();
+                        Origami.Button(paper, "op_btn_st_row_o", "Outline", () => _btnClickCount++).Danger().Outline().Show();
+                        Origami.Button(paper, "op_btn_st_row_g", "Ghost", () => _btnClickCount++).Danger().Ghost().Show();
+                        Origami.Button(paper, "op_btn_st_row_s", "Soft", () => _btnClickCount++).Danger().Soft().Show();
+                        Origami.Button(paper, "op_btn_st_row_l", "Link", () => _btnClickCount++).Danger().Link().Show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void ButtonsSection_Sizes(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_sz", "Sizes").Body(() =>
+        {
+            using (paper.Column("op_btn_sz_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "sz_sm", "Small", () =>
+                    Origami.Button(paper, "op_btn_sz_sm", "Compact", () => _btnClickCount++).Primary().Small().Show());
+                LabelRow(paper, "sz_md", "Medium (default)", () =>
+                    Origami.Button(paper, "op_btn_sz_md", "Standard", () => _btnClickCount++).Primary().Medium().Show());
+                LabelRow(paper, "sz_lg", "Large", () =>
+                    Origami.Button(paper, "op_btn_sz_lg", "Hero", () => _btnClickCount++).Primary().Large().Show());
+
+                LabelRow(paper, "sz_row_all", "Side-by-side", () =>
+                {
+                    using (paper.Row("op_btn_sz_row").Height(UnitValue.Auto).RowBetween(8).Enter())
+                    {
+                        Origami.Button(paper, "op_btn_sz_row_s", "S", () => _btnClickCount++).Primary().Small().Show();
+                        Origami.Button(paper, "op_btn_sz_row_m", "M", () => _btnClickCount++).Primary().Medium().Show();
+                        Origami.Button(paper, "op_btn_sz_row_l", "L", () => _btnClickCount++).Primary().Large().Show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void ButtonsSection_Width(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_w", "Width / Layout").Body(() =>
+        {
+            using (paper.Column("op_btn_w_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "w_fit", "FitContent (default)", () =>
+                    Origami.Button(paper, "op_btn_w_fit", "Hugs label", () => _btnClickCount++).Primary().FitContent().Show());
+
+                LabelRow(paper, "w_120", "Width(120)", () =>
+                    Origami.Button(paper, "op_btn_w_120", "Fixed", () => _btnClickCount++).Primary().Width(120f).Show());
+
+                LabelRow(paper, "w_full", "FullWidth", () =>
+                    Origami.Button(paper, "op_btn_w_full", "Stretch to row", () => _btnClickCount++).Primary().FullWidth().Show());
+
+                LabelRow(paper, "w_round", "Custom Rounding(12)", () =>
+                    Origami.Button(paper, "op_btn_w_round", "Pill", () => _btnClickCount++).Primary().Width(140f).Rounding(12).Show());
+            }
+        });
+    }
+
+    private void ButtonsSection_Icons(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_ic", "Icons").Body(() =>
+        {
+            using (paper.Column("op_btn_ic_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "ic_lead", "LeadingIcon", () =>
+                    Origami.Button(paper, "op_btn_ic_lead", "Save", () => _btnClickCount++)
+                        .Primary().LeadingIcon(EditorIcons.FloppyDisk).Show());
+
+                LabelRow(paper, "ic_trail", "TrailingIcon", () =>
+                    Origami.Button(paper, "op_btn_ic_trail", "Continue", () => _btnClickCount++)
+                        .Primary().TrailingIcon(EditorIcons.ArrowRight).Show());
+
+                LabelRow(paper, "ic_both", "Leading + Trailing", () =>
+                    Origami.Button(paper, "op_btn_ic_both", "Settings", () => _btnClickCount++)
+                        .Primary().LeadingIcon(EditorIcons.Gear).TrailingIcon(EditorIcons.ChevronDown).Show());
+
+                LabelRow(paper, "ic_only", "IconButton (square)", () =>
+                {
+                    using (paper.Row("op_btn_ic_only_row").Height(UnitValue.Auto).RowBetween(6).Enter())
+                    {
+                        Origami.IconButton(paper, "op_btn_ic_only_a", EditorIcons.Plus, () => _btnClickCount++).Primary().Show();
+                        Origami.IconButton(paper, "op_btn_ic_only_b", EditorIcons.Trash, () => _btnClickCount++).Danger().Show();
+                        Origami.IconButton(paper, "op_btn_ic_only_c", EditorIcons.Pencil, () => _btnClickCount++).Outline().Show();
+                        Origami.IconButton(paper, "op_btn_ic_only_d", EditorIcons.Gear, () => _btnClickCount++).Ghost().Show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void ButtonsSection_States(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_state", "States").Body(() =>
+        {
+            using (paper.Column("op_btn_state_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "st_disabled", $"Disabled (toggle below)", () =>
+                    Origami.Button(paper, "op_btn_st_dis", "Disabled when checked", () => _btnClickCount++)
+                        .Primary().Disabled(_btnDisabled).Show());
+
+                paper.Box("op_btn_st_dis_tog_row").Margin(0, 0, 0, 4).Height(EditorTheme.RowHeight);
+                LabelRow(paper, "st_dis_tog", "  Disable toggle", () =>
+                    Origami.Switch(paper, "op_btn_st_dis_tog", _btnDisabled, v => _btnDisabled = v).Show());
+
+                LabelRow(paper, "st_loading", "Loading", () =>
+                    Origami.Button(paper, "op_btn_st_load", "Importing assets", () => _btnClickCount++)
+                        .Primary().Loading(_btnLoading).LeadingIcon(EditorIcons.FloppyDisk).Show());
+                LabelRow(paper, "st_load_tog", "  Loading toggle", () =>
+                    Origami.Switch(paper, "op_btn_st_load_tog", _btnLoading, v => _btnLoading = v).Show());
+
+                LabelRow(paper, "st_tooltip", "Tooltip on hover", () =>
+                    Origami.Button(paper, "op_btn_st_tip", "Hover me", () => _btnClickCount++)
+                        .Primary().Tooltip("This is a contextual tooltip — fades in 16ms, lives on Layer.Topmost").Show());
+
+                LabelRow(paper, "st_autofocus", "AutoFocus on first frame", () =>
+                    Origami.Button(paper, "op_btn_st_af_dyn_" + (_btnClickCount % 5), "Re-render to focus", () => _btnClickCount++)
+                        .Primary().AutoFocus().Show());
+            }
+        });
+    }
+
+    private void ButtonsSection_ClickKinds(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_clicks", "Click kinds").Body(() =>
+        {
+            using (paper.Column("op_btn_cl_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "cl_basic", $"Click ({_btnClickCount})", () =>
+                    Origami.Button(paper, "op_btn_cl_b", "Click", () => _btnClickCount++).Primary().Show());
+
+                LabelRow(paper, "cl_right", $"OnRightClick ({_btnRightClickCount})", () =>
+                    Origami.Button(paper, "op_btn_cl_r", "Right-click me", () => _btnClickCount++)
+                        .Primary().OnRightClick(() => _btnRightClickCount++).Show());
+
+                LabelRow(paper, "cl_double", $"OnDoubleClick ({_btnDoubleClickCount})", () =>
+                    Origami.Button(paper, "op_btn_cl_d", "Double-click me", () => _btnClickCount++)
+                        .Primary().OnDoubleClick(() => _btnDoubleClickCount++).Show());
+
+                LabelRow(paper, "cl_all", "All three click handlers", () =>
+                    Origami.Button(paper, "op_btn_cl_all", "Click / Right / Double", () => _btnClickCount++)
+                        .Primary()
+                        .OnRightClick(() => _btnRightClickCount++)
+                        .OnDoubleClick(() => _btnDoubleClickCount++)
+                        .Show());
+            }
+        });
+    }
+
+    private void ButtonsSection_VisualExtras(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_vx", "Visual extras").Body(() =>
+        {
+            using (paper.Column("op_btn_vx_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "vx_shadow", "Shadow toggle", () =>
+                    Origami.Button(paper, "op_btn_vx_shd", "Has Shadow", () => _btnClickCount++)
+                        .Primary().Shadow(_btnShadow).Show());
+                LabelRow(paper, "vx_shadow_tog", "  Shadow toggle", () =>
+                    Origami.Switch(paper, "op_btn_vx_shd_tog", _btnShadow, v => _btnShadow = v).Show());
+
+                LabelRow(paper, "vx_pulse", "Pulse (CTA)", () =>
+                    Origami.Button(paper, "op_btn_vx_pul", "Subscribe", () => _btnClickCount++)
+                        .Primary().Pulse(_btnPulse).Show());
+                LabelRow(paper, "vx_pulse_tog", "  Pulse toggle", () =>
+                    Origami.Switch(paper, "op_btn_vx_pul_tog", _btnPulse, v => _btnPulse = v).Show());
+            }
+        });
+    }
+
+    private void ButtonsSection_Custom(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_cus", "Custom rendering").Body(() =>
+        {
+            using (paper.Column("op_btn_cu_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "cu_render", "CustomRender (caller paints)", () =>
+                    Origami.Button(paper, "op_btn_cu_r", "ignored", () => _btnClickCount++)
+                        .Width(160f).Height(34f)
+                        .CustomRender((canvas, ctx) =>
+                        {
+                            float x = (float)ctx.Rect.Min.X;
+                            float y = (float)ctx.Rect.Min.Y;
+                            float w = (float)ctx.Rect.Size.X;
+                            float h = (float)ctx.Rect.Size.Y;
+                            float t = ctx.HoverT;
+                            // Diagonal gradient — paint two halves with a bevel.
+                            var c1 = ctx.Theme.Primary.C500;
+                            var c2 = ctx.Theme.Blue.C500;
+                            var top = OrigamiRamp.LerpColor(c1, c2, t);
+                            var bot = OrigamiRamp.LerpColor(c2, c1, t);
+                            canvas.RoundedRectFilled(x, y, w, h * 0.5f, ctx.Theme.Metrics.Rounding, top);
+                            canvas.RoundedRectFilled(x, y + h * 0.5f, w, h * 0.5f, ctx.Theme.Metrics.Rounding, bot);
+                            if (ctx.Theme.Font != null)
+                            {
+                                var ts = canvas.MeasureText("Custom", ctx.Theme.Metrics.FontSize, ctx.Theme.Font);
+                                canvas.DrawText("Custom",
+                                    x + (w - (float)ts.X) * 0.5f,
+                                    y + (h - (float)ts.Y) * 0.5f,
+                                    ctx.Ink.C700, ctx.Theme.Metrics.FontSize, ctx.Theme.Font);
+                            }
+                        }).Show());
+
+                LabelRow(paper, "cu_content", "CustomContent (caller layout)", () =>
+                    Origami.Button(paper, "op_btn_cu_c", string.Empty, () => _btnClickCount++)
+                        .Primary().Width(180f)
+                        .CustomContent(() =>
+                        {
+                            using (paper.Row("op_btn_cu_c_row").Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
+                                .ChildLeft(8).ChildRight(8).RowBetween(6)
+                                .Alignment(TextAlignment.MiddleLeft).Enter())
+                            {
+                                paper.Box("op_btn_cu_c_lbl").Width(UnitValue.Stretch())
+                                    .Text("3 unread", EditorTheme.DefaultFont)
+                                    .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize)
+                                    .Alignment(TextAlignment.MiddleLeft);
+                                paper.Box("op_btn_cu_c_pill").Width(28).Height(18)
+                                    .BackgroundColor(EditorTheme.Purple400).Rounded(9)
+                                    .Text("3", EditorTheme.DefaultFont).TextColor(EditorTheme.Ink500)
+                                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                            }
+                        }).Show());
+            }
+        });
+    }
+
+    private static readonly string[] s_bgViewLabels = { "Shaded", "Wireframe", "SDF" };
+    private static readonly string[] s_bgAlignLabels = { "Left", "Center", "Right" };
+
+    private void ButtonsSection_Group(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_btn_group", "ButtonGroup (segmented)").Body(() =>
+        {
+            using (paper.Column("op_btn_g_col").Height(UnitValue.Auto).RowBetween(6).Enter())
+            {
+                LabelRow(paper, "g_basic", $"Basic (selected: {s_bgViewLabels[_bgViewMode]})", () =>
+                    Origami.ButtonGroup(paper, "op_btn_g_b", _bgViewMode, v => _bgViewMode = v)
+                        .Primary()
+                        .Item("Shaded")
+                        .Item("Wireframe")
+                        .Item("SDF")
+                        .Show());
+
+                LabelRow(paper, "g_icons", $"With icons + tooltips ({s_bgAlignLabels[_bgAlign]})", () =>
+                    Origami.ButtonGroup(paper, "op_btn_g_ic", _bgAlign, v => _bgAlign = v)
+                        .Success()
+                        .Item("Left",   EditorIcons.AlignLeft,   "Align left")
+                        .Item("Center", EditorIcons.AlignCenter, "Align center")
+                        .Item("Right",  EditorIcons.AlignRight,  "Align right")
+                        .Show());
+
+                LabelRow(paper, "g_full", "FullWidth", () =>
+                    Origami.ButtonGroup(paper, "op_btn_g_full", _bgViewMode, v => _bgViewMode = v)
+                        .Info().FullWidth()
+                        .Item("Tab A").Item("Tab B").Item("Tab C")
+                        .Show());
+
+                LabelRow(paper, "g_sm", "Small", () =>
+                    Origami.ButtonGroup(paper, "op_btn_g_sm", _bgSize, v => _bgSize = v)
+                        .Subtle().Small()
+                        .Item("XS").Item("S").Item("M").Item("L")
+                        .Show());
+
+                LabelRow(paper, "g_lg", "Large + Variants", () =>
+                    Origami.ButtonGroup(paper, "op_btn_g_lg", _bgVariant, v => _bgVariant = v)
+                        .Danger().Large()
+                        .Item("Cancel").Item("Discard").Item("Save")
+                        .Show());
+
+                LabelRow(paper, "g_disabled", "DisabledItem", () =>
+                    Origami.ButtonGroup(paper, "op_btn_g_dis", _bgViewMode, v => _bgViewMode = v)
+                        .Warning()
+                        .Item("Available")
+                        .DisabledItem("Locked")
+                        .Item("Available")
+                        .Show());
+            }
+        });
+    }
+
     private void Section_State(Paper paper)
     {
         Origami.Foldout(paper, "op_fo_state", "Live state").Body(() =>
@@ -1357,6 +1741,11 @@ public class OrigamiPlaygroundPanel : DockPanel
                 StateLine(paper, "st_slDrag",  $"Drag start/end count: {_slDragCount} / {_slDragEndCount}");
                 StateLine(paper, "st_rs",      $"RangeSlider float: [{_rsLow:F2}, {_rsHigh:F2}]");
                 StateLine(paper, "st_rsInt",   $"RangeSlider int: [{_rsIntLow}, {_rsIntHigh}]");
+                StateLine(paper, "st_btn_clk", $"Button click count: {_btnClickCount}");
+                StateLine(paper, "st_btn_rc",  $"Button right-click: {_btnRightClickCount}");
+                StateLine(paper, "st_btn_dc",  $"Button double-click: {_btnDoubleClickCount}");
+                StateLine(paper, "st_bg_view", $"ButtonGroup view: {s_bgViewLabels[_bgViewMode]} (idx {_bgViewMode})");
+                StateLine(paper, "st_bg_align",$"ButtonGroup align: {s_bgAlignLabels[_bgAlign]} (idx {_bgAlign})");
             }
         });
     }
