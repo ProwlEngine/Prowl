@@ -50,6 +50,29 @@ public sealed class MeshCollider : Collider
     [SerializeIgnore] private ConvexHullShape? _cachedConvexShape;
     [SerializeIgnore] private List<JTriangle>? _cachedHullTris;
 
+    // Pre-baked TriangleMesh (BVH) supplied via SetTriangleMesh before Mesh is assigned.
+    // Used by CreateShapes() when AutoBake = false to skip the main-thread BVH build.
+    [SerializeIgnore] private TriangleMesh? _prebakedTriangleMesh;
+
+    /// <summary>
+    /// When false, CreateShapes() uses the TriangleMesh supplied via SetTriangleMesh and skips
+    /// the main-thread BVH build. You must call SetTriangleMesh before assigning Mesh.
+    /// Default is true (auto-bake on the main thread, original behaviour).
+    /// </summary>
+    public bool AutoBake { get; set; } = true;
+
+    /// <summary>
+    /// Builds a Jitter2 TriangleMesh BVH from a Prowl Mesh. Safe to call from a background thread.
+    /// Pass the result to SetTriangleMesh before assigning Mesh when AutoBake = false.
+    /// </summary>
+    public static TriangleMesh BakeMesh(Mesh mesh) => new TriangleMesh(ToTriangleList(mesh), true);
+
+    /// <summary>
+    /// Supplies pre-baked collision data. Must be called before the Mesh property is set
+    /// (which triggers CreateShapes). Has no effect when AutoBake = true.
+    /// </summary>
+    public void SetTriangleMesh(TriangleMesh triMesh) => _prebakedTriangleMesh = triMesh;
+
     public override RigidBodyShape[] CreateShapes()
     {
         var m = mesh.Res;
@@ -79,7 +102,21 @@ public sealed class MeshCollider : Collider
         }
         else
         {
-            var triMesh = new TriangleMesh(triangles, true);
+            TriangleMesh triMesh;
+            if (_prebakedTriangleMesh is not null)
+            {
+                triMesh = _prebakedTriangleMesh;
+            }
+            else if (!AutoBake)
+            {
+                Debug.LogError("MeshCollider: AutoBake is false but SetTriangleMesh was not called before assigning Mesh.");
+                return null;
+            }
+            else
+            {
+                triMesh = new TriangleMesh(triangles, true);
+            }
+
             var shapes = new TriangleShape[triangles.Count];
             for (int i = 0; i < triangles.Count; i++)
                 shapes[i] = new TriangleShape(triMesh, i);
@@ -92,7 +129,6 @@ public sealed class MeshCollider : Collider
         _cachedConvexShape = null;
         _cachedHullTris = null;
         base.OnValidate();
-        Debug.Log("OnInvalidate called");
     }
 
     public override void OnEnable()
