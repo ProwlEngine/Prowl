@@ -21,6 +21,7 @@ public sealed class MeshCollider : Collider
 {
     [SerializeField] private AssetRef<Mesh> mesh;
     [SerializeField] private bool convex = false;
+    [SerializeField] private bool autoBake = true;
 
     public AssetRef<Mesh> Mesh
     {
@@ -46,6 +47,17 @@ public sealed class MeshCollider : Collider
         }
     }
 
+    /// <summary>
+    /// When false, CreateShapes() uses the TriangleMesh supplied via SetTriangleMesh and skips
+    /// the main-thread BVH build. You must call SetTriangleMesh before assigning Mesh.
+    /// Default is true (auto-bake on the main thread, original behaviour).
+    /// </summary>
+    public bool AutoBake
+    {
+        get => autoBake;
+        set => autoBake = value;
+    }
+
     // Cached convex hull shape and its tessellation for gizmo drawing — rebuilt when mesh or convex flag changes.
     [SerializeIgnore] private ConvexHullShape? _cachedConvexShape;
     [SerializeIgnore] private List<JTriangle>? _cachedHullTris;
@@ -53,13 +65,6 @@ public sealed class MeshCollider : Collider
     // Pre-baked TriangleMesh (BVH) supplied via SetTriangleMesh before Mesh is assigned.
     // Used by CreateShapes() when AutoBake = false to skip the main-thread BVH build.
     [SerializeIgnore] private TriangleMesh? _prebakedTriangleMesh;
-
-    /// <summary>
-    /// When false, CreateShapes() uses the TriangleMesh supplied via SetTriangleMesh and skips
-    /// the main-thread BVH build. You must call SetTriangleMesh before assigning Mesh.
-    /// Default is true (auto-bake on the main thread, original behaviour).
-    /// </summary>
-    public bool AutoBake { get; set; } = true;
 
     /// <summary>
     /// Builds a Jitter2 TriangleMesh BVH from a Prowl Mesh. Safe to call from a background thread.
