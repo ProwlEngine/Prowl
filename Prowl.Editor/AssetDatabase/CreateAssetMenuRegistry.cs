@@ -102,7 +102,7 @@ public static class CreateAssetMenuRegistry
     /// <summary>
     /// Appends one menu item per registered asset type to the given context menu builder.
     /// Names containing '/' are split into nested submenus (e.g. "Shader Graph/Surface"
-    /// produces an "Shader Graph" submenu with a "Surface" item inside).
+    /// produces a "Shader Graph" submenu with a "Surface" item inside).
     /// </summary>
     public static void BuildMenu(ContextMenuBuilder builder, string currentFolder, Action<string>? onCreated = null)
     {

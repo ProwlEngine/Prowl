@@ -50,7 +50,13 @@ public class CreateAssetTask : EditorTask
             var item = new ContentItem()
             {
                 Name = newName,
-
+                Icon = TaskType switch
+                {
+                    AssetType.Asset => FileIconRegistry.GetIconForExtension(".asset"),
+                    AssetType.Shader => FileIconRegistry.GetIconForExtension(".shader"),
+                    AssetType.Folder => EditorIcons.Folder,
+                    _ => null
+                }
             };
             panel.VirtualContentItems.Add(item);
 
@@ -68,7 +74,6 @@ public class CreateAssetTask : EditorTask
                 var path = TaskType switch
                 {
                     AssetType.Asset => CreateAsset(entry, panel.CurrentFolder, renameResult),
-                    AssetType.Script => CreateScript(renameResult, panel.CurrentFolder),
                     AssetType.Shader => CreateShader(renameResult, panel.CurrentFolder),
                     AssetType.Folder => CreateFolder(renameResult, panel.CurrentFolder),
                     _ => null
@@ -77,26 +82,6 @@ public class CreateAssetTask : EditorTask
 
             panel.VirtualContentItems.Remove(item);
         }
-    }
-
-
-    public static string? CreateScript(string scriptName, string relativeFolder)
-    {
-        string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
-        if (!Directory.Exists(absFolder)) return null;
-
-        string name = AssetCreateMenu.FindUniqueName(absFolder, scriptName, ".cs");
-        string className = Path.GetFileNameWithoutExtension(name);
-        string filePath = Path.Combine(absFolder, name);
-
-        var stream = EditorApplication.GetEmbeddedResource("NewScript.template");
-
-        using (StreamReader reader = new StreamReader(stream))
-        {
-            File.WriteAllText(filePath, reader.ReadToEnd().Replace("{[className]}", className));
-        }
-
-        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
     public static string? CreateShader(string shaderName, string relativeFolder)
