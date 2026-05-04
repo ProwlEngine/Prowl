@@ -47,7 +47,6 @@ public enum DefaultModel
     Cylinder,
     Plane,
     SkyDome,
-    UnitCube // 1mcube.obj - 1 meter cube
 }
 
 /// <summary>
@@ -87,6 +86,7 @@ public enum DefaultShaderInclude
     Shadow,
     VertexAttributes,
     Lighting,
+    LightBVH,
     StandardSurface,
     FastNoiseLite,
     SimplexNoise4D

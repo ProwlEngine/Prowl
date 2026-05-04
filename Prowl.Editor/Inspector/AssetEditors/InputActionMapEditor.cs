@@ -5,6 +5,7 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -146,8 +147,8 @@ public class InputActionMapEditor : AssetImporterEditor
             }
 
             // -- Action Properties --
-            EditorGUI.TextField(paper, $"{id}_name", "Name", action.Name)
-                .OnValueChanged(v =>
+            InspectorRow.Draw(paper, $"{id}_name", "Name", () =>
+                Origami.TextField(paper, $"{id}_name_v", action.Name, v =>
                 {
                     if (!string.IsNullOrWhiteSpace(v) && v != action.Name && map.FindAction(v) == null)
                     {
@@ -157,14 +158,17 @@ public class InputActionMapEditor : AssetImporterEditor
                         _selectedAction = v;
                         MarkDirty();
                     }
-                });
+                }).Show());
 
-            EditorGUI.EnumDropdown(paper, $"{id}_atype", "Type", action.ActionType)
-                .OnValueChanged(v => { action.ActionType = v; MarkDirty(); });
+            InspectorRow.Draw(paper, $"{id}_atype", "Type", () =>
+                Origami.EnumDropdown(paper, $"{id}_atype_v", action.ActionType,
+                    v => { action.ActionType = v; MarkDirty(); }).Show());
 
             bool isFloat2 = action.ExpectedValueType == typeof(Prowl.Vector.Float2);
-            EditorGUI.Dropdown(paper, $"{id}_vtype", "Value", isFloat2 ? 1 : 0, ["float", "Float2"])
-                .OnValueChanged(v => { action.ExpectedValueType = v == 1 ? typeof(Prowl.Vector.Float2) : typeof(float); MarkDirty(); });
+            InspectorRow.Draw(paper, $"{id}_vtype", "Value", () =>
+                Origami.Dropdown(paper, $"{id}_vtype_v", isFloat2 ? 1 : 0,
+                    v => { action.ExpectedValueType = v == 1 ? typeof(Prowl.Vector.Float2) : typeof(float); MarkDirty(); },
+                    new[] { "float", "Float2" }).Show());
 
             paper.Box($"{id}_sp1").Height(6);
             EditorGUI.Separator(paper, $"{id}_bsep");
@@ -366,8 +370,8 @@ public class InputActionMapEditor : AssetImporterEditor
             paper.Box($"{id}_sp").Height(4);
 
             // Binding type
-            EditorGUI.EnumDropdown(paper, $"{id}_btype", "Input Type", binding.BindingType)
-                .OnValueChanged(v =>
+            InspectorRow.Draw(paper, $"{id}_btype", "Input Type", () =>
+                Origami.EnumDropdown(paper, $"{id}_btype_v", binding.BindingType, v =>
                 {
                     binding.BindingType = v;
                     // Reset to sensible defaults
@@ -381,7 +385,7 @@ public class InputActionMapEditor : AssetImporterEditor
                         case InputBindingType.GamepadTrigger: binding.AxisIndex = 0; break;
                     }
                     MarkDirty();
-                });
+                }).Show());
 
             // Type-specific fields
             DrawBindingControl(paper, $"{id}_ctrl", binding);
@@ -390,8 +394,9 @@ public class InputActionMapEditor : AssetImporterEditor
             EditorGUI.Separator(paper, $"{id}_isep2");
 
             // Interaction
-            EditorGUI.EnumDropdown(paper, $"{id}_inter", "Interaction", binding.Interaction)
-                .OnValueChanged(v => { binding.Interaction = v; MarkDirty(); });
+            InspectorRow.Draw(paper, $"{id}_inter", "Interaction", () =>
+                Origami.EnumDropdown(paper, $"{id}_inter_v", binding.Interaction,
+                    v => { binding.Interaction = v; MarkDirty(); }).Show());
 
             DrawInteractionParams(paper, $"{id}_ip", binding);
 
@@ -415,8 +420,9 @@ public class InputActionMapEditor : AssetImporterEditor
             // Vector2-specific options
             if (composite is Vector2CompositeBinding v2c)
             {
-                EditorGUI.Toggle(paper, $"{id}_norm", "Normalize", v2c.Normalize)
-                    .OnValueChanged(v => { v2c.Normalize = v; MarkDirty(); });
+                Origami.Checkbox(paper, $"{id}_norm", v2c.Normalize,
+                        v => { v2c.Normalize = v; MarkDirty(); })
+                    .LabelRight("Normalize").Show();
                 paper.Box($"{id}_sp").Height(4);
             }
 
@@ -500,35 +506,44 @@ public class InputActionMapEditor : AssetImporterEditor
         switch (binding.BindingType)
         {
             case InputBindingType.Key:
-                EditorGUI.EnumDropdown(paper, $"{id}_key", "Key", binding.Key ?? KeyCode.Unknown)
-                    .OnValueChanged(v => { binding.Key = v; MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_key", "Key", () =>
+                    Origami.EnumDropdown(paper, $"{id}_key_v", binding.Key ?? KeyCode.Unknown,
+                        v => { binding.Key = v; MarkDirty(); }).Searchable().Show());
                 break;
 
             case InputBindingType.MouseButton:
-                EditorGUI.EnumDropdown(paper, $"{id}_mb", "Button", binding.MouseButton ?? MouseButton.Left)
-                    .OnValueChanged(v => { binding.MouseButton = v; MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_mb", "Button", () =>
+                    Origami.EnumDropdown(paper, $"{id}_mb_v", binding.MouseButton ?? MouseButton.Left,
+                        v => { binding.MouseButton = v; MarkDirty(); }).Show());
                 break;
 
             case InputBindingType.MouseAxis:
-                EditorGUI.Dropdown(paper, $"{id}_ma", "Axis", binding.AxisIndex ?? 0, ["X", "Y", "Wheel"])
-                    .OnValueChanged(v => { binding.AxisIndex = v; MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_ma", "Axis", () =>
+                    Origami.Dropdown(paper, $"{id}_ma_v", binding.AxisIndex ?? 0,
+                        v => { binding.AxisIndex = v; MarkDirty(); },
+                        new[] { "X", "Y", "Wheel" }).Show());
                 break;
 
             case InputBindingType.GamepadButton:
-                EditorGUI.EnumDropdown(paper, $"{id}_gb", "Button", binding.GamepadButton ?? GamepadButton.A)
-                    .OnValueChanged(v => { binding.GamepadButton = v; MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_gb", "Button", () =>
+                    Origami.EnumDropdown(paper, $"{id}_gb_v", binding.GamepadButton ?? GamepadButton.A,
+                        v => { binding.GamepadButton = v; MarkDirty(); }).Show());
                 DrawDeviceField(paper, $"{id}_gbd", binding);
                 break;
 
             case InputBindingType.GamepadAxis:
-                EditorGUI.Dropdown(paper, $"{id}_ga", "Stick", binding.AxisIndex ?? 0, ["Left Stick", "Right Stick"])
-                    .OnValueChanged(v => { binding.AxisIndex = v; MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_ga", "Stick", () =>
+                    Origami.Dropdown(paper, $"{id}_ga_v", binding.AxisIndex ?? 0,
+                        v => { binding.AxisIndex = v; MarkDirty(); },
+                        new[] { "Left Stick", "Right Stick" }).Show());
                 DrawDeviceField(paper, $"{id}_gad", binding);
                 break;
 
             case InputBindingType.GamepadTrigger:
-                EditorGUI.Dropdown(paper, $"{id}_gt", "Trigger", binding.AxisIndex ?? 0, ["Left", "Right"])
-                    .OnValueChanged(v => { binding.AxisIndex = v; MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_gt", "Trigger", () =>
+                    Origami.Dropdown(paper, $"{id}_gt_v", binding.AxisIndex ?? 0,
+                        v => { binding.AxisIndex = v; MarkDirty(); },
+                        new[] { "Left", "Right" }).Show());
                 DrawDeviceField(paper, $"{id}_gtd", binding);
                 break;
         }
@@ -536,8 +551,9 @@ public class InputActionMapEditor : AssetImporterEditor
 
     private void DrawDeviceField(Paper paper, string id, InputBinding binding)
     {
-        EditorGUI.IntField(paper, $"{id}_dev", binding.RequiredDeviceIndex ?? 0, "Device Index")
-            .OnValueChanged(v => { binding.RequiredDeviceIndex = Math.Max(0, v); MarkDirty(); });
+        InspectorRow.Draw(paper, $"{id}_dev", "Device Index", () =>
+            Origami.NumericField<int>(paper, $"{id}_dev_v", binding.RequiredDeviceIndex ?? 0,
+                v => { binding.RequiredDeviceIndex = Math.Max(0, v); MarkDirty(); }).Min(0).Show());
     }
 
     private void DrawInteractionParams(Paper paper, string id, InputBinding binding)
@@ -545,22 +561,27 @@ public class InputActionMapEditor : AssetImporterEditor
         switch (binding.Interaction)
         {
             case InputInteractionType.Hold:
-                EditorGUI.FloatField(paper, $"{id}_hd", binding.HoldDuration, "Hold Duration (s)")
-                    .OnValueChanged(v => { binding.HoldDuration = MathF.Max(0.01f, v); MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_hd", "Hold Duration (s)", () =>
+                    Origami.NumericField<float>(paper, $"{id}_hd_v", binding.HoldDuration,
+                        v => { binding.HoldDuration = MathF.Max(0.01f, v); MarkDirty(); }).Show());
                 break;
 
             case InputInteractionType.Tap:
-                EditorGUI.FloatField(paper, $"{id}_td", binding.MaxTapDuration, "Max Tap Duration (s)")
-                    .OnValueChanged(v => { binding.MaxTapDuration = MathF.Max(0.01f, v); MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_td", "Max Tap Duration (s)", () =>
+                    Origami.NumericField<float>(paper, $"{id}_td_v", binding.MaxTapDuration,
+                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); MarkDirty(); }).Show());
                 break;
 
             case InputInteractionType.MultiTap:
-                EditorGUI.IntField(paper, $"{id}_tc", binding.TapCount, "Tap Count")
-                    .OnValueChanged(v => { binding.TapCount = Math.Max(2, v); MarkDirty(); });
-                EditorGUI.FloatField(paper, $"{id}_tw", binding.TapWindow, "Tap Window (s)")
-                    .OnValueChanged(v => { binding.TapWindow = MathF.Max(0.01f, v); MarkDirty(); });
-                EditorGUI.FloatField(paper, $"{id}_mtd", binding.MaxTapDuration, "Max Tap Duration (s)")
-                    .OnValueChanged(v => { binding.MaxTapDuration = MathF.Max(0.01f, v); MarkDirty(); });
+                InspectorRow.Draw(paper, $"{id}_tc", "Tap Count", () =>
+                    Origami.NumericField<int>(paper, $"{id}_tc_v", binding.TapCount,
+                        v => { binding.TapCount = Math.Max(2, v); MarkDirty(); }).Min(2).Show());
+                InspectorRow.Draw(paper, $"{id}_tw", "Tap Window (s)", () =>
+                    Origami.NumericField<float>(paper, $"{id}_tw_v", binding.TapWindow,
+                        v => { binding.TapWindow = MathF.Max(0.01f, v); MarkDirty(); }).Show());
+                InspectorRow.Draw(paper, $"{id}_mtd", "Max Tap Duration (s)", () =>
+                    Origami.NumericField<float>(paper, $"{id}_mtd_v", binding.MaxTapDuration,
+                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); MarkDirty(); }).Show());
                 break;
         }
     }
@@ -623,46 +644,52 @@ public class InputActionMapEditor : AssetImporterEditor
                 switch (proc)
                 {
                     case ScaleProcessor sp:
-                        EditorGUI.FloatField(paper, $"{id}_ps{i}", sp.Scale, "Scale")
-                            .OnValueChanged(v => { sp.Scale = v; MarkDirty(); });
+                        InspectorRow.Draw(paper, $"{id}_ps{i}", "Scale", () =>
+                            Origami.NumericField<float>(paper, $"{id}_ps{i}_v", sp.Scale,
+                                v => { sp.Scale = v; MarkDirty(); }).Show());
                         break;
 
                     case ClampProcessor cp:
-                        EditorGUI.FloatField(paper, $"{id}_pmn{i}", cp.Min, "Min")
-                            .OnValueChanged(v => { cp.Min = v; MarkDirty(); });
-                        EditorGUI.FloatField(paper, $"{id}_pmx{i}", cp.Max, "Max")
-                            .OnValueChanged(v => { cp.Max = v; MarkDirty(); });
+                        InspectorRow.Draw(paper, $"{id}_pmn{i}", "Min", () =>
+                            Origami.NumericField<float>(paper, $"{id}_pmn{i}_v", cp.Min,
+                                v => { cp.Min = v; MarkDirty(); }).Show());
+                        InspectorRow.Draw(paper, $"{id}_pmx{i}", "Max", () =>
+                            Origami.NumericField<float>(paper, $"{id}_pmx{i}_v", cp.Max,
+                                v => { cp.Max = v; MarkDirty(); }).Show());
                         break;
 
                     case DeadzoneProcessor dp:
-                        EditorGUI.FloatField(paper, $"{id}_pd{i}", dp.Threshold, "Threshold")
-                            .OnValueChanged(v => { dp.Threshold = MathF.Max(0f, v); MarkDirty(); });
+                        InspectorRow.Draw(paper, $"{id}_pd{i}", "Threshold", () =>
+                            Origami.NumericField<float>(paper, $"{id}_pd{i}_v", dp.Threshold,
+                                v => { dp.Threshold = MathF.Max(0f, v); MarkDirty(); }).Min(0f).Show());
                         break;
 
                     case ExponentialProcessor ep:
-                        EditorGUI.FloatField(paper, $"{id}_pe{i}", ep.Exponent, "Exponent")
-                            .OnValueChanged(v => { ep.Exponent = MathF.Max(0.1f, v); MarkDirty(); });
+                        InspectorRow.Draw(paper, $"{id}_pe{i}", "Exponent", () =>
+                            Origami.NumericField<float>(paper, $"{id}_pe{i}_v", ep.Exponent,
+                                v => { ep.Exponent = MathF.Max(0.1f, v); MarkDirty(); }).Min(0.1f).Show());
                         break;
                 }
             }
         }
 
         // Add processor dropdown
-        EditorGUI.Dropdown(paper, $"{id}_add", "Add Processor", -1, _processorTypes)
-            .OnValueChanged(v =>
-            {
-                IInputProcessor? newProc = v switch
+        InspectorRow.Draw(paper, $"{id}_add", "Add Processor", () =>
+            Origami.Dropdown(paper, $"{id}_add_v", -1,
+                v =>
                 {
-                    0 => new NormalizeProcessor(),
-                    1 => new InvertProcessor(),
-                    2 => new ScaleProcessor(1f),
-                    3 => new ClampProcessor(0f, 1f),
-                    4 => new DeadzoneProcessor(0.2f),
-                    5 => new ExponentialProcessor(2f),
-                    _ => null
-                };
-                if (newProc != null) { processors.Add(newProc); MarkDirty(); }
-            });
+                    IInputProcessor? newProc = v switch
+                    {
+                        0 => new NormalizeProcessor(),
+                        1 => new InvertProcessor(),
+                        2 => new ScaleProcessor(1f),
+                        3 => new ClampProcessor(0f, 1f),
+                        4 => new DeadzoneProcessor(0.2f),
+                        5 => new ExponentialProcessor(2f),
+                        _ => null
+                    };
+                    if (newProc != null) { processors.Add(newProc); MarkDirty(); }
+                }, _processorTypes).Placeholder("Select a processor...").Show());
     }
 
     // ================================================================

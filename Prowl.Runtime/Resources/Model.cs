@@ -53,7 +53,6 @@ public class Model : EngineObject, ISerializable
             DefaultModel.Cylinder => "Cylinder.obj",
             DefaultModel.Plane => "Plane.obj",
             DefaultModel.SkyDome => "SkyDome.obj",
-            DefaultModel.UnitCube => "1mcube.obj",
             _ => throw new ArgumentException($"Unknown default model: {model}")
         };
 
@@ -64,7 +63,8 @@ public class Model : EngineObject, ISerializable
         // Import via the OBJ importer. Embedded defaults have no companion .mtl, so the
         // resulting GO just has a MeshRenderer with an empty Materials list callers that
         // use these meshes (e.g. BuiltInAssets, primitive creators) assign their own material.
-        var importResult = new AssetImporting.Obj.ObjImporter().Import(stream, fileName);
+        
+        var importResult = new AssetImporting.Obj.ObjImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true });
         if (importResult.RootGO != null)
             result.GameObjectData = Serializer.Serialize(typeof(object), importResult.RootGO);
 

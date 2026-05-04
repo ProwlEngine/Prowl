@@ -1,4 +1,5 @@
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -19,46 +20,35 @@ public class CinematicEffectsEditor : CustomEditor
         DrawSection(paper, $"{id}_vignette", EditorIcons.Eye, "Vignette",
             fx.EnableVignette, v => fx.EnableVignette = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_vig_int", "Intensity", fx.VignetteIntensity, 0, 1)
-                .OnValueChanged(v => fx.VignetteIntensity = v);
-            EditorGUI.Slider(paper, $"{id}_vig_sm", "Smoothness", fx.VignetteSmoothness, 0.01f, 1)
-                .OnValueChanged(v => fx.VignetteSmoothness = v);
-            EditorGUI.Slider(paper, $"{id}_vig_rn", "Roundness", fx.VignetteRoundness, 0, 1)
-                .OnValueChanged(v => fx.VignetteRoundness = v);
+            SliderRow(paper, $"{id}_vig_int", "Intensity", fx.VignetteIntensity, 0, 1, v => fx.VignetteIntensity = v);
+            SliderRow(paper, $"{id}_vig_sm", "Smoothness", fx.VignetteSmoothness, 0.01f, 1, v => fx.VignetteSmoothness = v);
+            SliderRow(paper, $"{id}_vig_rn", "Roundness", fx.VignetteRoundness, 0, 1, v => fx.VignetteRoundness = v);
         });
 
         // ── Chromatic Aberration ──────────────────────────
         DrawSection(paper, $"{id}_chroma", EditorIcons.Droplet, "Chromatic Aberration",
             fx.EnableChromaticAberration, v => fx.EnableChromaticAberration = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_chr_int", "Intensity", fx.ChromaticIntensity, 0, 20)
-                .OnValueChanged(v => fx.ChromaticIntensity = v);
-            EditorGUI.Slider(paper, $"{id}_chr_dist", "Distortion", fx.ChromaticDistortion, 0, 2)
-                .OnValueChanged(v => fx.ChromaticDistortion = v);
+            SliderRow(paper, $"{id}_chr_int", "Intensity", fx.ChromaticIntensity, 0, 20, v => fx.ChromaticIntensity = v);
+            SliderRow(paper, $"{id}_chr_dist", "Distortion", fx.ChromaticDistortion, 0, 2, v => fx.ChromaticDistortion = v);
         });
 
         // ── Film Grain ────────────────────────────────────
         DrawSection(paper, $"{id}_grain", EditorIcons.Film, "Film Grain",
             fx.EnableFilmGrain, v => fx.EnableFilmGrain = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_grn_int", "Intensity", fx.GrainIntensity, 0, 1)
-                .OnValueChanged(v => fx.GrainIntensity = v);
-            EditorGUI.Slider(paper, $"{id}_grn_rsp", "Response", fx.GrainResponse, 0, 1)
-                .OnValueChanged(v => fx.GrainResponse = v);
+            SliderRow(paper, $"{id}_grn_int", "Intensity", fx.GrainIntensity, 0, 1, v => fx.GrainIntensity = v);
+            SliderRow(paper, $"{id}_grn_rsp", "Response", fx.GrainResponse, 0, 1, v => fx.GrainResponse = v);
         });
 
         // ── Color Grading ─────────────────────────────────
         DrawSection(paper, $"{id}_cgrade", EditorIcons.Palette, "Color Grading",
             fx.EnableColorGrading, v => fx.EnableColorGrading = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_cg_exp", "Post Exposure (EV)", fx.PostExposure, -5, 5)
-                .OnValueChanged(v => fx.PostExposure = v);
-            EditorGUI.Slider(paper, $"{id}_cg_con", "Contrast", fx.Contrast, -1, 1)
-                .OnValueChanged(v => fx.Contrast = v);
-            EditorGUI.Slider(paper, $"{id}_cg_sat", "Saturation", fx.Saturation, -1, 1)
-                .OnValueChanged(v => fx.Saturation = v);
-            EditorGUI.Slider(paper, $"{id}_cg_tmp", "Temperature", fx.Temperature, -1, 1)
-                .OnValueChanged(v => fx.Temperature = v);
+            SliderRow(paper, $"{id}_cg_exp", "Post Exposure (EV)", fx.PostExposure, -5, 5, v => fx.PostExposure = v, bipolar: true);
+            SliderRow(paper, $"{id}_cg_con", "Contrast", fx.Contrast, -1, 1, v => fx.Contrast = v, bipolar: true);
+            SliderRow(paper, $"{id}_cg_sat", "Saturation", fx.Saturation, -1, 1, v => fx.Saturation = v, bipolar: true);
+            SliderRow(paper, $"{id}_cg_tmp", "Temperature", fx.Temperature, -1, 1, v => fx.Temperature = v, bipolar: true);
 
             EditorGUI.Separator(paper, $"{id}_cg_sep_lgg");
             EditorGUI.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain");
@@ -81,61 +71,60 @@ public class CinematicEffectsEditor : CustomEditor
                 {
                     fx.LUTTexture = new AssetRef<Texture2D>(newVal as Texture2D);
                 }, 0);
-            EditorGUI.Slider(paper, $"{id}_lut_cont", "Contribution", fx.LUTContribution, 0, 1)
-                .OnValueChanged(v => fx.LUTContribution = v);
+            SliderRow(paper, $"{id}_lut_cont", "Contribution", fx.LUTContribution, 0, 1, v => fx.LUTContribution = v);
         });
 
         // ── Sharpen (CAS) ─────────────────────────────────
         DrawSection(paper, $"{id}_sharp", EditorIcons.Diamond, "Sharpen (CAS)",
             fx.EnableSharpen, v => fx.EnableSharpen = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_shp_amt", "Amount", fx.SharpenAmount, 0, 1)
-                .OnValueChanged(v => fx.SharpenAmount = v);
-            EditorGUI.Slider(paper, $"{id}_shp_rad", "Radius", fx.SharpenRadius, 1, 4)
-                .OnValueChanged(v => fx.SharpenRadius = v);
+            SliderRow(paper, $"{id}_shp_amt", "Amount", fx.SharpenAmount, 0, 1, v => fx.SharpenAmount = v);
+            SliderRow(paper, $"{id}_shp_rad", "Radius", fx.SharpenRadius, 1, 4, v => fx.SharpenRadius = v);
         });
 
         // ── Edge Detection ────────────────────────────────
         DrawSection(paper, $"{id}_edge", EditorIcons.BorderAll, "Edge Detection",
             fx.EnableEdgeDetection, v => fx.EnableEdgeDetection = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_edg_int", "Intensity", fx.EdgeIntensity, 0, 5)
-                .OnValueChanged(v => fx.EdgeIntensity = v);
+            SliderRow(paper, $"{id}_edg_int", "Intensity", fx.EdgeIntensity, 0, 5, v => fx.EdgeIntensity = v);
             EditorGUI.ColorField(paper, $"{id}_edg_col", "Edge Color", fx.EdgeColor)
                 .OnValueChanged(v => fx.EdgeColor = v);
-            EditorGUI.Slider(paper, $"{id}_edg_bg", "Background Fade", fx.EdgeBackgroundFade, 0, 1)
-                .OnValueChanged(v => fx.EdgeBackgroundFade = v);
+            SliderRow(paper, $"{id}_edg_bg", "Background Fade", fx.EdgeBackgroundFade, 0, 1, v => fx.EdgeBackgroundFade = v);
         });
 
         // ── Pixelation ────────────────────────────────────
         DrawSection(paper, $"{id}_pixel", EditorIcons.TableCellsLarge, "Pixelation",
             fx.EnablePixelation, v => fx.EnablePixelation = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_pxl_sz", "Pixel Size", fx.PixelSize, 1, 32)
-                .OnValueChanged(v => fx.PixelSize = v);
+            SliderRow(paper, $"{id}_pxl_sz", "Pixel Size", fx.PixelSize, 1, 32, v => fx.PixelSize = v);
         });
 
         // ── God Rays ──────────────────────────────────────
         DrawSection(paper, $"{id}_godrays", EditorIcons.Sun, "God Rays",
             fx.EnableGodRays, v => fx.EnableGodRays = v, () =>
         {
-            EditorGUI.Slider(paper, $"{id}_gr_int", "Intensity", fx.GodRayIntensity, 0, 2)
-                .OnValueChanged(v => fx.GodRayIntensity = v);
-            EditorGUI.Slider(paper, $"{id}_gr_dec", "Decay", fx.GodRayDecay, 0.9f, 1.0f)
-                .OnValueChanged(v => fx.GodRayDecay = v);
-            EditorGUI.Slider(paper, $"{id}_gr_dns", "Density", fx.GodRayDensity, 0.1f, 2.0f)
-                .OnValueChanged(v => fx.GodRayDensity = v);
-            EditorGUI.Slider(paper, $"{id}_gr_wgt", "Weight", fx.GodRayWeight, 0, 1)
-                .OnValueChanged(v => fx.GodRayWeight = v);
-            EditorGUI.Slider(paper, $"{id}_gr_thr", "Threshold", fx.GodRayThreshold, 0, 1)
-                .OnValueChanged(v => fx.GodRayThreshold = v);
-            EditorGUI.IntField(paper, $"{id}_gr_smp", fx.GodRaySamples, "Samples")
-                .OnValueChanged(v => fx.GodRaySamples = System.Math.Clamp(v, 8, 128));
+            SliderRow(paper, $"{id}_gr_int", "Intensity", fx.GodRayIntensity, 0, 2, v => fx.GodRayIntensity = v);
+            SliderRow(paper, $"{id}_gr_dec", "Decay", fx.GodRayDecay, 0.9f, 1.0f, v => fx.GodRayDecay = v);
+            SliderRow(paper, $"{id}_gr_dns", "Density", fx.GodRayDensity, 0.1f, 2.0f, v => fx.GodRayDensity = v);
+            SliderRow(paper, $"{id}_gr_wgt", "Weight", fx.GodRayWeight, 0, 1, v => fx.GodRayWeight = v);
+            SliderRow(paper, $"{id}_gr_thr", "Threshold", fx.GodRayThreshold, 0, 1, v => fx.GodRayThreshold = v);
+            InspectorRow.Draw(paper, $"{id}_gr_smp", "Samples", () =>
+                Origami.IntSlider(paper, $"{id}_gr_smp_v", fx.GodRaySamples,
+                    v => fx.GodRaySamples = System.Math.Clamp(v, 8, 128), 8, 128).Show());
         });
     }
+
+    // ── Helpers ────────────────────────────────────────────────────────
+
+    private static void SliderRow(Paper paper, string id, string label, float value, float min, float max, System.Action<float> setter, bool bipolar = false)
+        => InspectorRow.Draw(paper, id, label, () =>
+        {
+            var s = Origami.Slider(paper, $"{id}_v", value, setter, min, max).Format("F2");
+            if (bipolar) s.Bipolar();
+            s.Show();
+        });
 
     private static void DrawSection(Paper paper, string id, string icon, string title,
         bool enabled, System.Action<bool> setEnabled, System.Action drawContent)
         => EditorGUI.ToggleSection(paper, id, $"{icon}  {title}", enabled, setEnabled, drawContent);
 }
-

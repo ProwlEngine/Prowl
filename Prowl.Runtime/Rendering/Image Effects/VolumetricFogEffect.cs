@@ -77,7 +77,6 @@ public sealed class VolumetricFogEffect : ImageEffect
     /// but ghosts more. 0.9 is a good default.</summary>
     public float TemporalBlendWeight = 0.9f;
 
-    private const int MaxFogLights = 5;     // 1 directional + 4 closest point/spot
     private const int MaxFogVolumes = 16;
 
     private Material _mat;
@@ -113,7 +112,7 @@ public sealed class VolumetricFogEffect : ImageEffect
         _mat.SetColor("_FogAmbientColor", AmbientColor);
         _mat.SetFloat("_FogAmbientIntensity", Math.Max(0f, AmbientIntensity));
 
-        UploadFogLights(context);
+        UploadFogToggles();
         UploadFogVolumes(context);
 
         var format = context.SceneColor.MainTexture.ImageFormat;
@@ -179,71 +178,19 @@ public sealed class VolumetricFogEffect : ImageEffect
     }
 
     /// <summary>
-    /// Walk the scene's FogLight components and upload fog params to whichever
-    /// shader slot the underlying Light occupies (per <see cref="Light.ForwardSlot"/>).
-    /// Lights that aren't currently selected by the forward pipeline are skipped —
-    /// they have no shadow data on the GPU this frame anyway.
+    /// Push the type-level enable / shadow toggles. With the BVH refactor every BVH light
+    /// contributes to fog automatically; the per-light overrides that the old FogLight
+    /// component carried are gone (no stable forward slot to attach them to). The global
+    /// <c>Scattering</c> / <c>Extinction</c> uniforms still apply to everyone.
     /// </summary>
-    private void UploadFogLights(RenderContext context)
+    private void UploadFogToggles()
     {
-        // Default-initialise all slots to "off" so any unused slot ignores fog contribution.
-        for (int i = 0; i < MaxFogLights; i++)
-        {
-            _mat.SetInt($"_FogLightEnabled[{i}]", 0);
-            _mat.SetInt($"_FogLightCastShadows[{i}]", 0);
-            _mat.SetInt($"_FogLightUseOverride[{i}]", 0);
-            _mat.SetColor($"_FogLightOverrideColor[{i}]", new Color(1, 1, 1, 1));
-            _mat.SetFloat($"_FogLightIntensity[{i}]", 1f);
-            _mat.SetFloat($"_FogLightScatBias[{i}]", 0f);
-        }
-
-        var scene = Resources.Scene.Current;
-        if (scene == null)
-        {
-            _mat.SetInt("_FogLightCount", 0);
-            return;
-        }
-
-        int active = 0;
-        foreach (var go in scene.ActiveObjects)
-        {
-            var fl = go.GetComponent<FogLight>();
-            if (fl == null || !fl.EnabledInHierarchy) continue;
-
-            var lightComp = go.GetComponent<Light>();
-            if (lightComp == null || !lightComp.EnabledInHierarchy) continue;
-
-            int slot = lightComp.ForwardSlot;
-            if (slot < 0 || slot >= MaxFogLights) continue;
-
-            LightType type = lightComp.GetLightType();
-            bool typeEnabled = type switch
-            {
-                LightType.Directional => EnableDirectional,
-                LightType.Point => EnablePointLights,
-                LightType.Spot => EnableSpotLights,
-                _ => false
-            };
-            if (!typeEnabled) continue;
-
-            bool shadowToggle = type switch
-            {
-                LightType.Directional => EnableDirectionalShadows,
-                LightType.Point => EnablePointLightShadows,
-                LightType.Spot => EnableSpotLightShadows,
-                _ => false
-            };
-
-            _mat.SetInt($"_FogLightEnabled[{slot}]", 1);
-            _mat.SetInt($"_FogLightCastShadows[{slot}]", (fl.CastFogShadows && shadowToggle) ? 1 : 0);
-            _mat.SetInt($"_FogLightUseOverride[{slot}]", fl.UseOverrideColor ? 1 : 0);
-            _mat.SetColor($"_FogLightOverrideColor[{slot}]", fl.OverrideColor);
-            _mat.SetFloat($"_FogLightIntensity[{slot}]", fl.IntensityMultiplier);
-            _mat.SetFloat($"_FogLightScatBias[{slot}]", fl.ScatteringBias);
-            active++;
-        }
-
-        _mat.SetInt("_FogLightCount", active);
+        _mat.SetInt("_FogEnableDirectional", EnableDirectional ? 1 : 0);
+        _mat.SetInt("_FogEnableDirectionalShadows", EnableDirectionalShadows ? 1 : 0);
+        _mat.SetInt("_FogEnablePointLights", EnablePointLights ? 1 : 0);
+        _mat.SetInt("_FogEnablePointShadows", EnablePointLightShadows ? 1 : 0);
+        _mat.SetInt("_FogEnableSpotLights", EnableSpotLights ? 1 : 0);
+        _mat.SetInt("_FogEnableSpotShadows", EnableSpotLightShadows ? 1 : 0);
     }
 
     private void UploadFogVolumes(RenderContext context)

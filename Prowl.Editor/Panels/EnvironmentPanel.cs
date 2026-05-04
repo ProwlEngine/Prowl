@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Editor.Docking;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -50,8 +51,9 @@ public class EnvironmentPanel : DockPanel
         {
             var sky = scene.Skybox;
 
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", "Mode", sky.Mode)
-                .OnValueChanged(v => { sky.Mode = v; scene.Skybox = sky; EditorSceneManager.IsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_mode", "Mode", () =>
+                Origami.EnumDropdown(paper, $"{id}_mode_v", sky.Mode,
+                    v => { sky.Mode = v; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }).Show());
 
             switch (sky.Mode)
             {
@@ -65,8 +67,10 @@ public class EnvironmentPanel : DockPanel
                         v => { sky.GradientTop = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
                     PropertyGrid.DrawField(paper, $"{id}_bot", "Bottom Color", typeof(VColor), sky.GradientBottom,
                         v => { sky.GradientBottom = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
-                    EditorGUI.Slider(paper, $"{id}_exp", "Exponent", sky.GradientExponent, 0.1f, 5f)
-                        .OnValueChanged(v => { sky.GradientExponent = v; scene.Skybox = sky; EditorSceneManager.IsDirty = true; });
+                    InspectorRow.Draw(paper, $"{id}_exp", "Exponent", () =>
+                        Origami.Slider(paper, $"{id}_exp_v", sky.GradientExponent,
+                            v => { sky.GradientExponent = v; scene.Skybox = sky; EditorSceneManager.IsDirty = true; },
+                            0.1f, 5f).Format("F2").Show());
                     break;
 
                 case Scene.SkyboxMode.Material:
@@ -89,8 +93,9 @@ public class EnvironmentPanel : DockPanel
         {
             var fog = scene.Fog;
 
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", "Mode", fog.Mode)
-                .OnValueChanged(v => { fog.Mode = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_mode", "Mode", () =>
+                Origami.EnumDropdown(paper, $"{id}_mode_v", fog.Mode,
+                    v => { fog.Mode = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; }).Show());
 
             if (fog.Mode != Scene.FogParams.FogMode.Off)
             {
@@ -99,15 +104,19 @@ public class EnvironmentPanel : DockPanel
 
                 if (fog.Mode == Scene.FogParams.FogMode.Linear)
                 {
-                    EditorGUI.FloatField(paper, $"{id}_start", fog.Start, "Start Distance")
-                        .OnValueChanged(v => { fog.Start = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; });
-                    EditorGUI.FloatField(paper, $"{id}_end", fog.End, "End Distance")
-                        .OnValueChanged(v => { fog.End = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; });
+                    InspectorRow.Draw(paper, $"{id}_start", "Start Distance", () =>
+                        Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start,
+                            v => { fog.Start = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; }).Show());
+                    InspectorRow.Draw(paper, $"{id}_end", "End Distance", () =>
+                        Origami.NumericField<float>(paper, $"{id}_end_v", fog.End,
+                            v => { fog.End = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; }).Show());
                 }
                 else
                 {
-                    EditorGUI.Slider(paper, $"{id}_density", "Density", fog.Density, 0f, 0.1f)
-                        .OnValueChanged(v => { fog.Density = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; });
+                    InspectorRow.Draw(paper, $"{id}_density", "Density", () =>
+                        Origami.Slider(paper, $"{id}_density_v", fog.Density,
+                            v => { fog.Density = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; },
+                            0f, 0.1f).Format("F4").Show());
                 }
             }
         });
@@ -119,11 +128,14 @@ public class EnvironmentPanel : DockPanel
         {
             var ambient = scene.Ambient;
 
-            EditorGUI.EnumDropdown(paper, $"{id}_mode", "Mode", ambient.Mode)
-                .OnValueChanged(v => { ambient.Mode = v; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_mode", "Mode", () =>
+                Origami.EnumDropdown(paper, $"{id}_mode_v", ambient.Mode,
+                    v => { ambient.Mode = v; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }).Show());
 
-            EditorGUI.Slider(paper, $"{id}_str", "Strength", ambient.Strength, 0f, 5f)
-                .OnValueChanged(v => { ambient.Strength = v; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_str", "Strength", () =>
+                Origami.Slider(paper, $"{id}_str_v", ambient.Strength,
+                    v => { ambient.Strength = v; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; },
+                    0f, 5f).Format("F2").Show());
 
             if (ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform)
             {

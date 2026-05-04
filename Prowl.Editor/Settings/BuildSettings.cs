@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 
@@ -126,8 +128,9 @@ public sealed class BuildSettings : ProjectSettingsBase
                     .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
 
                 // Enable toggle
-                EditorGUI.Toggle(paper, $"bld_se_{i}", "", scene.Enabled)
-                    .OnValueChanged(v => { scene.Enabled = v; ProjectSettingsRegistry.SaveAll(); });
+                Origami.Checkbox(paper, $"bld_se_{i}", scene.Enabled,
+                        v => { scene.Enabled = v; ProjectSettingsRegistry.SaveAll(); })
+                    .NoLabel().Show();
 
                 // Scene name
                 string displayName = !string.IsNullOrEmpty(scene.Path)
@@ -193,22 +196,28 @@ public sealed class BuildSettings : ProjectSettingsBase
         EditorGUI.Header(paper, "bld_config_h", $"{EditorIcons.Gear}  Configuration");
         EditorGUI.Separator(paper, "bld_config_sep");
 
-        EditorGUI.EnumDropdown(paper, "bld_config", "Configuration", Config)
-            .OnValueChanged(v => { Config = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "bld_config", "Configuration", () =>
+            Origami.EnumDropdown(paper, "bld_config_v", Config,
+                v => { Config = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        EditorGUI.TextField(paper, "bld_output", "Output Directory", OutputDirectory)
-            .OnValueChanged(v => { OutputDirectory = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "bld_output", "Output Directory", () =>
+            Origami.TextField(paper, "bld_output_v", OutputDirectory,
+                v => { OutputDirectory = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        EditorGUI.EnumDropdown(paper, "bld_packaging", "Asset Packaging", PackagingMode)
-            .OnValueChanged(v => { PackagingMode = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "bld_packaging", "Asset Packaging", () =>
+            Origami.EnumDropdown(paper, "bld_packaging_v", PackagingMode,
+                v => { PackagingMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        EditorGUI.EnumDropdown(paper, "bld_assetmode", "Asset Export", AssetMode)
-            .OnValueChanged(v => { AssetMode = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "bld_assetmode", "Asset Export", () =>
+            Origami.EnumDropdown(paper, "bld_assetmode_v", AssetMode,
+                v => { AssetMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
         if (PackagingMode == AssetPackagingMode.ProwlPak)
         {
-            EditorGUI.IntSlider(paper, "bld_maxpak", "Max Pak Size (MB)", MaxPakSizeMB, 256, 4096)
-                .OnValueChanged(v => { MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); });
+            InspectorRow.Draw(paper, "bld_maxpak", "Max Pak Size (MB)", () =>
+                Origami.IntSlider(paper, "bld_maxpak_v", MaxPakSizeMB,
+                    v => { MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); },
+                    256, 4096).Show());
         }
 
 

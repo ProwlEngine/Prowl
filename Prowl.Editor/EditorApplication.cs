@@ -62,7 +62,7 @@ public class EditorApplication : Game
 
         Resize(Window.Size.X, Window.Size.Y);
 
-        PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
+        PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Slug;
 
         // Load Font Awesome as fallback fonts for icons
         LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");

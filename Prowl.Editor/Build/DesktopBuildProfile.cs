@@ -4,7 +4,9 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 
@@ -41,24 +43,31 @@ public class DesktopBuildProfile : PlatformBuildProfile
 
     public override void OnGUI(Paper paper)
     {
-        EditorGUI.EnumDropdown(paper, "bld_platform", "Platform", Platform)
-            .OnValueChanged(v => { Platform = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "bld_platform", "Platform", () =>
+            Origami.EnumDropdown(paper, "bld_platform_v", Platform,
+                v => { Platform = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        EditorGUI.Toggle(paper, "bld_selfcontained", "Self-Contained", SelfContained)
-            .OnValueChanged(v => { SelfContained = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "bld_selfcontained", SelfContained,
+                v => { SelfContained = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Self-Contained").Show();
 
-        EditorGUI.Toggle(paper, "bld_trimmed", "Publish Trimmed", PublishTrimmed)
-            .OnValueChanged(v => { PublishTrimmed = v; ProjectSettingsRegistry.SaveAll(); });
+        Origami.Checkbox(paper, "bld_trimmed", PublishTrimmed,
+                v => { PublishTrimmed = v; ProjectSettingsRegistry.SaveAll(); })
+            .LabelRight("Publish Trimmed").Show();
 
         paper.Box("bld_sp2").Height(8);
         EditorGUI.Header(paper, "bld_window_h", "Window");
         EditorGUI.Separator(paper, "bld_window_sep");
 
-        EditorGUI.IntField(paper, "bld_width", WindowWidth, "Width")
-            .OnValueChanged(v => { WindowWidth = Math.Max(320, v); ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "bld_width", "Width", () =>
+            Origami.NumericField<int>(paper, "bld_width_v", WindowWidth,
+                v => { WindowWidth = Math.Max(320, v); ProjectSettingsRegistry.SaveAll(); })
+                .Min(320).Show());
 
-        EditorGUI.IntField(paper, "bld_height", WindowHeight, "Height")
-            .OnValueChanged(v => { WindowHeight = Math.Max(240, v); ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "bld_height", "Height", () =>
+            Origami.NumericField<int>(paper, "bld_height_v", WindowHeight,
+                v => { WindowHeight = Math.Max(240, v); ProjectSettingsRegistry.SaveAll(); })
+                .Min(240).Show());
     }
 
     public override void ModifyDefines(List<string> defines)

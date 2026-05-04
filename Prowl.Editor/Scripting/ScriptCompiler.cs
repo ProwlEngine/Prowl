@@ -64,11 +64,13 @@ public static class ScriptCompiler
             Runtime.Debug.Log($"[ScriptCompiler] Game assembly compiled successfully.");
         }
 
-        // Compile Editor assembly (depends on Game)
+        // Compile Editor assembly (depends on Game).
+        // BuildProjectReferences=false avoids redundantly rebuilding Game, which we
+        // already built above and which -t:Rebuild would otherwise force again.
         if (editorScripts.Count > 0)
         {
             Runtime.Debug.Log($"[ScriptCompiler] Compiling {project.Name}.Editor ({editorScripts.Count} scripts)...");
-            var editorResult = RunDotnetCommand($"build \"{project.EditorCsprojPath}\" --configuration Release -t:Rebuild", project.RootPath);
+            var editorResult = RunDotnetCommand($"build \"{project.EditorCsprojPath}\" --configuration Release -t:Rebuild -p:BuildProjectReferences=false", project.RootPath);
             output.AppendLine(editorResult.stdout);
             if (!string.IsNullOrEmpty(editorResult.stderr))
                 errors.AppendLine(editorResult.stderr);
@@ -166,8 +168,8 @@ public static class ScriptCompiler
         }
         sb.AppendLine("  </ItemGroup>");
 
-        // NuGet packages
-        AppendNuGetPackages(sb, project);
+        // NuGet packages (Game gets non-EditorOnly packages; Editor inherits these via ProjectReference)
+        AppendNuGetPackages(sb, project, isEditorAssembly: false);
 
         // Compile items
         sb.AppendLine("  <ItemGroup>");
@@ -190,7 +192,7 @@ public static class ScriptCompiler
         string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         string runtimeDll = Path.Combine(engineDir, "Prowl.Runtime.dll");
         string editorDll = Path.Combine(engineDir, "Prowl.Editor.dll");
-        string gameAssembly = Path.GetRelativePath(project.RootPath, project.GameAssemblyPath);
+        string gameCsprojRel = Path.GetFileName(project.GameCsprojPath);
         string outputDir = Path.GetRelativePath(project.RootPath, project.ScriptAssemblyPath);
 
         var sb = new StringBuilder();
@@ -207,7 +209,10 @@ public static class ScriptCompiler
         sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{GetVersionDefine()}</DefineConstants>");
         sb.AppendLine("  </PropertyGroup>");
 
-        // References
+        // References. Game is referenced via ProjectReference so its <PackageReference>s flow
+        // here transitively (so the user only marks a package "Editor Only" when they want to
+        // hide it from Game). Private=false avoids copying Game.dll on top of itself, since
+        // both csprojs share the same OutputPath.
         sb.AppendLine("  <ItemGroup>");
         sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");
         sb.AppendLine($"      <HintPath>{runtimeDll}</HintPath>");
@@ -217,10 +222,9 @@ public static class ScriptCompiler
         sb.AppendLine($"      <HintPath>{editorDll}</HintPath>");
         sb.AppendLine("      <Private>true</Private>");
         sb.AppendLine("    </Reference>");
-        sb.AppendLine($"    <Reference Include=\"{project.Name}.Game\">");
-        sb.AppendLine($"      <HintPath>{gameAssembly}</HintPath>");
-        sb.AppendLine("      <Private>true</Private>");
-        sb.AppendLine("    </Reference>");
+        sb.AppendLine($"    <ProjectReference Include=\"{gameCsprojRel}\">");
+        sb.AppendLine("      <Private>false</Private>");
+        sb.AppendLine("    </ProjectReference>");
 
         // Transitive dependencies
         foreach (var dll in Directory.EnumerateFiles(engineDir, "*.dll"))
@@ -234,8 +238,9 @@ public static class ScriptCompiler
         }
         sb.AppendLine("  </ItemGroup>");
 
-        // NuGet packages
-        AppendNuGetPackages(sb, project);
+        // NuGet packages (Editor csproj only emits packages flagged EditorOnly; the rest flow
+        // in transitively from the Game ProjectReference).
+        AppendNuGetPackages(sb, project, isEditorAssembly: true);
 
         // Compile items
         sb.AppendLine("  <ItemGroup>");
@@ -251,7 +256,7 @@ public static class ScriptCompiler
         File.WriteAllText(project.EditorCsprojPath, sb.ToString());
     }
 
-    internal static void AppendNuGetPackages(StringBuilder sb, Project project)
+    internal static void AppendNuGetPackages(StringBuilder sb, Project project, bool isEditorAssembly)
     {
         // Read packages from the PackageSettings (via ProjectSettingsRegistry)
         try
@@ -259,8 +264,13 @@ public static class ScriptCompiler
             var pkgSettings = ProjectSettingsRegistry.Get<PackageSettings>();
             if (pkgSettings.Packages.Count == 0) return;
 
+            // Editor csproj only declares EditorOnly packages; non-EditorOnly packages live
+            // on the Game csproj and flow into Editor via the ProjectReference.
+            var filtered = pkgSettings.Packages.Where(p => p.EditorOnly == isEditorAssembly).ToList();
+            if (filtered.Count == 0) return;
+
             sb.AppendLine("  <ItemGroup>");
-            foreach (var pkg in pkgSettings.Packages)
+            foreach (var pkg in filtered)
                 sb.AppendLine($"    <PackageReference Include=\"{pkg.Name}\" Version=\"{pkg.Version}\" />");
             sb.AppendLine("  </ItemGroup>");
         }

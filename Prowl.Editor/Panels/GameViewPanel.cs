@@ -3,6 +3,7 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -57,8 +58,8 @@ public class GameViewPanel : DockPanel
             .ChildTop(2).ChildBottom(2)
             .Enter())
         {
-            EditorGUI.Dropdown(paper, "gv_res", "Resolution", _resolutionIndex, resNames)
-                .OnValueChanged(v => { _resolutionIndex = v; InvalidateRT(); });
+            Origami.Dropdown(paper, "gv_res", _resolutionIndex,
+                v => { _resolutionIndex = v; InvalidateRT(); }, resNames).Show();
 
             paper.Box("gv_spacer");
 

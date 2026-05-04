@@ -28,7 +28,6 @@ public class SceneViewPanel : DockPanel
     /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
     public static EditorCamera? ActiveCamera { get; private set; }
     private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
-    private const float ToolbarHeight = 28f;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
@@ -56,22 +55,17 @@ public class SceneViewPanel : DockPanel
         }
         ActiveCamera = _editorCamera;
 
-        using (paper.Box("sv_root").Size(width, height).Enter())
+        using (paper.Column("sv_root").Size(width, height).Enter())
         {
-            DrawViewport(paper, font, width, height);
-            DrawToolbar(paper, font, width);
+            DrawToolbar(paper, font);
+            DrawViewport(paper, font, width, height - EditorTheme.MenuBarHeight);
         }
     }
 
-    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
+    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Row("sv_toolbar")
-            .PositionType(PositionType.SelfDirected)
-            .Position(4, 4).Size(width - 8, ToolbarHeight)
-            .Rounded(6)
-            .IsNotInteractable()
-            .ChildLeft(4).ChildRight(4).RowBetween(4)
-            .ChildTop(2).ChildBottom(2)
+            .Height(EditorTheme.MenuBarHeight)
             .Enter())
         {
             // Let active scene view editor draw its toolbar first
@@ -226,7 +220,6 @@ public class SceneViewPanel : DockPanel
         {
             paper.Box("sv_viewport")
                 .Size(width, height)
-                .Clip()
                 .OnPostLayout((handle, rect) =>
                 {
                     // Cache absolute rect for gizmo coordinate space
@@ -235,19 +228,24 @@ public class SceneViewPanel : DockPanel
                     // Draw RT
                     paper.Draw(ref handle, (canvas, r) =>
                     {
-                    float rx = (float)r.Min.X;
-                    float ry = (float)r.Min.Y;
-                    float rw = (float)r.Size.X;
-                    float rh = (float)r.Size.Y;
+                        float rx = (float)r.Min.X;
+                        float ry = (float)r.Min.Y;
+                        float rw = (float)r.Size.X;
+                        float rh = (float)r.Size.Y;
 
-                    // Draw RT with flipped Y OpenGL RT has Y=0 at bottom
-                    canvas.SetBrushTexture(rt.MainTexture);
-                    // TextureTransform maps screen rect to UV: flip V by translating +1 and scaling -1 on Y
-                    canvas.SetBrushTextureTransform(
-                        Transform2D.CreateTranslation(rx, ry + rh) *
-                        Transform2D.CreateScale(rw, -rh));
-                    canvas.RoundedRectFilled(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
-                    canvas.ClearBrushTexture();
+                        // Draw RT with flipped Y OpenGL RT has Y=0 at bottom
+                        canvas.SetBrushTexture(rt.MainTexture);
+                        // TextureTransform maps screen rect to UV: flip V by translating +1 and scaling -1 on Y
+                        canvas.SetBrushTextureTransform(
+                            Transform2D.CreateTranslation(rx, ry + rh) *
+                            Transform2D.CreateScale(rw, -rh));
+                        canvas.RoundedRectFilled(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
+                        canvas.ClearBrushTexture();
+
+                        canvas.RoundedRect(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness);
+                        canvas.SetStrokeColor(EditorTheme.Purple500);
+                        canvas.SetStrokeWidth(2);
+                        canvas.Stroke();
                     });
 
                     // Draw transform gizmo as 2D overlay (hidden when scene editor consumes input)
@@ -474,13 +472,13 @@ public class SceneViewPanel : DockPanel
         var lightGo = new GameObject("Directional Light");
         lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
         var light = lightGo.AddComponent<DirectionalLight>();
-        light.Intensity = 8f;
+        light.Intensity = 1f;
         scene.Add(lightGo);
 
         // Floor
         var floorGo = new GameObject("Floor");
-        floorGo.Transform.Position = new Float3(0, -0.05f, 0);
-        floorGo.Transform.LocalScale = new Float3(10, 0.1f, 10);
+        floorGo.Transform.Position = new Float3(0, 0, 0);
+        floorGo.Transform.LocalScale = new Float3(1, 1, 1);
         var floorRenderer = floorGo.AddComponent<MeshRenderer>();
         floorRenderer.Mesh = planeMesh;
         floorRenderer.Material = defaultMat;
@@ -735,7 +733,7 @@ public class SceneViewPanel : DockPanel
         // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
             .PositionType(PositionType.SelfDirected)
-            .Position(width - cubeSize - 8, 8)
+            .Position(width - cubeSize - 8, 8 + EditorTheme.MenuBarHeight)
             .Size(cubeSize, cubeSize)
             .OnPostLayout((handle, rect) => paper.DrawForeground(ref handle, (canvas, r) =>
             {

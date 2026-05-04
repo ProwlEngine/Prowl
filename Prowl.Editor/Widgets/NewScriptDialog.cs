@@ -135,8 +135,8 @@ public static class NewScriptDialog
                         .Wrap(Scribe.TextWrapMode.Wrap);
                 }
 
-                EditorGUI.TextField(paper, "scr_name", "Name", s_name)
-                    .OnValueChanged(v => s_name = v);
+                Origami.TextField(paper, "scr_name", s_name, v => s_name = v)
+                    .Placeholder("Name").Width(UnitValue.Stretch()).Show();
 
                 // Validation hint green when valid, red when not. Always visible so the
                 // user knows why Create is disabled.

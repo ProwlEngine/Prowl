@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.MeshFeatures;
@@ -116,13 +117,17 @@ public class MeshAssetEditor : AssetImporterEditor
         {
             EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
 
-            EditorGUI.ToggleButton(paper, $"{id}_view_shaded", "Shaded", state.Mode == ViewMode.Shaded, fitWidth: true)
-                .OnValueChanged(_ => { state.Mode = ViewMode.Shaded; state.LastPreviewSubject = null; });
+            // Mutually exclusive view modes — radios so the user can see both options and
+            // the active one is unambiguously highlighted.
+            Origami.Radio(paper, $"{id}_view_shaded", state.Mode == ViewMode.Shaded,
+                _ => { state.Mode = ViewMode.Shaded; state.LastPreviewSubject = null; })
+                .Primary().LabelRight("Shaded").Show();
 
             // Only offer the SDF view when an SDF actually exists.
             if (sdf != null)
-                EditorGUI.ToggleButton(paper, $"{id}_view_sdf", "SDF", state.Mode == ViewMode.SDFRaymarch, fitWidth: true)
-                    .OnValueChanged(_ => { state.Mode = ViewMode.SDFRaymarch; state.LastPreviewSubject = null; });
+                Origami.Radio(paper, $"{id}_view_sdf", state.Mode == ViewMode.SDFRaymarch,
+                    _ => { state.Mode = ViewMode.SDFRaymarch; state.LastPreviewSubject = null; })
+                    .Primary().LabelRight("SDF").Show();
         }
 
         if (state.Mode == ViewMode.SDFRaymarch && sdf == null)

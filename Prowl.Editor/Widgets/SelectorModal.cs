@@ -159,8 +159,7 @@ public static class SelectorModal
                 .Text(EditorIcons.MagnifyingGlass, font).TextColor(EditorTheme.Ink400)
                 .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-            EditorGUI.TextField(paper, "sel_search", "Search", _searchText)
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "sel_search", _searchText, v => _searchText = v).Show();
         }
     }
 

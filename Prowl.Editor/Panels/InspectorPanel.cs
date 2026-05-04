@@ -298,23 +298,27 @@ public class InspectorPanel : DockPanel
                             switch (val.TagType)
                             {
                                 case Echo.EchoType.Bool:
-                                    EditorGUI.Toggle(paper, $"insp_set_{key}", NicifySettingName(key), val.BoolValue)
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
+                                    Origami.Checkbox(paper, $"insp_set_{key}", val.BoolValue,
+                                            v => { settings[key] = new Echo.EchoObject(v); })
+                                        .LabelRight(NicifySettingName(key)).Show();
                                     break;
 
                                 case Echo.EchoType.Int:
-                                    EditorGUI.IntField(paper, $"insp_set_{key}", val.IntValue, NicifySettingName(key))
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
+                                    InspectorRow.Draw(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                        Origami.NumericField<int>(paper, $"insp_set_{key}_v", val.IntValue,
+                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
 
                                 case Echo.EchoType.Float:
-                                    EditorGUI.FloatField(paper, $"insp_set_{key}", val.FloatValue, NicifySettingName(key))
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
+                                    InspectorRow.Draw(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                        Origami.NumericField<float>(paper, $"insp_set_{key}_v", val.FloatValue,
+                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
 
                                 case Echo.EchoType.String:
-                                    EditorGUI.TextField(paper, $"insp_set_{key}", NicifySettingName(key), val.StringValue)
-                                        .OnValueChanged(v => { settings[key] = new Echo.EchoObject(v); });
+                                    InspectorRow.Draw(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                        Origami.TextField(paper, $"insp_set_{key}_v", val.StringValue,
+                                            v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
                             }
                         }

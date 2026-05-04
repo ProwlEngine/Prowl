@@ -1,6 +1,7 @@
 using System;
 
 using Prowl.Editor.Docking;
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -90,25 +91,29 @@ public class PreferencesPanel : DockPanel
         EditorGUI.Header(paper, "pref_gen_hdr", $"{EditorIcons.Gear}  General");
         EditorGUI.Separator(paper, "pref_gen_sep");
 
-        EditorGUI.TextField(paper, "pref_proj_path", "Default Projects Path", s.DefaultProjectsPath)
-            .OnValueChanged(v => { s.DefaultProjectsPath = v; s.Save(); });
+        InspectorRow.Draw(paper, "pref_proj_path", "Default Projects Path", () =>
+            Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
+                v => { s.DefaultProjectsPath = v; s.Save(); }).Show());
 
-        EditorGUI.Toggle(paper, "pref_auto_save", "Auto-Save Layout", s.AutoSaveLayout)
-            .OnValueChanged(v => { s.AutoSaveLayout = v; s.Save(); });
+        Origami.Checkbox(paper, "pref_auto_save", s.AutoSaveLayout,
+                v => { s.AutoSaveLayout = v; s.Save(); })
+            .LabelRight("Auto-Save Layout").Show();
 
-        EditorGUI.Toggle(paper, "pref_reimport_focus", "Reimport Only on Focus", s.ReimportOnFocusOnly)
-            .OnValueChanged(v => { s.ReimportOnFocusOnly = v; s.Save(); });
+        Origami.Checkbox(paper, "pref_reimport_focus", s.ReimportOnFocusOnly,
+                v => { s.ReimportOnFocusOnly = v; s.Save(); })
+            .LabelRight("Reimport Only on Focus").Show();
 
         string[] thumbOptions = ["32", "64", "128"];
         int thumbIndex = s.ThumbnailSize switch { 64 => 1, 128 => 2, _ => 0 };
-        EditorGUI.Dropdown(paper, "pref_thumb_size", "Thumbnail Size", thumbIndex, thumbOptions)
-            .OnValueChanged(v =>
-            {
-                s.ThumbnailSize = v switch { 1 => 64, 2 => 128, _ => 32 };
-                s.Save();
-                ThumbnailGenerator.DeleteAll();
-                ProjectPanel.ClearThumbnailCache();
-            });
+        InspectorRow.Draw(paper, "pref_thumb_size", "Thumbnail Size", () =>
+            Origami.Dropdown(paper, "pref_thumb_size_v", thumbIndex,
+                v =>
+                {
+                    s.ThumbnailSize = v switch { 1 => 64, 2 => 128, _ => 32 };
+                    s.Save();
+                    ThumbnailGenerator.DeleteAll();
+                    ProjectPanel.ClearThumbnailCache();
+                }, thumbOptions).Show());
     }
 
     // ================================================================
@@ -122,8 +127,9 @@ public class PreferencesPanel : DockPanel
         EditorGUI.Header(paper, "pref_theme_hdr", $"{EditorIcons.Palette}  Theme");
         EditorGUI.Separator(paper, "pref_theme_sep");
 
-        EditorGUI.TextField(paper, "pref_theme_name", "Theme Name", theme.Name)
-            .OnValueChanged(v => theme.Name = v);
+        InspectorRow.Draw(paper, "pref_theme_name", "Theme Name", () =>
+            Origami.TextField(paper, "pref_theme_name_v", theme.Name,
+                v => theme.Name = v).Show());
 
         paper.Box("pref_theme_sp1").Height(4);
 
@@ -228,8 +234,7 @@ public class PreferencesPanel : DockPanel
                     s.ApplyTheme();
                 });
 
-            EditorGUI.Toggle(paper, $"pref_ramp_{name}_override", "Override All Stops", ramp.OverrideAll)
-                .OnValueChanged(v =>
+            Origami.Checkbox(paper, $"pref_ramp_{name}_override", ramp.OverrideAll, v =>
                 {
                     ramp.OverrideAll = v;
                     if (v && ramp.Overrides != null)
@@ -238,7 +243,8 @@ public class PreferencesPanel : DockPanel
                             ramp.Overrides[i] = ColorRamp.ColorToHex(ramp.GetStop(i));
                     }
                     s.ApplyTheme();
-                });
+                })
+                .LabelRight("Override All Stops").Show();
 
             if (ramp.OverrideAll && ramp.Overrides != null)
             {
@@ -261,21 +267,22 @@ public class PreferencesPanel : DockPanel
 
     private void PrefTextField(Paper paper, EditorSettings s, string label, string value, Action<string> set)
     {
-
-        EditorGUI.TextField(paper, $"pref_ft_{label.Replace(" ", "_")}", label, value)
-            .OnValueChanged(v =>
+        string baseId = $"pref_ft_{label.Replace(" ", "_")}";
+        InspectorRow.Draw(paper, baseId, label, () =>
+            Origami.TextField(paper, $"{baseId}_v", value, v =>
             {
                 set(v);
                 //s.ApplyTheme();
                 s.Save();
-            });
+            }).Show());
     }
 
 
     private void SzSlider(Paper paper, EditorSettings s, string label, float value, float min, float max, Action<float> set, bool applyOnSlide = true)
     {
-        EditorGUI.Slider(paper, $"pref_sz_{label.Replace(" ", "_")}", label, value, min, max)
-            .OnValueChanged(v =>
+        string baseId = $"pref_sz_{label.Replace(" ", "_")}";
+        InspectorRow.Draw(paper, baseId, label, () =>
+            Origami.Slider(paper, $"{baseId}_v", value, v =>
             {
                 set(MathF.Round(v, 1));
                 if (applyOnSlide)
@@ -283,7 +290,7 @@ public class PreferencesPanel : DockPanel
                     s.ApplyTheme();
                     s.Save();
                 }
-            });
+            }, min, max).Format("F1").Show());
     }
 
     // ================================================================
@@ -330,8 +337,8 @@ public class PreferencesPanel : DockPanel
         EditorGUI.Separator(paper, "pref_sc_sep");
 
         // Search bar
-        EditorGUI.SearchBar(paper, "pref_sc_search", _shortcutSearch, "Search shortcuts...")
-            .OnValueChanged(v => _shortcutSearch = v);
+        Origami.SearchField(paper, "pref_sc_search", _shortcutSearch,
+            v => _shortcutSearch = v, "Search shortcuts...").Show();
 
         paper.Box("pref_sc_sp1").Height(4);
 

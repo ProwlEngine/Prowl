@@ -151,4 +151,194 @@ public static class Origami
         ArgumentNullException.ThrowIfNull(scrollViewId);
         ScrollViewBuilder.s_pendingScrollTo[scrollViewId] = offset;
     }
+
+    // ── Dropdown factories ───────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a single-select dropdown over a typed item list. Caller owns the value
+    /// and supplies a setter; Origami calls it when the user picks a different item. Equality
+    /// is determined by <see cref="EqualityComparer{T}.Default"/>; override via
+    /// <see cref="DropdownBuilder{T}.Comparer"/> if needed.
+    /// </summary>
+    public static DropdownBuilder<T> Dropdown<T>(Paper paper, string id, T value, Action<T> setter,
+        IReadOnlyList<T> items)
+        => new DropdownBuilder<T>(paper, id, value, setter, items, Current);
+
+    /// <summary>
+    /// String-array convenience: pick from a fixed list, with the caller tracking the index.
+    /// </summary>
+    public static DropdownBuilder<int> Dropdown(Paper paper, string id, int selectedIndex,
+        Action<int> setter, IReadOnlyList<string> options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var indices = new int[options.Count];
+        for (int i = 0; i < options.Count; i++) indices[i] = i;
+        return new DropdownBuilder<int>(paper, id, selectedIndex, setter, indices, Current)
+            .Display(i => (uint)i < (uint)options.Count ? options[i] : string.Empty);
+    }
+
+    /// <summary>
+    /// Enum convenience for a single-value enum. Renders <see cref="Enum.GetNames{T}"/> as labels.
+    /// </summary>
+    public static DropdownBuilder<TEnum> EnumDropdown<TEnum>(Paper paper, string id, TEnum value,
+        Action<TEnum> setter)
+        where TEnum : struct, Enum
+        => new DropdownBuilder<TEnum>(paper, id, value, setter, Enum.GetValues<TEnum>(), Current);
+
+    /// <summary>
+    /// Begin building a multi-select dropdown. The selection set is passed in and a fresh list
+    /// is delivered to <paramref name="setter"/> on every toggle.
+    /// </summary>
+    public static MultiDropdownBuilder<T> MultiDropdown<T>(Paper paper, string id,
+        IEnumerable<T> selected, Action<IReadOnlyList<T>> setter, IReadOnlyList<T> items)
+        => new MultiDropdownBuilder<T>(paper, id, selected, setter, items, Current);
+
+    // ── TextField factories ──────────────────────────────────────
+
+    /// <summary>Begin building a single-line text field.</summary>
+    public static TextFieldBuilder TextField(Paper paper, string id, string value, Action<string> setter)
+        => new TextFieldBuilder(paper, id, value, setter, Current);
+
+    /// <summary>Search field: leading magnifier glyph, default "Search..." placeholder, clear button.</summary>
+    public static TextFieldBuilder SearchField(Paper paper, string id, string value, Action<string> setter,
+        string placeholder = "Search...")
+        => new TextFieldBuilder(paper, id, value, setter, Current).Search(placeholder);
+
+    /// <summary>Password field: masks the value, adds a show/hide eye toggle.</summary>
+    public static TextFieldBuilder PasswordField(Paper paper, string id, string value, Action<string> setter,
+        char maskChar = '●')
+        => new TextFieldBuilder(paper, id, value, setter, Current).Password(maskChar);
+
+    /// <summary>Multi-line text area sized to <paramref name="rows"/> rows.</summary>
+    public static TextFieldBuilder TextArea(Paper paper, string id, string value, Action<string> setter, int rows = 4)
+        => new TextFieldBuilder(paper, id, value, setter, Current).MultiLine(rows);
+
+    /// <summary>
+    /// Begin building a numeric field. Generic on <typeparamref name="T"/> — works with
+    /// any <see cref="System.Numerics.INumber{T}"/> (float, double, decimal, int, uint,
+    /// long, short, byte, sbyte, etc.). Culture-aware by default
+    /// (<see cref="System.Globalization.CultureInfo.CurrentCulture"/>).
+    /// </summary>
+    public static NumericFieldBuilder<T> NumericField<T>(Paper paper, string id, T value, Action<T> setter)
+        where T : struct, System.Numerics.INumber<T>
+        => new NumericFieldBuilder<T>(paper, id, value, setter, Current);
+
+    // ── Button factories ─────────────────────────────────────────
+
+    /// <summary>Begin building a button. Construct the click handler at the call site.</summary>
+    public static ButtonBuilder Button(Paper paper, string id, string label, Action? onClick = null)
+        => new ButtonBuilder(paper, id, label, onClick, Current);
+
+    /// <summary>Square icon-only button. Sugar for <c>Button(...).IconOnly().LeadingIcon(glyph)</c>.</summary>
+    public static ButtonBuilder IconButton(Paper paper, string id, string glyph, Action? onClick = null)
+        => new ButtonBuilder(paper, id, string.Empty, onClick, Current).IconOnly().LeadingIcon(glyph);
+
+    /// <summary>
+    /// Begin building a segmented control. Caller supplies the current selected index and a setter;
+    /// chain <see cref="ButtonGroupBuilder.Item"/> for each segment.
+    /// </summary>
+    public static ButtonGroupBuilder ButtonGroup(Paper paper, string id, int selectedIndex, Action<int> setter)
+        => new ButtonGroupBuilder(paper, id, selectedIndex, setter, Current);
+
+    // ── Slider factories ─────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a generic slider. Track + thumb, click / drag / wheel / keyboard,
+    /// optional log + bipolar mapping, ticks, tooltip, inline numeric. Generic on
+    /// <typeparamref name="T"/> — any <see cref="System.Numerics.INumber{T}"/> works.
+    /// </summary>
+    public static SliderBuilder<T> Slider<T>(Paper paper, string id, T value, Action<T> setter, T min, T max)
+        where T : struct, System.Numerics.INumber<T>
+        => new SliderBuilder<T>(paper, id, value, setter, min, max, Current);
+
+    /// <summary>Float convenience for the generic <see cref="Slider{T}"/>.</summary>
+    public static SliderBuilder<float> Slider(Paper paper, string id, float value, Action<float> setter, float min, float max)
+        => new SliderBuilder<float>(paper, id, value, setter, min, max, Current);
+
+    /// <summary>Int convenience.</summary>
+    public static SliderBuilder<int> IntSlider(Paper paper, string id, int value, Action<int> setter, int min, int max)
+        => new SliderBuilder<int>(paper, id, value, setter, min, max, Current);
+
+    /// <summary>
+    /// Begin building a two-thumb range slider. Caller passes in <paramref name="low"/> and
+    /// <paramref name="high"/> and gets both back through <paramref name="setter"/> on every
+    /// change, ordered low &lt;= high.
+    /// </summary>
+    public static RangeSliderBuilder<T> RangeSlider<T>(Paper paper, string id, T low, T high,
+        Action<T, T> setter, T min, T max)
+        where T : struct, System.Numerics.INumber<T>
+        => new RangeSliderBuilder<T>(paper, id, low, high, setter, min, max, Current);
+
+    /// <summary>Float convenience for the generic <see cref="RangeSlider{T}"/>.</summary>
+    public static RangeSliderBuilder<float> RangeSlider(Paper paper, string id, float low, float high,
+        Action<float, float> setter, float min, float max)
+        => new RangeSliderBuilder<float>(paper, id, low, high, setter, min, max, Current);
+
+    /// <summary>Int convenience for the range slider.</summary>
+    public static RangeSliderBuilder<int> IntRangeSlider(Paper paper, string id, int low, int high,
+        Action<int, int> setter, int min, int max)
+        => new RangeSliderBuilder<int>(paper, id, low, high, setter, min, max, Current);
+
+    // ── Toggle factories ─────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a generic toggle. Defaults to switch style — chain
+    /// <see cref="ToggleBuilder.AsCheckbox"/> / <see cref="ToggleBuilder.AsRadio"/> to switch style.
+    /// </summary>
+    public static ToggleBuilder Toggle(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current);
+
+    /// <summary>Sliding-pill switch — alias for <see cref="Toggle"/> defaults.</summary>
+    public static ToggleBuilder Switch(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current).AsSwitch();
+
+    /// <summary>Square checkbox. Use <see cref="ToggleBuilder.Indeterminate"/> for tri-state.</summary>
+    public static ToggleBuilder Checkbox(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current).AsCheckbox();
+
+    /// <summary>Single circular radio. For "pick one of N" use <see cref="RadioGroup{T}"/> instead.</summary>
+    public static ToggleBuilder Radio(Paper paper, string id, bool value, Action<bool> setter)
+        => new ToggleBuilder(paper, id, value, setter, Current).AsRadio();
+
+    /// <summary>Begin building a typed radio group bound to a list of items.</summary>
+    public static RadioGroupBuilder<T> RadioGroup<T>(Paper paper, string id, T value,
+        Action<T> setter, IReadOnlyList<T> items)
+        => new RadioGroupBuilder<T>(paper, id, value, setter, items, Current);
+
+    /// <summary>Enum convenience for a single-value radio group. Renders <see cref="Enum.GetNames{T}"/> as labels.</summary>
+    public static RadioGroupBuilder<TEnum> EnumRadioGroup<TEnum>(Paper paper, string id,
+        TEnum value, Action<TEnum> setter)
+        where TEnum : struct, Enum
+        => new RadioGroupBuilder<TEnum>(paper, id, value, setter, Enum.GetValues<TEnum>(), Current);
+
+    /// <summary>
+    /// Convenience for a <c>[Flags]</c> enum: each non-zero flag becomes a checkbox row,
+    /// and the OR of the checked flags is delivered to <paramref name="setter"/>.
+    /// Zero (<c>None</c>) entries are skipped — clearing the selection clears all bits.
+    /// </summary>
+    public static MultiDropdownBuilder<TEnum> FlagsDropdown<TEnum>(Paper paper, string id,
+        TEnum value, Action<TEnum> setter)
+        where TEnum : struct, Enum
+    {
+        ArgumentNullException.ThrowIfNull(setter);
+
+        var all = Enum.GetValues<TEnum>();
+        var nonZero = new List<TEnum>(all.Length);
+        var valueU = Convert.ToUInt64(value);
+        var current = new List<TEnum>(all.Length);
+        foreach (var v in all)
+        {
+            ulong u = Convert.ToUInt64(v);
+            if (u == 0) continue;
+            nonZero.Add(v);
+            if ((valueU & u) == u) current.Add(v);
+        }
+
+        return new MultiDropdownBuilder<TEnum>(paper, id, current, list =>
+        {
+            ulong combined = 0;
+            foreach (var f in list) combined |= Convert.ToUInt64(f);
+            setter((TEnum)Enum.ToObject(typeof(TEnum), combined));
+        }, nonZero, Current);
+    }
 }

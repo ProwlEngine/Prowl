@@ -83,22 +83,52 @@ vec4 StandardSurface(
                                              baseColor, metallic, roughness, ao);
 
     // --- Translucency (per-light backscatter) ---
-    if (translucency > 0.0 && _LightCount > 0)
+    // Walks the same lights CalculateForwardLighting does: directional + every BVH leaf whose
+    // tight AABB contains worldPos. Range / spot falloff aren't applied here translucency is
+    // a thin-surface approximation that just wants per-light radiance, and the BVH's
+    // point-in-AABB query already culls lights too far away to contribute.
+    if (translucency > 0.0)
     {
-        for (int i = 0; i < _LightCount && i < MAX_FORWARD_LIGHTS; i++)
+        if (_DirectionalLightEnabled != 0)
         {
-            vec3 lightDir;
-            if (_LightType[i] == 0)
-                lightDir = normalize(_LightDirections[i]);
-            else
-                lightDir = normalize(_LightPositions[i] - worldPos);
-
-            vec3 lightColor = _LightColors[i] * _LightIntensities[i];
-
-            vec3 scatter = CalculateTranslucency(lightDir, viewDir, worldNormal,
+            vec3 lDir = normalize(_DirectionalLightDirection);
+            vec3 lCol = _DirectionalLightColor * _DirectionalLightIntensity;
+            vec3 scatter = CalculateTranslucency(lDir, viewDir, worldNormal,
                                translucency, scatteringPower,
-                               scatteringDistortion, scatteringScale, lightColor);
+                               scatteringDistortion, scatteringScale, lCol);
             lighting += scatter * baseColor;
+        }
+
+        if (_StaticLightRoot >= 0)
+        {
+            LBVH_Iter it; LBVH_Begin(it, _StaticLightRoot);
+            int slot;
+            while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0)
+            {
+                LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
+                vec3 lDir = normalize(L.Position - worldPos);
+                vec3 lCol = L.Color * L.Intensity;
+                vec3 scatter = CalculateTranslucency(lDir, viewDir, worldNormal,
+                                   translucency, scatteringPower,
+                                   scatteringDistortion, scatteringScale, lCol);
+                lighting += scatter * baseColor;
+            }
+        }
+
+        if (_DynamicLightRoot >= 0)
+        {
+            LBVH_Iter it; LBVH_Begin(it, _DynamicLightRoot);
+            int slot;
+            while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0)
+            {
+                LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+                vec3 lDir = normalize(L.Position - worldPos);
+                vec3 lCol = L.Color * L.Intensity;
+                vec3 scatter = CalculateTranslucency(lDir, viewDir, worldNormal,
+                                   translucency, scatteringPower,
+                                   scatteringDistortion, scatteringScale, lCol);
+                lighting += scatter * baseColor;
+            }
         }
     }
 

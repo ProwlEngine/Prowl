@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -200,7 +201,11 @@ public class ContextMenuBuilder
                         .Enter())
             {
 
-                EditorGUI.Toggle(paper, $"{id}_t_{index}", "", ToggleValue != null ? ToggleValue.Invoke() : false);
+                // Read-only indicator inside menu rows — the row itself owns the click; the
+                // checkbox just shows current state.
+                Origami.Checkbox(paper, $"{id}_t_{index}",
+                        ToggleValue != null ? ToggleValue.Invoke() : false, _ => { })
+                    .NoLabel().ReadOnly().Show();
 
 
                 paper.Box($"{id}_l_{index}")

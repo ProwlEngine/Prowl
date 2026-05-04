@@ -80,17 +80,15 @@ public static class PropertyGrid
                     continue;
                 }
 
-                // [Range] override for numeric types
+                // [Range] override > render as a slider (single value) or range slider
+                // (Float2/Double2/Int2 — interpreted as low/high pair within the same outer
+                // bounds). Falls through to the default editor for any other type.
                 var range = field.GetCustomAttribute<RangeAttribute>();
-                if (range != null && (fieldType == typeof(float) || fieldType == typeof(int)))
+                if (range != null)
                 {
-                    if (fieldType == typeof(float))
-                        EditorGUI.Slider(paper, fieldId, label, (float)(value ?? 0f), range.Min, range.Max)
-                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
-                    else
-                        EditorGUI.IntSlider(paper, fieldId, label, (int)(value ?? 0), (int)range.Min, (int)range.Max)
-                            .OnValueChanged(v => { field.SetValue(target, v); onChanged?.Invoke(target); });
-                    continue;
+                    bool handled = TryDrawRangeAttribute(paper, fieldId, label, fieldType, value, range,
+                        v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                    if (handled) continue;
                 }
 
                 // Check if this field is overridden on a prefab instance
@@ -156,8 +154,10 @@ public static class PropertyGrid
             var names = Enum.GetNames(type);
             var values = Enum.GetValues(type);
             int selectedIdx = value != null ? Array.IndexOf(values, value) : 0;
-            EditorGUI.Dropdown(paper, id, label, selectedIdx, names)
-                .OnValueChanged(idx => { if (idx >= 0 && idx < values.Length) onChange(values.GetValue(idx)); });
+            InspectorRow.Draw(paper, id, label, () =>
+                Origami.Dropdown(paper, $"{id}_dd", selectedIdx,
+                    idx => { if (idx >= 0 && idx < values.Length) onChange(values.GetValue(idx)); }, names)
+                    .Show());
             return;
         }
 
@@ -266,6 +266,72 @@ public static class PropertyGrid
     }
 
     // ================================================================
+    //  [Range] handling — slider for scalars, range slider for Float2/Double2/Int2
+    // ================================================================
+
+    /// <summary>
+    /// Render a <see cref="RangeAttribute"/>-decorated field as a slider (scalars) or two-thumb
+    /// range slider (Float2 / Double2 / Int2). Returns false if the field type isn't supported,
+    /// in which case the caller falls back to the default editor.
+    /// </summary>
+    static bool TryDrawRangeAttribute(Paper paper, string id, string label, Type fieldType, object? value,
+        RangeAttribute range, Action<object?> onChange)
+    {
+        if (fieldType == typeof(float))
+        {
+            InspectorRow.Draw(paper, id, label, () =>
+                Origami.Slider(paper, $"{id}_v", (float)(value ?? 0f),
+                    v => onChange(v), range.Min, range.Max).Show());
+            return true;
+        }
+        if (fieldType == typeof(int))
+        {
+            InspectorRow.Draw(paper, id, label, () =>
+                Origami.IntSlider(paper, $"{id}_v", (int)(value ?? 0),
+                    v => onChange(v), (int)range.Min, (int)range.Max).Show());
+            return true;
+        }
+        if (fieldType == typeof(double))
+        {
+            InspectorRow.Draw(paper, id, label, () =>
+                Origami.Slider<double>(paper, $"{id}_v", (double)(value ?? 0.0),
+                    v => onChange(v), range.Min, range.Max).Show());
+            return true;
+        }
+
+        // [Range] on a 2-component vector > range slider, with .X = low, .Y = high.
+        if (fieldType == typeof(Float2))
+        {
+            var v = (Float2)(value ?? Float2.Zero);
+            InspectorRow.Draw(paper, id, label, () =>
+                Origami.RangeSlider(paper, $"{id}_v", (float)v.X, (float)v.Y,
+                    (lo, hi) => onChange(new Float2(lo, hi)),
+                    range.Min, range.Max).Show());
+            return true;
+        }
+        if (fieldType == typeof(Double2))
+        {
+            var v = (Double2)(value ?? Double2.Zero);
+            InspectorRow.Draw(paper, id, label, () =>
+                Origami.RangeSlider<double>(paper, $"{id}_v", v.X, v.Y,
+                    (lo, hi) => onChange(new Double2(lo, hi)),
+                    range.Min, range.Max).Show());
+            return true;
+        }
+        if (fieldType == typeof(Int2))
+        {
+            var v = (Int2)(value ?? Int2.Zero);
+            InspectorRow.Draw(paper, id, label, () =>
+                Origami.IntRangeSlider(paper, $"{id}_v", v.X, v.Y,
+                    (lo, hi) => onChange(new Int2(lo, hi)),
+                    (int)range.Min, (int)range.Max).Show());
+            return true;
+        }
+
+        return false;
+    }
+
+    // ================================================================
     //  Type Picker (for polymorphism)
     // ================================================================
 
@@ -286,12 +352,14 @@ public static class PropertyGrid
         int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) + 1 : 0;
         var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
 
-        EditorGUI.Dropdown(paper, $"{id}_dd", "Type", selectedIndex, names, true)
-            .OnValueChanged(idx =>
-            {
-                if (idx == 0) onChange(null);
-                else if (idx >= 1 && idx <= types.Length) onChange(Activator.CreateInstance(types[idx - 1]));
-            });
+        InspectorRow.Draw(paper, $"{id}_row", "Type", () =>
+            Origami.Dropdown(paper, $"{id}_dd", selectedIndex,
+                idx =>
+                {
+                    if (idx == 0) onChange(null);
+                    else if (idx >= 1 && idx <= types.Length) onChange(Activator.CreateInstance(types[idx - 1]));
+                }, names)
+                .Show());
     }
 
     // ================================================================

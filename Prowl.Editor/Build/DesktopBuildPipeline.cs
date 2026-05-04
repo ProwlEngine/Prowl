@@ -344,15 +344,20 @@ public class DesktopBuildPipeline : BuildPipeline
                                 ? new[] { ".dylib", "" }
                                 : new[] { ".so", ".so.1", "" };
 
+                        string[] nameVariants = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                            ? new[] { libraryName }
+                            : new[] { libraryName, "lib" + libraryName };
+
                         foreach (var r in rids)
                         {
                             string nativeSubDir = string.IsNullOrEmpty(r)
                                 ? Path.Combine("runtimes", "native")
                                 : Path.Combine("runtimes", r, "native");
 
+                            foreach (var name in nameVariants)
                             foreach (var ext in exts)
                             {
-                                string fullPath = Path.Combine(baseDir, nativeSubDir, libraryName + ext);
+                                string fullPath = Path.Combine(baseDir, nativeSubDir, name + ext);
                                 Log($"[Native] Probing: {fullPath}");
 
                                 if (File.Exists(fullPath))
@@ -371,9 +376,10 @@ public class DesktopBuildPipeline : BuildPipeline
                         }
 
                         // Fallback to root directory
+                        foreach (var name in nameVariants)
                         foreach (var ext in exts)
                         {
-                            string rootPath = Path.Combine(baseDir, libraryName + ext);
+                            string rootPath = Path.Combine(baseDir, name + ext);
                             Log($"[Native] Root probe: {rootPath}");
                             if (File.Exists(rootPath) && NativeLibrary.TryLoad(rootPath, out IntPtr handle))
                             {
@@ -416,15 +422,20 @@ public class DesktopBuildPipeline : BuildPipeline
                             ? new[] { ".dylib", "" }
                             : new[] { ".so", ".so.1", "" };
 
+                    string[] nameVariants = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                        ? new[] { libraryName }
+                        : new[] { libraryName, "lib" + libraryName };
+
                     foreach (var r in rids)
                     {
                         string nativeSubDir = string.IsNullOrEmpty(r)
                             ? Path.Combine("runtimes", "native")
                             : Path.Combine("runtimes", r, "native");
 
+                        foreach (var name in nameVariants)
                         foreach (var ext in exts)
                         {
-                            string fullPath = Path.Combine(baseDir, nativeSubDir, libraryName + ext);
+                            string fullPath = Path.Combine(baseDir, nativeSubDir, name + ext);
                             Log($"[Native] Probing: {fullPath}");
 
                             if (File.Exists(fullPath))
@@ -443,9 +454,10 @@ public class DesktopBuildPipeline : BuildPipeline
                     }
 
                     // Last chance: root directory
+                    foreach (var name in nameVariants)
                     foreach (var ext in exts)
                     {
-                        string rootPath = Path.Combine(baseDir, libraryName + ext);
+                        string rootPath = Path.Combine(baseDir, name + ext);
                         if (File.Exists(rootPath) && NativeLibrary.TryLoad(rootPath, out IntPtr handle))
                         {
                             Log($"[Native] SUCCESS from root: {rootPath}");
@@ -557,8 +569,9 @@ public class DesktopBuildPipeline : BuildPipeline
 
         ListDependencies(sb);
 
-        // User NuGet packages from ProjectSettings/Packages.json
-        Scripting.ScriptCompiler.AppendNuGetPackages(sb, project);
+        // User NuGet packages from ProjectSettings/Packages.json. Desktop builds bundle the
+        // runtime / non-editor packages (EditorOnly packages live only inside the editor).
+        Scripting.ScriptCompiler.AppendNuGetPackages(sb, project, isEditorAssembly: false);
 
 
         // Compile items just the generated Program.cs (user scripts are a separate pre-compiled DLL)

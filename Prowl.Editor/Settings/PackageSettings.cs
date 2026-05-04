@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Scripting;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
@@ -22,10 +24,12 @@ public class PackageSettings : ProjectSettingsBase
     {
         public string Name = "";
         public string Version = "";
+        public bool EditorOnly = false;
     }
 
     private string _newName = "";
     private string _newVersion = "";
+    private bool _newEditorOnly = false;
 
     public override void Apply() { }
 
@@ -43,7 +47,7 @@ public class PackageSettings : ProjectSettingsBase
         EditorGUI.Separator(paper, "pkg_sep");
 
         EditorGUI.Label(paper, "pkg_info",
-            "Packages are added to both Game and Editor script assemblies.");
+            "Packages flow to both Game and Editor scripts. Mark a package Editor Only to keep it out of player builds.");
 
         paper.Box("pkg_sp1").Height(4);
 
@@ -60,6 +64,14 @@ public class PackageSettings : ProjectSettingsBase
                     .Text(pkg.Name, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize - 1)
                     .Alignment(TextAlignment.MiddleLeft);
+
+                Origami.Checkbox(paper, $"pkg_eo_{i}", pkg.EditorOnly, v =>
+                    {
+                        Packages[idx].EditorOnly = v;
+                        Apply();
+                        ProjectSettingsRegistry.SaveAll();
+                    })
+                    .LabelRight("Editor Only").Show();
 
                 paper.Box($"pkg_ver_{i}")
                     .Width(80).Height(EditorTheme.RowHeight)
@@ -94,20 +106,24 @@ public class PackageSettings : ProjectSettingsBase
         // Add new package
         EditorGUI.Header(paper, "pkg_add_hdr", "Add Package");
 
-        EditorGUI.TextField(paper, "pkg_add_name", "Package Name", _newName)
-            .OnValueChanged(v => _newName = v);
+        InspectorRow.Draw(paper, "pkg_add_name", "Package Name", () =>
+            Origami.TextField(paper, "pkg_add_name_v", _newName, v => _newName = v).Show());
 
-        EditorGUI.TextField(paper, "pkg_add_ver", "Version", _newVersion)
-            .OnValueChanged(v => _newVersion = v);
+        InspectorRow.Draw(paper, "pkg_add_ver", "Version", () =>
+            Origami.TextField(paper, "pkg_add_ver_v", _newVersion, v => _newVersion = v).Show());
+
+        Origami.Checkbox(paper, "pkg_add_editor_only", _newEditorOnly, v => _newEditorOnly = v)
+            .LabelRight("Editor Only").Show();
 
         EditorGUI.Button(paper, "pkg_add_btn", $"{EditorIcons.Plus}  Add Package", width: 140)
             .OnValueChanged(_ =>
             {
                 if (!string.IsNullOrWhiteSpace(_newName) && !string.IsNullOrWhiteSpace(_newVersion))
                 {
-                    Packages.Add(new PackageEntry { Name = _newName.Trim(), Version = _newVersion.Trim() });
+                    Packages.Add(new PackageEntry { Name = _newName.Trim(), Version = _newVersion.Trim(), EditorOnly = _newEditorOnly });
                     _newName = "";
                     _newVersion = "";
+                    _newEditorOnly = false;
                     Apply();
                     ProjectSettingsRegistry.SaveAll();
                 }

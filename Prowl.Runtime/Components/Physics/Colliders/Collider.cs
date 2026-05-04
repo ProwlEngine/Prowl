@@ -100,17 +100,24 @@ public abstract class Collider : MonoBehaviour
         {
             // Only try to remove shapes if the body is still registered with the physics world
             // (If the rigidbody was already removed, the shapes are already gone)
-            try
+            foreach (RigidBodyShape shape in _attachedShapes)
             {
-                foreach (var shape in _attachedShapes)
+                try
                 {
-                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Update);
+                    // Use Preserve: Update mode calls SetMassInertia() after each removal, which
+                    // iterates remaining shapes — this throws NotSupportedException for TriangleShape.
+                    // Mass/inertia is recalculated in full by RegisterShapes after re-attachment.
+                    _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
                 }
-            }
-            catch (System.InvalidOperationException)
-            {
-                // Shape was already removed (e.g., when rigidbody was removed from world)
-                // This is fine, just continue
+                catch (ArgumentException)
+                {
+                    // Shape was already removed from this body (e.g., UpdateShapes pre-cleared the
+                    // body with RemoveShapes before calling Detach). Safe to ignore.
+                }
+                catch (InvalidOperationException)
+                {
+                    // Body was removed from the physics world; its shapes are already gone.
+                }
             }
         }
 
@@ -141,29 +148,30 @@ public abstract class Collider : MonoBehaviour
 
         if (_attachedShapes != null)
         {
-            foreach (var shape in _attachedShapes)
+            foreach (RigidBodyShape shape in _attachedShapes)
             {
-                _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Update);
+                // Always use Preserve: per-shape Update mode calls SetMassInertia() after every
+                // addition, which iterates ALL attached shapes. Any TriangleShape in that set
+                // throws NotSupportedException. We set mass once below, after all shapes are added.
+                _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
             }
         }
 
         if (_attachedRigidbody3D != null)
         {
-            // Set mas to itself to force inertia tensor recalculation
+            // SetMassInertia(mass) sums inertia from all shapes, then scales to the requested mass.
+            // TriangleShape has no volume so it throws NotSupportedException; fall back to an
+            // identity tensor so the body still gets a finite, usable mass.
             try
             {
-                _attachedRigidbody3D.Mass = _attachedRigidbody3D.Mass;
+                _attachedBody.SetMassInertia(_attachedRigidbody3D.Mass);
             }
-            catch (InvalidOperationException)
+            catch (NotSupportedException)
             {
-                // This can occur if the Shapes provided are 2D and mass cannot be calculated from them
-                _attachedBody.SetMassInertia(JMatrix.Identity, 1f);
+                _attachedBody.SetMassInertia(JMatrix.Identity, _attachedRigidbody3D.Mass);
             }
         }
-        else
-        {
-            // Static bodies dont really need mass or inertia
-        }
+        // Static bodies don't need mass or inertia.
     }
 
     /// <summary>
