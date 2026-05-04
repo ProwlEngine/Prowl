@@ -236,9 +236,15 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 vie
     float NdotL = dot(worldNormal, lightDir);
     if (NdotL <= 0.0) return vec3(0.0);
 
-    float distAtten = 1.0 / (dist2 + 1.0);
-    float rangeAtten = 1.0 - smoothstep(L.Range * 0.8, L.Range, dist);
-    float attenuation = distAtten * rangeAtten;
+    //   window = (1 - (d/r)^4)^2  -> smooth cutoff at d == Range, 1.0 at d == 0
+    //   core   = 1 / (1 + 4*(d/r)^2) -> inverse-square feel in normalized units
+    float r = max(L.Range, 1e-4);
+    float t = dist / r;
+    float t2 = t * t;
+    float window = clamp(1.0 - t2 * t2, 0.0, 1.0);
+    window *= window;
+    float core = 1.0 / (1.0 + 4.0 * t2);
+    float attenuation = core * window;
 
     if (L.Type == 2) {
         float lightAngleCos = dot(normalize(L.Direction), -lightDir);
@@ -303,9 +309,13 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
     float NdotL = dot(worldNormal, lightDir);
     if (NdotL <= 0.0) return vec3(0.0);
 
-    float distAtten = 1.0 / (dist2 + 1.0);
-    float rangeAtten = 1.0 - smoothstep(L.Range * 0.8, L.Range, dist);
-    float attenuation = distAtten * rangeAtten;
+    float r = max(L.Range, 1e-4);
+    float t = dist / r;
+    float t2 = t * t;
+    float window = clamp(1.0 - t2 * t2, 0.0, 1.0);
+    window *= window;
+    float core = 1.0 / (1.0 + 4.0 * t2);
+    float attenuation = core * window;
 
     if (L.Type == 2) {
         float lightAngleCos = dot(normalize(L.Direction), -lightDir);

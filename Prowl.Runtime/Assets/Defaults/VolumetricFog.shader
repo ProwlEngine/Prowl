@@ -213,9 +213,13 @@ Pass "FogMarch"
 
         float DistanceAttenuation(float dist, float range)
         {
-            float att = 1.0 / max(dist * dist, 1e-4);
-            float window = clamp(1.0 - pow(dist / max(range, 1e-4), 4.0), 0.0, 1.0);
-            return att * window * window;
+            float r = max(range, 1e-4);
+            float t = dist / r;
+            float t2 = t * t;
+            float window = clamp(1.0 - t2 * t2, 0.0, 1.0);
+            window *= window;
+            float core = 1.0 / (1.0 + 4.0 * t2);
+            return core * window;
         }
 
         float Hash13(vec3 p)

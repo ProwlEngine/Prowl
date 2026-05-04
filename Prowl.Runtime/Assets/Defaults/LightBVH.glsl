@@ -89,9 +89,9 @@ LightSample LBVH_FetchLight(sampler2D tex, int dim, int shift, int slot)
     vec4 t1 = texelFetch(tex, LBVH_Coord(base + 1, dim, shift), 0);
     vec4 t2 = texelFetch(tex, LBVH_Coord(base + 2, dim, shift), 0);
 
-    int packed = int(t2.w + 0.5);
-    int type = packed & 3;
-    int shadowEnabled = (packed >> 2) & 1;
+    int typeAndFlags = int(t2.w + 0.5);
+    int type = typeAndFlags & 3;
+    int shadowEnabled = (typeAndFlags >> 2) & 1;
 
     LightSample L;
     L.Position      = t0.xyz;
