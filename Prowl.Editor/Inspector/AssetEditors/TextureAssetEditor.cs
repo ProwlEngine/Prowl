@@ -34,23 +34,14 @@ public class TextureAssetEditor : AssetImporterEditor
 
             paper.Box($"{id}_sp1").Height(8);
 
-            // Texture preview
+            // Texture preview — DrawTextureInto applies a Y-flip brush transform so the
+            // image shows right-side up. Plain canvas.DrawImage would render upside-down
+            // because Texture2D.FromImage flipped the image before GL upload.
             paper.Box($"{id}_preview")
                 .Width(UnitValue.Stretch()).Height(200)
                 .Rounded(4)
                 .BackgroundColor(System.Drawing.Color.FromArgb(255, 40, 40, 40))
-                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                {
-                    float maxW = (float)r.Size.X - 8;
-                    float maxH = (float)r.Size.Y - 8;
-                    float aspect = (float)texture.Width / Math.Max(1, (float)texture.Height);
-                    float drawW = maxW;
-                    float drawH = drawW / aspect;
-                    if (drawH > maxH) { drawH = maxH; drawW = drawH * aspect; }
-                    float drawX = (float)r.Min.X + ((float)r.Size.X - drawW) / 2;
-                    float drawY = (float)r.Min.Y + ((float)r.Size.Y - drawH) / 2;
-                    canvas.DrawImage(texture, drawX, drawY, drawW, drawH);
-                }));
+                .DrawTextureInto(paper, texture);
         }
 
         if (Project.Current == null) return;
@@ -124,5 +115,13 @@ public class TextureAssetEditor : AssetImporterEditor
                 _cachedSettings = null; // Force reload after reimport
                 EditorAssetDatabase.Instance?.Reimport(entry.Guid);
             });
+
+        // Open the PBR Forge tool with this texture as the initial diffuse.
+        if (texture != null)
+        {
+            paper.Box($"{id}_sp4").Height(8);
+            EditorGUI.Button(paper, $"{id}_pbr_open", $"{EditorIcons.WandMagicSparkles}  Create PBR Maps", width: 180)
+                .OnValueChanged(_ => PBRForgeWindow.OpenFor(texture));
+        }
     }
 }
