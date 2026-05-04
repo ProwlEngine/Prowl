@@ -60,6 +60,43 @@ public enum LightType
     //Area
 }
 
+/// <summary>
+/// Per-frame light parameters surfaced by every <see cref="IRenderableLight"/>. Consumed by
+/// <see cref="SceneLightSystem"/>, packed into the BVH leaf textures, and (for the directional
+/// light + closest-N shadow casters) uploaded as conventional uniforms.
+/// </summary>
+public struct ForwardLightData
+{
+    public LightType Type;
+    public Float3 Position;
+    public Float3 Direction;
+    public Float3 Color;
+    public float Intensity;
+    public float Range;
+    public float SpotAngle;       // degrees
+    public float InnerSpotAngle;  // degrees
+
+    // Shadow
+    public bool ShadowEnabled;
+    public float ShadowBias;
+    public float ShadowNormalBias;
+    public float ShadowStrength;
+    public float ShadowQuality;   // 0 = Hard, 1 = Soft
+
+    // Directional cascade data (only for LightType.Directional)
+    public int CascadeCount;
+    public Float4x4[] CascadeShadowMatrices; // [4]
+    public Float4[] CascadeAtlasParams;      // [4]
+
+    // Point shadow data (6 faces)
+    public Float4x4[] PointShadowMatrices; // [6]
+    public Float4[] PointShadowFaceParams; // [6]
+
+    // Spot shadow data (1 matrix)
+    public Float4x4 SpotShadowMatrix;
+    public Float4 SpotShadowAtlasParams;
+}
+
 public interface IRenderableLight
 {
     public int GetLightID();

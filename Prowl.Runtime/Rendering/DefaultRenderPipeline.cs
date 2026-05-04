@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -56,6 +57,18 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_gridMaterial;
 
     public static DefaultRenderPipeline Default { get; } = new();
+
+    // Per-Scene BVH state. Keyed weakly so it goes away with the scene without an explicit
+    // unload hook from this side; a dropped scene drops its light textures on the next GC pass.
+    private static readonly ConditionalWeakTable<Scene, SceneLightSystem> s_lightSystems = new();
+
+    /// <summary>Get (or create) the light system bound to a scene. Creating one is cheap (no
+    /// GPU allocation until the first <see cref="SceneLightSystem.Reconcile"/>).</summary>
+    public static SceneLightSystem GetOrCreateLightSystem(Scene scene)
+    {
+        if (scene == null) throw new ArgumentNullException(nameof(scene));
+        return s_lightSystems.GetValue(scene, _ => new SceneLightSystem());
+    }
 
     #endregion
 
@@ -161,6 +174,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // =======================================================
         // 3. Collect and Cull Renderables
         var (renderables, lights) = CollectRenderables(camera.GameObject.Scene, camera);
+        //lights.Clear();
 
         // Inject editor grid
         if (data.DisplayGrid)
@@ -183,13 +197,19 @@ public class DefaultRenderPipeline : RenderPipeline
             effect.OnPreRender(camera);
 
         // =======================================================
-        // 5. Shadow Atlas
-        RenderShadowAtlas(css, lights, renderables);
-        AssignCameraMatrices(css.View, css.Projection);
+        // 5. Light system reconcile + shadow atlas + uniform upload
+        // Reconcile does the cheap work first (BVH refits, shadow caster picks). Then the atlas
+        // is rendered for only the directional and the closest-N point/spot, and finally the
+        // BVH textures + directional + shadow uniforms are pushed to the GPU.
+        SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
+        lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
 
-        // =======================================================
-        // 6. Forward Light Setup select 8 most relevant lights, upload as globals
-        ForwardLightManager.SelectAndUploadLights(css.CameraPosition, lights, css.CullingMask);
+        Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
+        Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
+        lightSystem.RenderShadows(this, css.CameraPosition, renderables);
+
+        AssignCameraMatrices(css.View, css.Projection);
+        lightSystem.UploadGlobalUniforms();
 
         // Upload fog parameters as globals for forward shaders
         UploadFogUniforms(css.Scene);
@@ -384,24 +404,6 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalColor("_AmbientSkyColor", ambient.SkyColor);
         PropertyState.SetGlobalColor("_AmbientGroundColor", ambient.GroundColor);
         PropertyState.SetGlobalFloat("_AmbientStrength", (float)ambient.Strength);
-    }
-
-    private void RenderShadowAtlas(CameraSnapshot css, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
-    {
-        Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
-        Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
-
-        // Process all lights - each light handles its own shadow rendering
-        foreach (IRenderableLight light in lights)
-        {
-            if (css.CullingMask.HasLayer(light.GetLayer()) == false)
-                continue;
-
-            if (light is Light lightComponent)
-            {
-                lightComponent.RenderShadows(this, css.CameraPosition, renderables);
-            }
-        }
     }
 
     private void RenderSkybox(CameraSnapshot css, List<IRenderableLight> lights)

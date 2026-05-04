@@ -215,6 +215,23 @@ public class ParticleSystemComponentEditor : CustomEditor
             BoolRow(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU, v => ps.UV.FlipU = v);
             BoolRow(paper, $"{id}_uv_fv", "Flip V", ps.UV.FlipV, v => ps.UV.FlipV = v);
         });
+
+        // Light: each alive particle pushes a point light into the scene's dynamic BVH.
+        DrawModule(paper, $"{id}_lt", "Light", EditorIcons.Lightbulb, ps.Light, font, () =>
+        {
+            BoolRow(paper, $"{id}_lt_upc", "Use Particle Color", ps.Light.UseParticleColor,
+                v => ps.Light.UseParticleColor = v);
+            PropertyGrid.DrawField(paper, $"{id}_lt_col", "Tint", typeof(VColor), ps.Light.Color,
+                v => ps.Light.Color = v is VColor c ? c : VColor.White, 0);
+            FloatRow(paper, $"{id}_lt_int", "Intensity", ps.Light.Intensity,
+                v => ps.Light.Intensity = MathF.Max(0f, v));
+            FloatRow(paper, $"{id}_lt_rng", "Range", ps.Light.Range,
+                v => ps.Light.Range = MathF.Max(0.01f, v));
+            BoolRow(paper, $"{id}_lt_srs", "Scale Range By Size", ps.Light.ScaleRangeByParticleSize,
+                v => ps.Light.ScaleRangeByParticleSize = v);
+            BoolRow(paper, $"{id}_lt_fwl", "Fade With Lifetime", ps.Light.FadeWithLifetime,
+                v => ps.Light.FadeWithLifetime = v);
+        });
     }
 
     // ── Origami row helpers ────────────────────────────────────────────
