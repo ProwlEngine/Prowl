@@ -204,8 +204,10 @@ public sealed class LightBVHTextures : IDisposable
         _lightStaging[o + 8] = s.Direction.X;
         _lightStaging[o + 9] = s.Direction.Y;
         _lightStaging[o + 10] = s.Direction.Z;
-        // Pack type (low 2 bits) and shadow-enabled (bit 2) into texel 2.w. Stays integer-valued
-        // and small (<= 7) so float storage is exact and `int(value + 0.5)` recovers it cleanly.
+        // Pack type (low 2 bits) and shadow-enabled (bit 2) into texel 2.w. Store as raw int
+        // bits via floatBitsToInt round-trip the float-cast-and-int(x + 0.5) approach was
+        // miscompiling on Apple's GLSL->Metal layer for some values, causing point lights to
+        // read as Type == 2 (Spot) and fire the cone falloff over their sphere of influence.
         int typeBits = s.Type switch
         {
             LightType.Directional => 0,
@@ -214,7 +216,7 @@ public sealed class LightBVHTextures : IDisposable
             _ => 1
         };
         int flags = (s.ShadowEnabled ? 1 : 0) << 2;
-        _lightStaging[o + 11] = (float)(typeBits | flags);
+        _lightStaging[o + 11] = IntAsFloat(typeBits | flags);
         // Texel 3 spot uses cosines so the GLSL inner-loop avoids cos() calls.
         float spotCos = s.Type == LightType.Spot ? MathF.Cos(s.SpotAngle * MathF.PI / 180f) : -1f;
         float innerCos = s.Type == LightType.Spot ? MathF.Cos(s.InnerSpotAngle * MathF.PI / 180f) : 1f;
@@ -226,7 +228,7 @@ public sealed class LightBVHTextures : IDisposable
         // so the shader can decide whether this texel is even worth fetching).
         _lightStaging[o + 16] = s.ShadowStrength;
         _lightStaging[o + 17] = s.ShadowQuality;
-        _lightStaging[o + 18] = s.ShadowSlot;
+        _lightStaging[o + 18] = IntAsFloat(s.ShadowSlot);
         _lightStaging[o + 19] = 0f;
     }
 
