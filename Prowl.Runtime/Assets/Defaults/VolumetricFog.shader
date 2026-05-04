@@ -211,15 +211,16 @@ Pass "FogMarch"
             return clamp((cosFromAxis - L.SpotCos) / max(L.InnerSpotCos - L.SpotCos, 1e-4), 0.0, 1.0);
         }
 
+        // Physical inverse-square + smooth window cutoff. Matches Lighting.glsl exactly.
         float DistanceAttenuation(float dist, float range)
         {
-            float r = max(range, 1e-4);
-            float t = dist / r;
-            float t2 = t * t;
-            float window = clamp(1.0 - t2 * t2, 0.0, 1.0);
+            float dist2 = dist * dist;
+            float invR2 = 1.0 / max(range * range, 1e-8);
+            float factor = dist2 * invR2;
+            float window = clamp(1.0 - factor * factor, 0.0, 1.0);
             window *= window;
-            float core = 1.0 / (1.0 + 4.0 * t2);
-            return core * window;
+            float invSqr = 1.0 / max(dist2, 0.01);
+            return invSqr * window;
         }
 
         float Hash13(vec3 p)

@@ -236,15 +236,17 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 vie
     float NdotL = dot(worldNormal, lightDir);
     if (NdotL <= 0.0) return vec3(0.0);
 
-    //   window = (1 - (d/r)^4)^2  -> smooth cutoff at d == Range, 1.0 at d == 0
-    //   core   = 1 / (1 + 4*(d/r)^2) -> inverse-square feel in normalized units
-    float r = max(L.Range, 1e-4);
-    float t = dist / r;
-    float t2 = t * t;
-    float window = clamp(1.0 - t2 * t2, 0.0, 1.0);
-    window *= window;
-    float core = 1.0 / (1.0 + 4.0 * t2);
-    float attenuation = core * window;
+    // Physical inverse-square with smooth window cutoff.
+    //   1 / d^2   pure inverse-square in absolute world units
+    //   (1 - (d/r)^4)^2   smooth cutoff to 0 at d == Range
+    // Range here is purely the cutoff distance, not a scale Intensity is what you tune for
+    // visual brightness, in roughly physical units.
+    float invR2 = 1.0 / (L.Range * L.Range);
+    float factor = dist2 * invR2;            // (d / r)^2
+    float window = clamp(1.0 - factor * factor, 0.0, 1.0);
+    window *= window;                          // (1 - (d/r)^4)^2
+    float invSqr = 1.0 / max(dist2, 0.01);     // 1/d^2 with origin guard
+    float attenuation = invSqr * window;
 
     if (L.Type == 2) {
         float lightAngleCos = dot(normalize(L.Direction), -lightDir);
@@ -309,13 +311,13 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
     float NdotL = dot(worldNormal, lightDir);
     if (NdotL <= 0.0) return vec3(0.0);
 
-    float r = max(L.Range, 1e-4);
-    float t = dist / r;
-    float t2 = t * t;
-    float window = clamp(1.0 - t2 * t2, 0.0, 1.0);
+    // Physical inverse-square + smooth window cutoff. See EvaluateLocalLight.
+    float invR2 = 1.0 / (L.Range * L.Range);
+    float factor = dist2 * invR2;
+    float window = clamp(1.0 - factor * factor, 0.0, 1.0);
     window *= window;
-    float core = 1.0 / (1.0 + 4.0 * t2);
-    float attenuation = core * window;
+    float invSqr = 1.0 / max(dist2, 0.01);
+    float attenuation = invSqr * window;
 
     if (L.Type == 2) {
         float lightAngleCos = dot(normalize(L.Direction), -lightDir);
