@@ -174,9 +174,12 @@ public sealed class LightBVHTextures : IDisposable
     //   Light slot s, linear texel base = s * 5:
     //     +0 : Position.xyz, Range
     //     +1 : Color.rgb,    Intensity
-    //     +2 : Direction.xyz, TypeAsFloat   (0=Directional, 1=Point, 2=Spot)
+    //     +2 : Direction.xyz, TypeAndFlags   (low 2 bits: type 0=Dir,1=Point,2=Spot;
+    //                                          bit 2: ShadowEnabled)
     //     +3 : SpotCos, InnerSpotCos, ShadowBias, ShadowNormalBias
-    //     +4 : ShadowStrength, ShadowQuality, ShadowSlotAsFloat, ShadowEnabledAsFloat
+    //          (only fetched when type==Spot OR ShadowEnabled, otherwise not read)
+    //     +4 : ShadowStrength, ShadowQuality, ShadowSlotAsFloat, padding
+    //          (only fetched when ShadowEnabled, otherwise not read)
     //
     //   Node n, linear texel base = n * 2:
     //     +0 : Min.xyz, Hit (floatBitsToInt to recover signed int)
@@ -201,13 +204,17 @@ public sealed class LightBVHTextures : IDisposable
         _lightStaging[o + 8] = s.Direction.X;
         _lightStaging[o + 9] = s.Direction.Y;
         _lightStaging[o + 10] = s.Direction.Z;
-        _lightStaging[o + 11] = s.Type switch
+        // Pack type (low 2 bits) and shadow-enabled (bit 2) into texel 2.w. Stays integer-valued
+        // and small (<= 7) so float storage is exact and `int(value + 0.5)` recovers it cleanly.
+        int typeBits = s.Type switch
         {
-            LightType.Directional => 0f,
-            LightType.Point => 1f,
-            LightType.Spot => 2f,
-            _ => 1f
+            LightType.Directional => 0,
+            LightType.Point => 1,
+            LightType.Spot => 2,
+            _ => 1
         };
+        int flags = (s.ShadowEnabled ? 1 : 0) << 2;
+        _lightStaging[o + 11] = (float)(typeBits | flags);
         // Texel 3 spot uses cosines so the GLSL inner-loop avoids cos() calls.
         float spotCos = s.Type == LightType.Spot ? MathF.Cos(s.SpotAngle * MathF.PI / 180f) : -1f;
         float innerCos = s.Type == LightType.Spot ? MathF.Cos(s.InnerSpotAngle * MathF.PI / 180f) : 1f;
@@ -215,11 +222,12 @@ public sealed class LightBVHTextures : IDisposable
         _lightStaging[o + 13] = innerCos;
         _lightStaging[o + 14] = s.ShadowBias;
         _lightStaging[o + 15] = s.ShadowNormalBias;
-        // Texel 4
+        // Texel 4 (.w now padding; ShadowEnabled is packed into texel 2 above and read first
+        // so the shader can decide whether this texel is even worth fetching).
         _lightStaging[o + 16] = s.ShadowStrength;
         _lightStaging[o + 17] = s.ShadowQuality;
         _lightStaging[o + 18] = s.ShadowSlot;
-        _lightStaging[o + 19] = s.ShadowEnabled ? 1f : 0f;
+        _lightStaging[o + 19] = 0f;
     }
 
     private void WriteNodeToStaging(int nodeIdx, in LightBVH.Node n)

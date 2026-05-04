@@ -8,9 +8,11 @@
 //   slot s, linear texel base = s * 5:
 //     +0 : Position.xyz, Range
 //     +1 : Color.rgb,    Intensity
-//     +2 : Direction.xyz, TypeAsFloat   (0 = Directional, 1 = Point, 2 = Spot)
+//     +2 : Direction.xyz, TypeAndFlags   (low 2 bits: type, bit 2: ShadowEnabled)
 //     +3 : SpotCos, InnerSpotCos, ShadowBias, ShadowNormalBias
-//     +4 : ShadowStrength, ShadowQuality, ShadowSlotAsFloat, ShadowEnabledAsFloat
+//          (only fetched when type==Spot OR ShadowEnabled)
+//     +4 : ShadowStrength, ShadowQuality, ShadowSlotAsFloat, padding
+//          (only fetched when ShadowEnabled)
 //
 // NODE TEXTURE (RGBA32F, square, power-of-2 width):
 //   node n, linear texel base = n * 2:
@@ -77,30 +79,62 @@ ivec2 LBVH_Coord(int linearIdx, int dim, int shift)
     return ivec2(linearIdx & mask, linearIdx >> shift);
 }
 
+// Lazy load: only fetch the texels each light type / shadow state actually needs. An unshadowed
+// point light reads 3 texels; a shadowed spot light reads 5. Particle systems with hundreds of
+// unshadowed point lights save ~40 % of light-data bandwidth here.
 LightSample LBVH_FetchLight(sampler2D tex, int dim, int shift, int slot)
 {
     int base = slot * 5;
     vec4 t0 = texelFetch(tex, LBVH_Coord(base + 0, dim, shift), 0);
     vec4 t1 = texelFetch(tex, LBVH_Coord(base + 1, dim, shift), 0);
     vec4 t2 = texelFetch(tex, LBVH_Coord(base + 2, dim, shift), 0);
-    vec4 t3 = texelFetch(tex, LBVH_Coord(base + 3, dim, shift), 0);
-    vec4 t4 = texelFetch(tex, LBVH_Coord(base + 4, dim, shift), 0);
+
+    int packed = int(t2.w + 0.5);
+    int type = packed & 3;
+    int shadowEnabled = (packed >> 2) & 1;
 
     LightSample L;
-    L.Position         = t0.xyz;
-    L.Range            = t0.w;
-    L.Color            = t1.rgb;
-    L.Intensity        = t1.w;
-    L.Direction        = t2.xyz;
-    L.Type             = int(t2.w + 0.5);
-    L.SpotCos          = t3.x;
-    L.InnerSpotCos     = t3.y;
-    L.ShadowBias       = t3.z;
-    L.ShadowNormalBias = t3.w;
-    L.ShadowStrength   = t4.x;
-    L.ShadowQuality    = t4.y;
-    L.ShadowSlot       = int(t4.z);
-    L.ShadowEnabled    = int(t4.w + 0.5);
+    L.Position      = t0.xyz;
+    L.Range         = t0.w;
+    L.Color         = t1.rgb;
+    L.Intensity     = t1.w;
+    L.Direction     = t2.xyz;
+    L.Type          = type;
+    L.ShadowEnabled = shadowEnabled;
+
+    // Texel 3 carries spot cosines AND shadow biases. Both spot lighting and shadow sampling
+    // need it; everything else (an unshadowed point) skips it entirely.
+    if (type == 2 || shadowEnabled != 0)
+    {
+        vec4 t3 = texelFetch(tex, LBVH_Coord(base + 3, dim, shift), 0);
+        L.SpotCos          = t3.x;
+        L.InnerSpotCos     = t3.y;
+        L.ShadowBias       = t3.z;
+        L.ShadowNormalBias = t3.w;
+    }
+    else
+    {
+        // Defaults that make the spot-cone smoothstep pass through (1.0) and shadow biases
+        // harmless if some downstream code reads them anyway.
+        L.SpotCos          = -1.0;
+        L.InnerSpotCos     =  1.0;
+        L.ShadowBias       =  0.0;
+        L.ShadowNormalBias =  0.0;
+    }
+
+    if (shadowEnabled != 0)
+    {
+        vec4 t4 = texelFetch(tex, LBVH_Coord(base + 4, dim, shift), 0);
+        L.ShadowStrength = t4.x;
+        L.ShadowQuality  = t4.y;
+        L.ShadowSlot     = int(t4.z);
+    }
+    else
+    {
+        L.ShadowStrength = 0.0;
+        L.ShadowQuality  = 0.0;
+        L.ShadowSlot     = -1;
+    }
     return L;
 }
 

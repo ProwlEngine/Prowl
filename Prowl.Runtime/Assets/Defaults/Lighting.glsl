@@ -216,20 +216,14 @@ float SampleSpotShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldN
 vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
                         vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
-    // BVH only emits point + spot leaves; directional has its own path.
+    // BVH only emits point + spot leaves; directional has its own path. The leaf-level sphere
+    // test in LBVH_Next has already rejected fragments past Range, so we don't repeat it here.
     //
-    // Three cheap rejections before any PBR work, because the BVH leaf AABB is conservative
-    // (cube of side 2*Range) and most fragments inside the cube are NOT actually lit:
-    //   1) Sphere reject: discard fragments past Range. Corner-of-AABB fragments are at
-    //      ~1.7 * Range, well outside the sphere of influence, but the AABB still emitted
-    //      them. Without this we run full PBR + shadow sampling for every wasted hit.
-    //   2) Spot cone reject: an outer-cone-cosine test before PBR.
-    //   3) Backface reject: NdotL <= 0 contributes 0 anyway, no need to run GGX/Smith/Fresnel.
+    // Two remaining rejections before PBR:
+    //   1) Spot cone reject (outer-cone-cosine test before any GGX work).
+    //   2) Backface reject (NdotL <= 0 contributes 0; skip GGX/Smith/Fresnel/shadow sampling).
     vec3 lightToPixel = worldPos - L.Position;
     float dist2 = dot(lightToPixel, lightToPixel);
-    float range2 = L.Range * L.Range;
-    if (dist2 >= range2) return vec3(0.0);
-
     float dist = sqrt(dist2);
     vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
 
@@ -295,12 +289,9 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
                               vec3 albedo, float metallic, float mt, float mb,
                               float perceptualRoughness, float ao, vec3 F0)
 {
-    // See EvaluateLocalLight for the rationale on these early-outs.
+    // BVH leaf already culled fragments past Range; skip the redundant dist check.
     vec3 lightToPixel = worldPos - L.Position;
     float dist2 = dot(lightToPixel, lightToPixel);
-    float range2 = L.Range * L.Range;
-    if (dist2 >= range2) return vec3(0.0);
-
     float dist = sqrt(dist2);
     vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
 
