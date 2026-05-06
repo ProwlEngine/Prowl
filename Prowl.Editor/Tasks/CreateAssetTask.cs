@@ -29,9 +29,10 @@ public class CreateAssetTask : EditorTask
 
     public void StartRename(ContentItem item, bool inTree = false, Action<string>? onConfirm = null, Action? onCancel = null)
     {
-        string id = $"proj_asset_{item.RelativePath}";
+        string id = inTree ? $"proj_folder_{item.RelativePath}" : $"proj_asset_{item.RelativePath}";
+        string editName = item.IsFolder ? item.Name : Path.GetFileNameWithoutExtension(item.Name);
 
-        RenameOverlay.Begin(id, item.Name, newText =>
+        RenameOverlay.Begin(id, editName, newText =>
         {
             string newName = newText;
             if (onConfirm != null)
