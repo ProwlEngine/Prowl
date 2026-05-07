@@ -26,6 +26,17 @@ public class GameViewPanel : DockPanel
     private int _resolutionIndex = 0;
     private const float ToolbarHeight = 26f;
 
+    private Paper _gamePaperInstance;
+
+    public Paper GamePaperInstance
+    {
+        get => _gamePaperInstance;
+        set
+        {
+            _gamePaperInstance = value;
+        }
+    }
+
     private static readonly (string name, int w, int h)[] Resolutions =
     {
         ("Free", 0, 0),
@@ -37,6 +48,8 @@ public class GameViewPanel : DockPanel
         ("1024x768", 1024, 768),
     };
 
+    private static System.Collections.Generic.IReadOnlyList<string> ResolutionList => Resolutions.Select(r => r.name).ToArray();
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
@@ -44,12 +57,12 @@ public class GameViewPanel : DockPanel
 
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
-            DrawToolbar(paper, font, width);
+            DrawToolbar(paper, font, width, panelWidth: width, panelHeight: height - ToolbarHeight);
             DrawGameView(paper, font, width, height - ToolbarHeight);
         }
     }
 
-    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
+    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width, float panelWidth, float panelHeight)
     {
         var resNames = Resolutions.Select(r => r.name).ToArray();
 
@@ -59,7 +72,7 @@ public class GameViewPanel : DockPanel
             .Enter())
         {
             Origami.Dropdown(paper, "gv_res", _resolutionIndex,
-                v => { _resolutionIndex = v; InvalidateRT(); }, resNames).Show();
+                v => { _resolutionIndex = v; InitRT(panelWidth, panelHeight); }, resNames).Show();
 
             paper.Box("gv_spacer");
 
@@ -128,81 +141,90 @@ public class GameViewPanel : DockPanel
             cam.Target = origTarget;
         }
 
-        // Call OnGui on all MonoBehaviours so game UI works in playmode
-        if (Application.IsPlaying)
-            scene.OnGui(paper);
 
-        // Display the RT centered with letterboxing
-        if (_rt != null && _rt.MainTexture != null)
+        using (paper.Box("gv_container")
+                   .PositionType(PositionType.SelfDirected)
+                   .Position(0, ToolbarHeight)
+                   .Enter())
         {
-            float aspect = rtW / (float)rtH;
-            float panelAspect = width / height;
-            float displayW, displayH, offsetX, offsetY;
 
-            if (aspect > panelAspect)
+            // Display the RT centered with letterboxing
+            if (_rt != null && _rt.MainTexture != null)
             {
-                displayW = width;
-                displayH = width / aspect;
-                offsetX = 0;
-                offsetY = (height - displayH) / 2;
+                float aspect = rtW / (float)rtH;
+                float panelAspect = width / height;
+                float displayW, displayH, offsetX, offsetY;
+
+                if (aspect > panelAspect)
+                {
+                    displayW = width;
+                    displayH = width / aspect;
+                    offsetX = 0;
+                    offsetY = (height - displayH) / 2;
+                }
+                else
+                {
+                    displayH = height;
+                    displayW = height * aspect;
+                    offsetX = (width - displayW) / 2;
+                    offsetY = 0;
+                }
+
+                // Letterbox bars
+                if (offsetY > 0)
+                {
+                    paper.Box("gv_bar_top")
+                        .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, offsetY)
+                        .BackgroundColor(Color.Black);
+                    paper.Box("gv_bar_bot")
+                        .PositionType(PositionType.SelfDirected).Position(0, offsetY + displayH).Size(width, offsetY)
+                        .BackgroundColor(Color.Black);
+                }
+
+                if (offsetX > 0)
+                {
+                    paper.Box("gv_bar_left")
+                        .PositionType(PositionType.SelfDirected).Position(0, 0).Size(offsetX, height)
+                        .BackgroundColor(Color.Black);
+                    paper.Box("gv_bar_right")
+                        .PositionType(PositionType.SelfDirected).Position(offsetX + displayW, 0).Size(offsetX, height)
+                        .BackgroundColor(Color.Black);
+                }
+
+                // Game view
+                paper.Box("gv_display")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(offsetX, offsetY).Size(displayW, displayH)
+                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                    {
+                        float rx = (float)r.Min.X;
+                        float ry = (float)r.Min.Y;
+                        float rw = (float)r.Size.X;
+                        float rh = (float)r.Size.Y;
+
+                        // Flip Y
+                        canvas.SetBrushTexture(_rt.MainTexture);
+                        canvas.SetBrushTextureTransform(
+                            Transform2D.CreateTranslation(rx, ry + rh) *
+                            Transform2D.CreateScale(rw, -rh));
+                        canvas.RectFilled(rx, ry, rw, rh, new Prowl.Vector.Color32(255, 255, 255, 255));
+                        canvas.ClearBrushTexture();
+                    }));
+
+                // Game view is focused when hovered play-mode input is routed here
+                GameViewInputHandler.IsGameViewFocused = paper.IsParentHovered;
             }
             else
             {
-                displayH = height;
-                displayW = height * aspect;
-                offsetX = (width - displayW) / 2;
-                offsetY = 0;
-            }
-
-            // Letterbox bars
-            if (offsetY > 0)
-            {
-                paper.Box("gv_bar_top")
-                    .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, offsetY)
-                    .BackgroundColor(Color.Black);
-                paper.Box("gv_bar_bot")
-                    .PositionType(PositionType.SelfDirected).Position(0, offsetY + displayH).Size(width, offsetY)
+                paper.Box("gv_black")
+                    .Size(width, height)
                     .BackgroundColor(Color.Black);
             }
-            if (offsetX > 0)
-            {
-                paper.Box("gv_bar_left")
-                    .PositionType(PositionType.SelfDirected).Position(0, 0).Size(offsetX, height)
-                    .BackgroundColor(Color.Black);
-                paper.Box("gv_bar_right")
-                    .PositionType(PositionType.SelfDirected).Position(offsetX + displayW, 0).Size(offsetX, height)
-                    .BackgroundColor(Color.Black);
-            }
-
-            // Game view
-            paper.Box("gv_display")
-                .PositionType(PositionType.SelfDirected)
-                .Position(offsetX, offsetY).Size(displayW, displayH)
-                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                {
-                    float rx = (float)r.Min.X;
-                    float ry = (float)r.Min.Y;
-                    float rw = (float)r.Size.X;
-                    float rh = (float)r.Size.Y;
-
-                    // Flip Y
-                    canvas.SetBrushTexture(_rt.MainTexture);
-                    canvas.SetBrushTextureTransform(
-                        Transform2D.CreateTranslation(rx, ry + rh) *
-                        Transform2D.CreateScale(rw, -rh));
-                    canvas.RectFilled(rx, ry, rw, rh, new Prowl.Vector.Color32(255, 255, 255, 255));
-                    canvas.ClearBrushTexture();
-                }));
-
-            // Game view is focused when hovered play-mode input is routed here
-            GameViewInputHandler.IsGameViewFocused = paper.IsParentHovered;
         }
-        else
-        {
-            paper.Box("gv_black")
-                .Size(width, height)
-                .BackgroundColor(Color.Black);
-        }
+
+        // Call OnGui on all MonoBehaviours so game UI works in playmode
+        if (Application.IsPlaying)
+            scene.OnGui(paper);
     }
 
     private void EnsureRT(int w, int h)
@@ -210,6 +232,25 @@ public class GameViewPanel : DockPanel
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
         _rt?.Dispose();
         _rt = new RenderTexture(w, h, true, new[] { TextureImageFormat.Color4b });
+    }
+
+    private void InitRT(float windowWidth, float windowHeight)
+    {
+        var (_, targetW, targetH) = Resolutions[_resolutionIndex];
+        int rtW, rtH;
+        if (targetW == 0 || targetH == 0)
+        {
+            // Free match panel size
+            rtW = (int)MathF.Max(1, windowWidth);
+            rtH = (int)MathF.Max(1, windowHeight);
+        }
+        else
+        {
+            rtW = targetW;
+            rtH = targetH;
+        }
+
+        EnsureRT(rtW, rtH);
     }
 
     private void InvalidateRT()

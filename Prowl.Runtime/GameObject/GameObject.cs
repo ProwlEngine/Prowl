@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
@@ -174,6 +175,34 @@ public class GameObject : EngineObject, ISerializable
             _transform.GameObject = this; // ensure game object is this
             return _transform;
         }
+    }
+
+    /// <summary>
+    /// Returns the Transform as a <see cref="RectTransform"/> if it is one, otherwise null.
+    /// </summary>
+    public RectTransform? RectTransform
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _transform as RectTransform;
+    }
+
+    /// <summary>
+    /// Ensures this GameObject's transform is a <see cref="RectTransform"/>.
+    /// If it is already one, returns it. Otherwise, replaces the current
+    /// <see cref="Transform"/> with a new <see cref="RectTransform"/>
+    /// preserving position, rotation, and scale.
+    /// </summary>
+    public RectTransform EnsureRectTransform()
+    {
+        if (_transform is RectTransform existing) return existing;
+
+        RectTransform rt = new();
+        rt.LocalPosition = _transform.LocalPosition;
+        rt.LocalRotation = _transform.LocalRotation;
+        rt.LocalScale = _transform.LocalScale;
+        rt.GameObject = this;
+        _transform = rt;
+        return rt;
     }
 
     /// <summary>

@@ -28,7 +28,15 @@ public static class GameObjectInspector
 
         DrawHeader(paper, font, go);
         EditorGUI.Separator(paper, "gi_sep_header");
-        DrawTransform(paper, font, go);
+        if (go.RectTransform != null)
+        {
+            DrawRectTransform(paper, font, go);
+        }
+        else
+        {
+            DrawTransform(paper, font, go);
+        }
+
         EditorGUI.Separator(paper, "gi_sep_transform");
         DrawComponents(paper, font, go);
 
@@ -186,6 +194,325 @@ public static class GameObjectInspector
         var scale = t.LocalScale;
         EditorGUI.Vector3Field(paper, "gi_scale", "Scale", scale)
             .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; });
+    }
+
+    /// <summary>
+    /// Anchor presets arranged as a 4x4 grid, mirroring Unity's RectTransform popup:
+    /// the inner 3x3 are fixed-corner anchors, the outer row/column are stretch presets,
+    /// and the bottom-right corner is "stretch all". Item is (AnchorMin, AnchorMax).
+    /// </summary>
+    private static readonly (Float2 min, Float2 max)[,] AnchorPresets = new (Float2, Float2)[4, 4]
+    {
+        // Row 0: top fixed (TL, TC, TR) + horizontal-stretch top
+        { (new(0f, 0f), new(0f, 0f)),     (new(0.5f, 0f), new(0.5f, 0f)),     (new(1f, 0f), new(1f, 0f)),     (new(0f, 0f), new(1f, 0f)) },
+        // Row 1: middle fixed (ML, MC, MR) + horizontal-stretch middle
+        { (new(0f, 0.5f), new(0f, 0.5f)), (new(0.5f, 0.5f), new(0.5f, 0.5f)), (new(1f, 0.5f), new(1f, 0.5f)), (new(0f, 0.5f), new(1f, 0.5f)) },
+        // Row 2: bottom fixed (BL, BC, BR) + horizontal-stretch bottom
+        { (new(0f, 1f), new(0f, 1f)),     (new(0.5f, 1f), new(0.5f, 1f)),     (new(1f, 1f), new(1f, 1f)),     (new(0f, 1f), new(1f, 1f)) },
+        // Row 3: vertical-stretch (left, center, right) + stretch-all
+        { (new(0f, 0f), new(0f, 1f)),     (new(0.5f, 0f), new(0.5f, 1f)),     (new(1f, 0f), new(1f, 1f)),     (new(0f, 0f), new(1f, 1f)) },
+    };
+
+    private static bool ApproxEq(Float2 a, Float2 b)
+        => System.Math.Abs(a.X - b.X) < 1e-4f && System.Math.Abs(a.Y - b.Y) < 1e-4f;
+
+    private static void DrawRectTransform(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
+    {
+        var rt = go.RectTransform!;
+        var t = go.Transform;
+
+        paper.Box("gi_rt_header").Height(22).ChildLeft(8)
+            .Text($"{EditorIcons.VectorSquare}  Rect Transform", font)
+            .TextColor(EditorTheme.Ink500)
+            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+        // Top block: 4x4 anchor preset grid on the left, position + size fields filling the rest.
+        using (paper.Row("gi_rt_top").Height(UnitValue.Auto).RowBetween(8).Margin(4, 4, 2, 2).Enter())
+        {
+            DrawAnchorPresetGrid(paper, font, go, rt);
+
+            using (paper.Column("gi_rt_top_right").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
+            {
+                DrawPositionRow(paper, font, go, rt, t);
+                DrawSizeRow(paper, font, go, rt);
+                DrawPivotRow(paper, font, go, rt);
+            }
+        }
+
+        // Anchors (Min/Max) — exposed for fine-grained tweaking outside the preset grid.
+        EditorGUI.Vector2Field(paper, "gi_rt_amin", "Anchor Min", rt.AnchorMin)
+            .OnValueChanged(v =>
+            {
+                Undo.RecordGameObjectChange(go, "Change Anchor Min", rt.AnchorMin, v,
+                    (g, x) => { var r = g.RectTransform; if (r != null) r.AnchorMin = x; }, coalesce: true);
+                rt.AnchorMin = v;
+            });
+
+        EditorGUI.Vector2Field(paper, "gi_rt_amax", "Anchor Max", rt.AnchorMax)
+            .OnValueChanged(v =>
+            {
+                Undo.RecordGameObjectChange(go, "Change Anchor Max", rt.AnchorMax, v,
+                    (g, x) => { var r = g.RectTransform; if (r != null) r.AnchorMax = x; }, coalesce: true);
+                rt.AnchorMax = v;
+            });
+
+        // Rotation (as euler) and scale come from the underlying Transform.
+        var euler = t.LocalEulerAngles;
+        EditorGUI.Vector3Field(paper, "gi_rt_rot", "Rotation", euler)
+            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; });
+
+        var scale = t.LocalScale;
+        EditorGUI.Vector3Field(paper, "gi_rt_scale", "Scale", scale)
+            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; });
+    }
+
+    /// <summary>
+    /// Renders the 4x4 anchor preset grid. The active preset is highlighted; clicking a cell
+    /// applies its (AnchorMin, AnchorMax) to the RectTransform.
+    /// </summary>
+    private static void DrawAnchorPresetGrid(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
+    {
+        const float CellSize = 22f;
+        const float CellGap = 2f;
+        const float GridPad = 4f;
+        const float GridSize = CellSize * 4 + CellGap * 3 + GridPad * 2;
+
+        using (paper.Column("gi_rt_apreset")
+            .Width(GridSize).Height(GridSize)
+            .BackgroundColor(EditorTheme.Neutral200)
+            .BorderColor(EditorTheme.Ink100).BorderWidth(1)
+            .Rounded(3)
+            .ChildLeft(GridPad).ChildRight(GridPad).ChildTop(GridPad).ChildBottom(GridPad)
+            .ColBetween(CellGap)
+            .Enter())
+        {
+            for (int row = 0; row < 4; row++)
+            {
+                using (paper.Row($"gi_rt_apreset_r{row}")
+                    .Height(CellSize).RowBetween(CellGap).Enter())
+                {
+                    for (int col = 0; col < 4; col++)
+                    {
+                        var preset = AnchorPresets[row, col];
+                        DrawAnchorPresetCell(paper, $"gi_rt_acell_{row}_{col}", go, rt,
+                            preset.min, preset.max, CellSize);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void DrawAnchorPresetCell(Paper paper, string id, GameObject go, RectTransform rt,
+        Float2 minPreset, Float2 maxPreset, float cellSize)
+    {
+        bool isFixed = ApproxEq(minPreset, maxPreset);
+        bool isActive = ApproxEq(rt.AnchorMin, minPreset) && ApproxEq(rt.AnchorMax, maxPreset);
+
+        var bg = isActive ? EditorTheme.Purple400 : EditorTheme.Neutral300;
+        var hoverBg = isActive ? EditorTheme.Purple400 : EditorTheme.Neutral400;
+        var indicator = isActive ? EditorTheme.Neutral200 : EditorTheme.Purple400;
+
+        using (paper.Box(id)
+            .Width(cellSize).Height(cellSize)
+            .BackgroundColor(bg)
+            .Hovered.BackgroundColor(hoverBg).End()
+            .BorderColor(EditorTheme.Ink100).BorderWidth(1)
+            .Rounded(2)
+            .OnClick((go, minPreset, maxPreset), (cap, _) =>
+            {
+                var (capGo, capMin, capMax) = cap;
+                var r = capGo.RectTransform;
+                if (r == null) return;
+                var oldMin = r.AnchorMin;
+                var oldMax = r.AnchorMax;
+                Undo.RegisterAction("Change Anchor Preset",
+                    undo: () => { var rr = capGo.RectTransform; if (rr != null) { rr.AnchorMin = oldMin; rr.AnchorMax = oldMax; } },
+                    redo: () => { var rr = capGo.RectTransform; if (rr != null) { rr.AnchorMin = capMin; rr.AnchorMax = capMax; } });
+                r.AnchorMin = capMin;
+                r.AnchorMax = capMax;
+            })
+            .Enter())
+        {
+            // Inner drawable area (cell minus 2px border on each side).
+            float inner = cellSize - 4f;
+
+            if (isFixed)
+            {
+                // Fixed anchor: small dot positioned at the preset corner of the cell.
+                const float DotSize = 4f;
+                float range = inner - DotSize;
+                float dx = 2f + (float)minPreset.X * range;
+                float dy = 2f + (float)minPreset.Y * range;
+                paper.Box($"{id}_dot")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(dx, dy)
+                    .Width(DotSize).Height(DotSize)
+                    .BackgroundColor(indicator)
+                    .IsNotInteractable()
+                    .Rounded(2);
+            }
+            else
+            {
+                // Stretch preset: a bar visualizing the spanned axis (or a filled square for stretch-all).
+                bool stretchX = !ApproxEq(new Float2(minPreset.X, 0), new Float2(maxPreset.X, 0));
+                bool stretchY = !ApproxEq(new Float2(0, minPreset.Y), new Float2(0, maxPreset.Y));
+
+                const float BarThickness = 4f;
+                float bx, by, bw, bh;
+
+                if (stretchX && !stretchY)
+                {
+                    bx = 2f;
+                    by = 2f + (float)minPreset.Y * (inner - BarThickness);
+                    bw = inner;
+                    bh = BarThickness;
+                }
+                else if (stretchY && !stretchX)
+                {
+                    bx = 2f + (float)minPreset.X * (inner - BarThickness);
+                    by = 2f;
+                    bw = BarThickness;
+                    bh = inner;
+                }
+                else
+                {
+                    // Stretch in both axes — fill the cell.
+                    bx = 2f;
+                    by = 2f;
+                    bw = inner;
+                    bh = inner;
+                }
+
+                paper.Box($"{id}_bar")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(bx, by)
+                    .Width(bw).Height(bh)
+                    .BackgroundColor(indicator)
+                    .IsNotInteractable()
+                    .Rounded(1);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Pos X / Pos Y / Pos Z row. X and Y come from RectTransform.AnchoredPosition,
+    /// Z comes from Transform.LocalPosition (RectTransform doesn't track Z).
+    /// </summary>
+    private static void DrawPositionRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt, Transform t)
+    {
+        using (paper.Row("gi_rt_pos").Height(EditorTheme.RowHeight).RowBetween(4)
+            .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
+        {
+            paper.Box("gi_rt_pos_lbl")
+                .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
+                .IsNotInteractable()
+                .Alignment(TextAlignment.MiddleLeft)
+                .Text("Position", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+
+            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_posx", (float)rt.AnchoredPosition.X, "X",
+                Color.FromArgb(255, 200, 80, 80))
+                .OnValueChanged(v =>
+                {
+                    var oldVal = rt.AnchoredPosition;
+                    var newVal = new Float2(v, (float)oldVal.Y);
+                    Undo.RecordGameObjectChange(go, "Change AnchoredPosition", oldVal, newVal,
+                        (g, x) => { var r = g.RectTransform; if (r != null) r.AnchoredPosition = x; }, coalesce: true);
+                    rt.AnchoredPosition = newVal;
+                });
+
+            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_posy", (float)rt.AnchoredPosition.Y, "Y",
+                Color.FromArgb(255, 80, 200, 80))
+                .OnValueChanged(v =>
+                {
+                    var oldVal = rt.AnchoredPosition;
+                    var newVal = new Float2((float)oldVal.X, v);
+                    Undo.RecordGameObjectChange(go, "Change AnchoredPosition", oldVal, newVal,
+                        (g, x) => { var r = g.RectTransform; if (r != null) r.AnchoredPosition = x; }, coalesce: true);
+                    rt.AnchoredPosition = newVal;
+                });
+
+            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_posz", (float)t.LocalPosition.Z, "Z",
+                Color.FromArgb(255, 80, 80, 200))
+                .OnValueChanged(v =>
+                {
+                    var oldVal = t.LocalPosition;
+                    var newVal = new Float3((float)oldVal.X, (float)oldVal.Y, v);
+                    Undo.RecordGameObjectChange(go, "Change Position Z", oldVal, newVal,
+                        (g, x) => g.Transform.LocalPosition = x, coalesce: true);
+                    t.LocalPosition = newVal;
+                });
+        }
+    }
+
+    /// <summary>Width / Height row driven by RectTransform.SizeDelta.</summary>
+    private static void DrawSizeRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
+    {
+        using (paper.Row("gi_rt_size").Height(EditorTheme.RowHeight).RowBetween(4)
+            .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
+        {
+            paper.Box("gi_rt_size_lbl")
+                .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
+                .IsNotInteractable()
+                .Alignment(TextAlignment.MiddleLeft)
+                .Text("Size", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+
+            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_w", (float)rt.SizeDelta.X, "W",
+                Color.FromArgb(255, 200, 80, 80))
+                .OnValueChanged(v =>
+                {
+                    var oldVal = rt.SizeDelta;
+                    var newVal = new Float2(v, (float)oldVal.Y);
+                    Undo.RecordGameObjectChange(go, "Change SizeDelta", oldVal, newVal,
+                        (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
+                    rt.SizeDelta = newVal;
+                });
+
+            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_h", (float)rt.SizeDelta.Y, "H",
+                Color.FromArgb(255, 80, 200, 80))
+                .OnValueChanged(v =>
+                {
+                    var oldVal = rt.SizeDelta;
+                    var newVal = new Float2((float)oldVal.X, v);
+                    Undo.RecordGameObjectChange(go, "Change SizeDelta", oldVal, newVal,
+                        (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
+                    rt.SizeDelta = newVal;
+                });
+        }
+    }
+
+    private static void DrawPivotRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
+    {
+        using (paper.Row("gi_rt_pivot").Height(EditorTheme.RowHeight).RowBetween(4)
+            .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
+        {
+            paper.Box("gi_rt_pivot_lbl")
+                .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
+                .IsNotInteractable()
+                .Alignment(TextAlignment.MiddleLeft)
+                .Text("Pivot", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+
+            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_pivx", (float)rt.Pivot.X, "X",
+                Color.FromArgb(255, 200, 80, 80))
+                .OnValueChanged(v =>
+                {
+                    var oldVal = rt.Pivot;
+                    var newVal = new Float2(v, (float)oldVal.Y);
+                    Undo.RecordGameObjectChange(go, "Change Pivot", oldVal, newVal,
+                        (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
+                    rt.Pivot = newVal;
+                });
+
+            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_pivy", (float)rt.Pivot.Y, "Y",
+                Color.FromArgb(255, 80, 200, 80))
+                .OnValueChanged(v =>
+                {
+                    var oldVal = rt.Pivot;
+                    var newVal = new Float2((float)oldVal.X, v);
+                    Undo.RecordGameObjectChange(go, "Change Pivot", oldVal, newVal,
+                        (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
+                    rt.Pivot = newVal;
+                });
+        }
     }
 
     // ================================================================

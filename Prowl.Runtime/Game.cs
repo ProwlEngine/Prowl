@@ -46,7 +46,7 @@ public abstract class Game
     public virtual void InitializeWindow(string title, int width, int height)
     {
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, false);
-    } 
+    }
 
     public void Run(string title, int width, int height)
     {
@@ -120,7 +120,7 @@ public abstract class Game
                 EndUpdate();
 
                 if (frameCounter++ % 60 == 0)
-                { 
+                {
                     Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {1.0 / Time.DeltaTime}";
                 }
 
