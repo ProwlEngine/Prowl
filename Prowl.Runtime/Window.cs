@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Silk.NET.Windowing.Sdl;
 
 namespace Prowl.Runtime;
 
@@ -154,7 +155,10 @@ public static class Window
 
     public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool VSync = true)
     {
+        SdlWindowing.Use();
+
         WindowOptions options = WindowOptions.Default;
+
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
