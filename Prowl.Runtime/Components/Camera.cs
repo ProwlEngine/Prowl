@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -107,13 +107,19 @@ public class Camera : MonoBehaviour
 
     private float _aspect;
     private bool _customAspect;
+
+    // The projection matrix used for rendering. May be jittered by TAA.
     private Float4x4 _projectionMatrix;
     private bool _customProjectionMatrix;
 
-    private Float4x4 _previousViewMatrix;
-    private Float4x4 _previousProjectionMatrix;
+    // The unjittered projection matrix. Always reflects the clean base projection.
+    // TAA sets ProjectionMatrix (jittered) while this stays clean.
+    private Float4x4 _nonJitteredProjectionMatrix;
+    private bool _customNonJitteredProjectionMatrix;
+
+    // Previous frame state, written by the render pipeline at end of frame.
     private Float4x4 _previousViewProjectionMatrix;
-    private bool _firstFrame = true;
+    private bool _hasPreviousViewProjectionMatrix;
 
     // Image effects that were considered active on the previous render tick for this
     // camera. Compared against the current list each frame to fire OnDisable() on
@@ -134,6 +140,11 @@ public class Camera : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// The projection matrix used for rendering. May include jitter from TAA.
+    /// Setting this overrides the auto-computed projection from FOV/aspect/clip planes.
+    /// Also updates NonJitteredProjectionMatrix unless it was explicitly set.
+    /// </summary>
     public Float4x4 ProjectionMatrix
     {
         get => _projectionMatrix;
@@ -144,17 +155,42 @@ public class Camera : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// The unjittered projection matrix. Used by the render pipeline for motion vectors
+    /// and other operations that need a stable, non-jittered projection.
+    /// If not explicitly set, returns the base projection computed from FOV/aspect/clip planes.
+    /// TAA effects should set ProjectionMatrix (jittered) while leaving this at the clean value,
+    /// or set this explicitly before applying jitter to ProjectionMatrix.
+    /// </summary>
+    public Float4x4 NonJitteredProjectionMatrix
+    {
+        get => _nonJitteredProjectionMatrix;
+        set
+        {
+            _nonJitteredProjectionMatrix = value;
+            _customNonJitteredProjectionMatrix = true;
+        }
+    }
+
     public Float4x4 ViewMatrix { get; private set; }
 
-    public Float4x4 PreviousViewMatrix => _previousViewMatrix;
-    public Float4x4 PreviousProjectionMatrix => _previousProjectionMatrix;
+    /// <summary>
+    /// The previous frame's unjittered view-projection matrix.
+    /// Set by the render pipeline at the end of each frame. Used for motion vectors
+    /// and temporal reprojection. Returns identity on the first frame.
+    /// </summary>
     public Float4x4 PreviousViewProjectionMatrix => _previousViewProjectionMatrix;
+
+    /// <summary>
+    /// Whether a valid previous view-projection matrix exists (false on the first frame).
+    /// </summary>
+    public bool HasPreviousViewProjectionMatrix => _hasPreviousViewProjectionMatrix;
 
     public Camera() : base() { }
 
     public override void OnEnable()
     {
-        _firstFrame = true;
+        _hasPreviousViewProjectionMatrix = false;
     }
 
     /// <summary>
@@ -205,21 +241,21 @@ public class Camera : MonoBehaviour
 
         Frustum frustum = Frustum.FromMatrix(viewProjectionMatrix);
         var corners = frustum.GetCorners();
-        
+
         // Corner indices from GetCorners():
         // 0: Near-Left-Bottom,  1: Near-Right-Bottom,  2: Near-Left-Top,  3: Near-Right-Top
         // 4: Far-Left-Bottom,   5: Far-Right-Bottom,   6: Far-Left-Top,   7: Far-Right-Top
-        
+
         Debug.DrawLine(corners[0], corners[1], Color.White);
         Debug.DrawLine(corners[1], corners[3], Color.White);
         Debug.DrawLine(corners[3], corners[2], Color.White);
         Debug.DrawLine(corners[2], corners[0], Color.White);
-        
+
         Debug.DrawLine(corners[4], corners[5], Color.White);
         Debug.DrawLine(corners[5], corners[7], Color.White);
         Debug.DrawLine(corners[7], corners[6], Color.White);
         Debug.DrawLine(corners[6], corners[4], Color.White);
-        
+
         Debug.DrawLine(corners[0], corners[4], Color.White);
         Debug.DrawLine(corners[1], corners[5], Color.White);
         Debug.DrawLine(corners[2], corners[6], Color.White);
@@ -234,14 +270,6 @@ public class Camera : MonoBehaviour
 
     public RenderTexture? UpdateRenderData()
     {
-        if (!_firstFrame)
-        {
-            _previousViewMatrix = ViewMatrix;
-            _previousProjectionMatrix = _projectionMatrix;
-            _previousViewProjectionMatrix = _projectionMatrix * ViewMatrix;
-        }
-        _firstFrame = false;
-
         // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
         RenderTexture? camTarget = null;
 
@@ -258,14 +286,27 @@ public class Camera : MonoBehaviour
         if (!_customAspect)
             _aspect = PixelWidth / (float)PixelHeight;
 
+        // Recompute the base projection unless the user set it manually
         if (!_customProjectionMatrix)
-        {
             _projectionMatrix = GetProjectionMatrix(_aspect);
-        }
+
+        // Keep the non-jittered projection in sync unless explicitly overridden
+        if (!_customNonJitteredProjectionMatrix)
+            _nonJitteredProjectionMatrix = GetProjectionMatrix(_aspect);
 
         ViewMatrix = Float4x4.CreateLookTo(Transform.Position, Transform.Forward, Transform.Up);
 
         return camTarget;
+    }
+
+    /// <summary>
+    /// Called by the render pipeline at end of frame to store the current unjittered
+    /// view-projection matrix as the previous frame's matrix for next frame's motion vectors.
+    /// </summary>
+    public void SavePreviousViewProjectionMatrix()
+    {
+        _previousViewProjectionMatrix = _nonJitteredProjectionMatrix * ViewMatrix;
+        _hasPreviousViewProjectionMatrix = true;
     }
 
     public void ResetAspect()
@@ -274,15 +315,34 @@ public class Camera : MonoBehaviour
         _customAspect = false;
     }
 
+    /// <summary>
+    /// Resets the projection matrix to the auto-computed value from FOV/aspect/clip planes.
+    /// Also resets the non-jittered projection matrix.
+    /// </summary>
     public void ResetProjectionMatrix()
     {
         _projectionMatrix = GetProjectionMatrix(_aspect);
         _customProjectionMatrix = false;
+        _nonJitteredProjectionMatrix = _projectionMatrix;
+        _customNonJitteredProjectionMatrix = false;
     }
 
+    /// <summary>
+    /// Resets the non-jittered projection matrix to the auto-computed value.
+    /// </summary>
+    public void ResetNonJitteredProjectionMatrix()
+    {
+        _nonJitteredProjectionMatrix = GetProjectionMatrix(_aspect);
+        _customNonJitteredProjectionMatrix = false;
+    }
+
+    /// <summary>
+    /// Clears the stored previous view-projection matrix, forcing the next frame
+    /// to treat itself as the first frame (no temporal history).
+    /// </summary>
     public void ResetMotionHistory()
     {
-        _firstFrame = true;
+        _hasPreviousViewProjectionMatrix = false;
     }
 
     public Ray ScreenPointToRay(Float2 screenPoint, Float2 screenSize)
@@ -297,7 +357,7 @@ public class Camera : MonoBehaviour
         Float4 nearPointNDC = new(ndc.X, ndc.Y, 0.0f, 1.0f);
         Float4 farPointNDC = new(ndc.X, ndc.Y, 1.0f, 1.0f);
 
-        // Calculate the inverse view-projection matrix
+        // Calculate the inverse view-projection matrix using unjittered projection
         float aspect = screenSize.X / screenSize.Y;
         Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * GetViewMatrix();
         Float4x4 inverseViewProjectionMatrix = viewProjectionMatrix.Invert();

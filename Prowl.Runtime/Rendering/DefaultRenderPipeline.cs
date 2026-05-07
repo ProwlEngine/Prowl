@@ -301,12 +301,56 @@ public class DefaultRenderPipeline : RenderPipeline
         DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
 
         // =======================================================
+        // 10b. Motion Vectors pass (when requested by DepthTextureMode)
+        // Motion vectors must use UNJITTERED current and previous VP so they
+        // represent real scene motion only, not sub-pixel jitter offsets.
+        RenderTexture motionVectorsRT = null;
+        if (css.DepthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
+        {
+            motionVectorsRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
+                TextureImageFormat.Short2, // RG16F for per-pixel motion vectors
+            ]);
+
+            // Copy depth prepass into MV RT so ZTest LEqual rejects occluded fragments
+            Graphics.BindFramebuffer(depthPrepass.frameBuffer, FBOTarget.Read);
+            Graphics.BindFramebuffer(motionVectorsRT.frameBuffer, FBOTarget.Draw);
+            Graphics.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
+                                     0, 0, motionVectorsRT.Width, motionVectorsRT.Height,
+                                     ClearFlags.Depth, BlitFilter.Nearest);
+
+            // Use the camera's NonJitteredProjectionMatrix for motion vectors
+            Float4x4 prevVP = css.HasPreviousViewProj
+                ? css.PreviousViewProj
+                : css.NonJitteredProjection * css.View; // First frame fallback: no motion
+
+            // Upload unjittered current VP and previous VP
+            AssignCameraMatrices(css.View, css.NonJitteredProjection);
+            GlobalUniforms.SetPrevViewProj(prevVP);
+            GlobalUniforms.Upload();
+
+            Graphics.BindFramebuffer(motionVectorsRT.frameBuffer);
+            Graphics.Clear(0.0f, 0.0f, 0.0f, 0.0f, ClearFlags.Color);
+
+            // Draw per-object motion vectors (uses previous model matrices)
+            DrawRenderables(renderables, "LightMode", "MotionVectors", new ViewerData(css), culledRenderableIndices, true);
+
+            PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", motionVectorsRT.MainTexture);
+
+            // Restore jittered matrices for subsequent passes
+            AssignCameraMatrices(css.View, css.Projection);
+
+            // Restore color RT for subsequent rendering
+            Graphics.BindFramebuffer(colorRT.frameBuffer);
+        }
+
+        // =======================================================
         // 11. AfterOpaques effects (GTAO, SSR, etc.)
         if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
             var afterContext = new RenderContext
             {
                 DepthNormals = depthPrepass,
+                MotionVectors = motionVectorsRT,
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
@@ -329,6 +373,7 @@ public class DefaultRenderPipeline : RenderPipeline
             var postContext = new RenderContext
             {
                 DepthNormals = depthPrepass,
+                MotionVectors = motionVectorsRT,
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
@@ -360,7 +405,11 @@ public class DefaultRenderPipeline : RenderPipeline
         Blit(colorRT, target, null, 0, false, false);
 
         // =======================================================
-        // 17. Post Render
+        // 17. Save previous VP for next frame's motion vectors (before OnPostRender resets jitter)
+        camera.SavePreviousViewProjectionMatrix();
+
+        // =======================================================
+        // 18. Post Render
         foreach (ImageEffect effect in allEffects)
             effect.OnPostRender(camera);
 
@@ -368,6 +417,8 @@ public class DefaultRenderPipeline : RenderPipeline
         // 18. Cleanup
         RenderTexture.ReleaseTemporaryRT(depthPrepass);
         RenderTexture.ReleaseTemporaryRT(colorRT);
+        if (motionVectorsRT != null)
+            RenderTexture.ReleaseTemporaryRT(motionVectorsRT);
 
         Graphics.UnbindFramebuffer();
         Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);

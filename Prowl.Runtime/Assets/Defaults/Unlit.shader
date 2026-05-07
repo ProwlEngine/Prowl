@@ -60,6 +60,56 @@ Pass "Unlit"
 	ENDGLSL
 }
 
+Pass "UnlitMotionVectors"
+{
+    Tags { "LightMode" = "MotionVectors" }
+
+    Blend Off
+    Cull Back
+    ZTest LEqual
+    ZWrite Off
+
+    GLSLPROGRAM
+        Vertex
+        {
+            #include "Fragment"
+            #include "VertexAttributes"
+
+            out vec4 vClipPos;
+            out vec4 vPrevClipPos;
+
+            void main()
+            {
+                vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
+                vClipPos = PROWL_MATRIX_VP * worldPos;
+                gl_Position = vClipPos;
+
+                vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
+                vPrevClipPos = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
+            }
+        }
+
+        Fragment
+        {
+            #include "Fragment"
+
+            layout(location = 0) out vec4 OutputColor;
+
+            in vec4 vClipPos;
+            in vec4 vPrevClipPos;
+
+            void main()
+            {
+                vec2 currentNDC = (vClipPos.xy / vClipPos.w) * 0.5 + 0.5;
+                vec2 previousNDC = (vPrevClipPos.xy / vPrevClipPos.w) * 0.5 + 0.5;
+                vec2 motion = currentNDC - previousNDC;
+
+                OutputColor = vec4(motion, 0.0, 1.0);
+            }
+        }
+    ENDGLSL
+}
+
 Pass "UnlitDepthNormals"
 {
     Tags { "LightMode" = "DepthNormals" }

@@ -132,7 +132,9 @@ public abstract class RenderPipeline : EngineObject
         public Float4x4 View = camera.ViewMatrix;
         public Float4x4 ViewInverse = camera.ViewMatrix.Invert();
         public Float4x4 Projection = camera.ProjectionMatrix;
+        public Float4x4 NonJitteredProjection = camera.NonJitteredProjectionMatrix;
         public Float4x4 PreviousViewProj = camera.PreviousViewProjectionMatrix;
+        public bool HasPreviousViewProj = camera.HasPreviousViewProjectionMatrix;
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
         public DepthTextureMode DepthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Normals, MotionVectors
     }
@@ -167,18 +169,21 @@ public abstract class RenderPipeline : EngineObject
         ActiveObjectIds.Clear();
     }
 
-    private void TrackModelMatrix(int objectId, Float4x4 currentModel)
+    /// <summary>
+    /// Tracks an object's model matrix for motion vector computation.
+    /// Returns the previous frame's model matrix (or current if first frame).
+    /// </summary>
+    private Float4x4 TrackModelMatrix(int objectId, Float4x4 currentModel)
     {
         // Mark this object ID as active this frame
         ActiveObjectIds.Add(objectId);
 
-        // Store current model matrix for next frame
-        if (s_prevModelMatrices.TryGetValue(objectId, out Float4x4 prevModel))
-            PropertyState.SetGlobalMatrix("prowl_PrevObjectToWorld", prevModel);
-        else
-            PropertyState.SetGlobalMatrix("prowl_PrevObjectToWorld", currentModel); // First frame, use current matrix
+        Float4x4 prevModel;
+        if (!s_prevModelMatrices.TryGetValue(objectId, out prevModel))
+            prevModel = currentModel; // First frame, use current matrix
 
         s_prevModelMatrices[objectId] = currentModel;
+        return prevModel;
     }
 
     /// <summary>
@@ -669,8 +674,9 @@ public abstract class RenderPipeline : EngineObject
 
                 // Track model matrix for motion vectors (used in temporal effects like TAA)
                 int instanceId = properties.GetInt("_ObjectID");
+                Float4x4 prevModel = model;
                 if (updatePreviousMatrices && instanceId != 0)
-                    TrackModelMatrix(instanceId, model);
+                    prevModel = TrackModelMatrix(instanceId, model);
 
                 // Apply instance-specific uniforms (tint colors, bone matrices, etc.)
                 // Texture slot counter continues from where material textures left off
@@ -681,6 +687,8 @@ public abstract class RenderPipeline : EngineObject
                 var fModel = (Float4x4)model;
                 Graphics.SetUniformMatrix(variant, "prowl_ObjectToWorld", false, fModel);
                 Graphics.SetUniformMatrix(variant, "prowl_WorldToObject", false, fModel.Invert());
+                if (updatePreviousMatrices)
+                    Graphics.SetUniformMatrix(variant, "prowl_PrevObjectToWorld", false, (Float4x4)prevModel);
 
                 // Execute draw call (mesh VAO already uploaded, just bind and draw)
                 unsafe
