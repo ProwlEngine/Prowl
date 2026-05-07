@@ -43,6 +43,15 @@ public static unsafe class Graphics
 
     private static RasterizerState.WindingOrder winding = RasterizerState.WindingOrder.CW;
 
+    private static bool stencilEnabled = false;
+    private static RasterizerState.StencilFunction stencilFunc = RasterizerState.StencilFunction.Always;
+    private static int stencilRef = 0;
+    private static int stencilReadMask = 255;
+    private static int stencilWriteMask = 255;
+    private static RasterizerState.StencilOp stencilPassOp = RasterizerState.StencilOp.Keep;
+    private static RasterizerState.StencilOp stencilFailOp = RasterizerState.StencilOp.Keep;
+    private static RasterizerState.StencilOp stencilZFailOp = RasterizerState.StencilOp.Keep;
+
     private static GraphicsFrameBuffer? currentFramebuffer = null;
     private static GraphicsFrameBuffer? currentReadFramebuffer = null;
     private static GraphicsFrameBuffer? currentDrawFramebuffer = null;
@@ -163,6 +172,39 @@ public static unsafe class Graphics
             GL.FrontFace(WindingToGL(state.Winding));
             winding = state.Winding;
         }
+
+        if (stencilEnabled != state.StencilEnabled || force)
+        {
+            if (state.StencilEnabled)
+                GL.Enable(EnableCap.StencilTest);
+            else
+                GL.Disable(EnableCap.StencilTest);
+            stencilEnabled = state.StencilEnabled;
+        }
+
+        if (state.StencilEnabled &&
+            (stencilFunc != state.StencilFunc || stencilRef != state.StencilRef || stencilReadMask != state.StencilReadMask || force))
+        {
+            GL.StencilFunc(StencilFuncToGL(state.StencilFunc), state.StencilRef, (uint)state.StencilReadMask);
+            stencilFunc = state.StencilFunc;
+            stencilRef = state.StencilRef;
+            stencilReadMask = state.StencilReadMask;
+        }
+
+        if (state.StencilEnabled &&
+            (stencilFailOp != state.StencilFailOp || stencilZFailOp != state.StencilZFailOp || stencilPassOp != state.StencilPassOp || force))
+        {
+            GL.StencilOp(StencilOpToGL(state.StencilFailOp), StencilOpToGL(state.StencilZFailOp), StencilOpToGL(state.StencilPassOp));
+            stencilFailOp = state.StencilFailOp;
+            stencilZFailOp = state.StencilZFailOp;
+            stencilPassOp = state.StencilPassOp;
+        }
+
+        if (state.StencilEnabled && (stencilWriteMask != state.StencilWriteMask || force))
+        {
+            GL.StencilMask((uint)state.StencilWriteMask);
+            stencilWriteMask = state.StencilWriteMask;
+        }
     }
 
     public static RasterizerState GetState()
@@ -176,7 +218,15 @@ public static unsafe class Graphics
             BlendSrc = blendSrc,
             BlendDst = blendDst,
             Blend = blendEquation,
-            CullFace = cullFace
+            CullFace = cullFace,
+            StencilEnabled = stencilEnabled,
+            StencilFunc = stencilFunc,
+            StencilRef = stencilRef,
+            StencilReadMask = stencilReadMask,
+            StencilWriteMask = stencilWriteMask,
+            StencilPassOp = stencilPassOp,
+            StencilFailOp = stencilFailOp,
+            StencilZFailOp = stencilZFailOp,
         };
     }
 
@@ -209,6 +259,16 @@ public static unsafe class Graphics
 
         GL.FrontFace(FrontFaceDirection.CW);
         winding = RasterizerState.WindingOrder.CW;
+
+        GL.Disable(EnableCap.StencilTest);
+        stencilEnabled = false;
+        stencilFunc = RasterizerState.StencilFunction.Always;
+        stencilRef = 0;
+        stencilReadMask = 255;
+        stencilWriteMask = 255;
+        stencilPassOp = RasterizerState.StencilOp.Keep;
+        stencilFailOp = RasterizerState.StencilOp.Keep;
+        stencilZFailOp = RasterizerState.StencilOp.Keep;
     }
 
     // Helper method to combine program ID and string hash into a unique ulong key
@@ -659,6 +719,38 @@ public static unsafe class Graphics
             RasterizerState.WindingOrder.CW => FrontFaceDirection.CW,
             RasterizerState.WindingOrder.CCW => FrontFaceDirection.Ccw,
             _ => throw new ArgumentOutOfRangeException(nameof(winding), winding, null),
+        };
+    }
+
+    private static StencilFunction StencilFuncToGL(RasterizerState.StencilFunction func)
+    {
+        return func switch
+        {
+            RasterizerState.StencilFunction.Never => StencilFunction.Never,
+            RasterizerState.StencilFunction.Less => StencilFunction.Less,
+            RasterizerState.StencilFunction.Equal => StencilFunction.Equal,
+            RasterizerState.StencilFunction.Lequal => StencilFunction.Lequal,
+            RasterizerState.StencilFunction.Greater => StencilFunction.Greater,
+            RasterizerState.StencilFunction.Notequal => StencilFunction.Notequal,
+            RasterizerState.StencilFunction.Gequal => StencilFunction.Gequal,
+            RasterizerState.StencilFunction.Always => StencilFunction.Always,
+            _ => throw new ArgumentOutOfRangeException(nameof(func), func, null),
+        };
+    }
+
+    private static StencilOp StencilOpToGL(RasterizerState.StencilOp op)
+    {
+        return op switch
+        {
+            RasterizerState.StencilOp.Keep => StencilOp.Keep,
+            RasterizerState.StencilOp.Zero => StencilOp.Zero,
+            RasterizerState.StencilOp.Replace => StencilOp.Replace,
+            RasterizerState.StencilOp.Incr => StencilOp.Incr,
+            RasterizerState.StencilOp.IncrWrap => StencilOp.IncrWrap,
+            RasterizerState.StencilOp.Decr => StencilOp.Decr,
+            RasterizerState.StencilOp.DecrWrap => StencilOp.DecrWrap,
+            RasterizerState.StencilOp.Invert => StencilOp.Invert,
+            _ => throw new ArgumentOutOfRangeException(nameof(op), op, null),
         };
     }
 

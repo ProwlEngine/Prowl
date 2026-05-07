@@ -641,6 +641,10 @@ public static class ShaderParser
                     pass.State.Winding = EnumParse<RasterizerState.WindingOrder>(tokenizer.Token.ToString(), "winding order");
                     break;
 
+                case "Stencil":
+                    ParseStencilState(tokenizer, ref pass.State);
+                    break;
+
                 case "GLSLPROGRAM":
                     pass.ProgramStartLine = tokenizer.CurrentLine;
                     EnsureUndef(pass.Program, "'GLSLPROGRAM' in pass");
@@ -775,6 +779,64 @@ public static class ShaderParser
 
                 default:
                     throw new ParseException("blend state", $"unknown blend key: {key}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Parses a Stencil block: <c>Stencil { Ref 1 Comp Equal Pass Replace Fail Keep ZFail Keep ReadMask 255 WriteMask 255 }</c>
+    /// All keys are optional; unspecified values keep their defaults.
+    /// </summary>
+    private static void ParseStencilState(Tokenizer<ShaderToken> tokenizer, ref RasterizerState state)
+    {
+        state.StencilEnabled = true;
+
+        // Expect opening brace
+        ExpectToken("stencil", tokenizer, ShaderToken.OpenCurlBrace);
+
+        while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
+        {
+            string key = tokenizer.Token.ToString();
+
+            switch (key)
+            {
+                case "Ref":
+                    ExpectToken("stencil", tokenizer, ShaderToken.Identifier);
+                    state.StencilRef = int.Parse(tokenizer.Token.ToString());
+                    break;
+
+                case "Comp":
+                    ExpectToken("stencil", tokenizer, ShaderToken.Identifier);
+                    state.StencilFunc = EnumParse<RasterizerState.StencilFunction>(tokenizer.Token.ToString(), "stencil comparison");
+                    break;
+
+                case "Pass":
+                    ExpectToken("stencil", tokenizer, ShaderToken.Identifier);
+                    state.StencilPassOp = EnumParse<RasterizerState.StencilOp>(tokenizer.Token.ToString(), "stencil pass op");
+                    break;
+
+                case "Fail":
+                    ExpectToken("stencil", tokenizer, ShaderToken.Identifier);
+                    state.StencilFailOp = EnumParse<RasterizerState.StencilOp>(tokenizer.Token.ToString(), "stencil fail op");
+                    break;
+
+                case "ZFail":
+                    ExpectToken("stencil", tokenizer, ShaderToken.Identifier);
+                    state.StencilZFailOp = EnumParse<RasterizerState.StencilOp>(tokenizer.Token.ToString(), "stencil zfail op");
+                    break;
+
+                case "ReadMask":
+                    ExpectToken("stencil", tokenizer, ShaderToken.Identifier);
+                    state.StencilReadMask = int.Parse(tokenizer.Token.ToString());
+                    break;
+
+                case "WriteMask":
+                    ExpectToken("stencil", tokenizer, ShaderToken.Identifier);
+                    state.StencilWriteMask = int.Parse(tokenizer.Token.ToString());
+                    break;
+
+                default:
+                    throw new ParseException("stencil state", $"unknown stencil key: {key}");
             }
         }
     }
