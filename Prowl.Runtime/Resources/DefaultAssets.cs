@@ -34,7 +34,8 @@ public enum DefaultShader
     Grid,
     CinematicEffects,
     VolumetricFog,
-    SDFRaymarch
+    SDFRaymarch,
+    TAA
 }
 
 /// <summary>
