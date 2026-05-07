@@ -128,6 +128,10 @@ public class GameViewPanel : DockPanel
             cam.Target = origTarget;
         }
 
+        // Call OnGui on all MonoBehaviours so game UI works in playmode
+        if (Application.IsPlaying)
+            scene.OnGui(paper);
+
         // Display the RT centered with letterboxing
         if (_rt != null && _rt.MainTexture != null)
         {
