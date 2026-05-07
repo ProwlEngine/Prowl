@@ -47,6 +47,17 @@
     <LibraryFiles Include="..\Libraries\**\*.*" />
   </ItemGroup>
 
+  <!-- Stamp each PackageReference as AssemblyMetadata so the build pipeline
+       can read dependencies from the compiled DLL without needing the .csproj file. -->
+  <Target Name="EmbedPackageReferences" BeforeTargets="GetAssemblyAttributes">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>PackageReference:%(PackageReference.Identity)</_Parameter1>
+        <_Parameter2>%(PackageReference.Version)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
   <!-- Copy native libraries to output -->
   <Target Name="CopyLibraries" AfterTargets="Build">
     <Copy SourceFiles="@(LibraryFiles)" DestinationFiles="@(LibraryFiles->'$(OutputPath)runtimes\%(RecursiveDir)%(Filename)%(Extension)')" />
