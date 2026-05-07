@@ -114,7 +114,7 @@ public interface IRenderableLight
 
 public abstract class RenderPipeline : EngineObject
 {
-    public struct CameraSnapshot(Camera camera)
+    public struct CameraSnapshot(Camera camera, DepthTextureMode depthTextureMode)
     {
         public Scene Scene = camera.Scene;
 
@@ -136,7 +136,7 @@ public abstract class RenderPipeline : EngineObject
         public Float4x4 PreviousViewProj = camera.PreviousViewProjectionMatrix;
         public bool HasPreviousViewProj = camera.HasPreviousViewProjectionMatrix;
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
-        public DepthTextureMode DepthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Normals, MotionVectors
+        public DepthTextureMode DepthTextureMode = depthTextureMode;
     }
 
     public HashSet<int> ActiveObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }

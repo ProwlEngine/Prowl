@@ -32,6 +32,13 @@ public abstract class ImageEffect
     public virtual bool TransformsToLDR { get; } = false;
 
     /// <summary>
+    /// Depth texture modes this effect requires. The pipeline gathers these from all
+    /// active effects to determine which passes to run (e.g. motion vectors).
+    /// Override to declare requirements instead of setting camera.DepthTextureMode manually.
+    /// </summary>
+    public virtual DepthTextureMode RequiredDepthTextureMode => DepthTextureMode.None;
+
+    /// <summary>
     /// Called during rendering with access to render targets.
     /// </summary>
     public virtual void OnRenderEffect(RenderContext context) { }
@@ -101,9 +108,6 @@ public class Camera : MonoBehaviour
     public float RenderScale = 1.0f;
 
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
-
-    [SerializeIgnore]
-    public DepthTextureMode DepthTextureMode = DepthTextureMode.None;
 
     private float _aspect;
     private bool _customAspect;

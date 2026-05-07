@@ -159,6 +159,11 @@ public class DefaultRenderPipeline : RenderPipeline
         // (user disabled them, removed them from Camera.Effects, or hot-swapped).
         camera.UpdateImageEffectLifecycle(allEffects);
 
+        // Gather DepthTextureMode requirements from all active effects
+        DepthTextureMode depthMode = DepthTextureMode.None;
+        foreach (var effect in allEffects)
+            depthMode |= effect.RequiredDepthTextureMode;
+
         RenderTexture target = camera.UpdateRenderData();
 
         // =======================================================
@@ -168,7 +173,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // =======================================================
         // 2. Camera snapshot and global uniforms
-        CameraSnapshot css = new(camera);
+        CameraSnapshot css = new(camera, depthMode);
         SetupGlobalUniforms(css);
 
         // =======================================================
