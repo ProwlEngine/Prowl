@@ -58,11 +58,11 @@ Pass "Standard"
 				vNormal = TransformDirection(vertexNormal);
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
-				vBitangent = cross(vNormal, vTangent);
+				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				// Guard against degenerate tangent frames (parallel normal/tangent)
 				if (dot(vBitangent, vBitangent) < 0.000001) {
 					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));
-					vBitangent = cross(vNormal, vTangent);
+					vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				}
 #endif
 			}
@@ -145,10 +145,10 @@ Pass "DepthNormals"
 				vNormal = TransformDirection(vertexNormal);
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
-				vBitangent = cross(vNormal, vTangent);
+				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				if (dot(vBitangent, vBitangent) < 0.000001) {
 					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));
-					vBitangent = cross(vNormal, vTangent);
+					vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				}
 #endif
 				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;

@@ -127,7 +127,7 @@ public class Mesh : EngineObject, ISerializable
         set => WriteVertexData(ref normals, CopyArray(value), value.Length);
     }
 
-    public Float3[] Tangents
+    public Float4[] Tangents
     {
         get => ReadVertexData(tangents ?? []);
         set => WriteVertexData(ref tangents, CopyArray(value), value.Length);
@@ -228,7 +228,7 @@ public class Mesh : EngineObject, ISerializable
     bool changed = true;
     Float3[]? vertices;
     Float3[]? normals;
-    Float3[]? tangents;
+    Float4[]? tangents;
     Color[]? colors;
     Color32[]? colors32;
     Float2[]? uv;
@@ -532,7 +532,8 @@ public class Mesh : EngineObject, ISerializable
         if (indices == null || indices.Length < 3) return;
         if (uv == null) return;
 
-        var tangents = new Float3[vertices.Length];
+        var tan1 = new Float3[vertices.Length]; // tangent accumulator
+        var tan2 = new Float3[vertices.Length]; // bitangent accumulator (for handedness)
 
         for (int i = 0; i < indices.Length; i += 3)
         {
@@ -557,19 +558,33 @@ public class Mesh : EngineObject, ISerializable
             tangent.Y = f * (deltaUV2.Y * edge1.Y - deltaUV1.Y * edge2.Y);
             tangent.Z = f * (deltaUV2.Y * edge1.Z - deltaUV1.Y * edge2.Z);
 
-            tangents[ai] += tangent;
-            tangents[bi] += tangent;
-            tangents[ci] += tangent;
+            Float3 bitangent;
+            bitangent.X = f * (-deltaUV2.X * edge1.X + deltaUV1.X * edge2.X);
+            bitangent.Y = f * (-deltaUV2.X * edge1.Y + deltaUV1.X * edge2.Y);
+            bitangent.Z = f * (-deltaUV2.X * edge1.Z + deltaUV1.X * edge2.Z);
+
+            tan1[ai] += tangent;  tan1[bi] += tangent;  tan1[ci] += tangent;
+            tan2[ai] += bitangent; tan2[bi] += bitangent; tan2[ci] += bitangent;
         }
 
+        var result = new Float4[vertices.Length];
         for (int i = 0; i < vertices.Length; i++)
         {
-            tangents[i] = Float3.Normalize(tangents[i]);
-            if (float.IsNaN(tangents[i].X) || float.IsNaN(tangents[i].Y) || float.IsNaN(tangents[i].Z))
-                tangents[i] = Float3.UnitX; // Fallback tangent
+            Float3 n = normals != null && i < normals.Length ? normals[i] : Float3.UnitY;
+            Float3 t = tan1[i];
+
+            // Gram-Schmidt orthogonalize: t' = normalize(t - n * dot(n, t))
+            Float3 orthoT = Float3.Normalize(t - n * Float3.Dot(n, t));
+            if (float.IsNaN(orthoT.X) || float.IsNaN(orthoT.Y) || float.IsNaN(orthoT.Z))
+                orthoT = Float3.UnitX;
+
+            // Handedness: sign of dot(cross(n, t), bitangent)
+            float w = Float3.Dot(Float3.Cross(t, n), tan2[i]) < 0.0f ? -1.0f : 1.0f;
+
+            result[i] = new Float4(orthoT.X, orthoT.Y, orthoT.Z, w);
         }
 
-        Tangents = tangents;
+        Tangents = result;
     }
 
     #region Raytracing
@@ -1176,7 +1191,7 @@ public class Mesh : EngineObject, ISerializable
             elements.Add(new Element(VertexSemantic.Color, VertexType.Float, 4));
 
         if (mesh.HasTangents)
-            elements.Add(new Element(VertexSemantic.Tangent, VertexType.Float, 3, 0, true));
+            elements.Add(new Element(VertexSemantic.Tangent, VertexType.Float, 4, 0, true));
 
         if (mesh.HasBoneIndices)
             elements.Add(new Element(VertexSemantic.BoneIndex, VertexType.Float, 4));
@@ -1257,6 +1272,7 @@ public class Mesh : EngineObject, ISerializable
                 Copy(BitConverter.GetBytes(tangents[i].X), ref index);
                 Copy(BitConverter.GetBytes(tangents[i].Y), ref index);
                 Copy(BitConverter.GetBytes(tangents[i].Z), ref index);
+                Copy(BitConverter.GetBytes(tangents[i].W), ref index);
             }
 
             if (HasBoneIndices)
@@ -1310,11 +1326,12 @@ public class Mesh : EngineObject, ISerializable
             writer.Write(tangents?.Length ?? 0);
             if (tangents != null)
             {
-                foreach (Float3 tangent in tangents)
+                foreach (Float4 tangent in tangents)
                 {
                     writer.Write(tangent.X);
                     writer.Write(tangent.Y);
                     writer.Write(tangent.Z);
+                    writer.Write(tangent.W);
                 }
             }
 
@@ -1483,9 +1500,9 @@ public class Mesh : EngineObject, ISerializable
             int tangentCount = reader.ReadInt32();
             if (tangentCount > 0)
             {
-                tangents = new Float3[tangentCount];
+                tangents = new Float4[tangentCount];
                 for (int i = 0; i < tangentCount; i++)
-                    tangents[i] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    tangents[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
             }
 
             int colorCount = reader.ReadInt32();

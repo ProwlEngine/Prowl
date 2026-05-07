@@ -32,9 +32,9 @@
 #endif
 
 #ifdef HAS_TANGENTS
-		layout (location = 5) in vec3 vertexTangent;
+		layout (location = 5) in vec4 vertexTangent; // xyz = tangent direction, w = bitangent sign
 #else
-		vec3 vertexTangent = vec3(1.0, 0.0, 0.0);
+		vec4 vertexTangent = vec4(1.0, 0.0, 0.0, 1.0);
 #endif
 
 // =============================================================
