@@ -224,7 +224,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     public bool GetMouseButtonUp(int button) => !isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
 
-    public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
+    public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Hidden;
 
     // Gamepad methods implementation
     public int GetGamepadCount() => Context.Gamepads.Count;

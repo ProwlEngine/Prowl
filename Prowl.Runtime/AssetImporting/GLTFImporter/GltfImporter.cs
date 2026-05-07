@@ -55,8 +55,7 @@ public class GltfImporter
     static Float3 ConvertPos(float[] v) => new(v[0], v[1], -v[2]);
     static Float3 ConvertPos(Float3 v) => new(v.X, v.Y, -v.Z);
     static Float3 ConvertNormal(Float3 v) => new(v.X, v.Y, -v.Z);
-    static Float3 ConvertTangent(Float4 v) => new(v.X, v.Y, -v.Z);
-    static float ConvertTangentW(Float4 v) => -v.W;
+    static Float4 ConvertTangent(Float4 v) => new(v.X, v.Y, -v.Z, -v.W);
     static Quaternion ConvertRot(float[] q) => new(q[0], q[1], -q[2], -q[3]);
     static Quaternion ConvertRot(Quaternion q) => new(q.X, q.Y, -q.Z, -q.W);
 
@@ -495,7 +494,7 @@ public class GltfImporter
             // Accumulate all primitives into one combined mesh
             var allVertices = new List<Float3>();
             var allNormals = new List<Float3>();
-            var allTangents = new List<Float3>();
+            var allTangents = new List<Float4>();
             var allUV = new List<Float2>();
             var allUV2 = new List<Float2>();
             var allColors = new List<Color>();
@@ -556,7 +555,7 @@ public class GltfImporter
                 if (prim.Attributes.TryGetValue("TANGENT", out int tanIdx))
                 {
                     var raw = GltfDataReader.ReadVec4(gltf, tanIdx);
-                    var tangents = new Float3[raw.Length];
+                    var tangents = new Float4[raw.Length];
                     for (int i = 0; i < raw.Length; i++)
                         tangents[i] = ConvertTangent(raw[i]);
                     allTangents.AddRange(tangents);
@@ -565,7 +564,7 @@ public class GltfImporter
                 {
                     hasTangents = false;
                     for (int i = 0; i < primVertCount; i++)
-                        allTangents.Add(Float3.Zero);
+                        allTangents.Add(Float4.Zero);
                 }
 
                 // --- UV0 ---
@@ -916,14 +915,17 @@ public class GltfImporter
             bitangents[i0] += b; bitangents[i1] += b; bitangents[i2] += b;
         }
 
-        mesh.Tangents = new Float3[mesh.Vertices.Length];
+        var result = new Float4[mesh.Vertices.Length];
         for (int i = 0; i < mesh.Vertices.Length; i++)
         {
             var n = mesh.Normals[i];
             var t = tangents[i];
             var orthogonalized = t - n * Float3.Dot(n, t);
             float lenSq = Float3.Dot(orthogonalized, orthogonalized);
-            mesh.Tangents[i] = lenSq > 1e-8f ? orthogonalized / MathF.Sqrt(lenSq) : Float3.UnitX;
+            Float3 orthoT = lenSq > 1e-8f ? orthogonalized / MathF.Sqrt(lenSq) : Float3.UnitX;
+            float w = Float3.Dot(Float3.Cross(t, n), bitangents[i]) < 0.0f ? -1.0f : 1.0f;
+            result[i] = new Float4(orthoT.X, orthoT.Y, orthoT.Z, w);
         }
+        mesh.Tangents = result;
     }
 }

@@ -27,6 +27,7 @@ namespace Prowl.Runtime.Rendering;
 public sealed class TAAEffect : ImageEffect
 {
     public override RenderStage Stage => RenderStage.PostProcess;
+    public override DepthTextureMode RequiredDepthTextureMode => DepthTextureMode.MotionVectors;
 
     /// <summary>How much of the history to keep (0..0.99). Higher = smoother but ghosts more.</summary>
     public float BlendFactor = 0.95f;
@@ -59,9 +60,6 @@ public sealed class TAAEffect : ImageEffect
 
     public override void OnPreCull(Camera camera)
     {
-        // Ensure motion vectors are enabled
-        camera.DepthTextureMode |= DepthTextureMode.MotionVectors;
-
         _previousJitter = _jitter;
 
         // Compute Halton jitter for this frame

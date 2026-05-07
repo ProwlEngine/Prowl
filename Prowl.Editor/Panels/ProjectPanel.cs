@@ -1034,7 +1034,11 @@ public class ProjectPanel : DockPanel
         float cellSize = _thumbnailSize + 8f;
         float labelH = 18f;
         float totalCellH = cellSize + labelH;
-        int cols = Math.Max(1, (int)((width - 16) / cellSize));
+        float gap = 6f;
+        // Available width minus padding (12 = 6 left margin + 6 right margin from parent)
+        // Each column takes cellSize + gap, minus one gap for the last column
+        float available = width - 12f;
+        int cols = Math.Max(1, (int)((available + gap) / (cellSize + gap)));
 
         var itemObjects = entries.Select(e => (object)e).ToList();
 

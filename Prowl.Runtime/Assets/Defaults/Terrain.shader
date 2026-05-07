@@ -203,7 +203,7 @@ Pass "Terrain"
 
                 vec3 N = normalize(worldNormal);
                 vec3 T = normalize(cross(N, vec3(0.0, 0.0, 1.0)));
-                vec3 B = cross(N, T);
+                vec3 B = cross(T, N);
                 vec3 finalWorldNormal = normalize(mat3(T, B, N) * blendedNormalTS);
 
                 // Brush visualization

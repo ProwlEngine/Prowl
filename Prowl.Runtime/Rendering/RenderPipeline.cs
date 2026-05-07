@@ -114,7 +114,7 @@ public interface IRenderableLight
 
 public abstract class RenderPipeline : EngineObject
 {
-    public struct CameraSnapshot(Camera camera)
+    public struct CameraSnapshot(Camera camera, DepthTextureMode depthTextureMode)
     {
         public Scene Scene = camera.Scene;
 
@@ -136,7 +136,7 @@ public abstract class RenderPipeline : EngineObject
         public Float4x4 PreviousViewProj = camera.PreviousViewProjectionMatrix;
         public bool HasPreviousViewProj = camera.HasPreviousViewProjectionMatrix;
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
-        public DepthTextureMode DepthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Normals, MotionVectors
+        public DepthTextureMode DepthTextureMode = depthTextureMode;
     }
 
     public HashSet<int> ActiveObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }
@@ -625,6 +625,10 @@ public abstract class RenderPipeline : EngineObject
 
                     // Restore the original framebuffer (for both read and draw)
                     Graphics.BindFramebuffer(currentFB, FBOTarget.Framebuffer);
+
+                    // Generate mipmaps so shaders can sample with textureLod for blur effects
+                    Graphics.GenerateMipmap(grabRT.MainTexture.Handle);
+                    Graphics.SetTextureFilters(grabRT.MainTexture.Handle, TextureMin.LinearMipmapLinear, TextureMag.Linear);
 
                     // Set as global texture for this and subsequent passes
                     PropertyState.SetGlobalTexture(pass.GrabTextureName, grabRT.MainTexture);
