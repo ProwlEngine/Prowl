@@ -165,6 +165,7 @@ Pass "Tonemapper"
 
 		    // EOTF back to linear
 		    color = agxTransformInverse * color;
+		    color = pow(max(vec3(0.0), color), vec3(2.2));
 		    return color;
 		}
 #endif
