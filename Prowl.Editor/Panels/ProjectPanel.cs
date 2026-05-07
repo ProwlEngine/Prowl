@@ -1317,20 +1317,7 @@ public class ProjectPanel : DockPanel
         if (db == null) return null;
 
         byte[]? pixels = db.LoadThumbnail(guid);
-        if (pixels == null || pixels.Length == 0)
-        {
-            // No thumbnail on disk — try to load the asset and queue generation
-            var asset = db.Get(guid);
-            if (asset != null)
-            {
-                var entry = db.GetEntry(guid);
-                string? sourceFile = entry?.MainAssetType == typeof(Prowl.Runtime.Resources.Texture2D)
-                    ? System.IO.Path.Combine(Project.Current?.AssetsPath ?? "", entry.Path)
-                    : null;
-                ThumbnailGenerator.Enqueue(guid, asset, sourceFile);
-            }
-            return null;
-        }
+        if (pixels == null || pixels.Length == 0) return null;
 
         try
         {
