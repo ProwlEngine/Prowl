@@ -459,6 +459,10 @@ public sealed class SceneColorNode : Node, IShaderNode, IShaderGraphNode
         AddInput<Float2>("UV",
             new Float2(0.5f, 0.5f),
             tooltip: "Screen-space UV to sample. Leave unconnected for automatic screen UV from gl_FragCoord.");
+        AddInput<float>("LOD", 0.0f,
+            tooltip: "Mip level for the grab texture. 0 = sharp, higher = blurrier. " +
+                     "Grab textures have auto-generated mipmaps with trilinear filtering. " +
+                     "Leave unconnected for standard texture() sampling.");
 
         AddOutput<Float4>("RGBA", tooltip: "Sampled grab-pass colour (vec4)");
         AddOutput<float>("R",    tooltip: "Red channel");
@@ -473,16 +477,9 @@ public sealed class SceneColorNode : Node, IShaderNode, IShaderGraphNode
             return outputPort.Name == "RGBA" ? "vec4(0.0)" : "0.0";
         ctx.Includes.Add("ShaderVariables");
 
-        // Uniform declaration the pipeline binds this when the pass declares GrabTexture.
         ctx.Uniforms.Add("uniform sampler2D _GrabTexture;");
-        // Auto-inject the GrabTexture pass directive so the sampler is actually populated
-        // before the fragment shader runs. Without this the sampler would be unbound and
-        // the node would read zeros.
         ctx.PassDirectives.Add("GrabTexture \"_GrabTexture\"");
 
-        // Stable local variable name uses node Id so multiple SceneColorNode instances
-        // don't collide, and the sentinel guards against emitting the texture() call twice
-        // when more than one output port is consumed (same pattern as RgbToHsvNode).
         string tmp = $"_grabCol_{Id:N}";
         ctx.EmitOnce("scenecol:" + tmp, () =>
         {
@@ -490,7 +487,17 @@ public sealed class SceneColorNode : Node, IShaderNode, IShaderGraphNode
             string uv = uvConnected
                 ? ctx.EvaluateInput(GetInput("UV")!)
                 : "gl_FragCoord.xy / _ScreenParams.xy";
-            ctx.BodyPrelude.AppendLine($"    vec4 {tmp} = texture(_GrabTexture, {uv});");
+
+            bool lodConnected = ctx.IsConnected(GetInput("LOD")!);
+            if (lodConnected)
+            {
+                string lod = ctx.EvaluateInputAs(GetInput("LOD")!, ShaderType.Float);
+                ctx.BodyPrelude.AppendLine($"    vec4 {tmp} = textureLod(_GrabTexture, {uv}, {lod});");
+            }
+            else
+            {
+                ctx.BodyPrelude.AppendLine($"    vec4 {tmp} = texture(_GrabTexture, {uv});");
+            }
         });
 
         return outputPort.Name switch
@@ -508,6 +515,101 @@ public sealed class SceneColorNode : Node, IShaderNode, IShaderGraphNode
     {
         "RGBA" => ShaderType.Vec4,
         _      => ShaderType.Float,
+    };
+}
+
+// ─── Scene Color Blur (One-Step Mip Blur) ────────────────────────────────────
+
+/// <summary>
+/// One-step frosted glass / mip blur using the grab-pass texture with auto-generated mipmaps.
+///
+/// Uses Interleaved Gradient Noise (Jimenez 2014) to pick a random direction on a disk,
+/// then samples the grab texture at that offset using a mip level proportional to blur radius.
+/// The mip provides the base blur, the noise-rotated offset breaks up banding.
+/// Multiple quality steps (1-4) rotate the sample point by 90 degrees each iteration.
+///
+/// Based on Mirza Beig's one-step blur technique.
+/// </summary>
+public sealed class SceneColorBlurNode : Node, IShaderNode, IShaderGraphNode
+{
+    public override string Title => "Scene Color Blur";
+    public override string Category => "Scene Data";
+    public override System.Drawing.Color AccentColor => SceneAccents.Scene;
+
+    protected override void DefineNode()
+    {
+        AddInput<float>("Blur", 0.02f,
+            tooltip: "Blur radius in UV space. 0 = sharp, 0.05 = moderate frosted glass.");
+        AddInput<float>("MIP", 0.0f,
+            tooltip: "Base mip level bias. Combined with blur radius for final mip selection. " +
+                     "Higher values use coarser mip levels for a smoother base blur.");
+        AddInput<int>("Steps", 4,
+            tooltip: "Number of blur samples (1-4). Each step rotates 90 degrees. " +
+                     "1 = fastest, 4 = best quality. Even 1-2 steps look good with mip blur.");
+
+        AddOutput<Float4>("RGBA", tooltip: "Blurred grab-pass colour (vec4)");
+        AddOutput<Float3>("RGB",  tooltip: "Blurred colour RGB");
+    }
+
+    string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
+    {
+        if (ctx.RequireFragmentStage(Id, Title))
+            return outputPort.Name == "RGBA" ? "vec4(0.0)" : "vec3(0.0)";
+        ctx.Includes.Add("ShaderVariables");
+
+        ctx.Uniforms.Add("uniform sampler2D _GrabTexture;");
+        ctx.PassDirectives.Add("GrabTexture \"_GrabTexture\"");
+
+        string tmp = $"_grabBlur_{Id:N}";
+        ctx.EmitOnce("sceneblur:" + tmp, () =>
+        {
+            // Emit the IGN + blur helper once per shader
+            ctx.EmitOnce("sceneblur:helpers", () =>
+            {
+                ctx.TopLevelHelpers.AppendLine(@"
+float _IGN(vec2 pixCoord, int frameCount) {
+    const vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    vec2 frameMagicScale = vec2(2.083, 4.867);
+    pixCoord += float(frameCount) * frameMagicScale;
+    return fract(magic.z * fract(dot(pixCoord, magic.xy)));
+}
+vec4 _MipBlur(sampler2D tex, vec2 uv, float radius, float mipBias, int steps, vec2 pixCoord) {
+    float noise = _IGN(pixCoord, int(_Time.w) % 60);
+    float angle = noise * 6.28318530718;
+    vec2 dir = vec2(cos(angle), sin(angle));
+    vec2 aspect = vec2(min(1.0, _ScreenParams.y / _ScreenParams.x),
+                       min(1.0, _ScreenParams.x / _ScreenParams.y));
+    vec4 acc = vec4(0.0);
+    steps = clamp(steps, 1, 4);
+    for (int i = 0; i < steps; i++) {
+        vec2 offset = dir * radius * aspect;
+        acc += textureLod(tex, uv + offset, mipBias);
+        dir = vec2(-dir.y, dir.x);
+    }
+    return acc / float(steps);
+}");
+            });
+
+            string blur  = ctx.EvaluateInputAs(GetInput("Blur")!,  ShaderType.Float);
+            string mip   = ctx.EvaluateInputAs(GetInput("MIP")!,   ShaderType.Float);
+            string steps = ctx.EvaluateInputAs(GetInput("Steps")!,  ShaderType.Int);
+
+            ctx.BodyPrelude.AppendLine(
+                $"    vec4 {tmp} = _MipBlur(_GrabTexture, gl_FragCoord.xy / _ScreenParams.xy, {blur}, {mip}, {steps}, gl_FragCoord.xy);");
+        });
+
+        return outputPort.Name switch
+        {
+            "RGBA" => tmp,
+            "RGB"  => $"{tmp}.rgb",
+            _      => tmp,
+        };
+    }
+
+    ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => p.Name switch
+    {
+        "RGB"  => ShaderType.Vec3,
+        _      => ShaderType.Vec4,
     };
 }
 
