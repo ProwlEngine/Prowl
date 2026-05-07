@@ -228,7 +228,7 @@ public static class Window
     {
         Closing?.Invoke();
         WindowInputHandler.Dispose();
-        Input.PopHandler();
+        //Input.PopHandler();
         Graphics.Dispose();
     }
 
