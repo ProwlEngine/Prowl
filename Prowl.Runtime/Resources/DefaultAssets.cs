@@ -35,7 +35,8 @@ public enum DefaultShader
     CinematicEffects,
     VolumetricFog,
     SDFRaymarch,
-    TAA
+    TAA,
+    MotionBlur
 }
 
 /// <summary>
