@@ -1034,7 +1034,11 @@ public class ProjectPanel : DockPanel
         float cellSize = _thumbnailSize + 8f;
         float labelH = 18f;
         float totalCellH = cellSize + labelH;
-        int cols = Math.Max(1, (int)((width - 16) / cellSize));
+        float gap = 6f;
+        // Available width minus padding (12 = 6 left margin + 6 right margin from parent)
+        // Each column takes cellSize + gap, minus one gap for the last column
+        float available = width - 12f;
+        int cols = Math.Max(1, (int)((available + gap) / (cellSize + gap)));
 
         var itemObjects = entries.Select(e => (object)e).ToList();
 
@@ -1313,7 +1317,20 @@ public class ProjectPanel : DockPanel
         if (db == null) return null;
 
         byte[]? pixels = db.LoadThumbnail(guid);
-        if (pixels == null || pixels.Length == 0) return null;
+        if (pixels == null || pixels.Length == 0)
+        {
+            // No thumbnail on disk — try to load the asset and queue generation
+            var asset = db.Get(guid);
+            if (asset != null)
+            {
+                var entry = db.GetEntry(guid);
+                string? sourceFile = entry?.MainAssetType == typeof(Prowl.Runtime.Resources.Texture2D)
+                    ? System.IO.Path.Combine(Project.Current?.AssetsPath ?? "", entry.Path)
+                    : null;
+                ThumbnailGenerator.Enqueue(guid, asset, sourceFile);
+            }
+            return null;
+        }
 
         try
         {
