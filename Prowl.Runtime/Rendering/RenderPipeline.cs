@@ -626,6 +626,10 @@ public abstract class RenderPipeline : EngineObject
                     // Restore the original framebuffer (for both read and draw)
                     Graphics.BindFramebuffer(currentFB, FBOTarget.Framebuffer);
 
+                    // Generate mipmaps so shaders can sample with textureLod for blur effects
+                    Graphics.GenerateMipmap(grabRT.MainTexture.Handle);
+                    Graphics.SetTextureFilters(grabRT.MainTexture.Handle, TextureMin.LinearMipmapLinear, TextureMag.Linear);
+
                     // Set as global texture for this and subsequent passes
                     PropertyState.SetGlobalTexture(pass.GrabTextureName, grabRT.MainTexture);
                     if (wantDepth && grabRT.InternalDepth != null)
