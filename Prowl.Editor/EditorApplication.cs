@@ -671,6 +671,8 @@ public class EditorApplication : Game
 
         // Systems drawn on top (Overlay/Topmost layers)
         Widgets.FileDialog.Draw(paper);
+        Packages.PackageExportDialog.Draw(paper);
+        Packages.PackageImportDialog.Draw(paper);
         Widgets.SelectorModal.Draw(paper);
         Inspector.AddComponentPopup.Draw(paper);
         Widgets.ModalDialog.Draw(paper);
@@ -1002,6 +1004,18 @@ public class EditorApplication : Game
 
         // Assets menu
         AssetCreateMenu.RegisterMenus();
+        MenuRegistry.RegisterSeparator("Assets");
+        MenuRegistry.Register("Assets/Import Package...", () =>
+        {
+            Widgets.FileDialog.Open(Widgets.FileDialogMode.Open, path =>
+            {
+                if (path != null && System.IO.File.Exists(path))
+                    Packages.PackageImportDialog.Open(path);
+            },
+            startPath: Project.Current?.PackagesPath,
+            filters: new[] { "*.prowlpackage" },
+            filterLabels: new[] { "ProwlPackage (*.prowlpackage)" });
+        });
 
         // GameObject menu auto-populated from [CreateGameObjectMenu] attributes
         CreateGameObjectMenuRegistry.RegisterMenuBarItems();

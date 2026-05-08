@@ -174,8 +174,7 @@ public class ShaderGraphEditorWindow : DockPanel
     {
         using (paper.Row("sg_tb_row1").Height(26).RowBetween(4).Enter())
         {
-            EditorGUI.Button(paper, "sg_tb_compile", $"{EditorIcons.WandMagicSparkles} Compile", width: 90)
-                .OnValueChanged(_ => _editor.Save());
+            Origami.Button(paper, "sg_tb_compile", $"{EditorIcons.WandMagicSparkles} Compile", () => _editor.Save()).Width(90).Show();
             Origami.Switch(paper, "sg_tb_auto", _autoRecompile, v => _autoRecompile = v)
                 .Primary().LabelRight("Auto").Show();
             // Recenter lives on F / Space no need for a button. Frees toolbar room
@@ -194,8 +193,7 @@ public class ShaderGraphEditorWindow : DockPanel
                 .TextColor(_editor.IsDirty ? EditorTheme.Purple400 : EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize - 2)
                 .Alignment(TextAlignment.MiddleRight);
-            EditorGUI.Button(paper, "sg_tb_hide", EditorIcons.CircleXmark, width: 24)
-                .OnValueChanged(_ => _sidebarOpen = false);
+            Origami.Button(paper, "sg_tb_hide", EditorIcons.CircleXmark, () => _sidebarOpen = false).Width(24).Show();
         }
     }
 
@@ -363,12 +361,9 @@ public class ShaderGraphEditorWindow : DockPanel
 
         using (paper.Row("sg_presets").Height(22).RowBetween(4).Enter())
         {
-            EditorGUI.Button(paper, "sg_preset_opaque", "Opaque", width: 70)
-                .OnValueChanged(_ => ApplyPreset(ShaderGraphRenderSettings.OpaqueDefaults(), "Opaque Preset"));
-            EditorGUI.Button(paper, "sg_preset_transp", "Transparent", width: 90)
-                .OnValueChanged(_ => ApplyPreset(ShaderGraphRenderSettings.TransparentDefaults(), "Transparent Preset"));
-            EditorGUI.Button(paper, "sg_preset_add", "Additive", width: 70)
-                .OnValueChanged(_ => ApplyPreset(ShaderGraphRenderSettings.AdditiveDefaults(), "Additive Preset"));
+            Origami.Button(paper, "sg_preset_opaque", "Opaque", () => ApplyPreset(ShaderGraphRenderSettings.OpaqueDefaults(), "Opaque Preset")).Width(70).Show();
+            Origami.Button(paper, "sg_preset_transp", "Transparent", () => ApplyPreset(ShaderGraphRenderSettings.TransparentDefaults(), "Transparent Preset")).Width(90).Show();
+            Origami.Button(paper, "sg_preset_add", "Additive", () => ApplyPreset(ShaderGraphRenderSettings.AdditiveDefaults(), "Additive Preset")).Width(70).Show();
         }
     }
 

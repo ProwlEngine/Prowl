@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Editor.Docking;
+using Prowl.Editor.Packages;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -380,7 +381,7 @@ public class ProjectPanel : DockPanel
             .Size(FolderTreeWidth, height)
             .BackgroundColor(EditorTheme.Neutral400)
             .OnClick(0, (_, _) => Selection.Clear())
-            .OnRightClick(0, (_, _) => Selection.Clear())
+            //.OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Right-click background show create/explorer menu
@@ -533,7 +534,7 @@ public class ProjectPanel : DockPanel
             .Size(width, height)
             .BackgroundColor(EditorTheme.Neutral300)
             .OnClick(0, (_, _) => Selection.Clear())
-            .OnRightClick(0, (_, _) => Selection.Clear())
+            //.OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Remember that the mouse is over the content background the central drop
@@ -835,7 +836,7 @@ public class ProjectPanel : DockPanel
         {
             // Right-click should select the item if not already selected
             if (!Selection.IsSelected(item))
-                Selection.Select(item);
+                Selection.AddToSelection(item);
 
             bool isMulti = Selection.Count > 1;
             string folder = item.IsFolder ? item.RelativePath : _currentFolder;
@@ -875,6 +876,26 @@ public class ProjectPanel : DockPanel
                     Runtime.Debug.Log($"GUID: {item.Guid}");
                 }, icon: EditorIcons.Fingerprint);
             }
+
+            builder.Separator();
+
+            builder.Item($"Export Package...", () =>
+            {
+                var paths = Selection.GetSelected<ContentItem>()
+                    .Where(c => !c.IsSubAsset)
+                    .SelectMany(c =>
+                    {
+                        if (c.IsFolder)
+                            return ProwlPackage.CollectFolderAssets(c.RelativePath);
+                        if (c.Guid != Guid.Empty)
+                            return new[] { c.RelativePath };
+                        return Enumerable.Empty<string>();
+                    })
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (paths.Count > 0)
+                    PackageExportDialog.Open(paths);
+            }, icon: EditorIcons.FileZipper);
 
             builder.Separator();
 

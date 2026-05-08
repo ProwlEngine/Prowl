@@ -147,33 +147,30 @@ public class ModelAssetEditor : AssetImporterEditor
             {
                 paper.Box($"{id}_btn_spacer");
 
-                EditorGUI.Button(paper, $"{id}_revert", "Revert", width: 80)
-                    .OnValueChanged(_ =>
-                    {
-                        LoadSettingsFromMeta(entry);
-                        _settingsDirty = false;
-                    });
+                Origami.Button(paper, $"{id}_revert", "Revert", () =>
+                {
+                    LoadSettingsFromMeta(entry);
+                    _settingsDirty = false;
+                }).Width(80).Show();
 
-                EditorGUI.Button(paper, $"{id}_save", "Save & Reimport", width: 120)
-                    .OnValueChanged(_ =>
-                    {
-                        SaveSettingsToMeta(entry);
-                        _settingsDirty = false;
-                        _lastPreviewAsset = null; // Force preview refresh
-                        _settingsLoaded = false;
-                        EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-                        MeshAssetEditor.InvalidateCachedPreviews();
-                    });
+                Origami.Button(paper, $"{id}_save", "Save & Reimport", () =>
+                {
+                    SaveSettingsToMeta(entry);
+                    _settingsDirty = false;
+                    _lastPreviewAsset = null; // Force preview refresh
+                    _settingsLoaded = false;
+                    EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+                    MeshAssetEditor.InvalidateCachedPreviews();
+                }).Width(120).Show();
             }
         }
         else
         {
-            EditorGUI.Button(paper, $"{id}_reimport", $"{EditorIcons.ArrowsRotate}  Reimport")
-                .OnValueChanged(_ =>
-                {
-                    _lastPreviewAsset = null;
-                    EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-                });
+            Origami.Button(paper, $"{id}_reimport", $"{EditorIcons.ArrowsRotate}  Reimport", () =>
+            {
+                _lastPreviewAsset = null;
+                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+            }).Show();
         }
 
         // 3D Preview

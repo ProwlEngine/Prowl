@@ -453,8 +453,7 @@ public static class FileDialog
                             v => _newFolderName = v)
                         .Placeholder("Name").Width(UnitValue.Stretch()).Show();
 
-                    EditorGUI.Button(paper, "fd_nf_ok", "Create", width: 60)
-                        .OnValueChanged(_ =>
+                    Origami.Button(paper, "fd_nf_ok", "Create", () =>
                         {
                             try
                             {
@@ -464,10 +463,9 @@ public static class FileDialog
                                 RefreshEntries();
                             }
                             catch { }
-                        });
+                        }).Width(60).Show();
 
-                    EditorGUI.Button(paper, "fd_nf_cancel", "Cancel", width: 60)
-                        .OnValueChanged(_ => _creatingFolder = false);
+                    Origami.Button(paper, "fd_nf_cancel", "Cancel", () => { _creatingFolder = false; }).Width(60).Show();
                 }
             }
 
@@ -585,11 +583,9 @@ public static class FileDialog
                     _ => "Open"
                 };
 
-                EditorGUI.Button(paper, "fd_btn_ok", confirmLabel, width: 101)
-                    .OnValueChanged(_ => ConfirmSelection());
+                Origami.Button(paper, "fd_btn_ok", confirmLabel, () => { ConfirmSelection(); }).Width(101).Show();
 
-                EditorGUI.Button(paper, "fd_btn_cancel", "Cancel", width: 60)
-                    .OnValueChanged(_ => Close(null));
+                Origami.Button(paper, "fd_btn_cancel", "Cancel", () => { Close(null); }).Width(60).Show();
             }
         }
     }

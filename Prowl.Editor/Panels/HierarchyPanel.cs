@@ -53,7 +53,11 @@ public class HierarchyPanel : DockPanel
 
         var scene = Scene.Current;
 
-        using (paper.Column("hier_root").Size(width, height).OnClick(0, (_, _) => Selection.Clear()).OnRightClick(0, (_, _) => Selection.Clear()).Enter())
+        using (paper.Column("hier_root")
+            .Size(width, height)
+            .OnClick(0, (_, _) => Selection.Clear())
+            //.OnRightClick(0, (_, _) => Selection.Clear())
+            .Enter())
         {
             // Prefab editing breadcrumb
             if (Prefabs.PrefabEditingMode.IsEditing)
@@ -102,8 +106,7 @@ public class HierarchyPanel : DockPanel
 
                     paper.Box("hier_prefab_spacer");
 
-                    EditorGUI.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  Save & Exit", width: 100)
-                        .OnValueChanged(_ => Prefabs.PrefabEditingMode.SaveAndExit());
+                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  Save & Exit", () => Prefabs.PrefabEditingMode.SaveAndExit()).Width(100).Show();
                 }
             }
 
@@ -119,8 +122,7 @@ public class HierarchyPanel : DockPanel
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
-                EditorGUI.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  New Scene", width: 120)
-                    .OnValueChanged(_ => SceneViewPanel.CreateAndLoadDefaultScene());
+                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  New Scene", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
                 return;
             }
 
@@ -436,7 +438,7 @@ public class HierarchyPanel : DockPanel
             {
                 _expandedState[id] = !_expandedState.GetValueOrDefault(id, false);
             })
-            .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.Select(g); })
+            .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.AddToSelection(g); })
             .OnDragStart(go, (dragGO, _) =>
             {
                 if (DragDrop.IsDragging) return;

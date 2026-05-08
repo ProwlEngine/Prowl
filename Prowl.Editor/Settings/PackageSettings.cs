@@ -115,8 +115,7 @@ public class PackageSettings : ProjectSettingsBase
         Origami.Checkbox(paper, "pkg_add_editor_only", _newEditorOnly, v => _newEditorOnly = v)
             .LabelRight("Editor Only").Show();
 
-        EditorGUI.Button(paper, "pkg_add_btn", $"{EditorIcons.Plus}  Add Package", width: 140)
-            .OnValueChanged(_ =>
+        Origami.Button(paper, "pkg_add_btn", $"{EditorIcons.Plus}  Add Package", () =>
             {
                 if (!string.IsNullOrWhiteSpace(_newName) && !string.IsNullOrWhiteSpace(_newVersion))
                 {
@@ -127,13 +126,12 @@ public class PackageSettings : ProjectSettingsBase
                     Apply();
                     ProjectSettingsRegistry.SaveAll();
                 }
-            });
+            }).Width(140).Show();
 
         paper.Box("pkg_sp3").Height(8);
 
         // Recompile button
-        EditorGUI.Button(paper, "pkg_recompile", $"{EditorIcons.ArrowsRotate}  Recompile Scripts", width: 180)
-            .OnValueChanged(_ => ScriptAssemblyManager.RequestRecompile());
+        Origami.Button(paper, "pkg_recompile", $"{EditorIcons.ArrowsRotate}  Recompile Scripts", () => { ScriptAssemblyManager.RequestRecompile(); }).Width(180).Show();
     }
 
 }

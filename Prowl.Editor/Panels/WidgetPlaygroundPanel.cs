@@ -179,11 +179,9 @@ public class WidgetPlaygroundPanel : DockPanel
 
             using (paper.Row("btn_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
-                EditorGUI.Button(paper, "btn1", "Click Me")
-                    .OnValueChanged(v => _clickCount++);
-                EditorGUI.Button(paper, "btn2", "Reset")
-                    .OnValueChanged(v => ResetAll());
-                EditorGUI.Button(paper, "btn3", "Wide Button", width: 160);
+                Origami.Button(paper, "btn1", "Click Me", () => _clickCount++).Show();
+                Origami.Button(paper, "btn2", "Reset", () => ResetAll()).Show();
+                Origami.Button(paper, "btn3", "Wide Button").Width(160).Show();
             }
             EditorGUI.Label(paper, "btn_count", $"Click count: {_clickCount}");
 
@@ -367,14 +365,12 @@ public class WidgetPlaygroundPanel : DockPanel
 
             using (paper.Row("modal_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
-                EditorGUI.Button(paper, "btn_confirm", "Confirm Dialog")
-                    .OnValueChanged(v => ModalDialog.Confirm("Delete Object",
-                        "Are you sure you want to delete this object?",
-                        () => Toasts.Success("Deleted", "Object was deleted"),
-                        () => Toasts.Info("Cancelled", "Deletion cancelled")));
+                Origami.Button(paper, "btn_confirm", "Confirm Dialog", () => ModalDialog.Confirm("Delete Object",
+                    "Are you sure you want to delete this object?",
+                    () => Toasts.Success("Deleted", "Object was deleted"),
+                    () => Toasts.Info("Cancelled", "Deletion cancelled"))).Show();
 
-                EditorGUI.Button(paper, "btn_message", "Message Dialog")
-                    .OnValueChanged(v => ModalDialog.Message("Info", "This is a message dialog."));
+                Origami.Button(paper, "btn_message", "Message Dialog", () => ModalDialog.Message("Info", "This is a message dialog.")).Show();
             }
 
             EditorGUI.Separator(paper, "sep11");
@@ -384,14 +380,10 @@ public class WidgetPlaygroundPanel : DockPanel
 
             using (paper.Row("toast_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
-                EditorGUI.Button(paper, "btn_toast_info", "Info")
-                    .OnValueChanged(v => Toasts.Info("Info", "Something happened"));
-                EditorGUI.Button(paper, "btn_toast_ok", "Success")
-                    .OnValueChanged(v => Toasts.Success("Saved", "Scene saved successfully"));
-                EditorGUI.Button(paper, "btn_toast_warn", "Warning")
-                    .OnValueChanged(v => Toasts.Warning("Warning", "Asset may be outdated"));
-                EditorGUI.Button(paper, "btn_toast_err", "Error")
-                    .OnValueChanged(v => Toasts.Error("Error", "Failed to compile shader"));
+                Origami.Button(paper, "btn_toast_info", "Info", () => Toasts.Info("Info", "Something happened")).Show();
+                Origami.Button(paper, "btn_toast_ok", "Success", () => Toasts.Success("Saved", "Scene saved successfully")).Show();
+                Origami.Button(paper, "btn_toast_warn", "Warning", () => Toasts.Warning("Warning", "Asset may be outdated")).Show();
+                Origami.Button(paper, "btn_toast_err", "Error", () => Toasts.Error("Error", "Failed to compile shader")).Show();
             }
 
             EditorGUI.Separator(paper, "sep12");
@@ -452,19 +444,16 @@ public class WidgetPlaygroundPanel : DockPanel
             // ── File Dialog ──
             EditorGUI.Header(paper, "h_filedialog", "File Dialog");
 
-            EditorGUI.Button(paper, "btn_open_file", "Open File...")
-                .OnValueChanged(_ => Widgets.FileDialog.Open(Widgets.FileDialogMode.Open,
-                    path => { if (path != null) Widgets.Toasts.Show("File", $"Selected: {path}"); },
-                    filters: new[] { "*.cs;*.json;*.xml", "*.png;*.jpg", "*.*" },
-                    filterLabels: new[] { "Code (*.cs, *.json, *.xml)", "Images (*.png, *.jpg)", "All Files (*.*)" }));
+            Origami.Button(paper, "btn_open_file", "Open File...", () => Widgets.FileDialog.Open(Widgets.FileDialogMode.Open,
+                path => { if (path != null) Widgets.Toasts.Show("File", $"Selected: {path}"); },
+                filters: new[] { "*.cs;*.json;*.xml", "*.png;*.jpg", "*.*" },
+                filterLabels: new[] { "Code (*.cs, *.json, *.xml)", "Images (*.png, *.jpg)", "All Files (*.*)" })).Show();
 
-            EditorGUI.Button(paper, "btn_save_file", "Save File...")
-                .OnValueChanged(_ => Widgets.FileDialog.Open(Widgets.FileDialogMode.Save,
-                    path => { if (path != null) Widgets.Toasts.Show("File", $"Save to: {path}", Widgets.ToastType.Success); }));
+            Origami.Button(paper, "btn_save_file", "Save File...", () => Widgets.FileDialog.Open(Widgets.FileDialogMode.Save,
+                path => { if (path != null) Widgets.Toasts.Show("File", $"Save to: {path}", Widgets.ToastType.Success); })).Show();
 
-            EditorGUI.Button(paper, "btn_select_folder", "Select Folder...")
-                .OnValueChanged(_ => Widgets.FileDialog.Open(Widgets.FileDialogMode.SelectFolder,
-                    path => { if (path != null) Widgets.Toasts.Show("Folder", $"Selected: {path}"); }));
+            Origami.Button(paper, "btn_select_folder", "Select Folder...", () => Widgets.FileDialog.Open(Widgets.FileDialogMode.SelectFolder,
+                path => { if (path != null) Widgets.Toasts.Show("Folder", $"Selected: {path}"); })).Show();
 
             EditorGUI.Separator(paper, "sep_filedialog");
 

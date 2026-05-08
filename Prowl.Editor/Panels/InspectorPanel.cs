@@ -20,6 +20,10 @@ public class InspectorPanel : DockPanel
     public override string Title => "Inspector";
     public override string Icon => EditorIcons.Sliders;
 
+    // Remember the last non-folder selection so navigating folders doesn't clear the inspector.
+    private object? _lastInspectable;
+    private bool _subscribed;
+
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {
         // Selection is global, so the Inspector is the natural owner of its persistence.
@@ -53,20 +57,45 @@ public class InspectorPanel : DockPanel
         }
     }
 
+    private static bool IsFolderSelection(object? obj)
+        => obj is ContentItem ci && ci.IsFolder;
+
+    private void OnSelectionChanged()
+    {
+        var active = Selection.ActiveObject;
+
+        // If the new selection is a folder (or all selected are folders), keep the
+        // previous inspectable so browsing folders doesn't wipe the inspector.
+        if (active == null || IsFolderSelection(active))
+            return;
+
+        _lastInspectable = active;
+    }
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
+        if (!_subscribed)
+        {
+            Selection.OnSelectionChanged += OnSelectionChanged;
+            _subscribed = true;
+        }
+
         Origami.ScrollView(paper, "insp_scroll", width, height).Padding(8, 0, 8, 0).Body(() =>
         {
-            if (Selection.Count == 0)
+            // Determine what to inspect: current selection, unless it's a folder
+            var active = Selection.ActiveObject;
+            if (active == null || IsFolderSelection(active))
+                active = _lastInspectable;
+
+            if (Selection.Count == 0 && _lastInspectable == null)
             {
                 DrawEmpty(paper, font, width);
                 return;
             }
 
-            var active = Selection.ActiveObject;
             if (active == null)
             {
                 DrawEmpty(paper, font, width);
@@ -325,13 +354,12 @@ public class InspectorPanel : DockPanel
 
                         // Save & Reimport button
                         paper.Box("insp_set_sp").Height(4);
-                        EditorGUI.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", width: 150)
-                            .OnValueChanged(_ =>
-                            {
-                                meta.Settings = settings;
-                                MetaFile.Write(metaPath, meta);
-                                db.Reimport(entry.Guid);
-                            });
+                        Origami.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", () =>
+                        {
+                            meta.Settings = settings;
+                            MetaFile.Write(metaPath, meta);
+                            db.Reimport(entry.Guid);
+                        }).Width(150).Show();
                     }
                 }
             }
@@ -341,8 +369,7 @@ public class InspectorPanel : DockPanel
         EditorGUI.Separator(paper, "insp_sep_actions");
         if (entry != null)
         {
-            EditorGUI.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  Reimport")
-                .OnValueChanged(_ => db.Reimport(entry.Guid));
+            Origami.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  Reimport", () => db.Reimport(entry.Guid)).Show();
         }
     }
 
@@ -478,8 +505,7 @@ public class InspectorPanel : DockPanel
         EditorGUI.Separator(paper, "insp_sub_sep3");
 
         // Extract button clone sub-asset to a standalone file
-        EditorGUI.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  Extract as Asset")
-            .OnValueChanged(_ => ExtractSubAsset(item, parentEntry, subEntry, asset));
+        Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  Extract as Asset", () => ExtractSubAsset(item, parentEntry, subEntry, asset)).Show();
     }
 
     private void ExtractSubAsset(ContentItem item, AssetEntry? parentEntry, SubAssetEntry? subEntry, EngineObject? asset)

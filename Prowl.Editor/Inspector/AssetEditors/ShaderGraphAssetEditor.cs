@@ -1,5 +1,6 @@
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
@@ -31,7 +32,6 @@ public class ShaderGraphAssetEditor : AssetImporterEditor
 
         paper.Box($"{id}_sp").Height(8);
 
-        EditorGUI.Button(paper, $"{id}_open", $"{EditorIcons.PenToSquare}  Open Editor", width: 160)
-            .OnValueChanged(_ => ShaderGraphEditorWindow.OpenFor(graph));
+        Origami.Button(paper, $"{id}_open", $"{EditorIcons.PenToSquare}  Open Editor", () => { ShaderGraphEditorWindow.OpenFor(graph); }).Width(160).Show();
     }
 }

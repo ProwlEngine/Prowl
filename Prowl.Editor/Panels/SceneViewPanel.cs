@@ -3,6 +3,7 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -177,8 +178,7 @@ public class SceneViewPanel : DockPanel
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
-                    EditorGUI.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  New Scene", width: 120)
-                        .OnValueChanged(_ => CreateAndLoadDefaultScene());
+                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  New Scene", () => CreateAndLoadDefaultScene()).Width(120).Show();
                     paper.Box("sv_btn_spacer_r");
                 }
 
@@ -202,8 +202,8 @@ public class SceneViewPanel : DockPanel
                 Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 viewSize = new Float2(width, height);
                 Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
-                bool hovered = mouseLocal.X >= 0 && mouseLocal.X <= viewSize.X
-                            && mouseLocal.Y >= 0 && mouseLocal.Y <= viewSize.Y;
+                // Use Paper's hover state which respects overlays/popups, not just bounds
+                bool hovered = paper.IsParentHovered;
                 sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, mouseRay, mouseLocal, hovered);
             }
         }

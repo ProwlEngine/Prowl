@@ -174,8 +174,7 @@ public sealed class BuildSettings : ProjectSettingsBase
         // Add scene buttons
         using (paper.Row("bld_add_row").Height(EditorTheme.RowHeight).RowBetween(6).ChildLeft(4).Enter())
         {
-            EditorGUI.Button(paper, "bld_add_open", $"{EditorIcons.Plus} Add Open Scene", width: 140)
-                .OnValueChanged(_ =>
+            Origami.Button(paper, "bld_add_open", $"{EditorIcons.Plus} Add Open Scene", () =>
                 {
                     if (EditorSceneManager.CurrentScenePath != null)
                     {
@@ -187,7 +186,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                             ProjectSettingsRegistry.SaveAll();
                         }
                     }
-                });
+                }).Width(140).Show();
         }
 
         paper.Box("bld_sp1").Height(12);

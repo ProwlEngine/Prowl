@@ -115,8 +115,7 @@ public class OrmPackerPanel : DockPanel
                                 v => _outputPath = v ?? "")
                             .Placeholder("Pick a file…").Width(UnitValue.Stretch()).Show();
 
-                        EditorGUI.Button(paper, "orm_out_browse", "Browse", width: 80)
-                            .OnValueChanged(_ => OpenSaveDialog());
+                        Origami.Button(paper, "orm_out_browse", "Browse", () => OpenSaveDialog()).Width(80).Show();
                     }
                 });
 
@@ -191,11 +190,9 @@ public class OrmPackerPanel : DockPanel
         {
             paper.Box("orm_actions_spacer").Width(UnitValue.StretchOne);
 
-            EditorGUI.Button(paper, "orm_preview_btn", $"{EditorIcons.Eye}  Generate Preview", width: 180)
-                .OnValueChanged(_ => RunPreview());
+            Origami.Button(paper, "orm_preview_btn", $"{EditorIcons.Eye}  Generate Preview", () => RunPreview()).Width(180).Show();
 
-            EditorGUI.Button(paper, "orm_pack_btn", $"{EditorIcons.FloppyDisk}  Pack & Save", width: 160)
-                .OnValueChanged(_ => RunPack());
+            Origami.Button(paper, "orm_pack_btn", $"{EditorIcons.FloppyDisk}  Pack & Save", () => RunPack()).Width(160).Show();
         }
     }
 

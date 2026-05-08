@@ -27,13 +27,12 @@ public class CollectionPropertyEditor : PropertyEditor
         {
             if (list == null)
             {
-                EditorGUI.Button(paper, $"{id}_create", $"Create {elementType.Name}[]")
-                    .OnValueChanged(v =>
-                    {
-                        onChange(type.IsArray
-                            ? Array.CreateInstance(elementType, 0)
-                            : Activator.CreateInstance(type));
-                    });
+                Origami.Button(paper, $"{id}_create", $"Create {elementType.Name}[]", () =>
+                {
+                    onChange(type.IsArray
+                        ? Array.CreateInstance(elementType, 0)
+                        : Activator.CreateInstance(type));
+                }).Show();
                 return;
             }
 
@@ -58,8 +57,7 @@ public class CollectionPropertyEditor : PropertyEditor
                                 newVal => { list[idx] = newVal; onChange(list); }, depth + 1);
                         }
 
-                        EditorGUI.ButtonSquare(paper, $"{id}_rm_{stableKey}", EditorIcons.Xmark)
-                            .OnValueChanged(v =>
+                        Origami.IconButton(paper, $"{id}_rm_{stableKey}", EditorIcons.Xmark, () =>
                             {
                                 stableIds.RemoveAt(idx);
                                 paper.SetElementStorage(colEl, "stableIds", stableIds);
@@ -77,33 +75,32 @@ public class CollectionPropertyEditor : PropertyEditor
                                         if (j != idx) newList.Add(list[j]);
                                     onChange(newList);
                                 }
-                            });
+                            }).Show();
                     }
                 }
 
-                EditorGUI.Button(paper, $"{id}_add", "+ Add Element")
-                    .OnValueChanged(v =>
+                Origami.Button(paper, $"{id}_add", "+ Add Element", () =>
+                {
+                    object? newElement = elementType.IsValueType
+                        ? Activator.CreateInstance(elementType)
+                        : elementType == typeof(string) ? "" : null;
+                    stableIds.Add(Guid.NewGuid().ToString("N"));
+                    paper.SetElementStorage(colEl, "stableIds", stableIds);
+                    if (type.IsArray)
                     {
-                        object? newElement = elementType.IsValueType
-                            ? Activator.CreateInstance(elementType)
-                            : elementType == typeof(string) ? "" : null;
-                        stableIds.Add(Guid.NewGuid().ToString("N"));
-                        paper.SetElementStorage(colEl, "stableIds", stableIds);
-                        if (type.IsArray)
-                        {
-                            var newArr = Array.CreateInstance(elementType, list.Count + 1);
-                            for (int j = 0; j < list.Count; j++) newArr.SetValue(list[j], j);
-                            newArr.SetValue(newElement, list.Count);
-                            onChange(newArr);
-                        }
-                        else
-                        {
-                            var newList = (IList)Activator.CreateInstance(list.GetType())!;
-                            for (int j = 0; j < list.Count; j++) newList.Add(list[j]);
-                            newList.Add(newElement);
-                            onChange(newList);
-                        }
-                    });
+                        var newArr = Array.CreateInstance(elementType, list.Count + 1);
+                        for (int j = 0; j < list.Count; j++) newArr.SetValue(list[j], j);
+                        newArr.SetValue(newElement, list.Count);
+                        onChange(newArr);
+                    }
+                    else
+                    {
+                        var newList = (IList)Activator.CreateInstance(list.GetType())!;
+                        for (int j = 0; j < list.Count; j++) newList.Add(list[j]);
+                        newList.Add(newElement);
+                        onChange(newList);
+                    }
+                }).Show();
             }
         });
     }
@@ -127,8 +124,7 @@ public class DictionaryPropertyEditor : PropertyEditor
         {
             if (dict == null)
             {
-                EditorGUI.Button(paper, $"{id}_create", "Create Dictionary")
-                    .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
+                Origami.Button(paper, $"{id}_create", "Create Dictionary", () => { onChange(Activator.CreateInstance(type)); }).Show();
                 return;
             }
 
@@ -152,8 +148,7 @@ public class DictionaryPropertyEditor : PropertyEditor
                                 newVal => { dict[keyObj] = newVal; onChange(dict); }, depth + 1);
                         }
 
-                        EditorGUI.ButtonSquare(paper, $"{id}_drm_{i}", EditorIcons.Xmark)
-                            .OnValueChanged(v => { dict.Remove(keyObj); onChange(dict); });
+                        Origami.IconButton(paper, $"{id}_drm_{i}", EditorIcons.Xmark, () => { dict.Remove(keyObj); onChange(dict); }).Show();
                     }
                 }
 
@@ -168,24 +163,23 @@ public class DictionaryPropertyEditor : PropertyEditor
                             v => paper.SetElementStorage(addRowEl, "pendingKey", v))
                         .Placeholder("Key").Width(UnitValue.Stretch()).Show();
 
-                    EditorGUI.Button(paper, $"{id}_addentry", "+ Add")
-                        .OnValueChanged(v =>
+                    Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
+                    {
+                        string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
+                        if (string.IsNullOrWhiteSpace(pk)) return;
+                        try
                         {
-                            string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
-                            if (string.IsNullOrWhiteSpace(pk)) return;
-                            try
-                            {
-                                object? typedKey = keyType == typeof(string) ? pk
-                                    : Convert.ChangeType(pk, keyType, CultureInfo.InvariantCulture);
-                                if (dict.Contains(typedKey!)) return;
-                                object? newVal = valType.IsValueType ? Activator.CreateInstance(valType)
-                                    : valType == typeof(string) ? "" : null;
-                                dict.Add(typedKey!, newVal);
-                                onChange(dict);
-                                paper.SetElementStorage(addRowEl, "pendingKey", "");
-                            }
-                            catch { }
-                        });
+                            object? typedKey = keyType == typeof(string) ? pk
+                                : Convert.ChangeType(pk, keyType, CultureInfo.InvariantCulture);
+                            if (dict.Contains(typedKey!)) return;
+                            object? newVal = valType.IsValueType ? Activator.CreateInstance(valType)
+                                : valType == typeof(string) ? "" : null;
+                            dict.Add(typedKey!, newVal);
+                            onChange(dict);
+                            paper.SetElementStorage(addRowEl, "pendingKey", "");
+                        }
+                        catch { }
+                    }).Show();
                 }
             }
         });

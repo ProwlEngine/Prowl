@@ -52,15 +52,14 @@ public static class MaterialPropertyDrawer
 
             if (overridden)
             {
-                EditorGUI.Button(paper, $"{id}_revert", EditorIcons.ArrowRotateLeft, width: 24)
-                    .OnValueChanged(_ =>
-                    {
-                        material.RevertProperty(prop.Name);
-                        // Drop the stored value too otherwise it'd still get uploaded
-                        // by ApplyMaterialUniformsWithDefaults even though the flag is gone.
-                        material._properties.RemoveProperty(prop.Name);
-                        onChanged?.Invoke();
-                    });
+                Origami.Button(paper, $"{id}_revert", EditorIcons.ArrowRotateLeft, () =>
+                {
+                    material.RevertProperty(prop.Name);
+                    // Drop the stored value too otherwise it'd still get uploaded
+                    // by ApplyMaterialUniformsWithDefaults even though the flag is gone.
+                    material._properties.RemoveProperty(prop.Name);
+                    onChanged?.Invoke();
+                }).Width(24).Show();
             }
         }
     }

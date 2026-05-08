@@ -118,7 +118,7 @@ public static class FileIconRegistry
         Register(EditorIcons.Palette, ".mat", ".material");
         Register(EditorIcons.FilePdf, ".pdf");
         Register(EditorIcons.FileLines, ".txt", ".md", ".log", ".json", ".xml", ".yaml", ".yml");
-        Register(EditorIcons.FileZipper, ".zip", ".rar", ".7z", ".tar", ".gz");
+        Register(EditorIcons.FileZipper, ".zip", ".rar", ".7z", ".tar", ".gz", ".prowlpackage");
         Register(EditorIcons.Gear, ".exe", ".dll", ".so");
     }
 }

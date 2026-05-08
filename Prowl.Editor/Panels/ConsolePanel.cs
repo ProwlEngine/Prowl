@@ -144,8 +144,7 @@ public class ConsolePanel : DockPanel
             .Margin(8)
             .Enter())
         {
-            EditorGUI.Button(paper, "con_clear", "Clear", width: 50)
-                .OnValueChanged(_ => { _messages.Clear(); _filteredIndices.Clear(); });
+            Origami.Button(paper, "con_clear", "Clear", () => { _messages.Clear(); _filteredIndices.Clear(); }).Width(50).Show();
 
             paper.Box("con_sep1").Width(1).Height(24).BackgroundColor(EditorTheme.Ink200);
 
@@ -174,11 +173,11 @@ public class ConsolePanel : DockPanel
 
             Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, "Filter...").Show();
 
-            EditorGUI.ButtonSquareWithHandle(paper, "con_settingsButton", $"{EditorIcons.Gear}", out var settingsButton)
-                .OnValueChanged((clicked) =>
-                {
-                    ContextMenuHelper.OpenContextMenu(paper, "con_settings", settingsButton);
-                });
+            ElementHandle settingsButton = default;
+            Origami.IconButton(paper, "con_settingsButton", $"{EditorIcons.Gear}", () =>
+            {
+                ContextMenuHelper.OpenContextMenu(paper, "con_settings", settingsButton);
+            }).WithHandle(h => settingsButton = h).Show();
 
             ContextMenuHelper.ContextMenu(paper, "con_settings", menu =>
             {

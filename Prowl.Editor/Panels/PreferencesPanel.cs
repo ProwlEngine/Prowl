@@ -136,40 +136,36 @@ public class PreferencesPanel : DockPanel
         // Actions
         using (paper.Row("pref_theme_actions").Height(28).RowBetween(6).ChildLeft(4).Enter())
         {
-            EditorGUI.Button(paper, "pref_apply", $"{EditorIcons.Check}  Apply", width: 80)
-                .OnValueChanged(_ => { s.ApplyTheme(); s.Save(); });
+            Origami.Button(paper, "pref_apply", $"{EditorIcons.Check}  Apply", () => { s.ApplyTheme(); s.Save(); }).Width(80).Show();
 
-            EditorGUI.Button(paper, "pref_reset", $"{EditorIcons.RotateLeft}  Reset", width: 80)
-                .OnValueChanged(_ => s.ResetTheme());
+            Origami.Button(paper, "pref_reset", $"{EditorIcons.RotateLeft}  Reset", () => s.ResetTheme()).Width(80).Show();
 
-            EditorGUI.Button(paper, "pref_export", $"{EditorIcons.Download}  Export", width: 90)
-                .OnValueChanged(_ =>
+            Origami.Button(paper, "pref_export", $"{EditorIcons.Download}  Export", () =>
+            {
+                FileDialog.Open(FileDialogMode.Save, path =>
                 {
-                    FileDialog.Open(FileDialogMode.Save, path =>
-                    {
-                        if (path == null) return;
-                        if (!path.EndsWith(".prowltheme")) path += ".prowltheme";
-                        theme.ExportToFile(path);
-                        Toasts.Info("Theme", $"Exported to {System.IO.Path.GetFileName(path)}");
-                    }, filters: new[] { "*.prowltheme" }, filterLabels: new[] { "Prowl Theme" });
-                });
+                    if (path == null) return;
+                    if (!path.EndsWith(".prowltheme")) path += ".prowltheme";
+                    theme.ExportToFile(path);
+                    Toasts.Info("Theme", $"Exported to {System.IO.Path.GetFileName(path)}");
+                }, filters: new[] { "*.prowltheme" }, filterLabels: new[] { "Prowl Theme" });
+            }).Width(90).Show();
 
-            EditorGUI.Button(paper, "pref_import", $"{EditorIcons.Upload}  Import", width: 90)
-                .OnValueChanged(_ =>
+            Origami.Button(paper, "pref_import", $"{EditorIcons.Upload}  Import", () =>
+            {
+                FileDialog.Open(FileDialogMode.Open, path =>
                 {
-                    FileDialog.Open(FileDialogMode.Open, path =>
+                    if (path == null) return;
+                    var imported = EditorThemeData.ImportFromFile(path);
+                    if (imported != null)
                     {
-                        if (path == null) return;
-                        var imported = EditorThemeData.ImportFromFile(path);
-                        if (imported != null)
-                        {
-                            s.Theme = imported;
-                            s.ApplyTheme();
-                            s.Save();
-                            Toasts.Info("Theme", $"Imported: {imported.Name}");
-                        }
-                    }, filters: new[] { "*.prowltheme" }, filterLabels: new[] { "Prowl Theme" });
-                });
+                        s.Theme = imported;
+                        s.ApplyTheme();
+                        s.Save();
+                        Toasts.Info("Theme", $"Imported: {imported.Name}");
+                    }
+                }, filters: new[] { "*.prowltheme" }, filterLabels: new[] { "Prowl Theme" });
+            }).Width(90).Show();
         }
 
         paper.Box("pref_theme_sp2").Height(12);
@@ -345,8 +341,7 @@ public class PreferencesPanel : DockPanel
         // Reset All button
         using (paper.Row("pref_sc_actions").Height(28).ChildLeft(4).Enter())
         {
-            EditorGUI.Button(paper, "pref_sc_reset_all", $"{EditorIcons.RotateLeft}  Reset All to Defaults", width: 200)
-                .OnValueChanged(_ => ShortcutManager.ClearAllOverrides());
+            Origami.Button(paper, "pref_sc_reset_all", $"{EditorIcons.RotateLeft}  Reset All to Defaults", () => ShortcutManager.ClearAllOverrides()).Width(200).Show();
         }
 
         paper.Box("pref_sc_sp2").Height(8);
