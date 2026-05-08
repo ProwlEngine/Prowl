@@ -2,40 +2,55 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Runtime.InteropServices;
+using System.IO;
 
 using Prowl.Echo;
-using Prowl.Runtime.Audio;
 using Prowl.Scribe;
 
 namespace Prowl.Runtime.Resources;
 
-public class FontAsset : EngineObject, ISerializable
+/// <summary>
+/// A font asset that wraps a TrueType/OpenType font file for use in UI text rendering.
+/// Stores the raw TTF/OTF bytes so the font can be reconstructed at runtime.
+/// The actual glyph atlas is managed per-Canvas by Scribe's FontSystem at runtime.
+/// </summary>
+public sealed class FontAsset : EngineObject
 {
-    public string fontName;
-    public byte[] fontData;
+    /// <summary>Raw font file bytes (TTF or OTF). Serialized with the asset.</summary>
+    [SerializeField]
+    private byte[] _fontData = [];
 
-    private Prowl.Scribe.FontFile _scribeFont;
+    [SerializeIgnore]
+    private FontFile? _fontFile;
 
-    public void Serialize(ref EchoObject compound, SerializationContext ctx)
+    /// <summary>The Scribe FontFile instance. Lazily created from the raw bytes.</summary>
+    public FontFile FontFile
     {
-        // Save the name
-        compound.Add("Name", new EchoObject(fontName ?? string.Empty));
-
-        compound.Add("Data", new EchoObject(fontData));
+        get
+        {
+            if (_fontFile == null && _fontData.Length > 0)
+                _fontFile = new FontFile(_fontData);
+            return _fontFile!;
+        }
     }
 
-    public void Deserialize(EchoObject value, SerializationContext ctx)
-    {
-        // Restore the name
-        fontName = value["Name"].StringValue;
+    /// <summary>Font family name (e.g. "Roboto", "Arial").</summary>
+    public string FamilyName => FontFile?.FamilyName ?? "Unknown";
 
-        fontData = value["Data"].ByteArrayValue;
+    /// <summary>Font style (Regular, Bold, Italic, etc.).</summary>
+    public FontStyle Style => FontFile?.Style ?? FontStyle.Regular;
+
+    public FontAsset() : base("Font") { }
+
+    public FontAsset(byte[] fontData) : base("Font")
+    {
+        _fontData = fontData;
+        _fontFile = new FontFile(fontData);
     }
 
-    public Prowl.Scribe.FontFile GetScribeFont()
+    public FontAsset(string name, byte[] fontData) : base(name)
     {
-        _scribeFont ??= new FontFile(fontData);
-        return _scribeFont;
+        _fontData = fontData;
+        _fontFile = new FontFile(fontData);
     }
 }
