@@ -11,7 +11,7 @@
 #ifndef STANDARD_SURFACE
 #define STANDARD_SURFACE
 
-#include "Fragment"
+#include "ProwlCG"
 #include "Lighting"
 
 // Full Standard PBR surface with POM and translucency support.

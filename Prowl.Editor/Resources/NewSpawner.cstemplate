@@ -1,0 +1,40 @@
+using Prowl.Runtime;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
+
+public class {[className]} : MonoBehaviour
+{
+    public AssetRef<PrefabAsset> Prefab;
+    public KeyCode SpawnKey = KeyCode.F;
+    public float AutoSpawnInterval = 0f; // 0 = disabled
+    public Float3 SpawnOffset;
+
+    private float _timer;
+
+    public override void Update()
+    {
+        if (Input.GetKeyDown(SpawnKey))
+            Spawn();
+
+        if (AutoSpawnInterval > 0f)
+        {
+            _timer += Time.DeltaTime;
+            if (_timer >= AutoSpawnInterval)
+            {
+                _timer = 0f;
+                Spawn();
+            }
+        }
+    }
+
+    public GameObject? Spawn()
+    {
+        var go = Prefab.Res?.Instantiate();
+        if (go == null) return null;
+
+        go.Transform.Position = Transform.Position + Transform.Rotation * SpawnOffset;
+        go.Transform.Rotation = Transform.Rotation;
+        Scene?.Add(go);
+        return go;
+    }
+}

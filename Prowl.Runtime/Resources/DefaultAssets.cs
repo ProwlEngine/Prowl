@@ -81,7 +81,7 @@ public enum DefaultTexture
 /// </summary>
 public enum DefaultShaderInclude
 {
-    Fragment,
+    ProwlCG,
     PBR,
     Random,
     ShaderVariables,

@@ -102,7 +102,7 @@ public static class CreateAssetMenuRegistry
     /// <summary>
     /// Appends one menu item per registered asset type to the given context menu builder.
     /// Names containing '/' are split into nested submenus (e.g. "Shader Graph/Surface"
-    /// produces an "Shader Graph" submenu with a "Surface" item inside).
+    /// produces a "Shader Graph" submenu with a "Surface" item inside).
     /// </summary>
     public static void BuildMenu(ContextMenuBuilder builder, string currentFolder, Action<string>? onCreated = null)
     {
@@ -135,8 +135,11 @@ public static class CreateAssetMenuRegistry
             string icon = !string.IsNullOrEmpty(captured.Icon) ? captured.Icon : EditorIcons.FileCirclePlus;
             builder.Item($"{icon}  {display}", () =>
             {
-                var path = CreateAsset(captured, currentFolder);
-                if (path != null) onCreated?.Invoke(path);
+                var task = new Tasks.CreateAssetTask();
+
+                task.TaskType = Tasks.CreateAssetTask.AssetType.Asset;
+                task.BeginCreateTask(captured, currentFolder);
+
             });
         }
         foreach (var (head, list) in branches)

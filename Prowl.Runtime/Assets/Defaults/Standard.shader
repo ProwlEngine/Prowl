@@ -36,7 +36,7 @@ Pass "Standard"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -128,7 +128,7 @@ Pass "DepthNormals"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec3 vNormal;
@@ -157,7 +157,7 @@ Pass "DepthNormals"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			layout (location = 0) out vec4 normalOut;
 
@@ -200,7 +200,7 @@ Pass "MotionVectors"
 
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec4 vClipPos;
@@ -225,7 +225,7 @@ Pass "MotionVectors"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             layout(location = 0) out vec4 OutputColor;
 
@@ -264,7 +264,7 @@ Pass "StandardShadow"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -281,7 +281,7 @@ Pass "StandardShadow"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			in vec2 texCoord0;
 			uniform sampler2D _MainTex;

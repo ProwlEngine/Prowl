@@ -386,7 +386,7 @@ public sealed class DepthBlendNode : Node, IShaderNode, IShaderGraphNode
     {
         if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
         ctx.Includes.Add("ShaderVariables");
-        ctx.Includes.Add("Fragment"); // for linearizeDepthFromProjection
+        ctx.Includes.Add("ProwlCG"); // for linearizeDepthFromProjection
 
         // Pipeline binds this globally when the camera's DepthTextureMode includes Depth.
         ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
@@ -657,7 +657,7 @@ public sealed class SceneDepthNode : Node, IShaderNode, IShaderGraphNode
     {
         if (ctx.RequireFragmentStage(Id, Title)) return "0.0";
         ctx.Includes.Add("ShaderVariables");
-        ctx.Includes.Add("Fragment"); // for linearizeDepthFromProjection()
+        ctx.Includes.Add("ProwlCG"); // for linearizeDepthFromProjection()
 
         ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
 

@@ -1,0 +1,22 @@
+using Prowl.Runtime;
+
+[RequireComponent(typeof(AudioSource))]
+public class {[className]} : MonoBehaviour
+{
+    public bool PlayOnStart = true;
+
+    private AudioSource _source = null!;
+
+    public override void Start()
+    {
+        _source = GetComponent<AudioSource>()!;
+        if (PlayOnStart) Play();
+    }
+
+    public void Play()
+    {
+        if (_source.Clip != null) _source.Play();
+    }
+
+    public void Stop() => _source.Stop();
+}

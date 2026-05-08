@@ -24,7 +24,7 @@ Pass "Grass"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -139,7 +139,7 @@ Pass "Grass"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "Lighting"
 
 			layout (location = 0) out vec4 fragColor;
@@ -186,7 +186,7 @@ Pass "GrassDepthNormals"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 vNormal;
@@ -273,7 +273,7 @@ Pass "GrassDepthNormals"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			layout (location = 0) out vec4 normalOut;
             in vec3 vNormal;

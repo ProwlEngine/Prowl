@@ -5,6 +5,7 @@ using System.Linq;
 using Prowl.Editor.Panels;
 using Prowl.Editor.Widgets;
 using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor;
 
@@ -19,15 +20,37 @@ public static class AssetCreateMenu
     /// </summary>
     public static void Build(ContextMenuBuilder builder, string currentFolder, Action<string>? onCreated = null)
     {
-        builder.Item($"{EditorIcons.Folder}  Folder", () => { var p = CreateFolder(currentFolder); if (p != null) onCreated?.Invoke(p); });
+        builder.Item($"{EditorIcons.Folder}  Folder", () => {
+
+            var task = new Tasks.CreateAssetTask();
+
+            task.TaskType = Tasks.CreateAssetTask.AssetType.Folder;
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Folder", Extension = "", Icon = FileIconRegistry.GetIconForExtension("") }, currentFolder);
+
+        });
         builder.Separator();
 
         // Registry-discovered asset types (Scene, Material, InputActions, user-defined, etc.)
         CreateAssetMenuRegistry.BuildMenu(builder, currentFolder, onCreated);
 
-        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => { var p = CreateShader(currentFolder); if (p != null) onCreated?.Invoke(p); });
+        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => {
+
+            var task = new Tasks.CreateAssetTask();
+
+            task.TaskType = Tasks.CreateAssetTask.AssetType.Shader;
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = FileIconRegistry.GetIconForExtension(".shader") }, currentFolder);
+
+        });
         builder.Separator();
-        builder.Item($"{EditorIcons.FileCode}  C# Script", () => NewScriptDialog.Open(currentFolder, onCreated));
+        builder.Item($"{EditorIcons.FileCode}  C# Script", () =>
+        {
+            NewScriptDialog.Open(GetCurrentFolder());
+
+            /*var task = new Tasks.CreateAssetTask();
+            task.TaskType = Tasks.CreateAssetTask.AssetType.Script;
+            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = FileIconRegistry.GetIconForExtension(".cs") }, currentFolder);*/
+
+        });
     }
 
     /// <summary>
@@ -146,7 +169,7 @@ Pass ""Default""
 
         Vertex
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""VertexAttributes""
 
             out vec2 texCoord0;
@@ -172,7 +195,7 @@ Pass ""Default""
 
         Fragment
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""Lighting""
 
             layout (location = 0) out vec4 fragColor;
@@ -232,7 +255,7 @@ Pass ""DepthNormals""
 
         Vertex
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""VertexAttributes""
 
             out vec3 vNormal;
@@ -254,7 +277,7 @@ Pass ""DepthNormals""
 
         Fragment
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
 
             layout (location = 0) out vec4 normalOut;
             in vec3 vNormal;
@@ -283,7 +306,7 @@ Pass ""ShadowCaster""
 
         Vertex
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""VertexAttributes""
 
             void main()
@@ -294,7 +317,7 @@ Pass ""ShadowCaster""
 
         Fragment
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
 
             void main()
             {

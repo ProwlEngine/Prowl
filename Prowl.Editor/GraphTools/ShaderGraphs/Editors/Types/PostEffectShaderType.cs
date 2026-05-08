@@ -74,7 +74,7 @@ internal sealed class PostEffectPass : IShaderPass
         // Fragment context: evaluate the user's Color.
         var fragCtx = new ShaderGenContext(graph, ShaderStage.Fragment);
         foreach (var u in shared.PropertyUniforms) fragCtx.Uniforms.Add(u);
-        fragCtx.Includes.Add("Fragment");
+        fragCtx.Includes.Add("ProwlCG");
         // TexCoords is always forwarded it's cheap and nodes like SceneColor / ScreenUV
         // expect it.
         fragCtx.Varyings.Add(("TexCoords", "vec2"));

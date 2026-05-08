@@ -25,7 +25,7 @@ Pass "SDFRaymarch"
     GLSLPROGRAM
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 worldPos;
@@ -39,7 +39,7 @@ Pass "SDFRaymarch"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             layout (location = 0) out vec4 fragColor;
 

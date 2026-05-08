@@ -19,7 +19,7 @@ Pass "Skybox"
 
 	    Vertex
 	    {
-            #include "Fragment"
+            #include "ProwlCG"
 
 	    	in vec3 vertexPosition;
 

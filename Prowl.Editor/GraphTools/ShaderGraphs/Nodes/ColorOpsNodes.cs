@@ -462,7 +462,7 @@ public sealed class LuminanceNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("ProwlCG");
         var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
         return $"luminance({c})";
     }
@@ -497,7 +497,7 @@ public sealed class GrayscaleNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("ProwlCG");
         var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
         return $"vec3(luminance({c}))";
     }
@@ -534,7 +534,7 @@ public sealed class GammaToLinearNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("ProwlCG");
         var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
         return $"gammaToLinearSpace({c})";
     }
@@ -562,7 +562,7 @@ public sealed class LinearToGammaNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("ProwlCG");
         var c = ctx.EvaluateInputAs(GetInput("Color")!, ShaderType.Vec3);
         return $"linearToGammaSpace({c})";
     }
