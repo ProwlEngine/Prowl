@@ -86,9 +86,7 @@ public static class PackageImportDialog
                 var action = ProwlPackage.DetermineAction(_archive, asset, assetsPath);
                 _assetActions[asset.Path] = action;
 
-                // Enable by default unless identical (Skip)
-                if (action != ImportAction.Skip)
-                    _enabledPaths.Add(asset.Path);
+                _enabledPaths.Add(asset.Path);
             }
 
             BuildTree();
@@ -149,7 +147,6 @@ public static class PackageImportDialog
                 IsFolder = true
             };
             folderMap[folderPath] = node;
-            _expandedFolders.Add(folderPath);
 
             string parent = Path.GetDirectoryName(folderPath)?.Replace('\\', '/') ?? "";
             if (!string.IsNullOrEmpty(parent))

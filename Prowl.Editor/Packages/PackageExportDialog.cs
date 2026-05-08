@@ -154,7 +154,6 @@ public static class PackageExportDialog
                 IsFolder = true
             };
             folderMap[folderPath] = node;
-            _expandedFolders.Add(folderPath);
 
             string parent = Path.GetDirectoryName(folderPath)?.Replace('\\', '/') ?? "";
             if (!string.IsNullOrEmpty(parent))
