@@ -835,7 +835,7 @@ public class ProjectPanel : DockPanel
         {
             // Right-click should select the item if not already selected
             if (!Selection.IsSelected(item))
-                Selection.Select(item);
+                Selection.AddToSelection(item);
 
             bool isMulti = Selection.Count > 1;
             string folder = item.IsFolder ? item.RelativePath : _currentFolder;

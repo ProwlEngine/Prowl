@@ -436,7 +436,7 @@ public class HierarchyPanel : DockPanel
             {
                 _expandedState[id] = !_expandedState.GetValueOrDefault(id, false);
             })
-            .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.Select(g); })
+            .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.AddToSelection(g); })
             .OnDragStart(go, (dragGO, _) =>
             {
                 if (DragDrop.IsDragging) return;
