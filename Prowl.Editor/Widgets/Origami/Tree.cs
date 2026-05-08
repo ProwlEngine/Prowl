@@ -78,6 +78,18 @@ public sealed class TreeNode
 
     /// <summary>Color for the trailing icon.</summary>
     public Color? TrailingIconColor;
+
+    /// <summary>
+    /// If set, overrides the internal expand state this frame AND persists it.
+    /// Use to force-expand parents of pinged/searched nodes.
+    /// </summary>
+    public bool? OverrideExpanded;
+
+    /// <summary>
+    /// If set, the tree draws a drop indicator (above/below bar or into-tint) on this node.
+    /// Set by the caller each frame based on drag state.
+    /// </summary>
+    public TreeDropPosition? DropIndicator;
 }
 
 /// <summary>Where a drag payload was dropped relative to a tree node.</summary>
@@ -337,8 +349,17 @@ public sealed class TreeBuilder
 
                     bool isExpandable = node.HasChildren && !node.IsLeaf;
                     string expKey = expandPrefix + node.Id;
-                    bool isExpanded = isExpandable && _paper.GetElementStorage(
-                        stateHandle, expKey, node.DefaultExpanded);
+                    bool isExpanded;
+                    if (node.OverrideExpanded.HasValue)
+                    {
+                        isExpanded = isExpandable && node.OverrideExpanded.Value;
+                        _paper.SetElementStorage(stateHandle, expKey, node.OverrideExpanded.Value);
+                    }
+                    else
+                    {
+                        isExpanded = isExpandable && _paper.GetElementStorage(
+                            stateHandle, expKey, node.DefaultExpanded);
+                    }
 
                     // If collapsed, skip children
                     if (isExpandable && !isExpanded)
@@ -347,14 +368,15 @@ public sealed class TreeBuilder
                     bool isSelected = _isSelected?.Invoke(node) ?? false;
                     bool isPinged = _isPinged?.Invoke(node) ?? false;
 
-                    DrawNode(font, ink, metrics, rounding, stateHandle, node, i, isSelected, isExpanded,
-                        isExpandable, isPinged);
+                    DrawNode(font, ink, metrics, rounding, stateHandle, expandPrefix, nodes,
+                        node, i, isSelected, isExpanded, isExpandable, isPinged);
                 }
             });
     }
 
     private void DrawNode(Prowl.Scribe.FontFile? font, OrigamiRamp ink, OrigamiMetrics metrics,
-        float rounding, ElementHandle stateHandle, TreeNode node, int index, bool isSelected, bool isExpanded,
+        float rounding, ElementHandle stateHandle, string expandPrefix, List<TreeNode> allNodes,
+        TreeNode node, int index, bool isSelected, bool isExpanded,
         bool isExpandable, bool isPinged)
     {
         float indent = node.Depth * _indentSize;
@@ -364,7 +386,18 @@ public sealed class TreeBuilder
         var capturedNode = node;
         bool disabled = node.Disabled;
 
-        Color rowBg = isSelected ? EditorTheme.Purple400 : Color.Transparent;
+        // Drop indicator above
+        if (node.DropIndicator == TreeDropPosition.Above)
+        {
+            _paper.Box($"{rowId}_drop_above")
+                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
+                .BackgroundColor(EditorTheme.Purple400);
+        }
+
+        bool isDropInto = node.DropIndicator == TreeDropPosition.Into;
+        Color rowBg = isSelected ? EditorTheme.Purple400
+            : isDropInto ? Color.FromArgb(60, EditorTheme.Purple400.R, EditorTheme.Purple400.G, EditorTheme.Purple400.B)
+            : Color.Transparent;
         Color rowHover = isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200;
 
         // Build the row element
@@ -451,8 +484,27 @@ public sealed class TreeBuilder
                     .OnClick(_ =>
                     {
                         bool newState = !isExpanded;
+                        bool alt = _paper.IsKeyDown(PaperKey.LeftAlt) || _paper.IsKeyDown(PaperKey.RightAlt);
+
                         _paper.SetElementStorage(stateHandle, expKey, newState);
                         _onExpandChanged?.Invoke(capturedNode, newState);
+
+                        // Alt+Click: recursively expand/collapse all descendants
+                        if (alt)
+                        {
+                            int parentDepth = capturedNode.Depth;
+                            for (int di = capturedIndex + 1; di < allNodes.Count; di++)
+                            {
+                                var desc = allNodes[di];
+                                if (desc.Depth <= parentDepth) break;
+                                if (desc.HasChildren && !desc.IsLeaf)
+                                {
+                                    string descKey = expandPrefix + desc.Id;
+                                    _paper.SetElementStorage(stateHandle, descKey, newState);
+                                    _onExpandChanged?.Invoke(desc, newState);
+                                }
+                            }
+                        }
                     });
             }
             else
@@ -482,6 +534,14 @@ public sealed class TreeBuilder
             {
                 DrawDefaultContent(font, ink, metrics, node, rowId, isSelected, disabled);
             }
+        }
+
+        // Drop indicator below
+        if (node.DropIndicator == TreeDropPosition.Below)
+        {
+            _paper.Box($"{rowId}_drop_below")
+                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
+                .BackgroundColor(EditorTheme.Purple400);
         }
     }
 
