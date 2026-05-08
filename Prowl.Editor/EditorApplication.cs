@@ -26,6 +26,7 @@ public class EditorApplication : Game
     private const double IntroDuration = 5.0;      // total
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
+    private IDisposable? _origamiScope;
 
     private string _curDefaultFont;
     private string _curDefaultBoldFont;
@@ -332,10 +333,9 @@ public class EditorApplication : Game
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
 
-        // Push the editor's Origami theme for the remainder of this frame's render. User code
-        // running inside the editor (e.g. game UI in play mode) can override locally with its
-        // own PushTheme, or read Origami.Root directly for the unmodified default.
-        using var origamiScope = EditorTheme.PushOrigami();
+        // Push the editor's Origami theme persists until EndGui disposes it
+        _origamiScope?.Dispose();
+        _origamiScope = EditorTheme.PushOrigami();
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -687,6 +687,10 @@ public class EditorApplication : Game
             _introTime += introDelta;
             DrawIntro(paper);
         }
+
+        // Pop the editor Origami theme now that all rendering (including overlays) is done.
+        _origamiScope?.Dispose();
+        _origamiScope = null;
     }
 
     private const int BarCount = 10;
