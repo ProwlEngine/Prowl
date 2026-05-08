@@ -628,8 +628,8 @@ public class EditorAssetDatabase : IAssetDatabase
     /// <summary>Get an already-loaded asset from memory without triggering import. Returns null if not loaded.</summary>
     public EngineObject? GetLoadedAsset(Guid guid) => _loadedAssets.GetValueOrDefault(guid);
 
-    /// <summary>Load a cached thumbnail for an asset. Returns raw RGBA bytes or null.</summary>
-    public byte[]? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
+    /// <summary>Load a cached thumbnail for an asset. Returns (width, height, pixels) or null.</summary>
+    public (int width, int height, byte[] pixels)? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
 
     // ================================================================
     //  Asset CRUD

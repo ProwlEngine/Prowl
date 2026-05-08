@@ -69,7 +69,15 @@ public static class ThumbnailGenerator
             try
             {
                 Directory.CreateDirectory(db.ThumbnailsPath);
-                File.WriteAllBytes(GetThumbnailPath(job.Guid, db.ThumbnailsPath), pixels);
+                string thumbPath = GetThumbnailPath(job.Guid, db.ThumbnailsPath);
+
+                // Write with size header: [width:int32 LE][height:int32 LE][RGBA pixels]
+                int size = ThumbnailSize;
+                byte[] fileData = new byte[8 + pixels.Length];
+                BitConverter.TryWriteBytes(fileData.AsSpan(0, 4), size);
+                BitConverter.TryWriteBytes(fileData.AsSpan(4, 4), size);
+                pixels.CopyTo(fileData, 8);
+                File.WriteAllBytes(thumbPath, fileData);
             }
             catch { }
         }
@@ -101,11 +109,35 @@ public static class ThumbnailGenerator
         }
     }
 
-    public static byte[]? LoadThumbnail(Guid guid, string thumbnailsPath)
+    /// <summary>
+    /// Load a thumbnail from disk. Returns (width, height, RGBA pixels) or null.
+    /// The on-disk format is: [width:int32 LE][height:int32 LE][RGBA pixel data].
+    /// Legacy files without the header are discarded (they will regenerate).
+    /// </summary>
+    public static (int width, int height, byte[] pixels)? LoadThumbnail(Guid guid, string thumbnailsPath)
     {
         string path = GetThumbnailPath(guid, thumbnailsPath);
         if (!File.Exists(path)) return null;
-        try { return File.ReadAllBytes(path); }
+        try
+        {
+            byte[] data = File.ReadAllBytes(path);
+            if (data.Length <= 8) return null; // Too small to have header + any pixels
+
+            int w = BitConverter.ToInt32(data, 0);
+            int h = BitConverter.ToInt32(data, 4);
+
+            // Sanity check: dimensions must be positive and pixel data must match
+            if (w <= 0 || h <= 0 || data.Length != 8 + w * h * 4)
+            {
+                // Legacy or corrupt file - delete so it regenerates
+                try { File.Delete(path); } catch { }
+                return null;
+            }
+
+            byte[] pixels = new byte[data.Length - 8];
+            Buffer.BlockCopy(data, 8, pixels, 0, pixels.Length);
+            return (w, h, pixels);
+        }
         catch { return null; }
     }
 
