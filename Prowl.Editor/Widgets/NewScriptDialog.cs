@@ -169,8 +169,7 @@ public static class NewScriptDialog
         // so the user sees the error hint rather than clicking a dead button.
         using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).ChildLeft(UnitValue.Stretch()).RowBetween(8).Enter())
         {
-            EditorGUI.Button(paper, "scr_cancel", "Cancel", width: 90)
-                .OnValueChanged(_ => ModalDialog.Close());
+            Origami.Button(paper, "scr_cancel", "Cancel", () => { ModalDialog.Close(); }).Width(90).Show();
 
             if (ok)
             {

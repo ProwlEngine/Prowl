@@ -106,8 +106,7 @@ public class HierarchyPanel : DockPanel
 
                     paper.Box("hier_prefab_spacer");
 
-                    EditorGUI.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  Save & Exit", width: 100)
-                        .OnValueChanged(_ => Prefabs.PrefabEditingMode.SaveAndExit());
+                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  Save & Exit", () => Prefabs.PrefabEditingMode.SaveAndExit()).Width(100).Show();
                 }
             }
 
@@ -123,8 +122,7 @@ public class HierarchyPanel : DockPanel
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
-                EditorGUI.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  New Scene", width: 120)
-                    .OnValueChanged(_ => SceneViewPanel.CreateAndLoadDefaultScene());
+                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  New Scene", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
                 return;
             }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
@@ -162,8 +163,7 @@ public static class ModalDialog
                         var (label, onClick) = modal.Buttons[i];
                         bool isPrimary = i == 0;
 
-                        EditorGUI.Button(paper, $"modal_btn_{i}", label, width: 80)
-                            .OnValueChanged(v => onClick());
+                        Origami.Button(paper, $"modal_btn_{i}", label, () => { onClick(); }).Width(80).Show();
                     }
                 }
             }

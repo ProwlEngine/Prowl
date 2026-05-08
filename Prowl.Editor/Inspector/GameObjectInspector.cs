@@ -382,8 +382,7 @@ public static class GameObjectInspector
             if (method.GetParameters().Length > 0) continue; // Only parameterless methods
 
             string label = btnAttr.Label ?? NicifyName(method.Name);
-            EditorGUI.Button(paper, $"{id}_{btnIdx++}", label)
-                .OnValueChanged(_ => method.Invoke(comp, null));
+            Origami.Button(paper, $"{id}_{btnIdx++}", label, () => { method.Invoke(comp, null); }).Show();
         }
     }
 
@@ -514,16 +513,13 @@ public static class GameObjectInspector
 
                 if (!isMissing)
                 {
-                    EditorGUI.Button(paper, "gi_prefab_select", "Select", width: 55)
-                        .OnValueChanged(_ => Selection.Ping(go.PrefabAssetId));
+                    Origami.Button(paper, "gi_prefab_select", "Select", () => { Selection.Ping(go.PrefabAssetId); }).Width(55).Show();
 
                     if (isRoot && hasOverrides)
                     {
-                        EditorGUI.Button(paper, "gi_prefab_revert", "Revert", width: 55)
-                            .OnValueChanged(_ => { if (root != null) PrefabUtility.RevertOverrides(root); });
+                        Origami.Button(paper, "gi_prefab_revert", "Revert", () => { if (root != null) PrefabUtility.RevertOverrides(root); }).Width(55).Show();
 
-                        EditorGUI.Button(paper, "gi_prefab_apply", "Apply", width: 50)
-                            .OnValueChanged(_ => { if (root != null) PrefabUtility.ApplyOverrides(root); });
+                        Origami.Button(paper, "gi_prefab_apply", "Apply", () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
                     }
                 }
             }

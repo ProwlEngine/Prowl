@@ -568,11 +568,9 @@ public static class PackageImportDialog
 
             paper.Box("pkgimp_spacer").Width(UnitValue.Stretch());
 
-            EditorGUI.Button(paper, "pkgimp_cancel", "Cancel", width: 80)
-                .OnValueChanged(_ => Close());
+            Origami.Button(paper, "pkgimp_cancel", "Cancel", () => { Close(); }).Width(80).Show();
 
-            EditorGUI.Button(paper, "pkgimp_import", "Import", width: 80)
-                .OnValueChanged(_ => DoImport());
+            Origami.Button(paper, "pkgimp_import", "Import", () => { DoImport(); }).Width(80).Show();
         }
     }
 

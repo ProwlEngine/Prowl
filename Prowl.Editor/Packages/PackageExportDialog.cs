@@ -426,8 +426,7 @@ public static class PackageExportDialog
                 Origami.TextField(paper, "pkgexp_path", _outputPath, v => _outputPath = v)
                     .Width(UnitValue.Stretch()).Show();
 
-                EditorGUI.Button(paper, "pkgexp_browse", "...", width: 30)
-                    .OnValueChanged(_ =>
+                Origami.Button(paper, "pkgexp_browse", "...", () =>
                     {
                         FileDialog.Open(FileDialogMode.Save, path =>
                         {
@@ -441,7 +440,7 @@ public static class PackageExportDialog
                         startPath: Path.GetDirectoryName(_outputPath),
                         filters: new[] { "*.prowlpackage" },
                         filterLabels: new[] { "ProwlPackage (*.prowlpackage)" });
-                    });
+                    }).Width(30).Show();
             }
         }
     }
@@ -466,11 +465,9 @@ public static class PackageExportDialog
 
             paper.Box("pkgexp_spacer").Width(UnitValue.Stretch());
 
-            EditorGUI.Button(paper, "pkgexp_cancel", "Cancel", width: 80)
-                .OnValueChanged(_ => Close());
+            Origami.Button(paper, "pkgexp_cancel", "Cancel", () => { Close(); }).Width(80).Show();
 
-            EditorGUI.Button(paper, "pkgexp_export", "Export", width: 80)
-                .OnValueChanged(_ => DoExport());
+            Origami.Button(paper, "pkgexp_export", "Export", () => { DoExport(); }).Width(80).Show();
         }
     }
 

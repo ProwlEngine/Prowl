@@ -264,19 +264,15 @@ public class ParticleSystemComponentEditor : CustomEditor
         {
             if (ps.IsPlaying)
             {
-                EditorGUI.Button(paper, $"{id}_pause", $"{EditorIcons.Pause}  Pause", width: 70)
-                    .OnValueChanged(_ => ps.Pause());
-                EditorGUI.Button(paper, $"{id}_stop", $"{EditorIcons.Stop}  Stop", width: 65)
-                    .OnValueChanged(_ => ps.Stop());
+                Origami.Button(paper, $"{id}_pause", $"{EditorIcons.Pause}  Pause", () => { ps.Pause(); }).Width(70).Show();
+                Origami.Button(paper, $"{id}_stop", $"{EditorIcons.Stop}  Stop", () => { ps.Stop(); }).Width(65).Show();
             }
             else
             {
-                EditorGUI.Button(paper, $"{id}_play", $"{EditorIcons.Play}  Play", width: 65)
-                    .OnValueChanged(_ => ps.Play());
+                Origami.Button(paper, $"{id}_play", $"{EditorIcons.Play}  Play", () => { ps.Play(); }).Width(65).Show();
             }
 
-            EditorGUI.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear", width: 70)
-                .OnValueChanged(_ => ps.Clear());
+            Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear", () => { ps.Clear(); }).Width(70).Show();
 
             paper.Box($"{id}_spacer").Width(UnitValue.Stretch());
 
@@ -344,7 +340,6 @@ public class ParticleSystemComponentEditor : CustomEditor
             }
         }
 
-        EditorGUI.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add Burst", width: 110)
-            .OnValueChanged(_ => bursts.Add(new ParticleBurst { Time = 0f, MinCount = 10, MaxCount = 10, CycleCount = 1, RepeatInterval = 0.01f }));
+        Origami.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add Burst", () => { bursts.Add(new ParticleBurst { Time = 0f, MinCount = 10, MaxCount = 10, CycleCount = 1, RepeatInterval = 0.01f }); }).Width(110).Show();
     }
 }

@@ -3,6 +3,7 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -177,8 +178,7 @@ public class SceneViewPanel : DockPanel
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
-                    EditorGUI.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  New Scene", width: 120)
-                        .OnValueChanged(_ => CreateAndLoadDefaultScene());
+                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  New Scene", () => CreateAndLoadDefaultScene()).Width(120).Show();
                     paper.Box("sv_btn_spacer_r");
                 }
 

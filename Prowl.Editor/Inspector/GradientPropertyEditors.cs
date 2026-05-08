@@ -202,14 +202,13 @@ public class GradientPropertyEditor : PropertyEditor
 
                         if (gradient.ColorKeys.Count > 1)
                         {
-                            EditorGUI.Button(paper, $"{id}_sel_del", $"{EditorIcons.Trash}", width: 24)
-                                .OnValueChanged(_ =>
-                                {
-                                    gradient.ColorKeys.RemoveAt(idx);
-                                    _selectedKeyIndex = -1;
-                                    _selectedEditorId = null;
-                                    onChange(gradient);
-                                });
+                            Origami.Button(paper, $"{id}_sel_del", $"{EditorIcons.Trash}", () =>
+                            {
+                                gradient.ColorKeys.RemoveAt(idx);
+                                _selectedKeyIndex = -1;
+                                _selectedEditorId = null;
+                                onChange(gradient);
+                            }).Width(24).Show();
                         }
                     }
 
@@ -253,14 +252,13 @@ public class GradientPropertyEditor : PropertyEditor
 
                         if (gradient.AlphaKeys.Count > 1)
                         {
-                            EditorGUI.Button(paper, $"{id}_sel_del", $"{EditorIcons.Trash}", width: 24)
-                                .OnValueChanged(_ =>
-                                {
-                                    gradient.AlphaKeys.RemoveAt(idx);
-                                    _selectedKeyIndex = -1;
-                                    _selectedEditorId = null;
-                                    onChange(gradient);
-                                });
+                            Origami.Button(paper, $"{id}_sel_del", $"{EditorIcons.Trash}", () =>
+                            {
+                                gradient.AlphaKeys.RemoveAt(idx);
+                                _selectedKeyIndex = -1;
+                                _selectedEditorId = null;
+                                onChange(gradient);
+                            }).Width(24).Show();
                         }
                     }
 

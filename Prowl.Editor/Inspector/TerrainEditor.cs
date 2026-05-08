@@ -100,36 +100,31 @@ public class TerrainEditor : CustomEditor
         if (_isDirty)
         {
             paper.Box($"{id}_sp_save").Height(8);
-            EditorGUI.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save to TerrainData")
-                .OnValueChanged(_ => SaveToAsset(terrainData));
+            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save to TerrainData", () => { SaveToAsset(terrainData); }).Show();
         }
     }
 
     #region Tab Bar
 
+    private static readonly string[] _tabLabels =
+    [
+        EditorIcons.Mountain,
+        EditorIcons.Paintbrush,
+        EditorIcons.Seedling,
+        EditorIcons.Leaf,
+        EditorIcons.Gear,
+    ];
+
     private static void DrawTabBar(Paper paper, string id, Prowl.Scribe.FontFile font)
     {
-        using (paper.Row($"{id}_row").Height(28).RowBetween(2).Enter())
-        {
-            DrawTabButton(paper, $"{id}_h", $"{EditorIcons.Mountain}", TerrainTab.Height, font);
-            DrawTabButton(paper, $"{id}_p", $"{EditorIcons.Paintbrush}", TerrainTab.Paint, font);
-            DrawTabButton(paper, $"{id}_g", $"{EditorIcons.Seedling}", TerrainTab.Details, font);
-            DrawTabButton(paper, $"{id}_t", $"{EditorIcons.Leaf}", TerrainTab.Trees, font);
-            DrawTabButton(paper, $"{id}_s", $"{EditorIcons.Gear}", TerrainTab.Settings, font);
-        }
-    }
-
-    private static void DrawTabButton(Paper paper, string id, string label, TerrainTab tab, Prowl.Scribe.FontFile font)
-    {
-        bool active = ActiveTab == tab;
-        paper.Box(id)
-            .Width(UnitValue.Stretch()).Height(26).Rounded(4)
-            .BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-            .Text(label, font)
-            .TextColor(active ? Prowl.Vector.Color.White : EditorTheme.Ink500)
-            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => ActiveTab = tab);
+        Origami.ButtonGroup(paper, $"{id}_grp", (int)ActiveTab, v => ActiveTab = (TerrainTab)v)
+            .Item(_tabLabels[0])
+            .Item(_tabLabels[1])
+            .Item(_tabLabels[2])
+            .Item(_tabLabels[3])
+            .Item(_tabLabels[4])
+            .FullWidth()
+            .Show();
     }
 
     #endregion
@@ -139,13 +134,13 @@ public class TerrainEditor : CustomEditor
     private void DrawHeightTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
     {
         // Tool buttons
-        using (paper.Row($"{id}_tools").Height(28).RowBetween(2).Enter())
-        {
-            DrawToolButton(paper, $"{id}_raise", $"{EditorIcons.ArrowUp}  Raise", HeightTool.Raise, font);
-            DrawToolButton(paper, $"{id}_lower", $"{EditorIcons.ArrowDown}  Lower", HeightTool.Lower, font);
-            DrawToolButton(paper, $"{id}_flat", $"{EditorIcons.GripLines}  Flatten", HeightTool.Flatten, font);
-            DrawToolButton(paper, $"{id}_smooth", $"{EditorIcons.WaveSquare}  Smooth", HeightTool.Smooth, font);
-        }
+        Origami.ButtonGroup(paper, $"{id}_tools", (int)ActiveHeightTool, v => ActiveHeightTool = (HeightTool)v)
+            .Item($"{EditorIcons.ArrowUp}  Raise")
+            .Item($"{EditorIcons.ArrowDown}  Lower")
+            .Item($"{EditorIcons.GripLines}  Flatten")
+            .Item($"{EditorIcons.WaveSquare}  Smooth")
+            .FullWidth()
+            .Show();
 
         paper.Box($"{id}_sp").Height(6);
 
@@ -161,19 +156,6 @@ public class TerrainEditor : CustomEditor
         }
     }
 
-    private static void DrawToolButton(Paper paper, string id, string label, HeightTool tool, Prowl.Scribe.FontFile font)
-    {
-        bool active = ActiveHeightTool == tool;
-        paper.Box(id)
-            .Width(UnitValue.Stretch()).Height(26).Rounded(4)
-            .BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-            .Text(label, font)
-            .TextColor(active ? Prowl.Vector.Color.White : EditorTheme.Ink500)
-            .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => ActiveHeightTool = tool);
-    }
-
     #endregion
 
     #region Paint Tab
@@ -185,23 +167,13 @@ public class TerrainEditor : CustomEditor
             .Text("Paint Layer", font).TextColor(EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-        using (paper.Row($"{id}_layers").Height(32).RowBetween(4).Enter())
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                int layer = i;
-                bool selected = PaintLayer == i;
-                paper.Box($"{id}_l{i}")
-                    .Width(UnitValue.Stretch()).Height(28).Rounded(4)
-                    .BackgroundColor(selected ? EditorTheme.Purple400 : EditorTheme.Neutral300)
-                    .Hovered.BackgroundColor(selected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-                    .BorderWidth(selected ? 2 : 0).BorderColor(EditorTheme.Purple400)
-                    .Text($"Layer {i}", font)
-                    .TextColor(selected ? Prowl.Vector.Color.White : EditorTheme.Ink500)
-                    .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => PaintLayer = layer);
-            }
-        }
+        Origami.ButtonGroup(paper, $"{id}_layers", PaintLayer, v => PaintLayer = v)
+            .Item("Layer 0")
+            .Item("Layer 1")
+            .Item("Layer 2")
+            .Item("Layer 3")
+            .FullWidth()
+            .Show();
 
         paper.Box($"{id}_sp0").Height(4);
 
@@ -245,16 +217,14 @@ public class TerrainEditor : CustomEditor
         // Add/Remove buttons
         using (paper.Row($"{id}_btns").Height(24).RowBetween(4).Enter())
         {
-            EditorGUI.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add")
-                .OnValueChanged(_ => { data.AddDetailPrototype(new DetailPrototype()); MarkDetailsDirty(); });
+            Origami.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add", () => { data.AddDetailPrototype(new DetailPrototype()); MarkDetailsDirty(); }).Show();
             if (data.DetailPrototypes.Count > 1)
-                EditorGUI.Button(paper, $"{id}_rem", $"{EditorIcons.Trash}  Remove")
-                    .OnValueChanged(_ =>
-                    {
-                        data.RemoveDetailPrototype(ActiveDetailIndex);
-                        ActiveDetailIndex = Math.Clamp(ActiveDetailIndex, 0, Math.Max(0, data.DetailPrototypes.Count - 1));
-                        MarkDetailsDirty();
-                    });
+                Origami.Button(paper, $"{id}_rem", $"{EditorIcons.Trash}  Remove", () =>
+                {
+                    data.RemoveDetailPrototype(ActiveDetailIndex);
+                    ActiveDetailIndex = Math.Clamp(ActiveDetailIndex, 0, Math.Max(0, data.DetailPrototypes.Count - 1));
+                    MarkDetailsDirty();
+                }).Show();
         }
 
         paper.Box($"{id}_sp0").Height(6);
@@ -327,19 +297,17 @@ public class TerrainEditor : CustomEditor
         // Add/Remove buttons
         using (paper.Row($"{id}_btns").Height(24).RowBetween(4).Enter())
         {
-            EditorGUI.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add")
-                .OnValueChanged(_ => { data.TreePrototypes.Add(new TreePrototype()); _isDirty = true; });
+            Origami.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add", () => { data.TreePrototypes.Add(new TreePrototype()); _isDirty = true; }).Show();
             if (data.TreePrototypes.Count > 0)
-                EditorGUI.Button(paper, $"{id}_rem", $"{EditorIcons.Trash}  Remove")
-                    .OnValueChanged(_ =>
+                Origami.Button(paper, $"{id}_rem", $"{EditorIcons.Trash}  Remove", () =>
+                {
+                    if (ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Count)
                     {
-                        if (ActiveTreePrototype >= 0 && ActiveTreePrototype < data.TreePrototypes.Count)
-                        {
-                            data.TreePrototypes.RemoveAt(ActiveTreePrototype);
-                            ActiveTreePrototype = Math.Clamp(ActiveTreePrototype, 0, Math.Max(0, data.TreePrototypes.Count - 1));
-                            _isDirty = true;
-                        }
-                    });
+                        data.TreePrototypes.RemoveAt(ActiveTreePrototype);
+                        ActiveTreePrototype = Math.Clamp(ActiveTreePrototype, 0, Math.Max(0, data.TreePrototypes.Count - 1));
+                        _isDirty = true;
+                    }
+                }).Show();
         }
 
         paper.Box($"{id}_sp0").Height(6);

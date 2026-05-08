@@ -3,6 +3,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -81,8 +82,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         if (_dirty)
         {
             EditorGUI.Separator(paper, $"{id}_sep_save");
-            EditorGUI.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material")
-                .OnValueChanged(_ => SaveMaterial(material, entry));
+            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material", () => { SaveMaterial(material, entry); }).Show();
         }
 
         // 3D Preview

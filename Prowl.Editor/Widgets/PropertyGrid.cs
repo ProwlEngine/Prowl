@@ -214,8 +214,7 @@ public static class PropertyGrid
             {
                 EditorGUI.Label(paper, $"{id}_lbl", $"{label}: (null)");
                 if (!type.IsAbstract && !type.IsInterface)
-                    EditorGUI.Button(paper, $"{id}_create", EditorIcons.Plus + " Create")
-                        .OnValueChanged(v => onChange(Activator.CreateInstance(type)));
+                    Origami.Button(paper, $"{id}_create", EditorIcons.Plus + " Create", () => { onChange(Activator.CreateInstance(type)); }).Show();
                 else
                     DrawTypePicker(paper, $"{id}_pick", type, null, onChange);
             }
@@ -375,8 +374,7 @@ public static class PropertyGrid
             var attr = method.GetCustomAttribute<ButtonAttribute>();
             if (attr == null || method.GetParameters().Length > 0) continue;
             string label = attr.Label ?? NicifyName(method.Name);
-            EditorGUI.Button(paper, $"{id}_{idx++}", label)
-                .OnValueChanged(_ => method.Invoke(target, null));
+            Origami.Button(paper, $"{id}_{idx++}", label, () => { method.Invoke(target, null); }).Show();
         }
     }
 

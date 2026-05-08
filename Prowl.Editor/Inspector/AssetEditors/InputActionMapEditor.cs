@@ -46,8 +46,7 @@ public class InputActionMapEditor : AssetImporterEditor
             EditorGUI.Header(paper, $"{id}_title", $"{EditorIcons.Gamepad}  Input Actions: {map.Name}");
 
             if (_dirty)
-                EditorGUI.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save", width: 80)
-                    .OnValueChanged(_ => SaveMap(map, entry));
+                Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save", () => { SaveMap(map, entry); }).Width(80).Show();
         }
         EditorGUI.Separator(paper, $"{id}_sep");
 
@@ -236,47 +235,43 @@ public class InputActionMapEditor : AssetImporterEditor
             // -- Add Buttons --
             using (paper.Row($"{id}_add1").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
             {
-                EditorGUI.Button(paper, $"{id}_abind", $"{EditorIcons.Plus} Add Binding", width: 110)
-                    .OnValueChanged(_ =>
-                    {
-                        action.AddBinding(KeyCode.Space);
-                        _selectedBindingIdx = action.Bindings.Count - 1;
-                        MarkDirty();
-                    });
+                Origami.Button(paper, $"{id}_abind", $"{EditorIcons.Plus} Add Binding", () =>
+                {
+                    action.AddBinding(KeyCode.Space);
+                    _selectedBindingIdx = action.Bindings.Count - 1;
+                    MarkDirty();
+                }).Width(110).Show();
 
-                EditorGUI.Button(paper, $"{id}_awasd", $"{EditorIcons.Plus} WASD", width: 80)
-                    .OnValueChanged(_ =>
-                    {
-                        action.AddBinding(new Vector2CompositeBinding(
-                            InputBinding.CreateKeyBinding(KeyCode.W),
-                            InputBinding.CreateKeyBinding(KeyCode.S),
-                            InputBinding.CreateKeyBinding(KeyCode.A),
-                            InputBinding.CreateKeyBinding(KeyCode.D)));
-                        _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
-                        MarkDirty();
-                    });
+                Origami.Button(paper, $"{id}_awasd", $"{EditorIcons.Plus} WASD", () =>
+                {
+                    action.AddBinding(new Vector2CompositeBinding(
+                        InputBinding.CreateKeyBinding(KeyCode.W),
+                        InputBinding.CreateKeyBinding(KeyCode.S),
+                        InputBinding.CreateKeyBinding(KeyCode.A),
+                        InputBinding.CreateKeyBinding(KeyCode.D)));
+                    _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
+                    MarkDirty();
+                }).Width(80).Show();
 
-                EditorGUI.Button(paper, $"{id}_aaxis", $"{EditorIcons.Plus} Axis", width: 75)
-                    .OnValueChanged(_ =>
-                    {
-                        action.AddBinding(new AxisCompositeBinding(
-                            InputBinding.CreateKeyBinding(KeyCode.D),
-                            InputBinding.CreateKeyBinding(KeyCode.A)));
-                        _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
-                        MarkDirty();
-                    });
+                Origami.Button(paper, $"{id}_aaxis", $"{EditorIcons.Plus} Axis", () =>
+                {
+                    action.AddBinding(new AxisCompositeBinding(
+                        InputBinding.CreateKeyBinding(KeyCode.D),
+                        InputBinding.CreateKeyBinding(KeyCode.A)));
+                    _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
+                    MarkDirty();
+                }).Width(75).Show();
             }
 
             paper.Box($"{id}_sp3").Height(12);
 
-            EditorGUI.Button(paper, $"{id}_del", $"{EditorIcons.Trash}  Delete Action", width: 130)
-                .OnValueChanged(_ =>
-                {
-                    map.RemoveAction(action.Name);
-                    _selectedAction = null;
-                    _selectedBindingIdx = -1;
-                    MarkDirty();
-                });
+            Origami.Button(paper, $"{id}_del", $"{EditorIcons.Trash}  Delete Action", () =>
+            {
+                map.RemoveAction(action.Name);
+                _selectedAction = null;
+                _selectedBindingIdx = -1;
+                MarkDirty();
+            }).Width(130).Show();
         }
     }
 
@@ -477,23 +472,22 @@ public class InputActionMapEditor : AssetImporterEditor
         else
         {
             string current = GetBindingSummary(binding);
-            EditorGUI.Button(paper, $"{id}_btn", $"{EditorIcons.Bullseye}  Listen  ({current})", width: 0)
-                .OnValueChanged(_ =>
+            Origami.Button(paper, $"{id}_btn", $"{EditorIcons.Bullseye}  Listen  ({current})", () =>
+            {
+                _listenCompositePartName = compositePartName;
+                _listeningForBinding = true;
+                InputBindingListener.Start(detected =>
                 {
-                    _listenCompositePartName = compositePartName;
-                    _listeningForBinding = true;
-                    InputBindingListener.Start(detected =>
-                    {
-                        binding.BindingType = detected.BindingType;
-                        binding.Key = detected.Key;
-                        binding.MouseButton = detected.MouseButton;
-                        binding.GamepadButton = detected.GamepadButton;
-                        binding.AxisIndex = detected.AxisIndex;
-                        binding.RequiredDeviceIndex = detected.RequiredDeviceIndex;
-                        _listeningForBinding = false;
-                        MarkDirty();
-                    });
+                    binding.BindingType = detected.BindingType;
+                    binding.Key = detected.Key;
+                    binding.MouseButton = detected.MouseButton;
+                    binding.GamepadButton = detected.GamepadButton;
+                    binding.AxisIndex = detected.AxisIndex;
+                    binding.RequiredDeviceIndex = detected.RequiredDeviceIndex;
+                    _listeningForBinding = false;
+                    MarkDirty();
                 });
+            }).Show();
         }
     }
 

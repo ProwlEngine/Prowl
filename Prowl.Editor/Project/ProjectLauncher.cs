@@ -123,25 +123,25 @@ public static class ProjectLauncher
                         .Margin(0, 0, 28, 0)
                         .Enter())
                     {
-                        EditorGUI.ButtonSquareGhost(paper, "www_link", EditorIcons.Globe).OnValueChanged((_) =>
+                        Origami.IconButton(paper, "www_link", EditorIcons.Globe, () =>
                         {
                             EditorUtils.OpenUrl("https://prowlengine.com");
-                        });
+                        }).Ghost().Show();
 
-                        EditorGUI.ButtonSquareGhost(paper, "ds_link", EditorIcons.Message).OnValueChanged((_) =>
+                        Origami.IconButton(paper, "ds_link", EditorIcons.Message, () =>
                         {
                             EditorUtils.OpenUrl("https://discord.gg/HgBsBqfSpa");
-                        });
+                        }).Ghost().Show();
 
-                        EditorGUI.ButtonSquareGhost(paper, "yt_link", EditorIcons.Video).OnValueChanged((_) =>
+                        Origami.IconButton(paper, "yt_link", EditorIcons.Video, () =>
                         {
                             EditorUtils.OpenUrl("https://youtube.com/@prowlengine");
-                        });
+                        }).Ghost().Show();
 
-                        EditorGUI.ButtonSquareGhost(paper, "gh_link", EditorIcons.Code).OnValueChanged((_) =>
+                        Origami.IconButton(paper, "gh_link", EditorIcons.Code, () =>
                         {
                             EditorUtils.OpenUrl("https://github.com/ProwlEngine/Prowl");
-                        });
+                        }).Ghost().Show();
                     }
 
                     paper.Box("spacer");
@@ -172,15 +172,14 @@ public static class ProjectLauncher
                         // Spacer (search input is currently visual-only — no filter wired up)
                         Origami.SearchField(paper, "search", "", _ => { }, "Search Projects").Show();
 
-                        EditorGUI.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", 130)
-                            .OnValueChanged(_ =>
+                        Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", () =>
                             {
                                 FileDialog.Open(FileDialogMode.SelectFolder, path =>
                                 {
                                     if (path == null) return;
                                     TryOpenProject(path);
                                 });
-                            });
+                            }).Width(130).Show();
 
                         using (paper.Box("tl_btn_new")
                             .Height(EditorTheme.RowHeight)
@@ -264,17 +263,15 @@ public static class ProjectLauncher
                         .Alignment(TextAlignment.MiddleLeft);
                 }
 
-                EditorGUI.Button(paper, "pl_np_browse", EditorIcons.FolderOpen, width: 30)
-                    .OnValueChanged(_ =>
+                Origami.Button(paper, "pl_np_browse", EditorIcons.FolderOpen, () =>
                     {
                         FileDialog.Open(FileDialogMode.SelectFolder, path =>
                         {
                             if (path != null) _newProjectPath = path;
                         }, _newProjectPath);
-                    });
+                    }).Width(30).Show();
 
-                EditorGUI.Button(paper, "pl_np_create", "Create", width: 70)
-                    .OnValueChanged(_ => TryCreateProject());
+                Origami.Button(paper, "pl_np_create", "Create", () => { TryCreateProject(); }).Width(70).Show();
             }
         }
     }

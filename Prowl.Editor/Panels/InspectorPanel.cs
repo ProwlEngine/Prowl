@@ -354,13 +354,12 @@ public class InspectorPanel : DockPanel
 
                         // Save & Reimport button
                         paper.Box("insp_set_sp").Height(4);
-                        EditorGUI.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", width: 150)
-                            .OnValueChanged(_ =>
-                            {
-                                meta.Settings = settings;
-                                MetaFile.Write(metaPath, meta);
-                                db.Reimport(entry.Guid);
-                            });
+                        Origami.Button(paper, "insp_set_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", () =>
+                        {
+                            meta.Settings = settings;
+                            MetaFile.Write(metaPath, meta);
+                            db.Reimport(entry.Guid);
+                        }).Width(150).Show();
                     }
                 }
             }
@@ -370,8 +369,7 @@ public class InspectorPanel : DockPanel
         EditorGUI.Separator(paper, "insp_sep_actions");
         if (entry != null)
         {
-            EditorGUI.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  Reimport")
-                .OnValueChanged(_ => db.Reimport(entry.Guid));
+            Origami.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  Reimport", () => db.Reimport(entry.Guid)).Show();
         }
     }
 
@@ -507,8 +505,7 @@ public class InspectorPanel : DockPanel
         EditorGUI.Separator(paper, "insp_sub_sep3");
 
         // Extract button clone sub-asset to a standalone file
-        EditorGUI.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  Extract as Asset")
-            .OnValueChanged(_ => ExtractSubAsset(item, parentEntry, subEntry, asset));
+        Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  Extract as Asset", () => ExtractSubAsset(item, parentEntry, subEntry, asset)).Show();
     }
 
     private void ExtractSubAsset(ContentItem item, AssetEntry? parentEntry, SubAssetEntry? subEntry, EngineObject? asset)

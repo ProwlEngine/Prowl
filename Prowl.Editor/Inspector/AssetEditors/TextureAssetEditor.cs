@@ -114,15 +114,14 @@ public class TextureAssetEditor : AssetImporterEditor
 
         paper.Box($"{id}_sp3").Height(8);
 
-        EditorGUI.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", width: 150)
-            .OnValueChanged(_ =>
-            {
-                // Write settings to meta and reimport
-                var meta = MetaFile.Read(metaPath);
-                meta.Settings = settings;
-                MetaFile.Write(metaPath, meta);
-                _cachedSettings = null; // Force reload after reimport
-                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-            });
+        Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", () =>
+        {
+            // Write settings to meta and reimport
+            var meta = MetaFile.Read(metaPath);
+            meta.Settings = settings;
+            MetaFile.Write(metaPath, meta);
+            _cachedSettings = null; // Force reload after reimport
+            EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+        }).Width(150).Show();
     }
 }
