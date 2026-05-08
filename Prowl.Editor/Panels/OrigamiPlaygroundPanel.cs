@@ -254,6 +254,10 @@ public class OrigamiPlaygroundPanel : DockPanel
         new("EG", "Egypt",          "Africa"),
     };
 
+    // ── Tree state ─────────────────────────────────────────────
+    private string? _treeSelectedId;
+    private HashSet<string> _treeChecked = new() { "src", "main_cs" };
+
     // ── OnGUI ──────────────────────────────────────────────────
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -305,6 +309,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_SliderVertical(paper);
                 Section_RangeSliderShowcase(paper);
                 Section_Buttons(paper);
+                Section_Tree(paper);
                 Section_State(paper);
             });
     }
@@ -1701,6 +1706,114 @@ public class OrigamiPlaygroundPanel : DockPanel
                         .DisabledItem("Locked")
                         .Item("Available")
                         .Show());
+            }
+        });
+    }
+
+    private void Section_Tree(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_tree", "Tree View").DefaultExpanded().Body(() =>
+        {
+            using (paper.Column("op_tree_col").Height(UnitValue.Auto).RowBetween(12).Enter())
+            {
+                var folderColor = Color.FromArgb(255, 220, 180, 80);
+
+                // ---- 1. Basic selection tree (no checkboxes) ----
+                StateLine(paper, "op_tree_h1", "Basic - selection, icons, badges");
+
+                var basicNodes = new List<TreeNode>
+                {
+                    new() { Id = "b_scene", Label = "Scene", Icon = EditorIcons.Film, HasChildren = true, Depth = 0 },
+                      new() { Id = "b_cam", Label = "Main Camera", Icon = EditorIcons.Camera, Depth = 1, Badge = "Active" },
+                      new() { Id = "b_light", Label = "Directional Light", Icon = EditorIcons.Sun, Depth = 1 },
+                      new() { Id = "b_env", Label = "Environment", Icon = EditorIcons.Cube, HasChildren = true, Depth = 1 },
+                        new() { Id = "b_terrain", Label = "Terrain", Icon = EditorIcons.Mountain, Depth = 2 },
+                        new() { Id = "b_water", Label = "Water Plane", Icon = EditorIcons.Water, Depth = 2 },
+                      new() { Id = "b_player", Label = "Player", Icon = EditorIcons.User, HasChildren = true, Depth = 1 },
+                        new() { Id = "b_mesh", Label = "Mesh", Icon = EditorIcons.VectorSquare, Depth = 2 },
+                        new() { Id = "b_collider", Label = "Collider", Icon = EditorIcons.Cubes, Depth = 2 },
+                      new() { Id = "b_ui", Label = "UI Canvas", Icon = EditorIcons.Display, HasChildren = true, Depth = 1 },
+                        new() { Id = "b_hud", Label = "HUD", Icon = EditorIcons.Gauge, Depth = 2 },
+                        new() { Id = "b_menu", Label = "Pause Menu", Icon = EditorIcons.Bars, Depth = 2, Disabled = true },
+                };
+
+                Origami.Tree(paper, "op_tree_basic", 400, 220)
+                    .Nodes(basicNodes)
+                    .IsSelected(n => n.Id == _treeSelectedId)
+                    .OnSelect(e => _treeSelectedId = e.Node.Id)
+                    .OnDoubleClick(e => Widgets.Toasts.Info("Tree", $"Double-clicked: {e.Node.Label}"))
+                    .EmptyMessage("No items")
+                    .Show();
+
+                StateLine(paper, "op_tree_sel", $"Selected: {_treeSelectedId ?? "(none)"}");
+
+                // ---- 2. Checkbox tree (package-style) ----
+                StateLine(paper, "op_tree_h2", "Checkboxes - package import style");
+
+                var checkNodes = new List<TreeNode>
+                {
+                    new() { Id = "c_assets", Label = "Assets", Icon = EditorIcons.Folder, IconColor = folderColor, HasChildren = true, Depth = 0, Checked = _treeChecked.Contains("c_assets") },
+                      new() { Id = "c_tex", Label = "Textures", Icon = EditorIcons.Folder, IconColor = folderColor, HasChildren = true, Depth = 1, Checked = _treeChecked.Contains("c_tex") },
+                        new() { Id = "c_grass", Label = "Grass.png", Icon = EditorIcons.FileImage, Depth = 2, Badge = "256 KB", Checked = _treeChecked.Contains("c_grass") },
+                        new() { Id = "c_sky", Label = "Sky.hdr", Icon = EditorIcons.FileImage, Depth = 2, Badge = "1.8 MB", Checked = _treeChecked.Contains("c_sky") },
+                        new() { Id = "c_dirt", Label = "Dirt.png", Icon = EditorIcons.FileImage, Depth = 2, Badge = "128 KB", Checked = _treeChecked.Contains("c_dirt") },
+                      new() { Id = "c_models", Label = "Models", Icon = EditorIcons.Folder, IconColor = folderColor, HasChildren = true, Depth = 1, Checked = _treeChecked.Contains("c_models") },
+                        new() { Id = "c_char", Label = "Character.glb", Icon = EditorIcons.VectorSquare, Depth = 2, Badge = "1.2 MB", Checked = _treeChecked.Contains("c_char") },
+                        new() { Id = "c_prop", Label = "Barrel.obj", Icon = EditorIcons.VectorSquare, Depth = 2, Badge = "45 KB", Checked = _treeChecked.Contains("c_prop") },
+                      new() { Id = "c_scripts", Label = "Scripts", Icon = EditorIcons.Folder, IconColor = folderColor, HasChildren = true, Depth = 1, Checked = _treeChecked.Contains("c_scripts") },
+                        new() { Id = "c_main", Label = "GameManager.cs", Icon = EditorIcons.FileCode, Depth = 2, Checked = _treeChecked.Contains("c_main") },
+                        new() { Id = "c_input", Label = "InputHandler.cs", Icon = EditorIcons.FileCode, Depth = 2, Checked = _treeChecked.Contains("c_input") },
+                      new() { Id = "c_audio", Label = "Audio", Icon = EditorIcons.Folder, IconColor = folderColor, HasChildren = true, Depth = 1, Checked = _treeChecked.Contains("c_audio") },
+                        new() { Id = "c_bgm", Label = "Background.ogg", Icon = EditorIcons.FileAudio, Depth = 2, Badge = "3.4 MB", Checked = _treeChecked.Contains("c_bgm") },
+                };
+
+                Origami.Tree(paper, "op_tree_check", 400, 220)
+                    .Nodes(checkNodes)
+                    .Checkboxes()
+                    .IsSelected(n => n.Id == _treeSelectedId)
+                    .OnSelect(e => _treeSelectedId = e.Node.Id)
+                    .OnCheckedChanged((n, v) =>
+                    {
+                        if (v) _treeChecked.Add(n.Id);
+                        else _treeChecked.Remove(n.Id);
+                    })
+                    .EmptyMessage("No items")
+                    .Show();
+
+                StateLine(paper, "op_tree_chk", $"Checked: {(_treeChecked.Count > 0 ? string.Join(", ", _treeChecked) : "(none)")}");
+
+                // ---- 3. Trailing icons + colored labels ----
+                StateLine(paper, "op_tree_h3", "Trailing icons, colored labels, status badges");
+
+                var statusGreen = Color.FromArgb(255, 80, 200, 80);
+                var statusYellow = Color.FromArgb(255, 220, 180, 40);
+                var statusGrey = Color.FromArgb(255, 130, 130, 130);
+
+                var fancyNodes = new List<TreeNode>
+                {
+                    new() { Id = "f_root", Label = "Package Contents", Icon = EditorIcons.BoxArchive, HasChildren = true, Depth = 0 },
+                      new() { Id = "f_add1", Label = "NewTexture.png", Icon = EditorIcons.FileImage, Depth = 1, Badge = "Add", BadgeColor = statusGreen, LabelColor = statusGreen, TrailingIcon = EditorIcons.CirclePlus, TrailingIconColor = statusGreen },
+                      new() { Id = "f_add2", Label = "NewShader.glsl", Icon = EditorIcons.WandMagicSparkles, Depth = 1, Badge = "Add", BadgeColor = statusGreen, LabelColor = statusGreen, TrailingIcon = EditorIcons.CirclePlus, TrailingIconColor = statusGreen },
+                      new() { Id = "f_rep1", Label = "Player.cs", Icon = EditorIcons.FileCode, Depth = 1, Badge = "Replace", BadgeColor = statusYellow, LabelColor = statusYellow, TrailingIcon = EditorIcons.ArrowsRotate, TrailingIconColor = statusYellow },
+                      new() { Id = "f_rep2", Label = "Config.json", Icon = EditorIcons.FileLines, Depth = 1, Badge = "Replace", BadgeColor = statusYellow, LabelColor = statusYellow, TrailingIcon = EditorIcons.ArrowsRotate, TrailingIconColor = statusYellow },
+                      new() { Id = "f_skip1", Label = "Utils.cs", Icon = EditorIcons.FileCode, Depth = 1, Badge = "Identical", BadgeColor = statusGrey, LabelColor = statusGrey },
+                      new() { Id = "f_skip2", Label = "README.md", Icon = EditorIcons.FileLines, Depth = 1, Badge = "Identical", BadgeColor = statusGrey, LabelColor = statusGrey },
+                };
+
+                Origami.Tree(paper, "op_tree_fancy", 400, 180)
+                    .Nodes(fancyNodes)
+                    .OnSelect(e => _treeSelectedId = e.Node.Id)
+                    .IsSelected(n => n.Id == _treeSelectedId)
+                    .OnTrailingIconClick(n => Widgets.Toasts.Info("Tree", $"Action: {n.Label}"))
+                    .Show();
+
+                // ---- 4. Empty state ----
+                StateLine(paper, "op_tree_h4", "Empty state");
+
+                Origami.Tree(paper, "op_tree_empty", 400, 60)
+                    .Nodes(new List<TreeNode>())
+                    .EmptyMessage("No assets in this package")
+                    .Show();
             }
         });
     }
