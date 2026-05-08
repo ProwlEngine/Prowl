@@ -72,7 +72,7 @@ internal sealed class GrassPass : IShaderPass
 
         var fragCtx = new ShaderGenContext(graph, ShaderStage.Fragment);
         foreach (var u in shared.PropertyUniforms) fragCtx.Uniforms.Add(u);
-        fragCtx.Includes.Add("Fragment");
+        fragCtx.Includes.Add("ProwlCG");
         if (master.Lighting != ShaderLightingMode.Unlit) fragCtx.Includes.Add("Lighting");
 
         fragCtx.Varyings.Add(("texCoord0", "vec2"));
@@ -91,7 +91,7 @@ internal sealed class GrassPass : IShaderPass
         // context and evaluate them there so users can modulate via noise / properties.
         var vertCtx = new ShaderGenContext(graph, ShaderStage.Vertex);
         foreach (var u in shared.PropertyUniforms) vertCtx.Uniforms.Add(u);
-        vertCtx.Includes.Add("Fragment");
+        vertCtx.Includes.Add("ProwlCG");
         vertCtx.Includes.Add("VertexAttributes");
         // Forward the fragment's varyings vertex writes them, fragment reads.
         foreach (var v in fragCtx.Varyings) vertCtx.Varyings.Add(v);

@@ -62,7 +62,7 @@ internal sealed class TerrainPass : IShaderPass
         // Fragment context.
         var fragCtx = new ShaderGenContext(graph, ShaderStage.Fragment);
         foreach (var u in shared.PropertyUniforms) fragCtx.Uniforms.Add(u);
-        fragCtx.Includes.Add("Fragment");
+        fragCtx.Includes.Add("ProwlCG");
         fragCtx.Includes.Add("Lighting");
         fragCtx.Varyings.Add(("texCoord0",   "vec2"));  // terrain UV
         fragCtx.Varyings.Add(("worldPos",    "vec3"));
@@ -98,7 +98,7 @@ internal sealed class TerrainPass : IShaderPass
     {
         sb.AppendLine("    Vertex");
         sb.AppendLine("    {");
-        sb.AppendLine("        #include \"Fragment\"");
+        sb.AppendLine("        #include \"ProwlCG\"");
         sb.AppendLine("        #include \"VertexAttributes\"");
         sb.AppendLine();
         sb.AppendLine("        out vec2 texCoord0;");

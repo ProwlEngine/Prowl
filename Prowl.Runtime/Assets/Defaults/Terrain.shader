@@ -43,7 +43,7 @@ Pass "Terrain"
 
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec2 texCoord0;
@@ -124,7 +124,7 @@ Pass "Terrain"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "Lighting"
 
             layout (location = 0) out vec4 fragColor;
@@ -243,7 +243,7 @@ Pass "TerrainShadow"
 
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 worldPos;
@@ -285,7 +285,7 @@ Pass "TerrainShadow"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             in vec3 worldPos;
 
@@ -306,7 +306,7 @@ Pass "TerrainDepthNormals"
 
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 worldNormal;
@@ -359,7 +359,7 @@ Pass "TerrainDepthNormals"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             layout (location = 0) out vec4 normalOut;
             in vec3 worldNormal;

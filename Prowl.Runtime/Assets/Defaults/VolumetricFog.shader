@@ -31,7 +31,7 @@ Pass "FogMarch"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
         #include "Lighting"
 
         layout(location = 0) out vec4 OutputColor;
@@ -470,7 +470,7 @@ Pass "FogTemporal"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         layout(location = 0) out vec4 OutputColor;
 
@@ -558,7 +558,7 @@ Pass "FogComposite"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         layout(location = 0) out vec4 OutputColor;
 

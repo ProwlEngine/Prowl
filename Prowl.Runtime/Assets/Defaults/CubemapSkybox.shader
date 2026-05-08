@@ -23,7 +23,7 @@ Pass "CubemapSkybox"
 
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 vDirection;
@@ -44,7 +44,7 @@ Pass "CubemapSkybox"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             layout (location = 0) out vec4 fragColor;
 

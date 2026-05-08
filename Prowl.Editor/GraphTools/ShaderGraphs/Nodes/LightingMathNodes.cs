@@ -336,7 +336,7 @@ public sealed class NormalMapNode : Node, IShaderNode, IShaderGraphNode
         if (ctx.RequireFragmentStage(Id, Title))
             return "vec3(0.0, 0.0, 1.0)";
 
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("ProwlCG");
         ctx.Varyings.Add(("vNormal",    "vec3"));
         ctx.Varyings.Add(("vTangent",   "vec3"));
         ctx.Varyings.Add(("vBitangent", "vec3"));

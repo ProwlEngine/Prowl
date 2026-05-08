@@ -86,7 +86,7 @@ internal sealed class ParticlePass : IShaderPass
         // those to the vertex stage's `out` list.
         var fragCtx = new ShaderGenContext(graph, ShaderStage.Fragment);
         foreach (var u in shared.PropertyUniforms) fragCtx.Uniforms.Add(u);
-        fragCtx.Includes.Add("Fragment");
+        fragCtx.Includes.Add("ProwlCG");
 
         // Particle standard varyings everyone gets these, no matter what the graph does.
         fragCtx.Varyings.Add(("texCoord0", "vec2"));
@@ -105,7 +105,7 @@ internal sealed class ParticlePass : IShaderPass
         if (master.SoftParticles)
         {
             fragCtx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
-            fragCtx.Includes.Add("Fragment");  // linearizeDepthFromProjection lives here
+            fragCtx.Includes.Add("ProwlCG");  // linearizeDepthFromProjection lives here
         }
 
         shared.Diagnostics.AddRange(fragCtx.Diagnostics);
@@ -136,7 +136,7 @@ internal sealed class ParticlePass : IShaderPass
     {
         sb.AppendLine("    Vertex");
         sb.AppendLine("    {");
-        sb.AppendLine("        #include \"Fragment\"");
+        sb.AppendLine("        #include \"ProwlCG\"");
         sb.AppendLine("        #include \"VertexAttributes\"");
         sb.AppendLine();
         // Forward exactly the varyings the fragment wants vLifetime only appears

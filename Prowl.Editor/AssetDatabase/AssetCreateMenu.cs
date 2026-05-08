@@ -146,7 +146,7 @@ Pass ""Default""
 
         Vertex
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""VertexAttributes""
 
             out vec2 texCoord0;
@@ -172,7 +172,7 @@ Pass ""Default""
 
         Fragment
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""Lighting""
 
             layout (location = 0) out vec4 fragColor;
@@ -232,7 +232,7 @@ Pass ""DepthNormals""
 
         Vertex
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""VertexAttributes""
 
             out vec3 vNormal;
@@ -254,7 +254,7 @@ Pass ""DepthNormals""
 
         Fragment
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
 
             layout (location = 0) out vec4 normalOut;
             in vec3 vNormal;
@@ -283,7 +283,7 @@ Pass ""ShadowCaster""
 
         Vertex
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
             #include ""VertexAttributes""
 
             void main()
@@ -294,7 +294,7 @@ Pass ""ShadowCaster""
 
         Fragment
         {
-            #include ""Fragment""
+            #include ""ProwlCG""
 
             void main()
             {

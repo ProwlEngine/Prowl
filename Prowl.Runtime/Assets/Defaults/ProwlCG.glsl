@@ -1,5 +1,5 @@
-﻿#ifndef SHADER_FRAGMENT
-#define SHADER_FRAGMENT
+﻿#ifndef PROWL_CG
+#define PROWL_CG
 
 #include "ShaderVariables"
 

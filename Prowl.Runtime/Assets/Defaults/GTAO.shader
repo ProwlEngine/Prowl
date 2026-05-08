@@ -30,7 +30,7 @@ Pass "CalculateGTAO"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _CameraDepthTexture;
         uniform sampler2D _CameraNormalsTexture; // View-space normals from depth pre-pass
@@ -185,7 +185,7 @@ Pass "Blur"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _CameraDepthTexture;
@@ -253,7 +253,7 @@ Pass "Composite"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _AOTex;

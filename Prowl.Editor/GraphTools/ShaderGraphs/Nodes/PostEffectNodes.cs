@@ -72,7 +72,7 @@ public sealed class SurfaceDepthNode : Node, IShaderNode, IShaderGraphNode
             // perspective Z back to view-space units. Keeps the math identical
             // to whatever the depth pre-pass writes, so depth comparisons line
             // up exactly.
-            ctx.Includes.Add("Fragment");
+            ctx.Includes.Add("ProwlCG");
             eye = "linearizeDepthFromProjection(gl_FragCoord.z)";
         }
         else
@@ -266,7 +266,7 @@ public sealed class ReprojectUVNode : Node, IShaderNode, IShaderGraphNode
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         if (ctx.RequireFragmentStage(Id, Title)) return "vec2(0.0)";
-        ctx.Includes.Add("Fragment"); // Reproject
+        ctx.Includes.Add("ProwlCG"); // Reproject
         ctx.Includes.Add("ShaderVariables"); // prowl_PrevViewProj
         ctx.Uniforms.Add("uniform sampler2D _CameraDepthTexture;");
 
@@ -399,7 +399,7 @@ public sealed class DitherNode : Node, IShaderNode, IShaderGraphNode
 
             case DitherPattern.Hash:
             default:
-                ctx.Includes.Add("Fragment");
+                ctx.Includes.Add("ProwlCG");
                 expr = $"hash1({coord})";
                 break;
         }
