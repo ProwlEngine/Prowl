@@ -491,16 +491,30 @@ public class GltfImporter
             var gmesh = root.Meshes[mi];
             string meshName = gmesh.Name ?? $"Mesh_{mi}";
 
+            // Pre-compute total vertex/index counts for capacity hints
+            int estimatedVertices = 0;
+            int estimatedIndices = 0;
+            for (int pi = 0; pi < gmesh.Primitives.Count; pi++)
+            {
+                var p = gmesh.Primitives[pi];
+                if (p.Attributes.TryGetValue("POSITION", out int posAcc))
+                {
+                    int vc = gltf.Root.Accessors[posAcc].Count;
+                    estimatedVertices += vc;
+                    estimatedIndices += p.Indices.HasValue ? gltf.Root.Accessors[p.Indices.Value].Count : vc;
+                }
+            }
+
             // Accumulate all primitives into one combined mesh
-            var allVertices = new List<Float3>();
-            var allNormals = new List<Float3>();
-            var allTangents = new List<Float4>();
-            var allUV = new List<Float2>();
-            var allUV2 = new List<Float2>();
-            var allColors = new List<Color>();
-            var allBoneIndices = new List<Float4>();
-            var allBoneWeights = new List<Float4>();
-            var allIndices = new List<uint>();
+            var allVertices = new List<Float3>(estimatedVertices);
+            var allNormals = new List<Float3>(estimatedVertices);
+            var allTangents = new List<Float4>(estimatedVertices);
+            var allUV = new List<Float2>(estimatedVertices);
+            var allUV2 = new List<Float2>(estimatedVertices);
+            var allColors = new List<Color>(estimatedVertices);
+            var allBoneIndices = new List<Float4>(estimatedVertices);
+            var allBoneWeights = new List<Float4>(estimatedVertices);
+            var allIndices = new List<uint>(estimatedIndices);
             var subMeshes = new List<SubMeshDescriptor>();
             var primMaterials = new List<Material?>();
             bool hasBones = false;
@@ -520,10 +534,9 @@ public class GltfImporter
                 Float3[] primVerts;
                 if (prim.Attributes.TryGetValue("POSITION", out int posIdx))
                 {
-                    var raw = GltfDataReader.ReadVec3(gltf, posIdx);
-                    primVerts = new Float3[raw.Length];
-                    for (int i = 0; i < raw.Length; i++)
-                        primVerts[i] = ConvertPos(raw[i]) * scale;
+                    primVerts = GltfDataReader.ReadVec3(gltf, posIdx);
+                    for (int i = 0; i < primVerts.Length; i++)
+                        primVerts[i] = ConvertPos(primVerts[i]) * scale;
                 }
                 else
                 {
@@ -537,10 +550,9 @@ public class GltfImporter
                 // --- Normals ---
                 if (prim.Attributes.TryGetValue("NORMAL", out int normIdx))
                 {
-                    var raw = GltfDataReader.ReadVec3(gltf, normIdx);
-                    var normals = new Float3[raw.Length];
-                    for (int i = 0; i < raw.Length; i++)
-                        normals[i] = ConvertNormal(raw[i]);
+                    var normals = GltfDataReader.ReadVec3(gltf, normIdx);
+                    for (int i = 0; i < normals.Length; i++)
+                        normals[i] = ConvertNormal(normals[i]);
                     allNormals.AddRange(normals);
                 }
                 else
@@ -554,10 +566,9 @@ public class GltfImporter
                 // --- Tangents ---
                 if (prim.Attributes.TryGetValue("TANGENT", out int tanIdx))
                 {
-                    var raw = GltfDataReader.ReadVec4(gltf, tanIdx);
-                    var tangents = new Float4[raw.Length];
-                    for (int i = 0; i < raw.Length; i++)
-                        tangents[i] = ConvertTangent(raw[i]);
+                    var tangents = GltfDataReader.ReadVec4(gltf, tanIdx);
+                    for (int i = 0; i < tangents.Length; i++)
+                        tangents[i] = ConvertTangent(tangents[i]);
                     allTangents.AddRange(tangents);
                 }
                 else
