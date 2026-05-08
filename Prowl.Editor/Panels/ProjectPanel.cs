@@ -380,7 +380,7 @@ public class ProjectPanel : DockPanel
             .Size(FolderTreeWidth, height)
             .BackgroundColor(EditorTheme.Neutral400)
             .OnClick(0, (_, _) => Selection.Clear())
-            .OnRightClick(0, (_, _) => Selection.Clear())
+            //.OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Right-click background show create/explorer menu
@@ -533,7 +533,7 @@ public class ProjectPanel : DockPanel
             .Size(width, height)
             .BackgroundColor(EditorTheme.Neutral300)
             .OnClick(0, (_, _) => Selection.Clear())
-            .OnRightClick(0, (_, _) => Selection.Clear())
+            //.OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Remember that the mouse is over the content background the central drop

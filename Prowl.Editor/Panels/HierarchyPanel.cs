@@ -53,7 +53,11 @@ public class HierarchyPanel : DockPanel
 
         var scene = Scene.Current;
 
-        using (paper.Column("hier_root").Size(width, height).OnClick(0, (_, _) => Selection.Clear()).OnRightClick(0, (_, _) => Selection.Clear()).Enter())
+        using (paper.Column("hier_root")
+            .Size(width, height)
+            .OnClick(0, (_, _) => Selection.Clear())
+            //.OnRightClick(0, (_, _) => Selection.Clear())
+            .Enter())
         {
             // Prefab editing breadcrumb
             if (Prefabs.PrefabEditingMode.IsEditing)
