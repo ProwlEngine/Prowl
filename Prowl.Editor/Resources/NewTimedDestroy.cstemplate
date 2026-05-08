@@ -1,0 +1,18 @@
+using Prowl.Runtime;
+
+public class {[className]} : MonoBehaviour
+{
+    public float Lifetime = 3f;
+
+    private float _elapsed;
+
+    public override void Update()
+    {
+        _elapsed += Time.DeltaTime;
+        if (_elapsed >= Lifetime)
+        {
+            Scene?.Remove(GameObject);
+            GameObject.Dispose();
+        }
+    }
+}
