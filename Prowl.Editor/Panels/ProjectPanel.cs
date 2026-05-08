@@ -1342,13 +1342,13 @@ public class ProjectPanel : DockPanel
         var db = EditorAssetDatabase.Instance;
         if (db == null) return null;
 
-        byte[]? pixels = db.LoadThumbnail(guid);
-        if (pixels == null || pixels.Length == 0) return null;
+        var thumb = db.LoadThumbnail(guid);
+        if (thumb == null) return null;
 
         try
         {
-            int size = ThumbnailGenerator.ThumbnailSize;
-            var tex = new Prowl.Runtime.Resources.Texture2D((uint)size, (uint)size, false, TextureImageFormat.Color4b);
+            var (w, h, pixels) = thumb.Value;
+            var tex = new Prowl.Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
             tex.SetData<byte>(pixels);
             tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _thumbnailCache[guid] = tex;
