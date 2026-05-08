@@ -413,8 +413,9 @@ public sealed class TreeBuilder
         {
             if (_onSelectModified != null && _multiSelect)
             {
-                row.OnClick(_ =>
+                row.OnClick(e =>
                 {
+                    e.StopPropagation();
                     bool ctrl = _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
                     bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
                     _onSelectModified(new TreeNodeEvent(capturedNode, capturedIndex), ctrl, shift);
@@ -422,14 +423,26 @@ public sealed class TreeBuilder
             }
             else if (_onSelect != null)
             {
-                row.OnClick(_ => _onSelect(new TreeNodeEvent(capturedNode, capturedIndex)));
+                row.OnClick(e =>
+                {
+                    e.StopPropagation();
+                    _onSelect(new TreeNodeEvent(capturedNode, capturedIndex));
+                });
             }
 
             if (_onDoubleClick != null)
-                row.OnDoubleClick(_ => _onDoubleClick(new TreeNodeEvent(capturedNode, capturedIndex)));
+                row.OnDoubleClick(e =>
+                {
+                    e.StopPropagation();
+                    _onDoubleClick(new TreeNodeEvent(capturedNode, capturedIndex));
+                });
 
             if (_onRightClick != null)
-                row.OnRightClick(_ => _onRightClick(new TreeNodeEvent(capturedNode, capturedIndex)));
+                row.OnRightClick(e =>
+                {
+                    e.StopPropagation();
+                    _onRightClick(new TreeNodeEvent(capturedNode, capturedIndex));
+                });
 
             // Drag
             if (_onDragStart != null && (_canDrag == null || _canDrag(node)))
