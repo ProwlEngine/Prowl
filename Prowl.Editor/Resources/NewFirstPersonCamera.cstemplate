@@ -1,0 +1,32 @@
+using System;
+
+using Prowl.Runtime;
+using Prowl.Vector;
+
+public class {[className]} : MonoBehaviour
+{
+    public float Sensitivity = 0.15f;
+    public float MinPitch = -89f;
+    public float MaxPitch = 89f;
+
+    private float _yaw;
+    private float _pitch;
+
+    public override void Start()
+    {
+        Float3 euler = Transform.LocalEulerAngles;
+        _pitch = euler.X;
+        _yaw = euler.Y;
+    }
+
+    public override void Update()
+    {
+        if (!Input.CursorLocked) return;
+
+        Float2 delta = Input.MouseDelta;
+        _yaw += delta.X * Sensitivity;
+        _pitch = Math.Clamp(_pitch - delta.Y * Sensitivity, MinPitch, MaxPitch);
+
+        Transform.LocalEulerAngles = new Float3(_pitch, _yaw, 0f);
+    }
+}

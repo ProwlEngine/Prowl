@@ -14,6 +14,7 @@ namespace Prowl.Editor.Widgets;
 public class ModalDialogEntry
 {
     public string Title;
+    public string Message;
     public Action<Paper> DrawContent;
     public List<(string label, Action onClick)> Buttons = new();
     public float Width;
@@ -25,6 +26,11 @@ public class ModalDialogEntry
         DrawContent = drawContent;
         Width = width;
         Height = height;
+    }
+
+    public ModalDialogEntry(string title, string message, Action<Paper> drawContent, float width = 400, float height = 0) : this(title, drawContent, width, height)
+    {
+        Message = message;
     }
 
     public ModalDialogEntry Button(string label, Action onClick)
@@ -54,7 +60,7 @@ public static class ModalDialog
     /// </summary>
     public static void Confirm(string title, string message, Action onYes, Action? onNo = null)
     {
-        Show(new ModalDialogEntry(title, paper =>
+        Show(new ModalDialogEntry(title, message, paper =>
         {
             EditorGUI.Label(paper, "modal_msg", message);
         }, 350)
@@ -67,7 +73,7 @@ public static class ModalDialog
     /// </summary>
     public static void Message(string title, string message)
     {
-        Show(new ModalDialogEntry(title, paper =>
+        Show(new ModalDialogEntry(title, message, paper =>
         {
             EditorGUI.Label(paper, "modal_msg", message);
         }, 350)
@@ -92,7 +98,7 @@ public static class ModalDialog
         EditorGUI.Backdrop(paper, "modal_overlay");
 
         // Dialog box centered
-        float dialogW = modal.Width;
+        float dialogW = Math.Max(modal.Width, paper.MeasureText(modal.Message, EditorTheme.FontSize, font).X);
         float dialogX = (w - dialogW) / 2;
         float dialogY = modal.Height > 0 ? (h - modal.Height) / 2 : h * 0.3f;
 
@@ -118,14 +124,16 @@ public static class ModalDialog
             // the default TopLeft left the title pinned to the top-left of the 32px bar.
             if (font != null)
             {
-                paper.Box("modal_title")
+                using (paper.Box("modal_title")
                     .Height(32)
                     .BackgroundColor(EditorTheme.Neutral300)
                     .Rounded(8)
                     .Text(modal.Title, font)
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize + 1)
-                    .Alignment(PaperUI.TextAlignment.MiddleCenter);
+                    .Alignment(PaperUI.TextAlignment.MiddleCenter)
+                    .Enter());
+
             }
 
             // Content area

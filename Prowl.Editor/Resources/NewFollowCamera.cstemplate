@@ -1,0 +1,29 @@
+using System;
+
+using Prowl.Runtime;
+using Prowl.Vector;
+
+public class {[className]} : MonoBehaviour
+{
+    public GameObject? Target;
+    public Float3 Offset = new Float3(0, 3, -6);
+    public float FollowSmoothing = 8f;
+    public float LookSmoothing = 8f;
+
+    public override void LateUpdate()
+    {
+        if (Target == null) return;
+
+        Float3 desiredPos = Target.Transform.Position + Target.Transform.Rotation * Offset;
+        float tMove = 1f - MathF.Exp(-FollowSmoothing * Time.DeltaTime);
+        Transform.Position = Maths.Lerp(Transform.Position, desiredPos, tMove);
+
+        Float3 lookDir = Target.Transform.Position - Transform.Position;
+        if (Float3.LengthSquared(lookDir) > 0.0001f)
+        {
+            Quaternion desiredRot = Quaternion.LookRotation(Float3.Normalize(lookDir), Float3.UnitY);
+            float tLook = 1f - MathF.Exp(-LookSmoothing * Time.DeltaTime);
+            Transform.Rotation = Quaternion.Slerp(Transform.Rotation, desiredRot, tLook);
+        }
+    }
+}

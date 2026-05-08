@@ -1,0 +1,14 @@
+using Prowl.Runtime;
+
+public class {[className]} : MonoBehaviour
+{
+    public override void Start()
+    {
+
+    }
+
+    public override void Update()
+    {
+
+    }
+}
