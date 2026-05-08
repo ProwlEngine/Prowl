@@ -208,7 +208,11 @@ public class HierarchyPanel : DockPanel
                     _forceExpandedIds.Clear();
                 }
 
-                float scrollHeight = height - EditorTheme.RowHeight - 22;
+                // Account for toolbar + scene name header + margins + optional prefab breadcrumb
+                float usedHeight = ToolbarHeight + EditorTheme.RowHeight + 12; // toolbar + scene header + margins
+                if (Prefabs.PrefabEditingMode.IsEditing)
+                    usedHeight += 28; // prefab breadcrumb row + margins
+                float scrollHeight = height - usedHeight;
                 var roots = GetDisplayRoots(scene);
                 var treeNodes = new List<TreeNode>();
                 var flatObjects = new List<object>();
