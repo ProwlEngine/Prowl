@@ -332,20 +332,23 @@ public sealed class TreeBuilder
                     return;
                 }
 
-                // We walk the flat list, skipping children of collapsed parents.
-                // The caller provides nodes in depth-first order. When we encounter
-                // a collapsed parent, we skip everything with depth > parent.depth
-                // until we find a sibling at the same or lesser depth.
-                int skipUntilDepth = int.MaxValue;
+                // We walk the flat list in depth-first order. Expandable parents get an
+                // animated wrapper around their children that lerps height 0..Auto.
+                // A stack tracks open wrappers so we close them when depth decreases.
+
+                // Stack of (parentDepth, IDisposable wrapper scope)
+                var wrapperStack = new Stack<(int depth, IDisposable scope)>();
 
                 for (int i = 0; i < nodes.Count; i++)
                 {
                     var node = nodes[i];
 
-                    // Skip children of collapsed parents
-                    if (node.Depth > skipUntilDepth)
-                        continue;
-                    skipUntilDepth = int.MaxValue; // reset skip
+                    // Close any wrappers for parents we've moved past
+                    while (wrapperStack.Count > 0 && node.Depth <= wrapperStack.Peek().depth)
+                    {
+                        var (_, scope) = wrapperStack.Pop();
+                        scope.Dispose();
+                    }
 
                     bool isExpandable = node.HasChildren && !node.IsLeaf;
                     string expKey = expandPrefix + node.Id;
@@ -361,15 +364,47 @@ public sealed class TreeBuilder
                             stateHandle, expKey, node.DefaultExpanded);
                     }
 
-                    // If collapsed, skip children
-                    if (isExpandable && !isExpanded)
-                        skipUntilDepth = node.Depth;
-
                     bool isSelected = _isSelected?.Invoke(node) ?? false;
                     bool isPinged = _isPinged?.Invoke(node) ?? false;
 
                     DrawNode(font, ink, metrics, rounding, stateHandle, expandPrefix, nodes,
                         node, i, isSelected, isExpanded, isExpandable, isPinged);
+
+                    // If this node is expandable, open an animated wrapper for its children
+                    if (isExpandable)
+                    {
+                        string animId = $"{_id}_anim_{node.Id}";
+                        float anim = _paper.AnimateBool(isExpanded, 0.15f, id: animId);
+
+                        if (!isExpanded && anim <= float.Epsilon)
+                        {
+                            // Fully collapsed and animation done - skip all children
+                            int parentDepth = node.Depth;
+                            while (i + 1 < nodes.Count && nodes[i + 1].Depth > parentDepth)
+                                i++;
+                        }
+                        else
+                        {
+                            // Animating or expanded - wrap children in a height-lerped container
+                            var wrapper = _paper.Column($"{_id}_cw_{node.Id}")
+                                .Width(UnitValue.Stretch())
+                                .Height(UnitValue.Lerp(0, UnitValue.Auto, anim));
+
+                            // Only clip during animation (not at rest) since Clip isn't cheap
+                            bool animating = anim > float.Epsilon && anim < 1f - float.Epsilon;
+                            if (animating)
+                                wrapper.Clip();
+
+                            wrapperStack.Push((node.Depth, wrapper.Enter()));
+                        }
+                    }
+                }
+
+                // Close any remaining open wrappers
+                while (wrapperStack.Count > 0)
+                {
+                    var (_, scope) = wrapperStack.Pop();
+                    scope.Dispose();
                 }
             });
     }
