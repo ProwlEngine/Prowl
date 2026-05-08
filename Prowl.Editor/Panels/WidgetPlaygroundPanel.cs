@@ -37,6 +37,7 @@ public class WidgetPlaygroundPanel : DockPanel
     private TestEnum _testEnum = TestEnum.Option2;
 
     public enum TestEnum { Option1, Option2, Option3, SuperLongOptionName }
+
     private Prowl.Runtime.AnimationCurve _curve = new();
     private TestComponent _testObject = new();
 

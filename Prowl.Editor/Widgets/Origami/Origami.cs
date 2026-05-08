@@ -240,6 +240,16 @@ public static class Origami
     public static ButtonGroupBuilder ButtonGroup(Paper paper, string id, int selectedIndex, Action<int> setter)
         => new ButtonGroupBuilder(paper, id, selectedIndex, setter, Current);
 
+    // ── Tree factories ─────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a tree view. Provide nodes as a flat depth-first list via
+    /// <see cref="TreeBuilder.Nodes"/>; chain callbacks for selection, expand, checkbox,
+    /// drag-drop, rename, context menu; call <see cref="TreeBuilder.Show"/> to render.
+    /// </summary>
+    public static TreeBuilder Tree(Paper paper, string id, float width, float height)
+        => new TreeBuilder(paper, id, Current).Size(width, height);
+
     // ── Slider factories ─────────────────────────────────────────
 
     /// <summary>
