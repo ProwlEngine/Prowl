@@ -367,6 +367,7 @@ public static class ContextMenuHelper
 
             // Close any previously open menu
             _closeCurrentMenu?.Invoke();
+            _closeCurrentMenu = null;
 
             paper.SetElementStorage(parentEl, $"{id}_open", true);
             paper.SetElementStorage(parentEl, $"{id}_x", (float)e.RelativePosition.X);
@@ -375,7 +376,11 @@ public static class ContextMenuHelper
 
         if (isOpen)
         {
-            Action close = () => paper.SetElementStorage(parentEl, $"{id}_open", false);
+            Action close = () =>
+            {
+                if (parentEl.IsValid && paper.HasElementStorage(parentEl, $"{id}_open")) // If it doesnt have an open storage, it means the parent element was likely destroyed (this is a different element now), so we can skip setting it to false
+                    paper.SetElementStorage(parentEl, $"{id}_open", false);
+            };
             _closeCurrentMenu = close;
 
             var builder = new ContextMenuBuilder();
