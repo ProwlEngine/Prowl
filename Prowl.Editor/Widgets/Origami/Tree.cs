@@ -138,8 +138,8 @@ public sealed class TreeBuilder
     // Node data
     private List<TreeNode>? _nodes;
 
-    // Layout
-    private float _rowHeight = 22f;
+    // Layout - default to 0 meaning "use theme HeaderHeight"
+    private float _rowHeight;
     private float _indentSize = 16f;
     private float _width;
     private float _height;
@@ -309,6 +309,10 @@ public sealed class TreeBuilder
         var ink = _theme.Ink;
         var metrics = _theme.Metrics;
         float rounding = metrics.Rounding;
+
+        // Resolve row height from theme if not explicitly set
+        if (_rowHeight <= 0)
+            _rowHeight = metrics.HeaderHeight;
 
         // Expand state storage key prefix
         string expandPrefix = $"{_id}_exp_";
