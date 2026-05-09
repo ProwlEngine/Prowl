@@ -40,7 +40,11 @@ public class ProjectPanel : DockPanel
     //   null   → mouse not over any folder drop target
     //   ""     → over the Assets root (represented by an empty relative path)
     //   "Foo"  → over folder 'Foo' (assets-relative)
-    private string? _dragHoverFolder;
+    private string? _dragHoverFolder;      // current frame's resolved hover target (from last frame's callbacks)
+    private string? _dragHoverFolderNext;  // written by deferred callbacks, promoted next frame
+    private string? _dragDwellFolder;     // folder being dwelled on for auto-open
+    private float _dragDwellTimer;        // seconds spent hovering the dwell folder
+    private const float DragDwellOpenDelay = 0.75f;
     // True while the mouse is over the content-area background (not just a folder item) —
     // lets "drop on empty space" fall back to the currently-open folder.
     private bool _contentBgHovered;
@@ -95,11 +99,44 @@ public class ProjectPanel : DockPanel
             }
         }
 
-        // Reset drag-hover tracking at the start of each frame. Each drop target's OnHover
-        // callback will repopulate this during DrawBody if the cursor is over it. Without
-        // the reset, leaving a folder with the mouse would keep the stale hover path.
-        _dragHoverFolder = null;
+        // Promote deferred hover target to current, then always clear the next slot.
+        // Hover callbacks will re-set it this frame if the mouse is still over a folder.
+        // On the drop frame, we keep the last promoted value (don't null it out).
+        if (DragDrop.IsDropFrame)
+        {
+            // Drop frame: _dragHoverFolder already has the right value from last promotion
+        }
+        else
+        {
+            _dragHoverFolder = _dragHoverFolderNext;
+            _dragHoverFolderNext = null;
+        }
         _contentBgHovered = false;
+
+        // Drag-dwell auto-open: if hovering the same folder for DragDwellOpenDelay, navigate into it
+        if (DragDrop.IsDragging && _dragHoverFolder != null)
+        {
+            if (_dragHoverFolder == _dragDwellFolder)
+            {
+                _dragDwellTimer += (float)Runtime.Time.UnscaledDeltaTime;
+                if (_dragDwellTimer >= DragDwellOpenDelay)
+                {
+                    _currentFolder = _dragDwellFolder;
+                    _dragDwellFolder = null;
+                    _dragDwellTimer = 0f;
+                }
+            }
+            else
+            {
+                _dragDwellFolder = _dragHoverFolder;
+                _dragDwellTimer = 0f;
+            }
+        }
+        else
+        {
+            _dragDwellFolder = null;
+            _dragDwellTimer = 0f;
+        }
 
         using (paper.Column("proj_root").Size(width, height).Enter())
         {
@@ -336,7 +373,9 @@ public class ProjectPanel : DockPanel
     /// </summary>
     private static bool CanAcceptAssetDropInto(string destRelFolder)
     {
-        if (!DragDrop.IsDraggingType<AssetDragPayload>()) return false;
+        // Use HasPayloadType (not IsDraggingType) so this works on the drop frame
+        // when IsDragging is already false but the payload is still available.
+        if (!DragDrop.HasPayloadType<AssetDragPayload>()) return false;
         var payload = (AssetDragPayload)DragDrop.Payload!;
 
         foreach (var rawSrc in payload.AssetPaths)
@@ -431,7 +470,7 @@ public class ProjectPanel : DockPanel
                 .OnHover((n, normY) =>
                 {
                     if (DragDrop.IsDragging || DragDrop.IsDropFrame)
-                        _dragHoverFolder = (string)n.UserData!;
+                        _dragHoverFolderNext = (string)n.UserData!;
                 })
                 .CustomRowContent((p, node, isSel, isExp) =>
                 {
@@ -751,7 +790,7 @@ public class ProjectPanel : DockPanel
             {
                 var it = (ContentItem)n.UserData!;
                 if (it.IsFolder && (DragDrop.IsDragging || DragDrop.IsDropFrame))
-                    _dragHoverFolder = it.RelativePath;
+                    _dragHoverFolderNext = it.RelativePath;
             })
             .IsPinged(n =>
             {
@@ -1138,7 +1177,7 @@ public class ProjectPanel : DockPanel
             .OnHover(item, (it, _) =>
             {
                 if (!it.IsFolder) return;
-                if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolder = it.RelativePath;
+                if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolderNext = it.RelativePath;
             })
             .Tooltip(item.Name)
             .OnPostLayout((handle, rect) =>
