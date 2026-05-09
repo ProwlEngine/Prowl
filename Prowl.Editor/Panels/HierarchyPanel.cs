@@ -28,7 +28,6 @@ public class HierarchyPanel : DockPanel
     // Rename state is managed by RenameOverlay
 
     private const float ToolbarHeight = 30f;
-    private const float IndentSize = 16f;
 
     // Drag-drop state
     private bool _assetDropTarget;
@@ -37,13 +36,12 @@ public class HierarchyPanel : DockPanel
     private string? _dragHoverTargetId;
     private float _dragHoverNormalizedY;
 
-
-    // Track expanded state per GO identifier
-    private static readonly Dictionary<string, bool> _expandedState = new();
-
     // Ping state which GOs in the hierarchy match the pinged GUID
     private static Guid _lastHierarchyPingGuid;
     private static readonly HashSet<GameObject> _pingedGameObjects = new();
+
+    // IDs of nodes that need force-expanding (parents of pinged GOs)
+    private readonly HashSet<string> _forceExpandedIds = new();
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -183,7 +181,6 @@ public class HierarchyPanel : DockPanel
                 }
 
                 // Handle ping search for the pinged GUID among GameObjects and their component AssetRefs.
-                // Done BEFORE building the flat list so parent-expansion affects what FlattenVisible walks.
                 bool pingIsNew = false;
                 if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastHierarchyPingGuid)
                 {
@@ -191,13 +188,14 @@ public class HierarchyPanel : DockPanel
                     _pingedGameObjects.Clear();
                     FindGameObjectsWithGuid(scene, Selection.PingedGuid, _pingedGameObjects);
 
-                    // Expand parents so all pinged GOs are visible
+                    // Collect parent IDs to force-expand so pinged GOs are visible
+                    _forceExpandedIds.Clear();
                     foreach (var pinged in _pingedGameObjects)
                     {
                         var parent = pinged.Parent;
                         while (parent.IsValid())
                         {
-                            _expandedState[parent.Identifier.ToString()] = true;
+                            _forceExpandedIds.Add(parent.Identifier.ToString());
                             parent = parent.Parent;
                         }
                     }
@@ -207,51 +205,120 @@ public class HierarchyPanel : DockPanel
                 {
                     _lastHierarchyPingGuid = Guid.Empty;
                     _pingedGameObjects.Clear();
+                    _forceExpandedIds.Clear();
                 }
 
-                float scrollHeight = height - EditorTheme.RowHeight - 22;
+                // Account for toolbar + scene name header + margins + optional prefab breadcrumb
+                float usedHeight = ToolbarHeight + EditorTheme.RowHeight + 12; // toolbar + scene header + margins
+                if (Prefabs.PrefabEditingMode.IsEditing)
+                    usedHeight += 28; // prefab breadcrumb row + margins
+                float scrollHeight = height - usedHeight;
                 var roots = GetDisplayRoots(scene);
-                var flatList = new List<GameObject>();
+                var treeNodes = new List<TreeNode>();
+                var flatObjects = new List<object>();
                 foreach (var root in roots)
-                    FlattenVisible(root, flatList);
-                var flatObjects = flatList.Select(g => (object)g).ToList();
+                    BuildNodeList(root, 0, treeNodes, flatObjects);
 
                 // Scroll-to-ping: when a newly-pinged GO lives in the scene, center its row in the
-                // scroll view so the yellow highlight is actually visible. Uses the flat list index
-                // (post-expansion) and the scroll view's known row height.
+                // scroll view so the yellow highlight is actually visible.
                 if (pingIsNew)
                 {
                     int pingIndex = -1;
-                    for (int i = 0; i < flatList.Count; i++)
+                    for (int i = 0; i < treeNodes.Count; i++)
                     {
-                        if (_pingedGameObjects.Contains(flatList[i])) { pingIndex = i; break; }
+                        if (_pingedGameObjects.Contains((GameObject)treeNodes[i].UserData!)) { pingIndex = i; break; }
                     }
                     if (pingIndex >= 0)
                     {
                         float rowTotal = EditorTheme.RowHeight + 2f; // row + vertical spacing
                         float targetY = pingIndex * rowTotal - (scrollHeight * 0.5f) + rowTotal * 0.5f;
-                        Origami.ScrollTo("hier_scroll", new Float2(0, targetY));
+                        Origami.ScrollTo("hier_tree_scroll", new Float2(0, targetY));
                     }
                 }
 
                 // Tree view
-                Origami.ScrollView(paper, "hier_scroll", width, scrollHeight).Body(() =>
-                {
-                    if (roots.Count == 0)
+                Origami.Tree(paper, "hier_tree", width, scrollHeight)
+                    .Nodes(treeNodes)
+                    .MultiSelect()
+                    .Reorderable()
+                    .IsSelected(n => Selection.IsSelected((GameObject)n.UserData!))
+                    .OnSelectModified((e, ctrl, shift) =>
                     {
-                        paper.Box("hier_empty_scene").Height(40)
-                            .Text("Scene is empty", font)
-                            .TextColor(EditorTheme.Ink300)
-                            .FontSize(EditorTheme.FontSize - 2)
-                            .Alignment(TextAlignment.MiddleCenter);
-                    }
+                        if (DragDrop.IsDragging || DragDrop.IsDropFrame) return;
+                        var go = (GameObject)e.Node.UserData!;
+                        Selection.HandleListClick(go, (IReadOnlyList<object>)flatObjects, e.Index, ctrl, shift);
+                    })
+                    .OnRightClick(e =>
+                    {
+                        var go = (GameObject)e.Node.UserData!;
+                        if (!Selection.IsSelected(go)) Selection.AddToSelection(go);
+                    })
+                    .OnDragStart(n =>
+                    {
+                        if (DragDrop.IsDragging) return;
+                        var go = (GameObject)n.UserData!;
+                        var selected = Selection.GetSelected<GameObject>().ToArray();
+                        if (selected.Length > 0 && Selection.IsSelected(go))
+                            DragDrop.StartDrag(new GameObjectDragPayload(selected));
+                        else
+                            DragDrop.StartDrag(new GameObjectDragPayload(go));
+                    })
+                    .OnHover((n, normY) =>
+                    {
+                        if (!DragDrop.IsDragging || DragDrop.Payload is not GameObjectDragPayload) return;
+                        var go = (GameObject)n.UserData!;
+                        _dragHoverTarget = go;
+                        _dragHoverTargetId = go.Identifier.ToString();
+                        _dragHoverNormalizedY = normY;
+                    })
+                    .CustomRowContent((paper, node, isSel, isExp) =>
+                    {
+                        if (font == null) return;
+                        var go = (GameObject)node.UserData!;
+                        string goId = go.Identifier.ToString();
 
-                    int drawIndex = 0;
-                    foreach (var root in roots)
-                    {
-                        DrawGameObjectNode(paper, font, root, 0, flatObjects, ref drawIndex);
-                    }
-                });
+                        // Icon
+                        paper.Box($"hier_ico_{goId}")
+                            .Width(16).Height(EditorTheme.RowHeight)
+                            .Text(node.Icon, font)
+                            .TextColor(node.IconColor ?? EditorTheme.Ink400)
+                            .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+
+                        // Name or rename field
+                        if (RenameOverlay.IsRenaming(goId))
+                        {
+                            RenameOverlay.Draw(paper, $"hier_rename_{goId}");
+                        }
+                        else
+                        {
+                            paper.Box($"hier_name_{goId}")
+                                .Height(EditorTheme.RowHeight).ChildLeft(4)
+                                .Text(go.Name, font)
+                                .TextColor(node.LabelColor ?? EditorTheme.Ink500)
+                                .FontSize(EditorTheme.FontSize - 1)
+                                .Alignment(TextAlignment.MiddleLeft);
+                        }
+
+                        // Visibility eye
+                        paper.Box($"hier_vis_{goId}")
+                            .Width(18).Height(EditorTheme.RowHeight)
+                            .Text(node.TrailingIcon ?? "", font)
+                            .TextColor(node.TrailingIconColor ?? EditorTheme.Ink400)
+                            .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
+                            .StopEventPropagation()
+                            .OnClick(go, (g, _) =>
+                            {
+                                Undo.RecordGameObjectChange(g, "Toggle Visibility", g.Enabled, !g.Enabled, (x, e) => x.Enabled = e);
+                                g.Enabled = !g.Enabled;
+                            });
+
+                        // Per-GameObject right-click menu
+                        BuildGameObjectContextMenu(paper, $"hier_go_ctx_{goId}");
+                    })
+                    .IsPinged(n => _pingedGameObjects.Contains((GameObject)n.UserData!) && Selection.PingedGuid != Guid.Empty)
+                    .PingAlpha(() => Selection.GetPingAlpha())
+                    .EmptyMessage("Scene is empty")
+                    .Show();
 
                 // --- All drop handling uses hier_bg (the stable outer background) ---
 
@@ -372,14 +439,11 @@ public class HierarchyPanel : DockPanel
         }
     }
 
-    private void DrawGameObjectNode(Paper paper, Prowl.Scribe.FontFile font,
-        GameObject go, int depth, List<object> flatList, ref int drawIndex)
+    private void BuildNodeList(GameObject go, int depth, List<TreeNode> nodes, List<object> flatObjects)
     {
-        // Skip hidden objects
         if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
             return;
 
-        // Filter by search
         if (!string.IsNullOrEmpty(_searchText))
         {
             if (!go.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
@@ -388,166 +452,43 @@ public class HierarchyPanel : DockPanel
         }
 
         string goId = go.Identifier.ToString();
-        bool isSelected = Selection.IsSelected(go);
-        bool hasChildren = go.Children.Count > 0
+        bool hasVisibleChildren = go.Children.Count > 0
             && go.Children.Any(c => !c.HideFlags.HasFlag(HideFlags.Hide) && !c.HideFlags.HasFlag(HideFlags.HideAndDontSave));
-        bool isExpanded = _expandedState.GetValueOrDefault(goId, false);
-        float indent = depth * IndentSize;
-        int currentIndex = drawIndex++;
 
-        string icon = GetGameObjectIcon(go);
-
-        // Determine drop visual for this node during drag
-        bool isDragTarget = DragDrop.IsDragging && _dragHoverTargetId == goId;
-        DropPosition? dragDropPos = null;
-        if (isDragTarget)
+        // Determine drop indicator for this node
+        TreeDropPosition? dropInd = null;
+        if (DragDrop.IsDragging && _dragHoverTargetId == goId)
         {
-            if (_dragHoverNormalizedY < 0.25f) dragDropPos = DropPosition.Above;
-            else if (_dragHoverNormalizedY > 0.75f) dragDropPos = DropPosition.Below;
-            else dragDropPos = DropPosition.Into;
+            if (_dragHoverNormalizedY < 0.25f) dropInd = TreeDropPosition.Above;
+            else if (_dragHoverNormalizedY > 0.75f) dropInd = TreeDropPosition.Below;
+            else dropInd = TreeDropPosition.Into;
         }
 
-        // Drop indicator above
-        if (dragDropPos == DropPosition.Above)
+        var node = new TreeNode
         {
-            paper.Box($"hier_drop_above_{goId}")
-                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
-                .BackgroundColor(EditorTheme.Purple400);
-        }
+            Id = goId,
+            Label = go.Name,
+            Icon = GetGameObjectIcon(go),
+            IconColor = go.EnabledInHierarchy ? null : EditorTheme.Ink300,
+            LabelColor = GetPrefabTextColor(go),
+            HasChildren = hasVisibleChildren,
+            Depth = depth,
+            UserData = go,
+            TrailingIcon = go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash,
+            TrailingIconColor = go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300,
+            DropIndicator = dropInd,
+        };
 
-        bool isDropInto = dragDropPos == DropPosition.Into;
-        bool isPinged = _pingedGameObjects.Contains(go) && Selection.PingedGuid != Guid.Empty;
+        // Force expand parents of pinged nodes
+        if (_forceExpandedIds.Contains(goId))
+            node.OverrideExpanded = true;
 
-        using (paper
-            .Row($"hier_go_{goId}")
-            .Height(EditorTheme.RowHeight)
-            .BackgroundColor(isSelected ? EditorTheme.Purple400
-                : isDropInto ? Color.FromArgb(60, EditorTheme.Purple400) : Color.Transparent)
-            .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-            .Rounded(4)
-            .Margin(indent + 8, 0, 0, 0)
-            .StopEventPropagation()
-            .OnClick((go, currentIndex, flatList), (cap, e) =>
-            {
-                if (DragDrop.IsDragging || DragDrop.IsDropFrame) return;
-                bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
-                bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
-                Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
-            })
-            .OnDoubleClick(goId, (id, _) =>
-            {
-                _expandedState[id] = !_expandedState.GetValueOrDefault(id, false);
-            })
-            .OnRightClick(go, (g, _) => { if (!Selection.IsSelected(g)) Selection.AddToSelection(g); })
-            .OnDragStart(go, (dragGO, _) =>
-            {
-                if (DragDrop.IsDragging) return;
-                var selected = Selection.GetSelected<GameObject>().ToArray();
-                if (selected.Length > 0 && Selection.IsSelected(dragGO))
-                    DragDrop.StartDrag(new GameObjectDragPayload(selected));
-                else
-                    DragDrop.StartDrag(new GameObjectDragPayload(dragGO));
-            })
-            .OnHover(go, (g, e) =>
-            {
-                if (!DragDrop.IsDragging || DragDrop.Payload is not GameObjectDragPayload) return;
-                _dragHoverTarget = g;
-                _dragHoverTargetId = g.Identifier.ToString();
-                _dragHoverNormalizedY = (float)e.NormalizedPosition.Y;
-            })
-            .OnPostLayout((handle, rect) =>
-            {
-                if (!isPinged) return;
-                paper.Draw(ref handle, (canvas, r) =>
-                {
-                    float alpha = Selection.GetPingAlpha();
-                    if (alpha <= 0f) return;
-                    int fillA = (int)(alpha * 60);
-                    int borderA = (int)(alpha * 200);
-                    var fillColor = Color.FromArgb(fillA, 255, 220, 50);
-                    var borderColor = Color.FromArgb(borderA, 255, 200, 0);
-                    float x = (float)r.Min.X, y = (float)r.Min.Y;
-                    float w = (float)r.Size.X, h = (float)r.Size.Y;
-                    canvas.RoundedRectFilled(x, y, w, h, 4, 4, 4, 4, fillColor);
-                    canvas.SetStrokeColor(borderColor);
-                    canvas.SetStrokeWidth(2f);
-                    canvas.BeginPath();
-                    canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, 3, 3, 3, 3);
-                    canvas.Stroke();
-                });
-            })
-            .Enter())
-        {
-            // Expand arrow
-            if (hasChildren)
-            {
-                paper.Box($"hier_arr_{goId}")
-                    .Width(14)
-                    .Height(EditorTheme.RowHeight)
-                    .Text(EditorGUI.FoldoutIcon(isExpanded), font)
-                    .TextColor(EditorTheme.Ink400)
-                    .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(goId, (id, _) =>
-                    {
-                        _expandedState[id] = !_expandedState.GetValueOrDefault(id, false);
-                    })
-                    .StopEventPropagation();
-            }
-            else
-            {
-                paper.Box($"hier_arr_{goId}").Width(14).Height(EditorTheme.RowHeight);
-            }
+        nodes.Add(node);
+        flatObjects.Add(go);
 
-            // Icon
-            paper.Box($"hier_ico_{goId}")
-                .Width(16).Height(EditorTheme.RowHeight)
-                .Text(icon, font)
-                .TextColor(go.EnabledInHierarchy ? EditorTheme.Ink400 : EditorTheme.Ink300)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-
-            // Name or rename field
-            if (RenameOverlay.IsRenaming(goId))
-            {
-                RenameOverlay.Draw(paper, $"hier_rename_{goId}");
-            }
-            else
-            {
-                paper.Box($"hier_name_{goId}")
-                    .Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(go.Name, font)
-                    .TextColor(GetPrefabTextColor(go))
-                    .FontSize(EditorTheme.FontSize - 1)
-                    .Alignment(TextAlignment.MiddleLeft);
-            }
-
-            // Enable/disable toggle (eye icon)
-            paper.Box($"hier_vis_{goId}")
-                .Width(18).Height(EditorTheme.RowHeight)
-                .Text(go.Enabled ? EditorIcons.Eye : EditorIcons.EyeSlash, font)
-                .TextColor(go.Enabled ? EditorTheme.Ink400 : EditorTheme.Ink300)
-                .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                .StopEventPropagation()
-                .OnClick(go, (g, _) => { Undo.RecordGameObjectChange(g, "Toggle Visibility", g.Enabled, !g.Enabled, (x, e) => x.Enabled = e); g.Enabled = !g.Enabled; });
-
-
-            // Per-GameObject right-click menu
-            BuildGameObjectContextMenu(paper, $"hier_go_ctx_{goId}");
-        }
-
-        // Drop indicator below
-        if (dragDropPos == DropPosition.Below)
-        {
-            paper.Box($"hier_drop_below_{goId}")
-                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
-                .BackgroundColor(EditorTheme.Purple400);
-        }
-
-        // Draw children
-        if (isExpanded && hasChildren)
-        {
-            foreach (var child in go.Children)
-                DrawGameObjectNode(paper, font, child, depth + 1, flatList, ref drawIndex);
-        }
+        // Recurse children (the tree widget handles skipping collapsed children internally)
+        foreach (var child in go.Children)
+            BuildNodeList(child, depth + 1, nodes, flatObjects);
     }
 
     // ================================================================
@@ -590,7 +531,6 @@ public class HierarchyPanel : DockPanel
                         continue;
                     }
                     dragged.SetParent(target);
-                    _expandedState[targetId] = true;
                     break;
 
                 case DropPosition.Above:
@@ -924,22 +864,6 @@ public class HierarchyPanel : DockPanel
             .Where(go => !go.HideFlags.HasFlag(HideFlags.Hide)
                       && !go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
             .ToList();
-    }
-
-    private void FlattenVisible(GameObject go, List<GameObject> list)
-    {
-        if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
-            return;
-
-        list.Add(go);
-
-        string goId = go.Identifier.ToString();
-        bool isExpanded = _expandedState.GetValueOrDefault(goId, false);
-        if (isExpanded)
-        {
-            foreach (var child in go.Children)
-                FlattenVisible(child, list);
-        }
     }
 
     private static Color GetPrefabTextColor(GameObject go)

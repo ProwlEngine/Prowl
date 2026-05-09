@@ -78,6 +78,18 @@ public sealed class TreeNode
 
     /// <summary>Color for the trailing icon.</summary>
     public Color? TrailingIconColor;
+
+    /// <summary>
+    /// If set, overrides the internal expand state this frame AND persists it.
+    /// Use to force-expand parents of pinged/searched nodes.
+    /// </summary>
+    public bool? OverrideExpanded;
+
+    /// <summary>
+    /// If set, the tree draws a drop indicator (above/below bar or into-tint) on this node.
+    /// Set by the caller each frame based on drag state.
+    /// </summary>
+    public TreeDropPosition? DropIndicator;
 }
 
 /// <summary>Where a drag payload was dropped relative to a tree node.</summary>
@@ -126,8 +138,8 @@ public sealed class TreeBuilder
     // Node data
     private List<TreeNode>? _nodes;
 
-    // Layout
-    private float _rowHeight = 22f;
+    // Layout - default to 0 meaning "use theme HeaderHeight"
+    private float _rowHeight;
     private float _indentSize = 16f;
     private float _width;
     private float _height;
@@ -298,6 +310,10 @@ public sealed class TreeBuilder
         var metrics = _theme.Metrics;
         float rounding = metrics.Rounding;
 
+        // Resolve row height from theme if not explicitly set
+        if (_rowHeight <= 0)
+            _rowHeight = metrics.HeaderHeight;
+
         // Expand state storage key prefix
         string expandPrefix = $"{_id}_exp_";
 
@@ -320,41 +336,86 @@ public sealed class TreeBuilder
                     return;
                 }
 
-                // We walk the flat list, skipping children of collapsed parents.
-                // The caller provides nodes in depth-first order. When we encounter
-                // a collapsed parent, we skip everything with depth > parent.depth
-                // until we find a sibling at the same or lesser depth.
-                int skipUntilDepth = int.MaxValue;
+                // We walk the flat list in depth-first order. Expandable parents get an
+                // animated wrapper around their children that lerps height 0..Auto.
+                // A stack tracks open wrappers so we close them when depth decreases.
+
+                // Stack of (parentDepth, IDisposable wrapper scope)
+                var wrapperStack = new Stack<(int depth, IDisposable scope)>();
 
                 for (int i = 0; i < nodes.Count; i++)
                 {
                     var node = nodes[i];
 
-                    // Skip children of collapsed parents
-                    if (node.Depth > skipUntilDepth)
-                        continue;
-                    skipUntilDepth = int.MaxValue; // reset skip
+                    // Close any wrappers for parents we've moved past
+                    while (wrapperStack.Count > 0 && node.Depth <= wrapperStack.Peek().depth)
+                    {
+                        var (_, scope) = wrapperStack.Pop();
+                        scope.Dispose();
+                    }
 
                     bool isExpandable = node.HasChildren && !node.IsLeaf;
                     string expKey = expandPrefix + node.Id;
-                    bool isExpanded = isExpandable && _paper.GetElementStorage(
-                        stateHandle, expKey, node.DefaultExpanded);
-
-                    // If collapsed, skip children
-                    if (isExpandable && !isExpanded)
-                        skipUntilDepth = node.Depth;
+                    bool isExpanded;
+                    if (node.OverrideExpanded.HasValue)
+                    {
+                        isExpanded = isExpandable && node.OverrideExpanded.Value;
+                        _paper.SetElementStorage(stateHandle, expKey, node.OverrideExpanded.Value);
+                    }
+                    else
+                    {
+                        isExpanded = isExpandable && _paper.GetElementStorage(
+                            stateHandle, expKey, node.DefaultExpanded);
+                    }
 
                     bool isSelected = _isSelected?.Invoke(node) ?? false;
                     bool isPinged = _isPinged?.Invoke(node) ?? false;
 
-                    DrawNode(font, ink, metrics, rounding, stateHandle, node, i, isSelected, isExpanded,
-                        isExpandable, isPinged);
+                    DrawNode(font, ink, metrics, rounding, stateHandle, expandPrefix, nodes,
+                        node, i, isSelected, isExpanded, isExpandable, isPinged);
+
+                    // If this node is expandable, open an animated wrapper for its children
+                    if (isExpandable)
+                    {
+                        string animId = $"{_id}_anim_{node.Id}";
+                        float anim = _paper.AnimateBool(isExpanded, 0.15f, id: animId);
+
+                        if (!isExpanded && anim <= float.Epsilon)
+                        {
+                            // Fully collapsed and animation done - skip all children
+                            int parentDepth = node.Depth;
+                            while (i + 1 < nodes.Count && nodes[i + 1].Depth > parentDepth)
+                                i++;
+                        }
+                        else
+                        {
+                            // Animating or expanded - wrap children in a height-lerped container
+                            var wrapper = _paper.Column($"{_id}_cw_{node.Id}")
+                                .Width(UnitValue.Stretch())
+                                .Height(UnitValue.Lerp(0, UnitValue.Auto, anim));
+
+                            // Only clip during animation (not at rest) since Clip isn't cheap
+                            bool animating = anim > float.Epsilon && anim < 1f - float.Epsilon;
+                            if (animating)
+                                wrapper.Clip();
+
+                            wrapperStack.Push((node.Depth, wrapper.Enter()));
+                        }
+                    }
+                }
+
+                // Close any remaining open wrappers
+                while (wrapperStack.Count > 0)
+                {
+                    var (_, scope) = wrapperStack.Pop();
+                    scope.Dispose();
                 }
             });
     }
 
     private void DrawNode(Prowl.Scribe.FontFile? font, OrigamiRamp ink, OrigamiMetrics metrics,
-        float rounding, ElementHandle stateHandle, TreeNode node, int index, bool isSelected, bool isExpanded,
+        float rounding, ElementHandle stateHandle, string expandPrefix, List<TreeNode> allNodes,
+        TreeNode node, int index, bool isSelected, bool isExpanded,
         bool isExpandable, bool isPinged)
     {
         float indent = node.Depth * _indentSize;
@@ -364,7 +425,18 @@ public sealed class TreeBuilder
         var capturedNode = node;
         bool disabled = node.Disabled;
 
-        Color rowBg = isSelected ? EditorTheme.Purple400 : Color.Transparent;
+        // Drop indicator above
+        if (node.DropIndicator == TreeDropPosition.Above)
+        {
+            _paper.Box($"{rowId}_drop_above")
+                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
+                .BackgroundColor(EditorTheme.Purple400);
+        }
+
+        bool isDropInto = node.DropIndicator == TreeDropPosition.Into;
+        Color rowBg = isSelected ? EditorTheme.Purple400
+            : isDropInto ? Color.FromArgb(60, EditorTheme.Purple400.R, EditorTheme.Purple400.G, EditorTheme.Purple400.B)
+            : Color.Transparent;
         Color rowHover = isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200;
 
         // Build the row element
@@ -380,8 +452,9 @@ public sealed class TreeBuilder
         {
             if (_onSelectModified != null && _multiSelect)
             {
-                row.OnClick(_ =>
+                row.OnClick(e =>
                 {
+                    e.StopPropagation();
                     bool ctrl = _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
                     bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
                     _onSelectModified(new TreeNodeEvent(capturedNode, capturedIndex), ctrl, shift);
@@ -389,14 +462,26 @@ public sealed class TreeBuilder
             }
             else if (_onSelect != null)
             {
-                row.OnClick(_ => _onSelect(new TreeNodeEvent(capturedNode, capturedIndex)));
+                row.OnClick(e =>
+                {
+                    e.StopPropagation();
+                    _onSelect(new TreeNodeEvent(capturedNode, capturedIndex));
+                });
             }
 
             if (_onDoubleClick != null)
-                row.OnDoubleClick(_ => _onDoubleClick(new TreeNodeEvent(capturedNode, capturedIndex)));
+                row.OnDoubleClick(e =>
+                {
+                    e.StopPropagation();
+                    _onDoubleClick(new TreeNodeEvent(capturedNode, capturedIndex));
+                });
 
             if (_onRightClick != null)
-                row.OnRightClick(_ => _onRightClick(new TreeNodeEvent(capturedNode, capturedIndex)));
+                row.OnRightClick(e =>
+                {
+                    e.StopPropagation();
+                    _onRightClick(new TreeNodeEvent(capturedNode, capturedIndex));
+                });
 
             // Drag
             if (_onDragStart != null && (_canDrag == null || _canDrag(node)))
@@ -451,8 +536,27 @@ public sealed class TreeBuilder
                     .OnClick(_ =>
                     {
                         bool newState = !isExpanded;
+                        bool alt = _paper.IsKeyDown(PaperKey.LeftAlt) || _paper.IsKeyDown(PaperKey.RightAlt);
+
                         _paper.SetElementStorage(stateHandle, expKey, newState);
                         _onExpandChanged?.Invoke(capturedNode, newState);
+
+                        // Alt+Click: recursively expand/collapse all descendants
+                        if (alt)
+                        {
+                            int parentDepth = capturedNode.Depth;
+                            for (int di = capturedIndex + 1; di < allNodes.Count; di++)
+                            {
+                                var desc = allNodes[di];
+                                if (desc.Depth <= parentDepth) break;
+                                if (desc.HasChildren && !desc.IsLeaf)
+                                {
+                                    string descKey = expandPrefix + desc.Id;
+                                    _paper.SetElementStorage(stateHandle, descKey, newState);
+                                    _onExpandChanged?.Invoke(desc, newState);
+                                }
+                            }
+                        }
                     });
             }
             else
@@ -482,6 +586,14 @@ public sealed class TreeBuilder
             {
                 DrawDefaultContent(font, ink, metrics, node, rowId, isSelected, disabled);
             }
+        }
+
+        // Drop indicator below
+        if (node.DropIndicator == TreeDropPosition.Below)
+        {
+            _paper.Box($"{rowId}_drop_below")
+                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
+                .BackgroundColor(EditorTheme.Purple400);
         }
     }
 

@@ -27,19 +27,6 @@ public static class PackageExportDialog
     private static bool _includeProjectSettings;
     private static string _outputPath = "";
 
-    // Tree structure for folder grouping
-    private static List<TreeNode> _rootNodes = new();
-    private static HashSet<string> _expandedFolders = new();
-
-    private class TreeNode
-    {
-        public string Name = "";
-        public string FullPath = ""; // Relative asset path (empty for folders that are just grouping)
-        public bool IsFolder;
-        public bool IsDependency; // True if this asset was pulled in via dependency resolution
-        public List<TreeNode> Children = new();
-    }
-
     private const float DialogWidth = 550f;
     private const float DialogHeight = 480f;
     private const float RowHeight = 22f;
@@ -72,7 +59,6 @@ public static class PackageExportDialog
         _explicitPaths.Clear();
         _dependencyPaths.Clear();
         _enabledPaths.Clear();
-        _rootNodes.Clear();
     }
 
     /// <summary>
@@ -128,82 +114,6 @@ public static class PackageExportDialog
 
         // Reset enabled: all on by default
         _enabledPaths = new HashSet<string>(allPaths, StringComparer.OrdinalIgnoreCase);
-
-        BuildTree(allPaths);
-    }
-
-    private static void BuildTree(List<string> allPaths)
-    {
-        _rootNodes.Clear();
-        _expandedFolders.Clear();
-
-        var folderMap = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
-
-        TreeNode GetOrCreateFolder(string folderPath)
-        {
-            if (string.IsNullOrEmpty(folderPath))
-                return null!;
-
-            if (folderMap.TryGetValue(folderPath, out var existing))
-                return existing;
-
-            var node = new TreeNode
-            {
-                Name = Path.GetFileName(folderPath),
-                FullPath = folderPath,
-                IsFolder = true
-            };
-            folderMap[folderPath] = node;
-
-            string parent = Path.GetDirectoryName(folderPath)?.Replace('\\', '/') ?? "";
-            if (!string.IsNullOrEmpty(parent))
-            {
-                var parentNode = GetOrCreateFolder(parent);
-                parentNode.Children.Add(node);
-            }
-            else
-            {
-                _rootNodes.Add(node);
-            }
-
-            return node;
-        }
-
-        foreach (string path in allPaths)
-        {
-            string dir = Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
-            var fileNode = new TreeNode
-            {
-                Name = Path.GetFileName(path),
-                FullPath = path,
-                IsFolder = false,
-                IsDependency = _dependencyPaths.Contains(path)
-            };
-
-            if (!string.IsNullOrEmpty(dir))
-            {
-                var folder = GetOrCreateFolder(dir);
-                folder.Children.Add(fileNode);
-            }
-            else
-            {
-                _rootNodes.Add(fileNode);
-            }
-        }
-
-        SortNodes(_rootNodes);
-    }
-
-    private static void SortNodes(List<TreeNode> nodes)
-    {
-        nodes.Sort((a, b) =>
-        {
-            if (a.IsFolder != b.IsFolder) return a.IsFolder ? -1 : 1;
-            return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
-        });
-        foreach (var node in nodes)
-            if (node.Children.Count > 0)
-                SortNodes(node.Children);
     }
 
     // ================================================================
@@ -274,123 +184,170 @@ public static class PackageExportDialog
     {
         float treeHeight = DialogHeight - 32 - 90 - 60; // title - options - bottom bar
 
-        Origami.ScrollView(paper, "pkgexp_tree_scroll", DialogWidth - 16, treeHeight)
-            .Body(() =>
+        var nodes = BuildFlatNodeList();
+
+        Origami.Tree(paper, "pkgexp_tree", DialogWidth - 16, treeHeight)
+            .Nodes(nodes)
+            .Checkboxes()
+            .OnCheckedChanged((node, isChecked) =>
             {
-                foreach (var node in _rootNodes)
-                    DrawTreeNode(paper, font, node, 0);
-            });
+                string path = (string)node.UserData!;
+
+                if (node.HasChildren)
+                {
+                    // Folder: toggle all descendant files
+                    int folderIndex = nodes.IndexOf(node);
+                    for (int i = folderIndex + 1; i < nodes.Count; i++)
+                    {
+                        if (nodes[i].Depth <= node.Depth) break;
+                        if (nodes[i].IsLeaf)
+                        {
+                            string childPath = (string)nodes[i].UserData!;
+                            if (isChecked) _enabledPaths.Add(childPath);
+                            else _enabledPaths.Remove(childPath);
+                        }
+                    }
+                }
+                else
+                {
+                    // File: toggle single path
+                    if (isChecked) _enabledPaths.Add(path);
+                    else _enabledPaths.Remove(path);
+                }
+            })
+            .EmptyMessage("No assets to export.")
+            .Show();
     }
 
-    private static void DrawTreeNode(Paper paper, Prowl.Scribe.FontFile font, TreeNode node, int depth)
+    /// <summary>
+    /// Build a flat depth-first list of TreeNodes from the current paths for the Origami Tree widget.
+    /// </summary>
+    private static List<TreeNode> BuildFlatNodeList()
     {
-        float indent = depth * 16f;
-        string id = $"pkgexp_node_{node.FullPath.GetHashCode():X}";
+        var allPaths = new List<string>(_explicitPaths);
+        if (_includeDependencies)
+            allPaths.AddRange(_dependencyPaths);
 
-        if (node.IsFolder)
+        allPaths = allPaths
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Collect all unique folder paths and file entries
+        var folderSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string path in allPaths)
         {
-            bool expanded = _expandedFolders.Contains(node.FullPath);
-            bool allEnabled = AllChildrenEnabled(node);
-            bool anyEnabled = AnyChildrenEnabled(node);
-
-            using (paper.Row(id)
-                .Height(RowHeight)
-                .ChildLeft(indent + 4)
-                .Hovered.BackgroundColor(EditorTheme.Ink100).End()
-                .Enter())
+            string? dir = Path.GetDirectoryName(path)?.Replace('\\', '/');
+            while (!string.IsNullOrEmpty(dir))
             {
-                // Expand arrow
-                paper.Box($"{id}_arrow")
-                    .Size(16, RowHeight)
-                    .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
-                    .TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 2)
-                    .Alignment(TextAlignment.MiddleCenter)
-                    .OnClick((_) =>
-                    {
-                        if (expanded) _expandedFolders.Remove(node.FullPath);
-                        else _expandedFolders.Add(node.FullPath);
-                    });
-
-                Origami.Checkbox(paper, $"{id}_chk", allEnabled, v =>
-                {
-                    SetFolderEnabled(node, v);
-                }).Show();
-
-                paper.Box($"{id}_ico")
-                    .Size(16, RowHeight)
-                    .Text(EditorIcons.Folder, font)
-                    .TextColor(Color.FromArgb(255, 220, 180, 80))
-                    .FontSize(EditorTheme.FontSize - 2)
-                    .Alignment(TextAlignment.MiddleCenter);
-
-                paper.Box($"{id}_name")
-                    .Height(RowHeight).ChildLeft(4)
-                    .Text(node.Name, font)
-                    .TextColor(anyEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 1)
-                    .Alignment(TextAlignment.MiddleLeft);
-            }
-
-            if (expanded)
-            {
-                foreach (var child in node.Children)
-                    DrawTreeNode(paper, font, child, depth + 1);
+                if (!folderSet.Add(dir)) break;
+                dir = Path.GetDirectoryName(dir)?.Replace('\\', '/');
             }
         }
-        else
+
+        // Build intermediate structure: for each folder, collect its direct children (folders + files)
+        // Then emit depth-first, folders sorted before files, alphabetical within each group.
+        var childFolders = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var childFiles = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string folder in folderSet)
         {
-            bool enabled = _enabledPaths.Contains(node.FullPath);
-            bool isDep = node.IsDependency;
+            string parent = Path.GetDirectoryName(folder)?.Replace('\\', '/') ?? "";
+            if (!childFolders.ContainsKey(parent))
+                childFolders[parent] = new List<string>();
+            childFolders[parent].Add(folder);
+        }
 
-            // Dependency items shown with a distinct tint
-            Color nameColor;
-            if (!enabled)
-                nameColor = EditorTheme.Ink300;
-            else if (isDep)
-                nameColor = Color.FromArgb(255, 140, 180, 220); // blue-ish tint for deps
-            else
-                nameColor = EditorTheme.Ink500;
+        foreach (string path in allPaths)
+        {
+            string parent = Path.GetDirectoryName(path)?.Replace('\\', '/') ?? "";
+            if (!childFiles.ContainsKey(parent))
+                childFiles[parent] = new List<string>();
+            childFiles[parent].Add(path);
+        }
 
-            using (paper.Row(id)
-                .Height(RowHeight)
-                .ChildLeft(indent + 20)
-                .Hovered.BackgroundColor(EditorTheme.Ink100).End()
-                .Enter())
+        var result = new List<TreeNode>();
+
+        void EmitChildren(string parentKey, int depth)
+        {
+            // Emit folders first, sorted
+            if (childFolders.TryGetValue(parentKey, out var folders))
             {
-                Origami.Checkbox(paper, $"{id}_chk", enabled, v =>
+                folders.Sort(StringComparer.OrdinalIgnoreCase);
+                foreach (string folderPath in folders)
                 {
-                    if (v) _enabledPaths.Add(node.FullPath);
-                    else _enabledPaths.Remove(node.FullPath);
-                }).Show();
+                    // Check if all/any descendant files are enabled
+                    bool allChecked = true;
+                    bool anyChecked = false;
+                    CheckDescendants(folderPath, ref allChecked, ref anyChecked);
 
-                string icon = FileIconRegistry.GetIconForFile(node.Name);
-                paper.Box($"{id}_ico")
-                    .Size(16, RowHeight)
-                    .Text(icon, font)
-                    .TextColor(isDep ? Color.FromArgb(255, 140, 180, 220) : EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 2)
-                    .Alignment(TextAlignment.MiddleCenter);
+                    result.Add(new TreeNode
+                    {
+                        Id = "f_" + folderPath,
+                        Label = Path.GetFileName(folderPath),
+                        Icon = EditorIcons.Folder,
+                        IconColor = Color.FromArgb(255, 220, 180, 80),
+                        HasChildren = true,
+                        DefaultExpanded = true,
+                        Depth = depth,
+                        Checked = allChecked,
+                        Indeterminate = !allChecked && anyChecked,
+                        UserData = folderPath
+                    });
 
-                paper.Box($"{id}_name")
-                    .Height(RowHeight).ChildLeft(4)
-                    .Text(node.Name, font)
-                    .TextColor(nameColor)
-                    .FontSize(EditorTheme.FontSize - 1)
-                    .Alignment(TextAlignment.MiddleLeft);
+                    EmitChildren(folderPath, depth + 1);
+                }
+            }
 
-                // Show "(dependency)" label for auto-included assets
-                if (isDep)
+            // Then files, sorted
+            if (childFiles.TryGetValue(parentKey, out var files))
+            {
+                files.Sort(StringComparer.OrdinalIgnoreCase);
+                foreach (string filePath in files)
                 {
-                    paper.Box($"{id}_dep_label")
-                        .Height(RowHeight).ChildLeft(4)
-                        .Text("(dependency)", font)
-                        .TextColor(Color.FromArgb(255, 100, 140, 180))
-                        .FontSize(EditorTheme.FontSize - 3)
-                        .Alignment(TextAlignment.MiddleLeft);
+                    bool isDep = _dependencyPaths.Contains(filePath);
+                    bool enabled = _enabledPaths.Contains(filePath);
+                    Color? labelColor = isDep ? Color.FromArgb(255, 140, 180, 220) : null;
+                    Color? iconColor = isDep ? Color.FromArgb(255, 140, 180, 220) : null;
+
+                    result.Add(new TreeNode
+                    {
+                        Id = "a_" + filePath,
+                        Label = Path.GetFileName(filePath),
+                        Icon = FileIconRegistry.GetIconForFile(filePath),
+                        IconColor = iconColor,
+                        LabelColor = labelColor,
+                        Badge = isDep ? "(dependency)" : null,
+                        BadgeColor = isDep ? Color.FromArgb(255, 100, 140, 180) : null,
+                        HasChildren = false,
+                        IsLeaf = true,
+                        Depth = depth,
+                        Checked = enabled,
+                        UserData = filePath
+                    });
                 }
             }
         }
+
+        void CheckDescendants(string folderPath, ref bool allChecked, ref bool anyChecked)
+        {
+            if (childFiles.TryGetValue(folderPath, out var files))
+            {
+                foreach (string f in files)
+                {
+                    if (_enabledPaths.Contains(f)) anyChecked = true;
+                    else allChecked = false;
+                }
+            }
+            if (childFolders.TryGetValue(folderPath, out var folders))
+            {
+                foreach (string sub in folders)
+                    CheckDescendants(sub, ref allChecked, ref anyChecked);
+            }
+        }
+
+        EmitChildren("", 0);
+        return result;
     }
 
     private static void DrawOptions(Paper paper, Prowl.Scribe.FontFile font)
@@ -499,53 +456,4 @@ public static class PackageExportDialog
         }
     }
 
-    // ================================================================
-    //  Tree helpers
-    // ================================================================
-
-    private static bool AllChildrenEnabled(TreeNode folder)
-    {
-        foreach (var child in folder.Children)
-        {
-            if (child.IsFolder)
-            {
-                if (!AllChildrenEnabled(child)) return false;
-            }
-            else
-            {
-                if (!_enabledPaths.Contains(child.FullPath)) return false;
-            }
-        }
-        return true;
-    }
-
-    private static bool AnyChildrenEnabled(TreeNode folder)
-    {
-        foreach (var child in folder.Children)
-        {
-            if (child.IsFolder)
-            {
-                if (AnyChildrenEnabled(child)) return true;
-            }
-            else
-            {
-                if (_enabledPaths.Contains(child.FullPath)) return true;
-            }
-        }
-        return false;
-    }
-
-    private static void SetFolderEnabled(TreeNode folder, bool enabled)
-    {
-        foreach (var child in folder.Children)
-        {
-            if (child.IsFolder)
-                SetFolderEnabled(child, enabled);
-            else
-            {
-                if (enabled) _enabledPaths.Add(child.FullPath);
-                else _enabledPaths.Remove(child.FullPath);
-            }
-        }
-    }
 }
