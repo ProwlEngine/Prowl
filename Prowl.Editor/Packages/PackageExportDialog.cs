@@ -85,7 +85,7 @@ public static class PackageExportDialog
 
             foreach (var depGuid in entry.Dependencies)
             {
-                string? depPath = db.GuidToPath(depGuid);
+                string? depPath = db.GuidToPathIncludingSubAssets(depGuid);
                 if (depPath == null || visited.Contains(depPath)) continue;
 
                 if (!explicitSet.Contains(depPath))

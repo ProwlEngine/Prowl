@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 using Prowl.Vector;
@@ -33,7 +34,7 @@ public static class TinyMathParser
         {
             if (matches[i].Value == "-" && (i == 0 || "^*/(-+".Contains(matches[i - 1].Value)))
             {
-                if (float.TryParse("-" + matches[i + 1].Value, out _)) tokens.Add("-" + matches[i++ + 1].Value);
+                if (float.TryParse("-" + matches[i + 1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out _)) tokens.Add("-" + matches[i++ + 1].Value);
             }
             else tokens.Add(matches[i].Value);
         }
@@ -46,7 +47,7 @@ public static class TinyMathParser
         Stack<string> operatorStack = new();
         foreach (string token in tokens)
         {
-            if (float.TryParse(token, out _) || Variables.ContainsKey(token))
+            if (float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out _) || Variables.ContainsKey(token))
                 output.Add(token);
             else if (token == "(")
                 operatorStack.Push(token);
@@ -79,7 +80,7 @@ public static class TinyMathParser
         Stack<float> stack = new();
         foreach (string token in postfix)
         {
-            if (float.TryParse(token, out float number))
+            if (float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out float number))
                 stack.Push(number);
             else if (Variables.TryGetValue(token, out float variableValue))
                 stack.Push(variableValue);

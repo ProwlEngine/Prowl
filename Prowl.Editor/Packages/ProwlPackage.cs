@@ -96,7 +96,9 @@ public static class ProwlPackage
                 {
                     foreach (var depGuid in entry.Dependencies)
                     {
-                        string? depPath = db.GuidToPath(depGuid);
+                        // Use GuidToPathIncludingSubAssets so sub-asset dependencies
+                        // resolve to their parent asset's file path
+                        string? depPath = db.GuidToPathIncludingSubAssets(depGuid);
                         if (depPath != null && !allPaths.Contains(depPath))
                             queue.Enqueue(depPath);
                     }
@@ -122,19 +124,31 @@ public static class ProwlPackage
             var entry = db.GetEntry(relPath);
 
             // Add asset file
-            archive.CreateEntryFromFile(absPath, "Assets/" + relPath.Replace('\\', '/'));
+            string zipRelPath = "Assets/" + relPath.Replace('\\', '/');
+            archive.CreateEntryFromFile(absPath, zipRelPath);
 
             // Add .meta file
             string metaPath = MetaFile.GetMetaPath(absPath);
             if (File.Exists(metaPath))
-                archive.CreateEntryFromFile(metaPath, "Assets/" + relPath.Replace('\\', '/') + ".meta");
+                archive.CreateEntryFromFile(metaPath, zipRelPath + ".meta");
+
+            // Add companion files (.bin for .gltf, .mtl for .obj, etc.)
+            foreach (var companion in GetCompanionFiles(absPath))
+            {
+                if (!File.Exists(companion)) continue;
+                string companionRel = Path.GetRelativePath(project.AssetsPath, companion).Replace('\\', '/');
+                string companionZip = "Assets/" + companionRel;
+                // Avoid duplicates (companion might also be a tracked asset)
+                if (archive.GetEntry(companionZip) == null)
+                    archive.CreateEntryFromFile(companion, companionZip);
+            }
 
             // Add thumbnail (with size header already baked in)
             if (entry != null)
             {
                 string thumbPath = ThumbnailGenerator.GetThumbnailPath(entry.Guid, project.ThumbnailsPath);
                 if (File.Exists(thumbPath))
-                    archive.CreateEntryFromFile(thumbPath, "Assets/" + relPath.Replace('\\', '/') + ".thumb");
+                    archive.CreateEntryFromFile(thumbPath, zipRelPath + ".thumb");
             }
 
             // Add to manifest
@@ -235,6 +249,31 @@ public static class ProwlPackage
             src.CopyTo(dst);
         }
 
+        // Extract any companion files (e.g., .bin for .gltf, .mtl for .obj)
+        // They're stored in the zip at the same relative path under Assets/
+        string assetDir = Path.GetDirectoryName(zipAssetPath)?.Replace('\\', '/') ?? "Assets";
+        foreach (var entry in archive.Entries)
+        {
+            string entryPath = entry.FullName.Replace('\\', '/');
+            // Skip the main asset, its meta, and its thumbnail
+            if (entryPath == zipAssetPath || entryPath == zipMetaPath || entryPath.EndsWith(".thumb"))
+                continue;
+            // Check if this entry is a companion in the same directory
+            string entryDir = Path.GetDirectoryName(entryPath)?.Replace('\\', '/') ?? "";
+            if (entryDir != assetDir) continue;
+            // Skip entries that are other tracked assets (they have their own .meta)
+            string companionMetaPath = entryPath + ".meta";
+            if (archive.GetEntry(companionMetaPath) != null) continue;
+
+            // This is a companion file - extract it
+            string companionRelPath = entryPath["Assets/".Length..];
+            string companionDest = Path.Combine(destAssetsPath, companionRelPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(companionDest)!);
+            using var csrc = entry.Open();
+            using var cdst = File.Create(companionDest);
+            csrc.CopyTo(cdst);
+        }
+
         return true;
     }
 
@@ -307,6 +346,69 @@ public static class ProwlPackage
     /// Collect all asset paths under a folder (recursive).
     /// Used when exporting a folder selection.
     /// </summary>
+    /// <summary>
+    /// Get companion/sidecar files that should be included alongside an asset.
+    /// E.g., .gltf -> .bin, .obj -> .mtl, plus any texture files referenced by relative URI.
+    /// </summary>
+    private static List<string> GetCompanionFiles(string absAssetPath)
+    {
+        var results = new List<string>();
+        string ext = Path.GetExtension(absAssetPath).ToLowerInvariant();
+        string dir = Path.GetDirectoryName(absAssetPath) ?? "";
+        string baseName = Path.GetFileNameWithoutExtension(absAssetPath);
+
+        switch (ext)
+        {
+            case ".gltf":
+                // GLTF text format can reference external .bin buffers and textures
+                string gltfBin = Path.Combine(dir, baseName + ".bin");
+                if (File.Exists(gltfBin)) results.Add(gltfBin);
+                // Scan for URI references in the GLTF JSON
+                try
+                {
+                    string gltfText = File.ReadAllText(absAssetPath);
+                    results.AddRange(ExtractUriReferences(gltfText, dir));
+                }
+                catch { }
+                break;
+
+            case ".obj":
+                // OBJ files reference .mtl material library files
+                string mtl = Path.Combine(dir, baseName + ".mtl");
+                if (File.Exists(mtl)) results.Add(mtl);
+                // Scan the .obj for mtllib directive
+                try
+                {
+                    foreach (var line in File.ReadLines(absAssetPath))
+                    {
+                        if (line.StartsWith("mtllib ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string mtlName = line["mtllib ".Length..].Trim();
+                            string mtlPath = Path.Combine(dir, mtlName);
+                            if (File.Exists(mtlPath)) results.Add(mtlPath);
+                        }
+                    }
+                }
+                catch { }
+                break;
+        }
+        return results;
+    }
+
+    /// <summary>Extract relative file URIs from a GLTF JSON string (buffers and images).</summary>
+    private static IEnumerable<string> ExtractUriReferences(string gltfJson, string baseDir)
+    {
+        // Simple regex to find "uri": "filename.ext" patterns (not data: URIs)
+        var matches = System.Text.RegularExpressions.Regex.Matches(gltfJson, @"""uri""\s*:\s*""([^""]+)""");
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            string uri = match.Groups[1].Value;
+            if (uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+            string fullPath = Path.GetFullPath(Path.Combine(baseDir, Uri.UnescapeDataString(uri)));
+            if (File.Exists(fullPath)) yield return fullPath;
+        }
+    }
+
     public static List<string> CollectFolderAssets(string folderRelativePath)
     {
         var project = Project.Current;

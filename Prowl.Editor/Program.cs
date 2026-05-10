@@ -35,10 +35,6 @@ public static class Program
 
         if (BuildMode)
         {
-            // Set invariant culture for consistent number parsing/formatting in the editor (e.g. asset import settings)
-            System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
-            System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
-
             ProjectSettingsRegistry.Initialize();
 
             var project = Project.Open(StartupProjectPath);

@@ -57,8 +57,6 @@ public class EditorApplication : Game
         Application.IsEditor = true;
         Application.IsPlaying = false;
 
-        // Set invariant culture for consistent number parsing/formatting in the editor (e.g. asset import settings)
-        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         InitializeFont();
 
         Resize(Window.Size.X, Window.Size.Y);
