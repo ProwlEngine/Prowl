@@ -10,6 +10,13 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+/// <summary>Height interpolation mode for terrain sampling.</summary>
+public enum TerrainInterpolation
+{
+    Bilinear,
+    Bicubic
+}
+
 /// <summary>Per-layer texture settings for terrain surface rendering.</summary>
 public class TerrainLayer
 {
@@ -104,13 +111,31 @@ public sealed class TerrainData : EngineObject, ISerializable
     public float Size = 1024f;
     public float Height = 100f;
 
+    /// <summary>Height interpolation mode for both CPU sampling and GPU shader.</summary>
+    public TerrainInterpolation Interpolation = TerrainInterpolation.Bicubic;
+
     /// <summary>
     /// Raw 16-bit heightmap. Values 0..kMaxHeight map to normalized 0..1.
     /// Use GetHeight/SetHeight for float access. Halves memory vs float[].
     /// </summary>
     public short[] Heights;
+    /// <summary>
+    /// Interleaved splatmap weights. For N layers, each pixel has N floats.
+    /// Layout: [pixel0_layer0, pixel0_layer1, ..., pixel0_layerN-1, pixel1_layer0, ...].
+    /// Length = SplatmapResolution * SplatmapResolution * LayerCount.
+    /// </summary>
     public float[] Splats;
-    public TerrainLayer[] Layers = [new(), new(), new(), new()];
+
+    /// <summary>Dynamic layer list. Each group of 4 layers maps to one RGBA splatmap texture.</summary>
+    public List<TerrainLayer> Layers = [new(), new(), new(), new()];
+
+    // --- Holes ---
+
+    /// <summary>
+    /// Per-pixel hole map at SplatmapResolution. 0 = hole (not rendered/no collision), 255 = solid.
+    /// Null means no holes (all solid).
+    /// </summary>
+    public byte[]? Holes;
 
     // --- Details/Grass ---
 
@@ -134,9 +159,11 @@ public sealed class TerrainData : EngineObject, ISerializable
     // --- GPU Textures ---
 
     [NonSerialized] private Texture2D? _heightmapTexture;
-    [NonSerialized] private Texture2D? _splatmapTexture;
+    [NonSerialized] private List<Texture2D>? _splatmapTextures;
     [NonSerialized] private bool _heightmapDirty = true;
     [NonSerialized] private bool _splatmapDirty = true;
+    [NonSerialized] private bool _holesDirty = true;
+    [NonSerialized] private Texture2D? _holesTexture;
     // TODO: wire up a GPU details rebuild path that consumes _detailsDirty (see _heightmapDirty/_splatmapDirty for the pattern).
 #pragma warning disable CS0414
     [NonSerialized] private bool _detailsDirty = true;
@@ -145,8 +172,9 @@ public sealed class TerrainData : EngineObject, ISerializable
     public TerrainData() : base("New TerrainData")
     {
         Heights = new short[HeightmapResolution * HeightmapResolution];
-        Splats = new float[SplatmapResolution * SplatmapResolution * 4];
-        for (int i = 0; i < Splats.Length; i += 4)
+        int lc = Layers.Count;
+        Splats = new float[SplatmapResolution * SplatmapResolution * lc];
+        for (int i = 0; i < Splats.Length; i += lc)
             Splats[i] = 1f;
 
         EnsureDetailLayers();
@@ -180,10 +208,17 @@ public sealed class TerrainData : EngineObject, ISerializable
         _heightmapDirty = true;
     }
 
-    /// <summary>Bilinear interpolated height in world units at normalized UV coordinates.</summary>
+    /// <summary>Interpolated height in world units at normalized UV coordinates.</summary>
     public float GetInterpolatedHeight(float u, float v)
     {
         if (Heights == null) return 0f;
+        return Interpolation == TerrainInterpolation.Bicubic
+            ? GetInterpolatedHeightBicubic(u, v)
+            : GetInterpolatedHeightBilinear(u, v);
+    }
+
+    private float GetInterpolatedHeightBilinear(float u, float v)
+    {
         float px = u * (HeightmapResolution - 1);
         float pz = v * (HeightmapResolution - 1);
         int x0 = Maths.Clamp((int)MathF.Floor(px), 0, HeightmapResolution - 1);
@@ -197,6 +232,85 @@ public sealed class TerrainData : EngineObject, ISerializable
         float h01 = Heights[z1 * HeightmapResolution + x0] * scale;
         float h11 = Heights[z1 * HeightmapResolution + x1] * scale;
         return ((h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz) * Height;
+    }
+
+    /// <summary>
+    /// Bicubic (Catmull-Rom) interpolation using the same 4-tap bilinear trick as the GPU shader.
+    /// This mirrors the GPU path exactly to ensure CPU/GPU height agreement.
+    /// </summary>
+    private float GetInterpolatedHeightBicubic(float u, float v)
+    {
+        // Mirror the GPU: coord = uv * texSize - 0.5
+        float texSize = HeightmapResolution;
+        float invTexSize = 1f / texSize;
+        float scale = 1f / kMaxHeight;
+
+        float coordX = u * texSize - 0.5f;
+        float coordZ = v * texSize - 0.5f;
+        float floorX = MathF.Floor(coordX);
+        float floorZ = MathF.Floor(coordZ);
+        float fx = coordX - floorX;
+        float fz = coordZ - floorZ;
+
+        // Catmull-Rom weights (same as GPU)
+        float fx2 = fx * fx, fx3 = fx2 * fx;
+        float fz2 = fz * fz, fz3 = fz2 * fz;
+
+        float w0x = -0.5f * fx3 + fx2 - 0.5f * fx;
+        float w1x = 1.5f * fx3 - 2.5f * fx2 + 1f;
+        float w2x = -1.5f * fx3 + 2f * fx2 + 0.5f * fx;
+        float w3x = 0.5f * fx3 - 0.5f * fx2;
+
+        float w0z = -0.5f * fz3 + fz2 - 0.5f * fz;
+        float w1z = 1.5f * fz3 - 2.5f * fz2 + 1f;
+        float w2z = -1.5f * fz3 + 2f * fz2 + 0.5f * fz;
+        float w3z = 0.5f * fz3 - 0.5f * fz2;
+
+        // Combine pairs for the bilinear trick
+        float s0x = w0x + w1x, s1x = w2x + w3x;
+        float s0z = w0z + w1z, s1z = w2z + w3z;
+        float f0x = w1x / s0x, f1x = w3x / s1x;
+        float f0z = w1z / s0z, f1z = w3z / s1z;
+
+        // Compute the 4 sample positions (matching GPU: (coord - 0.5 + f0) * invTexSize + 0.5 * invTexSize)
+        float t0x = (floorX - 0.5f + f0x) * invTexSize + 0.5f * invTexSize;
+        float t1x = (floorX + 1.5f + f1x) * invTexSize + 0.5f * invTexSize;
+        float t0z = (floorZ - 0.5f + f0z) * invTexSize + 0.5f * invTexSize;
+        float t1z = (floorZ + 1.5f + f1z) * invTexSize + 0.5f * invTexSize;
+
+        // Bilinear sample at each of the 4 positions (replicates GPU texture() with linear filtering)
+        float h00 = SampleBilinear(t0x, t0z, scale);
+        float h10 = SampleBilinear(t1x, t0z, scale);
+        float h01 = SampleBilinear(t0x, t1z, scale);
+        float h11 = SampleBilinear(t1x, t1z, scale);
+
+        // Blend (same as GPU)
+        float blendX = s1x / (s0x + s1x);
+        float blendZ = s1z / (s0z + s1z);
+        float row0 = h00 + (h10 - h00) * blendX;
+        float row1 = h01 + (h11 - h01) * blendX;
+        return (row0 + (row1 - row0) * blendZ) * Height;
+    }
+
+    /// <summary>Bilinear sample in UV space, matching GPU texture() with linear filtering.</summary>
+    private float SampleBilinear(float u, float v, float scale)
+    {
+        // GPU linear filtering: texel centers at (i+0.5)/N
+        // Convert UV to texel space, subtract 0.5 for center offset
+        float px = u * HeightmapResolution - 0.5f;
+        float pz = v * HeightmapResolution - 0.5f;
+        int x0 = Maths.Clamp((int)MathF.Floor(px), 0, HeightmapResolution - 1);
+        int z0 = Maths.Clamp((int)MathF.Floor(pz), 0, HeightmapResolution - 1);
+        int x1 = Maths.Min(x0 + 1, HeightmapResolution - 1);
+        int z1 = Maths.Min(z0 + 1, HeightmapResolution - 1);
+        float fx = px - x0, fz = pz - z0;
+        fx = Maths.Clamp(fx, 0f, 1f);
+        fz = Maths.Clamp(fz, 0f, 1f);
+        float h00 = Heights[z0 * HeightmapResolution + x0] * scale;
+        float h10 = Heights[z0 * HeightmapResolution + x1] * scale;
+        float h01 = Heights[z1 * HeightmapResolution + x0] * scale;
+        float h11 = Heights[z1 * HeightmapResolution + x1] * scale;
+        return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
     }
 
     public void ResizeHeightmap(int newRes)
@@ -256,32 +370,134 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     #region Splatmap
 
+    /// <summary>Number of active terrain layers.</summary>
+    public int LayerCount => Layers.Count;
+
     public float GetSplat(int x, int z, int channel)
     {
-        if (Splats == null || channel < 0 || channel > 3 ||
+        int lc = LayerCount;
+        if (Splats == null || channel < 0 || channel >= lc ||
             x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution)
             return 0f;
-        return Splats[(z * SplatmapResolution + x) * 4 + channel];
+        return Splats[(z * SplatmapResolution + x) * lc + channel];
     }
 
     public void SetSplat(int x, int z, int channel, float value)
     {
-        if (Splats == null || channel < 0 || channel > 3 ||
+        int lc = LayerCount;
+        if (Splats == null || channel < 0 || channel >= lc ||
             x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution)
             return;
-        Splats[(z * SplatmapResolution + x) * 4 + channel] = Maths.Clamp(value, 0f, 1f);
+        Splats[(z * SplatmapResolution + x) * lc + channel] = Maths.Clamp(value, 0f, 1f);
         _splatmapDirty = true;
     }
 
     public void ResizeSplatmap(int newRes)
     {
         SplatmapResolution = newRes;
-        Splats = new float[newRes * newRes * 4];
-        for (int i = 0; i < Splats.Length; i += 4) Splats[i] = 1f;
+        int lc = LayerCount;
+        Splats = new float[newRes * newRes * lc];
+        // Default: layer 0 = 1.0, rest = 0.0
+        for (int i = 0; i < Splats.Length; i += lc) Splats[i] = 1f;
         _splatmapDirty = true;
     }
 
+    /// <summary>Max supported terrain layers (2 splatmap textures x 4 channels).</summary>
+    public const int kMaxLayers = 8;
+
+    /// <summary>Add a new terrain layer. Expands the splat array with zeros for the new channel.</summary>
+    public void AddLayer(TerrainLayer layer)
+    {
+        if (Layers.Count >= kMaxLayers) return;
+        int oldCount = Layers.Count;
+        Layers.Add(layer);
+        int newCount = Layers.Count;
+        RebuildSplatsForLayerCount(oldCount, newCount);
+        _splatmapDirty = true;
+    }
+
+    /// <summary>Remove a terrain layer at the given index. Shrinks the splat array.</summary>
+    public void RemoveLayer(int index)
+    {
+        if (index < 0 || index >= Layers.Count || Layers.Count <= 1) return;
+        int oldCount = Layers.Count;
+        Layers.RemoveAt(index);
+        int newCount = Layers.Count;
+
+        // Rebuild splats removing the channel at index
+        int res = SplatmapResolution;
+        int pixelCount = res * res;
+        var newSplats = new float[pixelCount * newCount];
+        for (int p = 0; p < pixelCount; p++)
+        {
+            int dst = 0;
+            for (int c = 0; c < oldCount; c++)
+            {
+                if (c == index) continue;
+                newSplats[p * newCount + dst] = Splats[p * oldCount + c];
+                dst++;
+            }
+        }
+        Splats = newSplats;
+        _splatmapDirty = true;
+    }
+
+    private void RebuildSplatsForLayerCount(int oldCount, int newCount)
+    {
+        if (Splats == null) return;
+        int res = SplatmapResolution;
+        int pixelCount = res * res;
+        var newSplats = new float[pixelCount * newCount];
+        int copyChannels = Math.Min(oldCount, newCount);
+        for (int p = 0; p < pixelCount; p++)
+        {
+            for (int c = 0; c < copyChannels; c++)
+                newSplats[p * newCount + c] = Splats[p * oldCount + c];
+        }
+        Splats = newSplats;
+    }
+
     public void SetSplatmapDirty() => _splatmapDirty = true;
+
+    #endregion
+
+    #region Holes
+
+    /// <summary>Check if a cell is solid (not a hole). Returns true if solid.</summary>
+    public bool IsHoleSolid(int x, int z)
+    {
+        if (Holes == null) return true; // No holes map = all solid
+        if (x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution) return true;
+        return Holes[z * SplatmapResolution + x] != 0;
+    }
+
+    /// <summary>Set a hole at the given splatmap-resolution coordinates. value=0 = hole, value=255 = solid.</summary>
+    public void SetHole(int x, int z, byte value)
+    {
+        if (x < 0 || x >= SplatmapResolution || z < 0 || z >= SplatmapResolution) return;
+        // Lazy-allocate holes map on first use
+        if (Holes == null)
+        {
+            Holes = new byte[SplatmapResolution * SplatmapResolution];
+            Array.Fill(Holes, (byte)255);
+        }
+        Holes[z * SplatmapResolution + x] = value;
+        _holesDirty = true;
+    }
+
+    /// <summary>Check if a heightmap cell has a hole (any corner is a hole). Used by physics.</summary>
+    public bool IsCellHole(int cellX, int cellZ)
+    {
+        if (Holes == null) return false;
+        // Map heightmap cell to splatmap coords
+        float scaleX = (float)(SplatmapResolution - 1) / (HeightmapResolution - 1);
+        float scaleZ = (float)(SplatmapResolution - 1) / (HeightmapResolution - 1);
+        int sx = (int)(cellX * scaleX);
+        int sz = (int)(cellZ * scaleZ);
+        return !IsHoleSolid(sx, sz);
+    }
+
+    public void SetHolesDirty() => _holesDirty = true;
 
     #endregion
 
@@ -361,20 +577,79 @@ public sealed class TerrainData : EngineObject, ISerializable
         return _heightmapTexture;
     }
 
-    public Texture2D? GetSplatmapTexture()
+    /// <summary>
+    /// Get the splatmap textures. Each texture holds 4 layer weights as RGBA.
+    /// Returns a list of textures: index 0 = layers 0-3, index 1 = layers 4-7, etc.
+    /// </summary>
+    public IReadOnlyList<Texture2D> GetSplatmapTextures()
     {
-        if (Splats == null) return null;
-        if (_splatmapDirty || _splatmapTexture == null)
+        if (Splats == null) return Array.Empty<Texture2D>();
+
+        int lc = LayerCount;
+        int texCount = (lc + 3) / 4; // ceil(layerCount / 4)
+        int pixelCount = SplatmapResolution * SplatmapResolution;
+
+        if (_splatmapDirty || _splatmapTextures == null || _splatmapTextures.Count != texCount)
         {
-            _splatmapTexture?.Dispose();
-            _splatmapTexture = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float4);
-            _splatmapTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            Graphics.SetWrapS(_splatmapTexture.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(_splatmapTexture.Handle, TextureWrap.ClampToEdge);
-            unsafe { fixed (float* ptr = Splats) _splatmapTexture.SetDataPtr(ptr, 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution); }
+            // Dispose old textures
+            if (_splatmapTextures != null)
+                foreach (var t in _splatmapTextures) t?.Dispose();
+
+            _splatmapTextures = new List<Texture2D>(texCount);
+            var buffer = new float[pixelCount * 4];
+
+            for (int ti = 0; ti < texCount; ti++)
+            {
+                int baseChannel = ti * 4;
+                int channels = Math.Min(4, lc - baseChannel);
+
+                // Pack channels into RGBA buffer
+                Array.Clear(buffer);
+                for (int p = 0; p < pixelCount; p++)
+                {
+                    for (int c = 0; c < channels; c++)
+                        buffer[p * 4 + c] = Splats[p * lc + baseChannel + c];
+                }
+
+                var tex = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float4);
+                tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+                Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
+                Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
+                unsafe { fixed (float* ptr = buffer) tex.SetDataPtr(ptr, 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution); }
+                _splatmapTextures.Add(tex);
+            }
+
             _splatmapDirty = false;
         }
-        return _splatmapTexture;
+        return _splatmapTextures;
+    }
+
+    /// <summary>
+    /// Get the holes map as an R8 GPU texture. 0 = hole, 255 = solid.
+    /// Returns null if no holes have been painted.
+    /// </summary>
+    [NonSerialized] private float[]? _holesFloatBuffer;
+
+    public Texture2D? GetHolesTexture()
+    {
+        if (Holes == null) return null;
+        if (_holesDirty || _holesTexture == null)
+        {
+            int count = SplatmapResolution * SplatmapResolution;
+            if (_holesFloatBuffer == null || _holesFloatBuffer.Length != count)
+                _holesFloatBuffer = new float[count];
+            for (int i = 0; i < count; i++)
+                _holesFloatBuffer[i] = Holes[i] > 0 ? 1f : 0f;
+
+            _holesTexture?.Dispose();
+            _holesTexture = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float);
+            _holesTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
+            Graphics.SetWrapS(_holesTexture.Handle, TextureWrap.ClampToEdge);
+            Graphics.SetWrapT(_holesTexture.Handle, TextureWrap.ClampToEdge);
+            unsafe { fixed (float* ptr = _holesFloatBuffer) _holesTexture.SetDataPtr(ptr, 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution); }
+            _holesDirty = false;
+        }
+        return _holesTexture;
     }
 
     #endregion
@@ -388,10 +663,11 @@ public sealed class TerrainData : EngineObject, ISerializable
         value.Add("SplatmapResolution", new EchoObject(SplatmapResolution));
         value.Add("Size", new EchoObject(Size));
         value.Add("Height", new EchoObject(Height));
+        value.Add("Interpolation", new EchoObject((int)Interpolation));
 
-        // Layers
+        // Layers (dynamic count)
         var layerList = EchoObject.NewList();
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < Layers.Count; i++)
         {
             var l = Layers[i];
             var lo = EchoObject.NewCompound();
@@ -407,6 +683,13 @@ public sealed class TerrainData : EngineObject, ISerializable
         // Raw data
         SerializeShortArray(value, "Heights16", Heights);
         SerializeFloatArray(value, "Splats", Splats);
+
+        // Holes (only serialize if any holes exist)
+        if (Holes != null)
+        {
+            byte[] holesBytes = Holes;
+            value.Add("Holes", new EchoObject(Convert.ToBase64String(holesBytes)));
+        }
 
         // Detail system
         value.Add("DetailResolution", new EchoObject(DetailResolution));
@@ -476,20 +759,28 @@ public sealed class TerrainData : EngineObject, ISerializable
         SplatmapResolution = value.Get("SplatmapResolution")?.IntValue ?? 512;
         Size = value.Get("Size")?.FloatValue ?? 1024f;
         Height = value.Get("Height")?.FloatValue ?? 100f;
+        Interpolation = (TerrainInterpolation)(value.Get("Interpolation")?.IntValue ?? (int)TerrainInterpolation.Bicubic);
 
         // Layers
         var layerList = value.Get("Layers");
-        Layers = [new(), new(), new(), new()];
+        Layers = [];
         if (layerList != null)
-            for (int i = 0; i < Math.Min(4, layerList.List.Count); i++)
+        {
+            for (int i = 0; i < layerList.List.Count; i++)
             {
                 var lo = layerList.List[i];
-                Layers[i].Albedo = Serializer.Deserialize<AssetRef<Texture2D>>(lo.Get("Albedo"), ctx);
-                Layers[i].NormalMap = Serializer.Deserialize<AssetRef<Texture2D>>(lo.Get("NormalMap"), ctx);
-                Layers[i].Tiling = lo.Get("Tiling")?.FloatValue ?? 10f;
-                Layers[i].Roughness = lo.Get("Roughness")?.FloatValue ?? 1f;
-                Layers[i].Metallic = lo.Get("Metallic")?.FloatValue ?? 0f;
+                Layers.Add(new TerrainLayer
+                {
+                    Albedo = Serializer.Deserialize<AssetRef<Texture2D>>(lo.Get("Albedo"), ctx),
+                    NormalMap = Serializer.Deserialize<AssetRef<Texture2D>>(lo.Get("NormalMap"), ctx),
+                    Tiling = lo.Get("Tiling")?.FloatValue ?? 10f,
+                    Roughness = lo.Get("Roughness")?.FloatValue ?? 1f,
+                    Metallic = lo.Get("Metallic")?.FloatValue ?? 0f,
+                });
             }
+        }
+        if (Layers.Count == 0)
+            Layers = [new(), new(), new(), new()]; // Default 4 layers
 
         // Raw data - try new 16-bit format first, fall back to legacy float[]
         Heights = DeserializeShortArray(value, "Heights16");
@@ -509,6 +800,10 @@ public sealed class TerrainData : EngineObject, ISerializable
             }
         }
         Splats = DeserializeFloatArray(value, "Splats") ?? CreateDefaultSplats();
+
+        // Holes
+        var holesB64 = value.Get("Holes")?.StringValue;
+        Holes = holesB64 != null ? Convert.FromBase64String(holesB64) : null;
 
         // Detail system
         DetailResolution = value.Get("DetailResolution")?.IntValue ?? value.Get("GrassmapResolution")?.IntValue ?? 1024;
@@ -610,6 +905,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
         _heightmapDirty = true;
         _splatmapDirty = true;
+        _holesDirty = true;
         _detailsDirty = true;
     }
 
@@ -667,8 +963,9 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     private float[] CreateDefaultSplats()
     {
-        var s = new float[SplatmapResolution * SplatmapResolution * 4];
-        for (int i = 0; i < s.Length; i += 4) s[i] = 1f;
+        int lc = LayerCount;
+        var s = new float[SplatmapResolution * SplatmapResolution * lc];
+        for (int i = 0; i < s.Length; i += lc) s[i] = 1f;
         return s;
     }
 

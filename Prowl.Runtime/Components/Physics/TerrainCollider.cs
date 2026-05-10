@@ -51,6 +51,12 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         return x >= 0 && x < res - 1 && z >= 0 && z < res - 1;
     }
 
+    public bool IsCellHole(int x, int z)
+    {
+        var data = _terrain?.Data.Res;
+        return data != null && data.IsCellHole(x, z);
+    }
+
     #endregion
 
     public override void OnEnable()

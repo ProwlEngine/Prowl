@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Collections.Generic;
 using Prowl.Vector;
 
@@ -9,7 +8,7 @@ namespace Prowl.Runtime.Terrain;
 
 /// <summary>
 /// Manages the quadtree LOD system for terrain rendering.
-/// Determines which chunks to render based on camera distance.
+/// Simple distance-based subdivision with a quality multiplier.
 /// </summary>
 public class TerrainQuadtree
 {
@@ -27,49 +26,52 @@ public class TerrainQuadtree
 
     /// <summary>
     /// Updates the quadtree based on camera position.
-    /// Determines which chunks should be visible.
-    /// Only recalculates when camera has moved significantly.
     /// </summary>
-    public void Update(Float3 cameraPosition)
+    /// <param name="cameraPosition">Camera position in terrain-local space.</param>
+    /// <param name="lodQuality">Quality multiplier for LOD distance thresholds.
+    /// 1.0 = default, higher = more detail (subdivides further from camera), lower = less detail.</param>
+    public void Update(Float3 cameraPosition, float lodQuality = 1f)
     {
-        // Clear visibility and update tree
         VisibleChunks.Clear();
-        UpdateNode(Root, cameraPosition);
+        UpdateNode(Root, cameraPosition, lodQuality);
     }
 
-    private void UpdateNode(TerrainChunk chunk, Float3 cameraPosition)
+    private void UpdateNode(TerrainChunk chunk, Float3 cameraPosition, float lodQuality)
     {
-        // Calculate distance from camera to chunk center
+        // Calculate distance from camera to chunk center (XZ plane)
         Float3 chunkCenter = chunk.Position + new Float3(chunk.Size * 0.5f, 0, chunk.Size * 0.5f);
         float distanceToCamera = Float3.Distance(cameraPosition, chunkCenter);
 
-        var size = chunk.Size * 1.5;
+        // Distance threshold scaled by quality multiplier
+        // Higher quality = larger threshold = subdivides at greater distances
+        float subdivideThreshold = chunk.Size * 1.5f * lodQuality;
 
-        // Simple subdivision rule: subdivide if camera is closer than chunk size
-        if (distanceToCamera < size && chunk.LODLevel < MaxLODLevel)
+        if (distanceToCamera < subdivideThreshold && chunk.LODLevel < MaxLODLevel)
         {
             // Subdivide and recurse into children
             if (chunk.Children == null)
                 chunk.Subdivide();
 
             foreach (var child in chunk.Children)
-            {
-                UpdateNode(child, cameraPosition);
-            }
+                UpdateNode(child, cameraPosition, lodQuality);
         }
         else
         {
-            // Should not subdivide - check if we should merge existing children
+            // Merge children if they exist and camera is far enough
             if (chunk.Children != null)
             {
-                // Merge threshold is 1.5x chunk size to add hysteresis
-                if (distanceToCamera > size)
-                {
+                // Hysteresis: merge at a slightly larger distance to prevent thrashing
+                if (distanceToCamera > subdivideThreshold * 1.1f)
                     chunk.Merge();
+                else
+                {
+                    // Still within hysteresis range - keep children
+                    foreach (var child in chunk.Children)
+                        UpdateNode(child, cameraPosition, lodQuality);
+                    return;
                 }
             }
 
-            // This is a leaf node at appropriate LOD - mark as visible
             chunk.IsVisible = true;
             VisibleChunks.Add(chunk);
         }
@@ -80,9 +82,6 @@ public class TerrainQuadtree
         Root.DrawGizmos(offset);
     }
 
-    /// <summary>
-    /// Gets all visible leaf chunks for rendering.
-    /// </summary>
     public List<TerrainChunk> GetVisibleChunks()
     {
         return VisibleChunks;

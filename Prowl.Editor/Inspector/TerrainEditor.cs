@@ -18,7 +18,7 @@ using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.Inspector;
 
-public enum TerrainTab { Height, Paint, Details, Trees, Settings }
+public enum TerrainTab { Height, Paint, Holes, Details, Trees, Settings }
 public enum HeightTool { Raise, Lower, Flatten, Smooth }
 
 [CustomEditor(typeof(TerrainComponent))]
@@ -85,6 +85,9 @@ public class TerrainEditor : CustomEditor
             case TerrainTab.Paint:
                 DrawPaintTab(paper, $"{id}_pt", font, terrainData);
                 break;
+            case TerrainTab.Holes:
+                DrawHolesTab(paper, $"{id}_ho", font, terrainData);
+                break;
             case TerrainTab.Details:
                 DrawDetailsTab(paper, $"{id}_dt", font, terrainData);
                 break;
@@ -110,6 +113,7 @@ public class TerrainEditor : CustomEditor
     [
         EditorIcons.Mountain,
         EditorIcons.Paintbrush,
+        EditorIcons.CircleXmark,
         EditorIcons.Seedling,
         EditorIcons.Leaf,
         EditorIcons.Gear,
@@ -123,6 +127,7 @@ public class TerrainEditor : CustomEditor
             .Item(_tabLabels[2])
             .Item(_tabLabels[3])
             .Item(_tabLabels[4])
+            .Item(_tabLabels[5])
             .FullWidth()
             .Show();
     }
@@ -162,18 +167,42 @@ public class TerrainEditor : CustomEditor
 
     private void DrawPaintTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
     {
-        // Layer selector (4 slots)
+        // Layer selector (dynamic count)
         paper.Box($"{id}_lbl").Height(20)
             .Text("Paint Layer", font).TextColor(EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-        Origami.ButtonGroup(paper, $"{id}_layers", PaintLayer, v => PaintLayer = v)
-            .Item("Layer 0")
-            .Item("Layer 1")
-            .Item("Layer 2")
-            .Item("Layer 3")
-            .FullWidth()
-            .Show();
+        // Clamp PaintLayer to valid range
+        if (PaintLayer >= data.LayerCount) PaintLayer = data.LayerCount - 1;
+        if (PaintLayer < 0) PaintLayer = 0;
+
+        var layerGroup = Origami.ButtonGroup(paper, $"{id}_layers", PaintLayer, v => PaintLayer = v);
+        for (int i = 0; i < data.LayerCount; i++)
+            layerGroup.Item($"Layer {i}");
+        layerGroup.FullWidth().Show();
+
+        // Add/Remove layer buttons
+        using (paper.Row($"{id}_layer_btns").Height(24).RowBetween(4).Enter())
+        {
+            if (data.LayerCount < TerrainData.kMaxLayers)
+            {
+                Origami.Button(paper, $"{id}_add_layer", $"{EditorIcons.Plus}  Add Layer", () =>
+                {
+                    data.AddLayer(new TerrainLayer());
+                    _isDirty = true;
+                }).Show();
+            }
+
+            if (data.LayerCount > 1)
+            {
+                Origami.Button(paper, $"{id}_rem_layer", $"{EditorIcons.Trash}  Remove Layer {PaintLayer}", () =>
+                {
+                    data.RemoveLayer(PaintLayer);
+                    PaintLayer = Math.Clamp(PaintLayer, 0, Math.Max(0, data.LayerCount - 1));
+                    _isDirty = true;
+                }).Show();
+            }
+        }
 
         paper.Box($"{id}_sp0").Height(4);
 
@@ -198,6 +227,21 @@ public class TerrainEditor : CustomEditor
                 v => { sl.Metallic = v; _isDirty = true; }, 0f, 1f).Format("F2").Show());
 
         paper.Box($"{id}_sp1").Height(6);
+
+        DrawBrushSettings(paper, $"{id}_brush", font);
+    }
+
+    #endregion
+
+    #region Holes Tab
+
+    private void DrawHolesTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainData data)
+    {
+        paper.Box($"{id}_hint").Height(20)
+            .Text("Click to paint holes, Shift+click to fill", font)
+            .TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleLeft);
+
+        paper.Box($"{id}_sp").Height(4);
 
         DrawBrushSettings(paper, $"{id}_brush", font);
     }
@@ -400,6 +444,10 @@ public class TerrainEditor : CustomEditor
             Origami.NumericField<float>(paper, $"{id}_height_v", data.Height,
                 v => { data.Height = MathF.Max(0.1f, v); _isDirty = true; }).Min(0.1f).Show());
 
+        InspectorRow.Draw(paper, $"{id}_interp", "Interpolation", () =>
+            Origami.EnumDropdown(paper, $"{id}_interp_v", data.Interpolation,
+                v => { data.Interpolation = v; _isDirty = true; terrain.InvalidateGrassCache(); }).Show());
+
         paper.Box($"{id}_sp").Height(6);
 
         // Heightmap resolution dropdown
@@ -449,6 +497,10 @@ public class TerrainEditor : CustomEditor
         InspectorRow.Draw(paper, $"{id}_lod", "Max LOD Levels", () =>
             Origami.NumericField<int>(paper, $"{id}_lod_v", terrain.MaxLODLevel,
                 v => { terrain.MaxLODLevel = Math.Clamp(v, 1, 8); }).Min(1).Max(8).Show());
+
+        InspectorRow.Draw(paper, $"{id}_lodq", "LOD Quality", () =>
+            Origami.Slider(paper, $"{id}_lodq_v", terrain.LODQuality,
+                v => { terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());
 
         paper.Box($"{id}_sp3").Height(10);
         EditorGUI.Label(paper, $"{id}_veg_hdr", "Vegetation");
@@ -539,16 +591,20 @@ public class TerrainEditor : CustomEditor
     /// Apply a brush stroke at the given terrain UV position.
     /// Called from TerrainSceneEditor during mouse drag.
     /// </summary>
-    public static void ApplyBrush(TerrainData data, Float2 terrainUV, float deltaTime, out bool heightChanged, out bool splatChanged, out bool detailChanged)
+    public static void ApplyBrush(TerrainData data, Float2 terrainUV, float deltaTime,
+        out bool heightChanged, out bool splatChanged, out bool detailChanged, out bool holesChanged)
     {
         heightChanged = false;
         splatChanged = false;
         detailChanged = false;
+        holesChanged = false;
 
         if (ActiveTab == TerrainTab.Height)
             ApplyHeightBrush(data, terrainUV, deltaTime, ref heightChanged);
         else if (ActiveTab == TerrainTab.Paint)
             ApplySplatBrush(data, terrainUV, deltaTime, ref splatChanged);
+        else if (ActiveTab == TerrainTab.Holes)
+            ApplyHolesBrush(data, terrainUV, ref holesChanged);
         else if (ActiveTab == TerrainTab.Details)
             ApplyDetailBrush(data, terrainUV, deltaTime, ref detailChanged);
     }
@@ -645,17 +701,19 @@ public class TerrainEditor : CustomEditor
                 float falloff = 1f - SmoothStep(falloffStart, 1f, t);
                 float delta = BrushStrength * falloff * dt * 5f; // 5x multiplier for responsive painting
 
-                // Increase target channel, then normalize all 4
-                float[] weights = new float[4];
-                for (int c = 0; c < 4; c++)
+                // Increase target channel, then normalize all layers
+                int lc = data.LayerCount;
+                float[] weights = new float[lc];
+                for (int c = 0; c < lc; c++)
                     weights[c] = data.GetSplat(x, z, c);
 
                 weights[PaintLayer] += delta;
 
                 // Normalize
-                float sum = weights[0] + weights[1] + weights[2] + weights[3];
+                float sum = 0;
+                for (int c = 0; c < lc; c++) sum += weights[c];
                 if (sum > 0)
-                    for (int c = 0; c < 4; c++)
+                    for (int c = 0; c < lc; c++)
                         data.SetSplat(x, z, c, weights[c] / sum);
 
                 changed = true;
@@ -679,6 +737,34 @@ public class TerrainEditor : CustomEditor
         else
         {
             Debug.LogWarning("[TerrainEditor] Cannot save TerrainData has no asset ID.");
+        }
+    }
+
+    private static void ApplyHolesBrush(TerrainData data, Float2 uv, ref bool changed)
+    {
+        bool shiftHeld = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
+        byte value = shiftHeld ? (byte)255 : (byte)0; // Shift = fill, normal = dig hole
+
+        int res = data.SplatmapResolution;
+        float radiusPixels = BrushSize / data.Size * (res - 1);
+        int cx = (int)(uv.X * (res - 1));
+        int cz = (int)(uv.Y * (res - 1));
+        int r = (int)MathF.Ceiling(radiusPixels);
+
+        for (int z = cz - r; z <= cz + r; z++)
+        {
+            for (int x = cx - r; x <= cx + r; x++)
+            {
+                if (x < 0 || x >= res || z < 0 || z >= res) continue;
+
+                float dx = x - cx;
+                float dz = z - cz;
+                float dist = MathF.Sqrt(dx * dx + dz * dz);
+                if (dist > radiusPixels) continue;
+
+                data.SetHole(x, z, value);
+                changed = true;
+            }
         }
     }
 
