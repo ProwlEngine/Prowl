@@ -202,18 +202,55 @@ public sealed class TerrainData : EngineObject, ISerializable
     public void ResizeHeightmap(int newRes)
     {
         HeightmapResolution = newRes;
-        Heights = new float[newRes * newRes];
         Heights = new short[newRes * newRes];
         _heightmapDirty = true;
     }
 
-    public void SetHeightmapDirty()
+    public void SetHeightmapDirty() => _heightmapDirty = true;
+
+    /// <summary>Compute terrain normal at integer heightmap coordinates using Sobel operator.</summary>
+    public Float3 CalculateNormalSobel(int x, int z)
     {
-        _heightmapDirty = true;
-    }
+        if (Heights == null) return Float3.UnitY;
+
+        // Sample 3x3 neighborhood (clamped at edges)
+        float hL = GetHeight(Math.Max(x - 1, 0), z);
+        float hR = GetHeight(Math.Min(x + 1, HeightmapResolution - 1), z);
+        float hD = GetHeight(x, Math.Max(z - 1, 0));
+        float hU = GetHeight(x, Math.Min(z + 1, HeightmapResolution - 1));
+
+        // Sobel gradient (simplified 2-sample per axis)
+        float cellSize = Size / (HeightmapResolution - 1);
+        float dX = (hL - hR) * Height;
+        float dZ = (hD - hU) * Height;
+
+        var normal = new Float3(dX, 2f * cellSize, dZ);
+        float len = Float3.Length(normal);
+        return len > 1e-8f ? normal / len : Float3.UnitY;
     }
 
-    public void SetHeightmapDirty() => _heightmapDirty = true;
+    /// <summary>Interpolated normal at normalized UV coordinates (0-1).</summary>
+    public Float3 GetInterpolatedNormal(float u, float v)
+    {
+        if (Heights == null) return Float3.UnitY;
+
+        float px = u * (HeightmapResolution - 1);
+        float pz = v * (HeightmapResolution - 1);
+        int x = Maths.Clamp((int)MathF.Round(px), 0, HeightmapResolution - 1);
+        int z = Maths.Clamp((int)MathF.Round(pz), 0, HeightmapResolution - 1);
+        return CalculateNormalSobel(x, z);
+    }
+
+    /// <summary>
+    /// Get terrain steepness (slope angle in degrees) at normalized UV coordinates.
+    /// 0 = flat, 90 = vertical cliff.
+    /// </summary>
+    public float GetSteepness(float u, float v)
+    {
+        var normal = GetInterpolatedNormal(u, v);
+        // Angle between normal and up vector
+        return MathF.Acos(Maths.Clamp(normal.Y, -1f, 1f)) * (180f / MathF.PI);
+    }
 
     #endregion
 
