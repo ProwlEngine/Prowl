@@ -30,6 +30,13 @@ public static class PropertyGrid
     /// </summary>
     [ThreadStatic]
     public static HashSet<string>? OverriddenFields;
+
+    /// <summary>
+    /// The root EngineObject being edited. Set at depth 0 so nested property changes
+    /// can call OnValidate on the correct object.
+    /// </summary>
+    [ThreadStatic]
+    private static EngineObject? _validationRoot;
     /// <summary>
     /// Draw the property grid for an object.
     /// </summary>
@@ -44,7 +51,10 @@ public static class PropertyGrid
             // Pre-snapshot at top level: captures state BEFORE any widgets mutate
             // nested objects, collections, curves, etc. in-place
             if (depth == 0)
+            {
                 Undo.Snapshot(target);
+                _validationRoot = target as EngineObject;
+            }
 
             var type = target.GetType();
             var fields = GetSerializableFields(type);
@@ -87,7 +97,7 @@ public static class PropertyGrid
                 if (range != null)
                 {
                     bool handled = TryDrawRangeAttribute(paper, fieldId, label, fieldType, value, range,
-                        v => { field.SetValue(target, v); onChanged?.Invoke(target); });
+                        v => { field.SetValue(target, v); onChanged?.Invoke(target); NotifyValidation(); });
                     if (handled) continue;
                 }
 
@@ -111,6 +121,7 @@ public static class PropertyGrid
                             {
                                 field.SetValue(target, newVal);
                                 onChanged?.Invoke(target);
+                                NotifyValidation();
                             }, depth);
                         }
                     }
@@ -127,7 +138,18 @@ public static class PropertyGrid
 
             // [Button] methods
             DrawButtonMethods(paper, $"{id}_btns", target);
+
+            // Clear root at depth 0 exit
+            if (depth == 0)
+                _validationRoot = null;
         }
+    }
+
+    /// <summary>Call OnValidate on the root EngineObject if one is being edited.</summary>
+    private static void NotifyValidation()
+    {
+        try { _validationRoot?.OnValidate(); }
+        catch (Exception ex) { Runtime.Debug.LogWarning($"OnValidate error: {ex.Message}"); }
     }
 
     /// <summary>

@@ -220,7 +220,7 @@ public static class GameObjectInspector
             {
                 // Enabled toggle
                 Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
-                    v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = old; }, () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = v; }); comp.Enabled = v; })
+                    v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = old; c.OnValidate(); } }, () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
                     .NoLabel().Show();
 
                 // Icon + Name (click to fold)
