@@ -376,7 +376,7 @@ public sealed class EchoTextFormat : IFileFormat
     private static EchoObject ReadNumberTag(StringTagTokenizer parser)
     {
         static T ParsePrimitive<T>(StringTagTokenizer parser) where T : unmanaged
-            => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T));
+            => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T), CultureInfo.InvariantCulture);
 
         return parser.Token[^1] switch
         {
@@ -391,7 +391,7 @@ public sealed class EchoTextFormat : IFileFormat
             'F' => new EchoObject(ParsePrimitive<float>(parser)),
             'D' => new EchoObject(ParsePrimitive<double>(parser)),
             'M' => new EchoObject(ParsePrimitive<decimal>(parser)),
-            >= '0' and <= '9' => new EchoObject((int)Convert.ChangeType(new string(parser.Token), typeof(int))),
+            >= '0' and <= '9' => new EchoObject((int)Convert.ChangeType(new string(parser.Token), typeof(int), CultureInfo.InvariantCulture)),
             _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token}\" at position {parser.TokenPosition}")
         };
     }
