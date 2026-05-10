@@ -193,6 +193,9 @@ public interface ITerrainHeightProvider
     /// <returns>True if the cell is valid.</returns>
     bool IsValidCell(int x, int z);
 
+    /// <summary>Check if a cell is a hole (should skip collision). Default false.</summary>
+    bool IsCellHole(int x, int z) => false;
+
     /// <summary>
     /// Gets the width of the heightmap in grid cells.
     /// </summary>

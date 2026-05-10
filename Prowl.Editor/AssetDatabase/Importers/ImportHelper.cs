@@ -12,7 +12,7 @@ namespace Prowl.Editor.Importers;
 public static class ImportHelper
 {
     /// <summary>
-    /// Creates a SerializationContext that tracks all $assetId references encountered
+    /// Creates a SerializationContext that tracks all AssetRef references encountered
     /// during deserialization. After deserialization, discoveredDependencies contains
     /// the GUIDs of all referenced assets.
     /// </summary>

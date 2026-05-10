@@ -99,8 +99,10 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
         {
             for (int z = minZ; z < maxZ; z++)
             {
-                // Skip invalid cells
+                // Skip invalid cells and holes
                 if (!_heightProvider.IsValidCell(x, z))
+                    continue;
+                if (_heightProvider.IsCellHole(x, z))
                     continue;
 
                 // Get heights for this quad

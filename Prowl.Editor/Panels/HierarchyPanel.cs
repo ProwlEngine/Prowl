@@ -32,9 +32,14 @@ public class HierarchyPanel : DockPanel
     // Drag-drop state
     private bool _assetDropTarget;
     private enum DropPosition { Into, Above, Below }
+    // Double-buffered drag hover state: deferred callbacks write to *Next,
+    // promoted to current at frame start so layout reads the resolved value.
     private GameObject? _dragHoverTarget;
     private string? _dragHoverTargetId;
     private float _dragHoverNormalizedY;
+    private GameObject? _dragHoverTargetNext;
+    private string? _dragHoverTargetIdNext;
+    private float _dragHoverNormalizedYNext;
 
     // Ping state which GOs in the hierarchy match the pinged GUID
     private static Guid _lastHierarchyPingGuid;
@@ -48,6 +53,23 @@ public class HierarchyPanel : DockPanel
         _paper = paper;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
+
+        // Promote deferred hover state then clear the next slot. OnHover callbacks
+        // fire every frame the mouse is over a node, so clearing is safe - the callback
+        // will re-set it if still hovering. On the drop frame keep the current value.
+        if (DragDrop.IsDropFrame)
+        {
+            // Drop frame: _dragHoverTarget already has the right value
+        }
+        else
+        {
+            _dragHoverTarget = _dragHoverTargetNext;
+            _dragHoverTargetId = _dragHoverTargetIdNext;
+            _dragHoverNormalizedY = _dragHoverNormalizedYNext;
+            _dragHoverTargetNext = null;
+            _dragHoverTargetIdNext = null;
+            _dragHoverNormalizedYNext = 0f;
+        }
 
         var scene = Scene.Current;
 
@@ -267,9 +289,9 @@ public class HierarchyPanel : DockPanel
                     {
                         if (!DragDrop.IsDragging || DragDrop.Payload is not GameObjectDragPayload) return;
                         var go = (GameObject)n.UserData!;
-                        _dragHoverTarget = go;
-                        _dragHoverTargetId = go.Identifier.ToString();
-                        _dragHoverNormalizedY = normY;
+                        _dragHoverTargetNext = go;
+                        _dragHoverTargetIdNext = go.Identifier.ToString();
+                        _dragHoverNormalizedYNext = normY;
                     })
                     .CustomRowContent((paper, node, isSel, isExp) =>
                     {
@@ -353,13 +375,6 @@ public class HierarchyPanel : DockPanel
                     }
                     DragDrop.EndDrag();
                     _assetDropTarget = false;
-                }
-
-                // Clear drag hover when not over the hierarchy panel
-                if (DragDrop.IsDragging && !bgHovered)
-                {
-                    _dragHoverTarget = null;
-                    _dragHoverTargetId = null;
                 }
 
                 // GO drop process using hover target tracked by OnHover callback

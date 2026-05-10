@@ -44,7 +44,7 @@ public sealed class StickyNote
 /// <summary>
 /// A titled bounding region behind a cluster of nodes. Moving the group moves all
 /// nodes whose Position falls inside it (resolved at interaction time, not stored —
-/// keeps the data model simple, matches Unity GraphToolkit behaviour).
+/// keeps the data model simple).
 /// </summary>
 public sealed class NodeGroup
 {

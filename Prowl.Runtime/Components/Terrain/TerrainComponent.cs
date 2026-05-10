@@ -37,6 +37,12 @@ public class TerrainComponent : MonoBehaviour
     /// <summary>Resolution of the base mesh grid (vertices per side).</summary>
     public int MeshResolution = 32;
 
+    /// <summary>
+    /// LOD quality multiplier. Controls the distance at which the quadtree subdivides.
+    /// 1.0 = default, higher = more detail at distance, lower = less detail.
+    /// </summary>
+    public float LODQuality = 1f;
+
     /// <summary>Grass material override. If null, uses built-in Grass material.</summary>
     public AssetRef<Material> GrassMaterial;
 
@@ -153,27 +159,41 @@ public class TerrainComponent : MonoBehaviour
         Float3 camLocal = WorldToTerrain(camera.Transform.Position);
         camLocal.Y = 0;
 
-        if (_quadtree == null || MathF.Abs(_quadtree.ChunkSize - terrainSize) > 0.01f)
+        if (_quadtree == null
+            || MathF.Abs(_quadtree.ChunkSize - terrainSize) > 0.01f
+            || _quadtree.MaxLODLevel != MaxLODLevel)
+        {
             _quadtree = new TerrainQuadtree(Float3.Zero, terrainSize, MaxLODLevel);
+        }
 
-        _quadtree.Update(camLocal);
+        _quadtree.Update(camLocal, LODQuality);
         UpdateInstanceData(terrainToWorld);
 
         var mat = GetMaterialInstance();
         if (mat == null || _transforms.Length == 0 || _baseMesh == null) return;
+
+        // Enable 8-layer keyword when more than 4 layers are active
+        mat.SetKeyword("TERRAIN_8_LAYERS", terrainData.LayerCount > 4);
+        mat.SetKeyword("TERRAIN_BICUBIC", terrainData.Interpolation == TerrainInterpolation.Bicubic);
 
         _properties.Clear();
         _properties.SetInt("_ObjectID", InstanceID);
 
         // GPU textures from TerrainData
         var heightmapTex = terrainData.GetHeightmapTexture();
-        var splatmapTex = terrainData.GetSplatmapTexture();
+        var splatmapTextures = terrainData.GetSplatmapTextures();
+
+        var holesTex = terrainData.GetHolesTexture();
 
         if (heightmapTex != null) _properties.SetTexture("_Heightmap", heightmapTex);
-        if (splatmapTex != null) _properties.SetTexture("_Splatmap", splatmapTex);
+        for (int si = 0; si < splatmapTextures.Count; si++)
+            _properties.SetTexture($"_Splatmap{si}", splatmapTextures[si]);
+        if (holesTex != null) _properties.SetTexture("_HolesMap", holesTex);
+        _properties.SetInt("_HasHoles", holesTex != null ? 1 : 0);
+        _properties.SetInt("_LayerCount", terrainData.LayerCount);
 
         // Per-layer textures and settings
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < terrainData.LayerCount; i++)
         {
             var layer = terrainData.Layers[i];
             string prefix = $"_Layer{i}";

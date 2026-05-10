@@ -491,6 +491,9 @@ public class DesktopBuildPipeline : BuildPipeline
                     if (File.Exists(gameAssembly))
                         Assembly.LoadFrom(gameAssembly);
 
+                    // Initialize built-in assets BEFORE loading any scenes/assets
+                    Prowl.Runtime.BuiltInAssets.Initialize();
+
                     // Initialize asset database
                     var db = new Prowl.Runtime.PlayerAssetDatabase(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
                     Prowl.Runtime.AssetDatabase.Current = db;

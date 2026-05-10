@@ -77,7 +77,6 @@ public static class GraphLayout
     }
 
     // ─── Type-based port colour palette ──────────────────────────────────────────────
-    // Convention close to Unity Shader Graph / Blender: flat-shaded by data category.
     private static readonly Dictionary<Type, Color32> _portColors = new()
     {
         [typeof(float)]   = new Color32(220, 200, 80, 255),    // amber scalar

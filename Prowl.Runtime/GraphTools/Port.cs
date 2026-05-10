@@ -25,8 +25,7 @@ public enum PortLayout { Above, Below }
 /// existing connections, but reordering them in the source code is safe.
 ///
 /// <see cref="DefaultValue"/> is the inline-editable value shown on an unconnected input
-/// port (e.g. a literal 0.5 next to a Float input). It mirrors Unity GraphToolkit's
-/// "embedded constant" pattern.
+/// port (e.g. a literal 0.5 next to a Float input).
 /// </remarks>
 public sealed class Port
 {
