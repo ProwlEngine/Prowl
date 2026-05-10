@@ -134,24 +134,23 @@ public class DefaultRenderPipeline : RenderPipeline
                     AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
                     break;
                 case UISurface.Overlay:
-                    /*
-                     More correct version should use, but it breaks in game view so we're retaining colorRT binding
-                     Graphics.UnbindFramebuffer();
-                        Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X,
-                            (uint)Window.InternalWindow.FramebufferSize.Y);
-                     */
                     if (colorRT != null)
                     {
-                        Graphics.BindFramebuffer(colorRT!.frameBuffer);
+                        // Editor
+                        Graphics.BindFramebuffer(colorRT.frameBuffer);
                         AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
                     }
                     else
                     {
+                        // Build / fullscreen
                         Graphics.UnbindFramebuffer();
-                        Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X,
-                            (uint)Window.InternalWindow.FramebufferSize.Y);
+                        uint fbW = (uint)Window.InternalWindow.FramebufferSize.X;
+                        uint fbH = (uint)Window.InternalWindow.FramebufferSize.Y;
+                        Graphics.Viewport(0, 0, fbW, fbH);
+                        AssignCameraMatrices(
+                            Float4x4.Identity,
+                            Float4x4.CreateOrthoOffCenter(0, fbW, fbH, 0, -1000f, 1000f));
                     }
-
                     break;
                 case UISurface.World:
                     return; // world items go through the UI stage right after transparents.
