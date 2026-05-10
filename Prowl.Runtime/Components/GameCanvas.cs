@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.PaperUI;
+using Prowl.Echo;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -15,157 +15,345 @@ using Prowl.Runtime.UI;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Render mode for a <see cref="GameCanvas"/>.
-/// </summary>
-public enum RenderMode
-{
-    /// <summary>
-    /// The GameCanvas is rendered as an overlay on top of the entire screen.
-    /// UI elements are sized in screen-space pixels.
-    /// </summary>
-    ScreenSpaceOverlay,
-
-    /// <summary>
-    /// The GameCanvas is rendered as a screen-space overlay on a specific camera's
-    /// output. Currently behaves identically to <see cref="ScreenSpaceOverlay"/>.
-    /// </summary>
-    ScreenSpaceCamera,
-
-    /// <summary>
-    /// The GameCanvas lives in world space. Use <see cref="WorldCanvas"/> for this mode.
-    /// </summary>
-    WorldSpace,
-}
-
-/// <summary>
-/// GameCanvas component that handles drawing UI components to the full screen.
+/// Coordinates a UI hierarchy: owns layout, scale, and the destination surface.
+/// Does not render anything itself — visible elements are <see cref="UIBehaviour"/>s
+/// that produce <see cref="UIRenderItem"/>s into <see cref="Tree"/>, which the
+/// pipeline then draws via <see cref="UIRenderTree.CollectFor"/>.
 /// </summary>
 [AddComponentMenu("UI/Game Canvas")]
-[ComponentIcon("\uf03e")] // Image
+[RequireComponent(typeof(RectTransform))]
+[ExecuteAlways]
+[ComponentIcon("")] // Image
 public class GameCanvas : MonoBehaviour
 {
-     /// <summary>
-    /// When set, GameCanvas uses this size instead of the window framebuffer size.
-    /// Used by the editor to render into off-screen render textures.
-    /// </summary>
+    // ============================================================
+    // REMOVED:
+    //   private RenderTexture? _renderTexture;     // dead — never used
+    //   private bool _initialized = false;          // dead — never read
+    //   public  void DrawGUI() { ... }              // replaced by RebuildIfDirty
+    //   private void BuildChildren(...)             // replaced by BuildRecursive
+    // ============================================================
+
+    /// <summary>When set, GameCanvas uses this size instead of the window framebuffer size.
+    /// Used by the editor to render into off-screen render textures.</summary>
     public static Float2? ScreenSizeOverride { get; set; }
 
-    /// <summary>
-    /// The rendering mode of this GameCanvas.
-    /// </summary>
-    public RenderMode RenderMode = RenderMode.ScreenSpaceOverlay;
+    // ----------------------------------------------------------------
+    // CHANGED: every public field that affects layout is now a property
+    //          with a backing field and dirty-marking setter.
+    // ----------------------------------------------------------------
+
+    [SerializeField] private RenderMode _renderMode = RenderMode.ScreenSpaceOverlay;
+    /// <summary>The rendering mode of this GameCanvas.</summary>
+    public RenderMode RenderMode
+    {
+        get => _renderMode;
+        set { if (_renderMode == value) return; _renderMode = value; MarkDirty(UIDirtyFlags.Layout | UIDirtyFlags.Hierarchy); }
+    }
+
+    [SerializeField] private float _scaleFactor = 1f;
+    /// <summary>Global scale factor applied to all elements.</summary>
+    public float ScaleFactor
+    {
+        get => _scaleFactor;
+        set { if (Maths.Abs(_scaleFactor - value) < 1e-6f) return; _scaleFactor = value; MarkDirty(UIDirtyFlags.Layout); }
+    }
+
+    [SerializeField] private int _sortOrder;
+    /// <summary>Sort order relative to other screen-space canvases. Higher = on top.</summary>
+    public int SortOrder
+    {
+        get => _sortOrder;
+        set { if (_sortOrder == value) return; _sortOrder = value; MarkDirty(UIDirtyFlags.Hierarchy); }
+    }
+
+    [SerializeField] private ScaleMode _uiScaleMode = ScaleMode.ConstantPixelSize;
+    public ScaleMode UIScaleMode { get => _uiScaleMode; set { if (_uiScaleMode == value) return; _uiScaleMode = value; MarkDirty(UIDirtyFlags.Layout); } }
+
+    [SerializeField] private Float2 _referenceResolution = new(1920f, 1080f);
+    public Float2 ReferenceResolution { get => _referenceResolution; set { if (_referenceResolution.Equals(value)) return; _referenceResolution = value; MarkDirty(UIDirtyFlags.Layout); } }
+
+    [SerializeField] private float _matchWidthOrHeight = 0.5f;
+    public float MatchWidthOrHeight { get => _matchWidthOrHeight; set { if (Maths.Abs(_matchWidthOrHeight - value) < 1e-6f) return; _matchWidthOrHeight = value; MarkDirty(UIDirtyFlags.Layout); } }
+
+    [SerializeField] private ScreenMatchMode _screenMatchMode = ScreenMatchMode.MatchWidthOrHeight;
+    public ScreenMatchMode ScreenMatchMode { get => _screenMatchMode; set { if (_screenMatchMode == value) return; _screenMatchMode = value; MarkDirty(UIDirtyFlags.Layout); } }
+
+    // ----------------------------------------------------------------
+    // NEW: WorldSpace-only configuration
+    // ----------------------------------------------------------------
+
+    /// <summary>How many canvas pixels equal one world unit when <see cref="RenderMode"/>
+    /// is <see cref="RenderMode.WorldSpace"/>. 100 ⇒ a 100×100 px button is 1×1 m.</summary>
+    [SerializeField] private float _referencePixelsPerUnit = 100f;
+    public float ReferencePixelsPerUnit
+    {
+        get => _referencePixelsPerUnit;
+        set { if (Maths.Abs(_referencePixelsPerUnit - value) < 1e-6f) return; _referencePixelsPerUnit = Maths.Max(value, 0.001f); MarkDirty(UIDirtyFlags.Layout); }
+    }
+
+    // ----------------------------------------------------------------
+    // NEW: shared default UI material — referenced by UIBehaviour.GetMaterial
+    // ----------------------------------------------------------------
+
+    private static Material? s_sharedUIMaterial;
+    /// <summary>Shared <see cref="Material"/> using the <c>Default/GameUI</c> shader.
+    /// Lazy-allocated; reused across every UI element that doesn't override
+    /// <see cref="UIBehaviour.GetMaterial"/>.</summary>
+    public static Material SharedUIMaterial
+        => s_sharedUIMaterial ??= new Material(Shader.LoadDefault(DefaultShader.GameUI));
+
+    // ----------------------------------------------------------------
+    // NEW: render tree + dirty state
+    // ----------------------------------------------------------------
+
+    // Read-only auto-property: not serialized by Prowl.Echo.
+    internal UIRenderTree Tree { get; } = new();
+    [SerializeIgnore] private bool _isDirty = true;
+    [SerializeIgnore] private UIDirtyFlags _aggregateDirty = UIDirtyFlags.All;
 
     /// <summary>
-    /// Global scale factor applied to all elements in the GameCanvas.
+    /// Size of the surface this canvas was last built against (in real pixels).
+    /// Tracked so that a resolution change — typical when the editor's game viewport resizes
+    /// or when the rendering camera switches between targets — automatically forces a rebuild.
+    /// Without this, layout uses the previous frame's resolution while the projection uses
+    /// the current one, putting the UI off-center and at the wrong scale.
     /// </summary>
-    public float ScaleFactor = 1f;
+    [SerializeIgnore] private Float2 _lastBuildSize = Float2.Zero;
 
-    /// <summary>
-    /// Sort order relative to other screen-space canvases.
-    /// Higher values render on top.
-    /// </summary>
-    public int SortOrder;
+    /// <summary>Called by descendants (or by property setters above) to request a rebuild.</summary>
+    public void MarkDirty(UIDirtyFlags flags)
+    {
+        _aggregateDirty |= flags;
+        _isDirty = true;
+    }
 
-    /// <summary>
-    /// Ensures this GameCanvas's own GameObject and all child GameObjects
-    /// have a <see cref="RectTransform"/> instead of a plain Transform.
-    /// </summary>
+    // ============================================================
+    // Lifecycle (mostly unchanged from the original)
+    // ============================================================
+
+    /// <summary>Ensures this GameCanvas's GameObject and all descendants use RectTransform.</summary>
     public override void OnAddedToScene()
     {
         GameObject.EnsureRectTransform();
         EnsureChildRectTransforms(GameObject);
+        MarkDirty(UIDirtyFlags.All);   // NEW: first build is always dirty
     }
 
-    /// <summary>
-    /// Called every frame by the Scene's OnGui pipeline.
-    /// Builds the full Paper UI tree from the child hierarchy.
-    /// </summary>
-    public override void OnGui(Paper paper)
-    {
-        // WorldSpace canvases are handled by WorldCanvas / IRenderable.
-        if (RenderMode == RenderMode.WorldSpace)
-            return;
+    // CHANGED: OnEnable / OnDisable bodies — both were empty in the original
+    public override void OnEnable()  => MarkDirty(UIDirtyFlags.All);
+    public override void OnDisable() { /* tree retained but no canvas walk picks us up */ }
 
-        // Determine screen-space root rect.
-        // When rendering into an off-screen RT (e.g. editor game view), the
-        // override provides the correct dimensions instead of the window size.
+    // Update() is intentionally not overridden. ScaleFactor must be computed against the
+    // active render-target size, which is only known inside RebuildIfDirty (where the
+    // pipeline has pushed GameCanvas.ScreenSizeOverride). Computing it here would use the
+    // stale framebuffer size and fight the per-camera value.
+
+    /// <summary>Resolves the effective screen-pixel size for this canvas, in real pixels.</summary>
+    private static Float2 ResolveScreenSize() => new Float2(
+        ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X,
+        ScreenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y);
+
+    // ============================================================
+    // NEW: WorldSpace IRenderable plumbing
+    // ============================================================
+
+    /// <summary>
+    /// For <see cref="RenderMode.WorldSpace"/> canvases, adds every item in <see cref="Tree"/>
+    /// to the scene's main renderable list so they participate in #13 Transparent + UI passes.
+    /// Overlay/Camera canvases ignore this hook — they are pulled by
+    /// <see cref="UIRenderTree.CollectFor"/> from the pipeline directly.
+    /// </summary>
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> _)
+    {
+        if (RenderMode != RenderMode.WorldSpace) return;
+        RebuildIfDirty();
+        Tree.RefreshTransforms();
+        foreach (UIRenderItem it in Tree.Items)
+            renderables.Add(it);
+    }
+
+    // ============================================================
+    // NEW: rebuild driver — replaces the old DrawGUI
+    // ============================================================
+
+    /// <summary>
+    /// Walks the hierarchy under this canvas, computes layout, generates meshes for any
+    /// <see cref="UIBehaviour"/> with dirty vertices, and produces a fresh <see cref="Tree"/>.
+    /// Cheap when <see cref="_isDirty"/> is false (single boolean check + return).
+    /// </summary>
+    public void RebuildIfDirty()
+    {
+        // Detect a render-target size change (window resize, editor viewport change, switch
+        // between cameras with different RT sizes). The pipeline pushes the active surface size
+        // via GameCanvas.ScreenSizeOverride before calling here, so a mismatch forces a rebuild.
+        Float2 currentSize = ResolveScreenSize();
+        if (!_lastBuildSize.Equals(currentSize))
+        {
+            _isDirty = true;
+            _lastBuildSize = currentSize;
+        }
+
+        if (!_isDirty) return;
+
+        // Recompute scale factor against the current screen size *before* layout — Update()
+        // can't do this reliably because it runs without ScreenSizeOverride set.
+        ScaleFactor = ComputeScaleFactor();
+
+        Tree.Clear();
+
+        Rect rootRect = ComputeRootRect();
+        if (GameObject.RectTransform is { } rrt)
+        {
+            rrt.AnchorMin = Float2.Zero; rrt.AnchorMax = Float2.One;
+            rrt.SizeDelta = Float2.Zero; rrt.AnchoredPosition = Float2.Zero;
+            rrt.ComputedRect = rootRect;
+        }
+
+        int dfs = 0;
+        BuildRecursive(GameObject, rootRect, UIContext.Default, ref dfs);
+        Tree.SortHierarchical();
+
+        _isDirty = false;
+        _aggregateDirty = UIDirtyFlags.None;
+    }
+
+    /// <summary>NEW: extracted from the old DrawGUI (lines 172–187 of the pre-refactor file).</summary>
+    private Rect ComputeRootRect()
+    {
         float rawW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
         float rawH = ScreenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y;
-        float screenW = rawW / ScaleFactor;
-        float screenH = rawH / ScaleFactor;
-        Rect rootRect = new(0, 0, screenW, screenH);
-
-        // Compute layout for the root RectTransform
-        RectTransform? rootRt = GameObject.RectTransform;
-        if (rootRt != null)
-        {
-            rootRt.AnchorMin = Float2.Zero;
-            rootRt.AnchorMax = Float2.One;
-            rootRt.SizeDelta = Float2.Zero;
-            rootRt.AnchoredPosition = Float2.Zero;
-            rootRt.ComputedRect = rootRect;
-        }
-
-        UIContext context = UIContext.Default;
-
-        // Create a root Paper container that covers the full screen
-        var root = paper.Box($"canvas_{InstanceID}")
-            .PositionType(PositionType.SelfDirected)
-            .Left(0)
-            .Top(0)
-            .Width(screenW)
-            .Height(screenH);
-
-        using (root.Enter())
-        {
-            // Traverse children depth-first
-            BuildChildren(paper, GameObject, rootRect, context);
-        }
+        float screenW = rawW / Maths.Max(ScaleFactor, 0.001f);
+        float screenH = rawH / Maths.Max(ScaleFactor, 0.001f);
+        return new Rect(0, 0, screenW, screenH);
     }
 
     /// <summary>
-    /// Recursively traverses child GameObjects, computes RectTransform layout,
-    /// applies CanvasGroup contexts, and invokes BuildUI on UIBehaviours.
+    /// CHANGED: was BuildChildren, which called the (now-deleted) DrawUI on each
+    /// UIBehaviour. The new version (a) bakes meshes via UIMeshBuilder, (b) emits
+    /// UIRenderItems into Tree, and (c) propagates a depth-first-search index for
+    /// hierarchical sorting.
     /// </summary>
-    private void BuildChildren(Paper paper, GameObject parent, Rect parentRect, UIContext context)
+    private void BuildRecursive(GameObject parent, Rect parentRect, UIContext ctx, ref int dfsIndex)
     {
         foreach (GameObject child in parent.Children)
         {
-            if (!child.EnabledInHierarchy)
-                continue;
+            if (!child.EnabledInHierarchy) continue;
 
-            // Nested GameCanvas — skip; it will handle itself
-            GameCanvas? nestedCanvas = child.GetComponent<GameCanvas>();
-            if (nestedCanvas != null && nestedCanvas != this)
-                continue;
+            // Nested GameCanvas — skip; it manages its own tree.
+            GameCanvas? nested = child.GetComponent<GameCanvas>();
+            if (nested != null && nested != this) continue;
 
-            // Apply CanvasGroup if present
-            UIContext childContext = context;
-            CanvasGroup? group = child.GetComponent<CanvasGroup>();
-            if (group != null && group.EnabledInHierarchy)
-                childContext = group.ApplyTo(context);
+            // Apply CanvasGroup to the inherited context.
+            UIContext childCtx = ctx;
+            CanvasGroup? grp = child.GetComponent<CanvasGroup>();
+            if (grp != null && grp.EnabledInHierarchy)
+                childCtx = grp.ApplyTo(ctx);
 
-            // Compute layout if the child has a RectTransform
+            // Lay out this child's RectTransform.
             Rect childRect = parentRect;
-            RectTransform? rt = child.RectTransform;
-            if (rt != null)
+            if (child.RectTransform is { } rt)
                 childRect = rt.ComputeRect(parentRect);
 
-            // Build visual UI for all UIBehaviours on this object
-            foreach (UIBehaviour uiBehaviour in child.GetComponents<UIBehaviour>())
+            // (Re)bake every UIBehaviour that produces geometry, then add a UIRenderItem.
+            foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
             {
-                if (uiBehaviour.EnabledInHierarchy)
-                    uiBehaviour.BuildUI(paper, childContext);
+                if (!ui.EnabledInHierarchy) continue;
+
+                bool needsBake = ui.CachedMesh is null
+                              || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0;
+
+                if (needsBake)
+                {
+                    ui.CachedMesh ??= new Mesh();
+                    UIMeshBuilder builder = UIMeshBuilder.Rent();
+                    try
+                    {
+                        ui.GenerateMesh(builder, childCtx);
+                        if (builder.IsEmpty)      ui.CachedMesh = null;
+                        else                      builder.Bake(ui.CachedMesh);
+                    }
+                    finally { UIMeshBuilder.Return(builder); }
+                    ui.DirtyFlags &= ~UIDirtyFlags.Vertices;
+                }
+
+                if (ui.CachedMesh is { } mesh)
+                {
+                    UIRenderItem item = Tree.RentItem();
+                    item.Initialize(
+                        owner:    ui,
+                        canvas:   this,
+                        mesh:     mesh,
+                        material: ui.GetMaterial(),
+                        model:    BuildItemModel(ui),
+                        sortKey:  (SortOrder << 24) | dfsIndex++,
+                        surface:  UIRenderTree.ToSurface(RenderMode));
+                    Tree.Add(item);
+                }
             }
 
-            // Recurse into grandchildren
-            BuildChildren(paper, child, childRect, childContext);
+            BuildRecursive(child, childRect, childCtx, ref dfsIndex);
         }
     }
 
     /// <summary>
-    /// Recursively ensures all child GameObjects under a GameCanvas use RectTransform.
+    /// Returns the model matrix for a UI element under this canvas.
+    ///
+    /// Convention: a <see cref="UIBehaviour"/>'s mesh is built in <b>element-local pixel space</b>,
+    /// with the element's pivot at the origin (0, 0). <see cref="BuildItemModel"/>:
+    ///   1. translates the pivot to its absolute canvas-design-pixel position (computed from
+    ///      <see cref="RectTransform.ComputedRect"/> + <see cref="RectTransform.Pivot"/>),
+    ///   2. applies any per-element <see cref="Transform.LocalRotation"/> /
+    ///      <see cref="Transform.LocalScale"/> around that pivot,
+    ///   3. converts design-pixel space to whatever the current <see cref="RenderMode"/> needs:
+    ///        • ScreenSpaceOverlay / ScreenSpaceCamera → multiply by <see cref="ScaleFactor"/>
+    ///          so design-pixel layout maps to real pixels for the screen ortho V/P.
+    ///        • WorldSpace → divide by <see cref="ReferencePixelsPerUnit"/> to get world units,
+    ///          then prepend the canvas's own <see cref="Transform.LocalToWorldMatrix"/>.
+    ///
+    /// Note: <see cref="RectTransform.LocalToWorldMatrix"/> is intentionally <b>not</b> used here.
+    /// It treats <see cref="RectTransform.AnchoredPosition"/> as a TRS translation, but the real
+    /// layout — anchors, pivot, SizeDelta, AnchoredPosition — is already baked into
+    /// <see cref="RectTransform.ComputedRect"/> by the layout pass. Multiplying the chain on top
+    /// of an absolute-positioned mesh would double-apply <see cref="RectTransform.AnchoredPosition"/>.
     /// </summary>
+    internal Float4x4 BuildItemModel(UIBehaviour b)
+    {
+        RectTransform rt = b.GameObject.RectTransform!;
+        Rect cr = rt.ComputedRect;
+        Float2 pivot = rt.Pivot;
+
+        // Absolute pivot position in canvas-design pixels.
+        float pivotX = cr.Min.X + pivot.X * cr.Size.X;
+        float pivotY = cr.Min.Y + pivot.Y * cr.Size.Y;
+
+        // Per-element TRS: rotation/scale apply around the pivot (mesh is pivot-centered),
+        // then the pivot is placed at its absolute design-pixel position.
+        Float4x4 elementTRS = Float4x4.CreateTRS(
+            new Float3(pivotX, pivotY, 0),
+            rt.LocalRotation,
+            rt.LocalScale);
+
+        return RenderMode switch
+        {
+            // WorldSpace: design pixels → world units (÷ RPU) → canvas world transform.
+            RenderMode.WorldSpace
+                => Transform.LocalToWorldMatrix
+                 * Float4x4.CreateScale(1f / Maths.Max(ReferencePixelsPerUnit, 0.001f))
+                 * elementTRS,
+
+            // ScreenSpace surfaces: the screen ortho V/P uses real pixel dimensions, but the
+            // mesh + layout live in canvas-design pixels (= real_pixels / ScaleFactor).
+            // Multiply by ScaleFactor to convert design pixels back to real pixels so the
+            // ortho projects them correctly. This is what makes UI scale with the screen.
+            _ => Float4x4.CreateScale(ScaleFactor) * elementTRS,
+        };
+    }
+
+    // ============================================================
+    // Unchanged from the original — preserved verbatim
+    // ============================================================
+
     private static void EnsureChildRectTransforms(GameObject parent)
     {
         foreach (GameObject child in parent.Children)
@@ -174,5 +362,37 @@ public class GameCanvas : MonoBehaviour
             EnsureChildRectTransforms(child);
         }
     }
-}
 
+    private float ComputeScaleFactor()
+    {
+        switch (UIScaleMode)
+        {
+            case ScaleMode.ConstantPixelSize:    return Maths.Max(ScaleFactor, 0.001f);
+            case ScaleMode.ScaleWithScreenSize:  return ComputeScreenSizeScale();
+            default:                              return 1f;
+        }
+    }
+
+    private float ComputeScreenSizeScale()
+    {
+        float screenW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
+        float screenH = ScreenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y;
+        if (screenW <= 0 || screenH <= 0) return 1f;
+
+        float refW = Maths.Max(ReferenceResolution.X, 1f);
+        float refH = Maths.Max(ReferenceResolution.Y, 1f);
+
+        float logWidth  = MathF.Log2(screenW / refW);
+        float logHeight = MathF.Log2(screenH / refH);
+
+        float logScale = ScreenMatchMode switch
+        {
+            ScreenMatchMode.MatchWidthOrHeight =>
+                Maths.Lerp(logWidth, logHeight, Maths.Clamp(MatchWidthOrHeight, 0f, 1f)),
+            ScreenMatchMode.Expand => Maths.Min(logWidth, logHeight),
+            ScreenMatchMode.Shrink => Maths.Max(logWidth, logHeight),
+            _ => 0f,
+        };
+        return Maths.Max(Maths.Pow(2f, logScale), 0.001f);
+    }
+}

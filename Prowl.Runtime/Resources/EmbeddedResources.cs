@@ -55,7 +55,8 @@ internal static class EmbeddedResources
         string[] resourceNames = RuntimeAssembly.GetManifestResourceNames();
 
         // Try exact match first
-        resourceName = resourceNames.FirstOrDefault(r => r.Replace('\\', '/').EndsWith(resourcePath, StringComparison.OrdinalIgnoreCase))
+        resourceName = resourceNames.FirstOrDefault(r => r.Replace('\\', '/').EndsWith(resourcePath, StringComparison.OrdinalIgnoreCase) ||
+                                                         r.Replace('\\', '/').EndsWith("." + resourcePath.Split('/').Last(), StringComparison.OrdinalIgnoreCase))
                     ?? resourceNames.FirstOrDefault(r => r.EndsWith(Path.GetFileName(resourcePath), StringComparison.OrdinalIgnoreCase));
 
         return resourceName != null;

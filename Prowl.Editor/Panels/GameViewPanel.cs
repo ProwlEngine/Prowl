@@ -27,11 +27,6 @@ public class GameViewPanel : DockPanel
     private int _resolutionIndex = 0;
     private const float ToolbarHeight = 26f;
 
-    // Separate Paper instance for in-game UI so it renders into the game RT,
-    // not on top of the editor.
-    private PaperRenderer? _gamePaperRenderer;
-    private Paper? _gamePaper;
-
     private static readonly (string name, int w, int h)[] Resolutions =
     {
         ("Free", 0, 0),
@@ -45,8 +40,21 @@ public class GameViewPanel : DockPanel
 
     private static System.Collections.Generic.IReadOnlyList<string> ResolutionList => Resolutions.Select(r => r.name).ToArray();
 
+    private bool _initialized = false;
+
+    private void Initialize(float panelWidth, float panelHeight)
+    {
+        if (_initialized) return;
+
+        _resolutionIndex = ProjectSettingsRegistry.Get<ProjectsEditorSettings>().SelectedResolutionIndex;
+        _initialized = true;
+        InitRT(panelWidth, panelHeight);
+    }
+
     public override void OnGUI(Paper paper, float width, float height)
     {
+        Initialize(width, height);
+
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
@@ -67,7 +75,11 @@ public class GameViewPanel : DockPanel
             .Enter())
         {
             Origami.Dropdown(paper, "gv_res", _resolutionIndex,
-                v => { _resolutionIndex = v; InitRT(panelWidth, panelHeight); }, resNames).Show();
+                v => { _resolutionIndex = v; InitRT(panelWidth, panelHeight);
+                        var settings = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+                        settings.SelectedResolutionIndex = v;
+                        ProjectSettingsRegistry.SaveAll();
+                }, resNames).Show();
 
             paper.Box("gv_spacer");
 
@@ -134,26 +146,6 @@ public class GameViewPanel : DockPanel
             pipeline.Render(cam, new RenderingData());
 
             cam.Target = origTarget;
-        }
-
-        // Render game OnGui into the game RT using a separate Paper instance
-        // so it doesn't overlay the editor UI.
-        if (Application.IsPlaying && _rt != null)
-        {
-            EnsureGamePaper(rtW, rtH);
-            _gamePaperRenderer!.UpdateProjection(rtW, rtH);
-
-            // Bind the game RT BEFORE EndFrame so the Paper renderer draws into it
-            Graphics.BindFramebuffer(_rt.frameBuffer);
-            Graphics.Viewport(0, 0, (uint)rtW, (uint)rtH);
-
-            _gamePaper!.BeginFrame(Time.DeltaTime, -1f);
-            scene.OnGui(_gamePaper);
-            _gamePaper.EndFrame(); // Layout + render draw calls go to the bound RT
-
-            // Restore default framebuffer for editor rendering
-            Graphics.UnbindFramebuffer();
-            Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         }
 
         using (paper.Box("gv_container")
@@ -235,24 +227,6 @@ public class GameViewPanel : DockPanel
                     .BackgroundColor(Color.Black);
             }
         }
-
-        // Call OnGui on all MonoBehaviours so game UI works in playmode
-        if (Application.IsPlaying)
-            scene.OnGui(paper);
-    }
-
-    private void EnsureGamePaper(int w, int h)
-    {
-        if (_gamePaperRenderer == null)
-        {
-            _gamePaperRenderer = new PaperRenderer();
-            _gamePaperRenderer.Initialize(w, h);
-        }
-
-        if (_gamePaper == null)
-            _gamePaper = new Paper(_gamePaperRenderer, w, h, new Prowl.Quill.FontAtlasSettings());
-        else
-            _gamePaper.SetResolution(w, h);
     }
 
     private void EnsureRT(int w, int h)

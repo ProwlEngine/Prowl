@@ -7,6 +7,8 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.UI;
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 using Material = Prowl.Runtime.Resources.Material;
@@ -22,12 +24,24 @@ public struct ViewerData
     public Float3 Up;
     public Float3 Right;
 
+    public uint PixelWidth;
+    public uint PixelHeight;
+
+    public Float4x4 ViewMatrix;
+    public Float4x4 ProjectionMatrix;
+
     public ViewerData(DefaultRenderPipeline.CameraSnapshot css)
     {
         Position = css.CameraPosition;
         Forward = css.CameraForward;
         Up = css.CameraUp;
         Right = css.CameraRight;
+
+        PixelWidth = css.PixelWidth;
+        PixelHeight = css.PixelHeight;
+
+        ViewMatrix = css.View;
+        ProjectionMatrix = css.Projection;
     }
 
     public ViewerData(Float3 position, Float3 forward, Float3 right, Float3 up) : this()
@@ -92,6 +106,72 @@ public class DefaultRenderPipeline : RenderPipeline
     }
 
     #endregion
+
+    private static readonly List<IRenderable> s_uiTmp = new(64);
+
+    private void RenderUIQueue(Camera cam, CameraSnapshot css, RenderTexture? colorRT, UISurface surface)
+    {
+        // Tell every screen-space GameCanvas the size of the surface it is being drawn onto.
+        // This MUST match the orthographic projection built by BuildScreenOrtho below — otherwise
+        // canvas-design-pixel layout (computed from this size) will not align with the projection
+        // and the UI will be off-center / mis-scaled. The canvas will rebuild itself when this
+        // value differs from the last rebuild's size.
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        GameCanvas.ScreenSizeOverride = new Float2(css.PixelWidth, css.PixelHeight);
+        try
+        {
+            s_uiTmp.Clear();
+            UIRenderTree.CollectFor(css.Scene, surface, s_uiTmp);
+            if (s_uiTmp.Count == 0) return;
+
+            // Items already in hierarchical order per-canvas. Stable-sort by SortKey across canvases.
+            s_uiTmp.Sort((a, b) => ((UIRenderItem)a).SortKey.CompareTo(((UIRenderItem)b).SortKey));
+
+            switch (surface)
+            {
+                case UISurface.Camera:
+                    Graphics.BindFramebuffer(colorRT!.frameBuffer);
+                    AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
+                    break;
+                case UISurface.Overlay:
+                    /*
+                     More correct version should use, but it breaks in game view so we're retaining colorRT binding
+                     Graphics.UnbindFramebuffer();
+                        Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X,
+                            (uint)Window.InternalWindow.FramebufferSize.Y);
+                     */
+                    if (colorRT != null)
+                    {
+                        Graphics.BindFramebuffer(colorRT!.frameBuffer);
+                        AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
+                    }
+                    else
+                    {
+                        Graphics.UnbindFramebuffer();
+                        Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X,
+                            (uint)Window.InternalWindow.FramebufferSize.Y);
+                    }
+
+                    break;
+                case UISurface.World:
+                    return; // world items go through the UI stage right after transparents.
+            }
+
+            DrawRenderables(s_uiTmp, "RenderOrder", "UI", new ViewerData(css), null, false);
+
+            if (surface != UISurface.World)
+                AssignCameraMatrices(css.View, css.Projection); // restore for subsequent stages
+        }
+        finally
+        {
+            GameCanvas.ScreenSizeOverride = prevOverride;
+        }
+    }
+
+    private static Float4x4 BuildScreenOrtho(CameraSnapshot css)
+    {
+        return Float4x4.CreateOrthoOffCenter(0, css.PixelWidth, css.PixelHeight, 0, -1000f, 1000f);
+    }
 
     #region Main Rendering
 
@@ -370,6 +450,11 @@ public class DefaultRenderPipeline : RenderPipeline
         Graphics.BindFramebuffer(colorRT.frameBuffer);
         List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
         DrawRenderables(sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false);
+        DrawRenderables(sortBackToFront, "RenderOrder", "UI", new ViewerData(css), null, false); // world-space UI
+
+        // =======================================================
+        // 13b. ScreenSpaceCamera UI — drawn before PostProcess so post-FX (bloom, tonemap, ...) composite over UI
+        RenderUIQueue(camera, css, colorRT, UISurface.Camera);
 
         // =======================================================
         // 14. PostProcess effects
@@ -409,6 +494,8 @@ public class DefaultRenderPipeline : RenderPipeline
         // 16. Final blit to target (null = screen)
         Blit(colorRT, target, null, 0, false, false);
 
+        RenderUIQueue(camera, css, target,  UISurface.Overlay);    // 16b (NEW)
+
         // =======================================================
         // 17. Save previous VP for next frame's motion vectors (before OnPostRender resets jitter)
         camera.SavePreviousViewProjectionMatrix();
@@ -417,6 +504,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // 18. Post Render
         foreach (ImageEffect effect in allEffects)
             effect.OnPostRender(camera);
+
 
         // =======================================================
         // 18. Cleanup

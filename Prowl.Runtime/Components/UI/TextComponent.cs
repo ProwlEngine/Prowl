@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
-using Prowl.PaperUI;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
-using Prowl.Scribe;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime;
 
@@ -28,54 +28,32 @@ public class TextComponent : UIBehaviour
 
     public int Size = 20;
 
-    private WorldCanvas _canvas;
+    public override bool RequiresPerElementMaterial => true;
 
-    public override void OnEnable()
+    public override void GenerateMesh(UIMeshBuilder builder, in UIContext context)
     {
-        base.OnEnable();
-        //_canvas ??= GetComponentInParent<WorldCanvas>();
-        //_canvas.OnRenderUI += RenderGUI;
+        // Phase 4.A — placeholder. Until Scribe atlas integration lands, draw a
+        // tinted rect so layout/dirty paths can be exercised against TextComponent.
+        if (string.IsNullOrEmpty(Text)) return;
+        var rt = GameObject.RectTransform;
+        if (rt is null) return;
+        Rect r = rt.ComputedRect;
+        if (r.Size.X <= 0 || r.Size.Y <= 0) return;
+
+        // Element-local pivot-centered rect (see GameCanvas.BuildItemModel for the convention).
+        float w = r.Size.X;
+        float h = r.Size.Y;
+        Float2 pivot = rt.Pivot;
+        Rect local = new Rect(
+            -pivot.X * w,
+            -pivot.Y * h,
+            (1f - pivot.X) * w,
+            (1f - pivot.Y) * h);
+
+        Color tinted = TextColor * new Color(1, 1, 1, context.Alpha);
+        builder.AddQuad(local, tinted, Float2.Zero, Float2.One);
     }
 
-    public override void OnDisable()
-    {
-        base.OnDisable();
-        //_canvas ??= GetComponentInParent<WorldCanvas>();
-        //_canvas.OnRenderUI -= RenderGUI;
-    }
-
-    public override void BuildUI(Paper paper, UIContext ctx){}
-
-    public override void OnGui(Paper paper)
-    {
-        RenderGUI(paper);
-    }
-
-    public void RenderGUI(Paper paper)
-    {
-        if (paper == null) return;
-        if (Font == null) return;
-
-        RectTransform? rt = GameObject.RectTransform;
-        if (rt == null) return;
-
-        Rect rect = rt.ComputedRect;
-        float w = rect.Size.X;
-        float h = rect.Size.Y;
-        if (w <= 0 || h <= 0) return;
-
-        paper.Box($"txt_{InstanceID}")
-            .Height(Size)
-            .PositionType(PositionType.SelfDirected)
-            .Left(rect.Min.X)
-            .Top(rect.Min.Y)
-            .Width(w)
-            .Height(h)
-            .Text(Text, Font.GetScribeFont())
-            .TextColor(TextColor)
-            .Alignment(Alignment)
-            .FontSize(Size);
-
-        //Debug.Log($"Drawing text...!");
-    }
+    public override void PopulateProperties(PropertyState p, in UIContext _)
+        => p.SetTexture("_MainTex", Texture2D.LoadDefault(DefaultTexture.White));
 }

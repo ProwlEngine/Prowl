@@ -196,9 +196,9 @@ public class Transform
         return Quaternion.NormalizeSafe(new Quaternion(c.X, c.Y, c.Z, 1f + d));
     }
 
-    public Float4x4 WorldToLocalMatrix => LocalToWorldMatrix.Invert();
+    public virtual Float4x4 WorldToLocalMatrix => LocalToWorldMatrix.Invert();
 
-    public Float4x4 LocalToWorldMatrix
+    public virtual Float4x4 LocalToWorldMatrix
     {
         get
         {

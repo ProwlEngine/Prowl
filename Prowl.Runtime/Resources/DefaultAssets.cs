@@ -21,6 +21,7 @@ public enum DefaultShader
     Terrain,
     Grass,
     Refraction,
+    GameUI,
 
     ProceduralSkybox,
     GradientSkybox,

@@ -16,6 +16,8 @@ public class ProjectsEditorSettings : ProjectSettingsBase
     public List<string> ColorPalette = DefaultColorPalette();
     public List<CurvePreset> CurvePalette = DefaultCurvePalette();
 
+    public int SelectedResolutionIndex = 0;
+
     public class CurvePreset
     {
         public string Name = "";

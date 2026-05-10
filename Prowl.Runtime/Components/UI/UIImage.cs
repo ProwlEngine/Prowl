@@ -1,12 +1,11 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-
-using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
+using Prowl.Echo;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.UI;
 
@@ -21,99 +20,109 @@ namespace Prowl.Runtime.UI;
 /// </remarks>
 public class UIImage : UIBehaviour
 {
-    /// <summary>
-    /// The tint color of the image. Alpha is modulated by CanvasGroup.
-    /// </summary>
-    public Color Color = Color.White;
-
-    /// <summary>
-    /// Optional texture to display. When null, a solid color rectangle is drawn.
-    /// </summary>
-    public Texture2D? Sprite;
-
-    /// <summary>
-    /// Whether the image should preserve the source texture's aspect ratio.
-    /// </summary>
-    public bool PreserveAspect;
-
-    /// <summary>
-    /// Corner radius for rounded rectangles (in pixels). 0 = sharp corners.
-    /// </summary>
-    public float CornerRadius;
-
-    /// <summary>
-    /// Whether this element should block raycasts (pointer hit-testing).
-    /// </summary>
-    public bool RaycastTarget = true;
-
-    public override void BuildUI(Paper paper, UIContext context)
+    [SerializeIgnore] private static Texture2D _defaultTexture;
+    public static Texture2D defaultTexture
     {
-        RectTransform? rt = GameObject.RectTransform;
-        if (rt == null) return;
-
-        Rect rect = rt.ComputedRect;
-        float w = rect.Size.X;
-        float h = rect.Size.Y;
-        if (w <= 0 || h <= 0) return;
-
-        Color tinted = new(
-            Color.R,
-            Color.G,
-            Color.B,
-            Color.A * context.Alpha
-        );
-
-        var box = paper.Box($"img_{InstanceID}")
-            .PositionType(PositionType.SelfDirected)
-            .Left(rect.Min.X)
-            .Top(rect.Min.Y)
-            .Width(w)
-            .Height(h)
-            .BackgroundColor(tinted);
-
-        if (CornerRadius > 0)
-            box = box.Rounded(CornerRadius);
-
-        using (box.Enter())
+        get
         {
-            // Box content — texture support will use Paper's image API
-            // when the backend supports it.
+            if (_defaultTexture != null) return _defaultTexture;
+            //Texture2D.LoadDefault(DefaultTexture.White)
+            var tex = new Texture2D(1, 1);
+            tex.SetData(new System.Memory<byte>(new byte[] { 255, 255, 255, 255 }), 0,0,1,1);
+            _defaultTexture = tex;
+            return _defaultTexture;
         }
     }
 
-    public override void OnGui(Paper paper)
+    private Texture2D? _texture;
+    public Texture2D? Texture
     {
-        RectTransform? rt = GameObject.RectTransform;
-        if (rt == null) return;
+        get => _texture;
+        set { if (ReferenceEquals(_texture, value)) return; _texture = value; MarkDirty(UIDirtyFlags.Material); }
+    }
 
-        Rect rect = rt.ComputedRect;
-        float w = rect.Size.X;
-        float h = rect.Size.Y;
-        if (w <= 0 || h <= 0) return;
+    // ---- Material override ----
+    [SerializeField] private Material? _material;
+    public Material? Material
+    {
+        get => _material;
+        set { if (ReferenceEquals(_material, value)) return; _material = value; MarkDirty(UIDirtyFlags.Material); }
+    }
 
-        Color tinted = new(
-            Color.R,
-            Color.G,
-            Color.B,
-            Color.A
-        );
+    /// <summary>The tint color of the image. Alpha is modulated by the parent <see cref="CanvasGroup"/>.</summary>
+    [SerializeField] private Color _color = Color.White;
+    public Color Color
+    {
+        get => _color;
+        set { if (_color == value) return; _color = value; MarkDirty(UIDirtyFlags.Vertices); }
+    }
 
-        var box = paper.Box($"img_{InstanceID}")
-            .PositionType(PositionType.SelfDirected)
-            .Left(rect.Min.X)
-            .Top(rect.Min.Y)
-            .Width(w)
-            .Height(h)
-            .Rounded(CornerRadius)
-            .BackgroundColor(tinted);
+    /// <summary>Whether the image should preserve the source texture's aspect ratio.</summary>
+    [SerializeField] private bool _preserveAspect;
+    public bool PreserveAspect
+    {
+        get => _preserveAspect;
+        set { if (_preserveAspect == value) return; _preserveAspect = value; MarkDirty(UIDirtyFlags.Vertices); }
+    }
 
+    /// <summary>Corner radius for rounded rectangles (in pixels). 0 = sharp corners.</summary>
+    [SerializeField] private float _cornerRadius;
+    public float CornerRadius
+    {
+        get => _cornerRadius;
+        set { if (_cornerRadius == value) return; _cornerRadius = value; MarkDirty(UIDirtyFlags.Vertices); }
+    }
+
+    /// <summary>
+    /// Whether this element should block raycasts (pointer hit-testing).
+    /// Affects input dispatch only — does not change rendering.
+    /// </summary>
+    [SerializeField] private bool _raycastTarget = true;
+    public bool RaycastTarget
+    {
+        get => _raycastTarget;
+        set { if (_raycastTarget == value) return; _raycastTarget = value; MarkDirty(UIDirtyFlags.Hierarchy); }
+    }
+
+    public override Material GetMaterial() => _material ?? base.GetMaterial();
+
+    public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx)
+    {
+        var rt = GameObject.RectTransform;
+        if (rt is null) return;
+        Rect r = rt.ComputedRect;
+        if (r.Size.X <= 0 || r.Size.Y <= 0) return;
+
+        // Emit vertices in element-local pixel space, with the pivot at the origin.
+        // GameCanvas.BuildItemModel translates this pivot to its absolute design-pixel
+        // position and applies any LocalRotation / LocalScale around it.
+        float w = r.Size.X;
+        float h = r.Size.Y;
+        Float2 pivot = rt.Pivot;
+        Rect local = new Rect(
+            -pivot.X * w,
+            -pivot.Y * h,
+            (1f - pivot.X) * w,
+            (1f - pivot.Y) * h);
+
+        Color tinted = Color * new Color(1, 1, 1, ctx.Alpha);
         if (CornerRadius > 0)
-            box = box.Rounded(CornerRadius);
+            b.AddRoundedRect(local, CornerRadius, tinted);
+        else
+            b.AddQuad(local, tinted, new Float2(0,1), new Float2(1,0));
+    }
 
-        using (box.Enter())
-        {
-            // Box content — texture support will use Paper's image API
-            // when the backend supports it.
-        }
+    public override void PopulateProperties(PropertyState p, in UIContext _)
+    {
+        p.SetTexture("_MainTex", Texture ?? defaultTexture);
+        p.SetColor("_MainColor", Color);   // tint already baked into vertex color
+        p.SetVector("_Tiling", new Float2(1, 1));
+        p.SetVector("_Offset", Float2.Zero);
+    }
+
+    public override void OnValidate()
+    {
+        Debug.Log("UIImage.OnValidate");
+        MarkDirty(UIDirtyFlags.All);
     }
 }
