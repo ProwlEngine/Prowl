@@ -96,11 +96,19 @@ public sealed class TerrainData : EngineObject, ISerializable
 {
     // --- Heightmap & Surface ---
 
+    /// <summary>Max value for 16-bit height storage (matches Unity's kMaxHeight).</summary>
+    public const int kMaxHeight = 32766;
+
     public int HeightmapResolution = 513;
     public int SplatmapResolution = 512;
     public float Size = 1024f;
     public float Height = 100f;
-    public float[] Heights;
+
+    /// <summary>
+    /// Raw 16-bit heightmap. Values 0..kMaxHeight map to normalized 0..1.
+    /// Use GetHeight/SetHeight for float access. Halves memory vs float[].
+    /// </summary>
+    public short[] Heights;
     public float[] Splats;
     public TerrainLayer[] Layers = [new(), new(), new(), new()];
 
@@ -136,7 +144,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     public TerrainData() : base("New TerrainData")
     {
-        Heights = new float[HeightmapResolution * HeightmapResolution];
+        Heights = new short[HeightmapResolution * HeightmapResolution];
         Splats = new float[SplatmapResolution * SplatmapResolution * 4];
         for (int i = 0; i < Splats.Length; i += 4)
             Splats[i] = 1f;
@@ -155,21 +163,24 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     #region Heightmap
 
+    /// <summary>Get normalized height (0-1) at integer coordinates.</summary>
     public float GetHeight(int x, int z)
     {
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return 0f;
-        return Heights[z * HeightmapResolution + x];
+        return (float)Heights[z * HeightmapResolution + x] / kMaxHeight;
     }
 
+    /// <summary>Set normalized height (0-1) at integer coordinates. Stored as 16-bit.</summary>
     public void SetHeight(int x, int z, float value)
     {
         if (Heights == null || x < 0 || x >= HeightmapResolution || z < 0 || z >= HeightmapResolution)
             return;
-        Heights[z * HeightmapResolution + x] = Maths.Clamp(value, 0f, 1f);
+        Heights[z * HeightmapResolution + x] = (short)(Maths.Clamp(value, 0f, 1f) * kMaxHeight);
         _heightmapDirty = true;
     }
 
+    /// <summary>Bilinear interpolated height in world units at normalized UV coordinates.</summary>
     public float GetInterpolatedHeight(float u, float v)
     {
         if (Heights == null) return 0f;
@@ -180,10 +191,11 @@ public sealed class TerrainData : EngineObject, ISerializable
         int x1 = Maths.Min(x0 + 1, HeightmapResolution - 1);
         int z1 = Maths.Min(z0 + 1, HeightmapResolution - 1);
         float fx = px - x0, fz = pz - z0;
-        float h00 = Heights[z0 * HeightmapResolution + x0];
-        float h10 = Heights[z0 * HeightmapResolution + x1];
-        float h01 = Heights[z1 * HeightmapResolution + x0];
-        float h11 = Heights[z1 * HeightmapResolution + x1];
+        float scale = 1f / kMaxHeight;
+        float h00 = Heights[z0 * HeightmapResolution + x0] * scale;
+        float h10 = Heights[z0 * HeightmapResolution + x1] * scale;
+        float h01 = Heights[z1 * HeightmapResolution + x0] * scale;
+        float h11 = Heights[z1 * HeightmapResolution + x1] * scale;
         return ((h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz) * Height;
     }
 
@@ -191,7 +203,14 @@ public sealed class TerrainData : EngineObject, ISerializable
     {
         HeightmapResolution = newRes;
         Heights = new float[newRes * newRes];
+        Heights = new short[newRes * newRes];
         _heightmapDirty = true;
+    }
+
+    public void SetHeightmapDirty()
+    {
+        _heightmapDirty = true;
+    }
     }
 
     public void SetHeightmapDirty() => _heightmapDirty = true;
@@ -277,17 +296,29 @@ public sealed class TerrainData : EngineObject, ISerializable
 
     #region GPU Textures
 
+    // Reusable buffer for converting short heights to float for GPU upload
+    [NonSerialized] private float[]? _heightmapFloatBuffer;
+
     public Texture2D? GetHeightmapTexture()
     {
         if (Heights == null) return null;
         if (_heightmapDirty || _heightmapTexture == null)
         {
+            int count = HeightmapResolution * HeightmapResolution;
+
+            // Convert short[] to float[] for GPU
+            if (_heightmapFloatBuffer == null || _heightmapFloatBuffer.Length != count)
+                _heightmapFloatBuffer = new float[count];
+            float scale = 1f / kMaxHeight;
+            for (int i = 0; i < count; i++)
+                _heightmapFloatBuffer[i] = Heights[i] * scale;
+
             _heightmapTexture?.Dispose();
             _heightmapTexture = new Texture2D((uint)HeightmapResolution, (uint)HeightmapResolution, false, TextureImageFormat.Float);
             _heightmapTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             Graphics.SetWrapS(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
             Graphics.SetWrapT(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
-            unsafe { fixed (float* ptr = Heights) _heightmapTexture.SetDataPtr(ptr, 0, 0, (uint)HeightmapResolution, (uint)HeightmapResolution); }
+            unsafe { fixed (float* ptr = _heightmapFloatBuffer) _heightmapTexture.SetDataPtr(ptr, 0, 0, (uint)HeightmapResolution, (uint)HeightmapResolution); }
             _heightmapDirty = false;
         }
         return _heightmapTexture;
@@ -337,7 +368,7 @@ public sealed class TerrainData : EngineObject, ISerializable
         value.Add("Layers", layerList);
 
         // Raw data
-        SerializeFloatArray(value, "Heights", Heights);
+        SerializeShortArray(value, "Heights16", Heights);
         SerializeFloatArray(value, "Splats", Splats);
 
         // Detail system
@@ -423,8 +454,23 @@ public sealed class TerrainData : EngineObject, ISerializable
                 Layers[i].Metallic = lo.Get("Metallic")?.FloatValue ?? 0f;
             }
 
-        // Raw data
-        Heights = DeserializeFloatArray(value, "Heights") ?? new float[HeightmapResolution * HeightmapResolution];
+        // Raw data - try new 16-bit format first, fall back to legacy float[]
+        Heights = DeserializeShortArray(value, "Heights16");
+        if (Heights == null)
+        {
+            // Migration: convert old float[] heights to short[]
+            float[]? oldHeights = DeserializeFloatArray(value, "Heights");
+            if (oldHeights != null)
+            {
+                Heights = new short[oldHeights.Length];
+                for (int i = 0; i < oldHeights.Length; i++)
+                    Heights[i] = (short)(Maths.Clamp(oldHeights[i], 0f, 1f) * kMaxHeight);
+            }
+            else
+            {
+                Heights = new short[HeightmapResolution * HeightmapResolution];
+            }
+        }
         Splats = DeserializeFloatArray(value, "Splats") ?? CreateDefaultSplats();
 
         // Detail system
@@ -533,6 +579,24 @@ public sealed class TerrainData : EngineObject, ISerializable
     #endregion
 
     #region Helpers
+
+    private static void SerializeShortArray(EchoObject value, string key, short[]? data)
+    {
+        if (data == null) return;
+        byte[] bytes = new byte[data.Length * sizeof(short)];
+        Buffer.BlockCopy(data, 0, bytes, 0, bytes.Length);
+        value.Add(key, new EchoObject(Convert.ToBase64String(bytes)));
+    }
+
+    private static short[]? DeserializeShortArray(EchoObject value, string key)
+    {
+        string? b64 = value.Get(key)?.StringValue;
+        if (b64 == null) return null;
+        byte[] bytes = Convert.FromBase64String(b64);
+        short[] arr = new short[bytes.Length / sizeof(short)];
+        Buffer.BlockCopy(bytes, 0, arr, 0, bytes.Length);
+        return arr;
+    }
 
     private static void SerializeFloatArray(EchoObject value, string key, float[]? data)
     {

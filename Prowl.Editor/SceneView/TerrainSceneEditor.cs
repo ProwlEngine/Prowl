@@ -28,7 +28,7 @@ public class TerrainSceneEditor : ISceneViewEditor
     private bool _useTransformTool;
 
     // Temporary full snapshot taken at stroke start used to extract the changed region at stroke end
-    private float[]? _preStrokeHeights;
+    private short[]? _preStrokeHeights;
     private float[]? _preStrokeSplats;
     private List<float[]>? _preStrokeDetails;
 
@@ -255,7 +255,7 @@ public class TerrainSceneEditor : ISceneViewEditor
         _preStrokeDetails = null;
 
         if (TerrainEditor.ActiveTab == TerrainTab.Height && data.Heights != null)
-            _preStrokeHeights = (float[])data.Heights.Clone();
+            _preStrokeHeights = (short[])data.Heights.Clone();
         else if (TerrainEditor.ActiveTab == TerrainTab.Paint && data.Splats != null)
             _preStrokeSplats = (float[])data.Splats.Clone();
         else if (TerrainEditor.ActiveTab == TerrainTab.Details)
@@ -330,6 +330,40 @@ public class TerrainSceneEditor : ISceneViewEditor
             }
             _preStrokeDetails = null;
         }
+    }
+
+    // short[] overloads for 16-bit heightmap undo
+    private static void FindChangedRect(short[] a, short[] b, int res, int rowStride,
+        out int minX, out int minZ, out int maxX, out int maxZ)
+    {
+        minX = int.MaxValue; minZ = int.MaxValue;
+        maxX = int.MinValue; maxZ = int.MinValue;
+        for (int z = 0; z < res; z++)
+            for (int x = 0; x < res; x++)
+            {
+                int idx = z * res + x;
+                if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
+                {
+                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                    minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
+                }
+            }
+    }
+
+    private static short[] CopyRect(short[] src, int res, int minX, int minZ, int maxX, int maxZ)
+    {
+        int w = maxX - minX + 1, h = maxZ - minZ + 1;
+        var rect = new short[w * h];
+        for (int z = 0; z < h; z++)
+            Array.Copy(src, (minZ + z) * res + minX, rect, z * w, w);
+        return rect;
+    }
+
+    private static void PasteRect(short[] dst, int res, int minX, int minZ, int maxX, int maxZ, short[] rect)
+    {
+        int w = maxX - minX + 1, h = maxZ - minZ + 1;
+        for (int z = 0; z < h; z++)
+            Array.Copy(rect, z * w, dst, (minZ + z) * res + minX, w);
     }
 
     // Find the bounding rect of changed values between two arrays (single-stride)
