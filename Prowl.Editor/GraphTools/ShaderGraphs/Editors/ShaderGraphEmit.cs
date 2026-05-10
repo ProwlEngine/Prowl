@@ -36,7 +36,7 @@ public static class ShaderGraphEmit
         _                            => "Back",
     };
 
-    /// <summary>Parser uses Unity-style shortened names for depth test. Keep our enum
+    /// <summary>Parser uses shortened names for depth test. Keep our enum
     /// human-readable but emit the short form.</summary>
     public static string ZTestKeyword(ShaderZTest z) => z switch
     {

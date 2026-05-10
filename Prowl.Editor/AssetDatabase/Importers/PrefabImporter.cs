@@ -10,8 +10,8 @@ namespace Prowl.Editor.Importers;
 
 /// <summary>
 /// Imports .prefab files serialized GameObject hierarchies wrapped in PrefabAsset.
-/// Dependencies are discovered by walking the raw EchoObject tree for $assetId tags
-/// and PrefabAssetId references, without deserializing the full GO hierarchy.
+/// Dependencies are discovered by walking the raw EchoObject tree for AssetID tags
+/// (from AssetRef serialization) and PrefabAssetId references, without deserializing the full GO hierarchy.
 /// </summary>
 [ImporterFor(".prefab")]
 public class PrefabImporter : AssetImporter
@@ -47,8 +47,8 @@ public class PrefabImporter : AssetImporter
     }
 
     /// <summary>
-    /// Recursively walks an EchoObject tree to find all asset references ($assetId tags)
-    /// and prefab references (PrefabAssetId strings).
+    /// Recursively walks an EchoObject tree to find all asset references (AssetID tags
+    /// from AssetRef serialization) and prefab references (PrefabAssetId strings).
     /// </summary>
     private static void CollectDependencies(EchoObject echo, HashSet<Guid> deps)
     {
@@ -56,8 +56,9 @@ public class PrefabImporter : AssetImporter
 
         if (echo.TagType == EchoType.Compound)
         {
-            // Check for $assetId references (materials, textures, meshes, etc.)
-            if (echo.TryGet("$assetId", out var assetIdTag))
+            // Check for AssetRef references (materials, textures, meshes, etc.)
+            // AssetRef<T> serializes as { "AssetID": "guid-string" }
+            if (echo.TryGet("AssetID", out var assetIdTag))
             {
                 if (Guid.TryParse(assetIdTag.StringValue, out var assetGuid) && assetGuid != Guid.Empty)
                     deps.Add(assetGuid);

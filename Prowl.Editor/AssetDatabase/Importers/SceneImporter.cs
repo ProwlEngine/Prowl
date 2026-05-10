@@ -32,7 +32,7 @@ public class SceneImporter : AssetImporter
                 ctx.SetMainAsset(scene);
 
                 // Also walk the raw echo for PrefabAssetId references
-                // (these are plain Guid strings, not $assetId, so not auto-tracked)
+                // (these are plain Guid strings, not AssetRef fields, so not auto-tracked)
                 CollectPrefabDependencies(echo, dependencies);
 
                 foreach (var dep in dependencies)

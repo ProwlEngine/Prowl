@@ -37,7 +37,7 @@ public enum DetailRenderMode
     Mesh,
 }
 
-/// <summary>Defines a detail/grass prototype for terrain vegetation (matches Unity's DetailPrototype).</summary>
+/// <summary>Defines a detail/grass prototype for terrain vegetation.</summary>
 public class DetailPrototype
 {
     public AssetRef<Texture2D> Texture;       // texture for billboard/non-billboard modes
@@ -61,7 +61,7 @@ public class DetailPrototype
     public bool AlignToNormal;
 }
 
-/// <summary>A placed tree instance on the terrain (matches Unity's TreeInstance).</summary>
+/// <summary>A placed tree instance on the terrain.</summary>
 public struct TreeInstance
 {
     public Float2 Position;        // terrain UV (0-1)
@@ -72,7 +72,7 @@ public struct TreeInstance
     public Color Tint;             // per-instance color variation
 }
 
-/// <summary>Defines a tree type for terrain vegetation (matches Unity's TreePrototype).</summary>
+/// <summary>Defines a tree type for terrain vegetation.</summary>
 public class TreePrototype
 {
     public AssetRef<Mesh> Mesh;
@@ -103,7 +103,7 @@ public sealed class TerrainData : EngineObject, ISerializable
 {
     // --- Heightmap & Surface ---
 
-    /// <summary>Max value for 16-bit height storage (matches Unity's kMaxHeight).</summary>
+    /// <summary>Max value for 16-bit height storage.</summary>
     public const int kMaxHeight = 32766;
 
     public int HeightmapResolution = 513;

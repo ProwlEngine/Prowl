@@ -84,7 +84,7 @@ public static class GraphRendering
 
     /// <summary>
     /// Draw a wire between two ports using the given <paramref name="style"/>.
-    /// Bezier = horizontal-tangent cubic (Unity-style "S"), Linear = straight,
+    /// Bezier = horizontal-tangent cubic, Linear = straight,
     /// Rectilinear = right-angle Z route. Stroke width stays constant in screen
     /// pixels regardless of zoom (Quill's stroke is in screen units).
     /// </summary>
