@@ -320,6 +320,11 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public virtual void DrawGizmos() { }
 
     /// <summary>
+    /// Called for rendering and handling GUI gizmos.
+    /// </summary>
+    public virtual void DrawGizmosSelected() { }
+
+    /// <summary>
     /// Called for drawing and handling interaction with Runtime/Ingame UI
     /// </summary>
     /// <param name="paper"></param>

@@ -53,6 +53,8 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_skybox;
     private static Material s_gradientSkybox;
     private static Material s_gizmo;
+    private static Material? s_iconMaterial;
+    private static Mesh? s_iconQuad;
     private static Mesh s_gridMesh;
     private static Material s_gridMaterial;
 
@@ -546,24 +548,23 @@ public class DefaultRenderPipeline : RenderPipeline
             if (solid.IsValid()) DrawMeshNow(solid, s_gizmo);
         }
 
-        // TODO: Implement Gizmo Icons rendering
+        // Gizmo Icons - billboarded textured quads
+        var icons = Debug.GetGizmoIcons();
+        if (icons.Count > 0)
+        {
+            s_iconMaterial ??= new Material(Shader.LoadDefault(DefaultShader.GizmoIcon));
+            s_iconQuad ??= Mesh.GetFullscreenQuad();
 
-        //List<GizmoBuilder.IconDrawCall> icons = Debug.GetGizmoIcons();
-        //if (icons != null)
-        //{
-        //    buffer.SetMaterial(s_gizmo);
-        //
-        //    foreach (GizmoBuilder.IconDrawCall icon in icons)
-        //    {
-        //        Vector3 center = icon.center;
-        //        Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, css.cameraUp, css.cameraForward);
-        //
-        //        buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
-        //        buffer.SetTexture("_MainTex", icon.texture);
-        //
-        //        buffer.DrawSingle(s_quadMesh);
-        //    }
-        //}
+            foreach (var icon in icons)
+            {
+                if (icon.Texture == null || icon.Texture.IsDisposed) continue;
+                s_iconMaterial.SetTexture("_MainTex", icon.Texture);
+                s_iconMaterial.SetVector("_IconCenter", icon.Center);
+                s_iconMaterial.SetFloat("_IconScale", icon.Scale);
+                s_iconMaterial.SetVector("_IconColor", new Float4(icon.Color.R, icon.Color.G, icon.Color.B, icon.Color.A));
+                DrawMeshNow(s_iconQuad, s_iconMaterial);
+            }
+        }
     }
 
     #endregion

@@ -240,6 +240,9 @@ public class Camera : MonoBehaviour
 
     public override void DrawGizmos()
     {
+        var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconCamera);
+        if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
+
         float aspect = 1280 / 720;
         Float4x4 viewProjectionMatrix = GetProjectionMatrix(aspect) * GetViewMatrix();
 

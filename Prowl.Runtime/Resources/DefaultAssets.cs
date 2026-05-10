@@ -36,7 +36,8 @@ public enum DefaultShader
     VolumetricFog,
     SDFRaymarch,
     TAA,
-    MotionBlur
+    MotionBlur,
+    GizmoIcon
 }
 
 /// <summary>
@@ -73,7 +74,11 @@ public enum DefaultTexture
     Surface,
     Emission,
     Grid,
-    Noise
+    Noise,
+
+    // Gizmo icons
+    IconCamera,
+    IconLight,
 }
 
 /// <summary>
