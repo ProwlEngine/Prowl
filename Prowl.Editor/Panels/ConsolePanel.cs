@@ -149,11 +149,19 @@ public class ConsolePanel : DockPanel
             paper.Box("con_sep1").Width(1).Height(24).BackgroundColor(EditorTheme.Ink200);
 
             int infoCount = 0, warnCount = 0, errCount = 0;
-            foreach (var m in _messages)
+
+            try
             {
-                if (m.Severity == LogSeverity.Normal || m.Severity == LogSeverity.Success) infoCount += m.Count;
-                else if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
-                else errCount += m.Count;
+                foreach (var m in _messages)
+                {
+                    if (m.Severity == LogSeverity.Normal || m.Severity == LogSeverity.Success) infoCount += m.Count;
+                    else if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
+                    else errCount += m.Count;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogException(ex);
             }
 
             Origami.Switch(paper, "con_collapse", _collapse, v => _collapse = v)
@@ -291,7 +299,7 @@ public class ConsolePanel : DockPanel
                             msg.IconLayout ??= canvas.CreateLayout(icon, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
                             msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
                             msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
-                            
+
 
 
                             float padStack = 4;
