@@ -10,7 +10,6 @@ namespace Prowl.Runtime.Rendering;
 
 public enum TonemapperType
 {
-    None,
     Melon,
     ACES,
     ACESSimple,
@@ -34,7 +33,7 @@ public sealed class TonemapperEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.Tonemapper));
+            _mat ??= new Material(Shader.LoadDefault(DefaultShader.Tonemapper));
 
         _mat.SetKeyword("TONEMAP_MELON", Type == TonemapperType.Melon);
         _mat.SetKeyword("TONEMAP_ACES", Type == TonemapperType.ACES);
