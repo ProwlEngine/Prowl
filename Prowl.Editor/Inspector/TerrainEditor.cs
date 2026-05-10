@@ -403,7 +403,7 @@ public class TerrainEditor : CustomEditor
         paper.Box($"{id}_sp").Height(6);
 
         // Heightmap resolution dropdown
-        string[] hmOptions = ["33", "65", "129", "257", "513", "1025"];
+        string[] hmOptions = ["33", "65", "129", "257", "513", "1025", "2049", "4097"];
         int hmCurrent = Array.IndexOf(hmOptions, data.HeightmapResolution.ToString());
         if (hmCurrent < 0) hmCurrent = 4; // default 513
         InspectorRow.Draw(paper, $"{id}_hmres", "Heightmap Resolution", () =>
