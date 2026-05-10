@@ -572,6 +572,20 @@ public class EditorAssetDatabase : IAssetDatabase
     public string? GuidToPath(Guid guid)
         => _guidToEntry.TryGetValue(guid, out var entry) ? entry.Path : null;
 
+    /// <summary>
+    /// Resolve a GUID to a file path, including sub-assets (returns the parent asset's path).
+    /// </summary>
+    public string? GuidToPathIncludingSubAssets(Guid guid)
+    {
+        // Try main asset first
+        if (_guidToEntry.TryGetValue(guid, out var entry))
+            return entry.Path;
+        // Try sub-asset -> parent
+        if (_subAssetIndex.TryGetValue(guid, out var subInfo))
+            return _guidToEntry.TryGetValue(subInfo.parentGuid, out var parentEntry) ? parentEntry.Path : null;
+        return null;
+    }
+
     public IEnumerable<AssetEntry> GetAllEntries() => _guidToEntry.Values;
 
     public IEnumerable<AssetEntry> FindAssetsOfType<T>() where T : EngineObject

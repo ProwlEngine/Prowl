@@ -96,7 +96,9 @@ public static class ProwlPackage
                 {
                     foreach (var depGuid in entry.Dependencies)
                     {
-                        string? depPath = db.GuidToPath(depGuid);
+                        // Use GuidToPathIncludingSubAssets so sub-asset dependencies
+                        // resolve to their parent asset's file path
+                        string? depPath = db.GuidToPathIncludingSubAssets(depGuid);
                         if (depPath != null && !allPaths.Contains(depPath))
                             queue.Enqueue(depPath);
                     }
