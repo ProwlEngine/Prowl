@@ -166,10 +166,24 @@ public class EditorCamera
             return;
         }
 
-        // Copy the effect list we share the same effect instances so settings
-        // tweaked on the game camera are immediately reflected in the editor view.
+        // Clone effects via Echo serialize/deserialize so each camera has its own
+        // temporal state (TAA history buffers, motion blur, etc.) while mirroring settings.
         _camera.Effects.Clear();
-        _camera.Effects.AddRange(sceneCamera.Effects);
+        foreach (var effect in sceneCamera.Effects)
+        {
+            try
+            {
+                var echo = Echo.Serializer.Serialize(effect);
+                var clone = Echo.Serializer.Deserialize(echo, effect.GetType()) as ImageEffect;
+                if (clone != null)
+                    _camera.Effects.Add(clone);
+            }
+            catch
+            {
+                // Fallback: share instance if clone fails
+                _camera.Effects.Add(effect);
+            }
+        }
 
         // Also match HDR setting so effects like tonemapping behave correctly
         _camera.HDR = sceneCamera.HDR;
