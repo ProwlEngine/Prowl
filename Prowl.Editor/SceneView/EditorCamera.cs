@@ -45,11 +45,14 @@ public class EditorCamera
     private RenderTexture? _renderTarget;
     private SceneViewLockContext _lockContext = new();
 
-    // Camera state position + euler angles (no orbit)
+    // Camera state
     private Float3 _position = new Float3(0, 5, -15);
     private float _yaw = 0f;
     private float _pitch = 15f;
     private float _moveSpeed = 5f;
+
+    // Orbit distance (pivot is always _position + forward * _orbitDistance)
+    private float _orbitDistance = 10f;
 
     // Toggles
     public bool ShowGrid { get; set; } = true;
@@ -166,24 +169,10 @@ public class EditorCamera
             return;
         }
 
-        // Clone effects via Echo serialize/deserialize so each camera has its own
-        // temporal state (TAA history buffers, motion blur, etc.) while mirroring settings.
+        // Copy the effect list we share the same effect instances so settings
+        // tweaked on the game camera are immediately reflected in the editor view.
         _camera.Effects.Clear();
-        foreach (var effect in sceneCamera.Effects)
-        {
-            try
-            {
-                var echo = Echo.Serializer.Serialize(effect);
-                var clone = Echo.Serializer.Deserialize(echo, effect.GetType()) as ImageEffect;
-                if (clone != null)
-                    _camera.Effects.Add(clone);
-            }
-            catch
-            {
-                // Fallback: share instance if clone fails
-                _camera.Effects.Add(effect);
-            }
-        }
+        _camera.Effects.AddRange(sceneCamera.Effects);
 
         // Also match HDR setting so effects like tonemapping behave correctly
         _camera.HDR = sceneCamera.HDR;
@@ -228,11 +217,38 @@ public class EditorCamera
         bool consumed = false;
         float scroll = Input.MouseWheelDelta;
 
-        // Scroll to move forward/back
+        // Scroll to dolly forward/back (also adjusts orbit distance)
         if (scroll != 0 && !Input.GetMouseButton(1))
         {
-            Float3 forward = _cameraObject.Transform.Forward;
-            _position += forward * scroll * _moveSpeed * 0.3f;
+            Float3 forward = GetForwardFromAngles();
+            float dolly = scroll * _orbitDistance * 0.1f;
+            _position += forward * dolly;
+            _orbitDistance = MathF.Max(0.1f, _orbitDistance - dolly);
+            UpdateTransform();
+            consumed = true;
+        }
+
+        // Alt + Left mouse = orbit around pivot (pivot = position + forward * distance)
+        if (Input.IsAltPressed && Input.GetMouseButton(0))
+        {
+            Float2 delta = Input.MouseDelta;
+            Float3 pivot = _position + GetForwardFromAngles() * _orbitDistance;
+
+            _yaw += delta.X * 0.3f;
+            _pitch += delta.Y * 0.3f;
+            _pitch = MathF.Max(-89f, MathF.Min(89f, _pitch));
+
+            _position = pivot - GetForwardFromAngles() * _orbitDistance;
+            UpdateTransform();
+            consumed = true;
+        }
+
+        // Alt + Right mouse = dolly zoom
+        if (Input.IsAltPressed && Input.GetMouseButton(1))
+        {
+            Float2 delta = Input.MouseDelta;
+            float zoomDelta = (delta.X + delta.Y) * 0.02f * _orbitDistance;
+            _orbitDistance = MathF.Max(0.1f, _orbitDistance - zoomDelta);
             UpdateTransform();
             consumed = true;
         }
@@ -353,13 +369,9 @@ public class EditorCamera
         float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
         dist = MathF.Max(dist, 0.5f);
 
-        // Look at target from the camera's current orientation subsequent F presses
-        // retighten the frame rather than being no-ops once we're "close enough".
-        Float3 forward = _cameraObject.Transform.Forward;
-        if (Float3.LengthSquared(forward) < 0.0001f) forward = new Float3(0, 0, 1);
-        forward = Float3.Normalize(forward);
-
-        _position = target - forward * dist;
+        // Set orbit distance and position camera to look at target
+        _orbitDistance = dist;
+        _position = target - GetForwardFromAngles() * dist;
         UpdateTransform();
     }
 
@@ -395,6 +407,19 @@ public class EditorCamera
     public Ray ScreenPointToRay(Float2 screenPos, Float2 panelSize)
     {
         return _camera.ScreenPointToRay(screenPos, panelSize);
+    }
+
+    /// <summary>Compute forward direction from yaw/pitch angles without reading the transform.</summary>
+    private Float3 GetForwardFromAngles()
+    {
+        float yawRad = _yaw * MathF.PI / 180f;
+        float pitchRad = _pitch * MathF.PI / 180f;
+        float cosPitch = MathF.Cos(pitchRad);
+        return new Float3(
+            MathF.Sin(yawRad) * cosPitch,
+            -MathF.Sin(pitchRad),
+            MathF.Cos(yawRad) * cosPitch
+        );
     }
 
     private void UpdateTransform()

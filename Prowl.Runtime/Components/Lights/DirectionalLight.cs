@@ -44,6 +44,9 @@ public class DirectionalLight : Light
 
     public override void DrawGizmos()
     {
+        var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconLight);
+        if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
+
         Debug.DrawArrow(Transform.Position, -Transform.Forward, Color.Yellow);
         Debug.DrawWireCircle(Transform.Position, Transform.Forward, 0.5f, Color.Yellow);
 
