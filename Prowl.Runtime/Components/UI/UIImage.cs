@@ -34,7 +34,7 @@ public class UIImage : UIBehaviour
         }
     }
 
-    private Texture2D? _texture;
+    [SerializeField] private Texture2D? _texture;
     public Texture2D? Texture
     {
         get => _texture;

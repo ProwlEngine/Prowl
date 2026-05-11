@@ -40,6 +40,12 @@ public abstract class UIBehaviour : MonoBehaviour
         MarkDirty(UIDirtyFlags.Hierarchy);
     }
 
+    public override void OnValidate()
+    {
+        GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);
+        MarkDirty(UIDirtyFlags.All);
+    }
+
     public override void OnAddedToScene()
     {
         GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);

@@ -13,7 +13,7 @@ Pass "GameUI"
     Tags { "RenderOrder" = "UI" }
 
     Blend {
-        Src One
+        Src SrcAlpha
         Dst OneMinusSrcAlpha
         Mode Add
     }
