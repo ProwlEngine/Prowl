@@ -764,13 +764,18 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     DisposeAndRemove(sub.Guid);
                     _subAssetIndex.Remove(sub.Guid);
+
+                    // Clean sub-asset cache file
+                    string subCachePath = GetCachePath(sub.Guid);
+                    if (File.Exists(subCachePath))
+                        try { File.Delete(subCachePath); } catch { }
                 }
 
             _guidToEntry.Remove(guid);
             _pathToGuid.Remove(relativePath);
             _dependencies.RemoveAsset(guid);
 
-            // Clean cache
+            // Clean main cache file
             string cachePath = GetCachePath(guid);
             if (File.Exists(cachePath))
                 try { File.Delete(cachePath); } catch { }
