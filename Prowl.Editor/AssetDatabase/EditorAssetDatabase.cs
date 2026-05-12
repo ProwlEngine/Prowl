@@ -355,12 +355,28 @@ public class EditorAssetDatabase : IAssetDatabase
         foreach (var guid in toRemove)
         {
             var entry = _guidToEntry[guid];
+
+            // Dispose main + sub-assets so AssetRefs detect invalidation
+            DisposeAndRemove(guid);
+            if (entry.SubAssets != null)
+            {
+                foreach (var sub in entry.SubAssets)
+                {
+                    DisposeAndRemove(sub.Guid);
+                    _subAssetIndex.Remove(sub.Guid);
+
+                    // Clean sub-asset cache file
+                    string subCachePath = GetCachePath(sub.Guid);
+                    if (File.Exists(subCachePath))
+                        try { File.Delete(subCachePath); } catch { }
+                }
+            }
+
             _pathToGuid.Remove(entry.Path);
             _guidToEntry.Remove(guid);
             _dependencies.RemoveAsset(guid);
-            _loadedAssets.Remove(guid);
 
-            // Clean cache file
+            // Clean main cache file
             string cachePath = GetCachePath(guid);
             if (File.Exists(cachePath))
                 try { File.Delete(cachePath); } catch { }
@@ -654,6 +670,7 @@ public class EditorAssetDatabase : IAssetDatabase
     /// </summary>
     public void CreateAsset(EngineObject obj, string relativePath)
     {
+        relativePath = NormalizePath(relativePath);
         string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 
@@ -662,16 +679,17 @@ public class EditorAssetDatabase : IAssetDatabase
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 
-        // Create meta
+        // Create meta with correct importer version
         string ext = Path.GetExtension(relativePath);
         string importerName = ImporterRegistry.GetImporterTypeName(ext);
-        var meta = MetaFile.CreateNew(importerName);
+        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        var meta = MetaFile.CreateNew(importerName, importer?.Version ?? 1);
         MetaFile.Write(MetaFile.GetMetaPath(absolutePath), meta);
 
         // Assign the GUID and path to the original instance so any existing
         // AssetRef holding this instance picks up the asset ID immediately,
         obj.AssetID = meta.Guid;
-        obj.AssetPath = NormalizePath(relativePath);
+        obj.AssetPath = relativePath;
 
         // Add to index and import
         var entry = new AssetEntry
@@ -730,6 +748,7 @@ public class EditorAssetDatabase : IAssetDatabase
     /// </summary>
     public void DeleteAsset(string relativePath)
     {
+        relativePath = NormalizePath(relativePath);
         string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
 
         if (_pathToGuid.TryGetValue(relativePath, out var guid))
@@ -745,13 +764,18 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     DisposeAndRemove(sub.Guid);
                     _subAssetIndex.Remove(sub.Guid);
+
+                    // Clean sub-asset cache file
+                    string subCachePath = GetCachePath(sub.Guid);
+                    if (File.Exists(subCachePath))
+                        try { File.Delete(subCachePath); } catch { }
                 }
 
             _guidToEntry.Remove(guid);
             _pathToGuid.Remove(relativePath);
             _dependencies.RemoveAsset(guid);
 
-            // Clean cache
+            // Clean main cache file
             string cachePath = GetCachePath(guid);
             if (File.Exists(cachePath))
                 try { File.Delete(cachePath); } catch { }
@@ -766,6 +790,10 @@ public class EditorAssetDatabase : IAssetDatabase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetsDeleted?.Invoke(new[] { relativePath });
+
+        // Script deleted - trigger recompile
+        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            Scripting.ScriptAssemblyManager.RequestRecompile();
     }
 
     /// <summary>
@@ -773,6 +801,8 @@ public class EditorAssetDatabase : IAssetDatabase
     /// </summary>
     public bool MoveAsset(string oldRelativePath, string newRelativePath)
     {
+        oldRelativePath = NormalizePath(oldRelativePath);
+        newRelativePath = NormalizePath(newRelativePath);
         string oldAbsolute = Path.Combine(_project.AssetsPath, oldRelativePath);
         string newAbsolute = Path.Combine(_project.AssetsPath, newRelativePath);
 
@@ -820,6 +850,17 @@ public class EditorAssetDatabase : IAssetDatabase
 
             if (_loadedAssets.TryGetValue(guid, out var obj))
                 obj.AssetPath = newRelativePath;
+
+            // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
+            var movedEntry = _guidToEntry.GetValueOrDefault(guid);
+            if (movedEntry?.SubAssets != null)
+            {
+                foreach (var sub in movedEntry.SubAssets)
+                {
+                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                        subObj.AssetPath = $"{newRelativePath}#{sub.Name}";
+                }
+            }
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -890,7 +931,19 @@ public class EditorAssetDatabase : IAssetDatabase
             _pathToGuid.Remove(oldPath);
             _pathToGuid[newPath] = guid;
             if (_guidToEntry.TryGetValue(guid, out var entry))
+            {
                 entry.Path = newPath;
+
+                // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
+                if (entry.SubAssets != null)
+                {
+                    foreach (var sub in entry.SubAssets)
+                    {
+                        if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                            subObj.AssetPath = $"{newPath}#{sub.Name}";
+                    }
+                }
+            }
             if (_loadedAssets.TryGetValue(guid, out var obj))
                 obj.AssetPath = newPath;
 
@@ -980,6 +1033,9 @@ public class EditorAssetDatabase : IAssetDatabase
 
         foreach (var evt in events)
         {
+            // Skip directory events - ScanAssets handles directory .meta creation
+            if (Directory.Exists(evt.Path)) continue;
+
             string relativePath = ToRelativePath(evt.Path);
 
             // Skip .meta files we manage them
@@ -1032,11 +1088,29 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     if (_pathToGuid.TryGetValue(relativePath, out var guid))
                     {
+                        var deletedEntry = _guidToEntry.GetValueOrDefault(guid);
+
+                        // Dispose main + sub-assets so AssetRefs detect invalidation
+                        DisposeAndRemove(guid);
+                        if (deletedEntry?.SubAssets != null)
+                        {
+                            foreach (var sub in deletedEntry.SubAssets)
+                            {
+                                DisposeAndRemove(sub.Guid);
+                                _subAssetIndex.Remove(sub.Guid);
+
+                                // Clean sub-asset cache file
+                                string subCachePath = GetCachePath(sub.Guid);
+                                if (File.Exists(subCachePath))
+                                    try { File.Delete(subCachePath); } catch { }
+                            }
+                        }
+
                         _guidToEntry.Remove(guid);
                         _pathToGuid.Remove(relativePath);
-                        _loadedAssets.Remove(guid);
                         _dependencies.RemoveAsset(guid);
 
+                        // Clean main cache file
                         string cachePath = GetCachePath(guid);
                         if (File.Exists(cachePath))
                             try { File.Delete(cachePath); } catch { }
@@ -1059,7 +1133,8 @@ public class EditorAssetDatabase : IAssetDatabase
                         {
                             _pathToGuid.Remove(oldRelative);
                             _pathToGuid[relativePath] = guid;
-                            _guidToEntry[guid].Path = relativePath;
+                            var renamedEntry = _guidToEntry[guid];
+                            renamedEntry.Path = relativePath;
 
                             // Move .meta
                             string oldMeta = MetaFile.GetMetaPath(evt.OldPath);
@@ -1069,6 +1144,34 @@ public class EditorAssetDatabase : IAssetDatabase
 
                             if (_loadedAssets.TryGetValue(guid, out var obj))
                                 obj.AssetPath = relativePath;
+
+                            // Update sub-asset AssetPaths
+                            if (renamedEntry.SubAssets != null)
+                            {
+                                foreach (var sub in renamedEntry.SubAssets)
+                                {
+                                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                                        subObj.AssetPath = $"{relativePath}#{sub.Name}";
+                                }
+                            }
+
+                            // If extension changed, update importer and trigger reimport
+                            string oldExt = Path.GetExtension(evt.OldPath);
+                            string newExt = Path.GetExtension(evt.Path);
+                            if (!string.Equals(oldExt, newExt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string newImporterName = ImporterRegistry.GetImporterTypeName(newExt);
+                                renamedEntry.ImporterType = newImporterName;
+                                renamedEntry.NeedsReimport = true;
+
+                                DisposeAndRemove(guid);
+                                if (renamedEntry.SubAssets != null)
+                                    foreach (var sub in renamedEntry.SubAssets)
+                                        DisposeAndRemove(sub.Guid);
+
+                                RunImport(renamedEntry);
+                                imported.Add(relativePath);
+                            }
 
                             OnAssetMoved?.Invoke(oldRelative, relativePath);
                         }
