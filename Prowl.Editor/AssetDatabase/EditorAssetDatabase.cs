@@ -1004,6 +1004,9 @@ public class EditorAssetDatabase : IAssetDatabase
 
         foreach (var evt in events)
         {
+            // Skip directory events - ScanAssets handles directory .meta creation
+            if (Directory.Exists(evt.Path)) continue;
+
             string relativePath = ToRelativePath(evt.Path);
 
             // Skip .meta files we manage them
