@@ -679,10 +679,11 @@ public class EditorAssetDatabase : IAssetDatabase
         if (echo != null)
             File.WriteAllText(absolutePath, echo.WriteToString());
 
-        // Create meta
+        // Create meta with correct importer version
         string ext = Path.GetExtension(relativePath);
         string importerName = ImporterRegistry.GetImporterTypeName(ext);
-        var meta = MetaFile.CreateNew(importerName);
+        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        var meta = MetaFile.CreateNew(importerName, importer?.Version ?? 1);
         MetaFile.Write(MetaFile.GetMetaPath(absolutePath), meta);
 
         // Assign the GUID and path to the original instance so any existing
