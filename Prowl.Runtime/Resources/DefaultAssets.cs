@@ -37,7 +37,8 @@ public enum DefaultShader
     SDFRaymarch,
     TAA,
     MotionBlur,
-    GizmoIcon
+    GizmoIcon,
+    AutoExposure
 }
 
 /// <summary>
