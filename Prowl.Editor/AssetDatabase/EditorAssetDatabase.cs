@@ -670,6 +670,7 @@ public class EditorAssetDatabase : IAssetDatabase
     /// </summary>
     public void CreateAsset(EngineObject obj, string relativePath)
     {
+        relativePath = NormalizePath(relativePath);
         string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 
@@ -746,6 +747,7 @@ public class EditorAssetDatabase : IAssetDatabase
     /// </summary>
     public void DeleteAsset(string relativePath)
     {
+        relativePath = NormalizePath(relativePath);
         string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
 
         if (_pathToGuid.TryGetValue(relativePath, out var guid))
@@ -793,6 +795,8 @@ public class EditorAssetDatabase : IAssetDatabase
     /// </summary>
     public bool MoveAsset(string oldRelativePath, string newRelativePath)
     {
+        oldRelativePath = NormalizePath(oldRelativePath);
+        newRelativePath = NormalizePath(newRelativePath);
         string oldAbsolute = Path.Combine(_project.AssetsPath, oldRelativePath);
         string newAbsolute = Path.Combine(_project.AssetsPath, newRelativePath);
 
