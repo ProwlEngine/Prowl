@@ -1031,6 +1031,9 @@ public class EditorApplication : Game
     //  Script Compilation
     // ================================================================
 
+    /// <summary>Called by ScriptAssemblyManager after hot-reload to re-scan all registries.</summary>
+    public void ReinitializeAfterReload() => ReinitializeRegistries();
+
     private void ReinitializeRegistries()
     {
         _registeredPanels.Clear();
@@ -1066,7 +1069,7 @@ public class EditorApplication : Game
         CreateGameObjectMenuRegistry.RegisterMenuBarItems();
     }
 
-    private void RestoreAutoSavedScene(string path)
+    public void RestoreAutoSavedScene(string path)
     {
         try
         {

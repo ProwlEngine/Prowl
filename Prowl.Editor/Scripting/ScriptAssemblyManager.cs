@@ -61,8 +61,13 @@ public static class ScriptAssemblyManager
 
             if (result.Success)
             {
-                Runtime.Debug.Log("[ScriptAssemblyManager] Compilation successful. Restarting editor...");
-                RestartEditor(Project.Current!);
+                Runtime.Debug.Log("[ScriptAssemblyManager] Compilation successful. Attempting hot-reload...");
+
+                if (!TryHotReload(Project.Current!))
+                {
+                    Runtime.Debug.LogWarning("[ScriptAssemblyManager] Hot-reload failed. Restarting editor...");
+                    RestartEditor(Project.Current!);
+                }
             }
             else
             {
@@ -196,6 +201,62 @@ public static class ScriptAssemblyManager
     /// <summary>Check if compiled assemblies exist for this project.</summary>
     public static bool HasScriptAssemblies(Project project)
         => File.Exists(project.GameAssemblyPath) || File.Exists(project.EditorAssemblyPath);
+
+    /// <summary>
+    /// Attempt to hot-reload script assemblies without restarting the editor.
+    /// Saves the scene, clears all type caches, loads new assemblies, reinitializes
+    /// registries, and restores the scene. Returns false if anything fails.
+    /// </summary>
+    private static bool TryHotReload(Project project)
+    {
+        try
+        {
+            // 1. Save the current scene state
+            SaveSceneForRestart(project);
+            EditorApplication.Instance?.SaveProjectState();
+
+            // 2. Clear all caches that hold Type references or reflection data
+
+            // Echo serialization caches (type name registry, reflection cache, formatter cache)
+            Echo.Serializer.ClearCache();
+
+            // Runtime caches
+            Runtime.RuntimeUtils.ClearCache();
+            Runtime.GraphTools.NodeRegistry.Reinitialize();
+            Runtime.MeshFeatures.MeshFeatureRegistry.Reinitialize();
+
+            // Editor ComponentIconRegistry cache
+            typeof(ComponentIconRegistry)
+                .GetField("_cache", BindingFlags.NonPublic | BindingFlags.Static)?
+                .GetValue(null)
+                ?.GetType().GetMethod("Clear")?
+                .Invoke(typeof(ComponentIconRegistry)
+                    .GetField("_cache", BindingFlags.NonPublic | BindingFlags.Static)?
+                    .GetValue(null), null);
+
+            // 3. Load the new assemblies
+            // Note: .NET doesn't truly unload assemblies loaded into the default context.
+            // We load the new version which shadows the old types. The old assembly stays
+            // in memory but its types are no longer discovered by the registries.
+            LoadAssemblies(project);
+
+            // 4. Reinitialize all editor registries (re-scans assemblies for attributes)
+            EditorApplication.Instance?.ReinitializeAfterReload();
+
+            // 5. Restore the scene
+            string autoSavePath = project.AutoSaveScenePath;
+            if (File.Exists(autoSavePath))
+                EditorApplication.Instance?.RestoreAutoSavedScene(autoSavePath);
+
+            Runtime.Debug.LogSuccess("[ScriptAssemblyManager] Hot-reload successful!");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[ScriptAssemblyManager] Hot-reload failed: {ex.Message}\n{ex.StackTrace}");
+            return false;
+        }
+    }
 
     /// <summary>Save all state and restart the editor process.</summary>
     private static void RestartEditor(Project project)
