@@ -290,6 +290,8 @@ public class TerrainEditor : CustomEditor
             {
                 PropertyGrid.DrawField(paper, $"{id}_tex", "Texture", typeof(AssetRef<Texture2D>), dp.Texture,
                     v => { dp.Texture = (AssetRef<Texture2D>)v!; MarkDetailsDirty(); }, 0);
+                PropertyGrid.DrawField(paper, $"{id}_gmat", "Grass Material", typeof(AssetRef<Material>), dp.GrassMaterial,
+                    v => { dp.GrassMaterial = (AssetRef<Material>)v!; MarkDetailsDirty(); }, 0);
             }
 
             InspectorRow.Draw(paper, $"{id}_minw", "Min Width", () =>
