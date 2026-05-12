@@ -43,6 +43,10 @@ public sealed class GrassMasterNode : MasterNodeBase
         AddInput<Float3>("Normal",      new Float3(0, 0, 1));
         AddInput<float>("Roughness",    0.9f);
 
+        // Translucency for thin grass blades. Uses the unified PBR foliage mode
+        // (scatteringPower = 0) so light scatters through back-lit blades.
+        AddInput<float>("Translucency", 25f);
+
         // Wind inputs scalars drive how strong and how fast the blades sway. Wired
         // as inputs so users can modulate them with global wind nodes / noise / etc.
         // Sane defaults match Default/Grass.shader.
@@ -52,6 +56,7 @@ public sealed class GrassMasterNode : MasterNodeBase
         bool unlit = Lighting == ShaderLightingMode.Unlit;
         SetHidden("Normal",    unlit);
         SetHidden("Roughness", Lighting != ShaderLightingMode.PBR && Lighting != ShaderLightingMode.BlinnPhong);
+        SetHidden("Translucency", unlit);
     }
 
     private void SetHidden(string name, bool hidden)

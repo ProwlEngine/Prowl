@@ -86,6 +86,7 @@ internal sealed class GrassPass : IShaderPass
         string emission     = SurfacePassHelpers.EvalMaster(master, "Emission",      fragCtx, "vec3(0.0)");
         string normalTS     = SurfacePassHelpers.EvalMaster(master, "Normal",        fragCtx, "vec3(0,0,1)");
         string roughness    = SurfacePassHelpers.EvalMaster(master, "Roughness",     fragCtx, "0.9");
+        string translucency = SurfacePassHelpers.EvalMaster(master, "Translucency",  fragCtx, "25.0");
 
         // Wind inputs are vertex-stage they drive the sway. Build a small vertex
         // context and evaluate them there so users can modulate via noise / properties.
@@ -113,7 +114,7 @@ internal sealed class GrassPass : IShaderPass
 
         EmitVertexStage(sb, master, vertCtx, windStrength, windSpeed);
         sb.AppendLine();
-        EmitFragmentStage(sb, master, fragCtx, albedo, alpha, alphaCutoff, emission, normalTS, roughness, settings);
+        EmitFragmentStage(sb, master, fragCtx, albedo, alpha, alphaCutoff, emission, normalTS, roughness, translucency, settings);
 
         sb.AppendLine("    ENDGLSL");
         sb.AppendLine("}");
@@ -172,17 +173,20 @@ internal sealed class GrassPass : IShaderPass
             sb.AppendLine("            vec3 upDir = _TerrainUp;");
 
         sb.AppendLine();
+        sb.AppendLine("            vec3 quadRight;");
         sb.AppendLine("            vec3 localOffset;");
         if (master.Billboard)
         {
             sb.AppendLine("            vec3 cameraRight = vec3(PROWL_MATRIX_V[0][0], PROWL_MATRIX_V[1][0], PROWL_MATRIX_V[2][0]);");
             sb.AppendLine("            cameraRight = normalize(cameraRight - upDir * dot(cameraRight, upDir));");
+            sb.AppendLine("            quadRight = cameraRight;");
             sb.AppendLine("            localOffset = cameraRight * vertexPosition.x * scaleX + upDir * vertexPosition.y * scaleY;");
         }
         else
         {
             sb.AppendLine("            vec3 rightAxis = normalize((_TerrainLocalToWorld * vec4(normalize(instanceModelRow0.xyz), 0.0)).xyz);");
             sb.AppendLine("            rightAxis = normalize(rightAxis - upDir * dot(rightAxis, upDir));");
+            sb.AppendLine("            quadRight = rightAxis;");
             sb.AppendLine("            localOffset = rightAxis * vertexPosition.x * scaleX + upDir * vertexPosition.y * scaleY;");
         }
 
@@ -201,7 +205,7 @@ internal sealed class GrassPass : IShaderPass
         sb.AppendLine("            vec3 wp = bladePosition + localOffset;");
         sb.AppendLine("            wp += upDir * 0.01 * scaleY;");
         sb.AppendLine("            worldPos = wp;");
-        sb.AppendLine("            vNormal = terrainNormal;");
+        sb.AppendLine("            vNormal = normalize(cross(upDir, quadRight));");
         sb.AppendLine("            vColor = instanceColor;");
         sb.AppendLine("            texCoord0 = vertexTexCoord0;");
         sb.AppendLine("            gl_Position = PROWL_MATRIX_VP * vec4(wp, 1.0);");
@@ -218,7 +222,7 @@ internal sealed class GrassPass : IShaderPass
 
     private static void EmitFragmentStage(StringBuilder sb, GrassMasterNode master, ShaderGenContext fragCtx,
         string albedo, string alpha, string alphaCutoff, string emission, string normalTS, string roughness,
-        ShaderGraphRenderSettings settings)
+        string translucency, ShaderGraphRenderSettings settings)
     {
         if (!settings.ReceivesShadows) fragCtx.Defines.Add("SG_NO_SHADOWS");
 
@@ -253,14 +257,15 @@ internal sealed class GrassPass : IShaderPass
             // Grass doesn't carry tangents build a simple TBN from vNormal so
             // tangent-space normal maps still produce a world-space normal.
             sb.AppendLine($"            vec3 _sgNormalTS = {normalTS};");
-            sb.AppendLine("            vec3 _sgN = normalize(vNormal);");
+            sb.AppendLine("            vec3 _sgN = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);");
             sb.AppendLine("            vec3 _sgT = normalize(cross(_sgN, abs(_sgN.y) < 0.99 ? vec3(0,1,0) : vec3(1,0,0)));");
             sb.AppendLine("            vec3 _sgB = normalize(cross(_sgN, _sgT));");
             sb.AppendLine("            vec3 _sgWorldN = normalize(mat3(_sgT, _sgB, _sgN) * _sgNormalTS);");
             sb.AppendLine("            vec3 _sgViewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);");
             string met = master.Lighting == ShaderLightingMode.Lambert ? "0.0" : "0.0";  // grass is never metal
             string rg  = master.Lighting == ShaderLightingMode.Lambert ? "1.0" : $"clamp({roughness}, 0.04, 1.0)";
-            sb.AppendLine($"            vec3 _sgLighting = CalculateForwardLighting(worldPos, _sgWorldN, _sgViewDir, _sgBaseColor, {met}, {rg}, 1.0);");
+            sb.AppendLine($"            float _sgTrans = {translucency};");
+            sb.AppendLine($"            vec3 _sgLighting = CalculateForwardLighting(worldPos, _sgWorldN, _sgViewDir, _sgBaseColor, {met}, {rg}, 1.0, _sgTrans, 0.0, 0.5, 1.0);");
             if (settings.ReceivesAmbient)
                 sb.AppendLine("            vec3 _sgAmbient = CalculateAmbient(_sgWorldN) * _sgBaseColor * _AmbientStrength;");
             else
