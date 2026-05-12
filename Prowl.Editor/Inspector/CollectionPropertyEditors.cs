@@ -57,6 +57,22 @@ public class CollectionPropertyEditor : PropertyEditor
                                 newVal => { list[idx] = newVal; onChange(list); }, depth + 1);
                         }
 
+                        Origami.IconButton(paper, $"{id}_up_{stableKey}", EditorIcons.AngleUp, () =>
+                        {
+                            if (idx <= 0) return;
+                            SwapElements(list, stableIds, idx, idx - 1);
+                            paper.SetElementStorage(colEl, "stableIds", stableIds);
+                            onChange(list);
+                        }).Disabled(idx == 0).Show();
+
+                        Origami.IconButton(paper, $"{id}_dn_{stableKey}", EditorIcons.AngleDown, () =>
+                        {
+                            if (idx >= list.Count - 1) return;
+                            SwapElements(list, stableIds, idx, idx + 1);
+                            paper.SetElementStorage(colEl, "stableIds", stableIds);
+                            onChange(list);
+                        }).Disabled(idx >= list.Count - 1).Show();
+
                         Origami.IconButton(paper, $"{id}_rm_{stableKey}", EditorIcons.Xmark, () =>
                             {
                                 stableIds.RemoveAt(idx);
@@ -103,6 +119,13 @@ public class CollectionPropertyEditor : PropertyEditor
                 }).Show();
             }
         });
+    }
+
+    /// <summary>Swap two elements in both the data list and the stable ID list.</summary>
+    private static void SwapElements(IList list, List<string> stableIds, int a, int b)
+    {
+        (list[a], list[b]) = (list[b], list[a]);
+        (stableIds[a], stableIds[b]) = (stableIds[b], stableIds[a]);
     }
 }
 
