@@ -766,6 +766,10 @@ public class EditorAssetDatabase : IAssetDatabase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetsDeleted?.Invoke(new[] { relativePath });
+
+        // Script deleted - trigger recompile
+        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            Scripting.ScriptAssemblyManager.RequestRecompile();
     }
 
     /// <summary>
