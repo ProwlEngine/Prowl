@@ -688,7 +688,7 @@ public class EditorAssetDatabase : IAssetDatabase
         // Assign the GUID and path to the original instance so any existing
         // AssetRef holding this instance picks up the asset ID immediately,
         obj.AssetID = meta.Guid;
-        obj.AssetPath = NormalizePath(relativePath);
+        obj.AssetPath = relativePath;
 
         // Add to index and import
         var entry = new AssetEntry
