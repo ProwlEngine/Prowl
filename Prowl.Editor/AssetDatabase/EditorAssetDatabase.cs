@@ -850,6 +850,17 @@ public class EditorAssetDatabase : IAssetDatabase
 
             if (_loadedAssets.TryGetValue(guid, out var obj))
                 obj.AssetPath = newRelativePath;
+
+            // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
+            var movedEntry = _guidToEntry.GetValueOrDefault(guid);
+            if (movedEntry?.SubAssets != null)
+            {
+                foreach (var sub in movedEntry.SubAssets)
+                {
+                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                        subObj.AssetPath = $"{newRelativePath}#{sub.Name}";
+                }
+            }
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -920,7 +931,19 @@ public class EditorAssetDatabase : IAssetDatabase
             _pathToGuid.Remove(oldPath);
             _pathToGuid[newPath] = guid;
             if (_guidToEntry.TryGetValue(guid, out var entry))
+            {
                 entry.Path = newPath;
+
+                // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
+                if (entry.SubAssets != null)
+                {
+                    foreach (var sub in entry.SubAssets)
+                    {
+                        if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                            subObj.AssetPath = $"{newPath}#{sub.Name}";
+                    }
+                }
+            }
             if (_loadedAssets.TryGetValue(guid, out var obj))
                 obj.AssetPath = newPath;
 
@@ -1102,6 +1125,16 @@ public class EditorAssetDatabase : IAssetDatabase
 
                             if (_loadedAssets.TryGetValue(guid, out var obj))
                                 obj.AssetPath = relativePath;
+
+                            // Update sub-asset AssetPaths
+                            if (renamedEntry.SubAssets != null)
+                            {
+                                foreach (var sub in renamedEntry.SubAssets)
+                                {
+                                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                                        subObj.AssetPath = $"{relativePath}#{sub.Name}";
+                                }
+                            }
 
                             OnAssetMoved?.Invoke(oldRelative, relativePath);
                         }
