@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
@@ -156,9 +157,15 @@ public class EditorCamera
             scene.Remove(_cameraObject);
     }
 
+    // Cached cloned effects for the editor camera. Persistent across frames so
+    // temporal effects (TAA, motion blur) keep their history buffers intact.
+    private readonly List<ImageEffect> _clonedEffects = new();
+    private Camera? _lastSceneCamera;
+
     /// <summary>
-    /// Find the scene's main camera and copy its image effects to the editor camera.
-    /// Looks for a camera tagged "Main Camera", falling back to the first Camera in the scene.
+    /// Sync image effects from the scene's main camera. Clones effect instances on first
+    /// use or when the effect list changes, then uses DeserializeInto each frame to copy
+    /// settings without destroying internal state (TAA history, etc.).
     /// </summary>
     private void CopySceneEffects(Scene scene)
     {
@@ -166,15 +173,66 @@ public class EditorCamera
         if (sceneCamera == null || sceneCamera == _camera)
         {
             _camera.Effects.Clear();
+            _clonedEffects.Clear();
+            _lastSceneCamera = null;
             return;
         }
 
-        // Copy the effect list we share the same effect instances so settings
-        // tweaked on the game camera are immediately reflected in the editor view.
-        _camera.Effects.Clear();
-        _camera.Effects.AddRange(sceneCamera.Effects);
+        // Check if the effect list structure changed (different types, count, or camera)
+        bool needsReclone = sceneCamera != _lastSceneCamera
+            || sceneCamera.Effects.Count != _clonedEffects.Count;
 
-        // Also match HDR setting so effects like tonemapping behave correctly
+        if (!needsReclone)
+        {
+            for (int i = 0; i < sceneCamera.Effects.Count; i++)
+            {
+                if (sceneCamera.Effects[i].GetType() != _clonedEffects[i].GetType())
+                {
+                    needsReclone = true;
+                    break;
+                }
+            }
+        }
+
+        if (needsReclone)
+        {
+            // Clone fresh instances via Echo deserialize (creates new internal state)
+            _clonedEffects.Clear();
+            foreach (var effect in sceneCamera.Effects)
+            {
+                try
+                {
+                    var echo = Echo.Serializer.Serialize(effect);
+                    var clone = Echo.Serializer.Deserialize(echo, effect.GetType()) as ImageEffect;
+                    if (clone != null)
+                        _clonedEffects.Add(clone);
+                }
+                catch
+                {
+                    // Fallback: create a blank instance
+                    if (Activator.CreateInstance(effect.GetType()) is ImageEffect blank)
+                        _clonedEffects.Add(blank);
+                }
+            }
+            _lastSceneCamera = sceneCamera;
+        }
+        else
+        {
+            // Sync settings into existing clones (preserves internal state like TAA history)
+            for (int i = 0; i < sceneCamera.Effects.Count; i++)
+            {
+                try
+                {
+                    var echo = Echo.Serializer.Serialize(sceneCamera.Effects[i]);
+                    Echo.Serializer.DeserializeInto(echo, _clonedEffects[i]);
+                }
+                catch { }
+            }
+        }
+
+        // Apply cloned effects to editor camera
+        _camera.Effects.Clear();
+        _camera.Effects.AddRange(_clonedEffects);
         _camera.HDR = sceneCamera.HDR;
     }
 
