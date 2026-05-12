@@ -1115,7 +1115,8 @@ public class EditorAssetDatabase : IAssetDatabase
                         {
                             _pathToGuid.Remove(oldRelative);
                             _pathToGuid[relativePath] = guid;
-                            _guidToEntry[guid].Path = relativePath;
+                            var renamedEntry = _guidToEntry[guid];
+                            renamedEntry.Path = relativePath;
 
                             // Move .meta
                             string oldMeta = MetaFile.GetMetaPath(evt.OldPath);
@@ -1134,6 +1135,24 @@ public class EditorAssetDatabase : IAssetDatabase
                                     if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
                                         subObj.AssetPath = $"{relativePath}#{sub.Name}";
                                 }
+                            }
+
+                            // If extension changed, update importer and trigger reimport
+                            string oldExt = Path.GetExtension(evt.OldPath);
+                            string newExt = Path.GetExtension(evt.Path);
+                            if (!string.Equals(oldExt, newExt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string newImporterName = ImporterRegistry.GetImporterTypeName(newExt);
+                                renamedEntry.ImporterType = newImporterName;
+                                renamedEntry.NeedsReimport = true;
+
+                                DisposeAndRemove(guid);
+                                if (renamedEntry.SubAssets != null)
+                                    foreach (var sub in renamedEntry.SubAssets)
+                                        DisposeAndRemove(sub.Guid);
+
+                                RunImport(renamedEntry);
+                                imported.Add(relativePath);
                             }
 
                             OnAssetMoved?.Invoke(oldRelative, relativePath);
