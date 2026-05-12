@@ -173,20 +173,29 @@ public class EditorCamera
         if (sceneCamera == null || sceneCamera == _camera)
         {
             _camera.Effects.Clear();
-            _clonedEffects.Clear();
+            DisposeClonedEffects();
             _lastSceneCamera = null;
             return;
         }
 
+        // Build a filtered list of non-null effects from the scene camera so null
+        // entries don't cause index misalignment between the source and clone lists.
+        var sourceEffects = new List<ImageEffect>();
+        foreach (var effect in sceneCamera.Effects)
+        {
+            if (effect != null)
+                sourceEffects.Add(effect);
+        }
+
         // Check if the effect list structure changed (different types, count, or camera)
         bool needsReclone = sceneCamera != _lastSceneCamera
-            || sceneCamera.Effects.Count != _clonedEffects.Count;
+            || sourceEffects.Count != _clonedEffects.Count;
 
         if (!needsReclone)
         {
-            for (int i = 0; i < sceneCamera.Effects.Count; i++)
+            for (int i = 0; i < sourceEffects.Count; i++)
             {
-                if (sceneCamera.Effects[i].GetType() != _clonedEffects[i].GetType())
+                if (sourceEffects[i].GetType() != _clonedEffects[i].GetType())
                 {
                     needsReclone = true;
                     break;
@@ -196,9 +205,11 @@ public class EditorCamera
 
         if (needsReclone)
         {
-            // Clone fresh instances via Echo deserialize (creates new internal state)
-            _clonedEffects.Clear();
-            foreach (var effect in sceneCamera.Effects)
+            // Dispose old clones first so persistent GPU resources (TAA history,
+            // adaptation buffers, etc.) are freed before creating new instances.
+            DisposeClonedEffects();
+
+            foreach (var effect in sourceEffects)
             {
                 try
                 {
@@ -219,11 +230,11 @@ public class EditorCamera
         else
         {
             // Sync settings into existing clones (preserves internal state like TAA history)
-            for (int i = 0; i < sceneCamera.Effects.Count; i++)
+            for (int i = 0; i < sourceEffects.Count; i++)
             {
                 try
                 {
-                    var echo = Echo.Serializer.Serialize(sceneCamera.Effects[i]);
+                    var echo = Echo.Serializer.Serialize(sourceEffects[i]);
                     Echo.Serializer.DeserializeInto(echo, _clonedEffects[i]);
                 }
                 catch { }
@@ -234,6 +245,20 @@ public class EditorCamera
         _camera.Effects.Clear();
         _camera.Effects.AddRange(_clonedEffects);
         _camera.HDR = sceneCamera.HDR;
+    }
+
+    /// <summary>
+    /// Dispose all cloned effects so persistent GPU resources (history buffers, adaptation
+    /// RTs, etc.) are properly freed.
+    /// </summary>
+    private void DisposeClonedEffects()
+    {
+        foreach (var effect in _clonedEffects)
+        {
+            try { effect.OnDisable(); }
+            catch { }
+        }
+        _clonedEffects.Clear();
     }
 
     private static Camera? FindSceneCamera(Scene scene)
@@ -488,6 +513,7 @@ public class EditorCamera
 
     public void Dispose()
     {
+        DisposeClonedEffects();
         _renderTarget?.Dispose();
         _renderTarget = null;
     }
