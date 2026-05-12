@@ -9,6 +9,9 @@ Properties
     _Billboard ("Billboard", Float) = 1.0
     _AlignToNormal ("Align To Normal", Float) = 0.0
     _Translucency ("Translucency", Float) = 15.0
+    _ScatterPower ("Scattering Power", Float) = 0.0
+    _ScatterDistortion ("Scattering Distortion", Float) = 0.5
+    _ScatterScale ("Scattering Scale", Float) = 1.0
     _GrassDistance ("Grass Max Distance", Float) = 150.0
     _GrassFadeStart ("Grass Fade Start (world units)", Float) = 90.0
 }
@@ -156,6 +159,9 @@ Pass "Grass"
             uniform sampler2D _MainTex;
             uniform float _AlphaCutoff;
             uniform float _Translucency;
+            uniform float _ScatterPower;
+            uniform float _ScatterDistortion;
+            uniform float _ScatterScale;
 
 			void main()
 			{
@@ -169,12 +175,12 @@ Pass "Grass"
                 // Flip normal for back faces since grass is double-sided
                 vec3 normal = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
 
-                // Unified PBR + translucency (foliage mode: scatterPower=0)
-                // Single light loop, shared attenuation and shadows
+                // Unified PBR + translucency in a single light loop
                 vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
                 vec3 lighting = CalculateForwardLighting(worldPos, normal, viewDir,
                                                          baseColor, 0.0, 0.9, 1.0,
-                                                         _Translucency, 0.0, 0.5, 1.0);
+                                                         _Translucency, _ScatterPower,
+                                                         _ScatterDistortion, _ScatterScale);
                 vec3 ambient = CalculateAmbient(normal) * baseColor * _AmbientStrength;
 
                 vec3 color = ambient + lighting;
