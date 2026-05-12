@@ -1088,11 +1088,29 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     if (_pathToGuid.TryGetValue(relativePath, out var guid))
                     {
+                        var deletedEntry = _guidToEntry.GetValueOrDefault(guid);
+
+                        // Dispose main + sub-assets so AssetRefs detect invalidation
+                        DisposeAndRemove(guid);
+                        if (deletedEntry?.SubAssets != null)
+                        {
+                            foreach (var sub in deletedEntry.SubAssets)
+                            {
+                                DisposeAndRemove(sub.Guid);
+                                _subAssetIndex.Remove(sub.Guid);
+
+                                // Clean sub-asset cache file
+                                string subCachePath = GetCachePath(sub.Guid);
+                                if (File.Exists(subCachePath))
+                                    try { File.Delete(subCachePath); } catch { }
+                            }
+                        }
+
                         _guidToEntry.Remove(guid);
                         _pathToGuid.Remove(relativePath);
-                        _loadedAssets.Remove(guid);
                         _dependencies.RemoveAsset(guid);
 
+                        // Clean main cache file
                         string cachePath = GetCachePath(guid);
                         if (File.Exists(cachePath))
                             try { File.Delete(cachePath); } catch { }
