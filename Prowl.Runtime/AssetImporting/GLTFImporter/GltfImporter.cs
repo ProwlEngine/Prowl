@@ -55,8 +55,7 @@ public class GltfImporter
     static Float3 ConvertPos(float[] v) => new(v[0], v[1], -v[2]);
     static Float3 ConvertPos(Float3 v) => new(v.X, v.Y, -v.Z);
     static Float3 ConvertNormal(Float3 v) => new(v.X, v.Y, -v.Z);
-    static Float3 ConvertTangent(Float4 v) => new(v.X, v.Y, -v.Z);
-    static float ConvertTangentW(Float4 v) => -v.W;
+    static Float4 ConvertTangent(Float4 v) => new(v.X, v.Y, -v.Z, -v.W);
     static Quaternion ConvertRot(float[] q) => new(q[0], q[1], -q[2], -q[3]);
     static Quaternion ConvertRot(Quaternion q) => new(q.X, q.Y, -q.Z, -q.W);
 
@@ -492,16 +491,30 @@ public class GltfImporter
             var gmesh = root.Meshes[mi];
             string meshName = gmesh.Name ?? $"Mesh_{mi}";
 
+            // Pre-compute total vertex/index counts for capacity hints
+            int estimatedVertices = 0;
+            int estimatedIndices = 0;
+            for (int pi = 0; pi < gmesh.Primitives.Count; pi++)
+            {
+                var p = gmesh.Primitives[pi];
+                if (p.Attributes.TryGetValue("POSITION", out int posAcc))
+                {
+                    int vc = gltf.Root.Accessors[posAcc].Count;
+                    estimatedVertices += vc;
+                    estimatedIndices += p.Indices.HasValue ? gltf.Root.Accessors[p.Indices.Value].Count : vc;
+                }
+            }
+
             // Accumulate all primitives into one combined mesh
-            var allVertices = new List<Float3>();
-            var allNormals = new List<Float3>();
-            var allTangents = new List<Float3>();
-            var allUV = new List<Float2>();
-            var allUV2 = new List<Float2>();
-            var allColors = new List<Color>();
-            var allBoneIndices = new List<Float4>();
-            var allBoneWeights = new List<Float4>();
-            var allIndices = new List<uint>();
+            var allVertices = new List<Float3>(estimatedVertices);
+            var allNormals = new List<Float3>(estimatedVertices);
+            var allTangents = new List<Float4>(estimatedVertices);
+            var allUV = new List<Float2>(estimatedVertices);
+            var allUV2 = new List<Float2>(estimatedVertices);
+            var allColors = new List<Color>(estimatedVertices);
+            var allBoneIndices = new List<Float4>(estimatedVertices);
+            var allBoneWeights = new List<Float4>(estimatedVertices);
+            var allIndices = new List<uint>(estimatedIndices);
             var subMeshes = new List<SubMeshDescriptor>();
             var primMaterials = new List<Material?>();
             bool hasBones = false;
@@ -521,10 +534,9 @@ public class GltfImporter
                 Float3[] primVerts;
                 if (prim.Attributes.TryGetValue("POSITION", out int posIdx))
                 {
-                    var raw = GltfDataReader.ReadVec3(gltf, posIdx);
-                    primVerts = new Float3[raw.Length];
-                    for (int i = 0; i < raw.Length; i++)
-                        primVerts[i] = ConvertPos(raw[i]) * scale;
+                    primVerts = GltfDataReader.ReadVec3(gltf, posIdx);
+                    for (int i = 0; i < primVerts.Length; i++)
+                        primVerts[i] = ConvertPos(primVerts[i]) * scale;
                 }
                 else
                 {
@@ -538,10 +550,9 @@ public class GltfImporter
                 // --- Normals ---
                 if (prim.Attributes.TryGetValue("NORMAL", out int normIdx))
                 {
-                    var raw = GltfDataReader.ReadVec3(gltf, normIdx);
-                    var normals = new Float3[raw.Length];
-                    for (int i = 0; i < raw.Length; i++)
-                        normals[i] = ConvertNormal(raw[i]);
+                    var normals = GltfDataReader.ReadVec3(gltf, normIdx);
+                    for (int i = 0; i < normals.Length; i++)
+                        normals[i] = ConvertNormal(normals[i]);
                     allNormals.AddRange(normals);
                 }
                 else
@@ -555,17 +566,16 @@ public class GltfImporter
                 // --- Tangents ---
                 if (prim.Attributes.TryGetValue("TANGENT", out int tanIdx))
                 {
-                    var raw = GltfDataReader.ReadVec4(gltf, tanIdx);
-                    var tangents = new Float3[raw.Length];
-                    for (int i = 0; i < raw.Length; i++)
-                        tangents[i] = ConvertTangent(raw[i]);
+                    var tangents = GltfDataReader.ReadVec4(gltf, tanIdx);
+                    for (int i = 0; i < tangents.Length; i++)
+                        tangents[i] = ConvertTangent(tangents[i]);
                     allTangents.AddRange(tangents);
                 }
                 else
                 {
                     hasTangents = false;
                     for (int i = 0; i < primVertCount; i++)
-                        allTangents.Add(Float3.Zero);
+                        allTangents.Add(Float4.Zero);
                 }
 
                 // --- UV0 ---
@@ -916,14 +926,17 @@ public class GltfImporter
             bitangents[i0] += b; bitangents[i1] += b; bitangents[i2] += b;
         }
 
-        mesh.Tangents = new Float3[mesh.Vertices.Length];
+        var result = new Float4[mesh.Vertices.Length];
         for (int i = 0; i < mesh.Vertices.Length; i++)
         {
             var n = mesh.Normals[i];
             var t = tangents[i];
             var orthogonalized = t - n * Float3.Dot(n, t);
             float lenSq = Float3.Dot(orthogonalized, orthogonalized);
-            mesh.Tangents[i] = lenSq > 1e-8f ? orthogonalized / MathF.Sqrt(lenSq) : Float3.UnitX;
+            Float3 orthoT = lenSq > 1e-8f ? orthogonalized / MathF.Sqrt(lenSq) : Float3.UnitX;
+            float w = Float3.Dot(Float3.Cross(t, n), bitangents[i]) < 0.0f ? -1.0f : 1.0f;
+            result[i] = new Float4(orthoT.X, orthoT.Y, orthoT.Z, w);
         }
+        mesh.Tangents = result;
     }
 }

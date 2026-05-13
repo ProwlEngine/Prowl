@@ -27,7 +27,7 @@ Pass "Threshold"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform float _Threshold;
@@ -77,7 +77,7 @@ Pass "Downsample"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
 
@@ -127,7 +127,7 @@ Pass "Upsample"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
 
@@ -180,7 +180,7 @@ Pass "Composite"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _BloomTex;

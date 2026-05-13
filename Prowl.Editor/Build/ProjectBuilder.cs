@@ -190,32 +190,38 @@ public static class ProjectBuilder
         var progress = new BuildProgress();
         var projectPath = Project.Current?.RootPath ?? "";
 
-        Task task = Task.Run(async () =>
+        // THREADING DISABLED: OpenGL is thread-affine, and the build pipeline currently
+        // touches GL during asset reimport (SceneImporter -> RenderTexture.Deserialize ->
+        // GenTexture()), which crashes with 0xC0000005 when invoked from a ThreadPool
+        // worker. Running the build inline on the main thread until GPU resource creation
+        // is removed from the import path (or marshaled back to the GL thread).
+        // TODO: restore the Task.Run wrapper once that's fixed.
+        //Task task = Task.Run(async () =>
+        //{
+        try
         {
-            try
-            {
-                Console.WriteLine($"[BEGIN]{projectPath}[END]");
-                var result = await pipeline.BuildAsync(
-                    projectPath, settings, outputPath, progress);
-                progress.Complete(result);
+            Console.WriteLine($"[BEGIN]{projectPath}[END]");
+            var result = pipeline.BuildAsync(
+                projectPath, settings, outputPath, progress).GetAwaiter().GetResult();
+            progress.Complete(result);
 
-                HandleBuildResult(pipeline, result, settings, andRun);
-            }
-            catch (Exception ex)
-            {
-                progress.Log($"FATAL: {ex.Message}", Runtime.LogSeverity.Error);
-                progress.Complete(new BuildResult
-                {
-                    Success = false,
-                    Errors = ex.ToString(),
-                });
-            }
-        });
-
-        if (Program.BuildMode)
-        {
-            task.Wait();
+            HandleBuildResult(pipeline, result, settings, andRun);
         }
+        catch (Exception ex)
+        {
+            progress.Log($"FATAL: {ex.Message}", Runtime.LogSeverity.Error);
+            progress.Complete(new BuildResult
+            {
+                Success = false,
+                Errors = ex.ToString(),
+            });
+        }
+        //});
+
+        //if (Program.BuildMode)
+        //{
+        //    task.Wait();
+        //}
 
         return progress;
     }

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -56,6 +57,18 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_gridMaterial;
 
     public static DefaultRenderPipeline Default { get; } = new();
+
+    // Per-Scene BVH state. Keyed weakly so it goes away with the scene without an explicit
+    // unload hook from this side; a dropped scene drops its light textures on the next GC pass.
+    private static readonly ConditionalWeakTable<Scene, SceneLightSystem> s_lightSystems = new();
+
+    /// <summary>Get (or create) the light system bound to a scene. Creating one is cheap (no
+    /// GPU allocation until the first <see cref="SceneLightSystem.Reconcile"/>).</summary>
+    public static SceneLightSystem GetOrCreateLightSystem(Scene scene)
+    {
+        if (scene == null) throw new ArgumentNullException(nameof(scene));
+        return s_lightSystems.GetValue(scene, _ => new SceneLightSystem());
+    }
 
     #endregion
 
@@ -146,6 +159,11 @@ public class DefaultRenderPipeline : RenderPipeline
         // (user disabled them, removed them from Camera.Effects, or hot-swapped).
         camera.UpdateImageEffectLifecycle(allEffects);
 
+        // Gather DepthTextureMode requirements from all active effects
+        DepthTextureMode depthMode = DepthTextureMode.None;
+        foreach (var effect in allEffects)
+            depthMode |= effect.RequiredDepthTextureMode;
+
         RenderTexture target = camera.UpdateRenderData();
 
         // =======================================================
@@ -155,12 +173,13 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // =======================================================
         // 2. Camera snapshot and global uniforms
-        CameraSnapshot css = new(camera);
+        CameraSnapshot css = new(camera, depthMode);
         SetupGlobalUniforms(css);
 
         // =======================================================
         // 3. Collect and Cull Renderables
         var (renderables, lights) = CollectRenderables(camera.GameObject.Scene, camera);
+        //lights.Clear();
 
         // Inject editor grid
         if (data.DisplayGrid)
@@ -183,13 +202,19 @@ public class DefaultRenderPipeline : RenderPipeline
             effect.OnPreRender(camera);
 
         // =======================================================
-        // 5. Shadow Atlas
-        RenderShadowAtlas(css, lights, renderables);
-        AssignCameraMatrices(css.View, css.Projection);
+        // 5. Light system reconcile + shadow atlas + uniform upload
+        // Reconcile does the cheap work first (BVH refits, shadow caster picks). Then the atlas
+        // is rendered for only the directional and the closest-N point/spot, and finally the
+        // BVH textures + directional + shadow uniforms are pushed to the GPU.
+        SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
+        lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
 
-        // =======================================================
-        // 6. Forward Light Setup select 8 most relevant lights, upload as globals
-        ForwardLightManager.SelectAndUploadLights(css.CameraPosition, lights, css.CullingMask);
+        Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
+        Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
+        lightSystem.RenderShadows(this, css.CameraPosition, renderables);
+
+        AssignCameraMatrices(css.View, css.Projection);
+        lightSystem.UploadGlobalUniforms();
 
         // Upload fog parameters as globals for forward shaders
         UploadFogUniforms(css.Scene);
@@ -281,12 +306,56 @@ public class DefaultRenderPipeline : RenderPipeline
         DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
 
         // =======================================================
+        // 10b. Motion Vectors pass (when requested by DepthTextureMode)
+        // Motion vectors must use UNJITTERED current and previous VP so they
+        // represent real scene motion only, not sub-pixel jitter offsets.
+        RenderTexture motionVectorsRT = null;
+        if (css.DepthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
+        {
+            motionVectorsRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
+                TextureImageFormat.Short2, // RG16F for per-pixel motion vectors
+            ]);
+
+            // Copy depth prepass into MV RT so ZTest LEqual rejects occluded fragments
+            Graphics.BindFramebuffer(depthPrepass.frameBuffer, FBOTarget.Read);
+            Graphics.BindFramebuffer(motionVectorsRT.frameBuffer, FBOTarget.Draw);
+            Graphics.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
+                                     0, 0, motionVectorsRT.Width, motionVectorsRT.Height,
+                                     ClearFlags.Depth, BlitFilter.Nearest);
+
+            // Use the camera's NonJitteredProjectionMatrix for motion vectors
+            Float4x4 prevVP = css.HasPreviousViewProj
+                ? css.PreviousViewProj
+                : css.NonJitteredProjection * css.View; // First frame fallback: no motion
+
+            // Upload unjittered current VP and previous VP
+            AssignCameraMatrices(css.View, css.NonJitteredProjection);
+            GlobalUniforms.SetPrevViewProj(prevVP);
+            GlobalUniforms.Upload();
+
+            Graphics.BindFramebuffer(motionVectorsRT.frameBuffer);
+            Graphics.Clear(0.0f, 0.0f, 0.0f, 0.0f, ClearFlags.Color);
+
+            // Draw per-object motion vectors (uses previous model matrices)
+            DrawRenderables(renderables, "LightMode", "MotionVectors", new ViewerData(css), culledRenderableIndices, true);
+
+            PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", motionVectorsRT.MainTexture);
+
+            // Restore jittered matrices for subsequent passes
+            AssignCameraMatrices(css.View, css.Projection);
+
+            // Restore color RT for subsequent rendering
+            Graphics.BindFramebuffer(colorRT.frameBuffer);
+        }
+
+        // =======================================================
         // 11. AfterOpaques effects (GTAO, SSR, etc.)
         if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
             var afterContext = new RenderContext
             {
                 DepthNormals = depthPrepass,
+                MotionVectors = motionVectorsRT,
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
@@ -309,6 +378,7 @@ public class DefaultRenderPipeline : RenderPipeline
             var postContext = new RenderContext
             {
                 DepthNormals = depthPrepass,
+                MotionVectors = motionVectorsRT,
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
@@ -340,7 +410,11 @@ public class DefaultRenderPipeline : RenderPipeline
         Blit(colorRT, target, null, 0, false, false);
 
         // =======================================================
-        // 17. Post Render
+        // 17. Save previous VP for next frame's motion vectors (before OnPostRender resets jitter)
+        camera.SavePreviousViewProjectionMatrix();
+
+        // =======================================================
+        // 18. Post Render
         foreach (ImageEffect effect in allEffects)
             effect.OnPostRender(camera);
 
@@ -348,6 +422,8 @@ public class DefaultRenderPipeline : RenderPipeline
         // 18. Cleanup
         RenderTexture.ReleaseTemporaryRT(depthPrepass);
         RenderTexture.ReleaseTemporaryRT(colorRT);
+        if (motionVectorsRT != null)
+            RenderTexture.ReleaseTemporaryRT(motionVectorsRT);
 
         Graphics.UnbindFramebuffer();
         Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
@@ -384,24 +460,6 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalColor("_AmbientSkyColor", ambient.SkyColor);
         PropertyState.SetGlobalColor("_AmbientGroundColor", ambient.GroundColor);
         PropertyState.SetGlobalFloat("_AmbientStrength", (float)ambient.Strength);
-    }
-
-    private void RenderShadowAtlas(CameraSnapshot css, IReadOnlyList<IRenderableLight> lights, IReadOnlyList<IRenderable> renderables)
-    {
-        Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
-        Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
-
-        // Process all lights - each light handles its own shadow rendering
-        foreach (IRenderableLight light in lights)
-        {
-            if (css.CullingMask.HasLayer(light.GetLayer()) == false)
-                continue;
-
-            if (light is Light lightComponent)
-            {
-                lightComponent.RenderShadows(this, css.CameraPosition, renderables);
-            }
-        }
     }
 
     private void RenderSkybox(CameraSnapshot css, List<IRenderableLight> lights)

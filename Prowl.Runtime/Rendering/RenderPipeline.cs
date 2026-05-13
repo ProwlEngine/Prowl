@@ -60,6 +60,43 @@ public enum LightType
     //Area
 }
 
+/// <summary>
+/// Per-frame light parameters surfaced by every <see cref="IRenderableLight"/>. Consumed by
+/// <see cref="SceneLightSystem"/>, packed into the BVH leaf textures, and (for the directional
+/// light + closest-N shadow casters) uploaded as conventional uniforms.
+/// </summary>
+public struct ForwardLightData
+{
+    public LightType Type;
+    public Float3 Position;
+    public Float3 Direction;
+    public Float3 Color;
+    public float Intensity;
+    public float Range;
+    public float SpotAngle;       // degrees
+    public float InnerSpotAngle;  // degrees
+
+    // Shadow
+    public bool ShadowEnabled;
+    public float ShadowBias;
+    public float ShadowNormalBias;
+    public float ShadowStrength;
+    public float ShadowQuality;   // 0 = Hard, 1 = Soft
+
+    // Directional cascade data (only for LightType.Directional)
+    public int CascadeCount;
+    public Float4x4[] CascadeShadowMatrices; // [4]
+    public Float4[] CascadeAtlasParams;      // [4]
+
+    // Point shadow data (6 faces)
+    public Float4x4[] PointShadowMatrices; // [6]
+    public Float4[] PointShadowFaceParams; // [6]
+
+    // Spot shadow data (1 matrix)
+    public Float4x4 SpotShadowMatrix;
+    public Float4 SpotShadowAtlasParams;
+}
+
 public interface IRenderableLight
 {
     public int GetLightID();
@@ -77,7 +114,7 @@ public interface IRenderableLight
 
 public abstract class RenderPipeline : EngineObject
 {
-    public struct CameraSnapshot(Camera camera)
+    public struct CameraSnapshot(Camera camera, DepthTextureMode depthTextureMode)
     {
         public Scene Scene = camera.Scene;
 
@@ -95,9 +132,11 @@ public abstract class RenderPipeline : EngineObject
         public Float4x4 View = camera.ViewMatrix;
         public Float4x4 ViewInverse = camera.ViewMatrix.Invert();
         public Float4x4 Projection = camera.ProjectionMatrix;
+        public Float4x4 NonJitteredProjection = camera.NonJitteredProjectionMatrix;
         public Float4x4 PreviousViewProj = camera.PreviousViewProjectionMatrix;
+        public bool HasPreviousViewProj = camera.HasPreviousViewProjectionMatrix;
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
-        public DepthTextureMode DepthTextureMode = camera.DepthTextureMode; // Flags, Can be None, Normals, MotionVectors
+        public DepthTextureMode DepthTextureMode = depthTextureMode;
     }
 
     public HashSet<int> ActiveObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }
@@ -130,18 +169,21 @@ public abstract class RenderPipeline : EngineObject
         ActiveObjectIds.Clear();
     }
 
-    private void TrackModelMatrix(int objectId, Float4x4 currentModel)
+    /// <summary>
+    /// Tracks an object's model matrix for motion vector computation.
+    /// Returns the previous frame's model matrix (or current if first frame).
+    /// </summary>
+    private Float4x4 TrackModelMatrix(int objectId, Float4x4 currentModel)
     {
         // Mark this object ID as active this frame
         ActiveObjectIds.Add(objectId);
 
-        // Store current model matrix for next frame
-        if (s_prevModelMatrices.TryGetValue(objectId, out Float4x4 prevModel))
-            PropertyState.SetGlobalMatrix("prowl_PrevObjectToWorld", prevModel);
-        else
-            PropertyState.SetGlobalMatrix("prowl_PrevObjectToWorld", currentModel); // First frame, use current matrix
+        Float4x4 prevModel;
+        if (!s_prevModelMatrices.TryGetValue(objectId, out prevModel))
+            prevModel = currentModel; // First frame, use current matrix
 
         s_prevModelMatrices[objectId] = currentModel;
+        return prevModel;
     }
 
     /// <summary>
@@ -584,6 +626,10 @@ public abstract class RenderPipeline : EngineObject
                     // Restore the original framebuffer (for both read and draw)
                     Graphics.BindFramebuffer(currentFB, FBOTarget.Framebuffer);
 
+                    // Generate mipmaps so shaders can sample with textureLod for blur effects
+                    Graphics.GenerateMipmap(grabRT.MainTexture.Handle);
+                    Graphics.SetTextureFilters(grabRT.MainTexture.Handle, TextureMin.LinearMipmapLinear, TextureMag.Linear);
+
                     // Set as global texture for this and subsequent passes
                     PropertyState.SetGlobalTexture(pass.GrabTextureName, grabRT.MainTexture);
                     if (wantDepth && grabRT.InternalDepth != null)
@@ -632,8 +678,9 @@ public abstract class RenderPipeline : EngineObject
 
                 // Track model matrix for motion vectors (used in temporal effects like TAA)
                 int instanceId = properties.GetInt("_ObjectID");
+                Float4x4 prevModel = model;
                 if (updatePreviousMatrices && instanceId != 0)
-                    TrackModelMatrix(instanceId, model);
+                    prevModel = TrackModelMatrix(instanceId, model);
 
                 // Apply instance-specific uniforms (tint colors, bone matrices, etc.)
                 // Texture slot counter continues from where material textures left off
@@ -644,6 +691,8 @@ public abstract class RenderPipeline : EngineObject
                 var fModel = (Float4x4)model;
                 Graphics.SetUniformMatrix(variant, "prowl_ObjectToWorld", false, fModel);
                 Graphics.SetUniformMatrix(variant, "prowl_WorldToObject", false, fModel.Invert());
+                if (updatePreviousMatrices)
+                    Graphics.SetUniformMatrix(variant, "prowl_PrevObjectToWorld", false, (Float4x4)prevModel);
 
                 // Execute draw call (mesh VAO already uploaded, just bind and draw)
                 unsafe

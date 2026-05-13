@@ -280,7 +280,7 @@ internal static class SurfacePassHelpers
         {
             var ctx = new ShaderGenContext(graph, ShaderStage.Fragment);
             foreach (var u in propertyUniforms) ctx.Uniforms.Add(u);
-            ctx.Includes.Add("Fragment");
+            ctx.Includes.Add("ProwlCG");
             ctx.Varyings.Add(("texCoord0", "vec2"));
 
             helper.AlphaExpr  = EvalMaster(master, "Alpha",        ctx, "1.0");
@@ -293,7 +293,7 @@ internal static class SurfacePassHelpers
         {
             var ctx = new ShaderGenContext(graph, ShaderStage.Vertex);
             foreach (var u in propertyUniforms) ctx.Uniforms.Add(u);
-            ctx.Includes.Add("Fragment");
+            ctx.Includes.Add("ProwlCG");
             ctx.Includes.Add("VertexAttributes");
 
             helper.VertexPosOffsetExpr = EvalMaster(master, "Vertex Position", ctx, "vec3(0.0)");
@@ -322,7 +322,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         // ── Fragment context ──────────────────────────────────────────────────────
         var fragCtx = new ShaderGenContext(graph, ShaderStage.Fragment);
         foreach (var u in shared.PropertyUniforms) fragCtx.Uniforms.Add(u);
-        fragCtx.Includes.Add("Fragment");
+        fragCtx.Includes.Add("ProwlCG");
         fragCtx.Includes.Add("StandardSurface");
         fragCtx.Varyings.Add(("texCoord0", "vec2"));
         fragCtx.Varyings.Add(("worldPos",  "vec3"));
@@ -339,7 +339,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         // vertex stage needs to know which optional `out` slots to declare + assign.
         var vertCtx = new ShaderGenContext(graph, ShaderStage.Vertex);
         foreach (var u in shared.PropertyUniforms) vertCtx.Uniforms.Add(u);
-        vertCtx.Includes.Add("Fragment");
+        vertCtx.Includes.Add("ProwlCG");
         vertCtx.Includes.Add("VertexAttributes");
         vertCtx.Varyings.Add(("texCoord0", "vec2"));
         vertCtx.Varyings.Add(("worldPos",  "vec3"));
@@ -686,13 +686,13 @@ internal static class SurfaceDepthPassEmit
 
         sb.AppendLine("    Vertex");
         sb.AppendLine("    {");
-        sb.AppendLine("        #include \"Fragment\"");
+        sb.AppendLine("        #include \"ProwlCG\"");
         sb.AppendLine("        #include \"VertexAttributes\"");
 
         if (needsVertOffset && depth?.VertexCtx is { } vctx)
         {
             foreach (var inc in vctx.Includes)
-                if (inc != "Fragment" && inc != "VertexAttributes")
+                if (inc != "ProwlCG" && inc != "VertexAttributes")
                     sb.AppendLine($"        #include \"{inc}\"");
             foreach (var u in vctx.Uniforms) sb.AppendLine($"        {u}");
         }
@@ -737,12 +737,12 @@ internal static class SurfaceDepthPassEmit
 
         sb.AppendLine("    Fragment");
         sb.AppendLine("    {");
-        sb.AppendLine("        #include \"Fragment\"");
+        sb.AppendLine("        #include \"ProwlCG\"");
 
         if (doDiscard && depth?.AlphaCtx is { } actx)
         {
             foreach (var inc in actx.Includes)
-                if (inc != "Fragment") sb.AppendLine($"        #include \"{inc}\"");
+                if (inc != "ProwlCG") sb.AppendLine($"        #include \"{inc}\"");
             foreach (var u in actx.Uniforms) sb.AppendLine($"        {u}");
             foreach (var (n, t) in actx.Varyings)
             {

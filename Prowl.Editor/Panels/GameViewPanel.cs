@@ -3,9 +3,11 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
+using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -24,6 +26,11 @@ public class GameViewPanel : DockPanel
     private RenderTexture? _rt;
     private int _resolutionIndex = 0;
     private const float ToolbarHeight = 26f;
+
+    // Separate Paper instance for in-game UI so it renders into the game RT,
+    // not on top of the editor.
+    private PaperRenderer? _gamePaperRenderer;
+    private Paper? _gamePaper;
 
     private static readonly (string name, int w, int h)[] Resolutions =
     {
@@ -57,8 +64,8 @@ public class GameViewPanel : DockPanel
             .ChildTop(2).ChildBottom(2)
             .Enter())
         {
-            EditorGUI.Dropdown(paper, "gv_res", "Resolution", _resolutionIndex, resNames)
-                .OnValueChanged(v => { _resolutionIndex = v; InvalidateRT(); });
+            Origami.Dropdown(paper, "gv_res", _resolutionIndex,
+                v => { _resolutionIndex = v; InvalidateRT(); }, resNames).Show();
 
             paper.Box("gv_spacer");
 
@@ -125,6 +132,26 @@ public class GameViewPanel : DockPanel
             pipeline.Render(cam, new RenderingData());
 
             cam.Target = origTarget;
+        }
+
+        // Render game OnGui into the game RT using a separate Paper instance
+        // so it doesn't overlay the editor UI.
+        if (Application.IsPlaying && _rt != null)
+        {
+            EnsureGamePaper(rtW, rtH);
+            _gamePaperRenderer!.UpdateProjection(rtW, rtH);
+
+            // Bind the game RT BEFORE EndFrame so the Paper renderer draws into it
+            Graphics.BindFramebuffer(_rt.frameBuffer);
+            Graphics.Viewport(0, 0, (uint)rtW, (uint)rtH);
+
+            _gamePaper!.BeginFrame(Time.DeltaTime, -1f);
+            scene.OnGui(_gamePaper);
+            _gamePaper.EndFrame(); // Layout + render draw calls go to the bound RT
+
+            // Restore default framebuffer for editor rendering
+            Graphics.UnbindFramebuffer();
+            Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         }
 
         // Display the RT centered with letterboxing
@@ -198,6 +225,20 @@ public class GameViewPanel : DockPanel
                 .Size(width, height)
                 .BackgroundColor(Color.Black);
         }
+    }
+
+    private void EnsureGamePaper(int w, int h)
+    {
+        if (_gamePaperRenderer == null)
+        {
+            _gamePaperRenderer = new PaperRenderer();
+            _gamePaperRenderer.Initialize(w, h);
+        }
+
+        if (_gamePaper == null)
+            _gamePaper = new Paper(_gamePaperRenderer, w, h, new Prowl.Quill.FontAtlasSettings());
+        else
+            _gamePaper.SetResolution(w, h);
     }
 
     private void EnsureRT(int w, int h)

@@ -36,7 +36,7 @@ Pass "Standard"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -58,11 +58,11 @@ Pass "Standard"
 				vNormal = TransformDirection(vertexNormal);
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
-				vBitangent = cross(vNormal, vTangent);
+				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				// Guard against degenerate tangent frames (parallel normal/tangent)
 				if (dot(vBitangent, vBitangent) < 0.000001) {
 					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));
-					vBitangent = cross(vNormal, vTangent);
+					vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				}
 #endif
 			}
@@ -128,7 +128,7 @@ Pass "DepthNormals"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec3 vNormal;
@@ -145,10 +145,10 @@ Pass "DepthNormals"
 				vNormal = TransformDirection(vertexNormal);
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
-				vBitangent = cross(vNormal, vTangent);
+				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				if (dot(vBitangent, vBitangent) < 0.000001) {
 					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));
-					vBitangent = cross(vNormal, vTangent);
+					vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				}
 #endif
 				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
@@ -157,7 +157,7 @@ Pass "DepthNormals"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			layout (location = 0) out vec4 normalOut;
 
@@ -187,6 +187,74 @@ Pass "DepthNormals"
 	ENDGLSL
 }
 
+Pass "MotionVectors"
+{
+    Tags { "LightMode" = "MotionVectors" }
+
+    Blend Off
+    Cull Back
+    ZTest LEqual
+    ZWrite Off
+
+    GLSLPROGRAM
+
+        Vertex
+        {
+            #include "ProwlCG"
+            #include "VertexAttributes"
+
+            out vec4 vClipPos;
+            out vec4 vPrevClipPos;
+            out vec2 texCoord0;
+
+            uniform vec2 _Tiling;
+            uniform vec2 _Offset;
+
+            void main()
+            {
+                vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
+                vClipPos = PROWL_MATRIX_VP * worldPos;
+                gl_Position = vClipPos;
+
+                vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
+                vPrevClipPos = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
+
+                texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
+            }
+        }
+
+        Fragment
+        {
+            #include "ProwlCG"
+
+            layout(location = 0) out vec4 OutputColor;
+
+            in vec4 vClipPos;
+            in vec4 vPrevClipPos;
+            in vec2 texCoord0;
+
+            uniform sampler2D _MainTex;
+            uniform vec4 _MainColor;
+            uniform float _AlphaCutoff;
+
+            void main()
+            {
+                if (_AlphaCutoff > 0.0)
+                {
+                    float alpha = texture(_MainTex, texCoord0).a * _MainColor.a;
+                    if (alpha < _AlphaCutoff) discard;
+                }
+
+                vec2 currentNDC = (vClipPos.xy / vClipPos.w) * 0.5 + 0.5;
+                vec2 previousNDC = (vPrevClipPos.xy / vPrevClipPos.w) * 0.5 + 0.5;
+                vec2 motion = currentNDC - previousNDC;
+
+                OutputColor = vec4(motion, 0.0, 1.0);
+            }
+        }
+    ENDGLSL
+}
+
 Pass "StandardShadow"
 {
     Tags { "LightMode" = "ShadowCaster" }
@@ -196,7 +264,7 @@ Pass "StandardShadow"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -213,7 +281,7 @@ Pass "StandardShadow"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			in vec2 texCoord0;
 			uniform sampler2D _MainTex;

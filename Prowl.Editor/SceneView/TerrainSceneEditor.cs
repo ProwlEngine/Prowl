@@ -28,8 +28,9 @@ public class TerrainSceneEditor : ISceneViewEditor
     private bool _useTransformTool;
 
     // Temporary full snapshot taken at stroke start used to extract the changed region at stroke end
-    private float[]? _preStrokeHeights;
+    private short[]? _preStrokeHeights;
     private float[]? _preStrokeSplats;
+    private byte[]? _preStrokeHoles;
     private List<float[]>? _preStrokeDetails;
 
     public int Priority => 0;
@@ -77,6 +78,10 @@ public class TerrainSceneEditor : ISceneViewEditor
         else if (TerrainEditor.ActiveTab == TerrainTab.Paint)
         {
             DrawSimpleToolBtn(paper, $"{id}_paint", EditorIcons.Paintbrush, font);
+        }
+        else if (TerrainEditor.ActiveTab == TerrainTab.Holes)
+        {
+            DrawSimpleToolBtn(paper, $"{id}_holes", EditorIcons.CircleXmark, font);
         }
         else if (TerrainEditor.ActiveTab == TerrainTab.Details)
         {
@@ -226,9 +231,10 @@ public class TerrainSceneEditor : ISceneViewEditor
 
             if (_isPainting && leftDown)
             {
-                TerrainEditor.ApplyBrush(terrainData, terrainUV, Time.DeltaTime, out bool hChanged, out bool sChanged, out bool gChanged);
+                TerrainEditor.ApplyBrush(terrainData, terrainUV, Time.DeltaTime,
+                    out bool hChanged, out bool sChanged, out bool gChanged, out bool hoChanged);
 
-                if (hChanged || sChanged || gChanged)
+                if (hChanged || sChanged || gChanged || hoChanged)
                 {
                     if (hChanged || gChanged) _terrain.InvalidateGrassCache();
                     TerrainEditor.ActiveInstance?.MarkDirty();
@@ -252,12 +258,21 @@ public class TerrainSceneEditor : ISceneViewEditor
         // Lightweight: only snapshot the array that the active tab modifies
         _preStrokeHeights = null;
         _preStrokeSplats = null;
+        _preStrokeHoles = null;
         _preStrokeDetails = null;
 
         if (TerrainEditor.ActiveTab == TerrainTab.Height && data.Heights != null)
-            _preStrokeHeights = (float[])data.Heights.Clone();
+            _preStrokeHeights = (short[])data.Heights.Clone();
         else if (TerrainEditor.ActiveTab == TerrainTab.Paint && data.Splats != null)
             _preStrokeSplats = (float[])data.Splats.Clone();
+        else if (TerrainEditor.ActiveTab == TerrainTab.Holes && data.Holes != null)
+            _preStrokeHoles = (byte[])data.Holes.Clone();
+        else if (TerrainEditor.ActiveTab == TerrainTab.Holes)
+        {
+            // Holes not yet allocated - snapshot an all-solid array so undo restores to no holes
+            _preStrokeHoles = new byte[data.SplatmapResolution * data.SplatmapResolution];
+            Array.Fill(_preStrokeHoles, (byte)255);
+        }
         else if (TerrainEditor.ActiveTab == TerrainTab.Details)
         {
             int idx = TerrainEditor.ActiveDetailIndex;
@@ -306,6 +321,17 @@ public class TerrainSceneEditor : ISceneViewEditor
             }
             _preStrokeSplats = null;
         }
+        else if (_preStrokeHoles != null && data.Holes != null)
+        {
+            // Simple full-array undo for holes (byte array is small)
+            var pre = _preStrokeHoles;
+            var post = (byte[])data.Holes.Clone();
+            var capturedData = data;
+            Undo.RegisterAction("Terrain Holes",
+                () => { capturedData.Holes = (byte[])pre.Clone(); capturedData.SetHolesDirty(); },
+                () => { capturedData.Holes = (byte[])post.Clone(); capturedData.SetHolesDirty(); });
+            _preStrokeHoles = null;
+        }
         else if (_preStrokeDetails != null)
         {
             int idx = TerrainEditor.ActiveDetailIndex;
@@ -330,6 +356,40 @@ public class TerrainSceneEditor : ISceneViewEditor
             }
             _preStrokeDetails = null;
         }
+    }
+
+    // short[] overloads for 16-bit heightmap undo
+    private static void FindChangedRect(short[] a, short[] b, int res, int rowStride,
+        out int minX, out int minZ, out int maxX, out int maxZ)
+    {
+        minX = int.MaxValue; minZ = int.MaxValue;
+        maxX = int.MinValue; maxZ = int.MinValue;
+        for (int z = 0; z < res; z++)
+            for (int x = 0; x < res; x++)
+            {
+                int idx = z * res + x;
+                if (idx < a.Length && idx < b.Length && a[idx] != b[idx])
+                {
+                    minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                    minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
+                }
+            }
+    }
+
+    private static short[] CopyRect(short[] src, int res, int minX, int minZ, int maxX, int maxZ)
+    {
+        int w = maxX - minX + 1, h = maxZ - minZ + 1;
+        var rect = new short[w * h];
+        for (int z = 0; z < h; z++)
+            Array.Copy(src, (minZ + z) * res + minX, rect, z * w, w);
+        return rect;
+    }
+
+    private static void PasteRect(short[] dst, int res, int minX, int minZ, int maxX, int maxZ, short[] rect)
+    {
+        int w = maxX - minX + 1, h = maxZ - minZ + 1;
+        for (int z = 0; z < h; z++)
+            Array.Copy(rect, z * w, dst, (minZ + z) * res + minX, w);
     }
 
     // Find the bounding rect of changed values between two arrays (single-stride)

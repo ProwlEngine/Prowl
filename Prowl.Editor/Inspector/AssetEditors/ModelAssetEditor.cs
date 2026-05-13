@@ -4,6 +4,7 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -90,41 +91,52 @@ public class ModelAssetEditor : AssetImporterEditor
         EditorGUI.Separator(paper, $"{id}_sep_settings");
         EditorGUI.Header(paper, $"{id}_h_settings", "Import Settings");
 
-        EditorGUI.Toggle(paper, $"{id}_genNormals", "Generate Normals", _generateNormals)
-            .OnValueChanged(v => { _generateNormals = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_genNormals", _generateNormals,
+                v => { _generateNormals = v; _settingsDirty = true; })
+            .LabelRight("Generate Normals").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_smoothNormals", "Smooth Normals", _generateSmoothNormals)
-            .OnValueChanged(v => { _generateSmoothNormals = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_smoothNormals", _generateSmoothNormals,
+                v => { _generateSmoothNormals = v; _settingsDirty = true; })
+            .LabelRight("Smooth Normals").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_tangents", "Calculate Tangents", _calculateTangents)
-            .OnValueChanged(v => { _calculateTangents = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_tangents", _calculateTangents,
+                v => { _calculateTangents = v; _settingsDirty = true; })
+            .LabelRight("Calculate Tangents").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_flipUV", "Flip UVs", _flipUVs)
-            .OnValueChanged(v => { _flipUVs = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_flipUV", _flipUVs,
+                v => { _flipUVs = v; _settingsDirty = true; })
+            .LabelRight("Flip UVs").Show();
 
-        EditorGUI.Toggle(paper, $"{id}_globalScale", "Global Scale", _globalScale)
-            .OnValueChanged(v => { _globalScale = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_globalScale", _globalScale,
+                v => { _globalScale = v; _settingsDirty = true; })
+            .LabelRight("Global Scale").Show();
 
-        EditorGUI.FloatField(paper, $"{id}_unitScale", _unitScale, label: "Unit Scale")
-            .OnValueChanged(v => { _unitScale = v; _settingsDirty = true; });
+        InspectorRow.Draw(paper, $"{id}_unitScale", "Unit Scale", () =>
+            Origami.NumericField<float>(paper, $"{id}_unitScale_v", _unitScale,
+                v => { _unitScale = v; _settingsDirty = true; }).Show());
 
         // Mesh features produces an SDF sub-asset alongside every imported mesh.
         EditorGUI.Separator(paper, $"{id}_sep_features");
         EditorGUI.Header(paper, $"{id}_h_features", "Mesh Features");
 
-        EditorGUI.Toggle(paper, $"{id}_genSDF", "Generate SDF (all meshes)", _generateSDF)
-            .OnValueChanged(v => { _generateSDF = v; _settingsDirty = true; });
+        Origami.Checkbox(paper, $"{id}_genSDF", _generateSDF,
+                v => { _generateSDF = v; _settingsDirty = true; })
+            .LabelRight("Generate SDF (all meshes)").Show();
 
         if (_generateSDF)
         {
-            EditorGUI.IntField(paper, $"{id}_sdfRes", _sdfResolution, "SDF Resolution")
-                .OnValueChanged(v => { _sdfResolution = System.Math.Clamp(v, 8, 256); _settingsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_sdfRes", "SDF Resolution", () =>
+                Origami.NumericField<int>(paper, $"{id}_sdfRes_v", _sdfResolution,
+                    v => { _sdfResolution = System.Math.Clamp(v, 8, 256); _settingsDirty = true; })
+                    .Min(8).Max(256).Show());
 
-            EditorGUI.FloatField(paper, $"{id}_sdfPad", _sdfPadding, label: "SDF Padding")
-                .OnValueChanged(v => { _sdfPadding = v; _settingsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_sdfPad", "SDF Padding", () =>
+                Origami.NumericField<float>(paper, $"{id}_sdfPad_v", _sdfPadding,
+                    v => { _sdfPadding = v; _settingsDirty = true; }).Show());
 
-            EditorGUI.FloatField(paper, $"{id}_sdfMax", _sdfMaxDistance, label: "SDF Max Distance")
-                .OnValueChanged(v => { _sdfMaxDistance = v; _settingsDirty = true; });
+            InspectorRow.Draw(paper, $"{id}_sdfMax", "SDF Max Distance", () =>
+                Origami.NumericField<float>(paper, $"{id}_sdfMax_v", _sdfMaxDistance,
+                    v => { _sdfMaxDistance = v; _settingsDirty = true; }).Show());
         }
 
         // Save / Revert buttons
@@ -135,33 +147,30 @@ public class ModelAssetEditor : AssetImporterEditor
             {
                 paper.Box($"{id}_btn_spacer");
 
-                EditorGUI.Button(paper, $"{id}_revert", "Revert", width: 80)
-                    .OnValueChanged(_ =>
-                    {
-                        LoadSettingsFromMeta(entry);
-                        _settingsDirty = false;
-                    });
+                Origami.Button(paper, $"{id}_revert", "Revert", () =>
+                {
+                    LoadSettingsFromMeta(entry);
+                    _settingsDirty = false;
+                }).Width(80).Show();
 
-                EditorGUI.Button(paper, $"{id}_save", "Save & Reimport", width: 120)
-                    .OnValueChanged(_ =>
-                    {
-                        SaveSettingsToMeta(entry);
-                        _settingsDirty = false;
-                        _lastPreviewAsset = null; // Force preview refresh
-                        _settingsLoaded = false;
-                        EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-                        MeshAssetEditor.InvalidateCachedPreviews();
-                    });
+                Origami.Button(paper, $"{id}_save", "Save & Reimport", () =>
+                {
+                    SaveSettingsToMeta(entry);
+                    _settingsDirty = false;
+                    _lastPreviewAsset = null; // Force preview refresh
+                    _settingsLoaded = false;
+                    EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+                    MeshAssetEditor.InvalidateCachedPreviews();
+                }).Width(120).Show();
             }
         }
         else
         {
-            EditorGUI.Button(paper, $"{id}_reimport", $"{EditorIcons.ArrowsRotate}  Reimport")
-                .OnValueChanged(_ =>
-                {
-                    _lastPreviewAsset = null;
-                    EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-                });
+            Origami.Button(paper, $"{id}_reimport", $"{EditorIcons.ArrowsRotate}  Reimport", () =>
+            {
+                _lastPreviewAsset = null;
+                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+            }).Show();
         }
 
         // 3D Preview

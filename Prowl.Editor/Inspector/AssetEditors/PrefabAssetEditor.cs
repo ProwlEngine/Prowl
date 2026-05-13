@@ -2,6 +2,7 @@ using System.IO;
 
 using Prowl.Editor.Prefabs;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
@@ -37,8 +38,7 @@ public class PrefabAssetEditor : AssetImporterEditor
         paper.Box($"{id}_sp").Height(8);
 
         // Open in editing mode
-        EditorGUI.Button(paper, $"{id}_edit", $"{EditorIcons.PenToSquare}  Open Prefab", width: 140)
-            .OnValueChanged(_ => PrefabEditingMode.Enter(entry.Guid));
+        Origami.Button(paper, $"{id}_edit", $"{EditorIcons.PenToSquare}  Open Prefab", () => { PrefabEditingMode.Enter(entry.Guid); }).Width(140).Show();
 
         // 3D Preview
         if (prefab.GameObjectData != null)

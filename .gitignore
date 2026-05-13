@@ -168,6 +168,9 @@ PublishScripts/
 **/packages/*
 # except build/, which is used as an MSBuild target.
 !**/packages/build/
+# Keep the editor Packages source directory
+!Prowl.Editor/Packages/
+!Prowl.Editor/Packages/**
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/packages/repositories.config
 # NuGet v3's project.json files produces more ignorable files

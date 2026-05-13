@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Editor.Docking;
+using Prowl.Editor.Packages;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -20,9 +21,14 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Project")]
 public class ProjectPanel : DockPanel
 {
+    public static ProjectPanel Instance;
     public override string Title => "Project";
     public override string Icon => EditorIcons.Folder;
 
+    // Handled Virtual (Placeholder) content to be displayed with normal objects
+    public List<ContentItem> VirtualContentItems = new();
+
+    public string CurrentFolder => _currentFolder;
     private string _currentFolder = ""; // Relative to Assets/, empty = Assets root
     private string _searchText = "";
     private float _thumbnailSize = 64f;
@@ -34,7 +40,11 @@ public class ProjectPanel : DockPanel
     //   null   → mouse not over any folder drop target
     //   ""     → over the Assets root (represented by an empty relative path)
     //   "Foo"  → over folder 'Foo' (assets-relative)
-    private string? _dragHoverFolder;
+    private string? _dragHoverFolder;      // current frame's resolved hover target (from last frame's callbacks)
+    private string? _dragHoverFolderNext;  // written by deferred callbacks, promoted next frame
+    private string? _dragDwellFolder;     // folder being dwelled on for auto-open
+    private float _dragDwellTimer;        // seconds spent hovering the dwell folder
+    private const float DragDwellOpenDelay = 0.75f;
     // True while the mouse is over the content-area background (not just a folder item) —
     // lets "drop on empty space" fall back to the currently-open folder.
     private bool _contentBgHovered;
@@ -55,6 +65,9 @@ public class ProjectPanel : DockPanel
         _paper = paper;
         var font = EditorTheme.DefaultFont;
         if (font == null || Project.Current == null) return;
+
+        // Sets itself as instance on start
+        Instance ??= this;
 
         // Detect new ping and navigate to the pinged asset's folder
         if (Selection.PingedGuid != Guid.Empty && Selection.PingedGuid != _lastPingedGuid)
@@ -86,11 +99,44 @@ public class ProjectPanel : DockPanel
             }
         }
 
-        // Reset drag-hover tracking at the start of each frame. Each drop target's OnHover
-        // callback will repopulate this during DrawBody if the cursor is over it. Without
-        // the reset, leaving a folder with the mouse would keep the stale hover path.
-        _dragHoverFolder = null;
+        // Promote deferred hover target to current, then always clear the next slot.
+        // Hover callbacks will re-set it this frame if the mouse is still over a folder.
+        // On the drop frame, we keep the last promoted value (don't null it out).
+        if (DragDrop.IsDropFrame)
+        {
+            // Drop frame: _dragHoverFolder already has the right value from last promotion
+        }
+        else
+        {
+            _dragHoverFolder = _dragHoverFolderNext;
+            _dragHoverFolderNext = null;
+        }
         _contentBgHovered = false;
+
+        // Drag-dwell auto-open: if hovering the same folder for DragDwellOpenDelay, navigate into it
+        if (DragDrop.IsDragging && _dragHoverFolder != null)
+        {
+            if (_dragHoverFolder == _dragDwellFolder)
+            {
+                _dragDwellTimer += (float)Runtime.Time.UnscaledDeltaTime;
+                if (_dragDwellTimer >= DragDwellOpenDelay)
+                {
+                    _currentFolder = _dragDwellFolder;
+                    _dragDwellFolder = null;
+                    _dragDwellTimer = 0f;
+                }
+            }
+            else
+            {
+                _dragDwellFolder = _dragHoverFolder;
+                _dragDwellTimer = 0f;
+            }
+        }
+        else
+        {
+            _dragDwellFolder = null;
+            _dragDwellTimer = 0f;
+        }
 
         using (paper.Column("proj_root").Size(width, height).Enter())
         {
@@ -167,8 +213,9 @@ public class ProjectPanel : DockPanel
                 .Text(EditorIcons.List, font).TextColor(EditorTheme.Ink400)
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
-            EditorGUI.Slider(paper, "proj_thumb_slider", "", _thumbnailSize, MinThumbSize, MaxThumbSize, false)
-                .OnValueChanged(v => _thumbnailSize = v);
+            Origami.Slider(paper, "proj_thumb_slider", _thumbnailSize, v => _thumbnailSize = v,
+                    MinThumbSize, MaxThumbSize)
+                .ShowValue(false).Width(120f).Show();
 
             paper.Box("proj_grid_ico")
                 .Size(ToolbarHeight - 6)
@@ -176,8 +223,7 @@ public class ProjectPanel : DockPanel
                 .FontSize(14f).Alignment(TextAlignment.MiddleCenter);
 
             // Search
-            EditorGUI.SearchBar(paper, "proj_search", _searchText, "Search...")
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "proj_search", _searchText, v => _searchText = v).Show();
 
             // Refresh button
             paper.Box("proj_refresh")
@@ -327,7 +373,9 @@ public class ProjectPanel : DockPanel
     /// </summary>
     private static bool CanAcceptAssetDropInto(string destRelFolder)
     {
-        if (!DragDrop.IsDraggingType<AssetDragPayload>()) return false;
+        // Use HasPayloadType (not IsDraggingType) so this works on the drop frame
+        // when IsDragging is already false but the payload is still available.
+        if (!DragDrop.HasPayloadType<AssetDragPayload>()) return false;
         var payload = (AssetDragPayload)DragDrop.Payload!;
 
         foreach (var rawSrc in payload.AssetPaths)
@@ -372,140 +420,136 @@ public class ProjectPanel : DockPanel
             .Size(FolderTreeWidth, height)
             .BackgroundColor(EditorTheme.Neutral400)
             .OnClick(0, (_, _) => Selection.Clear())
-            .OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Right-click background show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_tree_bg_ctx");
 
-            Origami.ScrollView(paper, "proj_tree", FolderTreeWidth, height).Padding(4, 4, 4, 4).Body(() =>
+            // Build flat node list by walking directories recursively
+            var nodes = new List<OrigamiUI.TreeNode>();
+            BuildFolderNodes(nodes, Project.Current!.AssetsPath, "Assets", 0);
+
+            // Build a parallel ContentItem list for multi-select via Selection.HandleListClick
+            var folderItems = new List<object>();
+            foreach (var n in nodes)
             {
-                // Root "Assets" node
-                using (paper.Column("proj_tree_inner")
-                    .MinHeight(22)
-                    .Height(UnitValue.Auto)
-                    .Enter())
+                string relPath = (string)n.UserData!;
+                folderItems.Add(new ContentItem
                 {
-                    DrawFolderNode(paper, font, Project.Current!.AssetsPath, "Assets", 0);
-                }
-            });
+                    Name = n.Label,
+                    RelativePath = relPath,
+                    IsFolder = true,
+                    Icon = EditorIcons.Folder,
+                    TypeLabel = "Folder"
+                });
+            }
+
+            Origami.Tree(paper, "proj_tree", FolderTreeWidth, height)
+                .Nodes(nodes)
+                .MultiSelect()
+                .IsSelected(n =>
+                {
+                    string relPath = (string)n.UserData!;
+                    // Check if any selected ContentItem matches this folder
+                    foreach (var sel in Selection.GetSelected<ContentItem>())
+                        if (sel.IsFolder && sel.RelativePath == relPath) return true;
+                    return _currentFolder == relPath;
+                })
+                .OnSelectModified((e, ctrl, shift) =>
+                {
+                    _currentFolder = (string)e.Node.UserData!;
+                    Selection.HandleListClick(folderItems[e.Index], (IReadOnlyList<object>)folderItems, e.Index, ctrl, shift);
+                })
+                .OnDoubleClick(e => { /* tree handles expand toggle internally */ })
+                .OnRightClick(e =>
+                {
+                    var item = (ContentItem)folderItems[e.Index];
+                    if (!Selection.IsSelected(item))
+                        Selection.Select(item);
+                })
+                .OnHover((n, normY) =>
+                {
+                    if (DragDrop.IsDragging || DragDrop.IsDropFrame)
+                        _dragHoverFolderNext = (string)n.UserData!;
+                })
+                .CustomRowContent((p, node, isSel, isExp) =>
+                {
+                    string relativePath = (string)node.UserData!;
+
+                    // Folder icon
+                    p.Box($"proj_fi_{node.Id.GetHashCode()}")
+                        .Width(18).Height(22)
+                        .Text(EditorIcons.Folder, font)
+                        .TextColor(Color.FromArgb(255, 220, 180, 80))
+                        .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
+
+                    // Name (inline rename or label)
+                    if (RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
+                    {
+                        RenameOverlay.Draw(p, $"proj_ft_rename_{node.Id.GetHashCode()}");
+                    }
+                    else
+                    {
+                        p.Box($"proj_fl_{node.Id.GetHashCode()}")
+                            .Height(22)
+                            .Margin(4, 0, 0, 0)
+                            .Text(node.Label, font)
+                            .TextColor(EditorTheme.Ink500)
+                            .FontSize(EditorTheme.FontSize)
+                            .Alignment(TextAlignment.MiddleLeft);
+                    }
+
+                    // Right-click context menu on folder tree
+                    BuildFolderTreeContextMenu(p, $"proj_ft_ctx_{node.Id.GetHashCode()}", relativePath);
+
+                    // Drop-target highlight
+                    if (_dragHoverFolder == relativePath
+                        && (DragDrop.IsDraggingType<GameObjectDragPayload>()
+                            || (DragDrop.IsDraggingType<AssetDragPayload>() && CanAcceptAssetDropInto(relativePath))))
+                    {
+                        p.Box($"proj_fn_drop_{node.Id.GetHashCode()}")
+                            .PositionType(PositionType.SelfDirected)
+                            .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
+                            .Rounded(3).IsNotInteractable()
+                            .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+                            .BorderColor(EditorTheme.Purple400).BorderWidth(1);
+                    }
+                })
+                .Show();
         }
     }
 
-    private void DrawFolderNode(Paper paper, Prowl.Scribe.FontFile font, string absolutePath, string displayName, int depth)
+    private static void BuildFolderNodes(List<OrigamiUI.TreeNode> nodes, string absolutePath, string displayName, int depth)
     {
-        string relativePath = absolutePath == Project.Current!.AssetsPath
+        string relativePath = depth == 0
             ? ""
-            : Path.GetRelativePath(Project.Current.AssetsPath, absolutePath).Replace('\\', '/');
+            : Path.GetRelativePath(Project.Current!.AssetsPath, absolutePath).Replace('\\', '/');
 
-        bool isSelected = _currentFolder == relativePath;
-        float indent = depth * 16f;
-
-        // Get subdirectories
         string[] subDirs;
-        try { subDirs = Directory.GetDirectories(absolutePath).Where(d => !Path.GetFileName(d).StartsWith('.')).OrderBy(d => d).ToArray(); }
+        try
+        {
+            subDirs = Directory.GetDirectories(absolutePath)
+                .Where(d => !Path.GetFileName(d).StartsWith('.'))
+                .OrderBy(d => d)
+                .ToArray();
+        }
         catch { subDirs = Array.Empty<string>(); }
 
-        bool hasChildren = subDirs.Length > 0;
-        string arrowIcon = hasChildren ? EditorIcons.AngleRight : "";
-
-        // Use element storage for open/close state
-        string stateKey = $"proj_fo_{relativePath}";
-
-        using (paper.Row($"proj_fn_{relativePath.GetHashCode()}")
-            .Height(22)
-            .BackgroundColor(isSelected ? EditorTheme.Ink100 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Rounded(3)
-            .ChildLeft(indent + 4)
-            .OnClick(relativePath, (path, _) => _currentFolder = path)
-            .OnDoubleClick(stateKey, (key, _) =>
-            {
-                // Toggle folder open/close state via a static dictionary
-                _folderOpenState[key] = !_folderOpenState.GetValueOrDefault(key, depth < 2);
-            })
-            .OnHover(relativePath, (path, _) =>
-            {
-                // Track drag hover here instead of reading paper.IsParentHovered the
-                // latter was unreliable for items inside the scroll view while a drag is
-                // active (same workaround HierarchyPanel uses).
-                if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolder = path;
-            })
-            .Enter())
+        nodes.Add(new OrigamiUI.TreeNode
         {
-            // Arrow
-            if (hasChildren)
-            {
-                bool isOpen = _folderOpenState.GetValueOrDefault(stateKey, depth < 2);
-                paper.Box($"proj_fa_{relativePath.GetHashCode()}")
-                    .Width(16).Height(22)
-                    .Text(EditorGUI.FoldoutIcon(isOpen), font)
-                    .TextColor(EditorTheme.Ink500)
-                    .FontSize(10f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(stateKey, (key, e) =>
-                    {
-                        e.StopPropagation();
-                        _folderOpenState[key] = !_folderOpenState.GetValueOrDefault(key, depth < 2);
-                    });
-            }
-            else
-            {
-                paper.Box($"proj_fa_{relativePath.GetHashCode()}")
-                    .Width(16).Height(22);
-            }
+            Id = relativePath,
+            Label = displayName,
+            Icon = EditorIcons.Folder,
+            IconColor = Color.FromArgb(255, 220, 180, 80),
+            HasChildren = subDirs.Length > 0,
+            DefaultExpanded = depth < 2,
+            Depth = depth,
+            UserData = relativePath
+        });
 
-            // Folder icon
-            paper.Box($"proj_fi_{relativePath.GetHashCode()}")
-                .Width(18).Height(22)
-                .Text(EditorIcons.Folder, font)
-                .TextColor(Color.FromArgb(255, 220, 180, 80))
-                .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
-
-            // Name (inline rename or label)
-            if (RenameOverlay.IsRenaming($"proj_folder_{relativePath}"))
-            {
-                RenameOverlay.Draw(paper, $"proj_ft_rename_{relativePath.GetHashCode()}");
-            }
-            else
-            {
-                paper.Box($"proj_fl_{relativePath.GetHashCode()}")
-                    .Height(22)
-                    .Margin(4, 0, 0, 0)
-                    .Text(displayName, font)
-                    .TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize)
-                    .Alignment(TextAlignment.MiddleLeft);
-            }
-
-            // Right-click context menu on folder tree
-            BuildFolderTreeContextMenu(paper, $"proj_ft_ctx_{relativePath.GetHashCode()}", relativePath);
-
-            // Drop-target highlight painted when the cursor is over this node during a
-            // valid drag. Actual drop handling is centralized in OnGUI after the body
-            // finishes drawing; see DispatchProjectDrop.
-            if (_dragHoverFolder == relativePath
-                && (DragDrop.IsDraggingType<GameObjectDragPayload>()
-                    || (DragDrop.IsDraggingType<AssetDragPayload>() && CanAcceptAssetDropInto(relativePath))))
-            {
-                paper.Box($"proj_fn_drop_{relativePath.GetHashCode()}")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
-                    .Rounded(3).IsNotInteractable()
-                    .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                    .BorderColor(EditorTheme.Purple400).BorderWidth(1);
-            }
-        }
-
-        // Children
-        bool open = _folderOpenState.GetValueOrDefault(stateKey, depth < 2);
-        if (open && hasChildren)
-        {
-            foreach (var subDir in subDirs)
-                DrawFolderNode(paper, font, subDir, Path.GetFileName(subDir), depth + 1);
-        }
+        foreach (var subDir in subDirs)
+            BuildFolderNodes(nodes, subDir, Path.GetFileName(subDir), depth + 1);
     }
-
-    private static readonly Dictionary<string, bool> _folderOpenState = new();
 
     // ================================================================
     //  Content Area (right)
@@ -525,7 +569,7 @@ public class ProjectPanel : DockPanel
             .Size(width, height)
             .BackgroundColor(EditorTheme.Neutral300)
             .OnClick(0, (_, _) => Selection.Clear())
-            .OnRightClick(0, (_, _) => Selection.Clear())
+            //.OnRightClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Remember that the mouse is over the content background the central drop
@@ -580,32 +624,39 @@ public class ProjectPanel : DockPanel
             // Breadcrumb
             DrawBreadcrumb(paper, font, width, 20);
 
-            Origami.ScrollView(paper, "proj_content", width, height - 31).Body(() =>
+            float contentHeight = height - 31;
+
+            if (isList)
             {
-                using (paper.Column("proj_content_inner")
-                    .Margin(6, 0, 0, 6)
-                    .Height(UnitValue.Auto)
-                    .Enter())
+                // List mode uses the tree widget which has its own scroll
+                DrawListView(paper, font, entries, width, contentHeight);
+            }
+            else
+            {
+                // Grid mode uses a plain scroll view
+                Origami.ScrollView(paper, "proj_content", width, contentHeight).Body(() =>
                 {
-                    if (entries.Count == 0)
+                    using (paper.Column("proj_content_inner")
+                        .Margin(6, 0, 0, 6)
+                        .Height(UnitValue.Auto)
+                        .Enter())
                     {
-                        paper.Box("proj_empty")
-                            .Height(60)
-                            .Text("This folder is empty", font)
-                            .TextColor(EditorTheme.Ink300)
-                            .FontSize(EditorTheme.FontSize - 2)
-                            .Alignment(TextAlignment.MiddleCenter);
+                        if (entries.Count == 0)
+                        {
+                            paper.Box("proj_empty")
+                                .Height(60)
+                                .Text("This folder is empty", font)
+                                .TextColor(EditorTheme.Ink300)
+                                .FontSize(EditorTheme.FontSize - 2)
+                                .Alignment(TextAlignment.MiddleCenter);
+                        }
+                        else
+                        {
+                            DrawGridView(paper, font, entries, width);
+                        }
                     }
-                    else if (isList)
-                    {
-                        DrawListView(paper, font, entries, width);
-                    }
-                    else
-                    {
-                        DrawGridView(paper, font, entries, width);
-                    }
-                }
-            });
+                });
+            }
 
         }
     }
@@ -669,156 +720,139 @@ public class ProjectPanel : DockPanel
     //  List View
     // ================================================================
 
-    private void DrawListView(Paper paper, Prowl.Scribe.FontFile font, List<ContentItem> entries, float width)
+    private void DrawListView(Paper paper, Prowl.Scribe.FontFile font, List<ContentItem> entries, float width, float height)
     {
-        // Build object list for Selection.HandleListClick
-        var itemObjects = entries.Select(e => (object)e).ToList();
+        // Build flat TreeNode list + parallel object list for Selection.HandleListClick
+        var treeNodes = new List<OrigamiUI.TreeNode>();
+        var flatObjects = new List<object>();
 
-        for (int i = 0; i < entries.Count; i++)
+        foreach (var item in entries)
         {
-            var item = entries[i];
-            bool isSelected = Selection.IsSelected(item);
-            bool isPingedList = item.Guid != Guid.Empty && item.Guid == Selection.PingedGuid;
-            int idx = i;
-
-            using (paper.Row($"proj_li_{i}")
-                .Height(22)
-                .BackgroundColor(isSelected ? EditorTheme.Purple300 : (i % 2 == 0 ? Color.Transparent : EditorTheme.Neutral400))
-                .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple300 : EditorTheme.Neutral500).End()
-                .Rounded(3)
-                .RowBetween(4)
-                .OnClick((item, idx, itemObjects), (cap, e) =>
-                {
-                    e.StopPropagation();
-                    bool ctrl = _paper?.IsKeyDown(PaperKey.LeftControl) == true || _paper?.IsKeyDown(PaperKey.RightControl) == true;
-                    bool shift = _paper?.IsKeyDown(PaperKey.LeftShift) == true || _paper?.IsKeyDown(PaperKey.RightShift) == true;
-                    Selection.HandleListClick(cap.Item1, (IReadOnlyList<object>)cap.Item3, cap.Item2, ctrl, shift);
-                })
-                .OnDoubleClick(item, (it, _) =>
-                {
-                    if (it.IsFolder)
-                        _currentFolder = it.RelativePath;
-                    else
-                        EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
-                })
-                .OnDragStart(item, (it, _) =>
-                {
-                    // Sub-assets still handled separately: they can't be moved but we DO want
-                    // the drag to flow to scene-view drop handlers (assign material, etc.).
-                    if (it.IsSubAsset && it.Guid != Guid.Empty)
-                    {
-                        Type? subType = null;
-                        var db = EditorAssetDatabase.Instance;
-                        if (db != null)
-                        {
-                            var subs = db.GetSubAssets(it.ParentGuid);
-                            subType = subs.FirstOrDefault(s => s.Guid == it.Guid)?.Type;
-                        }
-                        DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
-                        return;
-                    }
-
-                    var payload = BuildAssetDragPayload(it);
-                    if (payload != null) DragDrop.StartDrag(payload);
-                })
-                .OnHover(item, (it, _) =>
-                {
-                    if (!it.IsFolder) return;
-                    if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolder = it.RelativePath;
-                })
-                .OnPostLayout((handle, rect) =>
-                {
-                    if (!isPingedList) return;
-                    paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        float alpha = Selection.GetPingAlpha();
-                        if (alpha <= 0f) return;
-                        int fillA = (int)(alpha * 60);
-                        int borderA = (int)(alpha * 200);
-                        var fillColor = Color.FromArgb(fillA, 255, 220, 50);
-                        var borderColor = Color.FromArgb(borderA, 255, 200, 0);
-                        float x = (float)r.Min.X, y = (float)r.Min.Y;
-                        float w = (float)r.Size.X, h = (float)r.Size.Y;
-                        canvas.RoundedRectFilled(x, y, w, h, 3, 3, 3, 3, fillColor);
-                        canvas.SetStrokeColor(borderColor);
-                        canvas.SetStrokeWidth(2f);
-                        canvas.BeginPath();
-                        canvas.RoundedRect(x + 1, y + 1, w - 2, h - 2, 2, 2, 2, 2);
-                        canvas.Stroke();
-                    });
-                })
-                .Enter())
+            var node = new OrigamiUI.TreeNode
             {
-                // Sub-asset indent
-                if (item.IsSubAsset)
-                    paper.Box($"proj_li_indent_{i}").Width(16).Height(22);
+                Id = item.Guid != Guid.Empty ? item.Guid.ToString() : item.RelativePath,
+                Label = item.Name,
+                Icon = item.Icon,
+                IconColor = item.IsFolder ? Color.FromArgb(255, 220, 180, 80)
+                    : item.IsSubAsset ? EditorTheme.Purple300 : EditorTheme.Ink400,
+                Depth = item.IsSubAsset ? 1 : 0,
+                HasChildren = item.HasSubAssets,
+                IsLeaf = !item.HasSubAssets, // folders, files without subs, and sub-assets are all leaves
+                UserData = item,
+                Badge = item.IsFolder ? null : item.TypeLabel,
+                BadgeColor = EditorTheme.Ink400,
+            };
+            treeNodes.Add(node);
+            flatObjects.Add(item);
+        }
 
-                // Expand arrow for items with sub-assets
-                if (item.HasSubAssets)
+        Origami.Tree(paper, "proj_list_tree", width, height)
+            .Nodes(treeNodes)
+            .MultiSelect()
+            .IsSelected(n => Selection.IsSelected((ContentItem)n.UserData!))
+            .OnSelectModified((e, ctrl, shift) =>
+            {
+                Selection.HandleListClick((ContentItem)e.Node.UserData!, (IReadOnlyList<object>)flatObjects, e.Index, ctrl, shift);
+            })
+            .OnDoubleClick(e =>
+            {
+                var it = (ContentItem)e.Node.UserData!;
+                if (it.IsFolder)
+                    _currentFolder = it.RelativePath;
+                else
+                    EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
+            })
+            .OnRightClick(e =>
+            {
+                var it = (ContentItem)e.Node.UserData!;
+                if (!Selection.IsSelected(it))
+                    Selection.AddToSelection(it);
+            })
+            .OnDragStart(n =>
+            {
+                var it = (ContentItem)n.UserData!;
+                if (it.IsSubAsset && it.Guid != Guid.Empty)
                 {
-                    bool expanded = _expandedAssets.Contains(item.Guid);
-                    paper.Box($"proj_li_arrow_{i}")
-                        .Width(14).Height(22)
-                        .Text(EditorGUI.FoldoutIcon(expanded), font)
-                        .TextColor(EditorTheme.Ink400)
-                        .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(item.Guid, (guid, _) =>
-                        {
-                            if (_expandedAssets.Contains(guid)) _expandedAssets.Remove(guid);
-                            else _expandedAssets.Add(guid);
-                        });
+                    Type? subType = null;
+                    var db = EditorAssetDatabase.Instance;
+                    if (db != null)
+                    {
+                        var subs = db.GetSubAssets(it.ParentGuid);
+                        subType = subs.FirstOrDefault(s => s.Guid == it.Guid)?.Type;
+                    }
+                    DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
+                    return;
                 }
+                var payload = BuildAssetDragPayload(it);
+                if (payload != null) DragDrop.StartDrag(payload);
+            })
+            .OnHover((n, _) =>
+            {
+                var it = (ContentItem)n.UserData!;
+                if (it.IsFolder && (DragDrop.IsDragging || DragDrop.IsDropFrame))
+                    _dragHoverFolderNext = it.RelativePath;
+            })
+            .IsPinged(n =>
+            {
+                var it = (ContentItem)n.UserData!;
+                return it.Guid != Guid.Empty && it.Guid == Selection.PingedGuid;
+            })
+            .PingAlpha(() => Selection.GetPingAlpha())
+            .CustomRowContent((p, node, isSel, isExp) =>
+            {
+                var it = (ContentItem)node.UserData!;
 
                 // Icon
-                paper.Box($"proj_li_ico_{i}")
+                p.Box($"proj_li_ico_{node.Id}")
                     .Width(18).Height(22)
-                    .Text(item.Icon, font)
-                    .TextColor(item.IsFolder ? Color.FromArgb(255, 220, 180, 80) : (item.IsSubAsset ? EditorTheme.Purple300 : EditorTheme.Ink400))
+                    .Text(node.Icon, font)
+                    .TextColor(node.IconColor ?? EditorTheme.Ink400)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter);
 
                 // Name (inline rename or label)
-                if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
+                if (RenameOverlay.IsRenaming($"proj_asset_{it.RelativePath}"))
                 {
-                    RenameOverlay.Draw(paper, $"proj_li_rename_{i}");
+                    RenameOverlay.Draw(p, $"proj_li_rename_{node.Id}");
                 }
                 else
                 {
-                    paper.Box($"proj_li_name_{i}")
+                    p.Box($"proj_li_name_{node.Id}")
                         .Height(22)
-                        .Text(item.Name, font)
+                        .Text(it.Name, font)
                         .TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize - 3)
                         .Alignment(TextAlignment.MiddleLeft);
                 }
 
-                // Type
-                if (!item.IsFolder)
+                // Type label (right-aligned)
+                if (!it.IsFolder)
                 {
-                    paper.Box($"proj_li_type_{i}")
+                    p.Box($"proj_li_type_{node.Id}")
                         .Width(80).Height(22)
-                        .Text(item.TypeLabel, font)
+                        .Text(it.TypeLabel, font)
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSize - 4)
                         .Alignment(TextAlignment.MiddleRight);
                 }
 
-                // Right-click context menu
-                BuildItemContextMenu(paper, $"proj_li_ctx_{i}", item);
+                // Context menu
+                BuildItemContextMenu(p, $"proj_li_ctx_{node.Id}", it);
 
-                // Folder list items are drop targets highlight during a valid drag hover.
-                if (item.IsFolder && _dragHoverFolder == item.RelativePath
+                // Folder drop target highlight
+                if (it.IsFolder && _dragHoverFolder == it.RelativePath
                     && (DragDrop.IsDraggingType<GameObjectDragPayload>()
-                        || (DragDrop.IsDraggingType<AssetDragPayload>() && CanAcceptAssetDropInto(item.RelativePath))))
+                        || (DragDrop.IsDraggingType<AssetDragPayload>() && CanAcceptAssetDropInto(it.RelativePath))))
                 {
-                    paper.Box($"proj_li_drop_{i}")
+                    p.Box($"proj_li_drop_{node.Id}")
                         .PositionType(PositionType.SelfDirected)
                         .Position(0, 0).Size(UnitValue.Stretch(), UnitValue.Stretch())
                         .Rounded(3).IsNotInteractable()
                         .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                         .BorderColor(EditorTheme.Purple400).BorderWidth(1);
                 }
-            }
-        }
+            })
+            .EmptyMessage("This folder is empty")
+            .Show();
     }
 
     private void BuildItemContextMenu(Paper paper, string id, ContentItem item, bool inTree = false)
@@ -827,7 +861,7 @@ public class ProjectPanel : DockPanel
         {
             // Right-click should select the item if not already selected
             if (!Selection.IsSelected(item))
-                Selection.Select(item);
+                Selection.AddToSelection(item);
 
             bool isMulti = Selection.Count > 1;
             string folder = item.IsFolder ? item.RelativePath : _currentFolder;
@@ -870,6 +904,26 @@ public class ProjectPanel : DockPanel
 
             builder.Separator();
 
+            builder.Item($"Export Package...", () =>
+            {
+                var paths = Selection.GetSelected<ContentItem>()
+                    .Where(c => !c.IsSubAsset)
+                    .SelectMany(c =>
+                    {
+                        if (c.IsFolder)
+                            return ProwlPackage.CollectFolderAssets(c.RelativePath);
+                        if (c.Guid != Guid.Empty)
+                            return new[] { c.RelativePath };
+                        return Enumerable.Empty<string>();
+                    })
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (paths.Count > 0)
+                    PackageExportDialog.Open(paths);
+            }, icon: EditorIcons.FileZipper);
+
+            builder.Separator();
+
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
             builder.Item($"Rename", () => StartRename(item, inTree), enabled: !isMulti && !isRoot, icon: EditorIcons.PenToSquare);
 
@@ -902,7 +956,7 @@ public class ProjectPanel : DockPanel
             builder.Item("Show in Explorer", () =>
             {
                 string absPath = Path.Combine(Project.Current!.AssetsPath, folder);
-                ReferenceOpenerService.OpenFileSystemPath(absPath);
+                EditorUtils.OpenFileSystemPath(absPath);
             }, icon: EditorIcons.FolderOpen);
 
             builder.Separator();
@@ -1009,6 +1063,7 @@ public class ProjectPanel : DockPanel
         });
     }
 
+
     private static void OpenWithSystem(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
@@ -1022,7 +1077,7 @@ public class ProjectPanel : DockPanel
     private static void ShowInExplorer(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-        ReferenceOpenerService.OpenFileSystemPath(absPath);
+        EditorUtils.OpenFileSystemPath(absPath);
     }
 
     // ================================================================
@@ -1033,8 +1088,14 @@ public class ProjectPanel : DockPanel
     {
         float cellSize = _thumbnailSize + 8f;
         float labelH = 18f;
+
+
         float totalCellH = cellSize + labelH;
-        int cols = Math.Max(1, (int)((width - 16) / cellSize));
+        float gap = 6f;
+        // Available width minus padding (12 = 6 left margin + 6 right margin from parent)
+        // Each column takes cellSize + gap, minus one gap for the last column
+        float available = width - 12f;
+        int cols = Math.Max(1, (int)((available + gap) / (cellSize + gap)));
 
         var itemObjects = entries.Select(e => (object)e).ToList();
 
@@ -1052,7 +1113,17 @@ public class ProjectPanel : DockPanel
                     var item = entries[idx];
                     bool isSelected = Selection.IsSelected(item);
 
-                    DrawGridItem(paper, font, $"proj_gc_{idx}", item, idx, itemObjects, cellSize, labelH, totalCellH);
+
+                    var size = paper.MeasureText(item.Name, EditorTheme.FontSize - 3, font);
+
+                    if (size.X > cellSize)
+                    {
+                        size *= 2;
+                    }
+
+                    //Runtime.Debug.Log($"Size: ({item.Name}) {labelH} - {sizeY} - {sizeYo} ({(EditorTheme.FontSize - 5)/paper.Canvas.Scale})");
+
+                    DrawGridItem(paper, font, $"proj_gc_{idx}", item, idx, itemObjects, cellSize, size.Y, totalCellH);
                 }
             }
             row++;
@@ -1106,7 +1177,7 @@ public class ProjectPanel : DockPanel
             .OnHover(item, (it, _) =>
             {
                 if (!it.IsFolder) return;
-                if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolder = it.RelativePath;
+                if (DragDrop.IsDragging || DragDrop.IsDropFrame) _dragHoverFolderNext = it.RelativePath;
             })
             .Tooltip(item.Name)
             .OnPostLayout((handle, rect) =>
@@ -1181,16 +1252,18 @@ public class ProjectPanel : DockPanel
             // Label
             if (RenameOverlay.IsRenaming($"proj_asset_{item.RelativePath}"))
             {
-                RenameOverlay.Draw(paper, $"{id}_rename");
+                RenameOverlay.Draw(paper, $"{id}_rename", RenameOverlay.Position.Bottom);
             }
             else
             {
                 paper.Box($"{id}_l")
-                    .Width(cellSize).Height(labelH)
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(0,UnitValue.Stretch())
+                    .Width(cellSize).Height(EditorTheme.FontSize)
                     .Clip()
                     .Text(item.Name, font)
                     .TextColor(isSubAsset ? EditorTheme.Purple300 : EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleLeft);
             }
 
             BuildItemContextMenu(paper, $"{id}_ctx", item);
@@ -1245,6 +1318,8 @@ public class ProjectPanel : DockPanel
         }
         catch { }
 
+        items.AddRange(VirtualContentItems);
+
         // Files
         try
         {
@@ -1270,8 +1345,8 @@ public class ProjectPanel : DockPanel
                     HasSubAssets = hasSubAssets
                 });
 
-                // Insert sub-assets if expanded
-                if (hasSubAssets && entry != null && _expandedAssets.Contains(entry.Guid))
+                // Insert sub-assets if expanded (grid mode) or always (list mode uses tree widget)
+                if (hasSubAssets && entry != null && (_expandedAssets.Contains(entry.Guid) || _thumbnailSize < ListThreshold))
                 {
                     foreach (var sub in entry.SubAssets)
                     {
@@ -1312,13 +1387,13 @@ public class ProjectPanel : DockPanel
         var db = EditorAssetDatabase.Instance;
         if (db == null) return null;
 
-        byte[]? pixels = db.LoadThumbnail(guid);
-        if (pixels == null || pixels.Length == 0) return null;
+        var thumb = db.LoadThumbnail(guid);
+        if (thumb == null) return null;
 
         try
         {
-            int size = ThumbnailGenerator.ThumbnailSize;
-            var tex = new Prowl.Runtime.Resources.Texture2D((uint)size, (uint)size, false, TextureImageFormat.Color4b);
+            var (w, h, pixels) = thumb.Value;
+            var tex = new Prowl.Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
             tex.SetData<byte>(pixels);
             tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _thumbnailCache[guid] = tex;

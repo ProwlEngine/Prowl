@@ -62,7 +62,7 @@ public class PreviewRenderer : IDisposable
         _lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         _lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
         var light = _lightGo.AddComponent<DirectionalLight>();
-        light.Intensity = 6f;
+        light.Intensity = 1f;
         light.CastShadows = false;
         _scene.Add(_lightGo);
 

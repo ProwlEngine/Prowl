@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 //
 // Patch-based detail renderer with per-prototype density layers.
-// Architecture follows Unity's DetailDatabase/DetailRenderer pattern.
 
 using System;
 using System.Collections.Generic;

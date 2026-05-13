@@ -143,32 +143,30 @@ public sealed class AnisotropicLightingNode : Node, IShaderNode, IShaderGraphNod
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Translucency CalculateTranslucency
-// Light scattering through thin / subsurface materials. Two internal modes:
+// Directional Translucency CalculateTranslucency against the sun
+// Two internal modes:
 //   ScatteringPower < 0.001  wrapped diffuse + GGX backscatter (foliage, cloth)
 //   ScatteringPower ≥ 0.001  spherical Gaussian (skin, wax, marble)
-// The node adds the scatter from ONE light (picked by LightIndex). Add multiple
-// instances + sum them if you want translucency from every active light.
+// Computed against the directional light only. For translucency from BVH lights
+// (point / spot), use the PBR Lighting node which folds them all in.
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// <summary>
-/// Backscatter / subsurface-scattering lobe for thin or translucent surfaces.
-/// Runs the same <c>CalculateTranslucency</c> helper the Standard shader uses,
-/// configured via ScatteringPower (see the node's remarks for mode semantics).
+/// Backscatter / subsurface-scattering lobe for thin or translucent surfaces, evaluated
+/// against the scene's directional light. Runs the same <c>CalculateTranslucency</c> helper
+/// the Standard shader uses, configured via ScatteringPower (see the node's remarks for
+/// mode semantics).
 /// </summary>
 /// <remarks>
-/// Scattering mode: set <c>ScatteringPower</c> to 0 for wrapped-diffuse foliage,
-/// or 1..8 for Gaussian skin/wax. <c>Thickness</c> is the per-pixel translucency
-/// (e.g. from a texture's B channel), <c>Distortion</c> bends the effective
-/// light direction through the surface, <c>Scale</c> is overall intensity.
+/// Scattering mode: set <c>ScatteringPower</c> to 0 for wrapped-diffuse foliage, or 1..8
+/// for Gaussian skin/wax. <c>Thickness</c> is the per-pixel translucency (e.g. from a
+/// texture's B channel), <c>Distortion</c> bends the effective light direction through
+/// the surface, <c>Scale</c> is overall intensity.
 /// </remarks>
-public sealed class TranslucencyNode : Node, IShaderNode, IShaderGraphNode
+public sealed class DirectionalTranslucencyNode : Node, IShaderNode, IShaderGraphNode
 {
-    /// <summary>Which forward light to use. 0 = primary / directional.</summary>
-    public int LightIndex = 0;
-
-    public override string Title => $"Translucency [{LightIndex}]";
-    public override string Category => "Lighting";
+    public override string Title => "Directional Translucency";
+    public override string Category => "Lighting/Directional";
     public override System.Drawing.Color AccentColor => LightingAccents.Lighting;
 
     protected override void DefineNode()
@@ -209,11 +207,11 @@ public sealed class TranslucencyNode : Node, IShaderNode, IShaderGraphNode
             ctx.BodyPrelude.AppendLine(
                 $"    vec3 {local}_N = normalize({tbn} * {normalTS});");
             ctx.BodyPrelude.AppendLine(
-                $"    vec3 {local}_L = GetLightDirection({LightIndex}, worldPos);");
+                $"    vec3 {local}_L = normalize(_DirectionalLightDirection);");
             ctx.BodyPrelude.AppendLine(
                 $"    vec3 {local}_V = GetWorldViewDir(worldPos);");
             ctx.BodyPrelude.AppendLine(
-                $"    vec3 {local}_Lc = _LightColors[{LightIndex}] * _LightIntensities[{LightIndex}] * GetLightAttenuation({LightIndex}, worldPos);");
+                $"    vec3 {local}_Lc = _DirectionalLightColor * _DirectionalLightIntensity;");
             ctx.BodyPrelude.AppendLine(
                 $"    vec3 {local} = CalculateTranslucency({local}_L, {local}_V, {local}_N, {thick}, {sPow}, {dist}, {scale}, {local}_Lc);");
         });
@@ -338,7 +336,7 @@ public sealed class NormalMapNode : Node, IShaderNode, IShaderGraphNode
         if (ctx.RequireFragmentStage(Id, Title))
             return "vec3(0.0, 0.0, 1.0)";
 
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("ProwlCG");
         ctx.Varyings.Add(("vNormal",    "vec3"));
         ctx.Varyings.Add(("vTangent",   "vec3"));
         ctx.Varyings.Add(("vBitangent", "vec3"));

@@ -17,6 +17,9 @@ public sealed class RenderContext : IDisposable
     /// <summary>Depth + normals from the pre-pass. InternalDepth = depth, InternalTextures[0] = view-space normals.</summary>
     public RenderTexture DepthNormals { get; set; }
 
+    /// <summary>Per-pixel screen-space motion vectors (RG16F). Null when DepthTextureMode.MotionVectors is not set.</summary>
+    public RenderTexture MotionVectors { get; set; }
+
     /// <summary>The scene color buffer (forward-rendered opaques + skybox).</summary>
     public RenderTexture SceneColor { get; set; }
 

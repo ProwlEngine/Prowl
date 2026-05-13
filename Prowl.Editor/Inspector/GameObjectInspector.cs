@@ -5,6 +5,7 @@ using System.Reflection;
 
 using Prowl.Editor.Prefabs;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -59,14 +60,24 @@ public static class GameObjectInspector
         {
             paper.Box("gi_icon").Margin(6, 6, 0, 6).FontSize(EditorTheme.FontSize * 1.5f).Width(UnitValue.Auto).Text(EditorIcons.Cube, font);
 
-            EditorGUI.Toggle(paper, "gi_enabled", "", go.Enabled)
-                .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Toggle Enabled", go.Enabled, v, (g, x) => g.Enabled = x); go.Enabled = v; });
+            Origami.Checkbox(paper, "gi_enabled", go.Enabled,
+                v => { Undo.RecordGameObjectChange(go, "Toggle Enabled", go.Enabled, v, (g, x) => g.Enabled = x); go.Enabled = v; })
+                .NoLabel().Show();
 
-            EditorGUI.TextField(paper, "gi_name", "", go.Name)
-                .OnValueChanged(v => { if (!string.IsNullOrWhiteSpace(v)) { Undo.RecordGameObjectChange(go, "Change Name", go.Name, v, (g, x) => g.Name = x, coalesce: true); go.Name = v; } });
+            Origami.TextField(paper, "gi_name", go.Name, v =>
+                {
+                    if (!string.IsNullOrWhiteSpace(v))
+                    {
+                        Undo.RecordGameObjectChange(go, "Change Name", go.Name, v, (g, x) => g.Name = x, coalesce: true);
+                        go.Name = v;
+                    }
+                })
+                .Width(UnitValue.Stretch())
+                .Show();
 
-            EditorGUI.Toggle(paper, "gi_static", "Static", go.IsStatic)
-                .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x); go.IsStatic = v; });
+            Origami.Checkbox(paper, "gi_static", go.IsStatic,
+                v => { Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x); go.IsStatic = v; })
+                .LabelRight("Static").Show();
         }
 
         // Tag + Layer row (dropdowns)
@@ -80,8 +91,18 @@ public static class GameObjectInspector
             int tagIdx = TagLayerManager.tags.IndexOf(go.Tag);
             if (tagIdx < 0) tagIdx = 0;
 
-            EditorGUI.Dropdown(paper, "gi_tag", "Tag", tagIdx, tagNames, autoLabelWidth: true)
-                .OnValueChanged(v => { if (v >= 0 && v < tagNames.Length) { var newTag = tagNames[v]; Undo.RecordGameObjectChange(go, "Change Tag", go.Tag, newTag, (g, x) => g.Tag = x); go.Tag = newTag; } });
+            DrawInlineLabeled(paper, "gi_tag_row", "Tag", font, () =>
+                Origami.Dropdown(paper, "gi_tag", tagIdx,
+                    v =>
+                    {
+                        if (v >= 0 && v < tagNames.Length)
+                        {
+                            var newTag = tagNames[v];
+                            Undo.RecordGameObjectChange(go, "Change Tag", go.Tag, newTag, (g, x) => g.Tag = x);
+                            go.Tag = newTag;
+                        }
+                    }, tagNames)
+                    .Show());
 
             // Layer dropdown (filter out empty entries)
             var allLayers = TagLayerManager.layers;
@@ -99,8 +120,41 @@ public static class GameObjectInspector
             int selectedLayerIdx = layerIndices.IndexOf(go.LayerIndex);
             if (selectedLayerIdx < 0) selectedLayerIdx = 0;
 
-            EditorGUI.Dropdown(paper, "gi_layer", "Layer", selectedLayerIdx, layerNames.ToArray(), autoLabelWidth: true)
-                .OnValueChanged(v => { if (v >= 0 && v < layerIndices.Count) { var newIdx = layerIndices[v]; Undo.RecordGameObjectChange(go, "Change Layer", go.LayerIndex, newIdx, (g, x) => g.LayerIndex = x); go.LayerIndex = newIdx; } });
+            DrawInlineLabeled(paper, "gi_layer_row", "Layer", font, () =>
+                Origami.Dropdown(paper, "gi_layer", selectedLayerIdx,
+                    v =>
+                    {
+                        if (v >= 0 && v < layerIndices.Count)
+                        {
+                            var newIdx = layerIndices[v];
+                            Undo.RecordGameObjectChange(go, "Change Layer", go.LayerIndex, newIdx, (g, x) => g.LayerIndex = x);
+                            go.LayerIndex = newIdx;
+                        }
+                    }, layerNames.ToArray())
+                    .Show());
+        }
+    }
+
+    /// <summary>
+    /// Renders an auto-width label followed by the caller's control filling the remainder.
+    /// Used for the Tag/Layer header where we want compact label gutters, not the inspector's
+    /// fixed-width LabelWidth gutter.
+    /// </summary>
+    private static void DrawInlineLabeled(Paper paper, string id, string label,
+        Prowl.Scribe.FontFile font, Action drawControl)
+    {
+        using (paper.Row(id).Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        {
+            paper.Box($"{id}_lbl")
+                .Width(UnitValue.Auto).Height(EditorTheme.RowHeight)
+                .Margin(4, 4, 0, 0)
+                .IsNotInteractable()
+                .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize);
+
+            using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight).Enter())
+            {
+                drawControl();
+            }
         }
     }
 
@@ -165,8 +219,9 @@ public static class GameObjectInspector
                 .Enter())
             {
                 // Enabled toggle
-                EditorGUI.Toggle(paper, $"{compId}_en", "", comp.Enabled)
-                    .OnValueChanged(v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = old; }, () => { var c = Undo.FindComponent(cId); if (c != null) c.Enabled = v; }); comp.Enabled = v; });
+                Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
+                    v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = old; c.OnValidate(); } }, () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
+                    .NoLabel().Show();
 
                 // Icon + Name (click to fold)
                 paper.Box($"{compId}_label")
@@ -327,8 +382,7 @@ public static class GameObjectInspector
             if (method.GetParameters().Length > 0) continue; // Only parameterless methods
 
             string label = btnAttr.Label ?? NicifyName(method.Name);
-            EditorGUI.Button(paper, $"{id}_{btnIdx++}", label)
-                .OnValueChanged(_ => method.Invoke(comp, null));
+            Origami.Button(paper, $"{id}_{btnIdx++}", label, () => { method.Invoke(comp, null); }).Show();
         }
     }
 
@@ -459,16 +513,13 @@ public static class GameObjectInspector
 
                 if (!isMissing)
                 {
-                    EditorGUI.Button(paper, "gi_prefab_select", "Select", width: 55)
-                        .OnValueChanged(_ => Selection.Ping(go.PrefabAssetId));
+                    Origami.Button(paper, "gi_prefab_select", "Select", () => { Selection.Ping(go.PrefabAssetId); }).Width(55).Show();
 
                     if (isRoot && hasOverrides)
                     {
-                        EditorGUI.Button(paper, "gi_prefab_revert", "Revert", width: 55)
-                            .OnValueChanged(_ => { if (root != null) PrefabUtility.RevertOverrides(root); });
+                        Origami.Button(paper, "gi_prefab_revert", "Revert", () => { if (root != null) PrefabUtility.RevertOverrides(root); }).Width(55).Show();
 
-                        EditorGUI.Button(paper, "gi_prefab_apply", "Apply", width: 50)
-                            .OnValueChanged(_ => { if (root != null) PrefabUtility.ApplyOverrides(root); });
+                        Origami.Button(paper, "gi_prefab_apply", "Apply", () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
                     }
                 }
             }

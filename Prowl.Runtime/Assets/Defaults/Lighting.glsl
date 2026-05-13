@@ -1,50 +1,46 @@
 // Forward lighting utilities for Prowl Engine
 // Include this in any lit forward shader (Standard, Terrain, Grass, etc.)
-// Provides: CalculateForwardLighting(), ApplyAmbient(), ApplyFog()
+// Provides: CalculateForwardLighting(), CalculateAmbient(), ApplyFog()
+//
+// Light data lives in two BVHs (static + dynamic). Per fragment we walk both trees and
+// accumulate contributions from every light whose tight AABB contains worldPos. The single
+// directional light is uploaded separately and evaluated unconditionally (no BVH).
 
 #ifndef PROWL_LIGHTING
 #define PROWL_LIGHTING
 
 #include "PBR"
 #include "Shadow"
+#include "LightBVH"
 
 // ============================================================
-//  Light uniform declarations (max 8 lights per frame)
+//  Directional light (a single one per scene)
 // ============================================================
 
-#define MAX_FORWARD_LIGHTS 8
+uniform int   _DirectionalLightEnabled;     // 0 / 1
+uniform vec3  _DirectionalLightDirection;
+uniform vec3  _DirectionalLightColor;
+uniform float _DirectionalLightIntensity;
+uniform int   _DirectionalLightShadowEnabled;
+uniform float _DirectionalLightShadowBias;
+uniform float _DirectionalLightShadowNormalBias;
+uniform float _DirectionalLightShadowStrength;
+uniform float _DirectionalLightShadowQuality;
 
-// Light types: 0 = Directional, 1 = Point, 2 = Spot
-uniform int _LightCount;
-uniform int _LightType[MAX_FORWARD_LIGHTS];
+// ============================================================
+//  Local-light shadow atlas (closest N point + spot lights share these slots)
+// ============================================================
 
-// Shared light properties
-uniform vec3 _LightPositions[MAX_FORWARD_LIGHTS];
-uniform vec3 _LightDirections[MAX_FORWARD_LIGHTS];
-uniform vec3 _LightColors[MAX_FORWARD_LIGHTS];
-uniform float _LightIntensities[MAX_FORWARD_LIGHTS];
-uniform float _LightRanges[MAX_FORWARD_LIGHTS];
-
-// Spot light specific
-uniform float _LightSpotAngles[MAX_FORWARD_LIGHTS];      // outer cone angle in degrees
-uniform float _LightInnerSpotAngles[MAX_FORWARD_LIGHTS];  // inner cone angle in degrees
-
-// Shadow data per light
-uniform int _LightShadowEnabled[MAX_FORWARD_LIGHTS];   // 0 or 1
-uniform float _LightShadowBias[MAX_FORWARD_LIGHTS];
-uniform float _LightShadowNormalBias[MAX_FORWARD_LIGHTS];
-uniform float _LightShadowStrength[MAX_FORWARD_LIGHTS];
-uniform float _LightShadowQuality[MAX_FORWARD_LIGHTS];
+#ifndef MAX_SHADOW_CASTERS
+#define MAX_SHADOW_CASTERS 4
+#endif
 
 // Shadow atlas
 uniform sampler2D _ShadowAtlas;
 uniform vec2 _ShadowAtlasSize;
 
-// ============================================================
-//  Directional light cascade shadow data (light index 0 only)
-// ============================================================
-
-uniform int _CascadeCount;
+// Directional cascade shadows (one directional light)
+uniform int  _CascadeCount;
 uniform mat4 _CascadeShadowMatrix0;
 uniform mat4 _CascadeShadowMatrix1;
 uniform mat4 _CascadeShadowMatrix2;
@@ -54,59 +50,43 @@ uniform vec4 _CascadeAtlasParams1;
 uniform vec4 _CascadeAtlasParams2;
 uniform vec4 _CascadeAtlasParams3;
 
-// ============================================================
-//  Additional shadow-casting point/spot lights (max 2)
-// ============================================================
+// Point shadows (6 faces per light). A point light occupying slot s uses indices [s*6 .. s*6+5].
+uniform mat4 _PointShadowMatrices[MAX_SHADOW_CASTERS * 6];
+uniform vec4 _PointShadowFaceParams[MAX_SHADOW_CASTERS * 6]; // xy: atlasPos, z: faceSize, w: farPlane
 
-// Point light shadows: 6 faces per light, max 2 lights = 12 entries
-uniform mat4 _PointShadowMatrices[12];
-uniform vec4 _PointShadowFaceParams[12]; // xy: atlasPos, z: faceSize, w: farPlane
-
-// Spot light shadows: 1 matrix per light, max 2 lights = 2 entries
-uniform mat4 _SpotShadowMatrices[2];
-uniform vec4 _SpotShadowAtlasParams[2]; // xy: atlasPos, z: atlasSize, w: unused
-
-// Per-light: index into the shadow arrays (-1 = no shadow, 0 or 1 = slot index)
-uniform int _LightShadowSlot[MAX_FORWARD_LIGHTS];
+// Spot shadows (1 matrix per light, indexed by slot directly).
+uniform mat4 _SpotShadowMatrices[MAX_SHADOW_CASTERS];
+uniform vec4 _SpotShadowAtlasParams[MAX_SHADOW_CASTERS]; // xy: atlasPos, z: atlasSize, w: unused
 
 // ============================================================
 //  Fog uniforms
 // ============================================================
 
 uniform vec4 _FogColor;
-uniform vec4 _FogParams;  // x: density/sqrt(ln(2)) for Exp2, y: density/ln(2) for Exp, z: -1/(end-start) for Linear, w: end/(end-start) for Linear
-uniform vec3 _FogStates;  // x: linear enabled, y: exp enabled, z: exp2 enabled
+uniform vec4 _FogParams;
+uniform vec3 _FogStates;
 
 // ============================================================
 //  Ambient lighting uniforms
 // ============================================================
 
-uniform vec2 _AmbientMode;  // x: uniform enabled, y: hemisphere enabled
+uniform vec2 _AmbientMode;
 uniform vec4 _AmbientColor;
 uniform vec4 _AmbientSkyColor;
 uniform vec4 _AmbientGroundColor;
 uniform float _AmbientStrength;
 
 // ============================================================
+//  Helpers preserved for shader-graph access
+// ============================================================
 
-// Unit direction FROM a surface point TO light i. For directionals the world-space
-// position is ignored only the stored facing direction matters.
-vec3 GetLightDirection(int i, vec3 worldPos)
-{
-    if (_LightType[i] == 0) return normalize(-_LightDirections[i]);
-    return normalize(_LightPositions[i] - worldPos);
-}
-
-// Unit direction FROM the surface TO the camera, world-space. The common
-// `normalize(_WorldSpaceCameraPos - worldPos)` idiom with a meaningful name.
+// Unit direction FROM the surface TO the camera, world-space.
 vec3 GetWorldViewDir(vec3 worldPos)
 {
     return normalize(_WorldSpaceCameraPos.xyz - worldPos);
 }
 
-// Unit direction FROM the surface TO the camera, expressed in tangent space.
-// Useful for parallax-occlusion UV displacement and tangent-space reflection math.
-// Expects the three vertex varyings already transformed into world-space.
+// Unit direction FROM the surface TO the camera in tangent space.
 vec3 GetTangentViewDir(vec3 worldPos, vec3 worldNormal, vec3 worldTangent, vec3 worldBitangent)
 {
     vec3 vWorld = GetWorldViewDir(worldPos);
@@ -114,34 +94,8 @@ vec3 GetTangentViewDir(vec3 worldPos, vec3 worldNormal, vec3 worldTangent, vec3 
     return normalize(tbnT * vWorld);
 }
 
-// Combined distance + spot-cone attenuation for light i at worldPos. Directional
-// lights always return 1.0. Matches the formula used inside CalculateSingleLight
-// so graph authors get the same fall-off the built-in lighting uses.
-float GetLightAttenuation(int i, vec3 worldPos)
-{
-    int lt = _LightType[i];
-    if (lt == 0) return 1.0;
-
-    vec3 lightToPixel = worldPos - _LightPositions[i];
-    float dist = length(lightToPixel);
-
-    float range = _LightRanges[i];
-    float distAtten = 1.0 / (dist * dist + 1.0);
-    float rangeAtten = 1.0 - smoothstep(range * 0.8, range, dist);
-    float atten = distAtten * rangeAtten;
-
-    if (lt == 2) {
-        float outerCos = cos(radians(_LightSpotAngles[i]));
-        float innerCos = cos(radians(_LightInnerSpotAngles[i]));
-        float lightAngleCos = dot(normalize(_LightDirections[i]), normalize(lightToPixel));
-        atten *= smoothstep(outerCos, innerCos, lightAngleCos);
-    }
-
-    return max(atten, 0.0);
-}
-
 // ============================================================
-//  Shadow sampling functions
+//  Shadow sampling
 // ============================================================
 
 float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
@@ -153,7 +107,6 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
     mat4 cascadeMatrix;
     vec4 cascadeParams;
 
-    // Select cascade by distance
     if (_CascadeCount >= 1 && worldDistance <= _CascadeAtlasParams0.w) {
         cascadeMatrix = _CascadeShadowMatrix0;
         cascadeParams = _CascadeAtlasParams0;
@@ -167,8 +120,8 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
         cascadeMatrix = _CascadeShadowMatrix3;
         cascadeParams = _CascadeAtlasParams3;
     } else {
-        // Beyond all cascades use last
-        if (_CascadeCount == 1)      { cascadeMatrix = _CascadeShadowMatrix0; cascadeParams = _CascadeAtlasParams0; }
+        // Beyond all cascades: clamp to last available.
+        if      (_CascadeCount == 1) { cascadeMatrix = _CascadeShadowMatrix0; cascadeParams = _CascadeAtlasParams0; }
         else if (_CascadeCount == 2) { cascadeMatrix = _CascadeShadowMatrix1; cascadeParams = _CascadeAtlasParams1; }
         else if (_CascadeCount == 3) { cascadeMatrix = _CascadeShadowMatrix2; cascadeParams = _CascadeAtlasParams2; }
         else                         { cascadeMatrix = _CascadeShadowMatrix3; cascadeParams = _CascadeAtlasParams3; }
@@ -176,7 +129,7 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
 
     if (cascadeParams.z <= 0.0) return 0.0;
 
-    vec3 worldPosBiased = worldPos + normalize(worldNormal) * _LightShadowNormalBias[0];
+    vec3 worldPosBiased = worldPos + normalize(worldNormal) * _DirectionalLightShadowNormalBias;
     vec4 lightSpacePos = cascadeMatrix * vec4(worldPosBiased, 1.0);
     vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
     projCoords = projCoords * 0.5 + 0.5;
@@ -188,17 +141,17 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
     vec2 atlasCoords, shadowMin, shadowMax;
     GetAtlasCoordinates(projCoords, cascadeParams, atlasSize, atlasCoords, shadowMin, shadowMax);
 
-    float slopeBias = CalculateSlopeBias(worldNormal, _LightDirections[0], _LightShadowBias[0]);
+    float slopeBias = CalculateSlopeBias(worldNormal, _DirectionalLightDirection, _DirectionalLightShadowBias);
     float texelWorldSize = ((cascadeParams.w * 4.0) / (cascadeParams.z * atlasSize)) * 8.0;
     float currentDepth = projCoords.z - (slopeBias + texelWorldSize);
 
     return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, _LightShadowQuality[0], _LightShadowStrength[0]);
+                           currentDepth, _DirectionalLightShadowQuality, _DirectionalLightShadowStrength);
 }
 
-float SamplePointShadow(int lightIndex, int shadowSlot, vec3 worldPos, vec3 worldNormal)
+float SamplePointShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldNormal)
 {
-    vec3 lightToFrag = worldPos - _LightPositions[lightIndex];
+    vec3 lightToFrag = worldPos - L.Position;
     vec3 absDir = abs(lightToFrag);
 
     int faceIndex = 0;
@@ -213,7 +166,7 @@ float SamplePointShadow(int lightIndex, int shadowSlot, vec3 worldPos, vec3 worl
     mat4 shadowMatrix = _PointShadowMatrices[idx];
     vec4 faceParams = _PointShadowFaceParams[idx];
 
-    vec3 worldPosBiased = worldPos + normalize(worldNormal) * _LightShadowNormalBias[lightIndex];
+    vec3 worldPosBiased = worldPos + normalize(worldNormal) * L.ShadowNormalBias;
     vec4 lightSpacePos = shadowMatrix * vec4(worldPosBiased, 1.0);
     vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
     projCoords = projCoords * 0.5 + 0.5;
@@ -225,19 +178,19 @@ float SamplePointShadow(int lightIndex, int shadowSlot, vec3 worldPos, vec3 worl
     vec2 atlasCoords, shadowMin, shadowMax;
     GetAtlasCoordinates(projCoords, faceParams, atlasSize, atlasCoords, shadowMin, shadowMax);
 
-    float finalBias = CalculateSlopeBias(worldNormal, normalize(lightToFrag), _LightShadowBias[lightIndex]);
+    float finalBias = CalculateSlopeBias(worldNormal, normalize(lightToFrag), L.ShadowBias);
     float currentDepth = projCoords.z - finalBias;
 
     return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, _LightShadowQuality[lightIndex], _LightShadowStrength[lightIndex]);
+                           currentDepth, L.ShadowQuality, L.ShadowStrength);
 }
 
-float SampleSpotShadow(int lightIndex, int shadowSlot, vec3 worldPos, vec3 worldNormal)
+float SampleSpotShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldNormal)
 {
     vec4 atlasParams = _SpotShadowAtlasParams[shadowSlot];
     if (atlasParams.z <= 0.0) return 0.0;
 
-    vec3 worldPosBiased = worldPos + normalize(worldNormal) * _LightShadowNormalBias[lightIndex];
+    vec3 worldPosBiased = worldPos + normalize(worldNormal) * L.ShadowNormalBias;
     vec4 lightSpacePos = _SpotShadowMatrices[shadowSlot] * vec4(worldPosBiased, 1.0);
     vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
     projCoords = projCoords * 0.5 + 0.5;
@@ -249,60 +202,65 @@ float SampleSpotShadow(int lightIndex, int shadowSlot, vec3 worldPos, vec3 world
     vec2 atlasCoords, shadowMin, shadowMax;
     GetAtlasCoordinates(projCoords, atlasParams, atlasSize, atlasCoords, shadowMin, shadowMax);
 
-    float finalBias = CalculateSlopeBias(worldNormal, _LightDirections[lightIndex], _LightShadowBias[lightIndex]);
+    float finalBias = CalculateSlopeBias(worldNormal, L.Direction, L.ShadowBias);
     float currentDepth = projCoords.z - finalBias;
 
     return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, _LightShadowQuality[lightIndex], _LightShadowStrength[lightIndex]);
+                           currentDepth, L.ShadowQuality, L.ShadowStrength);
 }
 
 // ============================================================
-//  Per-light PBR calculation
+//  Per-light evaluation (BVH leaf -> radiance)
 // ============================================================
 
-vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
-                          vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
+vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                        vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
 {
-    int lightType = _LightType[i];
-    vec3 lightDir;
-    float attenuation = 1.0;
+    // BVH only emits point + spot leaves; directional has its own path. The leaf-level sphere
+    // test in LBVH_Next has already rejected fragments past Range, so we don't repeat it here.
+    //
+    // Two remaining rejections before PBR:
+    //   1) Spot cone reject (outer-cone-cosine test before any GGX work).
+    //   2) Backface reject (NdotL <= 0 contributes 0; skip GGX/Smith/Fresnel/shadow sampling).
+    vec3 lightToPixel = worldPos - L.Position;
+    float dist2 = dot(lightToPixel, lightToPixel);
+    float dist = sqrt(dist2);
+    vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
 
-    if (lightType == 0) {
-        // Directional
-        lightDir = normalize(_LightDirections[i]);
-    } else {
-        // Point or Spot
-        vec3 lightToPixel = worldPos - _LightPositions[i];
-        float dist = length(lightToPixel);
-        lightDir = normalize(-lightToPixel);
-
-        // Distance attenuation
-        float range = _LightRanges[i];
-        float distAtten = 1.0 / (dist * dist + 1.0);
-        float rangeAtten = 1.0 - smoothstep(range * 0.8, range, dist);
-        attenuation = distAtten * rangeAtten;
-
-        if (lightType == 2) {
-            // Spot cone attenuation
-            float spotAngleRad = radians(_LightSpotAngles[i]);
-            float innerSpotAngleRad = radians(_LightInnerSpotAngles[i]);
-            float lightAngleCos = dot(normalize(_LightDirections[i]), normalize(lightToPixel));
-            float outerCos = cos(spotAngleRad);
-            float innerCos = cos(innerSpotAngleRad);
-            attenuation *= smoothstep(outerCos, innerCos, lightAngleCos);
-        }
-
-        if (attenuation <= 0.0001) return vec3(0.0);
+    // Spot pre-check: if outside the outer cone the smoothstep returns 0 anyway.
+    if (L.Type == 2) {
+        float spotAxisCos = dot(normalize(L.Direction), -lightDir);
+        if (spotAxisCos <= L.SpotCos) return vec3(0.0);
     }
 
-    vec3 halfDir = normalize(lightDir + viewDir);
-    vec3 radiance = _LightColors[i] * _LightIntensities[i] * attenuation;
+    float NdotL = dot(worldNormal, lightDir);
+    if (NdotL <= 0.0) return vec3(0.0);
 
-    float NdotL = max(dot(worldNormal, lightDir), 0.0);
-    float NdotV = abs(dot(worldNormal, viewDir)); // abs handles backface normals
+    // Physical inverse-square with smooth window cutoff.
+    //   1 / d^2   pure inverse-square in absolute world units
+    //   (1 - (d/r)^4)^2   smooth cutoff to 0 at d == Range
+    // Range here is purely the cutoff distance, not a scale Intensity is what you tune for
+    // visual brightness, in roughly physical units.
+    float invR2 = 1.0 / (L.Range * L.Range);
+    float factor = dist2 * invR2;            // (d / r)^2
+    float window = clamp(1.0 - factor * factor, 0.0, 1.0);
+    window *= window;                          // (1 - (d/r)^4)^2
+    float invSqr = 1.0 / max(dist2, 0.01);     // 1/d^2 with origin guard
+    float attenuation = invSqr * window;
+
+    if (L.Type == 2) {
+        float lightAngleCos = dot(normalize(L.Direction), -lightDir);
+        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, lightAngleCos);
+    }
+
+    if (attenuation <= 0.0001) return vec3(0.0);
+
+    vec3 halfDir = normalize(lightDir + viewDir);
+    vec3 radiance = L.Color * (L.Intensity * 8.0) * attenuation;
+
+    float NdotV = abs(dot(worldNormal, viewDir));
     float LdotH = max(dot(lightDir, halfDir), 0.0);
 
-    // Cook-Torrance specular BRDF
     float NDF = DistributionGGX(worldNormal, halfDir, roughness);
     float G = GeometrySmith(worldNormal, viewDir, lightDir, roughness);
     vec3 F = FresnelSchlick(LdotH, F0);
@@ -314,30 +272,19 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     float denominator = 4.0 * NdotV * NdotL + 0.0001;
     vec3 specular = numerator / denominator;
 
-    // Disney Diffuse (roughness-aware)
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
     vec3 diffuse = kD * albedo * diffuseTerm;
 
-    // Shadow shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
-    // include. With the define set, shadowFactor stays at 1.0 and no atlas samples are
-    // performed, so the surface receives full direct lighting regardless of occluders.
     float shadowFactor;
 #ifdef SG_NO_SHADOWS
     shadowFactor = 1.0;
 #else
     float shadow = 0.0;
-    if (_LightShadowEnabled[i] != 0) {
-        if (lightType == 0) {
-            shadow = SampleDirectionalShadow(worldPos, worldNormal);
-        } else {
-            int slot = _LightShadowSlot[i];
-            if (slot >= 0) {
-                if (lightType == 1)
-                    shadow = SamplePointShadow(i, slot, worldPos, worldNormal);
-                else
-                    shadow = SampleSpotShadow(i, slot, worldPos, worldNormal);
-            }
-        }
+    if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
+        if (L.Type == 1)
+            shadow = SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal);
+        else
+            shadow = SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
     }
     shadowFactor = 1.0 - shadow;
 #endif
@@ -345,51 +292,45 @@ vec3 CalculateSingleLight(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
     return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
 }
 
-// ============================================================
-//  Per-light Anisotropic PBR calculation
-// ============================================================
-
-// Per-light anisotropic BRDF (matches Lux convention)
-// mt and mb are SQUARED roughness values passed in from the entry point.
-vec3 CalculateSingleLightAniso(int i, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
-                                vec3 worldTangent, vec3 worldBitangent,
-                                vec3 albedo, float metallic, float mt, float mb,
-                                float perceptualRoughness, float ao, vec3 F0)
+vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                              vec3 worldTangent, vec3 worldBitangent,
+                              vec3 albedo, float metallic, float mt, float mb,
+                              float perceptualRoughness, float ao, vec3 F0)
 {
-    int lightType = _LightType[i];
-    vec3 lightDir;
-    float attenuation = 1.0;
+    // BVH leaf already culled fragments past Range; skip the redundant dist check.
+    vec3 lightToPixel = worldPos - L.Position;
+    float dist2 = dot(lightToPixel, lightToPixel);
+    float dist = sqrt(dist2);
+    vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
 
-    if (lightType == 0) {
-        lightDir = normalize(_LightDirections[i]);
-    } else {
-        vec3 lightToPixel = worldPos - _LightPositions[i];
-        float dist = length(lightToPixel);
-        lightDir = normalize(-lightToPixel);
-
-        float range = _LightRanges[i];
-        float distAtten = 1.0 / (dist * dist + 1.0);
-        float rangeAtten = 1.0 - smoothstep(range * 0.8, range, dist);
-        attenuation = distAtten * rangeAtten;
-
-        if (lightType == 2) {
-            float spotAngleRad = radians(_LightSpotAngles[i]);
-            float innerSpotAngleRad = radians(_LightInnerSpotAngles[i]);
-            float lightAngleCos = dot(normalize(_LightDirections[i]), normalize(lightToPixel));
-            attenuation *= smoothstep(cos(spotAngleRad), cos(innerSpotAngleRad), lightAngleCos);
-        }
-
-        if (attenuation <= 0.0001) return vec3(0.0);
+    if (L.Type == 2) {
+        float spotAxisCos = dot(normalize(L.Direction), -lightDir);
+        if (spotAxisCos <= L.SpotCos) return vec3(0.0);
     }
 
-    vec3 halfDir = normalize(lightDir + viewDir);
+    float NdotL = dot(worldNormal, lightDir);
+    if (NdotL <= 0.0) return vec3(0.0);
 
-    float NdotL = max(dot(worldNormal, lightDir), 0.0);
+    // Physical inverse-square + smooth window cutoff. See EvaluateLocalLight.
+    float invR2 = 1.0 / (L.Range * L.Range);
+    float factor = dist2 * invR2;
+    float window = clamp(1.0 - factor * factor, 0.0, 1.0);
+    window *= window;
+    float invSqr = 1.0 / max(dist2, 0.01);
+    float attenuation = invSqr * window;
+
+    if (L.Type == 2) {
+        float lightAngleCos = dot(normalize(L.Direction), -lightDir);
+        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, lightAngleCos);
+    }
+
+    if (attenuation <= 0.0001) return vec3(0.0);
+
+    vec3 halfDir = normalize(lightDir + viewDir);
     float NdotV = abs(dot(worldNormal, viewDir));
     float LdotH = max(dot(lightDir, halfDir), 0.0);
     float NdotH = max(dot(worldNormal, halfDir), 0.0);
 
-    // Anisotropic dot products
     float TdotH = dot(worldTangent, halfDir);
     float BdotH = dot(worldBitangent, halfDir);
     float TdotV = dot(worldTangent, viewDir);
@@ -397,52 +338,158 @@ vec3 CalculateSingleLightAniso(int i, vec3 worldPos, vec3 worldNormal, vec3 view
     float TdotL = dot(worldTangent, lightDir);
     float BdotL = dot(worldBitangent, lightDir);
 
-    // Anisotropic specular: V * D * PI (Lux convention)
-    // V already includes 1/(4*NdotV*NdotL), so no separate denominator needed
     float D = DistributionGGXAniso(TdotH, BdotH, NdotH, mt, mb);
     float V = GeometrySmithAniso(TdotV, BdotV, NdotV, TdotL, BdotL, NdotL, mt, mb);
     vec3 F = FresnelSchlick(LdotH, F0);
 
     float specularTerm = max(0.0, (V * D) * PI * NdotL);
-
     vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
 
-    // Disney Diffuse with averaged perceptual roughness
     float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, perceptualRoughness) * NdotL;
 
-    // Shadow shader-graph shaders can opt out via `#define SG_NO_SHADOWS` before the
-    // include. With the define set, shadowFactor stays at 1.0 and no atlas samples are
-    // performed, so the surface receives full direct lighting regardless of occluders.
     float shadowFactor;
 #ifdef SG_NO_SHADOWS
     shadowFactor = 1.0;
 #else
     float shadow = 0.0;
-    if (_LightShadowEnabled[i] != 0) {
-        if (lightType == 0) {
-            shadow = SampleDirectionalShadow(worldPos, worldNormal);
-        } else {
-            int slot = _LightShadowSlot[i];
-            if (slot >= 0) {
-                if (lightType == 1)
-                    shadow = SamplePointShadow(i, slot, worldPos, worldNormal);
-                else
-                    shadow = SampleSpotShadow(i, slot, worldPos, worldNormal);
-            }
-        }
+    if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
+        if (L.Type == 1)
+            shadow = SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal);
+        else
+            shadow = SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
     }
     shadowFactor = 1.0 - shadow;
 #endif
 
-    vec3 lightColor = _LightColors[i] * _LightIntensities[i] * attenuation * shadowFactor;
-
-    // Final composition (matches Lux BRDF output structure)
+    vec3 lightColor = L.Color * (L.Intensity * 8.0) * attenuation * shadowFactor;
     return (kD * albedo * diffuseTerm + specularTerm * F) * lightColor * ao;
 }
 
 // ============================================================
-//  Anisotropic forward lighting entry point
+//  Directional evaluator
 // ============================================================
+
+vec3 EvaluateDirectional(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                         vec3 albedo, float metallic, float roughness, float ao, vec3 F0)
+{
+    if (_DirectionalLightEnabled == 0) return vec3(0.0);
+
+    // Prowl convention: a directional light's Transform.Forward points FROM the surface TO
+    // the sun, so it already IS the surface-to-light "L" vector. The shadow camera flips it
+    // separately (it wants the shining direction). Don't negate here.
+    vec3 lightDir = normalize(_DirectionalLightDirection);
+    vec3 halfDir = normalize(lightDir + viewDir);
+    vec3 radiance = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0);
+
+    float NdotL = max(dot(worldNormal, lightDir), 0.0);
+    float NdotV = abs(dot(worldNormal, viewDir));
+    float LdotH = max(dot(lightDir, halfDir), 0.0);
+
+    float NDF = DistributionGGX(worldNormal, halfDir, roughness);
+    float G = GeometrySmith(worldNormal, viewDir, lightDir, roughness);
+    vec3 F = FresnelSchlick(LdotH, F0);
+
+    vec3 kS = F;
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
+    vec3 numerator = NDF * G * F;
+    float denominator = 4.0 * NdotV * NdotL + 0.0001;
+    vec3 specular = numerator / denominator;
+
+    float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
+    vec3 diffuse = kD * albedo * diffuseTerm;
+
+    float shadowFactor;
+#ifdef SG_NO_SHADOWS
+    shadowFactor = 1.0;
+#else
+    float shadow = (_DirectionalLightShadowEnabled != 0)
+        ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
+    shadowFactor = 1.0 - shadow;
+#endif
+
+    return (diffuse + specular) * radiance * NdotL * shadowFactor * ao;
+}
+
+vec3 EvaluateDirectionalAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                              vec3 worldTangent, vec3 worldBitangent,
+                              vec3 albedo, float metallic, float mt, float mb,
+                              float perceptualRoughness, float ao, vec3 F0)
+{
+    if (_DirectionalLightEnabled == 0) return vec3(0.0);
+
+    vec3 lightDir = normalize(_DirectionalLightDirection);
+    vec3 halfDir = normalize(lightDir + viewDir);
+
+    float NdotL = max(dot(worldNormal, lightDir), 0.0);
+    float NdotV = abs(dot(worldNormal, viewDir));
+    float LdotH = max(dot(lightDir, halfDir), 0.0);
+    float NdotH = max(dot(worldNormal, halfDir), 0.0);
+
+    float TdotH = dot(worldTangent, halfDir);
+    float BdotH = dot(worldBitangent, halfDir);
+    float TdotV = dot(worldTangent, viewDir);
+    float BdotV = dot(worldBitangent, viewDir);
+    float TdotL = dot(worldTangent, lightDir);
+    float BdotL = dot(worldBitangent, lightDir);
+
+    float D = DistributionGGXAniso(TdotH, BdotH, NdotH, mt, mb);
+    float V = GeometrySmithAniso(TdotV, BdotV, NdotV, TdotL, BdotL, NdotL, mt, mb);
+    vec3 F = FresnelSchlick(LdotH, F0);
+
+    float specularTerm = max(0.0, (V * D) * PI * NdotL);
+    vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+    float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, perceptualRoughness) * NdotL;
+
+    float shadowFactor;
+#ifdef SG_NO_SHADOWS
+    shadowFactor = 1.0;
+#else
+    float shadow = (_DirectionalLightShadowEnabled != 0)
+        ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
+    shadowFactor = 1.0 - shadow;
+#endif
+
+    vec3 lightColor = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0) * shadowFactor;
+    return (kD * albedo * diffuseTerm + specularTerm * F) * lightColor * ao;
+}
+
+// ============================================================
+//  Forward lighting entry points (BVH-driven)
+// ============================================================
+
+vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                              vec3 albedo, float metallic, float roughness, float ao)
+{
+    roughness = ApplySpecularAA(roughness, worldNormal);
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
+    vec3 totalLight = EvaluateDirectional(worldPos, worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
+
+    // Static tree.
+    if (_StaticLightRoot >= 0) {
+        LBVH_Iter it;
+        LBVH_Begin(it, _StaticLightRoot);
+        int slot;
+        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
+            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
+            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
+        }
+    }
+
+    // Dynamic tree.
+    if (_DynamicLightRoot >= 0) {
+        LBVH_Iter it;
+        LBVH_Begin(it, _DynamicLightRoot);
+        int slot;
+        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
+            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+            totalLight += EvaluateLocalLight(L, worldPos, worldNormal, viewDir, albedo, metallic, roughness, ao, F0);
+        }
+    }
+
+    return totalLight;
+}
 
 vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
                                     vec3 worldTangent, vec3 worldBitangent,
@@ -450,43 +497,36 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir
                                     float roughness, float anisotropy, float ao)
 {
     roughness = ApplySpecularAA(roughness, worldNormal);
-
-    // Split roughness into tangent/bitangent based on anisotropy [-1, 1]
     float roughnessT = roughness * (1.0 + anisotropy);
     float roughnessB = roughness * (1.0 - anisotropy);
-
-    // Square roughness for D and V functions (Lux convention)
     float mt = roughnessT * roughnessT;
     float mb = roughnessB * roughnessB;
 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    vec3 totalLight = vec3(0.0);
 
-    for (int i = 0; i < _LightCount && i < MAX_FORWARD_LIGHTS; i++) {
-        totalLight += CalculateSingleLightAniso(i, worldPos, worldNormal, viewDir,
-                                                 worldTangent, worldBitangent,
-                                                 albedo, metallic, mt, mb, roughness, ao, F0);
+    vec3 totalLight = EvaluateDirectionalAniso(worldPos, worldNormal, viewDir, worldTangent, worldBitangent,
+                                                albedo, metallic, mt, mb, roughness, ao, F0);
+
+    if (_StaticLightRoot >= 0) {
+        LBVH_Iter it;
+        LBVH_Begin(it, _StaticLightRoot);
+        int slot;
+        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
+            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
+            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, viewDir, worldTangent, worldBitangent,
+                                                   albedo, metallic, mt, mb, roughness, ao, F0);
+        }
     }
 
-    return totalLight;
-}
-
-// ============================================================
-//  Main forward lighting entry point
-// ============================================================
-
-vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
-                              vec3 albedo, float metallic, float roughness, float ao)
-{
-    // Specular anti-aliasing: increase roughness where normal variance is high
-    roughness = ApplySpecularAA(roughness, worldNormal);
-
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    vec3 totalLight = vec3(0.0);
-
-    for (int i = 0; i < _LightCount && i < MAX_FORWARD_LIGHTS; i++) {
-        totalLight += CalculateSingleLight(i, worldPos, worldNormal, viewDir,
-                                           albedo, metallic, roughness, ao, F0);
+    if (_DynamicLightRoot >= 0) {
+        LBVH_Iter it;
+        LBVH_Begin(it, _DynamicLightRoot);
+        int slot;
+        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
+            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+            totalLight += EvaluateLocalLightAniso(L, worldPos, worldNormal, viewDir, worldTangent, worldBitangent,
+                                                   albedo, metallic, mt, mb, roughness, ao, F0);
+        }
     }
 
     return totalLight;
@@ -513,7 +553,6 @@ vec3 CalculateAmbient(vec3 worldNormal)
 
 vec3 ApplyFog(vec3 color, vec3 worldPos)
 {
-    // If no fog mode is active, return color unchanged
     if (_FogStates.x + _FogStates.y + _FogStates.z < 0.5)
         return color;
 

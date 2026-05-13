@@ -68,6 +68,8 @@ public struct RasterizerState
     public enum BlendMode { Add, Subtract, ReverseSubtract, Min, Max }
     public enum PolyFace { None, Front, Back, FrontAndBack }
     public enum WindingOrder { CW, CCW }
+    public enum StencilFunction { Never, Less, Equal, Lequal, Greater, Notequal, Gequal, Always }
+    public enum StencilOp { Keep, Zero, Replace, Incr, IncrWrap, Decr, DecrWrap, Invert }
 
     public bool DepthTest = true;
     public bool DepthWrite = true;
@@ -81,6 +83,15 @@ public struct RasterizerState
     public PolyFace CullFace = PolyFace.Back;
 
     public WindingOrder Winding = WindingOrder.CW;
+
+    public bool StencilEnabled = false;
+    public StencilFunction StencilFunc = StencilFunction.Always;
+    public int StencilRef = 0;
+    public int StencilReadMask = 255;
+    public int StencilWriteMask = 255;
+    public StencilOp StencilPassOp = StencilOp.Keep;
+    public StencilOp StencilFailOp = StencilOp.Keep;
+    public StencilOp StencilZFailOp = StencilOp.Keep;
 
     public RasterizerState()
     {

@@ -50,6 +50,12 @@ public abstract class Game
 
     public void Run(string title, int width, int height)
     {
+        // Invariant culture ensures consistent float parsing (dot decimal separator)
+        // across all locales. Without this, embedded .mat/.shader files with "0.5"
+        // break on cultures that use comma separators.
+        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
+
         InitializeWindow(title, width, height);
 
         Window.Load += () =>

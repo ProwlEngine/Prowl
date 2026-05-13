@@ -857,8 +857,8 @@ public sealed class DDXYNode : Node, IShaderNode, IShaderGraphNode
 /// <para>
 /// Formula: mix(col, vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), amount)
 /// </para>
-/// Uses Rec.709 luminance coefficients (matching Fragment.glsl's luminance helper).
-/// Requires ctx.Includes.Add("Fragment") so the luminance function is available
+/// Uses Rec.709 luminance coefficients (matching ProwlCG.glsl's luminance helper).
+/// Requires ctx.Includes.Add("ProwlCG") so the luminance function is available
 /// in the generated shader though the coefficients are inlined here for safety.
 /// Inputs: Color (Vec3), Amount (float 0–1).
 /// Output: Vec3.
@@ -879,7 +879,7 @@ public sealed class DesaturateNode : Node, IShaderNode, IShaderGraphNode
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         // Pull in the Fragment include so luminance() is available if the graph uses it elsewhere.
-        ctx.Includes.Add("Fragment");
+        ctx.Includes.Add("ProwlCG");
 
         var col    = ctx.EvaluateInputAs(GetInput("Color")!,  ShaderType.Vec3);
         var amount = ctx.EvaluateInputAs(GetInput("Amount")!, ShaderType.Float);

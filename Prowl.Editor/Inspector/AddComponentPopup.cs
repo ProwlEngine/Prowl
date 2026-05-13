@@ -96,8 +96,7 @@ public static class AddComponentPopup
                 .Height(28).ChildLeft(8).ChildRight(8).ChildTop(4).ChildBottom(4)
                 .Enter())
             {
-                EditorGUI.SearchBar(paper, "acp_search", _searchText, "Search components...")
-                    .OnValueChanged(v => _searchText = v);
+                Origami.SearchField(paper, "acp_search", _searchText, v => _searchText = v, "Search components...").Show();
             }
 
             // Component list

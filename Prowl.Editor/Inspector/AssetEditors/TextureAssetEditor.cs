@@ -3,6 +3,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -84,39 +85,43 @@ public class TextureAssetEditor : AssetImporterEditor
         EditorGUI.Header(paper, $"{id}_settings_hdr", $"{EditorIcons.Gear}  Import Settings");
 
         bool genMips = settings.TryGet("generateMipmaps", out var mipTag) && mipTag.BoolValue;
-        EditorGUI.Toggle(paper, $"{id}_mips", "Generate Mipmaps", genMips)
-            .OnValueChanged(v => settings["generateMipmaps"] = new EchoObject(v));
+        Origami.Checkbox(paper, $"{id}_mips", genMips,
+                v => settings["generateMipmaps"] = new EchoObject(v))
+            .LabelRight("Generate Mipmaps").Show();
 
         bool srgb = settings.TryGet("sRGB", out var srgbTag) && srgbTag.BoolValue;
-        EditorGUI.Toggle(paper, $"{id}_srgb", "sRGB", srgb)
-            .OnValueChanged(v => settings["sRGB"] = new EchoObject(v));
+        Origami.Checkbox(paper, $"{id}_srgb", srgb,
+                v => settings["sRGB"] = new EchoObject(v))
+            .LabelRight("sRGB").Show();
 
         var currentMin = settings.TryGet("minFilter", out var minTag)
             ? (TextureMin)minTag.IntValue : TextureMin.LinearMipmapLinear;
-        EditorGUI.EnumDropdown(paper, $"{id}_min", "Min Filter", currentMin)
-            .OnValueChanged(v => settings["minFilter"] = new EchoObject((int)v));
+        InspectorRow.Draw(paper, $"{id}_min", "Min Filter", () =>
+            Origami.EnumDropdown(paper, $"{id}_min_v", currentMin,
+                v => settings["minFilter"] = new EchoObject((int)v)).Show());
 
         var currentMag = settings.TryGet("magFilter", out var magTag)
             ? (TextureMag)magTag.IntValue : TextureMag.Linear;
-        EditorGUI.EnumDropdown(paper, $"{id}_mag", "Mag Filter", currentMag)
-            .OnValueChanged(v => settings["magFilter"] = new EchoObject((int)v));
+        InspectorRow.Draw(paper, $"{id}_mag", "Mag Filter", () =>
+            Origami.EnumDropdown(paper, $"{id}_mag_v", currentMag,
+                v => settings["magFilter"] = new EchoObject((int)v)).Show());
 
         var currentWrap = settings.TryGet("wrapMode", out var wrapTag)
             ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
-        EditorGUI.EnumDropdown(paper, $"{id}_wrap", "Wrap Mode", currentWrap)
-            .OnValueChanged(v => settings["wrapMode"] = new EchoObject((int)v));
+        InspectorRow.Draw(paper, $"{id}_wrap", "Wrap Mode", () =>
+            Origami.EnumDropdown(paper, $"{id}_wrap_v", currentWrap,
+                v => settings["wrapMode"] = new EchoObject((int)v)).Show());
 
         paper.Box($"{id}_sp3").Height(8);
 
-        EditorGUI.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", width: 150)
-            .OnValueChanged(_ =>
-            {
-                // Write settings to meta and reimport
-                var meta = MetaFile.Read(metaPath);
-                meta.Settings = settings;
-                MetaFile.Write(metaPath, meta);
-                _cachedSettings = null; // Force reload after reimport
-                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
-            });
+        Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", () =>
+        {
+            // Write settings to meta and reimport
+            var meta = MetaFile.Read(metaPath);
+            meta.Settings = settings;
+            MetaFile.Write(metaPath, meta);
+            _cachedSettings = null; // Force reload after reimport
+            EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+        }).Width(150).Show();
     }
 }

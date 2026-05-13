@@ -572,6 +572,20 @@ public class EditorAssetDatabase : IAssetDatabase
     public string? GuidToPath(Guid guid)
         => _guidToEntry.TryGetValue(guid, out var entry) ? entry.Path : null;
 
+    /// <summary>
+    /// Resolve a GUID to a file path, including sub-assets (returns the parent asset's path).
+    /// </summary>
+    public string? GuidToPathIncludingSubAssets(Guid guid)
+    {
+        // Try main asset first
+        if (_guidToEntry.TryGetValue(guid, out var entry))
+            return entry.Path;
+        // Try sub-asset -> parent
+        if (_subAssetIndex.TryGetValue(guid, out var subInfo))
+            return _guidToEntry.TryGetValue(subInfo.parentGuid, out var parentEntry) ? parentEntry.Path : null;
+        return null;
+    }
+
     public IEnumerable<AssetEntry> GetAllEntries() => _guidToEntry.Values;
 
     public IEnumerable<AssetEntry> FindAssetsOfType<T>() where T : EngineObject
@@ -628,8 +642,8 @@ public class EditorAssetDatabase : IAssetDatabase
     /// <summary>Get an already-loaded asset from memory without triggering import. Returns null if not loaded.</summary>
     public EngineObject? GetLoadedAsset(Guid guid) => _loadedAssets.GetValueOrDefault(guid);
 
-    /// <summary>Load a cached thumbnail for an asset. Returns raw RGBA bytes or null.</summary>
-    public byte[]? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
+    /// <summary>Load a cached thumbnail for an asset. Returns (width, height, pixels) or null.</summary>
+    public (int width, int height, byte[] pixels)? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
 
     // ================================================================
     //  Asset CRUD

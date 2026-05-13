@@ -144,8 +144,7 @@ public class ConsolePanel : DockPanel
             .Margin(8)
             .Enter())
         {
-            EditorGUI.Button(paper, "con_clear", "Clear", width: 50)
-                .OnValueChanged(_ => { _messages.Clear(); _filteredIndices.Clear(); });
+            Origami.Button(paper, "con_clear", "Clear", () => { _messages.Clear(); _filteredIndices.Clear(); }).Width(50).Show();
 
             paper.Box("con_sep1").Width(1).Height(24).BackgroundColor(EditorTheme.Ink200);
 
@@ -157,39 +156,28 @@ public class ConsolePanel : DockPanel
                 else errCount += m.Count;
             }
 
-            EditorGUI.ToggleButton(paper, "con_collapse", "Collapse", _collapse, fitWidth: true).OnValueChanged(newValue =>
+            Origami.Switch(paper, "con_collapse", _collapse, v => _collapse = v)
+                .LabelRight("Collapse").Show();
+
+            using (paper.Row("buttons").RowBetween(12).Enter())
             {
-                _collapse = newValue;
-            });
+                Origami.Switch(paper, "con_info", _showInfo, v => _showInfo = v)
+                    .Info().LabelRight($"{EditorIcons.CircleInfo} {infoCount}").Show();
 
-            using (paper.Row("buttons")
-                .RowBetween(8)
-                .Enter())
-            {
-                GetToggleStyle(LogSeverity.Normal, out Color infoTextColor, out Color infoBgColor);
-                EditorGUI.ToggleButton(paper, "con_info", $"{EditorIcons.CircleInfo} {infoCount}", _showInfo,
-                    fitWidth: true, textColorOverride: _showInfo ? infoTextColor : EditorTheme.Ink300, bgColorOverride: infoBgColor)
-                    .OnValueChanged(v => _showInfo = v);
+                Origami.Switch(paper, "con_warn", _showWarnings, v => _showWarnings = v)
+                    .Warning().LabelRight($"{EditorIcons.TriangleExclamation} {warnCount}").Show();
 
-                GetToggleStyle(LogSeverity.Warning, out Color warnTextColor, out Color warnBgColor);
-                EditorGUI.ToggleButton(paper, "con_warn", $"{EditorIcons.TriangleExclamation} {warnCount}", _showWarnings,
-                    fitWidth: true, textColorOverride: _showWarnings ? warnTextColor : EditorTheme.Ink300, bgColorOverride: warnBgColor)
-                    .OnValueChanged(v => _showWarnings = v);
-
-                GetToggleStyle(LogSeverity.Error, out Color errorTextColor, out Color errorBgColor);
-                EditorGUI.ToggleButton(paper, "con_err", $"{EditorIcons.CircleExclamation} {errCount}", _showErrors,
-                    fitWidth: true, textColorOverride: _showErrors ? errorTextColor : EditorTheme.Ink300, bgColorOverride: errorBgColor)
-                    .OnValueChanged(v => _showErrors = v);
+                Origami.Switch(paper, "con_err", _showErrors, v => _showErrors = v)
+                    .Danger().LabelRight($"{EditorIcons.CircleExclamation} {errCount}").Show();
             }
 
-            EditorGUI.SearchBar(paper, "con_search", _searchText, "Filter...")
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, "Filter...").Show();
 
-            EditorGUI.ButtonSquareWithHandle(paper, "con_settingsButton", $"{EditorIcons.Gear}", out var settingsButton)
-                .OnValueChanged((clicked) =>
-                {
-                    ContextMenuHelper.OpenContextMenu(paper, "con_settings", settingsButton);
-                });
+            ElementHandle settingsButton = default;
+            Origami.IconButton(paper, "con_settingsButton", $"{EditorIcons.Gear}", () =>
+            {
+                ContextMenuHelper.OpenContextMenu(paper, "con_settings", settingsButton);
+            }).WithHandle(h => settingsButton = h).Show();
 
             ContextMenuHelper.ContextMenu(paper, "con_settings", menu =>
             {

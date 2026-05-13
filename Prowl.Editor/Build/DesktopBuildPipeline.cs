@@ -344,15 +344,20 @@ public class DesktopBuildPipeline : BuildPipeline
                                 ? new[] { ".dylib", "" }
                                 : new[] { ".so", ".so.1", "" };
 
+                        string[] nameVariants = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                            ? new[] { libraryName }
+                            : new[] { libraryName, "lib" + libraryName };
+
                         foreach (var r in rids)
                         {
                             string nativeSubDir = string.IsNullOrEmpty(r)
                                 ? Path.Combine("runtimes", "native")
                                 : Path.Combine("runtimes", r, "native");
 
+                            foreach (var name in nameVariants)
                             foreach (var ext in exts)
                             {
-                                string fullPath = Path.Combine(baseDir, nativeSubDir, libraryName + ext);
+                                string fullPath = Path.Combine(baseDir, nativeSubDir, name + ext);
                                 Log($"[Native] Probing: {fullPath}");
 
                                 if (File.Exists(fullPath))
@@ -371,9 +376,10 @@ public class DesktopBuildPipeline : BuildPipeline
                         }
 
                         // Fallback to root directory
+                        foreach (var name in nameVariants)
                         foreach (var ext in exts)
                         {
-                            string rootPath = Path.Combine(baseDir, libraryName + ext);
+                            string rootPath = Path.Combine(baseDir, name + ext);
                             Log($"[Native] Root probe: {rootPath}");
                             if (File.Exists(rootPath) && NativeLibrary.TryLoad(rootPath, out IntPtr handle))
                             {
@@ -416,15 +422,20 @@ public class DesktopBuildPipeline : BuildPipeline
                             ? new[] { ".dylib", "" }
                             : new[] { ".so", ".so.1", "" };
 
+                    string[] nameVariants = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                        ? new[] { libraryName }
+                        : new[] { libraryName, "lib" + libraryName };
+
                     foreach (var r in rids)
                     {
                         string nativeSubDir = string.IsNullOrEmpty(r)
                             ? Path.Combine("runtimes", "native")
                             : Path.Combine("runtimes", r, "native");
 
+                        foreach (var name in nameVariants)
                         foreach (var ext in exts)
                         {
-                            string fullPath = Path.Combine(baseDir, nativeSubDir, libraryName + ext);
+                            string fullPath = Path.Combine(baseDir, nativeSubDir, name + ext);
                             Log($"[Native] Probing: {fullPath}");
 
                             if (File.Exists(fullPath))
@@ -443,9 +454,10 @@ public class DesktopBuildPipeline : BuildPipeline
                     }
 
                     // Last chance: root directory
+                    foreach (var name in nameVariants)
                     foreach (var ext in exts)
                     {
-                        string rootPath = Path.Combine(baseDir, libraryName + ext);
+                        string rootPath = Path.Combine(baseDir, name + ext);
                         if (File.Exists(rootPath) && NativeLibrary.TryLoad(rootPath, out IntPtr handle))
                         {
                             Log($"[Native] SUCCESS from root: {rootPath}");
@@ -478,6 +490,9 @@ public class DesktopBuildPipeline : BuildPipeline
                     string gameAssembly = Path.Combine(Prowl.Runtime.Application.DataPath, "{{project.Name}}.Game.dll");
                     if (File.Exists(gameAssembly))
                         Assembly.LoadFrom(gameAssembly);
+
+                    // Initialize built-in assets BEFORE loading any scenes/assets
+                    Prowl.Runtime.BuiltInAssets.Initialize();
 
                     // Initialize asset database
                     var db = new Prowl.Runtime.PlayerAssetDatabase(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
@@ -557,8 +572,9 @@ public class DesktopBuildPipeline : BuildPipeline
 
         ListDependencies(sb);
 
-        // User NuGet packages from ProjectSettings/Packages.json
-        Scripting.ScriptCompiler.AppendNuGetPackages(sb, project);
+        // User NuGet packages from ProjectSettings/Packages.json. Desktop builds bundle the
+        // runtime / non-editor packages (EditorOnly packages live only inside the editor).
+        Scripting.ScriptCompiler.AppendNuGetPackages(sb, project, isEditorAssembly: false);
 
 
         // Compile items just the generated Program.cs (user scripts are a separate pre-compiled DLL)
@@ -592,15 +608,44 @@ public class DesktopBuildPipeline : BuildPipeline
 
     public void ListDependencies(StringBuilder sb)
     {
-        // NuGet packages must use PackageReference for native deps (Silk.NET GLFW, OpenAL, etc.)
+        // Read PackageReferences from assembly metadata embedded by the MSBuild
+        // EmbedPackageReferences target in Prowl.Runtime.csproj. This works regardless
+        // of whether the source tree is present — the data lives in the compiled DLL.
+        var packages = GetRuntimePackageReferences();
+
         sb.AppendLine("  <ItemGroup>");
-        sb.AppendLine("    <PackageReference Include=\"Silk.NET\" Version=\"2.22.0\" />");
-        sb.AppendLine("    <PackageReference Include=\"Silk.NET.OpenAL.Soft.Native\" Version=\"1.23.1\" />");
-        sb.AppendLine("    <PackageReference Include=\"Jitter2\" Version=\"2.8.3\" />");
-        sb.AppendLine("    <PackageReference Include=\"Magick.NET-Q16-AnyCPU\" Version=\"14.11.1\" />");
-        sb.AppendLine("    <PackageReference Include=\"Prowl.Echo\" Version=\"2.1.2\" />");
-        sb.AppendLine("    <PackageReference Include=\"Prowl.Paper\" Version=\"1.5.1\" />");
+        foreach (var (name, version) in packages)
+            sb.AppendLine($"    <PackageReference Include=\"{name}\" Version=\"{version}\" />");
         sb.AppendLine("  </ItemGroup>");
+    }
+
+    /// <summary>
+    /// Reads PackageReference metadata stamped into the Prowl.Runtime assembly
+    /// by the EmbedPackageReferences MSBuild target. Each entry is an
+    /// AssemblyMetadataAttribute with Key = "PackageReference:{Name}" and Value = version.
+    /// Filters out SDK-implicit packages (e.g. Microsoft.NET.ILLink.Tasks).
+    /// </summary>
+    private static List<(string Name, string Version)> GetRuntimePackageReferences()
+    {
+        var result = new List<(string, string)>();
+        var runtimeAssembly = typeof(Prowl.Runtime.EngineObject).Assembly;
+        const string prefix = "PackageReference:";
+
+        foreach (var attr in runtimeAssembly.GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>())
+        {
+            if (attr.Key == null || !attr.Key.StartsWith(prefix) || string.IsNullOrEmpty(attr.Value))
+                continue;
+
+            string packageName = attr.Key.Substring(prefix.Length);
+
+            // Skip SDK-implicit packages that aren't real dependencies
+            if (packageName.StartsWith("Microsoft.NET.", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            result.Add((packageName, attr.Value));
+        }
+
+        return result;
     }
 
     public override string GetExecutablePath(string outputPath, BuildSettings settings)

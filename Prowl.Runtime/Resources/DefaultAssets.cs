@@ -34,7 +34,9 @@ public enum DefaultShader
     Grid,
     CinematicEffects,
     VolumetricFog,
-    SDFRaymarch
+    SDFRaymarch,
+    TAA,
+    MotionBlur
 }
 
 /// <summary>
@@ -79,13 +81,14 @@ public enum DefaultTexture
 /// </summary>
 public enum DefaultShaderInclude
 {
-    Fragment,
+    ProwlCG,
     PBR,
     Random,
     ShaderVariables,
     Shadow,
     VertexAttributes,
     Lighting,
+    LightBVH,
     StandardSurface,
     FastNoiseLite,
     SimplexNoise4D

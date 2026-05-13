@@ -52,18 +52,12 @@ public class ParticleSystemComponentEditor : CustomEditor
         PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), ps.Material,
             v => ps.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
 
-        EditorGUI.IntField(paper, $"{id}_maxp", ps.MaxParticles, "Max Particles")
-            .OnValueChanged(v => { ps.MaxParticles = Math.Max(1, v); });
-        EditorGUI.FloatField(paper, $"{id}_dur", ps.Duration, "Duration")
-            .OnValueChanged(v => { ps.Duration = MathF.Max(0.1f, v); });
-        EditorGUI.Toggle(paper, $"{id}_loop", "Looping", ps.Looping)
-            .OnValueChanged(v => { ps.Looping = v; });
-        EditorGUI.Toggle(paper, $"{id}_poe", "Play On Enable", ps.PlayOnEnable)
-            .OnValueChanged(v => { ps.PlayOnEnable = v; });
-        EditorGUI.Toggle(paper, $"{id}_pw", "Prewarm", ps.Prewarm)
-            .OnValueChanged(v => { ps.Prewarm = v; });
-        EditorGUI.EnumDropdown(paper, $"{id}_sim", "Simulation Space", ps.SimulationSpace)
-            .OnValueChanged(v => { ps.SimulationSpace = v; });
+        IntRow(paper, $"{id}_maxp", "Max Particles", ps.MaxParticles, v => ps.MaxParticles = Math.Max(1, v));
+        FloatRow(paper, $"{id}_dur", "Duration", ps.Duration, v => ps.Duration = MathF.Max(0.1f, v));
+        BoolRow(paper, $"{id}_loop", "Looping", ps.Looping, v => ps.Looping = v);
+        BoolRow(paper, $"{id}_poe", "Play On Enable", ps.PlayOnEnable, v => ps.PlayOnEnable = v);
+        BoolRow(paper, $"{id}_pw", "Prewarm", ps.Prewarm, v => ps.Prewarm = v);
+        EnumRow(paper, $"{id}_sim", "Simulation Space", ps.SimulationSpace, v => ps.SimulationSpace = v);
 
         paper.Box($"{id}_sp1").Height(6);
 
@@ -80,8 +74,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                 v => ps.Initial.StartRotation = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
             PropertyGrid.DrawField(paper, $"{id}_init_col", "Start Color", typeof(MinMaxGradient), ps.Initial.StartColor,
                 v => ps.Initial.StartColor = v as MinMaxGradient ?? new MinMaxGradient(VColor.White), 0);
-            EditorGUI.FloatField(paper, $"{id}_init_grav", ps.Initial.GravityModifier, "Gravity")
-                .OnValueChanged(v => { ps.Initial.GravityModifier = v; });
+            FloatRow(paper, $"{id}_init_grav", "Gravity", ps.Initial.GravityModifier, v => ps.Initial.GravityModifier = v);
         });
 
         // Emission Module
@@ -93,8 +86,7 @@ public class ParticleSystemComponentEditor : CustomEditor
             paper.Box($"{id}_emit_sp").Height(4);
 
             // Shape
-            EditorGUI.EnumDropdown(paper, $"{id}_emit_shape", "Shape", ps.Emission.Shape)
-                .OnValueChanged(v => { ps.Emission.Shape = v; });
+            EnumRow(paper, $"{id}_emit_shape", "Shape", ps.Emission.Shape, v => ps.Emission.Shape = v);
 
             EditorGUI.Vector3Field(paper, $"{id}_emit_pos", "Position", ps.Emission.ShapePosition)
                 .OnValueChanged(v => { ps.Emission.ShapePosition = v; });
@@ -107,25 +99,25 @@ public class ParticleSystemComponentEditor : CustomEditor
             switch (ps.Emission.Shape)
             {
                 case EmissionShape.LineSegment:
-                    EditorGUI.FloatField(paper, $"{id}_emit_ll", ps.Emission.LineLength, "Line Length")
-                        .OnValueChanged(v => { ps.Emission.LineLength = MathF.Max(0f, v); });
+                    FloatRow(paper, $"{id}_emit_ll", "Line Length", ps.Emission.LineLength,
+                        v => ps.Emission.LineLength = MathF.Max(0f, v));
                     break;
                 case EmissionShape.Circle:
                 case EmissionShape.Sphere:
-                    EditorGUI.FloatField(paper, $"{id}_emit_rad", ps.Emission.Radius, "Radius")
-                        .OnValueChanged(v => { ps.Emission.Radius = MathF.Max(0.01f, v); });
-                    EditorGUI.Toggle(paper, $"{id}_emit_shell", "Emit From Shell", ps.Emission.EmitFromShell)
-                        .OnValueChanged(v => { ps.Emission.EmitFromShell = v; });
+                    FloatRow(paper, $"{id}_emit_rad", "Radius", ps.Emission.Radius,
+                        v => ps.Emission.Radius = MathF.Max(0.01f, v));
+                    BoolRow(paper, $"{id}_emit_shell", "Emit From Shell", ps.Emission.EmitFromShell,
+                        v => ps.Emission.EmitFromShell = v);
                     break;
                 case EmissionShape.Box:
                     EditorGUI.Vector3Field(paper, $"{id}_emit_box", "Box Size", ps.Emission.BoxSize)
                         .OnValueChanged(v => { ps.Emission.BoxSize = v; });
                     break;
                 case EmissionShape.Cone:
-                    EditorGUI.FloatField(paper, $"{id}_emit_rad2", ps.Emission.Radius, "Radius")
-                        .OnValueChanged(v => { ps.Emission.Radius = MathF.Max(0.01f, v); });
-                    EditorGUI.FloatField(paper, $"{id}_emit_angle", ps.Emission.ConeAngle, "Angle")
-                        .OnValueChanged(v => { ps.Emission.ConeAngle = MathF.Max(0f, MathF.Min(90f, v)); });
+                    FloatRow(paper, $"{id}_emit_rad2", "Radius", ps.Emission.Radius,
+                        v => ps.Emission.Radius = MathF.Max(0.01f, v));
+                    FloatRow(paper, $"{id}_emit_angle", "Angle", ps.Emission.ConeAngle,
+                        v => ps.Emission.ConeAngle = MathF.Max(0f, MathF.Min(90f, v)));
                     break;
             }
 
@@ -170,51 +162,45 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Collision
         DrawModule(paper, $"{id}_coll", "Collision", EditorIcons.Explosion, ps.Collision, font, () =>
         {
-            EditorGUI.EnumDropdown(paper, $"{id}_coll_mode", "Mode", ps.Collision.Mode)
-                .OnValueChanged(v => { ps.Collision.Mode = v; });
-            EditorGUI.EnumDropdown(paper, $"{id}_coll_qual", "Quality", ps.Collision.Quality)
-                .OnValueChanged(v => { ps.Collision.Quality = v; });
-            EditorGUI.FloatField(paper, $"{id}_coll_damp", ps.Collision.Dampen, "Dampen")
-                .OnValueChanged(v => { ps.Collision.Dampen = MathF.Max(0f, MathF.Min(1f, v)); });
-            EditorGUI.FloatField(paper, $"{id}_coll_bounce", ps.Collision.Bounce, "Bounce")
-                .OnValueChanged(v => { ps.Collision.Bounce = MathF.Max(0f, MathF.Min(1f, v)); });
-            EditorGUI.FloatField(paper, $"{id}_coll_ll", ps.Collision.LifetimeLoss, "Lifetime Loss")
-                .OnValueChanged(v => { ps.Collision.LifetimeLoss = MathF.Max(0f, v); });
-            EditorGUI.FloatField(paper, $"{id}_coll_mks", ps.Collision.MinKillSpeed, "Min Kill Speed")
-                .OnValueChanged(v => { ps.Collision.MinKillSpeed = MathF.Max(0f, v); });
-            EditorGUI.FloatField(paper, $"{id}_coll_rad", ps.Collision.ParticleRadius, "Particle Radius")
-                .OnValueChanged(v => { ps.Collision.ParticleRadius = MathF.Max(0.001f, v); });
-            EditorGUI.FloatField(paper, $"{id}_coll_dist", ps.Collision.MaxCollisionDistance, "Max Distance")
-                .OnValueChanged(v => { ps.Collision.MaxCollisionDistance = MathF.Max(0.01f, v); });
+            EnumRow(paper, $"{id}_coll_mode", "Mode", ps.Collision.Mode, v => ps.Collision.Mode = v);
+            EnumRow(paper, $"{id}_coll_qual", "Quality", ps.Collision.Quality, v => ps.Collision.Quality = v);
+            FloatRow(paper, $"{id}_coll_damp", "Dampen", ps.Collision.Dampen,
+                v => ps.Collision.Dampen = MathF.Max(0f, MathF.Min(1f, v)));
+            FloatRow(paper, $"{id}_coll_bounce", "Bounce", ps.Collision.Bounce,
+                v => ps.Collision.Bounce = MathF.Max(0f, MathF.Min(1f, v)));
+            FloatRow(paper, $"{id}_coll_ll", "Lifetime Loss", ps.Collision.LifetimeLoss,
+                v => ps.Collision.LifetimeLoss = MathF.Max(0f, v));
+            FloatRow(paper, $"{id}_coll_mks", "Min Kill Speed", ps.Collision.MinKillSpeed,
+                v => ps.Collision.MinKillSpeed = MathF.Max(0f, v));
+            FloatRow(paper, $"{id}_coll_rad", "Particle Radius", ps.Collision.ParticleRadius,
+                v => ps.Collision.ParticleRadius = MathF.Max(0.001f, v));
+            FloatRow(paper, $"{id}_coll_dist", "Max Distance", ps.Collision.MaxCollisionDistance,
+                v => ps.Collision.MaxCollisionDistance = MathF.Max(0.01f, v));
 
             PropertyGrid.DrawField(paper, $"{id}_coll_lm", "Collides With", typeof(LayerMask), ps.Collision.CollidesWith,
                 v => ps.Collision.CollidesWith = (LayerMask)v!, 0);
 
             if (ps.Collision.Mode == CollisionMode.World)
             {
-                EditorGUI.FloatField(paper, $"{id}_coll_vox", ps.Collision.VoxelSize, "Voxel Size")
-                    .OnValueChanged(v => { ps.Collision.VoxelSize = MathF.Max(0.1f, v); });
+                FloatRow(paper, $"{id}_coll_vox", "Voxel Size", ps.Collision.VoxelSize,
+                    v => ps.Collision.VoxelSize = MathF.Max(0.1f, v));
             }
         });
 
         // UV Animation
         DrawModule(paper, $"{id}_uv", "UV Animation", EditorIcons.Film, ps.UV, font, () =>
         {
-            EditorGUI.EnumDropdown(paper, $"{id}_uv_mode", "Mode", ps.UV.Mode)
-                .OnValueChanged(v => { ps.UV.Mode = v; });
+            EnumRow(paper, $"{id}_uv_mode", "Mode", ps.UV.Mode, v => ps.UV.Mode = v);
 
             if (ps.UV.Mode == UVAnimationMode.GridAnimation)
             {
-                EditorGUI.IntField(paper, $"{id}_uv_tx", ps.UV.TilesX, "Tiles X")
-                    .OnValueChanged(v => { ps.UV.TilesX = Math.Max(1, v); });
-                EditorGUI.IntField(paper, $"{id}_uv_ty", ps.UV.TilesY, "Tiles Y")
-                    .OnValueChanged(v => { ps.UV.TilesY = Math.Max(1, v); });
-                EditorGUI.IntField(paper, $"{id}_uv_cc", ps.UV.CycleCount, "Cycle Count")
-                    .OnValueChanged(v => { ps.UV.CycleCount = Math.Max(1, v); });
-                EditorGUI.FloatField(paper, $"{id}_uv_fot", ps.UV.FrameOverTime, "Frame Over Time")
-                    .OnValueChanged(v => { ps.UV.FrameOverTime = MathF.Max(0f, v); });
-                EditorGUI.Toggle(paper, $"{id}_uv_rsf", "Random Start Frame", ps.UV.RandomStartFrame)
-                    .OnValueChanged(v => { ps.UV.RandomStartFrame = v; });
+                IntRow(paper, $"{id}_uv_tx", "Tiles X", ps.UV.TilesX, v => ps.UV.TilesX = Math.Max(1, v));
+                IntRow(paper, $"{id}_uv_ty", "Tiles Y", ps.UV.TilesY, v => ps.UV.TilesY = Math.Max(1, v));
+                IntRow(paper, $"{id}_uv_cc", "Cycle Count", ps.UV.CycleCount, v => ps.UV.CycleCount = Math.Max(1, v));
+                FloatRow(paper, $"{id}_uv_fot", "Frame Over Time", ps.UV.FrameOverTime,
+                    v => ps.UV.FrameOverTime = MathF.Max(0f, v));
+                BoolRow(paper, $"{id}_uv_rsf", "Random Start Frame", ps.UV.RandomStartFrame,
+                    v => ps.UV.RandomStartFrame = v);
             }
             else
             {
@@ -226,12 +212,45 @@ public class ParticleSystemComponentEditor : CustomEditor
                     .OnValueChanged(v => { ps.UV.ScrollSpeed = v; });
             }
 
-            EditorGUI.Toggle(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU)
-                .OnValueChanged(v => { ps.UV.FlipU = v; });
-            EditorGUI.Toggle(paper, $"{id}_uv_fv", "Flip V", ps.UV.FlipV)
-                .OnValueChanged(v => { ps.UV.FlipV = v; });
+            BoolRow(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU, v => ps.UV.FlipU = v);
+            BoolRow(paper, $"{id}_uv_fv", "Flip V", ps.UV.FlipV, v => ps.UV.FlipV = v);
+        });
+
+        // Light: each alive particle pushes a point light into the scene's dynamic BVH.
+        DrawModule(paper, $"{id}_lt", "Light", EditorIcons.Lightbulb, ps.Light, font, () =>
+        {
+            BoolRow(paper, $"{id}_lt_upc", "Use Particle Color", ps.Light.UseParticleColor,
+                v => ps.Light.UseParticleColor = v);
+            PropertyGrid.DrawField(paper, $"{id}_lt_col", "Tint", typeof(VColor), ps.Light.Color,
+                v => ps.Light.Color = v is VColor c ? c : VColor.White, 0);
+            FloatRow(paper, $"{id}_lt_int", "Intensity", ps.Light.Intensity,
+                v => ps.Light.Intensity = MathF.Max(0f, v));
+            FloatRow(paper, $"{id}_lt_rng", "Range", ps.Light.Range,
+                v => ps.Light.Range = MathF.Max(0.01f, v));
+            BoolRow(paper, $"{id}_lt_srs", "Scale Range By Size", ps.Light.ScaleRangeByParticleSize,
+                v => ps.Light.ScaleRangeByParticleSize = v);
+            BoolRow(paper, $"{id}_lt_fwl", "Fade With Lifetime", ps.Light.FadeWithLifetime,
+                v => ps.Light.FadeWithLifetime = v);
         });
     }
+
+    // ── Origami row helpers ────────────────────────────────────────────
+
+    private static void FloatRow(Paper paper, string id, string label, float value, Action<float> setter)
+        => InspectorRow.Draw(paper, id, label, () =>
+            Origami.NumericField<float>(paper, $"{id}_v", value, setter).Show());
+
+    private static void IntRow(Paper paper, string id, string label, int value, Action<int> setter)
+        => InspectorRow.Draw(paper, id, label, () =>
+            Origami.NumericField<int>(paper, $"{id}_v", value, setter).Show());
+
+    private static void EnumRow<T>(Paper paper, string id, string label, T value, Action<T> setter)
+        where T : struct, Enum
+        => InspectorRow.Draw(paper, id, label, () =>
+            Origami.EnumDropdown<T>(paper, $"{id}_v", value, setter).Show());
+
+    private static void BoolRow(Paper paper, string id, string label, bool value, Action<bool> setter)
+        => Origami.Checkbox(paper, id, value, setter).LabelRight(label).Show();
 
     // ================================================================
     //  Playback Controls
@@ -245,19 +264,15 @@ public class ParticleSystemComponentEditor : CustomEditor
         {
             if (ps.IsPlaying)
             {
-                EditorGUI.Button(paper, $"{id}_pause", $"{EditorIcons.Pause}  Pause", width: 70)
-                    .OnValueChanged(_ => ps.Pause());
-                EditorGUI.Button(paper, $"{id}_stop", $"{EditorIcons.Stop}  Stop", width: 65)
-                    .OnValueChanged(_ => ps.Stop());
+                Origami.Button(paper, $"{id}_pause", $"{EditorIcons.Pause}  Pause", () => { ps.Pause(); }).Width(70).Show();
+                Origami.Button(paper, $"{id}_stop", $"{EditorIcons.Stop}  Stop", () => { ps.Stop(); }).Width(65).Show();
             }
             else
             {
-                EditorGUI.Button(paper, $"{id}_play", $"{EditorIcons.Play}  Play", width: 65)
-                    .OnValueChanged(_ => ps.Play());
+                Origami.Button(paper, $"{id}_play", $"{EditorIcons.Play}  Play", () => { ps.Play(); }).Width(65).Show();
             }
 
-            EditorGUI.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear", width: 70)
-                .OnValueChanged(_ => ps.Clear());
+            Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear", () => { ps.Clear(); }).Width(70).Show();
 
             paper.Box($"{id}_spacer").Width(UnitValue.Stretch());
 
@@ -312,20 +327,19 @@ public class ParticleSystemComponentEditor : CustomEditor
                         .OnClick(idx, (ci, _) => bursts.RemoveAt(ci));
                 }
 
-                EditorGUI.FloatField(paper, $"{id}_bt{i}", burst.Time, "Time")
-                    .OnValueChanged(v => { burst.Time = MathF.Max(0f, v); bursts[idx] = burst; });
-                EditorGUI.IntField(paper, $"{id}_bmn{i}", burst.MinCount, "Min Count")
-                    .OnValueChanged(v => { burst.MinCount = Math.Max(0, v); bursts[idx] = burst; });
-                EditorGUI.IntField(paper, $"{id}_bmx{i}", burst.MaxCount, "Max Count")
-                    .OnValueChanged(v => { burst.MaxCount = Math.Max(burst.MinCount, v); bursts[idx] = burst; });
-                EditorGUI.IntField(paper, $"{id}_bcc{i}", burst.CycleCount, "Cycles")
-                    .OnValueChanged(v => { burst.CycleCount = Math.Max(0, v); bursts[idx] = burst; });
-                EditorGUI.FloatField(paper, $"{id}_bri{i}", burst.RepeatInterval, "Repeat Interval")
-                    .OnValueChanged(v => { burst.RepeatInterval = MathF.Max(0f, v); bursts[idx] = burst; });
+                FloatRow(paper, $"{id}_bt{i}", "Time", burst.Time,
+                    v => { burst.Time = MathF.Max(0f, v); bursts[idx] = burst; });
+                IntRow(paper, $"{id}_bmn{i}", "Min Count", burst.MinCount,
+                    v => { burst.MinCount = Math.Max(0, v); bursts[idx] = burst; });
+                IntRow(paper, $"{id}_bmx{i}", "Max Count", burst.MaxCount,
+                    v => { burst.MaxCount = Math.Max(burst.MinCount, v); bursts[idx] = burst; });
+                IntRow(paper, $"{id}_bcc{i}", "Cycles", burst.CycleCount,
+                    v => { burst.CycleCount = Math.Max(0, v); bursts[idx] = burst; });
+                FloatRow(paper, $"{id}_bri{i}", "Repeat Interval", burst.RepeatInterval,
+                    v => { burst.RepeatInterval = MathF.Max(0f, v); bursts[idx] = burst; });
             }
         }
 
-        EditorGUI.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add Burst", width: 110)
-            .OnValueChanged(_ => bursts.Add(new ParticleBurst { Time = 0f, MinCount = 10, MaxCount = 10, CycleCount = 1, RepeatInterval = 0.01f }));
+        Origami.Button(paper, $"{id}_add", $"{EditorIcons.Plus}  Add Burst", () => { bursts.Add(new ParticleBurst { Time = 0f, MinCount = 10, MaxCount = 10, CycleCount = 1, RepeatInterval = 0.01f }); }).Width(110).Show();
     }
 }

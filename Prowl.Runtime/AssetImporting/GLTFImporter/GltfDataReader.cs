@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.AssetImporting.Gltf;
@@ -22,10 +23,17 @@ public static class GltfDataReader
         int compSize = ComponentSize(accessor.ComponentType);
         bool normalize = accessor.Normalized == true;
 
-        for (int i = 0; i < count; i++)
+        if (accessor.ComponentType == 5126 && stride == 4)
         {
-            int offset = i * stride;
-            result[i] = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
+            MemoryMarshal.Cast<byte, float>(span.Slice(0, count * 4)).CopyTo(result.AsSpan());
+        }
+        else
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int offset = i * stride;
+                result[i] = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
+            }
         }
 
         ApplySparseScalar(file, accessor, result);
@@ -45,12 +53,24 @@ public static class GltfDataReader
         int compSize = ComponentSize(accessor.ComponentType);
         bool normalize = accessor.Normalized == true;
 
-        for (int i = 0; i < count; i++)
+        if (accessor.ComponentType == 5126 && stride == 8)
         {
-            int offset = i * stride;
-            float x = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
-            float y = ReadComponentAsFloat(span, offset + compSize, accessor.ComponentType, normalize);
-            result[i] = new Float2(x, y);
+            var floats = MemoryMarshal.Cast<byte, float>(span.Slice(0, count * 8));
+            for (int i = 0; i < count; i++)
+            {
+                int fi = i * 2;
+                result[i] = new Float2(floats[fi], floats[fi + 1]);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int offset = i * stride;
+                float x = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
+                float y = ReadComponentAsFloat(span, offset + compSize, accessor.ComponentType, normalize);
+                result[i] = new Float2(x, y);
+            }
         }
 
         ApplySparseVecN(file, accessor, 2, (values, idx) =>
@@ -73,13 +93,25 @@ public static class GltfDataReader
         int compSize = ComponentSize(accessor.ComponentType);
         bool normalize = accessor.Normalized == true;
 
-        for (int i = 0; i < count; i++)
+        if (accessor.ComponentType == 5126 && stride == 12)
         {
-            int offset = i * stride;
-            float x = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
-            float y = ReadComponentAsFloat(span, offset + compSize, accessor.ComponentType, normalize);
-            float z = ReadComponentAsFloat(span, offset + compSize * 2, accessor.ComponentType, normalize);
-            result[i] = new Float3(x, y, z);
+            var floats = MemoryMarshal.Cast<byte, float>(span.Slice(0, count * 12));
+            for (int i = 0; i < count; i++)
+            {
+                int fi = i * 3;
+                result[i] = new Float3(floats[fi], floats[fi + 1], floats[fi + 2]);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int offset = i * stride;
+                float x = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
+                float y = ReadComponentAsFloat(span, offset + compSize, accessor.ComponentType, normalize);
+                float z = ReadComponentAsFloat(span, offset + compSize * 2, accessor.ComponentType, normalize);
+                result[i] = new Float3(x, y, z);
+            }
         }
 
         ApplySparseVecN(file, accessor, 3, (values, idx) =>
@@ -102,14 +134,26 @@ public static class GltfDataReader
         int compSize = ComponentSize(accessor.ComponentType);
         bool normalize = accessor.Normalized == true;
 
-        for (int i = 0; i < count; i++)
+        if (accessor.ComponentType == 5126 && stride == 16)
         {
-            int offset = i * stride;
-            float x = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
-            float y = ReadComponentAsFloat(span, offset + compSize, accessor.ComponentType, normalize);
-            float z = ReadComponentAsFloat(span, offset + compSize * 2, accessor.ComponentType, normalize);
-            float w = ReadComponentAsFloat(span, offset + compSize * 3, accessor.ComponentType, normalize);
-            result[i] = new Float4(x, y, z, w);
+            var floats = MemoryMarshal.Cast<byte, float>(span.Slice(0, count * 16));
+            for (int i = 0; i < count; i++)
+            {
+                int fi = i * 4;
+                result[i] = new Float4(floats[fi], floats[fi + 1], floats[fi + 2], floats[fi + 3]);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int offset = i * stride;
+                float x = ReadComponentAsFloat(span, offset, accessor.ComponentType, normalize);
+                float y = ReadComponentAsFloat(span, offset + compSize, accessor.ComponentType, normalize);
+                float z = ReadComponentAsFloat(span, offset + compSize * 2, accessor.ComponentType, normalize);
+                float w = ReadComponentAsFloat(span, offset + compSize * 3, accessor.ComponentType, normalize);
+                result[i] = new Float4(x, y, z, w);
+            }
         }
 
         ApplySparseVecN(file, accessor, 4, (values, idx) =>
@@ -188,16 +232,29 @@ public static class GltfDataReader
 
         var span = GetAccessorSpan(file, accessor, out int stride);
 
-        for (int i = 0; i < count; i++)
+        if (accessor.ComponentType == 5125 && stride == 4)
         {
-            int offset = i * stride;
-            result[i] = accessor.ComponentType switch
+            MemoryMarshal.Cast<byte, uint>(span.Slice(0, count * 4)).CopyTo(result.AsSpan());
+        }
+        else if (accessor.ComponentType == 5123 && stride == 2)
+        {
+            var shorts = MemoryMarshal.Cast<byte, ushort>(span.Slice(0, count * 2));
+            for (int i = 0; i < count; i++)
+                result[i] = shorts[i];
+        }
+        else
+        {
+            for (int i = 0; i < count; i++)
             {
-                5121 => span[offset],                                           // unsigned byte
-                5123 => BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(offset, 2)), // unsigned short
-                5125 => BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4)), // unsigned int
-                _ => throw new NotSupportedException($"Unsupported index component type: {accessor.ComponentType}")
-            };
+                int offset = i * stride;
+                result[i] = accessor.ComponentType switch
+                {
+                    5121 => span[offset],                                           // unsigned byte
+                    5123 => BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(offset, 2)), // unsigned short
+                    5125 => BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(offset, 4)), // unsigned int
+                    _ => throw new NotSupportedException($"Unsupported index component type: {accessor.ComponentType}")
+                };
+            }
         }
 
         // Sparse support for indices accessor

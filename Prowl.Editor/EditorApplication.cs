@@ -26,6 +26,7 @@ public class EditorApplication : Game
     private const double IntroDuration = 5.0;      // total
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
+    private IDisposable? _origamiScope;
 
     private string _curDefaultFont;
     private string _curDefaultBoldFont;
@@ -56,13 +57,9 @@ public class EditorApplication : Game
         Application.IsEditor = true;
         Application.IsPlaying = false;
 
-        // Set invariant culture for consistent number parsing/formatting in the editor (e.g. asset import settings)
-        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         InitializeFont();
 
         Resize(Window.Size.X, Window.Size.Y);
-
-        PaperInstance.TextMode = Prowl.Quill.TextRenderMode.Bitmap;
 
         // Load Font Awesome as fallback fonts for icons
         LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
@@ -334,10 +331,9 @@ public class EditorApplication : Game
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
 
-        // Push the editor's Origami theme for the remainder of this frame's render. User code
-        // running inside the editor (e.g. game UI in play mode) can override locally with its
-        // own PushTheme, or read Origami.Root directly for the unmodified default.
-        using var origamiScope = EditorTheme.PushOrigami();
+        // Push the editor's Origami theme persists until EndGui disposes it
+        _origamiScope?.Dispose();
+        _origamiScope = EditorTheme.PushOrigami();
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -657,6 +653,8 @@ public class EditorApplication : Game
 
         // Systems drawn on top (Overlay/Topmost layers)
         Widgets.FileDialog.Draw(paper);
+        Packages.PackageExportDialog.Draw(paper);
+        Packages.PackageImportDialog.Draw(paper);
         Widgets.SelectorModal.Draw(paper);
         Inspector.AddComponentPopup.Draw(paper);
         Widgets.ModalDialog.Draw(paper);
@@ -673,9 +671,56 @@ public class EditorApplication : Game
             _introTime += introDelta;
             DrawIntro(paper);
         }
+
+        // Pop the editor Origami theme now that all rendering (including overlays) is done.
+        _origamiScope?.Dispose();
+        _origamiScope = null;
     }
 
     private const int BarCount = 10;
+
+    public static string GetEmbeddedResourceText(string resource)
+    {
+        var stream = GetEmbeddedResource(resource);
+
+        string data = "";
+        using (StreamReader reader = new StreamReader(stream))
+        {
+            data = reader.ReadToEnd();
+        }
+
+        return data;
+    }
+
+    public static Stream? GetEmbeddedResource(string resource)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+
+        var resourceName = "Prowl.Editor.Resources." + resource;
+
+        var stream = assembly.GetManifestResourceStream(resourceName);
+        return stream;
+    }
+
+    public static FileStream? GetResource(string resource)
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+
+        var resourceName = resource;
+
+        var pathToFile = Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory) +
+                          resourceName;
+
+        using (var stream = assembly.GetManifestResourceStream(resourceName))
+        {
+            using (var fileStream = File.Create(pathToFile))
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+                stream.CopyTo(fileStream);
+            }
+        }
+        return File.OpenRead(pathToFile);
+    }
 
     private void DrawIntro(Paper paper)
     {
@@ -941,6 +986,18 @@ public class EditorApplication : Game
 
         // Assets menu
         AssetCreateMenu.RegisterMenus();
+        MenuRegistry.RegisterSeparator("Assets");
+        MenuRegistry.Register("Assets/Import Package...", () =>
+        {
+            Widgets.FileDialog.Open(Widgets.FileDialogMode.Open, path =>
+            {
+                if (path != null && System.IO.File.Exists(path))
+                    Packages.PackageImportDialog.Open(path);
+            },
+            startPath: Project.Current?.PackagesPath,
+            filters: new[] { "*.prowlpackage" },
+            filterLabels: new[] { "ProwlPackage (*.prowlpackage)" });
+        });
 
         // GameObject menu auto-populated from [CreateGameObjectMenu] attributes
         CreateGameObjectMenuRegistry.RegisterMenuBarItems();

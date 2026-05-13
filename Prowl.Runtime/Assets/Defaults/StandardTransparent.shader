@@ -32,7 +32,7 @@ Pass "StandardTransparent"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -54,7 +54,7 @@ Pass "StandardTransparent"
 				vNormal = TransformDirection(vertexNormal);
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
-				vBitangent = cross(vNormal, vTangent);
+				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 #endif
 			}
 		}

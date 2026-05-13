@@ -189,16 +189,15 @@ public class BuildSettingsPanel : DockPanel
                     paper.Box("bp_spacer")
                         .Width(UnitValue.StretchOne);
 
-                    EditorGUI.Button(paper, "bld_build", $"{EditorIcons.Hammer}  Build", width: 120)
-                        .OnValueChanged(_ => {
-                            _activeProgress = ProjectBuilder.StartBuildAsync(false, _buildSettings.OutputDirectory);
-                        });
+                    Origami.Button(paper, "bld_build", $"{EditorIcons.Hammer}  Build", () =>
+                    {
+                        _activeProgress = ProjectBuilder.StartBuildAsync(false, _buildSettings.OutputDirectory);
+                    }).Width(120).Show();
 
-                    EditorGUI.Button(paper, "bld_buildrun", $"{EditorIcons.Play}  Build & Run", width: 140)
-                        .OnValueChanged(_ =>
-                        {
-                            _activeProgress = ProjectBuilder.StartBuildAsync(true, _buildSettings.OutputDirectory);
-                        });
+                    Origami.Button(paper, "bld_buildrun", $"{EditorIcons.Play}  Build & Run", () =>
+                    {
+                        _activeProgress = ProjectBuilder.StartBuildAsync(true, _buildSettings.OutputDirectory);
+                    }).Width(140).Show();
                 }
             }
 

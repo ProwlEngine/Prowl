@@ -31,7 +31,7 @@ Pass "FogMarch"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
         #include "Lighting"
 
         layout(location = 0) out vec4 OutputColor;
@@ -54,15 +54,15 @@ Pass "FogMarch"
         uniform vec4 _FogAmbientColor;
         uniform float _FogAmbientIntensity;
 
-        // Per-light fog config (parallel to _Light* arrays from Lighting.glsl)
-        #define MAX_FOG_LIGHTS 5
-        uniform int _FogLightCount;
-        uniform int _FogLightEnabled[MAX_FOG_LIGHTS];
-        uniform int _FogLightCastShadows[MAX_FOG_LIGHTS];
-        uniform int _FogLightUseOverride[MAX_FOG_LIGHTS];
-        uniform vec4 _FogLightOverrideColor[MAX_FOG_LIGHTS];
-        uniform float _FogLightIntensity[MAX_FOG_LIGHTS];
-        uniform float _FogLightScatBias[MAX_FOG_LIGHTS];
+        // Type-level enable / shadow toggles. All BVH lights of an enabled type contribute to
+        // fog scattering; per-light overrides were removed alongside the legacy FogLight
+        // component when the BVH refactor landed.
+        uniform int _FogEnableDirectional;
+        uniform int _FogEnableDirectionalShadows;
+        uniform int _FogEnablePointLights;
+        uniform int _FogEnablePointShadows;
+        uniform int _FogEnableSpotLights;
+        uniform int _FogEnableSpotShadows;
 
         // Fog volumes
         #define MAX_FOG_VOLUMES 16
@@ -153,14 +153,14 @@ Pass "FogMarch"
             vec2 atlasCoords, shadowMin, shadowMax;
             GetAtlasCoordinates(projCoords, cascadeParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
 
-            float currentDepth = projCoords.z - max(_LightShadowBias[0], 0.0005);
+            float currentDepth = projCoords.z - max(_DirectionalLightShadowBias, 0.0005);
             float closestDepth = texture(_ShadowAtlas, atlasCoords).r;
-            return (currentDepth > closestDepth ? 1.0 : 0.0) * _LightShadowStrength[0];
+            return (currentDepth > closestDepth ? 1.0 : 0.0) * _DirectionalLightShadowStrength;
         }
 
-        float VolPointShadow(int lightIndex, int shadowSlot, vec3 worldPos)
+        float VolPointShadow(LightSample L, int shadowSlot, vec3 worldPos)
         {
-            vec3 lightToFrag = worldPos - _LightPositions[lightIndex];
+            vec3 lightToFrag = worldPos - L.Position;
             vec3 absDir = abs(lightToFrag);
             int faceIndex = 0;
             if (absDir.x >= absDir.y && absDir.x >= absDir.z)      faceIndex = lightToFrag.x > 0.0 ? 0 : 1;
@@ -180,12 +180,12 @@ Pass "FogMarch"
             vec2 atlasCoords, shadowMin, shadowMax;
             GetAtlasCoordinates(projCoords, faceParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
 
-            float currentDepth = projCoords.z - max(_LightShadowBias[lightIndex], 0.0005);
+            float currentDepth = projCoords.z - max(L.ShadowBias, 0.0005);
             float closestDepth = texture(_ShadowAtlas, atlasCoords).r;
-            return (currentDepth > closestDepth ? 1.0 : 0.0) * _LightShadowStrength[lightIndex];
+            return (currentDepth > closestDepth ? 1.0 : 0.0) * L.ShadowStrength;
         }
 
-        float VolSpotShadow(int lightIndex, int shadowSlot, vec3 worldPos)
+        float VolSpotShadow(LightSample L, int shadowSlot, vec3 worldPos)
         {
             vec4 atlasParams = _SpotShadowAtlasParams[shadowSlot];
             if (atlasParams.z <= 0.0) return 0.0;
@@ -199,26 +199,28 @@ Pass "FogMarch"
             vec2 atlasCoords, shadowMin, shadowMax;
             GetAtlasCoordinates(projCoords, atlasParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
 
-            float currentDepth = projCoords.z - max(_LightShadowBias[lightIndex], 0.0005);
+            float currentDepth = projCoords.z - max(L.ShadowBias, 0.0005);
             float closestDepth = texture(_ShadowAtlas, atlasCoords).r;
-            return (currentDepth > closestDepth ? 1.0 : 0.0) * _LightShadowStrength[lightIndex];
+            return (currentDepth > closestDepth ? 1.0 : 0.0) * L.ShadowStrength;
         }
 
-        float SpotAttenuation(int i, vec3 lightDir)
+        float SpotAttenuation(LightSample L, vec3 lightDir)
         {
-            float outerAngle = radians(_LightSpotAngles[i]);
-            float innerAngle = radians(_LightInnerSpotAngles[i]);
-            float cosOuter = cos(outerAngle * 0.5);
-            float cosInner = cos(innerAngle * 0.5);
-            float cosFromAxis = dot(-lightDir, normalize(_LightDirections[i]));
-            return clamp((cosFromAxis - cosOuter) / max(cosInner - cosOuter, 1e-4), 0.0, 1.0);
+            // Cosines come pre-baked into the leaf data so we skip per-step trig here.
+            float cosFromAxis = dot(-lightDir, normalize(L.Direction));
+            return clamp((cosFromAxis - L.SpotCos) / max(L.InnerSpotCos - L.SpotCos, 1e-4), 0.0, 1.0);
         }
 
+        // Physical inverse-square + smooth window cutoff. Matches Lighting.glsl exactly.
         float DistanceAttenuation(float dist, float range)
         {
-            float att = 1.0 / max(dist * dist, 1e-4);
-            float window = clamp(1.0 - pow(dist / max(range, 1e-4), 4.0), 0.0, 1.0);
-            return att * window * window;
+            float dist2 = dist * dist;
+            float invR2 = 1.0 / max(range * range, 1e-8);
+            float factor = dist2 * invR2;
+            float window = clamp(1.0 - factor * factor, 0.0, 1.0);
+            window *= window;
+            float invSqr = 1.0 / max(dist2, 0.01);
+            return invSqr * window;
         }
 
         float Hash13(vec3 p)
@@ -299,63 +301,72 @@ Pass "FogMarch"
             color = colorWeight > 1e-4 ? color / colorWeight : vec3(1.0);
         }
 
+        // Single local-light contribution (point or spot). Returns inscatter vec3 already
+        // multiplied by the volume tint.
+        vec3 ScatterFromLocalLight(LightSample L, vec3 worldPos, vec3 viewDir, vec3 volColor)
+        {
+            vec3 d = L.Position - worldPos;
+            float dist = length(d);
+            if (dist > L.Range) return vec3(0.0);
+            vec3 toLight = d / max(dist, 1e-4);
+
+            float att = DistanceAttenuation(dist, L.Range);
+            if (L.Type == 2) att *= SpotAttenuation(L, toLight);
+            if (att <= 0.0) return vec3(0.0);
+
+            // Type-level enable / shadow toggles let users dim a whole light class without
+            // touching every light individually.
+            bool isPoint = (L.Type == 1);
+            int  enableType   = isPoint ? _FogEnablePointLights : _FogEnableSpotLights;
+            int  enableShadow = isPoint ? _FogEnablePointShadows : _FogEnableSpotShadows;
+            if (enableType == 0) return vec3(0.0);
+
+            float phase = HenyeyGreenstein(dot(viewDir, -toLight), _FogScattering);
+            vec3 contrib = L.Color * (L.Intensity * 8.0) * phase * att;
+
+            if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0 && enableShadow != 0) {
+                if (isPoint) contrib *= (1.0 - VolPointShadow(L, L.ShadowSlot, worldPos));
+                else         contrib *= (1.0 - VolSpotShadow(L, L.ShadowSlot, worldPos));
+            }
+
+            return contrib * volColor;
+        }
+
         // ── Per-step inscatter accumulation ──
         vec3 SampleScattering(vec3 worldPos, vec3 viewDir, vec3 volColor)
         {
             vec3 scatter = vec3(0.0);
-            int count = min(_LightCount, MAX_FORWARD_LIGHTS);
-            int fogCount = min(MAX_FOG_LIGHTS, count);
 
-            for (int i = 0; i < fogCount; i++)
-            {
-                if (_FogLightEnabled[i] == 0) continue;
-
-                vec3 lightColor = _FogLightUseOverride[i] != 0
-                    ? _FogLightOverrideColor[i].rgb
-                    : _LightColors[i];
-
-                float gBias = clamp(_FogScattering + _FogLightScatBias[i], -0.99, 0.99);
-                vec3 contrib = vec3(0.0);
-                vec3 toLight;
-                float att = 1.0;
-
-                if (_LightType[i] == 0) {
-                    toLight = -normalize(_LightDirections[i]);
-                    float phase = HenyeyGreenstein(dot(viewDir, -toLight), gBias);
-                    contrib = lightColor * _LightIntensities[i] * phase * _FogLightIntensity[i];
-
-                    if (_FogLightCastShadows[i] != 0)
-                        contrib *= (1.0 - VolDirShadow(worldPos));
-                }
-                else if (_LightType[i] == 1) {
-                    vec3 d = _LightPositions[i] - worldPos;
-                    float dist = length(d);
-                    if (dist > _LightRanges[i]) continue;
-                    toLight = d / max(dist, 1e-4);
-                    att = DistanceAttenuation(dist, _LightRanges[i]);
-                    float phase = HenyeyGreenstein(dot(viewDir, -toLight), gBias);
-                    contrib = lightColor * _LightIntensities[i] * phase * att * _FogLightIntensity[i];
-
-                    int slot = _LightShadowSlot[i];
-                    if (_FogLightCastShadows[i] != 0 && slot >= 0)
-                        contrib *= (1.0 - VolPointShadow(i, slot, worldPos));
-                }
-                else {
-                    vec3 d = _LightPositions[i] - worldPos;
-                    float dist = length(d);
-                    if (dist > _LightRanges[i]) continue;
-                    toLight = d / max(dist, 1e-4);
-                    att = DistanceAttenuation(dist, _LightRanges[i]) * SpotAttenuation(i, toLight);
-                    if (att <= 0.0) continue;
-                    float phase = HenyeyGreenstein(dot(viewDir, -toLight), gBias);
-                    contrib = lightColor * _LightIntensities[i] * phase * att * _FogLightIntensity[i];
-
-                    int slot = _LightShadowSlot[i];
-                    if (_FogLightCastShadows[i] != 0 && slot >= 0)
-                        contrib *= (1.0 - VolSpotShadow(i, slot, worldPos));
-                }
-
+            // Directional. _DirectionalLightDirection already points surface->sun.
+            if (_DirectionalLightEnabled != 0 && _FogEnableDirectional != 0) {
+                vec3 toLight = normalize(_DirectionalLightDirection);
+                float phase = HenyeyGreenstein(dot(viewDir, -toLight), _FogScattering);
+                vec3 contrib = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0) * phase;
+                if (_DirectionalLightShadowEnabled != 0 && _FogEnableDirectionalShadows != 0)
+                    contrib *= (1.0 - VolDirShadow(worldPos));
                 scatter += contrib * volColor;
+            }
+
+            // Static BVH.
+            if (_StaticLightRoot >= 0) {
+                LBVH_Iter it;
+                LBVH_Begin(it, _StaticLightRoot);
+                int slot;
+                while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
+                    LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
+                    scatter += ScatterFromLocalLight(L, worldPos, viewDir, volColor);
+                }
+            }
+
+            // Dynamic BVH.
+            if (_DynamicLightRoot >= 0) {
+                LBVH_Iter it;
+                LBVH_Begin(it, _DynamicLightRoot);
+                int slot;
+                while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
+                    LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+                    scatter += ScatterFromLocalLight(L, worldPos, viewDir, volColor);
+                }
             }
 
             return scatter;
@@ -459,7 +470,7 @@ Pass "FogTemporal"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         layout(location = 0) out vec4 OutputColor;
 
@@ -547,7 +558,7 @@ Pass "FogComposite"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         layout(location = 0) out vec4 OutputColor;
 

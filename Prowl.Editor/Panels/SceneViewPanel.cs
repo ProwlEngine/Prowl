@@ -3,6 +3,7 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -177,8 +178,7 @@ public class SceneViewPanel : DockPanel
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
-                    EditorGUI.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  New Scene", width: 120)
-                        .OnValueChanged(_ => CreateAndLoadDefaultScene());
+                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  New Scene", () => CreateAndLoadDefaultScene()).Width(120).Show();
                     paper.Box("sv_btn_spacer_r");
                 }
 
@@ -202,8 +202,8 @@ public class SceneViewPanel : DockPanel
                 Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
                 Float2 viewSize = new Float2(width, height);
                 Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
-                bool hovered = mouseLocal.X >= 0 && mouseLocal.X <= viewSize.X
-                            && mouseLocal.Y >= 0 && mouseLocal.Y <= viewSize.Y;
+                // Use Paper's hover state which respects overlays/popups, not just bounds
+                bool hovered = paper.IsParentHovered;
                 sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, mouseRay, mouseLocal, hovered);
             }
         }
@@ -472,13 +472,13 @@ public class SceneViewPanel : DockPanel
         var lightGo = new GameObject("Directional Light");
         lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
         var light = lightGo.AddComponent<DirectionalLight>();
-        light.Intensity = 8f;
+        light.Intensity = 1f;
         scene.Add(lightGo);
 
         // Floor
         var floorGo = new GameObject("Floor");
-        floorGo.Transform.Position = new Float3(0, -0.05f, 0);
-        floorGo.Transform.LocalScale = new Float3(10, 0.1f, 10);
+        floorGo.Transform.Position = new Float3(0, 0, 0);
+        floorGo.Transform.LocalScale = new Float3(1, 1, 1);
         var floorRenderer = floorGo.AddComponent<MeshRenderer>();
         floorRenderer.Mesh = planeMesh;
         floorRenderer.Material = defaultMat;

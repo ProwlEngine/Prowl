@@ -1,4 +1,6 @@
+using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 
 namespace Prowl.Editor;
@@ -18,13 +20,16 @@ public class GeneralSettings : ProjectSettingsBase
         EditorGUI.Header(paper, "gen_header", $"{EditorIcons.Gear}  General");
         EditorGUI.Separator(paper, "gen_sep");
 
-        EditorGUI.TextField(paper, "gen_company", "Company Name", CompanyName)
-            .OnValueChanged(v => { CompanyName = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "gen_company", "Company Name", () =>
+            Origami.TextField(paper, "gen_company_v", CompanyName,
+                v => { CompanyName = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        EditorGUI.TextField(paper, "gen_product", "Product Name", ProductName)
-            .OnValueChanged(v => { ProductName = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "gen_product", "Product Name", () =>
+            Origami.TextField(paper, "gen_product_v", ProductName,
+                v => { ProductName = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        EditorGUI.TextField(paper, "gen_version", "Version", Version)
-            .OnValueChanged(v => { Version = v; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "gen_version", "Version", () =>
+            Origami.TextField(paper, "gen_version_v", Version,
+                v => { Version = v; ProjectSettingsRegistry.SaveAll(); }).Show());
     }
 }

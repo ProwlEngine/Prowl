@@ -159,8 +159,7 @@ public static class SelectorModal
                 .Text(EditorIcons.MagnifyingGlass, font).TextColor(EditorTheme.Ink400)
                 .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-            EditorGUI.TextField(paper, "sel_search", "Search", _searchText)
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "sel_search", _searchText, v => _searchText = v).Show();
         }
     }
 
@@ -467,13 +466,13 @@ public static class SelectorModal
         var db = EditorAssetDatabase.Instance;
         if (db == null) return null;
 
-        byte[]? pixels = db.LoadThumbnail(guid);
-        if (pixels == null || pixels.Length == 0) return null;
+        var thumb = db.LoadThumbnail(guid);
+        if (thumb == null) return null;
 
         try
         {
-            int size = ThumbnailGenerator.ThumbnailSize;
-            var tex = new Texture2D((uint)size, (uint)size, false, TextureImageFormat.Color4b);
+            var (w, h, pixels) = thumb.Value;
+            var tex = new Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
             tex.SetData<byte>(pixels);
             tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _thumbCache[guid] = tex;

@@ -87,7 +87,7 @@ public static class PrefabEditingMode
         lightGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
         var light = lightGo.AddComponent<DirectionalLight>();
-        light.Intensity = 8f;
+        light.Intensity = 1f;
         editScene.Add(lightGo);
 
         Scene.Load(editScene);

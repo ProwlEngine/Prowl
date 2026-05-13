@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -200,7 +201,11 @@ public class ContextMenuBuilder
                         .Enter())
             {
 
-                EditorGUI.Toggle(paper, $"{id}_t_{index}", "", ToggleValue != null ? ToggleValue.Invoke() : false);
+                // Read-only indicator inside menu rows — the row itself owns the click; the
+                // checkbox just shows current state.
+                Origami.Checkbox(paper, $"{id}_t_{index}",
+                        ToggleValue != null ? ToggleValue.Invoke() : false, _ => { })
+                    .NoLabel().ReadOnly().Show();
 
 
                 paper.Box($"{id}_l_{index}")
@@ -362,6 +367,7 @@ public static class ContextMenuHelper
 
             // Close any previously open menu
             _closeCurrentMenu?.Invoke();
+            _closeCurrentMenu = null;
 
             paper.SetElementStorage(parentEl, $"{id}_open", true);
             paper.SetElementStorage(parentEl, $"{id}_x", (float)e.RelativePosition.X);
@@ -370,7 +376,11 @@ public static class ContextMenuHelper
 
         if (isOpen)
         {
-            Action close = () => paper.SetElementStorage(parentEl, $"{id}_open", false);
+            Action close = () =>
+            {
+                if (parentEl.IsValid && paper.HasElementStorage(parentEl, $"{id}_open")) // If it doesnt have an open storage, it means the parent element was likely destroyed (this is a different element now), so we can skip setting it to false
+                    paper.SetElementStorage(parentEl, $"{id}_open", false);
+            };
             _closeCurrentMenu = close;
 
             var builder = new ContextMenuBuilder();
