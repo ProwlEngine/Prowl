@@ -24,6 +24,8 @@ public static class ProwlService
     private static HttpListener? s_oauthListener;
     private static CancellationTokenSource? s_oauthCts;
 
+    public static bool IsSigningIn { get; private set; }
+
     public static async Task Initialize()
     {
         s_isProduction = true; // Set to false to use local dev Supabase instance
@@ -40,6 +42,8 @@ public static class ProwlService
     {
         if (s_instance == null)
             await Initialize();
+
+        IsSigningIn = true;
 
         // Abort any previous sign-in attempt that never completed
         s_oauthCts?.Cancel();
@@ -95,6 +99,7 @@ public static class ProwlService
             s_oauthListener = null;
             s_oauthCts?.Dispose();
             s_oauthCts = null;
+            IsSigningIn = false;
         }
     }
 

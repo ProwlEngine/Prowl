@@ -1,9 +1,13 @@
 using System.Collections.Generic;
+using System.Reflection;
 
+using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Scribe;
 
 using Color = System.Drawing.Color;
+using TextAlignment = Prowl.PaperUI.TextAlignment;
 
 namespace Prowl.Editor;
 
@@ -14,6 +18,7 @@ public static class MainMenuBar
 
     private static int _openMenuIndex = -1;
     private static float _xPos = -1;
+    private static string? s_cachedVersion;
 
     public static void Draw(Paper paper)
     {
@@ -25,10 +30,11 @@ public static class MainMenuBar
             .Position(0, 0)
             .Size(paper.Percent(100), EditorTheme.MenuBarHeight)
             .BackgroundColor(EditorTheme.Neutral200)
-            .ChildLeft(10)
-            .RowBetween(10)
+            .RowBetween(6)
             .Enter())
         {
+            paper.Box("mb_pad_l").Width(4);
+
             for (int i = 0; i < items.Count; i++)
             {
                 int index = i;
@@ -50,20 +56,34 @@ public static class MainMenuBar
                     })
                     .Enter())
                 {
-                    // If hovering a different menu while one is open, switch to it
                     if (_openMenuIndex >= 0 && _openMenuIndex != index && paper.IsParentHovered)
                         _openMenuIndex = index;
                 }
             }
+
+            paper.Box("mb_stretch").Width(UnitValue.Stretch(1));
+
+            DrawAuthWidget(paper, font);
+
+            paper.Box("mb_ver_sep").Width(1).Height(EditorTheme.MenuBarHeight - 10f).BackgroundColor(EditorTheme.Ink200);
+
+            paper.Box("mb_version")
+                .Height(EditorTheme.MenuBarHeight)
+                .Width(UnitValue.Auto)
+                .IsNotInteractable()
+                .Text(GetVersion(), font)
+                .TextColor(EditorTheme.Ink300)
+                .FontSize(EditorTheme.FontSize - 2)
+                .Alignment(TextAlignment.MiddleCenter);
+
+            paper.Box("mb_pad_r").Width(10);
         }
 
-        // Render the open dropdown outside the menubar row (so backdrop covers everything)
         if (_openMenuIndex >= 0 && _openMenuIndex < items.Count)
         {
             var openItem = items[_openMenuIndex];
             if (openItem.HasSubItems)
             {
-                // Backdrop click anywhere outside to close
                 paper.Box("menubar_backdrop")
                     .PositionType(PositionType.SelfDirected)
                     .Position(0, 0)
@@ -75,6 +95,46 @@ public static class MainMenuBar
                 RenderDropdown(paper, $"dd_{_openMenuIndex}", openItem.SubItems, _xPos, EditorTheme.MenuBarHeight - 2);
             }
         }
+    }
+
+    private static void DrawAuthWidget(Paper paper, FontFile? font)
+    {
+        if (font == null) return;
+
+        if (ProwlService.IsSignedIn)
+        {
+            string email = ProwlService.GetCurrentUser()?.Email ?? "Signed in";
+            int atIdx = email.IndexOf('@');
+            string display = atIdx > 0 ? email[..atIdx] : email;
+
+            EditorGUI.Label(paper, "mb_user", $"{EditorIcons.User}  {display}", EditorTheme.Ink400);
+            EditorGUI.ButtonGhost(paper, "mb_signout", "Sign Out", 72f)
+                .OnValueChanged(clicked => { _ = ProwlService.SignOutAsync(); });
+        }
+        else
+        {
+            // "Signing in..." is the longest label — 90px covers both states
+            string label = ProwlService.IsSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign In";
+            EditorGUI.ButtonGhost(paper, "mb_signin", label, 90f)
+                .OnValueChanged(clicked =>
+                {
+                    if (!ProwlService.IsSigningIn)
+                        _ = ProwlService.SignInWithGitHubAsync();
+                });
+        }
+    }
+
+    private static string GetVersion()
+    {
+        if (s_cachedVersion != null) return s_cachedVersion;
+        string v = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+            ?? "0.0.1";
+        int plus = v.IndexOf('+');
+        if (plus >= 0) v = v[..plus];
+        s_cachedVersion = $"v{v}";
+        return s_cachedVersion;
     }
 
     private static void RenderDropdown(Paper paper, string id, List<MenuItem> items, float x, float y)
@@ -90,12 +150,12 @@ public static class MainMenuBar
             .BorderColor(EditorTheme.Ink200)
             .BorderWidth(1)
             .Rounded(4)
-            .ChildTop(2).ChildBottom(2)
-            .ChildLeft(2).ChildRight(2)
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .Enter())
         {
+            paper.Box($"{id}_pad_t").Height(2);
+
             for (int i = 0; i < items.Count; i++)
             {
                 int index = i;
@@ -105,7 +165,7 @@ public static class MainMenuBar
                 {
                     paper.Box($"{id}_sep_{index}")
                         .Height(1)
-                        .Margin(4, 4, 4, 4)
+                        .Margin(4, 2, 4, 2)
                         .BackgroundColor(EditorTheme.Ink200);
                     continue;
                 }
@@ -116,6 +176,7 @@ public static class MainMenuBar
 
                 using (paper.Row($"{id}_i_{index}")
                     .Height(ItemHeight)
+                    .Margin(2, 0, 2, 0)
                     .BackgroundColor(Color.Transparent)
                     .Rounded(3)
                     .Hovered.BackgroundColor(itemEnabled ? EditorTheme.Purple400 : Color.Transparent).End()
@@ -134,7 +195,7 @@ public static class MainMenuBar
                         paper.Box($"{id}_chk_{index}")
                             .Width(24)
                             .Alignment(TextAlignment.MiddleLeft)
-                            .Text(item.IsChecked ? "\u2713" : "", font)
+                            .Text(item.IsChecked ? "✓" : "", font)
                             .TextColor(textColor)
                             .FontSize(EditorTheme.FontSize);
 
@@ -145,7 +206,6 @@ public static class MainMenuBar
                             .FontSize(EditorTheme.FontSize);
                     }
 
-                    // Submenu arrow + render on hover
                     if (item.HasSubItems)
                     {
                         if (font != null)
@@ -154,7 +214,7 @@ public static class MainMenuBar
                                 .Width(20)
                                 .Alignment(TextAlignment.MiddleLeft)
                                 .Margin(0, 4, 0, 0)
-                                .Text("\u25B6", font)
+                                .Text("▶", font)
                                 .TextColor(textColor)
                                 .FontSize(10f);
                         }
@@ -164,6 +224,8 @@ public static class MainMenuBar
                     }
                 }
             }
+
+            paper.Box($"{id}_pad_b").Height(2);
         }
     }
 }

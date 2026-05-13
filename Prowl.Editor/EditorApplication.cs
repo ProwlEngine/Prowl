@@ -484,22 +484,6 @@ public class EditorApplication : Game
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Version label goes to the right side of the menu bar
-        string version = Assembly.GetExecutingAssembly()
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.1";
-        int plus = version.IndexOf('+');
-        if (plus >= 0) version = version[..plus];
-
-        paper.Box("version_label")
-            .PositionType(PositionType.SelfDirected)
-            .Position(w - 130, 0).Size(120, EditorTheme.MenuBarHeight)
-            .IsNotInteractable()
-            .Text($"Prowl v{version}", font)
-            .TextColor(EditorTheme.Ink400)
-            .FontSize(EditorTheme.FontSize - 2)
-            .Alignment(TextAlignment.MiddleRight);
-
         // Flap content: buttons + project + fps
         int fps = Math.Min(9999, Time.UnscaledDeltaTime > 0 ? (int)(1.0 / Time.UnscaledDeltaTime) : 0);
         string projectText = Project.Current?.Name ?? "No Project";

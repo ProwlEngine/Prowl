@@ -42,9 +42,6 @@ public class MarketplacePanel : DockPanel
     private string _activeCategory = "all";
     private string? _selectedId;
 
-    // Auth
-    private bool _isSigningIn;
-
     // Import dialog state
     private ProwlPackage? _importPackage;
     private PackageVersion? _importVersion;
@@ -62,8 +59,7 @@ public class MarketplacePanel : DockPanel
         ("template", "Templates"),
     ];
 
-    // ── Lifecycle ────────────────────────────────────────────────────────
-
+    /// <inheritdoc/>
     public override void OnGUI(Paper paper, float width, float height)
     {
         FontFile? font = EditorTheme.DefaultFont;
@@ -81,8 +77,6 @@ public class MarketplacePanel : DockPanel
             DrawBody(paper, font, width, height - ToolbarHeight);
         }
     }
-
-    // ── Toolbar ──────────────────────────────────────────────────────────
 
     private void DrawToolbar(Paper paper, FontFile font, float width)
     {
@@ -113,39 +107,8 @@ public class MarketplacePanel : DockPanel
                     if (!_isLoading)
                         _ = LoadAsync();
                 });
-
-            paper.Box("mkt_tb_sep2").Width(1).BackgroundColor(EditorTheme.Ink200);
-
-            if (ProwlService.IsSignedIn)
-            {
-                string email = ProwlService.GetCurrentUser()?.Email ?? "Signed in";
-                int atIdx = email.IndexOf('@');
-                string display = atIdx > 0 ? email[..atIdx] : email;
-
-                paper.Box("mkt_tb_user")
-                    .Height(24f).Width(UnitValue.Auto)
-                    .Text($"{EditorIcons.User}  {display}", font)
-                    .TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize)
-                    .Alignment(TextAlignment.MiddleLeft);
-
-                EditorGUI.Button(paper, "mkt_tb_signout", "Sign Out", width: 72)
-                    .OnValueChanged(clicked => { _ = SignOutAsync(); });
-            }
-            else
-            {
-                string signInLabel = _isSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign In";
-                EditorGUI.Button(paper, "mkt_tb_signin", signInLabel, width: 110)
-                    .OnValueChanged(clicked =>
-                    {
-                        if (!_isSigningIn)
-                            _ = SignInAsync();
-                    });
-            }
         }
     }
-
-    // ── Body ─────────────────────────────────────────────────────────────
 
     private void DrawBody(Paper paper, FontFile font, float width, float height)
     {
@@ -176,8 +139,6 @@ public class MarketplacePanel : DockPanel
             DrawPackageDetail(paper, font, width - ListPaneWidth - 1f, height);
         }
     }
-
-    // ── Package list ─────────────────────────────────────────────────────
 
     private void DrawPackageList(Paper paper, FontFile font, float height)
     {
@@ -269,8 +230,6 @@ public class MarketplacePanel : DockPanel
                 .Clip();
         }
     }
-
-    // ── Package detail ────────────────────────────────────────────────────
 
     private void DrawPackageDetail(Paper paper, FontFile font, float width, float height)
     {
@@ -434,12 +393,12 @@ public class MarketplacePanel : DockPanel
                 }
                 else
                 {
-                    string signInLabel = _isSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign in to Import";
+                    string signInLabel = ProwlService.IsSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign in to Import";
                     EditorGUI.Button(paper, "mkt_d_signin_import", signInLabel, width: 160)
                         .OnValueChanged(clicked =>
                         {
-                            if (!_isSigningIn)
-                                _ = SignInAsync();
+                            if (!ProwlService.IsSigningIn)
+                                _ = ProwlService.SignInWithGitHubAsync();
                         });
                 }
             }
@@ -464,8 +423,6 @@ public class MarketplacePanel : DockPanel
             .FontSize(11f)
             .Alignment(TextAlignment.MiddleLeft);
     }
-
-    // ── Import dialog ─────────────────────────────────────────────────────
 
     private void OpenImportDialog(ProwlPackage pkg, PackageVersion ver)
     {
@@ -530,7 +487,7 @@ public class MarketplacePanel : DockPanel
         // Body: folder tree | destination summary
         using (paper.Row("imp_body").Height(bodyHeight).RowBetween(0f).Enter())
         {
-            // ── Left: folder picker ─────────────────────────────────────
+            // Folder tree for picking the destination
             using (paper.Column("imp_left")
                 .Width(folderPaneWidth)
                 .Height(bodyHeight)
@@ -576,7 +533,7 @@ public class MarketplacePanel : DockPanel
             // Vertical divider
             paper.Box("imp_vdiv").Width(1f).Height(bodyHeight).BackgroundColor(EditorTheme.Ink200);
 
-            // ── Right: import summary ────────────────────────────────────
+            // Summary of where the package will be extracted
             float rightW = 580f - 16f - folderPaneWidth - 1f; // modal content width - folder pane - divider
             using (paper.Column("imp_right")
                 .Width(rightW)
@@ -714,8 +671,6 @@ public class MarketplacePanel : DockPanel
         }
     }
 
-    // ── Import execution ──────────────────────────────────────────────────
-
     private async Task DoImportAsync()
     {
         if (_importPackage == null || _importVersion == null || Project.Current == null) return;
@@ -764,39 +719,6 @@ public class MarketplacePanel : DockPanel
         }
     }
 
-    // ── Auth ──────────────────────────────────────────────────────────────
-
-    private async Task SignInAsync()
-    {
-        _isSigningIn = true;
-        try
-        {
-            await ProwlService.SignInWithGitHubAsync();
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"[Marketplace] Sign-in failed: {ex.Message}");
-        }
-        finally
-        {
-            _isSigningIn = false;
-        }
-    }
-
-    private async Task SignOutAsync()
-    {
-        try
-        {
-            await ProwlService.SignOutAsync();
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"[Marketplace] Sign-out failed: {ex.Message}");
-        }
-    }
-
-    // ── Data loading ──────────────────────────────────────────────────────
-
     private async Task LoadAsync()
     {
         _isLoading = true;
@@ -815,8 +737,6 @@ public class MarketplacePanel : DockPanel
             _isLoading = false;
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────
 
     private List<ProwlPackage> FilteredPackages()
     {
