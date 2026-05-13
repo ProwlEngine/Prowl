@@ -1,31 +1,111 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Supabase;
+using Supabase.Gotrue;
 using Supabase.Postgrest.Models;
 using Supabase.Postgrest.Attributes;
 
 using static Supabase.Postgrest.Constants;
 
+using SupabaseClient = Supabase.Client;
+
 namespace Prowl.Editor;
 
 public static class ProwlService
 {
-    private static Client? s_instance;
+    private static SupabaseClient? s_instance;
+    private static bool s_isProduction;
+    private static HttpListener? s_oauthListener;
+    private static CancellationTokenSource? s_oauthCts;
 
     public static async Task Initialize()
     {
-        bool isProduction = true; // Set to false to use local dev Supabase instance
+        s_isProduction = true; // Set to false to use local dev Supabase instance
 
-        var url = isProduction? "https://skkeeysnpyaevansnnah.supabase.co" : "http://127.0.0.1:54321";
-        var key = isProduction? "sb_publishable_0A-aISx-Mcyyax8l3reBog_rIh1uaNT" : "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
+        var url = s_isProduction ? "https://skkeeysnpyaevansnnah.supabase.co" : "http://127.0.0.1:54321";
+        var key = s_isProduction ? "sb_publishable_0A-aISx-Mcyyax8l3reBog_rIh1uaNT" : "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
 
         var options = new SupabaseOptions { AutoConnectRealtime = false };
-        s_instance = new Client(url, key, options);
+        s_instance = new SupabaseClient(url, key, options);
         await s_instance.InitializeAsync();
     }
+
+    public static async Task<Session?> SignInWithGitHubAsync()
+    {
+        if (s_instance == null)
+            await Initialize();
+
+        // Abort any previous sign-in attempt that never completed
+        s_oauthCts?.Cancel();
+        s_oauthCts?.Dispose();
+        s_oauthListener?.Stop();
+        s_oauthListener?.Close();
+
+        const string redirectUri = "http://localhost:7777/auth/callback";
+
+        s_oauthCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        s_oauthListener = new HttpListener();
+        s_oauthListener.Prefixes.Add("http://localhost:7777/auth/callback/");
+        s_oauthListener.Start();
+
+        try
+        {
+            var signInState = await s_instance!.Auth.SignIn(
+                Supabase.Gotrue.Constants.Provider.Github,
+                new SignInOptions
+                {
+                    FlowType = Supabase.Gotrue.Constants.OAuthFlowType.PKCE,
+                    RedirectTo = redirectUri
+                }
+            );
+
+            Process.Start(new ProcessStartInfo(signInState.Uri.ToString()) { UseShellExecute = true });
+
+            // GetContextAsync has no cancellation support — race it against the timeout
+            var contextTask = s_oauthListener.GetContextAsync();
+            var timeoutTask = Task.Delay(Timeout.Infinite, s_oauthCts.Token);
+
+            if (await Task.WhenAny(contextTask, timeoutTask) != contextTask)
+                return null;
+
+            var context = await contextTask;
+            var code = context.Request.QueryString["code"];
+
+            var html = "<html><body><h2>Signed in! You can close this tab and return to Prowl.</h2></body></html>";
+            var buffer = System.Text.Encoding.UTF8.GetBytes(html);
+            context.Response.ContentLength64 = buffer.Length;
+            await context.Response.OutputStream.WriteAsync(buffer);
+            context.Response.OutputStream.Close();
+
+            if (string.IsNullOrEmpty(code))
+                return null;
+
+            return await s_instance.Auth.ExchangeCodeForSession(signInState.PKCEVerifier, code);
+        }
+        finally
+        {
+            s_oauthListener.Stop();
+            s_oauthListener.Close();
+            s_oauthListener = null;
+            s_oauthCts?.Dispose();
+            s_oauthCts = null;
+        }
+    }
+
+    public static async Task SignOutAsync()
+    {
+        if (s_instance?.Auth.CurrentSession != null)
+            await s_instance.Auth.SignOut();
+    }
+
+    public static bool IsSignedIn => s_instance?.Auth.CurrentUser != null;
+    public static User? GetCurrentUser() => s_instance?.Auth.CurrentUser;
 
     public static async Task<List<NewsPost>> FetchNewsPostsAsync()
     {

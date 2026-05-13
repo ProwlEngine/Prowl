@@ -42,6 +42,9 @@ public class MarketplacePanel : DockPanel
     private string _activeCategory = "all";
     private string? _selectedId;
 
+    // Auth
+    private bool _isSigningIn;
+
     // Import dialog state
     private ProwlPackage? _importPackage;
     private PackageVersion? _importVersion;
@@ -110,6 +113,35 @@ public class MarketplacePanel : DockPanel
                     if (!_isLoading)
                         _ = LoadAsync();
                 });
+
+            paper.Box("mkt_tb_sep2").Width(1).BackgroundColor(EditorTheme.Ink200);
+
+            if (ProwlService.IsSignedIn)
+            {
+                string email = ProwlService.GetCurrentUser()?.Email ?? "Signed in";
+                int atIdx = email.IndexOf('@');
+                string display = atIdx > 0 ? email[..atIdx] : email;
+
+                paper.Box("mkt_tb_user")
+                    .Height(24f).Width(UnitValue.Auto)
+                    .Text($"{EditorIcons.User}  {display}", font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleLeft);
+
+                EditorGUI.Button(paper, "mkt_tb_signout", "Sign Out", width: 72)
+                    .OnValueChanged(clicked => { _ = SignOutAsync(); });
+            }
+            else
+            {
+                string signInLabel = _isSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign In";
+                EditorGUI.Button(paper, "mkt_tb_signin", signInLabel, width: 110)
+                    .OnValueChanged(clicked =>
+                    {
+                        if (!_isSigningIn)
+                            _ = SignInAsync();
+                    });
+            }
         }
     }
 
@@ -395,8 +427,21 @@ public class MarketplacePanel : DockPanel
         {
             using (paper.Row("mkt_d_btn_row").Height(32f).RowBetween(8f).Enter())
             {
-                EditorGUI.Button(paper, "mkt_d_import", $"{EditorIcons.Download}  Import Package", width: 150)
-                    .OnValueChanged(clicked => OpenImportDialog(pkg, ver));
+                if (ProwlService.IsSignedIn)
+                {
+                    EditorGUI.Button(paper, "mkt_d_import", $"{EditorIcons.Download}  Import Package", width: 150)
+                        .OnValueChanged(clicked => OpenImportDialog(pkg, ver));
+                }
+                else
+                {
+                    string signInLabel = _isSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign in to Import";
+                    EditorGUI.Button(paper, "mkt_d_signin_import", signInLabel, width: 160)
+                        .OnValueChanged(clicked =>
+                        {
+                            if (!_isSigningIn)
+                                _ = SignInAsync();
+                        });
+                }
             }
         }
         else
@@ -716,6 +761,37 @@ public class MarketplacePanel : DockPanel
         {
             try { File.Delete(tempFile); } catch { }
             _isImporting = false;
+        }
+    }
+
+    // ── Auth ──────────────────────────────────────────────────────────────
+
+    private async Task SignInAsync()
+    {
+        _isSigningIn = true;
+        try
+        {
+            await ProwlService.SignInWithGitHubAsync();
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Marketplace] Sign-in failed: {ex.Message}");
+        }
+        finally
+        {
+            _isSigningIn = false;
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        try
+        {
+            await ProwlService.SignOutAsync();
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Marketplace] Sign-out failed: {ex.Message}");
         }
     }
 
