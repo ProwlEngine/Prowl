@@ -71,26 +71,37 @@ public static class RuntimeUtils
     public static Type? FindType(string qualifiedTypeName)
     {
         Type? t = Type.GetType(qualifiedTypeName);
-
         if (t != null)
-        {
             return t;
-        }
-        else
-        {
-            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                t = asm.GetType(qualifiedTypeName);
-                if (t != null)
-                    return t;
 
-                // If not found, try to find by name without namespace
-                t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(qualifiedTypeName, StringComparison.OrdinalIgnoreCase));
+        // Strip assembly qualifier to get just the namespace-qualified type name.
+        // Assembly-qualified names look like "Namespace.Type, AssemblyName, Version=..."
+        // asm.GetType() needs just "Namespace.Type" to search within a specific assembly.
+        string typeNameOnly = qualifiedTypeName;
+        int commaIdx = qualifiedTypeName.IndexOf(',');
+        if (commaIdx >= 0)
+            typeNameOnly = qualifiedTypeName.Substring(0, commaIdx).Trim();
+
+        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            t = asm.GetType(qualifiedTypeName);
+            if (t != null)
+                return t;
+
+            // Try with stripped assembly qualifier
+            if (typeNameOnly != qualifiedTypeName)
+            {
+                t = asm.GetType(typeNameOnly);
                 if (t != null)
                     return t;
             }
-            return null;
+
+            // If not found, try to find by name without namespace
+            t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
+            if (t != null)
+                return t;
         }
+        return null;
     }
 
     public static PropertyInfo GetInstanceProperty(this Type type, string name)
