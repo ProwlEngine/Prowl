@@ -107,16 +107,45 @@ public static class MainMenuBar
             int atIdx = email.IndexOf('@');
             string display = atIdx > 0 ? email[..atIdx] : email;
 
-            EditorGUI.Label(paper, "mb_user", $"{EditorIcons.User}  {display}", EditorTheme.Ink400);
-            EditorGUI.ButtonGhost(paper, "mb_signout", "Sign Out", 72f)
-                .OnValueChanged(clicked => { _ = ProwlService.SignOutAsync(); });
+            paper.Box("mb_user")
+                .Height(EditorTheme.MenuBarHeight)
+                .Width(UnitValue.Auto)
+                .IsNotInteractable()
+                .Text($"{EditorIcons.User}  {display}", font)
+                .TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize)
+                .Alignment(TextAlignment.MiddleCenter)
+                .Margin(0, 0, 4, 0);
+
+            paper.Box("mb_signout")
+                .Height(EditorTheme.MenuBarHeight)
+                .Width(UnitValue.Auto)
+                .BackgroundColor(Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text("Sign Out", font)
+                .TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize)
+                .Alignment(TextAlignment.MiddleCenter)
+                .Margin(0, 0, 4, 0)
+                .OnClick(0, (_, _) => { _ = ProwlService.SignOutAsync(); });
         }
         else
         {
-            // "Signing in..." is the longest label — 90px covers both states
-            string label = ProwlService.IsSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign In";
-            EditorGUI.ButtonGhost(paper, "mb_signin", label, 90f)
-                .OnValueChanged(clicked =>
+            string label = ProwlService.IsSigningIn
+                ? "Signing in..."
+                : $"{EditorIcons.ArrowRightToBracket}  Sign In";
+
+            paper.Box("mb_signin")
+                .Height(EditorTheme.MenuBarHeight)
+                .Width(UnitValue.Auto)
+                .BackgroundColor(Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .Text(label, font)
+                .TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSize)
+                .Alignment(TextAlignment.MiddleCenter)
+                .Margin(0, 0, 4, 0)
+                .OnClick(0, (_, _) =>
                 {
                     if (!ProwlService.IsSigningIn)
                         _ = ProwlService.SignInWithGitHubAsync();
@@ -140,6 +169,7 @@ public static class MainMenuBar
     private static void RenderDropdown(Paper paper, string id, List<MenuItem> items, float x, float y)
     {
         var font = EditorTheme.DefaultFont;
+        if (font == null) return;
 
         using (paper.Column(id)
             .PositionType(PositionType.SelfDirected)
@@ -154,7 +184,7 @@ public static class MainMenuBar
             .ClampToScreen()
             .Enter())
         {
-            paper.Box($"{id}_pad_t").Height(2);
+            paper.Box($"{id}_pad_t").Height(3);
 
             for (int i = 0; i < items.Count; i++)
             {
@@ -165,18 +195,17 @@ public static class MainMenuBar
                 {
                     paper.Box($"{id}_sep_{index}")
                         .Height(1)
-                        .Margin(4, 2, 4, 2)
+                        .Margin(8, 3, 8, 3)
                         .BackgroundColor(EditorTheme.Ink200);
                     continue;
                 }
 
                 bool itemEnabled = item.IsEnabled;
-                var textColor = itemEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300;
-                string displayLabel = item.DisplayLabel;
+                Color textColor = itemEnabled ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
                 using (paper.Row($"{id}_i_{index}")
                     .Height(ItemHeight)
-                    .Margin(2, 0, 2, 0)
+                    .Margin(3, 0, 3, 0)
                     .BackgroundColor(Color.Transparent)
                     .Rounded(3)
                     .Hovered.BackgroundColor(itemEnabled ? EditorTheme.Purple400 : Color.Transparent).End()
@@ -190,42 +219,54 @@ public static class MainMenuBar
                     })
                     .Enter())
                 {
-                    if (font != null)
-                    {
-                        paper.Box($"{id}_chk_{index}")
-                            .Width(24)
-                            .Alignment(TextAlignment.MiddleLeft)
-                            .Text(item.IsChecked ? "✓" : "", font)
-                            .TextColor(textColor)
-                            .FontSize(EditorTheme.FontSize);
+                    // Left indent
+                    paper.Box($"{id}_il_{index}").Width(8);
 
-                        paper.Box($"{id}_lbl_{index}")
-                            .Alignment(TextAlignment.MiddleLeft)
-                            .Text(displayLabel, font)
-                            .TextColor(textColor)
-                            .FontSize(EditorTheme.FontSize);
-                    }
+                    // Checkmark — always reserves space so labels stay aligned
+                    paper.Box($"{id}_chk_{index}")
+                        .Width(14).Height(ItemHeight)
+                        .Alignment(TextAlignment.MiddleCenter)
+                        .IsNotInteractable()
+                        .Text(item.IsChecked ? EditorIcons.Check : "", font)
+                        .TextColor(textColor)
+                        .FontSize(EditorTheme.FontSize - 3);
 
+                    paper.Box($"{id}_gap_{index}").Width(4);
+
+                    // Label
+                    paper.Box($"{id}_lbl_{index}")
+                        .Height(ItemHeight)
+                        .Width(UnitValue.Stretch())
+                        .Alignment(TextAlignment.MiddleLeft)
+                        .IsNotInteractable()
+                        .Text(item.DisplayLabel, font)
+                        .TextColor(textColor)
+                        .FontSize(EditorTheme.FontSize);
+
+                    // Submenu arrow
                     if (item.HasSubItems)
                     {
-                        if (font != null)
-                        {
-                            paper.Box($"{id}_arr_{index}")
-                                .Width(20)
-                                .Alignment(TextAlignment.MiddleLeft)
-                                .Margin(0, 4, 0, 0)
-                                .Text("▶", font)
-                                .TextColor(textColor)
-                                .FontSize(10f);
-                        }
+                        paper.Box($"{id}_arr_{index}")
+                            .Width(16).Height(ItemHeight)
+                            .Alignment(TextAlignment.MiddleCenter)
+                            .IsNotInteractable()
+                            .Text(EditorIcons.AngleRight, font)
+                            .TextColor(textColor)
+                            .FontSize(EditorTheme.FontSize - 2);
 
                         if (paper.IsParentHovered)
                             RenderDropdown(paper, $"{id}_s_{index}", item.SubItems, DropdownWidth - 5, 0);
                     }
+                    else
+                    {
+                        paper.Box($"{id}_arr_pad_{index}").Width(16);
+                    }
+
+                    paper.Box($"{id}_ir_{index}").Width(4);
                 }
             }
 
-            paper.Box($"{id}_pad_b").Height(2);
+            paper.Box($"{id}_pad_b").Height(3);
         }
     }
 }

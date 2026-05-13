@@ -32,7 +32,7 @@ public class MarketplacePanel : DockPanel
     private const float CardGap = 4f;
 
     // Data
-    private List<ProwlPackage> _packages = [];
+    private List<MarketplacePackage> _packages = [];
     private bool _isLoading;
     private string? _loadError;
     private bool _initialized;
@@ -43,7 +43,7 @@ public class MarketplacePanel : DockPanel
     private string? _selectedId;
 
     // Import dialog state
-    private ProwlPackage? _importPackage;
+    private MarketplacePackage? _importPackage;
     private PackageVersion? _importVersion;
     private string _importTargetFolder = "";
     private readonly Dictionary<string, bool> _folderOpenState = [];
@@ -87,17 +87,19 @@ public class MarketplacePanel : DockPanel
             .BackgroundColor(EditorTheme.Neutral300)
             .Enter())
         {
-            EditorGUI.SearchBar(paper, "mkt_search", _searchText, "Search packages...")
-                .OnValueChanged(v => _searchText = v);
+            Origami.SearchField(paper, "mkt_search", _searchText, v => _searchText = v).Show();
 
             paper.Box("mkt_tb_sep").Width(1).BackgroundColor(EditorTheme.Ink200);
 
-            foreach (var (key, label) in s_categories)
-            {
-                bool active = _activeCategory == key;
-                EditorGUI.ToggleButton(paper, $"mkt_cat_{key}", label, active, fitWidth: true)
-                    .OnValueChanged(_ => _activeCategory = key);
-            }
+            int catIdx = Array.FindIndex(s_categories, c => c.key == _activeCategory);
+            Origami.ButtonGroup(paper, "mkt_cats", catIdx < 0 ? 0 : catIdx, idx => _activeCategory = s_categories[idx].key)
+                .Small()
+                .Item(s_categories[0].label)
+                .Item(s_categories[1].label)
+                .Item(s_categories[2].label)
+                .Item(s_categories[3].label)
+                .Item(s_categories[4].label)
+                .Show();
 
             paper.Box("mkt_tb_stretch").Width(UnitValue.Stretch(1));
 
@@ -142,7 +144,7 @@ public class MarketplacePanel : DockPanel
 
     private void DrawPackageList(Paper paper, FontFile font, float height)
     {
-        List<ProwlPackage> filtered = FilteredPackages();
+        List<MarketplacePackage> filtered = FilteredPackages();
 
         Origami.ScrollView(paper, "mkt_list", ListPaneWidth, height)
             .Padding(6f, 6f, 6f, 6f)
@@ -165,7 +167,7 @@ public class MarketplacePanel : DockPanel
             });
     }
 
-    private void DrawPackageCard(Paper paper, FontFile font, int index, ProwlPackage pkg)
+    private void DrawPackageCard(Paper paper, FontFile font, int index, MarketplacePackage pkg)
     {
         bool isSelected = _selectedId == pkg.Id;
         Color cardBg = isSelected ? EditorTheme.Purple400 : EditorTheme.Neutral400;
@@ -233,7 +235,7 @@ public class MarketplacePanel : DockPanel
 
     private void DrawPackageDetail(Paper paper, FontFile font, float width, float height)
     {
-        ProwlPackage? pkg = _selectedId != null
+        MarketplacePackage? pkg = _selectedId != null
             ? _packages.FirstOrDefault(p => p.Id == _selectedId)
             : null;
 
@@ -255,7 +257,7 @@ public class MarketplacePanel : DockPanel
             .Body(() => DrawDetailContent(paper, font, pkg, ver, width - 36f));
     }
 
-    private void DrawDetailContent(Paper paper, FontFile font, ProwlPackage pkg, PackageVersion? ver, float contentWidth)
+    private void DrawDetailContent(Paper paper, FontFile font, MarketplacePackage pkg, PackageVersion? ver, float contentWidth)
     {
         // Name
         paper.Box("mkt_d_name")
@@ -424,7 +426,7 @@ public class MarketplacePanel : DockPanel
             .Alignment(TextAlignment.MiddleLeft);
     }
 
-    private void OpenImportDialog(ProwlPackage pkg, PackageVersion ver)
+    private void OpenImportDialog(MarketplacePackage pkg, PackageVersion ver)
     {
         _importPackage = pkg;
         _importVersion = ver;
@@ -738,9 +740,9 @@ public class MarketplacePanel : DockPanel
         }
     }
 
-    private List<ProwlPackage> FilteredPackages()
+    private List<MarketplacePackage> FilteredPackages()
     {
-        IEnumerable<ProwlPackage> result = _packages;
+        IEnumerable<MarketplacePackage> result = _packages;
 
         if (_activeCategory != "all")
             result = result.Where(p => p.Category == _activeCategory);

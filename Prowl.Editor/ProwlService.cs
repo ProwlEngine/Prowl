@@ -125,12 +125,12 @@ public static class ProwlService
         return response.Models;
     }
 
-    public static async Task<List<ProwlPackage>> FetchPackagesAsync()
+    public static async Task<List<MarketplacePackage>> FetchPackagesAsync()
     {
         if (s_instance == null)
             await Initialize();
 
-        var pkgResponse = await s_instance!.From<ProwlPackage>()
+        var pkgResponse = await s_instance!.From<MarketplacePackage>()
             .Order("published_at", Ordering.Descending, NullPosition.Last)
             .Get();
 
@@ -190,7 +190,7 @@ public class NewsPost : BaseModel
 }
 
 [Table("packages")]
-public class ProwlPackage : BaseModel
+public class MarketplacePackage : BaseModel
 {
     [PrimaryKey("id", false)]
     public string Id { get; set; } = "";
@@ -216,7 +216,7 @@ public class ProwlPackage : BaseModel
     // Populated client-side after fetch
     public PackageVersion? LatestVersion { get; set; }
 
-    public override bool Equals(object? obj) => obj is ProwlPackage p && Id == p.Id;
+    public override bool Equals(object? obj) => obj is MarketplacePackage p && Id == p.Id;
     public override int GetHashCode() => HashCode.Combine(Id);
 }
 
