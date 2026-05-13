@@ -128,8 +128,9 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_UInt", VertexElementSemantic.TextureCoordinate, VertexElementFormat.UInt4))
+                    0u,
+                    new VertexElementDescription("Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("Color_UInt", VertexElementFormat.UInt4))
             },
             TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
 
@@ -169,8 +170,9 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_UInt", VertexElementSemantic.TextureCoordinate, VertexElementFormat.UInt4))
+                    0u,
+                    new VertexElementDescription("Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("Color_UInt", VertexElementFormat.UInt4))
             },
             TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
 

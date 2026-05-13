@@ -19,10 +19,11 @@ public abstract class PipelineTests<T> : GraphicsDeviceTestBase<T> where T : Gra
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
+                    0u,
                     24,
                     0,
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_UInt", VertexElementSemantic.TextureCoordinate, VertexElementFormat.UInt4))
+                    new VertexElementDescription("Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("Color_UInt", VertexElementFormat.UInt4))
             },
             TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
 

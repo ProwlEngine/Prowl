@@ -24,10 +24,11 @@ public abstract class VertexLayoutTests<T> : GraphicsDeviceTestBase<T> where T :
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, outTex));
 
         VertexLayoutDescription vertexLayoutDesc = new VertexLayoutDescription(
-            new VertexElementDescription("A_V3", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float3, firstOffset),
-            new VertexElementDescription("B_V4", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4, secondOffset),
-            new VertexElementDescription("C_V2", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2, thirdOffset),
-            new VertexElementDescription("D_V4", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4, fourthOffset));
+            0u,
+            new VertexElementDescription("A_V3", VertexElementFormat.Float3, firstOffset),
+            new VertexElementDescription("B_V4", VertexElementFormat.Float4, secondOffset),
+            new VertexElementDescription("C_V2", VertexElementFormat.Float2, thirdOffset),
+            new VertexElementDescription("D_V4", VertexElementFormat.Float4, fourthOffset));
 
         if (stride > 0)
         {

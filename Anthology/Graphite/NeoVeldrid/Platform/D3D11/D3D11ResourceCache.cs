@@ -199,7 +199,6 @@ internal unsafe class D3D11ResourceCache : IDisposable
         int element = 0; // Total element index across slots.
         InputElementDesc[] elements = new InputElementDesc[totalCount];
         nint[] semanticPtrs = new nint[totalCount];
-        SemanticIndices si = new SemanticIndices();
         for (int slot = 0; slot < vertexLayouts.Length; slot++)
         {
             VertexElementDescription[] elementDescs = vertexLayouts[slot].Elements;
@@ -208,14 +207,14 @@ internal unsafe class D3D11ResourceCache : IDisposable
             for (int i = 0; i < elementDescs.Length; i++)
             {
                 VertexElementDescription desc = elementDescs[i];
-                semanticPtrs[element] = SilkMarshal.StringToPtr(GetSemanticString(desc.Semantic));
+                semanticPtrs[element] = SilkMarshal.StringToPtr(desc.Name);
                 elements[element] = new InputElementDesc
                 {
                     SemanticName = (byte*)semanticPtrs[element],
-                    SemanticIndex = (uint)SemanticIndices.GetAndIncrement(ref si, desc.Semantic),
+                    SemanticIndex = 0,
                     Format = D3D11Formats.ToDxgiFormat(desc.Format),
                     AlignedByteOffset = desc.Offset != 0 ? desc.Offset : (uint)currentOffset,
-                    InputSlot = (uint)slot,
+                    InputSlot = vertexLayouts[slot].Location,
                     InputSlotClass = stepRate == 0 ? InputClassification.PerVertexData : InputClassification.PerInstanceData,
                     InstanceDataStepRate = stepRate,
                 };
@@ -246,23 +245,6 @@ internal unsafe class D3D11ResourceCache : IDisposable
         }
     }
 
-    private string GetSemanticString(VertexElementSemantic semantic)
-    {
-        switch (semantic)
-        {
-            case VertexElementSemantic.Position:
-                return "POSITION";
-            case VertexElementSemantic.Normal:
-                return "NORMAL";
-            case VertexElementSemantic.TextureCoordinate:
-                return "TEXCOORD";
-            case VertexElementSemantic.Color:
-                return "COLOR";
-            default:
-                throw Illegal.Value<VertexElementSemantic>();
-        }
-    }
-
     public void Dispose()
     {
         foreach (KeyValuePair<BlendStateDescription, ComPtr<ID3D11BlendState>> kvp in _blendStates)
@@ -280,31 +262,6 @@ internal unsafe class D3D11ResourceCache : IDisposable
         foreach (KeyValuePair<InputLayoutCacheKey, ComPtr<ID3D11InputLayout>> kvp in _inputLayouts)
         {
             kvp.Value.Dispose();
-        }
-    }
-
-    private struct SemanticIndices
-    {
-        private int _position;
-        private int _texCoord;
-        private int _normal;
-        private int _color;
-
-        public static int GetAndIncrement(ref SemanticIndices si, VertexElementSemantic type)
-        {
-            switch (type)
-            {
-                case VertexElementSemantic.Position:
-                    return si._position++;
-                case VertexElementSemantic.TextureCoordinate:
-                    return si._texCoord++;
-                case VertexElementSemantic.Normal:
-                    return si._normal++;
-                case VertexElementSemantic.Color:
-                    return si._color++;
-                default:
-                    throw Illegal.Value<VertexElementSemantic>();
-            }
         }
     }
 

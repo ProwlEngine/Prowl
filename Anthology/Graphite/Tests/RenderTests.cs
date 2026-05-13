@@ -68,8 +68,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_UInt", VertexElementSemantic.TextureCoordinate, VertexElementFormat.UInt4))
+                    0u,
+                    new VertexElementDescription("Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("Color_UInt", VertexElementFormat.UInt4))
             },
             TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
 
@@ -202,8 +203,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("Color", VertexElementSemantic.TextureCoordinate, VertexElementFormat.UShort4_Norm))
+                    0u,
+                    new VertexElementDescription("Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("Color", VertexElementFormat.UShort4_Norm))
             },
             TestShaders.LoadVertexFragment(RF, "U16NormVertexAttribs"));
 
@@ -345,8 +347,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_UInt", VertexElementSemantic.TextureCoordinate, VertexElementFormat.UShort4))
+                    0u,
+                    new VertexElementDescription("Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("Color_UInt", VertexElementFormat.UShort4))
             },
             TestShaders.LoadVertexFragment(RF, "U16VertexAttribs"));
 
@@ -468,8 +471,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_Half", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Half4))
+                    0u,
+                    new VertexElementDescription("Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("Color_Half", VertexElementFormat.Half4))
             },
             TestShaders.LoadVertexFragment(RF, "F16VertexAttribs"));
 
@@ -633,7 +637,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2))
+                    new VertexElementDescription("Position", VertexElementFormat.Float2))
             },
             TestShaders.LoadVertexFragment(RF, "TexturedPoints"));
 
@@ -1014,10 +1018,11 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
-                    new VertexElementDescription("A_V3", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float3),
-                    new VertexElementDescription("B_V4", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4),
-                    new VertexElementDescription("C_V2", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                    new VertexElementDescription("D_V4", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4)
+                    0u,
+                    new VertexElementDescription("A_V3", VertexElementFormat.Float3),
+                    new VertexElementDescription("B_V4", VertexElementFormat.Float4),
+                    new VertexElementDescription("C_V2", VertexElementFormat.Float2),
+                    new VertexElementDescription("D_V4", VertexElementFormat.Float4)
                 )
             },
             TestShaders.LoadVertexFragment(RF, "VertexLayoutTestShader"));

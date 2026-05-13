@@ -87,8 +87,9 @@ void main()
             ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main"));
 
         VertexLayoutDescription vertexLayout = new VertexLayoutDescription(
-            new VertexElementDescription("a_Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-            new VertexElementDescription("a_UV", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2));
+            0u,
+            new VertexElementDescription("a_Position", VertexElementFormat.Float2),
+            new VertexElementDescription("a_UV", VertexElementFormat.Float2));
 
         GraphicsPipelineDescription pipelineDesc = new GraphicsPipelineDescription
         {

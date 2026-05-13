@@ -291,10 +291,10 @@ internal unsafe class OpenGLCommandExecutor
         for (int i = 0; i < layouts.Length; i++)
         {
             VertexLayoutDescription input = layouts[i];
-            OpenGLBuffer vb = _vertexBuffers[i];
+            OpenGLBuffer vb = _vertexBuffers[input.Location];
             _gl.BindBuffer(BufferTargetARB.ArrayBuffer, vb.Buffer);
             uint offset = 0;
-            uint vbOffset = _vbOffsets[i];
+            uint vbOffset = _vbOffsets[input.Location];
             for (uint slot = 0; slot < input.Elements.Length; slot++)
             {
                 ref VertexElementDescription element = ref input.Elements[slot]; // Large structure -- use by reference.

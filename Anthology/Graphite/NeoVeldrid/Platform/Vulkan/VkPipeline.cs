@@ -156,7 +156,7 @@ internal unsafe class VkPipeline : Pipeline
             VertexLayoutDescription inputDesc = inputDescriptions[binding];
             bindingDescs[binding] = new VertexInputBindingDescription()
             {
-                Binding = (uint)binding,
+                Binding = inputDesc.Location,
                 InputRate = (inputDesc.InstanceStepRate != 0) ? VertexInputRate.Instance : VertexInputRate.Vertex,
                 Stride = inputDesc.Stride
             };
@@ -169,7 +169,7 @@ internal unsafe class VkPipeline : Pipeline
                 attributeDescs[targetIndex] = new VertexInputAttributeDescription()
                 {
                     Format = VkFormats.VdToVkVertexElementFormat(inputElement.Format),
-                    Binding = (uint)binding,
+                    Binding = inputDesc.Location,
                     Location = (uint)(targetLocation + location),
                     Offset = inputElement.Offset != 0 ? inputElement.Offset : currentOffset
                 };
