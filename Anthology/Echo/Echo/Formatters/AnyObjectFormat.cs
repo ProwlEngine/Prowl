@@ -167,6 +167,44 @@ public sealed class AnyObjectFormat : ISerializationFormat
         return result;
     }
 
+    /// <summary>
+    /// Deserialize EchoObject data INTO an existing object instance, overwriting its
+    /// serializable fields without creating a new instance. Internal state (non-serialized
+    /// fields, caches, GPU resources, etc.) is preserved.
+    /// </summary>
+    public void DeserializeInto(EchoObject value, object target, SerializationContext context)
+    {
+        if (value.TagType != EchoType.Compound) return;
+
+        Type objectType = target.GetType();
+
+        if (target is ISerializable serializable)
+        {
+            serializable.Deserialize(value, context);
+        }
+        else
+        {
+            foreach (var cachedField in target.GetSerializableFields())
+            {
+                if (!TryGetFieldValue(value, cachedField, out EchoObject? fieldValue))
+                    continue;
+
+                try
+                {
+                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.Field.FieldType, context);
+                    cachedField.Field.SetValue(target, deserializedValue);
+                }
+                catch (Exception ex)
+                {
+                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Field.Name} into existing instance", ex);
+                }
+            }
+        }
+
+        if (target is ISerializationCallbackReceiver callback)
+            callback.OnAfterDeserialize();
+    }
+
     private static object? DeserializePrimitiveValue(EchoObject value, Type targetType)
     {
         // Handle primitive values that might be passed directly

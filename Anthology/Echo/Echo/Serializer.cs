@@ -162,6 +162,26 @@ public static class Serializer
         };
     }
 
+    /// <summary>
+    /// Deserialize EchoObject data into an existing object instance, overwriting serializable
+    /// fields without creating a new instance. Preserves non-serialized internal state
+    /// (history buffers, GPU resources, caches, etc.).
+    /// Only works for compound/object types (not primitives, arrays, etc.).
+    /// </summary>
+    public static void DeserializeInto(EchoObject? value, object target)
+        => DeserializeInto(value, target, new SerializationContext());
+
+    /// <inheritdoc cref="DeserializeInto(EchoObject?, object)"/>
+    public static void DeserializeInto(EchoObject? value, object target, SerializationContext context)
+    {
+        if (value is null || value.TagType == EchoType.Null || target is null) return;
+
+        var envelope = ExtractTypeEnvelope(value, target.GetType());
+        var format = GetFormatForType(target.GetType());
+        if (format is Formatters.AnyObjectFormat anyFormat)
+            anyFormat.DeserializeInto(envelope.Data, target, context);
+    }
+
     public static T? Deserialize<T>(EchoObject? value) => (T?)Deserialize(value, typeof(T));
     public static object? Deserialize(EchoObject? value, Type targetType) => Deserialize(value, targetType, new SerializationContext());
     public static T? Deserialize<T>(EchoObject? value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
