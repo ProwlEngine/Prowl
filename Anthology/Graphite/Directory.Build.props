@@ -1,5 +1,4 @@
 <Project>
-
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -11,13 +10,6 @@
     <!-- Centralized package versions -->
     <PropertyGroup>
         <SilkNetVersion>2.23.0</SilkNetVersion>
-        <ImGuiNetVersion>1.91.6.1</ImGuiNetVersion>
-        <ImageSharpVersion>3.1.12</ImageSharpVersion>
-    </PropertyGroup>
-
-    <!-- Sample assets directory -->
-    <PropertyGroup>
-        <SamplesAssetsDir>$(MSBuildThisFileDirectory)samples\assets</SamplesAssetsDir>
     </PropertyGroup>
 
     <!-- Backend exclusion flags (set to true to exclude a backend from the build) -->
@@ -45,17 +37,6 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
 
-    <!-- Pack icon and README into the package -->
-    <ItemGroup>
-        <None Include="$(MSBuildThisFileDirectory)art\icon.png" Pack="true" PackagePath="" />
-        <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="" />
-    </ItemGroup>
-
-    <!-- Default to not packable. Library projects in src/ override to true. -->
-    <PropertyGroup>
-        <IsPackable>false</IsPackable>
-    </PropertyGroup>
-
     <!-- SourceLink: enables stepping into NeoVeldrid source from NuGet packages -->
     <PropertyGroup>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -67,5 +48,4 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.203" PrivateAssets="All" />
     </ItemGroup>
-
 </Project>
