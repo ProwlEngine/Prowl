@@ -10,7 +10,6 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using static NeoVeldrid.OpenGL.EGL.EGLNative;
 using System.Runtime.CompilerServices;
 
 namespace NeoVeldrid.OpenGL
@@ -925,56 +924,56 @@ namespace NeoVeldrid.OpenGL
                     switch (workItem.Type)
                     {
                         case WorkItemType.ExecuteList:
-                        {
-                            OpenGLCommandEntryList list = (OpenGLCommandEntryList)workItem.Object0;
-                            try
                             {
-                                list.ExecuteAll(_gd._commandExecutor);
-                            }
-                            finally
-                            {
-                                if (!_gd.CheckCommandListDisposal(list.Parent))
+                                OpenGLCommandEntryList list = (OpenGLCommandEntryList)workItem.Object0;
+                                try
                                 {
-                                    list.Parent.OnCompleted(list);
+                                    list.ExecuteAll(_gd._commandExecutor);
+                                }
+                                finally
+                                {
+                                    if (!_gd.CheckCommandListDisposal(list.Parent))
+                                    {
+                                        list.Parent.OnCompleted(list);
+                                    }
                                 }
                             }
-                        }
-                        break;
+                            break;
                         case WorkItemType.Map:
-                        {
-                            MappableResource resourceToMap = (MappableResource)workItem.Object0;
-                            ManualResetEventSlim mre = (ManualResetEventSlim)workItem.Object1;
-
-                            MapParams* resultPtr = (MapParams*)Util.UnpackIntPtr(workItem.UInt0, workItem.UInt1);
-
-                            if (resultPtr->Map)
                             {
-                                ExecuteMapResource(
-                                    resourceToMap,
-                                    mre,
-                                    resultPtr);
+                                MappableResource resourceToMap = (MappableResource)workItem.Object0;
+                                ManualResetEventSlim mre = (ManualResetEventSlim)workItem.Object1;
+
+                                MapParams* resultPtr = (MapParams*)Util.UnpackIntPtr(workItem.UInt0, workItem.UInt1);
+
+                                if (resultPtr->Map)
+                                {
+                                    ExecuteMapResource(
+                                        resourceToMap,
+                                        mre,
+                                        resultPtr);
+                                }
+                                else
+                                {
+                                    ExecuteUnmapResource(resourceToMap, resultPtr->Subresource, mre);
+                                }
                             }
-                            else
-                            {
-                                ExecuteUnmapResource(resourceToMap, resultPtr->Subresource, mre);
-                            }
-                        }
-                        break;
+                            break;
                         case WorkItemType.UpdateBuffer:
-                        {
-                            DeviceBuffer updateBuffer = (DeviceBuffer)workItem.Object0;
-                            uint offsetInBytes = workItem.UInt0;
-                            StagingBlock stagingBlock = _gd.StagingMemoryPool.RetrieveById(workItem.UInt1);
+                            {
+                                DeviceBuffer updateBuffer = (DeviceBuffer)workItem.Object0;
+                                uint offsetInBytes = workItem.UInt0;
+                                StagingBlock stagingBlock = _gd.StagingMemoryPool.RetrieveById(workItem.UInt1);
 
-                            _gd._commandExecutor.UpdateBuffer(
-                                updateBuffer,
-                                offsetInBytes,
-                                (IntPtr)stagingBlock.Data,
-                                stagingBlock.SizeInBytes);
+                                _gd._commandExecutor.UpdateBuffer(
+                                    updateBuffer,
+                                    offsetInBytes,
+                                    (IntPtr)stagingBlock.Data,
+                                    stagingBlock.SizeInBytes);
 
-                            _gd.StagingMemoryPool.Free(stagingBlock);
-                        }
-                        break;
+                                _gd.StagingMemoryPool.Free(stagingBlock);
+                            }
+                            break;
                         case WorkItemType.UpdateTexture:
                             Texture texture = (Texture)workItem.Object0;
                             StagingMemoryPool pool = _gd.StagingMemoryPool;
@@ -990,86 +989,86 @@ namespace NeoVeldrid.OpenGL
                             pool.Free(textureData);
                             break;
                         case WorkItemType.GenericAction:
-                        {
-                            ((Action)workItem.Object0)();
-                        }
-                        break;
+                            {
+                                ((Action)workItem.Object0)();
+                            }
+                            break;
                         case WorkItemType.TerminateAction:
-                        {
-                            try
                             {
                                 try
                                 {
-                                    _makeCurrent(_gd._glContext);
+                                    try
+                                    {
+                                        _makeCurrent(_gd._glContext);
+                                        _gd.FlushDisposables();
+                                        _gd._deleteContext(_gd._glContext);
+                                    }
+                                    catch (SymbolLoadingException)
+                                    {
+                                        // Context already destroyed by the OS. Nothing to clean up via GL.
+                                    }
+                                    _gd.StagingMemoryPool.Dispose();
+                                }
+                                finally
+                                {
+                                    _terminated = true;
+                                    _terminatedEvent.Set();
+                                }
+                            }
+                            break;
+                        case WorkItemType.SetSyncToVerticalBlank:
+                            {
+                                bool value = workItem.UInt0 == 1 ? true : false;
+                                _gd._setSyncToVBlank(value);
+                            }
+                            break;
+                        case WorkItemType.SwapBuffers:
+                            {
+                                _gd._swapBuffers();
+                                _gd.FlushDisposables();
+                            }
+                            break;
+                        case WorkItemType.WaitForIdle:
+                            {
+                                // Set() must be in finally so the main thread never deadlocks
+                                // if FlushDisposables or glFinish throws on a destroyed context.
+                                try
+                                {
                                     _gd.FlushDisposables();
-                                    _gd._deleteContext(_gd._glContext);
+                                    bool isFullFlush = workItem.UInt0 != 0;
+                                    if (isFullFlush)
+                                    {
+                                        _gd.GL.Flush();
+                                        _gd.GL.Finish();
+                                    }
                                 }
                                 catch (SymbolLoadingException)
                                 {
-                                    // Context already destroyed by the OS. Nothing to clean up via GL.
+                                    // Context destroyed before the work item ran. Flush is moot; finally releases the caller.
                                 }
-                                _gd.StagingMemoryPool.Dispose();
-                            }
-                            finally
-                            {
-                                _terminated = true;
-                                _terminatedEvent.Set();
-                            }
-                        }
-                        break;
-                        case WorkItemType.SetSyncToVerticalBlank:
-                        {
-                            bool value = workItem.UInt0 == 1 ? true : false;
-                            _gd._setSyncToVBlank(value);
-                        }
-                        break;
-                        case WorkItemType.SwapBuffers:
-                        {
-                            _gd._swapBuffers();
-                            _gd.FlushDisposables();
-                        }
-                        break;
-                        case WorkItemType.WaitForIdle:
-                        {
-                            // Set() must be in finally so the main thread never deadlocks
-                            // if FlushDisposables or glFinish throws on a destroyed context.
-                            try
-                            {
-                                _gd.FlushDisposables();
-                                bool isFullFlush = workItem.UInt0 != 0;
-                                if (isFullFlush)
+                                finally
                                 {
-                                    _gd.GL.Flush();
-                                    _gd.GL.Finish();
+                                    ((ManualResetEventSlim)workItem.Object0).Set();
                                 }
                             }
-                            catch (SymbolLoadingException)
-                            {
-                                // Context destroyed before the work item ran. Flush is moot; finally releases the caller.
-                            }
-                            finally
-                            {
-                                ((ManualResetEventSlim)workItem.Object0).Set();
-                            }
-                        }
-                        break;
+                            break;
                         case WorkItemType.InitializeResource:
-                        {
-                            InitializeResourceInfo info = (InitializeResourceInfo)workItem.Object0;
-                            try
                             {
-                                info.DeferredResource.EnsureResourcesCreated();
+                                InitializeResourceInfo info = (InitializeResourceInfo)workItem.Object0;
+                                try
+                                {
+                                    info.DeferredResource.EnsureResourcesCreated();
+                                }
+                                catch (Exception e)
+                                {
+                                    info.Exception = e;
+                                }
+                                finally
+                                {
+                                    info.ResetEvent.Set();
+                                }
                             }
-                            catch (Exception e)
-                            {
-                                info.Exception = e;
-                            }
-                            finally
-                            {
-                                info.ResetEvent.Set();
-                            }
-                        }
-                        break;
+                            break;
                         default:
                             throw new InvalidOperationException("Invalid command type: " + workItem.Type);
                     }

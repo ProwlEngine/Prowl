@@ -227,7 +227,7 @@ namespace NeoVeldrid.StartupUtilities
         {
             var sdl = Sdl;
             sdl.ClearError();
-            var sdlWindow = (Silk.NET.SDL.Window*)window.SdlWindowHandle;
+            var sdlWindow = (Window*)window.SdlWindowHandle;
 
             SetSDLGLContextAttributes(options, backend);
 
