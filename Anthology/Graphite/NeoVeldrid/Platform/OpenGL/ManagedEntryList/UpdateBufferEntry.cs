@@ -1,33 +1,32 @@
 ﻿using System;
 
-namespace NeoVeldrid.OpenGL.ManagedEntryList
+namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class UpdateBufferEntry : OpenGLCommandEntry
 {
-    internal class UpdateBufferEntry : OpenGLCommandEntry
+    public DeviceBuffer Buffer;
+    public uint BufferOffsetInBytes;
+    public StagingBlock StagingBlock;
+
+    public UpdateBufferEntry(DeviceBuffer buffer, uint bufferOffsetInBytes, StagingBlock stagingBlock)
     {
-        public DeviceBuffer Buffer;
-        public uint BufferOffsetInBytes;
-        public StagingBlock StagingBlock;
+        Buffer = buffer;
+        BufferOffsetInBytes = bufferOffsetInBytes;
+        StagingBlock = stagingBlock;
+    }
 
-        public UpdateBufferEntry(DeviceBuffer buffer, uint bufferOffsetInBytes, StagingBlock stagingBlock)
-        {
-            Buffer = buffer;
-            BufferOffsetInBytes = bufferOffsetInBytes;
-            StagingBlock = stagingBlock;
-        }
+    public UpdateBufferEntry() { }
 
-        public UpdateBufferEntry() { }
+    public UpdateBufferEntry Init(DeviceBuffer buffer, uint bufferOffsetInBytes, StagingBlock stagingBlock)
+    {
+        Buffer = buffer;
+        BufferOffsetInBytes = bufferOffsetInBytes;
+        StagingBlock = stagingBlock;
+        return this;
+    }
 
-        public UpdateBufferEntry Init(DeviceBuffer buffer, uint bufferOffsetInBytes, StagingBlock stagingBlock)
-        {
-            Buffer = buffer;
-            BufferOffsetInBytes = bufferOffsetInBytes;
-            StagingBlock = stagingBlock;
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-            Buffer = null;
-        }
+    public override void ClearReferences()
+    {
+        Buffer = null;
     }
 }

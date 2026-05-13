@@ -1,28 +1,27 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class SetVertexBufferEntry : OpenGLCommandEntry
 {
-    internal class SetVertexBufferEntry : OpenGLCommandEntry
+    public uint Index;
+    public DeviceBuffer Buffer;
+
+    public SetVertexBufferEntry(uint index, DeviceBuffer buffer)
     {
-        public uint Index;
-        public DeviceBuffer Buffer;
+        Index = index;
+        Buffer = buffer;
+    }
 
-        public SetVertexBufferEntry(uint index, DeviceBuffer buffer)
-        {
-            Index = index;
-            Buffer = buffer;
-        }
+    public SetVertexBufferEntry() { }
 
-        public SetVertexBufferEntry() { }
+    public SetVertexBufferEntry Init(uint index, DeviceBuffer buffer)
+    {
+        Index = index;
+        Buffer = buffer;
+        return this;
+    }
 
-        public SetVertexBufferEntry Init(uint index, DeviceBuffer buffer)
-        {
-            Index = index;
-            Buffer = buffer;
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-            Buffer = null;
-        }
+    public override void ClearReferences()
+    {
+        Buffer = null;
     }
 }

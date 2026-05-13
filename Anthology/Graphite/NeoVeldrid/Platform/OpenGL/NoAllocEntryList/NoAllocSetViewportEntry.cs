@@ -1,14 +1,13 @@
-﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList
-{
-    internal struct NoAllocSetViewportEntry
-    {
-        public readonly uint Index;
-        public Viewport Viewport;
+﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList;
 
-        public NoAllocSetViewportEntry(uint index, ref Viewport viewport)
-        {
-            Index = index;
-            Viewport = viewport;
-        }
+internal struct NoAllocSetViewportEntry
+{
+    public readonly uint Index;
+    public Viewport Viewport;
+
+    public NoAllocSetViewportEntry(uint index, ref Viewport viewport)
+    {
+        Index = index;
+        Viewport = viewport;
     }
 }

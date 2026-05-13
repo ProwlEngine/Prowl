@@ -1,28 +1,27 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class SetComputeResourceSetEntry : OpenGLCommandEntry
 {
-    internal class SetComputeResourceSetEntry : OpenGLCommandEntry
+    public uint Slot;
+    public ResourceSet ResourceSet;
+
+    public SetComputeResourceSetEntry(uint slot, ResourceSet rs)
     {
-        public uint Slot;
-        public ResourceSet ResourceSet;
+        Slot = slot;
+        ResourceSet = rs;
+    }
 
-        public SetComputeResourceSetEntry(uint slot, ResourceSet rs)
-        {
-            Slot = slot;
-            ResourceSet = rs;
-        }
+    public SetComputeResourceSetEntry() { }
 
-        public SetComputeResourceSetEntry() { }
+    public SetComputeResourceSetEntry Init(uint slot, ResourceSet rs)
+    {
+        Slot = slot;
+        ResourceSet = rs;
+        return this;
+    }
 
-        public SetComputeResourceSetEntry Init(uint slot, ResourceSet rs)
-        {
-            Slot = slot;
-            ResourceSet = rs;
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-            ResourceSet = null;
-        }
+    public override void ClearReferences()
+    {
+        ResourceSet = null;
     }
 }

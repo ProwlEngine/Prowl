@@ -1,27 +1,26 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class SetViewportEntry : OpenGLCommandEntry
 {
-    internal class SetViewportEntry : OpenGLCommandEntry
+    public uint Index;
+    public Viewport Viewport;
+
+    public SetViewportEntry(uint index, ref Viewport viewport)
     {
-        public uint Index;
-        public Viewport Viewport;
+        Index = index;
+        Viewport = viewport;
+    }
 
-        public SetViewportEntry(uint index, ref Viewport viewport)
-        {
-            Index = index;
-            Viewport = viewport;
-        }
+    public SetViewportEntry() { }
 
-        public SetViewportEntry() { }
+    public SetViewportEntry Init(uint index, ref Viewport viewport)
+    {
+        Index = index;
+        Viewport = viewport;
+        return this;
+    }
 
-        public SetViewportEntry Init(uint index, ref Viewport viewport)
-        {
-            Index = index;
-            Viewport = viewport;
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-        }
+    public override void ClearReferences()
+    {
     }
 }

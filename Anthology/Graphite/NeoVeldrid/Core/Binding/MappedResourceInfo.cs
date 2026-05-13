@@ -1,9 +1,8 @@
-﻿namespace NeoVeldrid
+﻿namespace NeoVeldrid;
+
+internal struct MappedResourceInfo
 {
-    internal struct MappedResourceInfo
-    {
-        public int RefCount;
-        public MapMode Mode;
-        public MappedResource MappedResource;
-    }
+    public int RefCount;
+    public MapMode Mode;
+    public MappedResource MappedResource;
 }

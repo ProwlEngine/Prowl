@@ -1,36 +1,35 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class DrawIndexedEntry : OpenGLCommandEntry
 {
-    internal class DrawIndexedEntry : OpenGLCommandEntry
+    public uint IndexCount;
+    public uint InstanceCount;
+    public uint IndexStart;
+    public int VertexOffset;
+    public uint InstanceStart;
+
+    public DrawIndexedEntry(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        public uint IndexCount;
-        public uint InstanceCount;
-        public uint IndexStart;
-        public int VertexOffset;
-        public uint InstanceStart;
+        IndexCount = indexCount;
+        InstanceCount = instanceCount;
+        IndexStart = indexStart;
+        VertexOffset = vertexOffset;
+        InstanceStart = instanceStart;
+    }
 
-        public DrawIndexedEntry(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
-        {
-            IndexCount = indexCount;
-            InstanceCount = instanceCount;
-            IndexStart = indexStart;
-            VertexOffset = vertexOffset;
-            InstanceStart = instanceStart;
-        }
+    public DrawIndexedEntry() { }
 
-        public DrawIndexedEntry() { }
+    public DrawIndexedEntry Init(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    {
+        IndexCount = indexCount;
+        InstanceCount = instanceCount;
+        IndexStart = indexStart;
+        VertexOffset = vertexOffset;
+        InstanceStart = instanceStart;
+        return this;
+    }
 
-        public DrawIndexedEntry Init(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
-        {
-            IndexCount = indexCount;
-            InstanceCount = instanceCount;
-            IndexStart = indexStart;
-            VertexOffset = vertexOffset;
-            InstanceStart = instanceStart;
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-        }
+    public override void ClearReferences()
+    {
     }
 }

@@ -1,14 +1,13 @@
-﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList
-{
-    internal struct NoAllocDispatchIndirectEntry
-    {
-        public Tracked<DeviceBuffer> IndirectBuffer;
-        public uint Offset;
+﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList;
 
-        public NoAllocDispatchIndirectEntry(Tracked<DeviceBuffer> indirectBuffer, uint offset)
-        {
-            IndirectBuffer = indirectBuffer;
-            Offset = offset;
-        }
+internal struct NoAllocDispatchIndirectEntry
+{
+    public Tracked<DeviceBuffer> IndirectBuffer;
+    public uint Offset;
+
+    public NoAllocDispatchIndirectEntry(Tracked<DeviceBuffer> indirectBuffer, uint offset)
+    {
+        IndirectBuffer = indirectBuffer;
+        Offset = offset;
     }
 }

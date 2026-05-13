@@ -1,14 +1,13 @@
-﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList
-{
-    internal struct NoAllocResolveTextureEntry
-    {
-        public readonly Tracked<Texture> Source;
-        public readonly Tracked<Texture> Destination;
+﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList;
 
-        public NoAllocResolveTextureEntry(Tracked<Texture> source, Tracked<Texture> destination)
-        {
-            Source = source;
-            Destination = destination;
-        }
+internal struct NoAllocResolveTextureEntry
+{
+    public readonly Tracked<Texture> Source;
+    public readonly Tracked<Texture> Destination;
+
+    public NoAllocResolveTextureEntry(Tracked<Texture> source, Tracked<Texture> destination)
+    {
+        Source = source;
+        Destination = destination;
     }
 }

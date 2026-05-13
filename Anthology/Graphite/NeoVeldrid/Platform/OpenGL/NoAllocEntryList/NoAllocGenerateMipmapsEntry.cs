@@ -1,12 +1,11 @@
-﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList
-{
-    internal struct NoAllocGenerateMipmapsEntry
-    {
-        public readonly Tracked<Texture> Texture;
+﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList;
 
-        public NoAllocGenerateMipmapsEntry(Tracked<Texture> texture)
-        {
-            Texture = texture;
-        }
+internal struct NoAllocGenerateMipmapsEntry
+{
+    public readonly Tracked<Texture> Texture;
+
+    public NoAllocGenerateMipmapsEntry(Tracked<Texture> texture)
+    {
+        Texture = texture;
     }
 }

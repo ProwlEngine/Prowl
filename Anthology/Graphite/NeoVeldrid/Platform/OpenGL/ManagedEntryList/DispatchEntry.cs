@@ -1,31 +1,30 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class DispatchEntry : OpenGLCommandEntry
 {
-    internal class DispatchEntry : OpenGLCommandEntry
+    public uint GroupCountX;
+    public uint GroupCountY;
+    public uint GroupCountZ;
+
+    public DispatchEntry() { }
+
+    public DispatchEntry(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
-        public uint GroupCountX;
-        public uint GroupCountY;
-        public uint GroupCountZ;
+        GroupCountX = groupCountX;
+        GroupCountY = groupCountY;
+        GroupCountZ = groupCountZ;
+    }
 
-        public DispatchEntry() { }
+    public DispatchEntry Init(uint groupCountX, uint groupCountY, uint groupCountZ)
+    {
+        GroupCountX = groupCountX;
+        GroupCountY = groupCountY;
+        GroupCountZ = groupCountZ;
 
-        public DispatchEntry(uint groupCountX, uint groupCountY, uint groupCountZ)
-        {
-            GroupCountX = groupCountX;
-            GroupCountY = groupCountY;
-            GroupCountZ = groupCountZ;
-        }
+        return this;
+    }
 
-        public DispatchEntry Init(uint groupCountX, uint groupCountY, uint groupCountZ)
-        {
-            GroupCountX = groupCountX;
-            GroupCountY = groupCountY;
-            GroupCountZ = groupCountZ;
-
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-        }
+    public override void ClearReferences()
+    {
     }
 }

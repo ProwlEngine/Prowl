@@ -1,28 +1,27 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class SetIndexBufferEntry : OpenGLCommandEntry
 {
-    internal class SetIndexBufferEntry : OpenGLCommandEntry
+    public DeviceBuffer Buffer;
+    public IndexFormat Format;
+
+    public SetIndexBufferEntry(DeviceBuffer buffer, IndexFormat format)
     {
-        public DeviceBuffer Buffer;
-        public IndexFormat Format;
+        Buffer = buffer;
+        Format = format;
+    }
 
-        public SetIndexBufferEntry(DeviceBuffer buffer, IndexFormat format)
-        {
-            Buffer = buffer;
-            Format = format;
-        }
+    public SetIndexBufferEntry() { }
 
-        public SetIndexBufferEntry() { }
+    public SetIndexBufferEntry Init(DeviceBuffer buffer, IndexFormat format)
+    {
+        Buffer = buffer;
+        Format = format;
+        return this;
+    }
 
-        public SetIndexBufferEntry Init(DeviceBuffer buffer, IndexFormat format)
-        {
-            Buffer = buffer;
-            Format = format;
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-            Buffer = null;
-        }
+    public override void ClearReferences()
+    {
+        Buffer = null;
     }
 }

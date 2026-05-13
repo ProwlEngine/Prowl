@@ -1,62 +1,62 @@
 ﻿using System.Diagnostics;
 
-namespace NeoVeldrid
+namespace NeoVeldrid;
+
+internal static class ValidationHelpers
 {
-    internal static class ValidationHelpers
+    [Conditional("VALIDATE_USAGE")]
+    internal static void ValidateResourceSet(GraphicsDevice gd, ref ResourceSetDescription description)
     {
-        [Conditional("VALIDATE_USAGE")]
-        internal static void ValidateResourceSet(GraphicsDevice gd, ref ResourceSetDescription description)
-        {
 #if VALIDATE_USAGE
-            ResourceLayoutElementDescription[] elements = description.Layout.Description.Elements;
-            BindableResource[] resources = description.BoundResources;
+        ResourceLayoutElementDescription[] elements = description.Layout.Description.Elements;
+        BindableResource[] resources = description.BoundResources;
 
-            if (elements.Length != resources.Length)
-            {
-                throw new NeoVeldridException(
-                    $"The number of resources specified ({resources.Length}) must be equal to the number of resources in the {nameof(ResourceLayout)} ({elements.Length}).");
-            }
-
-            for (uint i = 0; i < elements.Length; i++)
-            {
-                ValidateResourceKind(elements[i].Kind, resources[i], i);
-            }
-
-            for (int i = 0; i < description.Layout.Description.Elements.Length; i++)
-            {
-                ResourceLayoutElementDescription element = description.Layout.Description.Elements[i];
-                if (element.Kind == ResourceKind.UniformBuffer
-                    || element.Kind == ResourceKind.StructuredBufferReadOnly
-                    || element.Kind == ResourceKind.StructuredBufferReadWrite)
-                {
-                    DeviceBufferRange range = Util.GetBufferRange(description.BoundResources[i], 0);
-
-                    if (!gd.Features.BufferRangeBinding && (range.Offset != 0 || range.SizeInBytes != range.Buffer.SizeInBytes))
-                    {
-                        throw new NeoVeldridException($"The {nameof(DeviceBufferRange)} in slot {i} uses a non-zero offset or less-than-full size, " +
-                            $"which requires {nameof(GraphicsDeviceFeatures)}.{nameof(GraphicsDeviceFeatures.BufferRangeBinding)}.");
-                    }
-
-                    uint alignment = element.Kind == ResourceKind.UniformBuffer
-                       ? gd.UniformBufferMinOffsetAlignment
-                       : gd.StructuredBufferMinOffsetAlignment;
-
-                    if ((range.Offset % alignment) != 0)
-                    {
-                       throw new NeoVeldridException($"The {nameof(DeviceBufferRange)} in slot {i} has an invalid offset: {range.Offset}. " +
-                           $"The offset for this buffer must be a multiple of {alignment}.");
-                    }
-                }
-            }
-#endif
+        if (elements.Length != resources.Length)
+        {
+            throw new NeoVeldridException(
+                $"The number of resources specified ({resources.Length}) must be equal to the number of resources in the {nameof(ResourceLayout)} ({elements.Length}).");
         }
 
-        [Conditional("VALIDATE_USAGE")]
-        private static void ValidateResourceKind(ResourceKind kind, BindableResource resource, uint slot)
+        for (uint i = 0; i < elements.Length; i++)
         {
-            switch (kind)
+            ValidateResourceKind(elements[i].Kind, resources[i], i);
+        }
+
+        for (int i = 0; i < description.Layout.Description.Elements.Length; i++)
+        {
+            ResourceLayoutElementDescription element = description.Layout.Description.Elements[i];
+            if (element.Kind == ResourceKind.UniformBuffer
+                || element.Kind == ResourceKind.StructuredBufferReadOnly
+                || element.Kind == ResourceKind.StructuredBufferReadWrite)
             {
-                case ResourceKind.UniformBuffer:
+                DeviceBufferRange range = Util.GetBufferRange(description.BoundResources[i], 0);
+
+                if (!gd.Features.BufferRangeBinding && (range.Offset != 0 || range.SizeInBytes != range.Buffer.SizeInBytes))
+                {
+                    throw new NeoVeldridException($"The {nameof(DeviceBufferRange)} in slot {i} uses a non-zero offset or less-than-full size, " +
+                        $"which requires {nameof(GraphicsDeviceFeatures)}.{nameof(GraphicsDeviceFeatures.BufferRangeBinding)}.");
+                }
+
+                uint alignment = element.Kind == ResourceKind.UniformBuffer
+                   ? gd.UniformBufferMinOffsetAlignment
+                   : gd.StructuredBufferMinOffsetAlignment;
+
+                if ((range.Offset % alignment) != 0)
+                {
+                    throw new NeoVeldridException($"The {nameof(DeviceBufferRange)} in slot {i} has an invalid offset: {range.Offset}. " +
+                        $"The offset for this buffer must be a multiple of {alignment}.");
+                }
+            }
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void ValidateResourceKind(ResourceKind kind, BindableResource resource, uint slot)
+    {
+        switch (kind)
+        {
+            case ResourceKind.UniformBuffer:
                 {
                     if (!Util.GetDeviceBuffer(resource, out DeviceBuffer b)
                         || (b.Usage & BufferUsage.UniformBuffer) == 0)
@@ -67,7 +67,7 @@ namespace NeoVeldrid
                     }
                     break;
                 }
-                case ResourceKind.StructuredBufferReadOnly:
+            case ResourceKind.StructuredBufferReadOnly:
                 {
                     if (!Util.GetDeviceBuffer(resource, out DeviceBuffer b)
                         || (b.Usage & (BufferUsage.StructuredBufferReadOnly | BufferUsage.StructuredBufferReadWrite)) == 0)
@@ -77,7 +77,7 @@ namespace NeoVeldrid
                     }
                     break;
                 }
-                case ResourceKind.StructuredBufferReadWrite:
+            case ResourceKind.StructuredBufferReadWrite:
                 {
                     if (!Util.GetDeviceBuffer(resource, out DeviceBuffer b)
                         || (b.Usage & BufferUsage.StructuredBufferReadWrite) == 0)
@@ -87,7 +87,7 @@ namespace NeoVeldrid
                     }
                     break;
                 }
-                case ResourceKind.TextureReadOnly:
+            case ResourceKind.TextureReadOnly:
                 {
                     if (!(resource is TextureView tv && (tv.Target.Usage & TextureUsage.Sampled) != 0)
                         && !(resource is Texture t && (t.Usage & TextureUsage.Sampled) != 0))
@@ -99,7 +99,7 @@ namespace NeoVeldrid
                     }
                     break;
                 }
-                case ResourceKind.TextureReadWrite:
+            case ResourceKind.TextureReadWrite:
                 {
                     if (!(resource is TextureView tv && (tv.Target.Usage & TextureUsage.Storage) != 0)
                         && !(resource is Texture t && (t.Usage & TextureUsage.Storage) != 0))
@@ -111,7 +111,7 @@ namespace NeoVeldrid
                     }
                     break;
                 }
-                case ResourceKind.Sampler:
+            case ResourceKind.Sampler:
                 {
                     if (!(resource is Sampler s))
                     {
@@ -120,9 +120,8 @@ namespace NeoVeldrid
                     }
                     break;
                 }
-                default:
-                    throw Illegal.Value<ResourceKind>();
-            }
+            default:
+                throw Illegal.Value<ResourceKind>();
         }
     }
 }

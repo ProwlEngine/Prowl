@@ -1,21 +1,20 @@
-﻿namespace NeoVeldrid
+﻿namespace NeoVeldrid;
+
+/// <summary>
+/// Indicates which face will be culled.
+/// </summary>
+public enum FaceCullMode : byte
 {
     /// <summary>
-    /// Indicates which face will be culled.
+    /// The back face.
     /// </summary>
-    public enum FaceCullMode : byte
-    {
-        /// <summary>
-        /// The back face.
-        /// </summary>
-        Back,
-        /// <summary>
-        /// The front face.
-        /// </summary>
-        Front,
-        /// <summary>
-        /// No face culling.
-        /// </summary>
-        None,
-    }
+    Back,
+    /// <summary>
+    /// The front face.
+    /// </summary>
+    Front,
+    /// <summary>
+    /// No face culling.
+    /// </summary>
+    None,
 }

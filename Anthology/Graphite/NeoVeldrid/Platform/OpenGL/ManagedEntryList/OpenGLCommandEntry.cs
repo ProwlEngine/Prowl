@@ -1,7 +1,6 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal abstract class OpenGLCommandEntry
 {
-    internal abstract class OpenGLCommandEntry
-    {
-        public abstract void ClearReferences();
-    }
+    public abstract void ClearReferences();
 }

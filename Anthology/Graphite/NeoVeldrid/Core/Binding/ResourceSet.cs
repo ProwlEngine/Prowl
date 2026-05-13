@@ -1,19 +1,19 @@
 ﻿using System;
 using System.Diagnostics;
 
-namespace NeoVeldrid
+namespace NeoVeldrid;
+
+/// <summary>
+/// A device resource used to bind a particular set of <see cref="BindableResource"/> objects to a <see cref="CommandList"/>.
+/// See <see cref="ResourceSetDescription"/>.
+/// </summary>
+public abstract class ResourceSet : DeviceResource, IDisposable
 {
-    /// <summary>
-    /// A device resource used to bind a particular set of <see cref="BindableResource"/> objects to a <see cref="CommandList"/>.
-    /// See <see cref="ResourceSetDescription"/>.
-    /// </summary>
-    public abstract class ResourceSet : DeviceResource, IDisposable
-    {
         internal ResourceSet(ref ResourceSetDescription description)
         {
 #if VALIDATE_USAGE
-            Layout = description.Layout;
-            Resources = description.BoundResources;
+                Layout = description.Layout;
+                Resources = description.BoundResources;
 #endif
         }
 
@@ -37,5 +37,4 @@ namespace NeoVeldrid
         internal ResourceLayout Layout { get; }
         internal BindableResource[] Resources { get; }
 #endif
-    }
 }

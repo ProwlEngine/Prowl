@@ -1,34 +1,33 @@
-﻿namespace NeoVeldrid.OpenGL.ManagedEntryList
+﻿namespace NeoVeldrid.OpenGL.ManagedEntryList;
+
+internal class DrawEntry : OpenGLCommandEntry
 {
-    internal class DrawEntry : OpenGLCommandEntry
+    public uint VertexCount;
+    public uint InstanceCount;
+    public uint VertexStart;
+    public uint InstanceStart;
+
+    public DrawEntry() { }
+
+    public DrawEntry(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
-        public uint VertexCount;
-        public uint InstanceCount;
-        public uint VertexStart;
-        public uint InstanceStart;
+        VertexCount = vertexCount;
+        InstanceCount = instanceCount;
+        VertexStart = vertexStart;
+        InstanceStart = instanceStart;
+    }
 
-        public DrawEntry() { }
+    public DrawEntry Init(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
+    {
+        VertexCount = vertexCount;
+        InstanceCount = instanceCount;
+        VertexStart = vertexStart;
+        InstanceStart = instanceStart;
 
-        public DrawEntry(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
-        {
-            VertexCount = vertexCount;
-            InstanceCount = instanceCount;
-            VertexStart = vertexStart;
-            InstanceStart = instanceStart;
-        }
+        return this;
+    }
 
-        public DrawEntry Init(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
-        {
-            VertexCount = vertexCount;
-            InstanceCount = instanceCount;
-            VertexStart = vertexStart;
-            InstanceStart = instanceStart;
-
-            return this;
-        }
-
-        public override void ClearReferences()
-        {
-        }
+    public override void ClearReferences()
+    {
     }
 }

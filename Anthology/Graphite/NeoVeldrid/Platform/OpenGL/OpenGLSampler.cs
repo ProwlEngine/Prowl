@@ -4,168 +4,167 @@ using Silk.NET.OpenGL;
 
 using Prowl.Vector;
 
-namespace NeoVeldrid.OpenGL
+namespace NeoVeldrid.OpenGL;
+
+internal unsafe class OpenGLSampler : Sampler, OpenGLDeferredResource
 {
-    internal unsafe class OpenGLSampler : Sampler, OpenGLDeferredResource
+    private readonly OpenGLGraphicsDevice _gd;
+    private GL _gl => _gd.GL;
+    private readonly SamplerDescription _description;
+    private readonly InternalSamplerState _noMipmapState;
+    private readonly InternalSamplerState _mipmapState;
+    private bool _disposeRequested;
+
+    private string _name;
+    private bool _nameChanged;
+    public override string Name { get => _name; set { _name = value; _nameChanged = true; } }
+
+    public override bool IsDisposed => _disposeRequested;
+
+    public uint NoMipmapSampler => _noMipmapState.Sampler;
+    public uint MipmapSampler => _mipmapState.Sampler;
+
+    public OpenGLSampler(OpenGLGraphicsDevice gd, ref SamplerDescription description)
     {
-        private readonly OpenGLGraphicsDevice _gd;
-        private GL _gl => _gd.GL;
-        private readonly SamplerDescription _description;
-        private readonly InternalSamplerState _noMipmapState;
-        private readonly InternalSamplerState _mipmapState;
-        private bool _disposeRequested;
+        _gd = gd;
+        _description = description;
 
-        private string _name;
-        private bool _nameChanged;
-        public override string Name { get => _name; set { _name = value; _nameChanged = true; } }
+        _mipmapState = new InternalSamplerState(this);
+        _noMipmapState = new InternalSamplerState(this);
+    }
 
-        public override bool IsDisposed => _disposeRequested;
+    public bool Created { get; private set; }
 
-        public uint NoMipmapSampler => _noMipmapState.Sampler;
-        public uint MipmapSampler => _mipmapState.Sampler;
-
-        public OpenGLSampler(OpenGLGraphicsDevice gd, ref SamplerDescription description)
+    public void EnsureResourcesCreated()
+    {
+        if (!Created)
         {
-            _gd = gd;
-            _description = description;
-
-            _mipmapState = new InternalSamplerState(this);
-            _noMipmapState = new InternalSamplerState(this);
+            CreateGLResources();
         }
-
-        public bool Created { get; private set; }
-
-        public void EnsureResourcesCreated()
+        if (_nameChanged)
         {
-            if (!Created)
+            _nameChanged = false;
+            if (_gd.Extensions.KHR_Debug)
             {
-                CreateGLResources();
-            }
-            if (_nameChanged)
-            {
-                _nameChanged = false;
-                if (_gd.Extensions.KHR_Debug)
-                {
-                    SetObjectLabel(ObjectIdentifier.Sampler, _noMipmapState.Sampler, string.Format("{0}_WithoutMipmapping", _name));
-                    SetObjectLabel(ObjectIdentifier.Sampler, _mipmapState.Sampler, string.Format("{0}_WithMipmapping", _name));
-                }
+                SetObjectLabel(ObjectIdentifier.Sampler, _noMipmapState.Sampler, string.Format("{0}_WithoutMipmapping", _name));
+                SetObjectLabel(ObjectIdentifier.Sampler, _mipmapState.Sampler, string.Format("{0}_WithMipmapping", _name));
             }
         }
+    }
 
-        private void CreateGLResources()
+    private void CreateGLResources()
+    {
+        GraphicsBackend backendType = _gd.BackendType;
+        _noMipmapState.CreateGLResources(_description, false, backendType);
+        _mipmapState.CreateGLResources(_description, true, backendType);
+        Created = true;
+    }
+
+    public override void Dispose()
+    {
+        if (!_disposeRequested)
         {
-            GraphicsBackend backendType = _gd.BackendType;
-            _noMipmapState.CreateGLResources(_description, false, backendType);
-            _mipmapState.CreateGLResources(_description, true, backendType);
-            Created = true;
+            _disposeRequested = true;
+            _gd.EnqueueDisposal(this);
+        }
+    }
+
+    public void DestroyGLResources()
+    {
+        _mipmapState.DestroyGLResources();
+        _noMipmapState.DestroyGLResources();
+    }
+
+    private class InternalSamplerState
+    {
+        private readonly OpenGLSampler _parent;
+        private uint _sampler;
+
+        public uint Sampler => _sampler;
+
+        public InternalSamplerState(OpenGLSampler parent)
+        {
+            _parent = parent;
         }
 
-        public override void Dispose()
+        private GL _gl => _parent._gl;
+
+        public void CreateGLResources(SamplerDescription description, bool mipmapped, GraphicsBackend backend)
         {
-            if (!_disposeRequested)
+            _sampler = _gl.GenSampler();
+            CheckLastError();
+
+            _gl.SamplerParameter(_sampler, SamplerParameterI.WrapS, (int)OpenGLFormats.VdToGLTextureWrapMode(description.AddressModeU));
+            CheckLastError();
+            _gl.SamplerParameter(_sampler, SamplerParameterI.WrapT, (int)OpenGLFormats.VdToGLTextureWrapMode(description.AddressModeV));
+            CheckLastError();
+            _gl.SamplerParameter(_sampler, SamplerParameterI.WrapR, (int)OpenGLFormats.VdToGLTextureWrapMode(description.AddressModeW));
+            CheckLastError();
+
+            if (description.AddressModeU == SamplerAddressMode.Border
+                || description.AddressModeV == SamplerAddressMode.Border
+                || description.AddressModeW == SamplerAddressMode.Border)
             {
-                _disposeRequested = true;
-                _gd.EnqueueDisposal(this);
+                Color borderColor = ToColor(description.BorderColor);
+                _gl.SamplerParameter(_sampler, SamplerParameterF.BorderColor, (float*)&borderColor);
+                CheckLastError();
+            }
+
+            _gl.SamplerParameter(_sampler, SamplerParameterF.MinLod, description.MinimumLod);
+            CheckLastError();
+            _gl.SamplerParameter(_sampler, SamplerParameterF.MaxLod, description.MaximumLod);
+            CheckLastError();
+            if (backend == GraphicsBackend.OpenGL && description.LodBias != 0)
+            {
+                _gl.SamplerParameter(_sampler, SamplerParameterF.LodBias, description.LodBias);
+                CheckLastError();
+            }
+
+            if (description.Filter == SamplerFilter.Anisotropic)
+            {
+                _gl.SamplerParameter(_sampler, SamplerParameterF.MaxAnisotropy, description.MaximumAnisotropy);
+                CheckLastError();
+                _gl.SamplerParameter(_sampler, SamplerParameterI.MinFilter, mipmapped ? (int)TextureMinFilter.LinearMipmapLinear : (int)TextureMinFilter.Linear);
+                CheckLastError();
+                _gl.SamplerParameter(_sampler, SamplerParameterI.MagFilter, (int)TextureMagFilter.Linear);
+                CheckLastError();
+            }
+            else
+            {
+                OpenGLFormats.VdToGLTextureMinMagFilter(description.Filter, mipmapped, out TextureMinFilter min, out TextureMagFilter mag);
+                _gl.SamplerParameter(_sampler, SamplerParameterI.MinFilter, (int)min);
+                CheckLastError();
+                _gl.SamplerParameter(_sampler, SamplerParameterI.MagFilter, (int)mag);
+                CheckLastError();
+            }
+
+            if (description.ComparisonKind != null)
+            {
+                _gl.SamplerParameter(_sampler, SamplerParameterI.CompareMode, (int)TextureCompareMode.CompareRefToTexture);
+                CheckLastError();
+                _gl.SamplerParameter(_sampler, SamplerParameterI.CompareFunc, (int)OpenGLFormats.VdToGLDepthFunction(description.ComparisonKind.Value));
+                CheckLastError();
             }
         }
 
         public void DestroyGLResources()
         {
-            _mipmapState.DestroyGLResources();
-            _noMipmapState.DestroyGLResources();
+            _gl.DeleteSampler(_sampler);
+            CheckLastError();
         }
 
-        private class InternalSamplerState
+        private Color ToColor(SamplerBorderColor borderColor)
         {
-            private readonly OpenGLSampler _parent;
-            private uint _sampler;
-
-            public uint Sampler => _sampler;
-
-            public InternalSamplerState(OpenGLSampler parent)
+            switch (borderColor)
             {
-                _parent = parent;
-            }
-
-            private GL _gl => _parent._gl;
-
-            public void CreateGLResources(SamplerDescription description, bool mipmapped, GraphicsBackend backend)
-            {
-                _sampler = _gl.GenSampler();
-                CheckLastError();
-
-                _gl.SamplerParameter(_sampler, SamplerParameterI.WrapS, (int)OpenGLFormats.VdToGLTextureWrapMode(description.AddressModeU));
-                CheckLastError();
-                _gl.SamplerParameter(_sampler, SamplerParameterI.WrapT, (int)OpenGLFormats.VdToGLTextureWrapMode(description.AddressModeV));
-                CheckLastError();
-                _gl.SamplerParameter(_sampler, SamplerParameterI.WrapR, (int)OpenGLFormats.VdToGLTextureWrapMode(description.AddressModeW));
-                CheckLastError();
-
-                if (description.AddressModeU == SamplerAddressMode.Border
-                    || description.AddressModeV == SamplerAddressMode.Border
-                    || description.AddressModeW == SamplerAddressMode.Border)
-                {
-                    Color borderColor = ToColor(description.BorderColor);
-                    _gl.SamplerParameter(_sampler, SamplerParameterF.BorderColor, (float*)&borderColor);
-                    CheckLastError();
-                }
-
-                _gl.SamplerParameter(_sampler, SamplerParameterF.MinLod, description.MinimumLod);
-                CheckLastError();
-                _gl.SamplerParameter(_sampler, SamplerParameterF.MaxLod, description.MaximumLod);
-                CheckLastError();
-                if (backend == GraphicsBackend.OpenGL && description.LodBias != 0)
-                {
-                    _gl.SamplerParameter(_sampler, SamplerParameterF.LodBias, description.LodBias);
-                    CheckLastError();
-                }
-
-                if (description.Filter == SamplerFilter.Anisotropic)
-                {
-                    _gl.SamplerParameter(_sampler, SamplerParameterF.MaxAnisotropy, description.MaximumAnisotropy);
-                    CheckLastError();
-                    _gl.SamplerParameter(_sampler, SamplerParameterI.MinFilter, mipmapped ? (int)TextureMinFilter.LinearMipmapLinear : (int)TextureMinFilter.Linear);
-                    CheckLastError();
-                    _gl.SamplerParameter(_sampler, SamplerParameterI.MagFilter, (int)TextureMagFilter.Linear);
-                    CheckLastError();
-                }
-                else
-                {
-                    OpenGLFormats.VdToGLTextureMinMagFilter(description.Filter, mipmapped, out TextureMinFilter min, out TextureMagFilter mag);
-                    _gl.SamplerParameter(_sampler, SamplerParameterI.MinFilter, (int)min);
-                    CheckLastError();
-                    _gl.SamplerParameter(_sampler, SamplerParameterI.MagFilter, (int)mag);
-                    CheckLastError();
-                }
-
-                if (description.ComparisonKind != null)
-                {
-                    _gl.SamplerParameter(_sampler, SamplerParameterI.CompareMode, (int)TextureCompareMode.CompareRefToTexture);
-                    CheckLastError();
-                    _gl.SamplerParameter(_sampler, SamplerParameterI.CompareFunc, (int)OpenGLFormats.VdToGLDepthFunction(description.ComparisonKind.Value));
-                    CheckLastError();
-                }
-            }
-
-            public void DestroyGLResources()
-            {
-                _gl.DeleteSampler(_sampler);
-                CheckLastError();
-            }
-
-            private Color ToColor(SamplerBorderColor borderColor)
-            {
-                switch (borderColor)
-                {
-                    case SamplerBorderColor.TransparentBlack:
-                        return new Color(0, 0, 0, 0);
-                    case SamplerBorderColor.OpaqueBlack:
-                        return new Color(0, 0, 0, 1);
-                    case SamplerBorderColor.OpaqueWhite:
-                        return new Color(1, 1, 1, 1);
-                    default:
-                        throw Illegal.Value<SamplerBorderColor>();
-                }
+                case SamplerBorderColor.TransparentBlack:
+                    return new Color(0, 0, 0, 0);
+                case SamplerBorderColor.OpaqueBlack:
+                    return new Color(0, 0, 0, 1);
+                case SamplerBorderColor.OpaqueWhite:
+                    return new Color(1, 1, 1, 1);
+                default:
+                    throw Illegal.Value<SamplerBorderColor>();
             }
         }
     }

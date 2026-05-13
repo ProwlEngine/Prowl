@@ -1,12 +1,11 @@
-namespace NeoVeldrid.OpenGL.NoAllocEntryList
-{
-    internal struct NoAllocInsertDebugMarkerEntry
-    {
-        public Tracked<string> Name;
+namespace NeoVeldrid.OpenGL.NoAllocEntryList;
 
-        public NoAllocInsertDebugMarkerEntry(Tracked<string> name)
-        {
-            Name = name;
-        }
+internal struct NoAllocInsertDebugMarkerEntry
+{
+    public Tracked<string> Name;
+
+    public NoAllocInsertDebugMarkerEntry(Tracked<string> name)
+    {
+        Name = name;
     }
 }

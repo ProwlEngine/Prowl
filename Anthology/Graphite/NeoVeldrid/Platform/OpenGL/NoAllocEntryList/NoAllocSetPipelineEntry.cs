@@ -1,12 +1,11 @@
-﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList
-{
-    internal struct NoAllocSetPipelineEntry
-    {
-        public readonly Tracked<Pipeline> Pipeline;
+﻿namespace NeoVeldrid.OpenGL.NoAllocEntryList;
 
-        public NoAllocSetPipelineEntry(Tracked<Pipeline> pipeline)
-        {
-            Pipeline = pipeline;
-        }
+internal struct NoAllocSetPipelineEntry
+{
+    public readonly Tracked<Pipeline> Pipeline;
+
+    public NoAllocSetPipelineEntry(Tracked<Pipeline> pipeline)
+    {
+        Pipeline = pipeline;
     }
 }
