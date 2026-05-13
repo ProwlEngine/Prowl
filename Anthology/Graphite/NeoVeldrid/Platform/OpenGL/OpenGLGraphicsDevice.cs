@@ -26,8 +26,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     private GraphicsBackend _backendType;
     private GraphicsDeviceFeatures _features;
     private uint _vao;
-    private readonly ConcurrentQueue<OpenGLDeferredResource> _resourcesToDispose
-        = new ConcurrentQueue<OpenGLDeferredResource>();
+    private readonly ConcurrentQueue<OpenGLDeferredResource> _resourcesToDispose = new();
     private IGLContext _glContext;
     private bool _glContextDestroyed;
     private Action<bool> _setSyncToVBlank;
@@ -148,14 +147,16 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     {
         _syncToVBlank = options.SyncToVerticalBlank;
         _glContext = platformInfo.GLContext;
-        _getCurrentContext = platformInfo.GetCurrentContext;
         _setSyncToVBlank = platformInfo.SetSyncToVerticalBlank;
+
         if (loadFunctions)
         {
-            GL = GL.GetApi(platformInfo.GLContext);
+            GL = GL.GetApi(_glContext);
             OpenGLUtil.GL = GL;
         }
+
         Debug.Assert(GL != null, "GL instance must be set before Init(). If loadFunctions=false, the caller must set GL beforehand.");
+
         _version = GL.GetStringS(StringName.Version);
         _shadingLanguageVersion = GL.GetStringS(StringName.ShadingLanguageVersion);
         _vendorName = GL.GetStringS(StringName.Vendor);
@@ -316,6 +317,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             platformInfo.ResizeSwapchain);
 
         _workItems = new BlockingCollection<ExecutionThreadWorkItem>(new ConcurrentQueue<ExecutionThreadWorkItem>());
+        _glContext.Clear();
         _executionThread = new ExecutionThread(this, _workItems, _glContext);
         _openglInfo = new BackendInfoOpenGL(this);
 

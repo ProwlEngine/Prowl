@@ -59,8 +59,6 @@ void main()
 
         OpenGLPlatformInfo platformInfo = new OpenGLPlatformInfo(
             glContext: context,
-            getCurrentContext: () => (IntPtr)sdl.GLGetCurrentContext(),
-            clearCurrentContext: () => sdl.GLMakeCurrent(window, null),
             setSyncToVerticalBlank: sync => sdl.GLSetSwapInterval(sync ? 1 : 0));
 
         GraphicsDeviceOptions options = new GraphicsDeviceOptions(
