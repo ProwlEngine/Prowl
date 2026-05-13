@@ -35,20 +35,21 @@ public static class MainMenuBar
         {
             paper.Box("mb_pad_l").Width(4);
 
+            float btnVMargin = (EditorTheme.MenuBarHeight - EditorTheme.RowHeight) * 0.5f;
+
             for (int i = 0; i < items.Count; i++)
             {
                 int index = i;
                 var item = items[i];
 
-                using (paper.Box($"menu_{index}")
-                    .Height(EditorTheme.MenuBarHeight)
+                bool isOpen = _openMenuIndex == index;
+                using (paper.Row($"menu_{index}")
+                    .Height(EditorTheme.RowHeight)
                     .Width(UnitValue.Auto)
-                    .BackgroundColor(_openMenuIndex == index ? EditorTheme.Ink200 : Color.Transparent)
+                    .Margin(0, 0, btnVMargin, btnVMargin)
+                    .BackgroundColor(isOpen ? EditorTheme.Ink200 : Color.Transparent)
                     .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(item.Label, font)
-                        .TextColor(EditorTheme.Ink500)
-                        .Alignment(TextAlignment.MiddleCenter)
-                        .FontSize(EditorTheme.FontSize)
+                    .Rounded(4)
                     .OnClick(index, (idx, e) =>
                     {
                         _openMenuIndex = _openMenuIndex == idx ? -1 : idx;
@@ -56,6 +57,19 @@ public static class MainMenuBar
                     })
                     .Enter())
                 {
+                    paper.Box($"menu_{index}_pl").Width(8).IsNotInteractable();
+
+                    paper.Box($"menu_{index}_lbl")
+                        .Height(EditorTheme.RowHeight)
+                        .Width(UnitValue.Auto)
+                        .IsNotInteractable()
+                        .Text(item.Label, font)
+                        .TextColor(EditorTheme.Ink500)
+                        .Alignment(TextAlignment.MiddleCenter)
+                        .FontSize(EditorTheme.FontSize);
+
+                    paper.Box($"menu_{index}_pr").Width(8).IsNotInteractable();
+
                     if (_openMenuIndex >= 0 && _openMenuIndex != index && paper.IsParentHovered)
                         _openMenuIndex = index;
                 }
@@ -63,13 +77,19 @@ public static class MainMenuBar
 
             paper.Box("mb_stretch").Width(UnitValue.Stretch(1));
 
-            DrawAuthWidget(paper, font);
+            DrawAuthWidget(paper, font, btnVMargin);
 
-            paper.Box("mb_ver_sep").Width(1).Height(EditorTheme.MenuBarHeight - 10f).BackgroundColor(EditorTheme.Ink200);
+            paper.Box("mb_ver_sep")
+                .Width(1)
+                .Height(EditorTheme.RowHeight)
+                .Margin(0, 0, btnVMargin, btnVMargin)
+                .BackgroundColor(EditorTheme.Ink200)
+                .IsNotInteractable();
 
             paper.Box("mb_version")
-                .Height(EditorTheme.MenuBarHeight)
+                .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Auto)
+                .Margin(0, 0, btnVMargin, btnVMargin)
                 .IsNotInteractable()
                 .Text(GetVersion(), font)
                 .TextColor(EditorTheme.Ink300)
@@ -97,7 +117,7 @@ public static class MainMenuBar
         }
     }
 
-    private static void DrawAuthWidget(Paper paper, FontFile? font)
+    private static void DrawAuthWidget(Paper paper, FontFile? font, float vMargin)
     {
         if (font == null) return;
 
@@ -107,27 +127,47 @@ public static class MainMenuBar
             int atIdx = email.IndexOf('@');
             string display = atIdx > 0 ? email[..atIdx] : email;
 
-            paper.Box("mb_user")
-                .Height(EditorTheme.MenuBarHeight)
+            // Non-interactive username label
+            using (paper.Row("mb_user")
+                .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Auto)
+                .Margin(0, 0, vMargin, vMargin)
                 .IsNotInteractable()
-                .Text($"{EditorIcons.User}  {display}", font)
-                .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize)
-                .Alignment(TextAlignment.MiddleCenter)
-                .Margin(0, 0, 4, 0);
+                .Enter())
+            {
+                paper.Box("mb_user_pl").Width(6).IsNotInteractable();
+                paper.Box("mb_user_lbl")
+                    .Height(EditorTheme.RowHeight)
+                    .Width(UnitValue.Auto)
+                    .IsNotInteractable()
+                    .Text($"{EditorIcons.User}  {display}", font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleCenter);
+                paper.Box("mb_user_pr").Width(6).IsNotInteractable();
+            }
 
-            paper.Box("mb_signout")
-                .Height(EditorTheme.MenuBarHeight)
+            using (paper.Row("mb_signout")
+                .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Auto)
+                .Margin(0, 0, vMargin, vMargin)
                 .BackgroundColor(Color.Transparent)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text("Sign Out", font)
-                .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize)
-                .Alignment(TextAlignment.MiddleCenter)
-                .Margin(0, 0, 4, 0)
-                .OnClick(0, (_, _) => { _ = ProwlService.SignOutAsync(); });
+                .Rounded(4)
+                .OnClick(0, (_, _) => { _ = ProwlService.SignOutAsync(); })
+                .Enter())
+            {
+                paper.Box("mb_signout_pl").Width(8).IsNotInteractable();
+                paper.Box("mb_signout_lbl")
+                    .Height(EditorTheme.RowHeight)
+                    .Width(UnitValue.Auto)
+                    .IsNotInteractable()
+                    .Text("Sign Out", font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleCenter);
+                paper.Box("mb_signout_pr").Width(8).IsNotInteractable();
+            }
         }
         else
         {
@@ -135,21 +175,31 @@ public static class MainMenuBar
                 ? "Signing in..."
                 : $"{EditorIcons.ArrowRightToBracket}  Sign In";
 
-            paper.Box("mb_signin")
-                .Height(EditorTheme.MenuBarHeight)
+            using (paper.Row("mb_signin")
+                .Height(EditorTheme.RowHeight)
                 .Width(UnitValue.Auto)
+                .Margin(0, 0, vMargin, vMargin)
                 .BackgroundColor(Color.Transparent)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(label, font)
-                .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize)
-                .Alignment(TextAlignment.MiddleCenter)
-                .Margin(0, 0, 4, 0)
+                .Rounded(4)
                 .OnClick(0, (_, _) =>
                 {
                     if (!ProwlService.IsSigningIn)
                         _ = ProwlService.SignInWithGitHubAsync();
-                });
+                })
+                .Enter())
+            {
+                paper.Box("mb_signin_pl").Width(8).IsNotInteractable();
+                paper.Box("mb_signin_lbl")
+                    .Height(EditorTheme.RowHeight)
+                    .Width(UnitValue.Auto)
+                    .IsNotInteractable()
+                    .Text(label, font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleCenter);
+                paper.Box("mb_signin_pr").Width(8).IsNotInteractable();
+            }
         }
     }
 

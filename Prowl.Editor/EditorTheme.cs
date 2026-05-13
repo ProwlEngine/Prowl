@@ -187,7 +187,7 @@ public static class EditorTheme
     public static float UserScale { get; set; } = 1f;
 
     // Sizing mutable so themes can override
-    public static float MenuBarHeight = 26f;
+    public static float MenuBarHeight = 32f;
     public static float RowHeight = 22f;
     public static float Spacing = 2f;
     public static float Padding = 4f;
