@@ -1213,6 +1213,8 @@ public class GameObject : EngineObject, ISerializable
     {
         // Were missing! see if we can recover
         MissingMonobehaviour missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
+        if (missing.ComponentData == null) return;
+
         EchoObject oldData = missing.ComponentData;
         // Try to recover the component
         if (oldData.TryGet("$type", out EchoObject? typeProp))
