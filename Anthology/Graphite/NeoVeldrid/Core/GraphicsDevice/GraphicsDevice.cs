@@ -166,43 +166,6 @@ public abstract class GraphicsDevice : IDisposable
     public abstract bool WaitForFence(Fence fence, ulong nanosecondTimeout);
 
     /// <summary>
-    /// Blocks the calling thread until one or all of the given <see cref="Fence"/> instances have become signaled.
-    /// </summary>
-    /// <param name="fences">An array of <see cref="Fence"/> objects to wait on.</param>
-    /// <param name="waitAll">If true, then this method blocks until all of the given Fences become signaled.
-    /// If false, then this method only waits until one of the Fences become signaled.</param>
-    public void WaitForFences(Fence[] fences, bool waitAll)
-    {
-        if (!WaitForFences(fences, waitAll, ulong.MaxValue))
-        {
-            throw new NeoVeldridException("The operation timed out before the Fence(s) were signaled.");
-        }
-    }
-
-    /// <summary>
-    /// Blocks the calling thread until one or all of the given <see cref="Fence"/> instances have become signaled,
-    /// or until the given timeout has been reached.
-    /// </summary>
-    /// <param name="fences">An array of <see cref="Fence"/> objects to wait on.</param>
-    /// <param name="waitAll">If true, then this method blocks until all of the given Fences become signaled.
-    /// If false, then this method only waits until one of the Fences become signaled.</param>
-    /// <param name="timeout">A TimeSpan indicating the maximum time to wait on the Fences.</param>
-    /// <returns>True if the Fence was signaled. False if the timeout was reached instead.</returns>
-    public bool WaitForFences(Fence[] fences, bool waitAll, TimeSpan timeout)
-        => WaitForFences(fences, waitAll, (ulong)timeout.TotalMilliseconds * 1_000_000);
-
-    /// <summary>
-    /// Blocks the calling thread until one or all of the given <see cref="Fence"/> instances have become signaled,
-    /// or until the given timeout has been reached.
-    /// </summary>
-    /// <param name="fences">An array of <see cref="Fence"/> objects to wait on.</param>
-    /// <param name="waitAll">If true, then this method blocks until all of the given Fences become signaled.
-    /// If false, then this method only waits until one of the Fences become signaled.</param>
-    /// <param name="nanosecondTimeout">A value in nanoseconds, indicating the maximum time to wait on the Fence.  Pass ulong.MaxValue to wait indefinitely.</param>
-    /// <returns>True if the Fence was signaled. False if the timeout was reached instead.</returns>
-    public abstract bool WaitForFences(Fence[] fences, bool waitAll, ulong nanosecondTimeout);
-
-    /// <summary>
     /// Resets the given <see cref="Fence"/> to the unsignaled state.
     /// </summary>
     /// <param name="fence">The <see cref="Fence"/> instance to reset.</param>

@@ -663,39 +663,6 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         return Util.AssertSubtype<Fence, D3D11Fence>(fence).Wait(nanosecondTimeout);
     }
 
-    public override bool WaitForFences(Fence[] fences, bool waitAll, ulong nanosecondTimeout)
-    {
-        int msTimeout;
-        if (nanosecondTimeout == ulong.MaxValue)
-        {
-            msTimeout = -1;
-        }
-        else
-        {
-            msTimeout = (int)Math.Min(nanosecondTimeout / 1_000_000, int.MaxValue);
-        }
-
-        ManualResetEvent[] events = GetResetEventArray(fences.Length);
-        for (int i = 0; i < fences.Length; i++)
-        {
-            events[i] = Util.AssertSubtype<Fence, D3D11Fence>(fences[i]).ResetEvent;
-        }
-        bool result;
-        if (waitAll)
-        {
-            result = WaitHandle.WaitAll(events, msTimeout);
-        }
-        else
-        {
-            int index = WaitHandle.WaitAny(events, msTimeout);
-            result = index != WaitHandle.WaitTimeout;
-        }
-
-        ReturnResetEventArray(events);
-
-        return result;
-    }
-
     private readonly object _resetEventsLock = new object();
     private readonly List<ManualResetEvent[]> _resetEvents = new List<ManualResetEvent[]>();
 

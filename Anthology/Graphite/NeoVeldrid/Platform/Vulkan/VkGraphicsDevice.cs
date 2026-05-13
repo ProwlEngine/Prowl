@@ -1402,19 +1402,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         return result == Result.Success;
     }
 
-    public override bool WaitForFences(Fence[] fences, bool waitAll, ulong nanosecondTimeout)
-    {
-        int fenceCount = fences.Length;
-        VkFenceHandle* fencesPtr = stackalloc VkFenceHandle[fenceCount];
-        for (int i = 0; i < fenceCount; i++)
-        {
-            fencesPtr[i] = Util.AssertSubtype<Fence, NeoVeldrid.Vk.VkFence>(fences[i]).DeviceFence;
-        }
-
-        Result result = _vk.WaitForFences(_device, (uint)fenceCount, fencesPtr, waitAll, nanosecondTimeout);
-        return result == Result.Success;
-    }
-
     internal static bool IsSupported()
     {
         return s_isSupported.Value;

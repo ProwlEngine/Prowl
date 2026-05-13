@@ -83,7 +83,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         = new Dictionary<MappedResourceCacheKey, MappedResourceInfoWithStaging>();
 
     private readonly object _resetEventsLock = new object();
-    private readonly List<ManualResetEvent[]> _resetEvents = new List<ManualResetEvent[]>();
+    private readonly List<ManualResetEventSlim[]> _resetEvents = new List<ManualResetEventSlim[]>();
     private Swapchain _mainSwapchain;
 
     private bool _syncToVBlank;
@@ -681,46 +681,13 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         return Util.AssertSubtype<Fence, OpenGLFence>(fence).Wait(nanosecondTimeout);
     }
 
-    public override bool WaitForFences(Fence[] fences, bool waitAll, ulong nanosecondTimeout)
-    {
-        int msTimeout;
-        if (nanosecondTimeout == ulong.MaxValue)
-        {
-            msTimeout = -1;
-        }
-        else
-        {
-            msTimeout = (int)Math.Min(nanosecondTimeout / 1_000_000, int.MaxValue);
-        }
-
-        ManualResetEvent[] events = GetResetEventArray(fences.Length);
-        for (int i = 0; i < fences.Length; i++)
-        {
-            events[i] = Util.AssertSubtype<Fence, OpenGLFence>(fences[i]).ResetEvent;
-        }
-        bool result;
-        if (waitAll)
-        {
-            result = WaitHandle.WaitAll(events, msTimeout);
-        }
-        else
-        {
-            int index = WaitHandle.WaitAny(events, msTimeout);
-            result = index != WaitHandle.WaitTimeout;
-        }
-
-        ReturnResetEventArray(events);
-
-        return result;
-    }
-
-    private ManualResetEvent[] GetResetEventArray(int length)
+    private ManualResetEventSlim[] GetResetEventArray(int length)
     {
         lock (_resetEventsLock)
         {
             for (int i = _resetEvents.Count - 1; i > 0; i--)
             {
-                ManualResetEvent[] array = _resetEvents[i];
+                ManualResetEventSlim[] array = _resetEvents[i];
                 if (array.Length == length)
                 {
                     _resetEvents.RemoveAt(i);
@@ -729,11 +696,11 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             }
         }
 
-        ManualResetEvent[] newArray = new ManualResetEvent[length];
+        ManualResetEventSlim[] newArray = new ManualResetEventSlim[length];
         return newArray;
     }
 
-    private void ReturnResetEventArray(ManualResetEvent[] array)
+    private void ReturnResetEventArray(ManualResetEventSlim[] array)
     {
         lock (_resetEventsLock)
         {
