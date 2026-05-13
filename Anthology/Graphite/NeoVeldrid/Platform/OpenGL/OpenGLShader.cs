@@ -7,7 +7,7 @@ using System;
 
 namespace NeoVeldrid.OpenGL;
 
-internal unsafe class OpenGLShader : Shader, OpenGLDeferredResource
+internal unsafe partial class OpenGLShader : Shader, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
@@ -28,19 +28,7 @@ internal unsafe class OpenGLShader : Shader, OpenGLDeferredResource
     public OpenGLShader(OpenGLGraphicsDevice gd, ShaderStages stage, StagingBlock stagingBlock, string entryPoint)
         : base(stage, entryPoint)
     {
-#if VALIDATE_USAGE
-        if (stage == ShaderStages.Compute && !gd.Extensions.ComputeShaders)
-        {
-            if (_gd.BackendType == GraphicsBackend.OpenGLES)
-            {
-                throw new NeoVeldridException("Compute shaders require OpenGL ES 3.1.");
-            }
-            else
-            {
-                throw new NeoVeldridException($"Compute shaders require OpenGL 4.3 or ARB_compute_shader.");
-            }
-        }
-#endif
+        OpenGLShader_CheckComputeSupport(gd, stage);
         _gd = gd;
         _shaderType = OpenGLFormats.VdToGLShaderType(stage);
         _stagingBlock = stagingBlock;

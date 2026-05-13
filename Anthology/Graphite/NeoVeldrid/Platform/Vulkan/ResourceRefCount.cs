@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace NeoVeldrid.Vk;
 
-internal class ResourceRefCount
+internal partial class ResourceRefCount
 {
     private readonly Action _disposeAction;
     private int _refCount;
@@ -17,12 +17,7 @@ internal class ResourceRefCount
     public int Increment()
     {
         int ret = Interlocked.Increment(ref _refCount);
-#if VALIDATE_USAGE
-        if (ret == 0)
-        {
-            throw new NeoVeldridException("An attempt was made to reference a disposed resource.");
-        }
-#endif
+        Increment_CheckNotDisposed(ret);
         return ret;
     }
 

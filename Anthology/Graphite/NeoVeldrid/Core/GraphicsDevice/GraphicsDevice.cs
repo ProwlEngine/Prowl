@@ -9,7 +9,7 @@ namespace NeoVeldrid;
 /// <summary>
 /// Represents an abstract graphics device, capable of creating device resources and executing commands.
 /// </summary>
-public abstract class GraphicsDevice : IDisposable
+public abstract partial class GraphicsDevice : IDisposable
 {
     private readonly object _deferredDisposalLock = new object();
     private readonly List<IDisposable> _disposables = new List<IDisposable>();
@@ -257,37 +257,7 @@ public abstract class GraphicsDevice : IDisposable
     /// <returns>A <see cref="MappedResource"/> structure describing the mapped data region.</returns>
     public MappedResource Map(MappableResource resource, MapMode mode, uint subresource)
     {
-#if VALIDATE_USAGE
-        if (resource is DeviceBuffer buffer)
-        {
-            if ((buffer.Usage & BufferUsage.Dynamic) != BufferUsage.Dynamic
-                && (buffer.Usage & BufferUsage.Staging) != BufferUsage.Staging)
-            {
-                throw new NeoVeldridException("Buffers must have the Staging or Dynamic usage flag to be mapped.");
-            }
-            if (subresource != 0)
-            {
-                throw new NeoVeldridException("Subresource must be 0 for Buffer resources.");
-            }
-            if ((mode == MapMode.Read || mode == MapMode.ReadWrite) && (buffer.Usage & BufferUsage.Staging) == 0)
-            {
-                throw new NeoVeldridException(
-                    $"{nameof(MapMode)}.{nameof(MapMode.Read)} and {nameof(MapMode)}.{nameof(MapMode.ReadWrite)} can only be used on buffers created with {nameof(BufferUsage)}.{nameof(BufferUsage.Staging)}.");
-            }
-        }
-        else if (resource is Texture tex)
-        {
-            if ((tex.Usage & TextureUsage.Staging) == 0)
-            {
-                throw new NeoVeldridException("Texture must have the Staging usage flag to be mapped.");
-            }
-            if (subresource >= tex.ArrayLayers * tex.MipLevels)
-            {
-                throw new NeoVeldridException(
-                    "Subresource must be less than the number of subresources in the Texture being mapped.");
-            }
-        }
-#endif
+        Map_CheckResource(resource, mode, subresource);
 
         return MapCore(resource, mode, subresource);
     }
@@ -374,9 +344,7 @@ public abstract class GraphicsDevice : IDisposable
         uint width, uint height, uint depth,
         uint mipLevel, uint arrayLayer)
     {
-#if VALIDATE_USAGE
-        ValidateUpdateTextureParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-#endif
+        UpdateTexture_CheckParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
         UpdateTextureCore(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
     }
 
@@ -430,9 +398,7 @@ public abstract class GraphicsDevice : IDisposable
         uint mipLevel, uint arrayLayer) where T : unmanaged
     {
         uint sizeInBytes = (uint)(sizeof(T) * source.Length);
-#if VALIDATE_USAGE
-        ValidateUpdateTextureParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-#endif
+        UpdateTexture_CheckParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
 
         fixed (void* pin = &MemoryMarshal.GetReference(source))
         {
@@ -479,69 +445,6 @@ public abstract class GraphicsDevice : IDisposable
         uint x, uint y, uint z,
         uint width, uint height, uint depth,
         uint mipLevel, uint arrayLayer);
-
-    [Conditional("VALIDATE_USAGE")]
-    private static void ValidateUpdateTextureParameters(
-        Texture texture,
-        uint sizeInBytes,
-        uint x, uint y, uint z,
-        uint width, uint height, uint depth,
-        uint mipLevel, uint arrayLayer)
-    {
-        if (FormatHelpers.IsCompressedFormat(texture.Format))
-        {
-            if (x % 4 != 0 || y % 4 != 0 || height % 4 != 0 || width % 4 != 0)
-            {
-                Util.GetMipDimensions(texture, mipLevel, out uint mipWidth, out uint mipHeight, out _);
-                if (width != mipWidth && height != mipHeight)
-                {
-                    throw new NeoVeldridException($"Updates to block-compressed textures must use a region that is block-size aligned and sized.");
-                }
-            }
-        }
-        uint expectedSize = FormatHelpers.GetRegionSize(width, height, depth, texture.Format);
-        if (sizeInBytes < expectedSize)
-        {
-            throw new NeoVeldridException(
-                $"The data size is less than expected for the given update region. At least {expectedSize} bytes must be provided, but only {sizeInBytes} were.");
-        }
-
-        // Compressed textures don't necessarily need to have a Texture.Width and Texture.Height that are a multiple of 4.
-        // But the mipdata width and height *does* need to be a multiple of 4.
-        uint roundedTextureWidth, roundedTextureHeight;
-        if (FormatHelpers.IsCompressedFormat(texture.Format))
-        {
-            roundedTextureWidth = (texture.Width + 3) / 4 * 4;
-            roundedTextureHeight = (texture.Height + 3) / 4 * 4;
-        }
-        else
-        {
-            roundedTextureWidth = texture.Width;
-            roundedTextureHeight = texture.Height;
-        }
-
-        if (x + width > roundedTextureWidth || y + height > roundedTextureHeight || z + depth > texture.Depth)
-        {
-            throw new NeoVeldridException($"The given region does not fit into the Texture.");
-        }
-
-        if (mipLevel >= texture.MipLevels)
-        {
-            throw new NeoVeldridException(
-                $"{nameof(mipLevel)} ({mipLevel}) must be less than the Texture's mip level count ({texture.MipLevels}).");
-        }
-
-        uint effectiveArrayLayers = texture.ArrayLayers;
-        if ((texture.Usage & TextureUsage.Cubemap) != 0)
-        {
-            effectiveArrayLayers *= 6;
-        }
-        if (arrayLayer >= effectiveArrayLayers)
-        {
-            throw new NeoVeldridException(
-                $"{nameof(arrayLayer)} ({arrayLayer}) must be less than the Texture's effective array layer count ({effectiveArrayLayers}).");
-        }
-    }
 
     /// <summary>
     /// Updates a <see cref="DeviceBuffer"/> region with new data.

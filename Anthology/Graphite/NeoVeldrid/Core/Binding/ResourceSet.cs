@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics;
+using System;
 
 namespace NeoVeldrid;
 
@@ -7,14 +6,11 @@ namespace NeoVeldrid;
 /// A device resource used to bind a particular set of <see cref="BindableResource"/> objects to a <see cref="CommandBuffer"/>.
 /// See <see cref="ResourceSetDescription"/>.
 /// </summary>
-public abstract class ResourceSet : DeviceResource, IDisposable
+public abstract partial class ResourceSet : DeviceResource, IDisposable
 {
         internal ResourceSet(ref ResourceSetDescription description)
         {
-#if VALIDATE_USAGE
-                Layout = description.Layout;
-                Resources = description.BoundResources;
-#endif
+                ResourceSet_StoreLayoutAndResources(ref description);
         }
 
         /// <summary>
@@ -32,9 +28,4 @@ public abstract class ResourceSet : DeviceResource, IDisposable
         /// Frees unmanaged device resources controlled by this instance.
         /// </summary>
         public abstract void Dispose();
-
-#if VALIDATE_USAGE
-        internal ResourceLayout Layout { get; }
-        internal BindableResource[] Resources { get; }
-#endif
 }

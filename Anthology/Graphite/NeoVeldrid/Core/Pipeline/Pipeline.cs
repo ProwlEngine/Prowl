@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace NeoVeldrid;
 
@@ -7,14 +7,12 @@ namespace NeoVeldrid;
 /// <see cref="CommandBuffer.SetPipeline(Pipeline)"/> to prepare a <see cref="CommandBuffer"/> for draw commands.
 /// See <see cref="GraphicsPipelineDescription"/>.
 /// </summary>
-public abstract class Pipeline : DeviceResource, IDisposable
+public abstract partial class Pipeline : DeviceResource, IDisposable
 {
     internal Pipeline(ref GraphicsPipelineDescription graphicsDescription)
         : this(graphicsDescription.ResourceLayouts)
     {
-#if VALIDATE_USAGE
-        GraphicsOutputDescription = graphicsDescription.Outputs;
-#endif
+        Pipeline_StoreGraphicsOutputDescription(ref graphicsDescription);
     }
 
     internal Pipeline(ref ComputePipelineDescription computeDescription)
@@ -23,9 +21,7 @@ public abstract class Pipeline : DeviceResource, IDisposable
 
     internal Pipeline(ResourceLayout[] resourceLayouts)
     {
-#if VALIDATE_USAGE
-        ResourceLayouts = Util.ShallowClone(resourceLayouts);
-#endif
+        Pipeline_StoreResourceLayouts(resourceLayouts);
     }
 
     /// <summary>
@@ -49,9 +45,4 @@ public abstract class Pipeline : DeviceResource, IDisposable
     /// Frees unmanaged device resources controlled by this instance.
     /// </summary>
     public abstract void Dispose();
-
-#if VALIDATE_USAGE
-    internal OutputDescription GraphicsOutputDescription { get; }
-    internal ResourceLayout[] ResourceLayouts { get; }
-#endif
 }

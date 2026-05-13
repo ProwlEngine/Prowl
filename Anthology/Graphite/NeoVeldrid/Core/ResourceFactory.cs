@@ -5,7 +5,7 @@ namespace NeoVeldrid;
 /// <summary>
 /// A device object responsible for the creation of graphics resources.
 /// </summary>
-public abstract class ResourceFactory
+public abstract partial class ResourceFactory
 {
     /// <summary></summary>
     /// <param name="features"></param>
@@ -37,56 +37,7 @@ public abstract class ResourceFactory
     /// <returns>A new <see cref="Pipeline"/> which, when bound to a CommandList, is used to dispatch draw commands.</returns>
     public Pipeline CreateGraphicsPipeline(ref GraphicsPipelineDescription description)
     {
-#if VALIDATE_USAGE
-        if (!description.RasterizerState.DepthClipEnabled && !Features.DepthClipDisable)
-        {
-            throw new NeoVeldridException(
-                "RasterizerState.DepthClipEnabled must be true if GraphicsDeviceFeatures.DepthClipDisable is not supported.");
-        }
-        if (!Features.IndependentBlend)
-        {
-            if (description.BlendState.AttachmentStates.Length > 0)
-            {
-                BlendAttachmentDescription attachmentState = description.BlendState.AttachmentStates[0];
-                for (int i = 1; i < description.BlendState.AttachmentStates.Length; i++)
-                {
-                    if (!attachmentState.Equals(description.BlendState.AttachmentStates[i]))
-                    {
-                        throw new NeoVeldridException(
-                            $"If GraphcsDeviceFeatures.IndependentBlend is false, then all members of BlendState.AttachmentStates must be equal.");
-                    }
-                }
-            }
-        }
-        foreach (VertexLayoutDescription layoutDesc in description.ShaderSet.VertexLayouts)
-        {
-            bool hasExplicitLayout = false;
-            uint minOffset = 0;
-            foreach (VertexElementDescription elementDesc in layoutDesc.Elements)
-            {
-                if (hasExplicitLayout && elementDesc.Offset == 0)
-                {
-                    throw new NeoVeldridException(
-                        $"If any vertex element has an explicit offset, then all elements must have an explicit offset.");
-                }
-
-                if (elementDesc.Offset != 0 && elementDesc.Offset < minOffset)
-                {
-                    throw new NeoVeldridException(
-                        $"Vertex element \"{elementDesc.Name}\" has an explicit offset which overlaps with the previous element.");
-                }
-
-                minOffset = elementDesc.Offset + FormatSizeHelpers.GetSizeInBytes(elementDesc.Format);
-                hasExplicitLayout |= elementDesc.Offset != 0;
-            }
-
-            if (minOffset > layoutDesc.Stride)
-            {
-                throw new NeoVeldridException(
-                    $"The vertex layout's stride ({layoutDesc.Stride}) is less than the full size of the vertex ({minOffset})");
-            }
-        }
-#endif
+        CreateGraphicsPipeline_CheckDescription(ref description);
         return CreateGraphicsPipelineCore(ref description);
     }
 
@@ -135,36 +86,7 @@ public abstract class ResourceFactory
     /// <returns>A new <see cref="Texture"/>.</returns>
     public Texture CreateTexture(ref TextureDescription description)
     {
-#if VALIDATE_USAGE
-        if (description.Width == 0 || description.Height == 0 || description.Depth == 0)
-        {
-            throw new NeoVeldridException("Width, Height, and Depth must be non-zero.");
-        }
-        if ((description.Format == PixelFormat.D24_UNorm_S8_UInt || description.Format == PixelFormat.D32_Float_S8_UInt)
-            && (description.Usage & TextureUsage.DepthStencil) == 0)
-        {
-            throw new NeoVeldridException("The givel PixelFormat can only be used in a Texture with DepthStencil usage.");
-        }
-        if ((description.Type == TextureType.Texture1D || description.Type == TextureType.Texture3D)
-            && description.SampleCount != TextureSampleCount.Count1)
-        {
-            throw new NeoVeldridException(
-                $"1D and 3D Textures must use {nameof(TextureSampleCount)}.{nameof(TextureSampleCount.Count1)}.");
-        }
-        if (description.Type == TextureType.Texture1D && !Features.Texture1D)
-        {
-            throw new NeoVeldridException($"1D Textures are not supported by this device.");
-        }
-        if ((description.Usage & TextureUsage.Staging) != 0 && description.Usage != TextureUsage.Staging)
-        {
-            throw new NeoVeldridException($"{nameof(TextureUsage)}.{nameof(TextureUsage.Staging)} cannot be combined with any other flags.");
-        }
-        if ((description.Usage & TextureUsage.DepthStencil) != 0 && (description.Usage & TextureUsage.GenerateMipmaps) != 0)
-        {
-            throw new NeoVeldridException(
-                $"{nameof(TextureUsage)}.{nameof(TextureUsage.DepthStencil)} and {nameof(TextureUsage)}.{nameof(TextureUsage.GenerateMipmaps)} cannot be combined.");
-        }
-#endif
+        CreateTexture_CheckDescription(ref description);
         return CreateTextureCore(ref description);
     }
 
@@ -237,37 +159,7 @@ public abstract class ResourceFactory
     /// <returns>A new <see cref="TextureView"/>.</returns>
     public TextureView CreateTextureView(ref TextureViewDescription description)
     {
-#if VALIDATE_USAGE
-        if (description.MipLevels == 0 || description.ArrayLayers == 0
-            || (description.BaseMipLevel + description.MipLevels) > description.Target.MipLevels
-            || (description.BaseArrayLayer + description.ArrayLayers) > description.Target.ArrayLayers)
-        {
-            throw new NeoVeldridException(
-                "TextureView mip level and array layer range must be contained in the target Texture.");
-        }
-        if ((description.Target.Usage & TextureUsage.Sampled) == 0
-            && (description.Target.Usage & TextureUsage.Storage) == 0)
-        {
-            throw new NeoVeldridException(
-                "To create a TextureView, the target texture must have either Sampled or Storage usage flags.");
-        }
-        if (!Features.SubsetTextureView &&
-            (description.BaseMipLevel != 0 || description.MipLevels != description.Target.MipLevels
-            || description.BaseArrayLayer != 0 || description.ArrayLayers != description.Target.ArrayLayers))
-        {
-            throw new NeoVeldridException("GraphicsDevice does not support subset TextureViews.");
-        }
-        if (description.Format != null && description.Format != description.Target.Format)
-        {
-            if (!FormatHelpers.IsFormatViewCompatible(description.Format.Value, description.Target.Format))
-            {
-                throw new NeoVeldridException(
-                    $"Cannot create a TextureView with format {description.Format.Value} targeting a Texture with format " +
-                    $"{description.Target.Format}. A TextureView's format must have the same size and number of " +
-                    $"components as the underlying Texture's format, or the same format.");
-            }
-        }
-#endif
+        CreateTextureView_CheckDescription(ref description);
 
         return CreateTextureViewCore(ref description);
     }
@@ -291,47 +183,7 @@ public abstract class ResourceFactory
     /// <returns>A new <see cref="DeviceBuffer"/>.</returns>
     public DeviceBuffer CreateBuffer(ref BufferDescription description)
     {
-#if VALIDATE_USAGE
-        BufferUsage usage = description.Usage;
-        if ((usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
-            || (usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
-        {
-            if (!Features.StructuredBuffer)
-            {
-                throw new NeoVeldridException("GraphicsDevice does not support structured buffers.");
-            }
-
-            if (description.StructureByteStride == 0)
-            {
-                throw new NeoVeldridException("Structured Buffer objects must have a non-zero StructureByteStride.");
-            }
-
-            if ((usage & BufferUsage.StructuredBufferReadWrite) != 0 && usage != BufferUsage.StructuredBufferReadWrite)
-            {
-                throw new NeoVeldridException(
-                    $"{nameof(BufferUsage)}.{nameof(BufferUsage.StructuredBufferReadWrite)} cannot be combined with any other flag.");
-            }
-            else if ((usage & BufferUsage.VertexBuffer) != 0
-                || (usage & BufferUsage.IndexBuffer) != 0
-                || (usage & BufferUsage.IndirectBuffer) != 0)
-            {
-                throw new NeoVeldridException(
-                    $"Read-Only Structured Buffer objects cannot specify {nameof(BufferUsage)}.{nameof(BufferUsage.VertexBuffer)}, {nameof(BufferUsage)}.{nameof(BufferUsage.IndexBuffer)}, or {nameof(BufferUsage)}.{nameof(BufferUsage.IndirectBuffer)}.");
-            }
-        }
-        else if (description.StructureByteStride != 0)
-        {
-            throw new NeoVeldridException("Non-structured Buffers must have a StructureByteStride of zero.");
-        }
-        if ((usage & BufferUsage.Staging) != 0 && usage != BufferUsage.Staging)
-        {
-            throw new NeoVeldridException("Buffers with Staging Usage must not specify any other Usage flags.");
-        }
-        if ((usage & BufferUsage.UniformBuffer) != 0 && (description.SizeInBytes % 16) != 0)
-        {
-            throw new NeoVeldridException($"Uniform buffer size must be a multiple of 16 bytes.");
-        }
-#endif
+        CreateBuffer_CheckDescription(ref description);
         return CreateBufferCore(ref description);
     }
 
@@ -354,18 +206,7 @@ public abstract class ResourceFactory
     /// <returns>A new <see cref="Sampler"/>.</returns>
     public Sampler CreateSampler(ref SamplerDescription description)
     {
-#if VALIDATE_USAGE
-        if (!Features.SamplerLodBias && description.LodBias != 0)
-        {
-            throw new NeoVeldridException(
-                "GraphicsDevice does not support Sampler LOD bias. SamplerDescription.LodBias must be 0.");
-        }
-        if (!Features.SamplerAnisotropy && description.Filter == SamplerFilter.Anisotropic)
-        {
-            throw new NeoVeldridException(
-                "SamplerFilter.Anisotropic cannot be used unless GraphicsDeviceFeatures.SamplerAnisotropy is supported.");
-        }
-#endif
+        CreateSampler_CheckDescription(ref description);
 
         return CreateSamplerCore(ref description);
     }
@@ -388,22 +229,7 @@ public abstract class ResourceFactory
     /// <returns>A new <see cref="Shader"/>.</returns>
     public Shader CreateShader(ref ShaderDescription description)
     {
-#if VALIDATE_USAGE
-        if (!Features.ComputeShader && description.Stage == ShaderStages.Compute)
-        {
-            throw new NeoVeldridException("GraphicsDevice does not support Compute Shaders.");
-        }
-        if (!Features.GeometryShader && description.Stage == ShaderStages.Geometry)
-        {
-            throw new NeoVeldridException("GraphicsDevice does not support Compute Shaders.");
-        }
-        if (!Features.TessellationShaders
-            && (description.Stage == ShaderStages.TessellationControl
-                || description.Stage == ShaderStages.TessellationEvaluation))
-        {
-            throw new NeoVeldridException("GraphicsDevice does not support Tessellation Shaders.");
-        }
-#endif
+        CreateShader_CheckDescription(ref description);
         return CreateShaderCore(ref description);
     }
 

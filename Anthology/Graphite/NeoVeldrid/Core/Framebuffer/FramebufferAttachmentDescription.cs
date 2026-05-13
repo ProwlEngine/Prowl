@@ -5,7 +5,7 @@ namespace NeoVeldrid;
 /// <summary>
 /// Describes a single attachment (color or depth) for a <see cref="Framebuffer"/>.
 /// </summary>
-public struct FramebufferAttachmentDescription : IEquatable<FramebufferAttachmentDescription>
+public partial struct FramebufferAttachmentDescription : IEquatable<FramebufferAttachmentDescription>
 {
     /// <summary>
     /// The target texture to render into. For color attachments, this resource must have been created with the
@@ -48,24 +48,7 @@ public struct FramebufferAttachmentDescription : IEquatable<FramebufferAttachmen
     /// the target <see cref="Texture"/>.</param>
     public FramebufferAttachmentDescription(Texture target, uint arrayLayer, uint mipLevel)
     {
-#if VALIDATE_USAGE
-        uint effectiveArrayLayers = target.ArrayLayers;
-        if ((target.Usage & TextureUsage.Cubemap) != 0)
-        {
-            effectiveArrayLayers *= 6;
-        }
-
-        if (arrayLayer >= effectiveArrayLayers)
-        {
-            throw new NeoVeldridException(
-                $"{nameof(arrayLayer)} must be less than {nameof(target)}.{nameof(Texture.ArrayLayers)}.");
-        }
-        if (mipLevel >= target.MipLevels)
-        {
-            throw new NeoVeldridException(
-                $"{nameof(mipLevel)} must be less than {nameof(target)}.{nameof(Texture.MipLevels)}.");
-        }
-#endif
+        FramebufferAttachmentDescription_CheckLayerAndMip(target, arrayLayer, mipLevel);
         Target = target;
         ArrayLayer = arrayLayer;
         MipLevel = mipLevel;

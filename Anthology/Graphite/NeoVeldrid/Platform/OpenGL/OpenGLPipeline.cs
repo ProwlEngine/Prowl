@@ -11,15 +11,11 @@ using System;
 
 namespace NeoVeldrid.OpenGL;
 
-internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
+internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
 {
     private const uint GL_INVALID_INDEX = 0xFFFFFFFF;
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
-
-#if !VALIDATE_USAGE
-    public ResourceLayout[] ResourceLayouts { get; }
-#endif
 
     // Graphics Pipeline
     public Shader[] GraphicsShaders { get; }
@@ -65,9 +61,7 @@ internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
             VertexStrides[i] = (int)description.ShaderSet.VertexLayouts[i].Stride;
         }
 
-#if !VALIDATE_USAGE
-        ResourceLayouts = Util.ShallowClone(description.ResourceLayouts);
-#endif
+        OpenGLPipeline_StoreResourceLayouts(description.ResourceLayouts);
     }
 
     public OpenGLPipeline(OpenGLGraphicsDevice gd, ref ComputePipelineDescription description)
@@ -77,9 +71,7 @@ internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         IsComputePipeline = true;
         ComputeShader = description.ComputeShader;
         VertexStrides = Array.Empty<int>();
-#if !VALIDATE_USAGE
-        ResourceLayouts = Util.ShallowClone(description.ResourceLayouts);
-#endif
+        OpenGLPipeline_StoreResourceLayouts(description.ResourceLayouts);
     }
 
     public bool Created { get; private set; }

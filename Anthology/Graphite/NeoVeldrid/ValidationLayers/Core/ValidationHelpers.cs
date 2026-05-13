@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
 namespace NeoVeldrid;
 
@@ -54,6 +54,7 @@ internal static class ValidationHelpers
     [Conditional("VALIDATE_USAGE")]
     private static void ValidateResourceKind(ResourceKind kind, BindableResource resource, uint slot)
     {
+#if VALIDATE_USAGE
         switch (kind)
         {
             case ResourceKind.UniformBuffer:
@@ -123,5 +124,6 @@ internal static class ValidationHelpers
             default:
                 throw Illegal.Value<ResourceKind>();
         }
+#endif
     }
 }
