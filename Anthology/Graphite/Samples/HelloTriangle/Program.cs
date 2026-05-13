@@ -40,60 +40,27 @@ void main()
     private static int Main()
     {
         Sdl sdl = Sdl.GetApi();
-        if (sdl.Init(Sdl.InitVideo) != 0)
-        {
-            Console.Error.WriteLine($"SDL_Init failed: {sdl.GetErrorS()}");
-            return 1;
-        }
-
-        sdl.GLSetAttribute(GLattr.ContextMajorVersion, 3);
-        sdl.GLSetAttribute(GLattr.ContextMinorVersion, 3);
-        sdl.GLSetAttribute(GLattr.ContextProfileMask, (int)GLprofile.Core);
-        sdl.GLSetAttribute(GLattr.Doublebuffer, 1);
-        sdl.GLSetAttribute(GLattr.DepthSize, 24);
-
-        const uint Width = 960;
-        const uint Height = 540;
-
-        Window* window = sdl.CreateWindow(
-            "NeoVeldrid - Hello Triangle",
+        Window* window = sdl.CreateWindow("Hello Triangle",
             Sdl.WindowposCentered, Sdl.WindowposCentered,
-            (int)Width, (int)Height,
+            960, 540,
             (uint)(WindowFlags.Opengl | WindowFlags.Resizable | WindowFlags.Shown));
 
-        if (window == null)
-        {
-            Console.Error.WriteLine($"SDL_CreateWindow failed: {sdl.GetErrorS()}");
-            sdl.Quit();
-            return 1;
-        }
+        SdlContext context = new SdlContext(sdl, window);
 
-        void* glContext = sdl.GLCreateContext(window);
-        if (glContext == null)
-        {
-            Console.Error.WriteLine($"SDL_GL_CreateContext failed: {sdl.GetErrorS()}");
-            sdl.DestroyWindow(window);
-            sdl.Quit();
-            return 1;
-        }
+        context.Create([
+            (GLattr.ContextMajorVersion, 3),
+            (GLattr.ContextMinorVersion, 3),
+            (GLattr.ContextProfileMask, (int)GLprofile.Core),
+            (GLattr.Doublebuffer, 1),
+            (GLattr.DepthSize, 24),
+        ]);
 
         sdl.GLSetSwapInterval(0);
 
         OpenGLPlatformInfo platformInfo = new OpenGLPlatformInfo(
-            openGLContextHandle: (IntPtr)glContext,
-            getProcAddress: name =>
-            {
-                byte[] bytes = Encoding.ASCII.GetBytes(name + "\0");
-                fixed (byte* p = bytes)
-                {
-                    return (IntPtr)sdl.GLGetProcAddress(p);
-                }
-            },
-            makeCurrent: ctx => sdl.GLMakeCurrent(window, (void*)ctx),
+            glContext: context,
             getCurrentContext: () => (IntPtr)sdl.GLGetCurrentContext(),
             clearCurrentContext: () => sdl.GLMakeCurrent(window, null),
-            deleteContext: ctx => sdl.GLDeleteContext((void*)ctx),
-            swapBuffers: () => sdl.GLSwapWindow(window),
             setSyncToVerticalBlank: sync => sdl.GLSetSwapInterval(sync ? 1 : 0));
 
         GraphicsDeviceOptions options = new GraphicsDeviceOptions(
@@ -101,16 +68,16 @@ void main()
             swapchainDepthFormat: PixelFormat.R16_UNorm,
             syncToVerticalBlank: true);
 
-        GraphicsDevice gd = GraphicsDevice.CreateOpenGL(options, platformInfo, Width, Height);
+        GraphicsDevice gd = GraphicsDevice.CreateOpenGL(options, platformInfo, 960, 540);
         ResourceFactory factory = gd.ResourceFactory;
 
         // Vertex buffer: 3 vertices, each (Position xy, UV xy) = 16 bytes
         VertexPositionUV[] vertices =
-        {
-            new VertexPositionUV(new Float2(  0.0f,  0.75f), new Float2(1.0f, 1.0f)),
-            new VertexPositionUV(new Float2( 0.75f, -0.75f), new Float2(1.0f, 0.0f)),
-            new VertexPositionUV(new Float2(-0.75f, -0.75f), new Float2(0.0f, 1.0f)),
-        };
+        [
+            new(new(  0.0f,  0.75f), new(1.0f, 1.0f)),
+            new(new( 0.75f, -0.75f), new(1.0f, 0.0f)),
+            new(new(-0.75f, -0.75f), new(0.0f, 1.0f)),
+        ];
 
         uint vertexBufferSize = (uint)(vertices.Length * sizeof(VertexPositionUV));
         DeviceBuffer vertexBuffer = factory.CreateBuffer(new BufferDescription(vertexBufferSize, BufferUsage.VertexBuffer));

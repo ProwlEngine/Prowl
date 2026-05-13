@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Runtime.CompilerServices;
+using Silk.NET.Core.Contexts;
 
 namespace NeoVeldrid.OpenGL;
 
@@ -27,12 +28,9 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     private uint _vao;
     private readonly ConcurrentQueue<OpenGLDeferredResource> _resourcesToDispose
         = new ConcurrentQueue<OpenGLDeferredResource>();
-    private IntPtr _glContext;
+    private IGLContext _glContext;
     private bool _glContextDestroyed;
-    private Action<IntPtr> _makeCurrent;
     private Func<IntPtr> _getCurrentContext;
-    private Action<IntPtr> _deleteContext;
-    private Action _swapBuffers;
     private Action<bool> _setSyncToVBlank;
     private OpenGLSwapchainFramebuffer _swapchainFramebuffer;
     private OpenGLTextureSamplerManager _textureSamplerManager;
@@ -150,15 +148,12 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         bool loadFunctions)
     {
         _syncToVBlank = options.SyncToVerticalBlank;
-        _glContext = platformInfo.OpenGLContextHandle;
-        _makeCurrent = platformInfo.MakeCurrent;
+        _glContext = platformInfo.GLContext;
         _getCurrentContext = platformInfo.GetCurrentContext;
-        _deleteContext = platformInfo.DeleteContext;
-        _swapBuffers = platformInfo.SwapBuffers;
         _setSyncToVBlank = platformInfo.SetSyncToVerticalBlank;
         if (loadFunctions)
         {
-            GL = GL.GetApi(platformInfo.GetProcAddress);
+            GL = GL.GetApi(platformInfo.GLContext);
             OpenGLUtil.GL = GL;
         }
         Debug.Assert(GL != null, "GL instance must be set before Init(). If loadFunctions=false, the caller must set GL beforehand.");
@@ -352,7 +347,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
 
         _workItems = new BlockingCollection<ExecutionThreadWorkItem>(new ConcurrentQueue<ExecutionThreadWorkItem>());
         platformInfo.ClearCurrentContext();
-        _executionThread = new ExecutionThread(this, _workItems, _makeCurrent, _glContext);
+        _executionThread = new ExecutionThread(this, _workItems, _glContext);
         _openglInfo = new BackendInfoOpenGL(this);
 
         PostDeviceCreated();
@@ -884,8 +879,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     {
         private readonly OpenGLGraphicsDevice _gd;
         private readonly BlockingCollection<ExecutionThreadWorkItem> _workItems;
-        private readonly Action<IntPtr> _makeCurrent;
-        private readonly IntPtr _context;
+        private readonly IGLContext _context;
         private bool _terminated;
         private readonly ManualResetEventSlim _terminatedEvent = new ManualResetEventSlim();
         private readonly List<Exception> _exceptions = new List<Exception>();
@@ -894,12 +888,10 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         public ExecutionThread(
             OpenGLGraphicsDevice gd,
             BlockingCollection<ExecutionThreadWorkItem> workItems,
-            Action<IntPtr> makeCurrent,
-            IntPtr context)
+            IGLContext context)
         {
             _gd = gd;
             _workItems = workItems;
-            _makeCurrent = makeCurrent;
             _context = context;
             Thread thread = new Thread(Run);
             thread.IsBackground = true;
@@ -908,7 +900,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
 
         private void Run()
         {
-            _makeCurrent(_context);
+            _context.MakeCurrent();
             while (!_terminated)
             {
                 ExecutionThreadWorkItem workItem = _workItems.Take();
@@ -998,9 +990,9 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
                             {
                                 try
                                 {
-                                    _makeCurrent(_gd._glContext);
+                                    _gd._glContext.MakeCurrent();
                                     _gd.FlushDisposables();
-                                    _gd._deleteContext(_gd._glContext);
+                                    _gd._glContext.Dispose();
                                 }
                                 catch (SymbolLoadingException)
                                 {
@@ -1023,7 +1015,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
                         break;
                     case WorkItemType.SwapBuffers:
                         {
-                            _gd._swapBuffers();
+                            _gd._glContext.SwapBuffers();
                             _gd.FlushDisposables();
                         }
                         break;

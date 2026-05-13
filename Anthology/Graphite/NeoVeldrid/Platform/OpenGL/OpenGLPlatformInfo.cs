@@ -1,5 +1,7 @@
 using System;
 
+using Silk.NET.Core.Contexts;
+
 namespace NeoVeldrid.OpenGL;
 
 /// <summary>
@@ -9,19 +11,9 @@ namespace NeoVeldrid.OpenGL;
 public class OpenGLPlatformInfo
 {
     /// <summary>
-    /// The OpenGL context handle.
-    /// </summary>
-    public IntPtr OpenGLContextHandle { get; }
-
-    /// <summary>
     /// A delegate which can be used to retrieve OpenGL function pointers by name.
     /// </summary>
-    public Func<string, IntPtr> GetProcAddress { get; }
-
-    /// <summary>
-    /// A delegate which can be used to make the given OpenGL context current on the calling thread.
-    /// </summary>
-    public Action<IntPtr> MakeCurrent { get; }
+    public IGLContext GLContext { get; }
 
     /// <summary>
     /// A delegate which can be used to retrieve the calling thread's active OpenGL context.
@@ -32,16 +24,6 @@ public class OpenGLPlatformInfo
     /// A delegate which can be used to clear the calling thread's GL context.
     /// </summary>
     public Action ClearCurrentContext { get; }
-
-    /// <summary>
-    /// A delegate which can be used to delete the given context.
-    /// </summary>
-    public Action<IntPtr> DeleteContext { get; }
-
-    /// <summary>
-    /// A delegate which can be used to swap the main back buffer associated with the OpenGL context.
-    /// </summary>
-    public Action SwapBuffers { get; }
 
     /// <summary>
     /// A delegate which can be used to set the synchronization behavior of the OpenGL context.
@@ -64,7 +46,7 @@ public class OpenGLPlatformInfo
     /// Constructs a new OpenGLPlatformInfo.
     /// </summary>
     /// <param name="openGLContextHandle">The OpenGL context handle.</param>
-    /// <param name="getProcAddress">A delegate which can be used to retrieve OpenGL function pointers by name.</param>
+    /// <param name="glContext">A delegate which can be used to retrieve OpenGL function pointers by name.</param>
     /// <param name="makeCurrent">A delegate which can be used to make the given OpenGL context current on the calling
     /// thread.</param>
     /// <param name="getCurrentContext">A delegate which can be used to retrieve the calling thread's active OpenGL context.</param>
@@ -75,30 +57,20 @@ public class OpenGLPlatformInfo
     /// <param name="setSyncToVerticalBlank">A delegate which can be used to set the synchronization behavior of the OpenGL
     /// context.</param>
     public OpenGLPlatformInfo(
-        IntPtr openGLContextHandle,
-        Func<string, IntPtr> getProcAddress,
-        Action<IntPtr> makeCurrent,
+        IGLContext glContext,
         Func<IntPtr> getCurrentContext,
         Action clearCurrentContext,
-        Action<IntPtr> deleteContext,
-        Action swapBuffers,
         Action<bool> setSyncToVerticalBlank)
     {
-        OpenGLContextHandle = openGLContextHandle;
-        GetProcAddress = getProcAddress;
-        MakeCurrent = makeCurrent;
+        GLContext = glContext;
         GetCurrentContext = getCurrentContext;
         ClearCurrentContext = clearCurrentContext;
-        DeleteContext = deleteContext;
-        SwapBuffers = swapBuffers;
         SetSyncToVerticalBlank = setSyncToVerticalBlank;
     }
 
     /// <summary>
     /// Constructs a new OpenGLPlatformInfo.
     /// </summary>
-    /// <param name="openGLContextHandle">The OpenGL context handle.</param>
-    /// <param name="getProcAddress">A delegate which can be used to retrieve OpenGL function pointers by name.</param>
     /// <param name="makeCurrent">A delegate which can be used to make the given OpenGL context current on the calling
     /// thread.</param>
     /// <param name="getCurrentContext">A delegate which can be used to retrieve the calling thread's active OpenGL context.</param>
@@ -113,24 +85,16 @@ public class OpenGLPlatformInfo
     /// <param name="resizeSwapchain">A delegate which is invoked when the main Swapchain is resized. This may be null,
     /// in which case no special action is taken when the Swapchain is resized.</param>
     public OpenGLPlatformInfo(
-        IntPtr openGLContextHandle,
-        Func<string, IntPtr> getProcAddress,
-        Action<IntPtr> makeCurrent,
+        IGLContext glContext,
         Func<IntPtr> getCurrentContext,
         Action clearCurrentContext,
-        Action<IntPtr> deleteContext,
-        Action swapBuffers,
         Action<bool> setSyncToVerticalBlank,
         Action setSwapchainFramebuffer,
         Action<uint, uint> resizeSwapchain)
     {
-        OpenGLContextHandle = openGLContextHandle;
-        GetProcAddress = getProcAddress;
-        MakeCurrent = makeCurrent;
+        GLContext = glContext;
         GetCurrentContext = getCurrentContext;
         ClearCurrentContext = clearCurrentContext;
-        DeleteContext = deleteContext;
-        SwapBuffers = swapBuffers;
         SetSyncToVerticalBlank = setSyncToVerticalBlank;
         SetSwapchainFramebuffer = setSwapchainFramebuffer;
         ResizeSwapchain = resizeSwapchain;
