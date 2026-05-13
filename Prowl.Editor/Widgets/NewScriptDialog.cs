@@ -389,6 +389,15 @@ public static class NewScriptDialog
             .Replace("{[className]}", className);
     }
 
+    [ScriptTemplate("Fly Camera",
+        "Right-click to enter fly mode with WASD + EQ movement, mouse look, and Shift to sprint. Great for debug or spectator cameras.",
+        EditorIcons.JetFighter, Order = 35)]
+    private static string FlyCameraTemplate(string className)
+    {
+        return EditorApplication.GetEmbeddedResourceText("NewFlyCamera.cstemplate")
+            .Replace("{[className]}", className);
+    }
+
     [ScriptTemplate("Follow Camera",
         "Smoothly follows a target Transform with a configurable offset. Good for third-person / chase cameras.",
         EditorIcons.Camera, Order = 40)]
