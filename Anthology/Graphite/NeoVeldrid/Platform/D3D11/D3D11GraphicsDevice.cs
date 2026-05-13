@@ -265,9 +265,9 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         return d3D11DeviceOptions;
     }
 
-    private protected override void SubmitCommandsCore(CommandList cl, Fence fence)
+    private protected override void SubmitCommandsCore(CommandBuffer cl, Fence fence)
     {
-        D3D11CommandList d3d11CL = Util.AssertSubtype<CommandList, D3D11CommandList>(cl);
+        D3D11CommandList d3d11CL = Util.AssertSubtype<CommandBuffer, D3D11CommandList>(cl);
         lock (_immediateContextLock)
         {
             if (d3d11CL.DeviceCommandList != null) // CommandList may have been reset in the meantime (resized swapchain).

@@ -29,14 +29,14 @@ public class GraphicsDeviceFeatures
     public bool SamplerLodBias { get; }
     /// <summary>
     /// Indicates whether a non-zero "vertexStart" value can be used in
-    /// <see cref="CommandList.Draw(uint, uint, uint, uint)"/> and
-    /// <see cref="CommandList.DrawIndexed(uint, uint, uint, int, uint)"/>.
+    /// <see cref="CommandBuffer.Draw(uint, uint, uint, uint)"/> and
+    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, uint, int, uint)"/>.
     /// </summary>
     public bool DrawBaseVertex { get; }
     /// <summary>
     /// Indicates whether a non-zero "instanceStart" value can be used in
-    /// <see cref="CommandList.Draw(uint, uint, uint, uint)"/> and
-    /// <see cref="CommandList.DrawIndexed(uint, uint, uint, int, uint)"/>.
+    /// <see cref="CommandBuffer.Draw(uint, uint, uint, uint)"/> and
+    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, uint, int, uint)"/>.
     /// </summary>
     public bool DrawBaseInstance { get; }
     /// <summary>
@@ -77,9 +77,9 @@ public class GraphicsDeviceFeatures
     /// </summary>
     public bool SubsetTextureView { get; }
     /// <summary>
-    /// Indicates whether <see cref="CommandList"/> instances created with this device support the
-    /// <see cref="CommandList.PushDebugGroup(string)"/>, <see cref="CommandList.PopDebugGroup"/>, and
-    /// <see cref="CommandList.InsertDebugMarker(string)"/> methods. If not, these methods will have no effect.
+    /// Indicates whether <see cref="CommandBuffer"/> instances created with this device support the
+    /// <see cref="CommandBuffer.PushDebugGroup(string)"/>, <see cref="CommandBuffer.PopDebugGroup"/>, and
+    /// <see cref="CommandBuffer.InsertDebugMarker(string)"/> methods. If not, these methods will have no effect.
     /// </summary>
     public bool CommandListDebugMarkers { get; }
     /// <summary>

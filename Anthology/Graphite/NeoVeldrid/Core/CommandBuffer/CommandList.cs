@@ -13,19 +13,19 @@ namespace NeoVeldrid;
 /// A device resource which allows the recording of graphics commands, which can later be executed by a
 /// <see cref="GraphicsDevice"/>.
 /// Before graphics commands can be issued, the <see cref="Begin"/> method must be invoked.
-/// When the <see cref="CommandList"/> is ready to be executed, <see cref="End"/> must be invoked, and then
-/// <see cref="GraphicsDevice.SubmitCommands(CommandList)"/> should be used.
-/// NOTE: The use of <see cref="CommandList"/> is not thread-safe. Access to the <see cref="CommandList"/> must be
+/// When the <see cref="CommandBuffer"/> is ready to be executed, <see cref="End"/> must be invoked, and then
+/// <see cref="GraphicsDevice.SubmitCommands(CommandBuffer)"/> should be used.
+/// NOTE: The use of <see cref="CommandBuffer"/> is not thread-safe. Access to the <see cref="CommandBuffer"/> must be
 /// externally synchronized.
 /// There are some limitations dictating proper usage and ordering of graphics commands. For example, a
 /// <see cref="Framebuffer"/>, <see cref="Pipeline"/>, vertex buffer, and index buffer must all be
 /// bound before a call to <see cref="DrawIndexed(uint, uint, uint, int, uint)"/> will succeed.
 /// These limitations are described in each function, where applicable.
-/// <see cref="CommandList"/> instances cannot be executed multiple times per-recording. When executed by a
+/// <see cref="CommandBuffer"/> instances cannot be executed multiple times per-recording. When executed by a
 /// <see cref="GraphicsDevice"/>, they must be reset and commands must be issued again.
 /// See <see cref="CommandListDescription"/>.
 /// </summary>
-public abstract class CommandList : DeviceResource, IDisposable
+public abstract class CommandBuffer : DeviceResource, IDisposable
 {
     private readonly GraphicsDeviceFeatures _features;
     private readonly uint _uniformBufferAlignment;
@@ -40,7 +40,7 @@ public abstract class CommandList : DeviceResource, IDisposable
     private IndexFormat _indexFormat;
 #endif
 
-    internal CommandList(
+    internal CommandBuffer(
         ref CommandListDescription description,
         GraphicsDeviceFeatures features,
         uint uniformAlignment,
@@ -62,10 +62,10 @@ public abstract class CommandList : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// Puts this <see cref="CommandList"/> into the initial state.
+    /// Puts this <see cref="CommandBuffer"/> into the initial state.
     /// This function must be called before other graphics commands can be issued.
     /// Begin must only be called if it has not been previously called, if <see cref="End"/> has been called,
-    /// or if <see cref="GraphicsDevice.SubmitCommands(CommandList)"/> has been called on this instance.
+    /// or if <see cref="GraphicsDevice.SubmitCommands(CommandBuffer)"/> has been called on this instance.
     /// </summary>
     public abstract void Begin();
 
@@ -439,13 +439,13 @@ public abstract class CommandList : DeviceResource, IDisposable
     private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
 
     /// <summary>
-    /// Draws indexed primitives from the currently-bound state in this <see cref="CommandList"/>.
+    /// Draws indexed primitives from the currently-bound state in this <see cref="CommandBuffer"/>.
     /// </summary>
     /// <param name="indexCount">The number of indices.</param>
     public void DrawIndexed(uint indexCount) => DrawIndexed(indexCount, 1, 0, 0, 0);
 
     /// <summary>
-    /// Draws indexed primitives from the currently-bound state in this <see cref="CommandList"/>.
+    /// Draws indexed primitives from the currently-bound state in this <see cref="CommandBuffer"/>.
     /// </summary>
     /// <param name="indexCount">The number of indices.</param>
     /// <param name="instanceCount">The number of instances.</param>
@@ -1040,7 +1040,7 @@ public abstract class CommandList : DeviceResource, IDisposable
     private protected abstract void GenerateMipmapsCore(Texture texture);
 
     /// <summary>
-    /// Pushes a debug group at the current position in the <see cref="CommandList"/>. This allows subsequent commands to be
+    /// Pushes a debug group at the current position in the <see cref="CommandBuffer"/>. This allows subsequent commands to be
     /// categorized and filtered when viewed in external debugging tools. This method can be called multiple times in order
     /// to create nested debug groupings. Each call to PushDebugGroup must be followed by a matching call to
     /// <see cref="PopDebugGroup"/>.
@@ -1098,7 +1098,7 @@ public abstract class CommandList : DeviceResource, IDisposable
 #if VALIDATE_USAGE
         if (_indexBuffer == null)
         {
-            throw new NeoVeldridException($"An index buffer must be bound before {nameof(CommandList)}.{nameof(DrawIndexed)} can be called.");
+            throw new NeoVeldridException($"An index buffer must be bound before {nameof(CommandBuffer)}.{nameof(DrawIndexed)} can be called.");
         }
 
         uint indexFormatSize = _indexFormat == IndexFormat.UInt16 ? 2u : 4u;

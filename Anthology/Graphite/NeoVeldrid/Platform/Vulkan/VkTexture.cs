@@ -307,7 +307,7 @@ internal unsafe class VkTexture : Texture
     }
 
     internal void TransitionImageLayout(
-        CommandBuffer cb,
+        Silk.NET.Vulkan.CommandBuffer cb,
         uint baseMipLevel,
         uint levelCount,
         uint baseArrayLayer,
@@ -368,7 +368,7 @@ internal unsafe class VkTexture : Texture
     }
 
     internal void TransitionImageLayoutNonmatching(
-        CommandBuffer cb,
+        Silk.NET.Vulkan.CommandBuffer cb,
         uint baseMipLevel,
         uint levelCount,
         uint baseArrayLayer,

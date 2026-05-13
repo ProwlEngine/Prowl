@@ -34,7 +34,7 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             width, height, 1, 1, PixelFormat.R32_G32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetFramebuffer(fb);
         // 999f and 7777f are deliberately distinctive sentinels for the B and A channels.
@@ -86,7 +86,7 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             width, height, 1, 1, PixelFormat.R16_G16_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetFramebuffer(fb);
         // 999f and 7777f are deliberately distinctive sentinels for the B and A channels:

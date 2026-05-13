@@ -88,7 +88,7 @@ void main()
             computeTargetTextureView,
             fillValueBuffer));
 
-        using CommandList cl = RF.CreateCommandList();
+        using CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
 
         cl.UpdateBuffer(fillValueBuffer, 0, new FillValueStruct(FillValue));
@@ -130,7 +130,7 @@ void main()
 
         Texture staging = factory.CreateTexture(ref description);
 
-        using CommandList cl = factory.CreateCommandList();
+        using CommandBuffer cl = factory.CreateCommandList();
         cl.Begin();
 
         cl.CopyTexture(texture,
@@ -215,7 +215,7 @@ void main()
             layout,
             16, 16, 1));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(pipeline);
         cl.SetComputeResourceSet(0, rs);
@@ -276,7 +276,7 @@ void main()
             computeLayout,
             32, 32, 1));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(computePipeline);
         cl.SetComputeResourceSet(0, computeSet);
@@ -365,7 +365,7 @@ void main()
             }
         }
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(computePipeline);
         cl.SetComputeResourceSet(0, computeSet);
@@ -473,7 +473,7 @@ void main()
         uint[] srcData = Enumerable.Range(0, (int)copySrc.SizeInBytes / sizeof(uint)).Select(i => (uint)i).ToArray();
         GD.UpdateBuffer(copySrc, 0, srcData);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(pipeline);
         if (combinedLayout)

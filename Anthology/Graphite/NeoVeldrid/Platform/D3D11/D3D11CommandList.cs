@@ -15,7 +15,7 @@ using Prowl.Vector;
 
 namespace NeoVeldrid.D3D11;
 
-internal unsafe class D3D11CommandList : CommandList
+internal unsafe class D3D11CommandList : CommandBuffer
 {
     private readonly D3D11GraphicsDevice _gd;
     private ComPtr<ID3D11DeviceContext> _context;

@@ -450,12 +450,12 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     }
 
     private protected override void SubmitCommandsCore(
-        CommandList cl,
+        CommandBuffer cl,
         Fence fence)
     {
         lock (_commandListDisposalLock)
         {
-            OpenGLCommandList glCommandList = Util.AssertSubtype<CommandList, OpenGLCommandList>(cl);
+            OpenGLCommandList glCommandList = Util.AssertSubtype<CommandBuffer, OpenGLCommandList>(cl);
             OpenGLCommandEntryList entryList = glCommandList.CurrentCommands;
             IncrementCount(glCommandList);
             _executionThread.ExecuteCommands(entryList);

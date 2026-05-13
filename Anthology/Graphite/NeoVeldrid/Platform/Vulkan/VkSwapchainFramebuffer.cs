@@ -171,7 +171,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         }
     }
 
-    public override void TransitionToIntermediateLayout(CommandBuffer cb)
+    public override void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb)
     {
         for (int i = 0; i < ColorTargets.Count; i++)
         {
@@ -181,7 +181,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         }
     }
 
-    public override void TransitionToFinalLayout(CommandBuffer cb)
+    public override void TransitionToFinalLayout(Silk.NET.Vulkan.CommandBuffer cb)
     {
         for (int i = 0; i < ColorTargets.Count; i++)
         {

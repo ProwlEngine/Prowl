@@ -112,7 +112,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         else
         {
             readback = RF.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-            CommandList cl = RF.CreateCommandList();
+            CommandBuffer cl = RF.CreateCommandList();
             cl.Begin();
             cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
             cl.End();
@@ -142,7 +142,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
                 texture.Format,
                 TextureUsage.Staging, texture.Type);
             Texture readback = RF.CreateTexture(ref desc);
-            CommandList cl = RF.CreateCommandList();
+            CommandBuffer cl = RF.CreateCommandList();
             cl.Begin();
             cl.CopyTexture(texture, readback);
             cl.End();

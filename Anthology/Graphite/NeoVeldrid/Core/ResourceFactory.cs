@@ -413,22 +413,22 @@ public abstract class ResourceFactory
     protected abstract Shader CreateShaderCore(ref ShaderDescription description);
 
     /// <summary>
-    /// Creates a new <see cref="CommandList"/>.
+    /// Creates a new <see cref="CommandBuffer"/>.
     /// </summary>
-    /// <returns>A new <see cref="CommandList"/>.</returns>
-    public CommandList CreateCommandList() => CreateCommandList(new CommandListDescription());
+    /// <returns>A new <see cref="CommandBuffer"/>.</returns>
+    public CommandBuffer CreateCommandList() => CreateCommandList(new CommandListDescription());
     /// <summary>
-    /// Creates a new <see cref="CommandList"/>.
+    /// Creates a new <see cref="CommandBuffer"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="CommandList"/>.</returns>
-    public CommandList CreateCommandList(CommandListDescription description) => CreateCommandList(ref description);
+    /// <returns>A new <see cref="CommandBuffer"/>.</returns>
+    public CommandBuffer CreateCommandList(CommandListDescription description) => CreateCommandList(ref description);
     /// <summary>
-    /// Creates a new <see cref="CommandList"/>.
+    /// Creates a new <see cref="CommandBuffer"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="CommandList"/>.</returns>
-    public abstract CommandList CreateCommandList(ref CommandListDescription description);
+    /// <returns>A new <see cref="CommandBuffer"/>.</returns>
+    public abstract CommandBuffer CreateCommandList(ref CommandListDescription description);
 
     /// <summary>
     /// Creates a new <see cref="ResourceLayout"/>.

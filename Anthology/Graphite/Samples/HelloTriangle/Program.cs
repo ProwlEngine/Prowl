@@ -86,12 +86,12 @@ void main()
         Shader fragmentShader = factory.CreateShader(new ShaderDescription(
             ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main"));
 
-        VertexLayoutDescription vertexLayout = new VertexLayoutDescription(
+        VertexLayoutDescription vertexLayout = new(
             0u,
             new VertexElementDescription("a_Position", VertexElementFormat.Float2),
             new VertexElementDescription("a_UV", VertexElementFormat.Float2));
 
-        GraphicsPipelineDescription pipelineDesc = new GraphicsPipelineDescription
+        GraphicsPipelineDescription pipelineDesc = new()
         {
             BlendState = BlendStateDescription.SingleOverrideBlend,
             DepthStencilState = new DepthStencilStateDescription(
@@ -108,7 +108,7 @@ void main()
         };
 
         Pipeline pipeline = factory.CreateGraphicsPipeline(pipelineDesc);
-        CommandList cl = factory.CreateCommandList();
+        CommandBuffer cl = factory.CreateCommandList();
 
         bool running = true;
         Event evt;

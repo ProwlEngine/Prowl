@@ -6,15 +6,15 @@
 public struct IndirectDispatchArguments
 {
     /// <summary>
-    /// The X group count, as if passed to the <see cref="CommandList.Dispatch(uint, uint, uint)"/> method.
+    /// The X group count, as if passed to the <see cref="CommandBuffer.Dispatch(uint, uint, uint)"/> method.
     /// </summary>
     public uint GroupCountX;
     /// <summary>
-    /// The Y group count, as if passed to the <see cref="CommandList.Dispatch(uint, uint, uint)"/> method.
+    /// The Y group count, as if passed to the <see cref="CommandBuffer.Dispatch(uint, uint, uint)"/> method.
     /// </summary>
     public uint GroupCountY;
     /// <summary>
-    /// The Z group count, as if passed to the <see cref="CommandList.Dispatch(uint, uint, uint)"/> method.
+    /// The Z group count, as if passed to the <see cref="CommandBuffer.Dispatch(uint, uint, uint)"/> method.
     /// </summary>
     public uint GroupCountZ;
 }

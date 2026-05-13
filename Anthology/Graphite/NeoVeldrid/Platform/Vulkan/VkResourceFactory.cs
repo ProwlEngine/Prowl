@@ -16,7 +16,7 @@ internal class VkResourceFactory : ResourceFactory
 
     public override GraphicsBackend BackendType => GraphicsBackend.Vulkan;
 
-    public override CommandList CreateCommandList(ref CommandListDescription description)
+    public override CommandBuffer CreateCommandList(ref CommandListDescription description)
     {
         return new VkCommandList(_gd, ref description);
     }

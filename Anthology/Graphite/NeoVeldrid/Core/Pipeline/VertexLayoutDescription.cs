@@ -9,7 +9,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
 {
     /// <summary>
     /// The buffer binding index this layout occupies. Matches the <c>index</c> argument
-    /// of <see cref="CommandList.SetVertexBuffer(uint, DeviceBuffer)"/>.
+    /// of <see cref="CommandBuffer.SetVertexBuffer(uint, DeviceBuffer)"/>.
     /// </summary>
     public uint Location;
     /// <summary>

@@ -112,7 +112,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         ResourceSet rs = RF.CreateResourceSet(new ResourceSetDescription(layout, ub));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(0, rs));
         cl.End();
@@ -151,7 +151,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(pipeline);
         Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(1, set));
@@ -205,7 +205,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(pipeline);
         cl.SetGraphicsResourceSet(0, set);

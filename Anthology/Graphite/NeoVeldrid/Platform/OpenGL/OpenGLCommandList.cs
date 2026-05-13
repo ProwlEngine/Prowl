@@ -8,7 +8,7 @@ using Prowl.Vector;
 
 namespace NeoVeldrid.OpenGL;
 
-internal class OpenGLCommandList : CommandList
+internal class OpenGLCommandList : CommandBuffer
 {
     private readonly OpenGLGraphicsDevice _gd;
     private OpenGLCommandEntryList _currentCommands;

@@ -142,7 +142,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateBuffer(vb, 0, vertices);
         GD.UpdateBuffer(infoBuffer, 0, new UIntVertexAttribsInfo { ColorNormalizationFactor = colorNormalizationFactor });
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -261,7 +261,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new BufferDescription((uint)(Unsafe.SizeOf<VertexCPU_UShortNorm>() * vertices.Length), BufferUsage.VertexBuffer));
         GD.UpdateBuffer(vb, 0, vertices);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -409,7 +409,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateBuffer(vb, 0, vertices);
         GD.UpdateBuffer(infoBuffer, 0, new UIntVertexAttribsInfo { ColorNormalizationFactor = colorNormalizationFactor });
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -564,7 +564,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateBuffer(vb, 0, vertices);
         GD.UpdateBuffer(infoBuffer, 0, new UIntVertexAttribsInfo { ColorNormalizationFactor = colorNormalizationFactor });
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -680,7 +680,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new BufferDescription((uint)(Unsafe.SizeOf<Float2>() * vertices.Length), BufferUsage.VertexBuffer));
         GD.UpdateBuffer(vb, 0, vertices);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         for (int i = 0; i < 2; i++)
         {
@@ -772,7 +772,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             graphicsLayout,
             framebuffer.OutputDescription));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(computePipeline);
         cl.SetComputeResourceSet(0, computeSet);
@@ -839,7 +839,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             graphicsLayout,
             framebuffer.OutputDescription));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(computePipeline);
         cl.SetComputeResourceSet(0, computeSet);
@@ -888,7 +888,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             computeLayout,
             32, 32, 1));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(computePipeline);
         cl.SetComputeResourceSet(0, computeSet);
@@ -967,7 +967,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -1064,7 +1064,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             Array.Empty<ResourceLayout>(),
             framebuffer2.OutputDescription));
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer1);
@@ -1153,7 +1153,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -1223,7 +1223,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -1276,7 +1276,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
 
         cl.Begin();
         cl.SetFramebuffer(framebuffer);

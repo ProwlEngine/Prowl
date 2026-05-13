@@ -94,14 +94,14 @@ public abstract class GraphicsDevice : IDisposable
 
     /// <summary>
     /// The required alignment, in bytes, for uniform buffer offsets. <see cref="DeviceBufferRange.Offset"/> must be a
-    /// multiple of this value. When binding a <see cref="ResourceSet"/> to a <see cref="CommandList"/> with an overload
+    /// multiple of this value. When binding a <see cref="ResourceSet"/> to a <see cref="CommandBuffer"/> with an overload
     /// accepting dynamic offsets, each offset must be a multiple of this value.
     /// </summary>
     public uint UniformBufferMinOffsetAlignment => GetUniformBufferMinOffsetAlignmentCore();
 
     /// <summary>
     /// The required alignment, in bytes, for structured buffer offsets. <see cref="DeviceBufferRange.Offset"/> must be a
-    /// multiple of this value. When binding a <see cref="ResourceSet"/> to a <see cref="CommandList"/> with an overload
+    /// multiple of this value. When binding a <see cref="ResourceSet"/> to a <see cref="CommandBuffer"/> with an overload
     /// accepting dynamic offsets, each offset must be a multiple of this value.
     /// </summary>
     public uint StructuredBufferMinOffsetAlignment => GetStructuredBufferMinOffsetAlignmentCore();
@@ -110,29 +110,29 @@ public abstract class GraphicsDevice : IDisposable
     internal abstract uint GetStructuredBufferMinOffsetAlignmentCore();
 
     /// <summary>
-    /// Submits the given <see cref="CommandList"/> for execution by this device.
+    /// Submits the given <see cref="CommandBuffer"/> for execution by this device.
     /// Commands submitted in this way may not be completed when this method returns.
     /// Use <see cref="WaitForIdle"/> to wait for all submitted commands to complete.
-    /// <see cref="CommandList.End"/> must have been called on <paramref name="commandList"/> for this method to succeed.
+    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="commandList"/> for this method to succeed.
     /// </summary>
-    /// <param name="commandList">The completed <see cref="CommandList"/> to execute. <see cref="CommandList.End"/> must have
+    /// <param name="commandList">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
     /// been previously called on this object.</param>
-    public void SubmitCommands(CommandList commandList) => SubmitCommandsCore(commandList, null);
+    public void SubmitCommands(CommandBuffer commandList) => SubmitCommandsCore(commandList, null);
 
     /// <summary>
-    /// Submits the given <see cref="CommandList"/> for execution by this device.
+    /// Submits the given <see cref="CommandBuffer"/> for execution by this device.
     /// Commands submitted in this way may not be completed when this method returns.
     /// Use <see cref="WaitForIdle"/> to wait for all submitted commands to complete.
-    /// <see cref="CommandList.End"/> must have been called on <paramref name="commandList"/> for this method to succeed.
+    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="commandList"/> for this method to succeed.
     /// </summary>
-    /// <param name="commandList">The completed <see cref="CommandList"/> to execute. <see cref="CommandList.End"/> must have
+    /// <param name="commandList">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
     /// been previously called on this object.</param>
     /// <param name="fence">A <see cref="Fence"/> which will become signaled after this submission fully completes
     /// execution.</param>
-    public void SubmitCommands(CommandList commandList, Fence fence) => SubmitCommandsCore(commandList, fence);
+    public void SubmitCommands(CommandBuffer commandList, Fence fence) => SubmitCommandsCore(commandList, fence);
 
     private protected abstract void SubmitCommandsCore(
-        CommandList commandList,
+        CommandBuffer commandList,
         Fence fence);
 
     /// <summary>
@@ -220,7 +220,7 @@ public abstract class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// A blocking method that returns when all submitted <see cref="CommandList"/> objects have fully completed.
+    /// A blocking method that returns when all submitted <see cref="CommandBuffer"/> objects have fully completed.
     /// </summary>
     public void WaitForIdle()
     {

@@ -10,12 +10,12 @@ public enum BufferUsage : byte
 {
     /// <summary>
     /// Indicates that a <see cref="DeviceBuffer"/> can be used as the source of vertex data for drawing commands.
-    /// This flag enables the use of a Buffer in the <see cref="CommandList.SetVertexBuffer(uint, DeviceBuffer)"/> method.
+    /// This flag enables the use of a Buffer in the <see cref="CommandBuffer.SetVertexBuffer(uint, DeviceBuffer)"/> method.
     /// </summary>
     VertexBuffer = 1 << 0,
     /// <summary>
     /// Indicates that a <see cref="DeviceBuffer"/> can be used as the source of index data for drawing commands.
-    /// This flag enables the use of a Buffer in the <see cref="CommandList.SetIndexBuffer(DeviceBuffer, IndexFormat)" /> method.
+    /// This flag enables the use of a Buffer in the <see cref="CommandBuffer.SetIndexBuffer(DeviceBuffer, IndexFormat)" /> method.
     /// </summary>
     IndexBuffer = 1 << 1,
     /// <summary>
@@ -37,7 +37,7 @@ public enum BufferUsage : byte
     StructuredBufferReadWrite = 1 << 4,
     /// <summary>
     /// Indicates that a <see cref="DeviceBuffer"/> can be used as the source of indirect drawing information.
-    /// This flag enables the use of a Buffer in the *Indirect methods of <see cref="CommandList"/>.
+    /// This flag enables the use of a Buffer in the *Indirect methods of <see cref="CommandBuffer"/>.
     /// This flag cannot be combined with <see cref="Dynamic"/>.
     /// </summary>
     IndirectBuffer = 1 << 5,

@@ -122,7 +122,7 @@ internal unsafe static class VulkanUtil
 
     public static void TransitionImageLayout(
         VkApi vk,
-        CommandBuffer cb,
+        Silk.NET.Vulkan.CommandBuffer cb,
         Image image,
         uint baseMipLevel,
         uint levelCount,

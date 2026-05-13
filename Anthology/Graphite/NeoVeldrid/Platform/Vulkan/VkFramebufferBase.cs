@@ -38,6 +38,6 @@ internal abstract class VkFramebufferBase : Framebuffer
     public abstract RenderPass RenderPassNoClear_Load { get; }
     public abstract RenderPass RenderPassClear { get; }
     public abstract uint AttachmentCount { get; }
-    public abstract void TransitionToIntermediateLayout(CommandBuffer cb);
-    public abstract void TransitionToFinalLayout(CommandBuffer cb);
+    public abstract void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb);
+    public abstract void TransitionToFinalLayout(Silk.NET.Vulkan.CommandBuffer cb);
 }

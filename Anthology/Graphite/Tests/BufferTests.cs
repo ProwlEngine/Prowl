@@ -119,7 +119,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         DeviceBuffer dst = CreateBuffer(1024, BufferUsage.Staging);
 
-        CommandList copyCL = RF.CreateCommandList();
+        CommandBuffer copyCL = RF.CreateCommandList();
         copyCL.Begin();
         copyCL.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
         copyCL.End();
@@ -149,7 +149,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
                 .Select(i => RF.CreateBuffer(new BufferDescription(1024, BufferUsage.UniformBuffer)))
                 .ToArray();
 
-            CommandList copyCL = RF.CreateCommandList();
+            CommandBuffer copyCL = RF.CreateCommandList();
             copyCL.Begin();
             copyCL.CopyBuffer(src, 0, dsts[0], 0, src.SizeInBytes);
             for (int i = 0; i < chainLength - 1; i++)
@@ -221,7 +221,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         byte[] data = Enumerable.Range(0, 208).Select(i => (byte)(i * 150)).ToArray();
         GD.UpdateBuffer(src, 0, data);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
         cl.End();
@@ -244,7 +244,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.UpdateBuffer(dynamic, 0, initialData);
 
         byte[] replacementData = Enumerable.Repeat((byte)255, 512).ToArray();
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.UpdateBuffer(dynamic, 512, replacementData);
         cl.End();
@@ -288,7 +288,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
             new BufferDescription(1024, BufferUsage.Staging));
         byte[] data = Enumerable.Range(0, 1024).Select(i => (byte)i).ToArray();
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.UpdateBuffer(staging, 0, data);
         cl.End();
@@ -334,7 +334,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         byte[] data = Enumerable.Range(0, (int)srcBufferSize).Select(i => (byte)i).ToArray();
         GD.UpdateBuffer(src, 0, data);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.CopyBuffer(src, srcCopyOffset, dst, dstCopyOffset, copySize);
         cl.End();
@@ -361,7 +361,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     {
         DeviceBuffer buffer = CreateBuffer(bufferSize, usage);
         byte[] data = Enumerable.Range(0, (int)dataSize).Select(i => (byte)i).ToArray();
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.UpdateBuffer(buffer, offset, data);
         cl.End();
@@ -405,7 +405,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     public void UpdateUniform_Offset_CommandList(BufferUsage usage)
     {
         DeviceBuffer buffer = CreateBuffer(128, usage);
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         Matrix4x4 mat1 = new Matrix4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
         cl.UpdateBuffer(buffer, 0, ref mat1);
@@ -479,7 +479,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.UpdateBuffer(src, 0, initialDataSrc);
         GD.UpdateBuffer(dst, 0, initialDataDst);
 
-        CommandList cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.CopyBuffer(src, 0, dst, 0, 0);
         cl.End();
@@ -521,7 +521,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         if (useCommandListUpdate)
         {
-            CommandList cl = RF.CreateCommandList();
+            CommandBuffer cl = RF.CreateCommandList();
             cl.Begin();
             fixed (byte* dataPtr = otherData)
             {

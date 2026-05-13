@@ -13,11 +13,11 @@ using Prowl.Vector;
 
 namespace NeoVeldrid.Vk;
 
-internal unsafe class VkCommandList : CommandList
+internal unsafe class VkCommandList : CommandBuffer
 {
     private readonly VkGraphicsDevice _gd;
     private CommandPool _pool;
-    private CommandBuffer _cb;
+    private Silk.NET.Vulkan.CommandBuffer _cb;
     private bool _destroyed;
 
     private bool _commandBufferBegun;
@@ -46,17 +46,17 @@ internal unsafe class VkCommandList : CommandList
     private string _name;
 
     private readonly object _commandBufferListLock = new object();
-    private readonly Queue<CommandBuffer> _availableCommandBuffers = new Queue<CommandBuffer>();
-    private readonly List<CommandBuffer> _submittedCommandBuffers = new List<CommandBuffer>();
+    private readonly Queue<Silk.NET.Vulkan.CommandBuffer> _availableCommandBuffers = new Queue<Silk.NET.Vulkan.CommandBuffer>();
+    private readonly List<Silk.NET.Vulkan.CommandBuffer> _submittedCommandBuffers = new List<Silk.NET.Vulkan.CommandBuffer>();
 
     private StagingResourceInfo _currentStagingInfo;
     private readonly object _stagingLock = new object();
-    private readonly Dictionary<CommandBuffer, StagingResourceInfo> _submittedStagingInfos = new Dictionary<CommandBuffer, StagingResourceInfo>();
+    private readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, StagingResourceInfo> _submittedStagingInfos = new Dictionary<Silk.NET.Vulkan.CommandBuffer, StagingResourceInfo>();
     private readonly List<StagingResourceInfo> _availableStagingInfos = new List<StagingResourceInfo>();
     private readonly List<VkBuffer> _availableStagingBuffers = new List<VkBuffer>();
 
     public CommandPool CommandPool => _pool;
-    public CommandBuffer CommandBuffer => _cb;
+    public Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
 
     public ResourceRefCount RefCount { get; }
 
@@ -79,13 +79,13 @@ internal unsafe class VkCommandList : CommandList
         RefCount = new ResourceRefCount(DisposeCore);
     }
 
-    private CommandBuffer GetNextCommandBuffer()
+    private Silk.NET.Vulkan.CommandBuffer GetNextCommandBuffer()
     {
         lock (_commandBufferListLock)
         {
             if (_availableCommandBuffers.Count > 0)
             {
-                CommandBuffer cachedCB = _availableCommandBuffers.Dequeue();
+                Silk.NET.Vulkan.CommandBuffer cachedCB = _availableCommandBuffers.Dequeue();
                 Result resetResult = _gd.Vk.ResetCommandBuffer(cachedCB, 0);
                 CheckResult(resetResult);
                 return cachedCB;
@@ -99,12 +99,12 @@ internal unsafe class VkCommandList : CommandList
             CommandBufferCount = 1,
             Level = CommandBufferLevel.Primary
         };
-        Result result = _gd.Vk.AllocateCommandBuffers(_gd.Device, in cbAI, out CommandBuffer cb);
+        Result result = _gd.Vk.AllocateCommandBuffers(_gd.Device, in cbAI, out Silk.NET.Vulkan.CommandBuffer cb);
         CheckResult(result);
         return cb;
     }
 
-    public void CommandBufferSubmitted(CommandBuffer cb)
+    public void CommandBufferSubmitted(Silk.NET.Vulkan.CommandBuffer cb)
     {
         RefCount.Increment();
         foreach (ResourceRefCount rrc in _currentStagingInfo.Resources)
@@ -116,14 +116,14 @@ internal unsafe class VkCommandList : CommandList
         _currentStagingInfo = null;
     }
 
-    public void CommandBufferCompleted(CommandBuffer completedCB)
+    public void CommandBufferCompleted(Silk.NET.Vulkan.CommandBuffer completedCB)
     {
 
         lock (_commandBufferListLock)
         {
             for (int i = 0; i < _submittedCommandBuffers.Count; i++)
             {
-                CommandBuffer submittedCB = _submittedCommandBuffers[i];
+                Silk.NET.Vulkan.CommandBuffer submittedCB = _submittedCommandBuffers[i];
                 if (submittedCB.Handle == completedCB.Handle)
                 {
                     _availableCommandBuffers.Enqueue(completedCB);
@@ -800,7 +800,7 @@ internal unsafe class VkCommandList : CommandList
 
     internal static void CopyTextureCore_VkCommandBuffer(
         VkApi vk,
-        CommandBuffer cb,
+        Silk.NET.Vulkan.CommandBuffer cb,
         Texture source,
         uint srcX, uint srcY, uint srcZ,
         uint srcMipLevel,

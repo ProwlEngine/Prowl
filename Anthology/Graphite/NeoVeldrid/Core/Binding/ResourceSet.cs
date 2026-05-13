@@ -4,7 +4,7 @@ using System.Diagnostics;
 namespace NeoVeldrid;
 
 /// <summary>
-/// A device resource used to bind a particular set of <see cref="BindableResource"/> objects to a <see cref="CommandList"/>.
+/// A device resource used to bind a particular set of <see cref="BindableResource"/> objects to a <see cref="CommandBuffer"/>.
 /// See <see cref="ResourceSetDescription"/>.
 /// </summary>
 public abstract class ResourceSet : DeviceResource, IDisposable
