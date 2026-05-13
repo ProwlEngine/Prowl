@@ -15,7 +15,7 @@ using Prowl.Vector;
 
 namespace NeoVeldrid.D3D11;
 
-internal unsafe class D3D11CommandList : CommandBuffer
+internal unsafe class D3D11CommandBuffer : CommandBuffer
 {
     private readonly D3D11GraphicsDevice _gd;
     private ComPtr<ID3D11DeviceContext> _context;
@@ -99,8 +99,8 @@ internal unsafe class D3D11CommandList : CommandBuffer
         get => _context;
     }
 
-    public D3D11CommandList(D3D11GraphicsDevice gd, ref CommandListDescription description)
-        : base(ref description, gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
+    public D3D11CommandBuffer(D3D11GraphicsDevice gd, ref CommandBufferDescription description)
+        : base(gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
     {
         _gd = gd;
 

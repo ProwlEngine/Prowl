@@ -215,7 +215,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         VkSemaphore* signalSemaphoresPtr,
         Fence fence)
     {
-        VkCommandList vkCL = Util.AssertSubtype<CommandBuffer, VkCommandList>(cl);
+        VkCommandBuffer vkCL = Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(cl);
         Silk.NET.Vulkan.CommandBuffer vkCB = vkCL.CommandBuffer;
 
         vkCL.CommandBufferSubmitted(vkCB);
@@ -223,7 +223,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     private void SubmitCommandBuffer(
-        VkCommandList vkCL,
+        VkCommandBuffer vkCL,
         Silk.NET.Vulkan.CommandBuffer vkCB,
         uint waitSemaphoreCount,
         VkSemaphore* waitSemaphoresPtr,
@@ -395,7 +395,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 case VkBuffer buffer:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.BufferExt, buffer.DeviceBuffer.Handle, name);
                     break;
-                case VkCommandList commandList:
+                case VkCommandBuffer commandList:
                     SetDebugMarkerName(
                         DebugReportObjectTypeEXT.CommandBufferExt,
                         (ulong)commandList.CommandBuffer.Handle,
@@ -1328,7 +1328,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             UpdateTexture(stagingTex, source, sizeInBytes, 0, 0, 0, width, height, depth, 0, 0);
             SharedCommandPool pool = GetFreeCommandPool();
             Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
-            VkCommandList.CopyTextureCore_VkCommandBuffer(
+            VkCommandBuffer.CopyTextureCore_VkCommandBuffer(
                 _vk,
                 cb,
                 stagingTex, 0, 0, 0, 0, 0,
@@ -1609,9 +1609,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private struct FenceSubmissionInfo
     {
         public VkFenceHandle Fence;
-        public VkCommandList CommandList;
+        public VkCommandBuffer CommandList;
         public Silk.NET.Vulkan.CommandBuffer CommandBuffer;
-        public FenceSubmissionInfo(VkFenceHandle fence, VkCommandList commandList, Silk.NET.Vulkan.CommandBuffer commandBuffer)
+        public FenceSubmissionInfo(VkFenceHandle fence, VkCommandBuffer commandList, Silk.NET.Vulkan.CommandBuffer commandBuffer)
         {
             Fence = fence;
             CommandList = commandList;

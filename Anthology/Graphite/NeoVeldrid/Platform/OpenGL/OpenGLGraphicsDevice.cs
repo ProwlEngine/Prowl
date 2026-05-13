@@ -72,9 +72,9 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     private BlockingCollection<ExecutionThreadWorkItem> _workItems;
     private ExecutionThread _executionThread;
     private readonly object _commandListDisposalLock = new object();
-    private readonly Dictionary<OpenGLCommandList, int> _submittedCommandListCounts
-        = new Dictionary<OpenGLCommandList, int>();
-    private readonly HashSet<OpenGLCommandList> _commandListsToDispose = new HashSet<OpenGLCommandList>();
+    private readonly Dictionary<OpenGLCommandBuffer, int> _submittedCommandListCounts
+        = new Dictionary<OpenGLCommandBuffer, int>();
+    private readonly HashSet<OpenGLCommandBuffer> _commandListsToDispose = new HashSet<OpenGLCommandBuffer>();
 
     private readonly object _mappedResourceLock = new object();
     private readonly Dictionary<MappedResourceCacheKey, MappedResourceInfoWithStaging> _mappedResources
@@ -455,7 +455,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     {
         lock (_commandListDisposalLock)
         {
-            OpenGLCommandList glCommandList = Util.AssertSubtype<CommandBuffer, OpenGLCommandList>(cl);
+            OpenGLCommandBuffer glCommandList = Util.AssertSubtype<CommandBuffer, OpenGLCommandBuffer>(cl);
             OpenGLCommandEntryList entryList = glCommandList.CurrentCommands;
             IncrementCount(glCommandList);
             _executionThread.ExecuteCommands(entryList);
@@ -466,7 +466,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         }
     }
 
-    private int IncrementCount(OpenGLCommandList glCommandList)
+    private int IncrementCount(OpenGLCommandBuffer glCommandList)
     {
         if (_submittedCommandListCounts.TryGetValue(glCommandList, out int count))
         {
@@ -481,7 +481,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         return count;
     }
 
-    private int DecrementCount(OpenGLCommandList glCommandList)
+    private int DecrementCount(OpenGLCommandBuffer glCommandList)
     {
         if (_submittedCommandListCounts.TryGetValue(glCommandList, out int count))
         {
@@ -503,7 +503,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         return count;
     }
 
-    private int GetCount(OpenGLCommandList glCommandList)
+    private int GetCount(OpenGLCommandBuffer glCommandList)
     {
         return _submittedCommandListCounts.TryGetValue(glCommandList, out int count) ? count : 0;
     }
@@ -689,7 +689,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         _resourcesToDispose.Enqueue(resource);
     }
 
-    internal void EnqueueDisposal(OpenGLCommandList commandList)
+    internal void EnqueueDisposal(OpenGLCommandBuffer commandList)
     {
         lock (_commandListDisposalLock)
         {
@@ -704,7 +704,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         }
     }
 
-    internal bool CheckCommandListDisposal(OpenGLCommandList commandList)
+    internal bool CheckCommandListDisposal(OpenGLCommandBuffer commandList)
     {
 
         lock (_commandListDisposalLock)

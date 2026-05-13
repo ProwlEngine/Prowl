@@ -6,7 +6,7 @@ namespace NeoVeldrid.OpenGL;
 
 internal interface OpenGLCommandEntryList
 {
-    OpenGLCommandList Parent { get; }
+    OpenGLCommandBuffer Parent { get; }
     void Begin();
     void ClearColorTarget(uint index, Color clearColor);
     void ClearDepthTarget(float depth, byte stencil);

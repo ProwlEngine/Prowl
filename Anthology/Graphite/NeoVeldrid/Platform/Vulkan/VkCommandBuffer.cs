@@ -13,7 +13,7 @@ using Prowl.Vector;
 
 namespace NeoVeldrid.Vk;
 
-internal unsafe class VkCommandList : CommandBuffer
+internal unsafe class VkCommandBuffer : CommandBuffer
 {
     private readonly VkGraphicsDevice _gd;
     private CommandPool _pool;
@@ -62,8 +62,8 @@ internal unsafe class VkCommandList : CommandBuffer
 
     public override bool IsDisposed => _destroyed;
 
-    public VkCommandList(VkGraphicsDevice gd, ref CommandListDescription description)
-        : base(ref description, gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
+    public VkCommandBuffer(VkGraphicsDevice gd, ref CommandBufferDescription description)
+        : base(gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
     {
         _gd = gd;
         CommandPoolCreateInfo poolCI = new CommandPoolCreateInfo

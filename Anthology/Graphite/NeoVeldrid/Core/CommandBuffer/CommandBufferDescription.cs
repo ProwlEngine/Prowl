@@ -5,14 +5,14 @@ namespace NeoVeldrid;
 /// <summary>
 /// Describes a <see cref="CommandBuffer"/>, for creation using a <see cref="ResourceFactory"/>.
 /// </summary>
-public struct CommandListDescription : IEquatable<CommandListDescription>
+public struct CommandBufferDescription : IEquatable<CommandBufferDescription>
 {
     /// <summary>
     /// Element-wise equality.
     /// </summary>
     /// <param name="other">The instance to compare to.</param>
     /// <returns>True if all elements are equal; false otherswise.</returns>
-    public bool Equals(CommandListDescription other)
+    public bool Equals(CommandBufferDescription other)
     {
         return true;
     }

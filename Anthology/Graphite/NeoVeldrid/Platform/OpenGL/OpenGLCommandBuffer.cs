@@ -8,7 +8,7 @@ using Prowl.Vector;
 
 namespace NeoVeldrid.OpenGL;
 
-internal class OpenGLCommandList : CommandBuffer
+internal class OpenGLCommandBuffer : CommandBuffer
 {
     private readonly OpenGLGraphicsDevice _gd;
     private OpenGLCommandEntryList _currentCommands;
@@ -25,8 +25,8 @@ internal class OpenGLCommandList : CommandBuffer
 
     public override bool IsDisposed => _disposed;
 
-    public OpenGLCommandList(OpenGLGraphicsDevice gd, ref CommandListDescription description)
-        : base(ref description, gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
+    public OpenGLCommandBuffer(OpenGLGraphicsDevice gd, ref CommandBufferDescription description)
+        : base(gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
     {
         _gd = gd;
     }

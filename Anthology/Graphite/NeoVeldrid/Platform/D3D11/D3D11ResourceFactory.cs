@@ -21,9 +21,9 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
         _cache = new D3D11ResourceCache(_device);
     }
 
-    public override CommandBuffer CreateCommandList(ref CommandListDescription description)
+    public override CommandBuffer CreateCommandList(ref CommandBufferDescription description)
     {
-        return new D3D11CommandList(_gd, ref description);
+        return new D3D11CommandBuffer(_gd, ref description);
     }
 
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)

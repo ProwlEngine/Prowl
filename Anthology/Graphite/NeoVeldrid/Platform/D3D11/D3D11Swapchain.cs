@@ -23,7 +23,7 @@ internal unsafe class D3D11Swapchain : Swapchain
     private string _name;
 
     private readonly object _referencedCLsLock = new object();
-    private HashSet<D3D11CommandList> _referencedCLs = new HashSet<D3D11CommandList>();
+    private HashSet<D3D11CommandBuffer> _referencedCLs = new HashSet<D3D11CommandBuffer>();
 
     public override Framebuffer Framebuffer => _framebuffer;
 
@@ -107,7 +107,7 @@ internal unsafe class D3D11Swapchain : Swapchain
     {
         lock (_referencedCLsLock)
         {
-            foreach (D3D11CommandList cl in _referencedCLs)
+            foreach (D3D11CommandBuffer cl in _referencedCLs)
             {
                 cl.Reset();
             }
@@ -168,7 +168,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         };
     }
 
-    public void AddCommandListReference(D3D11CommandList cl)
+    public void AddCommandListReference(D3D11CommandBuffer cl)
     {
         lock (_referencedCLsLock)
         {
@@ -176,7 +176,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         }
     }
 
-    public void RemoveCommandListReference(D3D11CommandList cl)
+    public void RemoveCommandListReference(D3D11CommandBuffer cl)
     {
         lock (_referencedCLsLock)
         {

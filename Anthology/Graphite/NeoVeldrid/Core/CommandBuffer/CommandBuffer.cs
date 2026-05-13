@@ -23,7 +23,7 @@ namespace NeoVeldrid;
 /// These limitations are described in each function, where applicable.
 /// <see cref="CommandBuffer"/> instances cannot be executed multiple times per-recording. When executed by a
 /// <see cref="GraphicsDevice"/>, they must be reset and commands must be issued again.
-/// See <see cref="CommandListDescription"/>.
+/// See <see cref="CommandBufferDescription"/>.
 /// </summary>
 public abstract class CommandBuffer : DeviceResource, IDisposable
 {
@@ -41,7 +41,6 @@ public abstract class CommandBuffer : DeviceResource, IDisposable
 #endif
 
     internal CommandBuffer(
-        ref CommandListDescription description,
         GraphicsDeviceFeatures features,
         uint uniformAlignment,
         uint structuredAlignment)
@@ -169,6 +168,7 @@ public abstract class CommandBuffer : DeviceResource, IDisposable
 #endif
         SetIndexBufferCore(buffer, format, offset);
     }
+
 
     private protected abstract void SetIndexBufferCore(DeviceBuffer buffer, IndexFormat format, uint offset);
 

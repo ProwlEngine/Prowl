@@ -93,9 +93,9 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
     private const byte InsertDebugMarkerEntryID = 26;
     private static readonly uint InsertDebugMarkerEntrySize = Util.USizeOf<NoAllocInsertDebugMarkerEntry>();
 
-    public OpenGLCommandList Parent { get; }
+    public OpenGLCommandBuffer Parent { get; }
 
-    public OpenGLNoAllocCommandEntryList(OpenGLCommandList cl)
+    public OpenGLNoAllocCommandEntryList(OpenGLCommandBuffer cl)
     {
         Parent = cl;
         _memoryPool = cl.Device.StagingMemoryPool;
