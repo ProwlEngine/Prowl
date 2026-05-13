@@ -8,4 +8,7 @@
     <Folder Name="/Tests/">
         <Project Path="Tests/NeoVeldrid.Tests.csproj" />
     </Folder>
+    <Folder Name="/Samples/">
+        <Project Path="Samples/HelloTriangle/HelloTriangle.csproj" />
+    </Folder>
 </Solution>

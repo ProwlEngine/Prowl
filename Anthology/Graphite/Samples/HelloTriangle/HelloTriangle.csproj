@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>NeoVeldrid.Samples.HelloTriangle</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\NeoVeldrid\NeoVeldrid.csproj" />
+        <PackageReference Include="Silk.NET.SDL" Version="$(SilkNetVersion)" />
+    </ItemGroup>
+
+</Project>
