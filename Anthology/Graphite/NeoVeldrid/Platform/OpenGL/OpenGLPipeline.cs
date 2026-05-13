@@ -131,8 +131,7 @@ internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         _gl.LinkProgram(_program);
         CheckLastError();
 
-        int linkStatus;
-        _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out linkStatus);
+        _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out int linkStatus);
         CheckLastError();
         if (linkStatus != 1)
         {
@@ -172,8 +171,7 @@ internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
                     uint blockIndex = GetUniformBlockIndex(resource.Name);
                     if (blockIndex != GL_INVALID_INDEX)
                     {
-                        int blockSize;
-                        _gl.GetActiveUniformBlock(_program, blockIndex, UniformBlockPName.DataSize, out blockSize);
+                        _gl.GetActiveUniformBlock(_program, blockIndex, UniformBlockPName.DataSize, out int blockSize);
                         CheckLastError();
                         uniformBindings[i] = new OpenGLUniformBinding(_program, blockIndex, (uint)blockSize, (uint)bindingIndex);
                     }
@@ -268,8 +266,7 @@ internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         _gl.LinkProgram(_program);
         CheckLastError();
 
-        int linkStatus;
-        _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out linkStatus);
+        _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out int linkStatus);
         CheckLastError();
         if (linkStatus != 1)
         {

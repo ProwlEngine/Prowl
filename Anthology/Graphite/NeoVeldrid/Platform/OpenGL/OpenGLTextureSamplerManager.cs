@@ -26,8 +26,7 @@ internal unsafe class OpenGLTextureSamplerManager
     {
         _gd = gd;
         _dsaAvailable = extensions.ARB_DirectStateAccess;
-        int maxTextureUnits;
-        _gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out maxTextureUnits);
+        _gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out int maxTextureUnits);
         CheckLastError();
         _maxTextureUnits = Math.Max(maxTextureUnits, 8); // OpenGL spec indicates that implementations must support at least 8.
         _textureUnitTextures = new OpenGLTextureView[_maxTextureUnits];

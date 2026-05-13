@@ -143,8 +143,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                     allocateInfo.PNext = &dedicatedAI;
                 }
 
-                DeviceMemory memory;
-                Result allocationResult = _vk.AllocateMemory(_device, in allocateInfo, null, out memory);
+                Result allocationResult = _vk.AllocateMemory(_device, in allocateInfo, null, out DeviceMemory memory);
                 if (allocationResult != Result.Success)
                 {
                     throw new NeoVeldridException("Unable to allocate sufficient Vulkan memory.");

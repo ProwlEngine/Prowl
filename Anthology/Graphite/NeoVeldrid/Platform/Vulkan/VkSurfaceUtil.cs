@@ -113,8 +113,7 @@ internal static unsafe class VkSurfaceUtil
             throw new NeoVeldridException("VK_KHR_win32_surface extension not available.");
         }
 
-        SurfaceKHR surface;
-        Result result = khrWin32Surface.CreateWin32Surface(instance, in surfaceCI, null, out surface);
+        Result result = khrWin32Surface.CreateWin32Surface(instance, in surfaceCI, null, out SurfaceKHR surface);
         CheckResult(result);
         return surface;
     }
@@ -133,8 +132,7 @@ internal static unsafe class VkSurfaceUtil
             throw new NeoVeldridException("VK_KHR_xlib_surface extension not available.");
         }
 
-        SurfaceKHR surface;
-        Result result = khrXlibSurface.CreateXlibSurface(instance, in xsci, null, out surface);
+        Result result = khrXlibSurface.CreateXlibSurface(instance, in xsci, null, out SurfaceKHR surface);
         CheckResult(result);
         return surface;
     }
@@ -153,8 +151,7 @@ internal static unsafe class VkSurfaceUtil
             throw new NeoVeldridException("VK_KHR_wayland_surface extension not available.");
         }
 
-        SurfaceKHR surface;
-        Result result = khrWaylandSurface.CreateWaylandSurface(instance, in wsci, null, out surface);
+        Result result = khrWaylandSurface.CreateWaylandSurface(instance, in wsci, null, out SurfaceKHR surface);
         CheckResult(result);
         return surface;
     }
@@ -189,8 +186,7 @@ internal static unsafe class VkSurfaceUtil
                 throw new NeoVeldridException("VK_EXT_metal_surface extension not available.");
             }
 
-            SurfaceKHR surface;
-            Result result = extMetalSurface.CreateMetalSurface(instance, in surfaceCI, null, out surface);
+            Result result = extMetalSurface.CreateMetalSurface(instance, in surfaceCI, null, out SurfaceKHR surface);
             CheckResult(result);
             return surface;
         }

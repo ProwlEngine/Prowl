@@ -30,7 +30,6 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         = new ConcurrentQueue<OpenGLDeferredResource>();
     private IGLContext _glContext;
     private bool _glContextDestroyed;
-    private Func<IntPtr> _getCurrentContext;
     private Action<bool> _setSyncToVBlank;
     private OpenGLSwapchainFramebuffer _swapchainFramebuffer;
     private OpenGLTextureSamplerManager _textureSamplerManager;
@@ -166,10 +165,9 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         // ClearDepthf/DepthRangef are available via GL.ClearDepth(float)/GL.DepthRange(float, float)
         // (core in GL 4.1+ from ARB_ES2_compatibility, and always available in GLES).
 
-        int majorVersion, minorVersion;
-        GL.GetInteger(GetPName.MajorVersion, out majorVersion);
+        GL.GetInteger(GetPName.MajorVersion, out int majorVersion);
         CheckLastError();
-        GL.GetInteger(GetPName.MinorVersion, out minorVersion);
+        GL.GetInteger(GetPName.MinorVersion, out int minorVersion);
         CheckLastError();
 
         GraphicsApiVersion.TryParseGLVersion(_version, out _apiVersion);
@@ -180,8 +178,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             _apiVersion = new GraphicsApiVersion(majorVersion, minorVersion, 0, 0);
         }
 
-        int extensionCount;
-        GL.GetInteger(GetPName.NumExtensions, out extensionCount);
+        GL.GetInteger(GetPName.NumExtensions, out int extensionCount);
         CheckLastError();
 
         HashSet<string> extensions = new HashSet<string>();
@@ -197,7 +194,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         }
 
         _extensions = new OpenGLExtensions(extensions, _backendType, majorVersion, minorVersion);
-        OpenGLUtil.HasGlObjectLabel = _extensions.KHR_Debug;
+        HasGlObjectLabel = _extensions.KHR_Debug;
 
         if (_extensions.EXT_DebugMarker)
         {
@@ -225,15 +222,13 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             bufferRangeBinding: _extensions.ARB_uniform_buffer_object,
             shaderFloat64: _extensions.ARB_GpuShaderFp64);
 
-        int uboAlignment;
-        GL.GetInteger(GetPName.UniformBufferOffsetAlignment, out uboAlignment);
+        GL.GetInteger(GetPName.UniformBufferOffsetAlignment, out int uboAlignment);
         CheckLastError();
         _minUboOffsetAlignment = (uint)uboAlignment;
 
         if (_features.StructuredBuffer)
         {
-            int ssboAlignment;
-            GL.GetInteger(GetPName.ShaderStorageBufferOffsetAlignment, out ssboAlignment);
+            GL.GetInteger(GetPName.ShaderStorageBufferOffsetAlignment, out int ssboAlignment);
             CheckLastError();
             _minSsboOffsetAlignment = (uint)ssboAlignment;
         }
@@ -280,53 +275,28 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         _textureSamplerManager = new OpenGLTextureSamplerManager(this, _extensions);
         _commandExecutor = new OpenGLCommandExecutor(this, platformInfo);
 
-        int maxColorTextureSamples;
-        if (_backendType == GraphicsBackend.OpenGL)
-        {
-            GL.GetInteger(GetPName.MaxColorTextureSamples, out maxColorTextureSamples);
-            CheckLastError();
-        }
-        else
-        {
-            GL.GetInteger((GetPName)GLEnum.MaxSamples, out maxColorTextureSamples);
-            CheckLastError();
-        }
-        if (maxColorTextureSamples >= 32)
-        {
-            _maxColorTextureSamples = TextureSampleCount.Count32;
-        }
-        else if (maxColorTextureSamples >= 16)
-        {
-            _maxColorTextureSamples = TextureSampleCount.Count16;
-        }
-        else if (maxColorTextureSamples >= 8)
-        {
-            _maxColorTextureSamples = TextureSampleCount.Count8;
-        }
-        else if (maxColorTextureSamples >= 4)
-        {
-            _maxColorTextureSamples = TextureSampleCount.Count4;
-        }
-        else if (maxColorTextureSamples >= 2)
-        {
-            _maxColorTextureSamples = TextureSampleCount.Count2;
-        }
-        else
-        {
-            _maxColorTextureSamples = TextureSampleCount.Count1;
-        }
-
-        int maxTexSize;
-
-        GL.GetInteger(GetPName.MaxTextureSize, out maxTexSize);
+        GL.GetInteger(
+            _backendType == GraphicsBackend.OpenGL ? GetPName.MaxColorTextureSamples : (GetPName)GLEnum.MaxSamples,
+            out int maxColorTextureSamples);
         CheckLastError();
 
-        int maxTexDepth;
-        GL.GetInteger(GetPName.Max3DTextureSize, out maxTexDepth);
+        _maxColorTextureSamples = maxColorTextureSamples switch
+        {
+            32 => TextureSampleCount.Count32,
+            16 => TextureSampleCount.Count16,
+            8 => TextureSampleCount.Count8,
+            4 => TextureSampleCount.Count4,
+            2 => TextureSampleCount.Count2,
+            _ => TextureSampleCount.Count1
+        };
+
+        GL.GetInteger(GetPName.MaxTextureSize, out int maxTexSize);
         CheckLastError();
 
-        int maxTexArrayLayers;
-        GL.GetInteger(GetPName.MaxArrayTextureLayers, out maxTexArrayLayers);
+        GL.GetInteger(GetPName.Max3DTextureSize, out int maxTexDepth);
+        CheckLastError();
+
+        GL.GetInteger(GetPName.MaxArrayTextureLayers, out int maxTexArrayLayers);
         CheckLastError();
 
         if (options.PreferDepthRangeZeroToOne && _extensions.ARB_ClipControl)
@@ -346,7 +316,6 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             platformInfo.ResizeSwapchain);
 
         _workItems = new BlockingCollection<ExecutionThreadWorkItem>(new ConcurrentQueue<ExecutionThreadWorkItem>());
-        platformInfo.ClearCurrentContext();
         _executionThread = new ExecutionThread(this, _workItems, _glContext);
         _openglInfo = new BackendInfoOpenGL(this);
 

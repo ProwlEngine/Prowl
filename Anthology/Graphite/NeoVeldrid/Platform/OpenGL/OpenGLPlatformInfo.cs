@@ -16,16 +16,6 @@ public class OpenGLPlatformInfo
     public IGLContext GLContext { get; }
 
     /// <summary>
-    /// A delegate which can be used to retrieve the calling thread's active OpenGL context.
-    /// </summary>
-    public Func<IntPtr> GetCurrentContext { get; }
-
-    /// <summary>
-    /// A delegate which can be used to clear the calling thread's GL context.
-    /// </summary>
-    public Action ClearCurrentContext { get; }
-
-    /// <summary>
     /// A delegate which can be used to set the synchronization behavior of the OpenGL context.
     /// </summary>
     public Action<bool> SetSyncToVerticalBlank { get; }
@@ -45,39 +35,21 @@ public class OpenGLPlatformInfo
     /// <summary>
     /// Constructs a new OpenGLPlatformInfo.
     /// </summary>
-    /// <param name="openGLContextHandle">The OpenGL context handle.</param>
-    /// <param name="glContext">A delegate which can be used to retrieve OpenGL function pointers by name.</param>
-    /// <param name="makeCurrent">A delegate which can be used to make the given OpenGL context current on the calling
-    /// thread.</param>
-    /// <param name="getCurrentContext">A delegate which can be used to retrieve the calling thread's active OpenGL context.</param>
-    /// <param name="clearCurrentContext">A delegate which can be used to clear the calling thread's GL context.</param>
-    /// <param name="deleteContext">A delegate which can be used to delete the given context.</param>
-    /// <param name="swapBuffers">A delegate which can be used to swap the main back buffer associated with the OpenGL
-    /// context.</param>
+    /// <param name="glContext">The OpenGL context handle.</param>
     /// <param name="setSyncToVerticalBlank">A delegate which can be used to set the synchronization behavior of the OpenGL
     /// context.</param>
     public OpenGLPlatformInfo(
         IGLContext glContext,
-        Func<IntPtr> getCurrentContext,
-        Action clearCurrentContext,
         Action<bool> setSyncToVerticalBlank)
     {
         GLContext = glContext;
-        GetCurrentContext = getCurrentContext;
-        ClearCurrentContext = clearCurrentContext;
         SetSyncToVerticalBlank = setSyncToVerticalBlank;
     }
 
     /// <summary>
     /// Constructs a new OpenGLPlatformInfo.
     /// </summary>
-    /// <param name="makeCurrent">A delegate which can be used to make the given OpenGL context current on the calling
-    /// thread.</param>
-    /// <param name="getCurrentContext">A delegate which can be used to retrieve the calling thread's active OpenGL context.</param>
-    /// <param name="clearCurrentContext">A delegate which can be used to clear the calling thread's GL context.</param>
-    /// <param name="deleteContext">A delegate which can be used to delete the given context.</param>
-    /// <param name="swapBuffers">A delegate which can be used to swap the main back buffer associated with the OpenGL
-    /// context.</param>
+    /// <param name="glContext">The OpenGL context handle.</param>
     /// <param name="setSyncToVerticalBlank">A delegate which can be used to set the synchronization behavior of the OpenGL
     /// context.</param>
     /// <param name="setSwapchainFramebuffer">A delegate which can be used to set the framebuffer used to render to the
@@ -86,15 +58,11 @@ public class OpenGLPlatformInfo
     /// in which case no special action is taken when the Swapchain is resized.</param>
     public OpenGLPlatformInfo(
         IGLContext glContext,
-        Func<IntPtr> getCurrentContext,
-        Action clearCurrentContext,
         Action<bool> setSyncToVerticalBlank,
         Action setSwapchainFramebuffer,
         Action<uint, uint> resizeSwapchain)
     {
         GLContext = glContext;
-        GetCurrentContext = getCurrentContext;
-        ClearCurrentContext = clearCurrentContext;
         SetSyncToVerticalBlank = setSyncToVerticalBlank;
         SetSwapchainFramebuffer = setSwapchainFramebuffer;
         ResizeSwapchain = resizeSwapchain;
