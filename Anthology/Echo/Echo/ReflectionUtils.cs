@@ -63,17 +63,36 @@ public static class ReflectionUtils
     internal static Type? FindTypeByName(string qualifiedTypeName)
     {
         return TypeCache.GetOrAdd(qualifiedTypeName, typeName => {
-            // First try direct type lookup
+            // First try direct type lookup (works for types in the default AssemblyLoadContext)
             Type? t = Type.GetType(typeName);
             if (t != null)
                 return t;
+
+            // Strip assembly qualifier to get just the namespace-qualified type name.
+            // Assembly-qualified names look like "Namespace.Type, AssemblyName, Version=..."
+            // asm.GetType() needs just "Namespace.Type" to search within a specific assembly.
+            string typeNameOnly = typeName;
+            int commaIdx = typeName.IndexOf(',');
+            if (commaIdx >= 0)
+                typeNameOnly = typeName.Substring(0, commaIdx).Trim();
+
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
             foreach (Assembly asm in assemblies)
             {
-                // Try full name lookup
+                // Try full name lookup (handles non-assembly-qualified names)
                 t = asm.GetType(typeName);
                 if (t != null)
                     return t;
+
+                // Try with stripped assembly qualifier (finds types in custom AssemblyLoadContexts
+                // where the assembly-qualified lookup fails)
+                if (typeNameOnly != typeName)
+                {
+                    t = asm.GetType(typeNameOnly);
+                    if (t != null)
+                        return t;
+                }
+
                 // Try name-only lookup (case insensitive) while ignoring load failures
                 Type[] types;
                 try
@@ -85,7 +104,7 @@ public static class ReflectionUtils
                     types = ex.Types.Where(type => type != null).Cast<Type>().ToArray();
                 }
 
-                t = types.FirstOrDefault(type => type.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
+                t = types.FirstOrDefault(type => type.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
                 if (t != null)
                     return t;
             }
