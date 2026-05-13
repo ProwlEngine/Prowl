@@ -6,9 +6,6 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
 
-using static System.Net.Mime.MediaTypeNames;
-using static Prowl.PaperUI.ElementBuilder;
-
 using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.Widgets;
@@ -75,19 +72,6 @@ public static class EditorGUI
         return s;
     }
 
-    // Shared callback storage: widgets register their callbacks here,
-    // Paper's end-of-frame events invoke them.
-    // We use a simple list that's drained each frame.
-    private static readonly System.Collections.Generic.List<Action> _pendingCallbacks = new();
-
-    /// <summary>Call at end of frame to flush any pending widget callbacks. Not needed
-    /// if widgets use Paper's own OnClick/OnDrag callbacks (which fire automatically).</summary>
-    public static void FlushCallbacks()
-    {
-        foreach (var cb in _pendingCallbacks) cb();
-        _pendingCallbacks.Clear();
-    }
-
     // ================================================================
     //  Label
     // ================================================================
@@ -121,18 +105,6 @@ public static class EditorGUI
             .FontSize(FontSz + 2);
     }
 
-
-    public static void RoundedRectFilled(Prowl.Quill.Canvas canvas, float rectX, float rectY, float rectWidth, float rectHeight,
-        float radiusTopLeft, float radiusTopRight, float radiusBottomLeft, float radiusBottomRight, Color color)
-    {
-        /*canvas.RoundedRectFilled(rectX, rectY, rectWidth, rectHeight,
-            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft,
-            color);*/
-        canvas.RoundedRect(rectX, rectY, rectWidth, rectHeight,
-            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft);
-        canvas.SetFillColor(color);
-        canvas.FillComplexAA();
-    }
 
     // ================================================================
     //  Separator
@@ -532,13 +504,17 @@ public static class EditorGUI
                     float trackR = trackH * 0.5f;
 
                     // ── Track background ──────────────────────────────────
-                    RoundedRectFilled(canvas, rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
-                        EditorTheme.Ink100);
+                    canvas.RoundedRect(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR);
+                    canvas.SetFillColor(EditorTheme.Ink100);
+                    canvas.Fill();
 
                     // ── Track fill ────────────────────────────────────────
                     if (progress > 0f)
-                        RoundedRectFilled(canvas, rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
-                            EditorTheme.Purple400);
+                    {
+                        canvas.RoundedRect(rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR);
+                        canvas.SetFillColor(EditorTheme.Purple400);
+                        canvas.Fill();
+                    }
                 }));
 
             if (Font != null)
