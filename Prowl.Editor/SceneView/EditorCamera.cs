@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
@@ -45,11 +46,14 @@ public class EditorCamera
     private RenderTexture? _renderTarget;
     private SceneViewLockContext _lockContext = new();
 
-    // Camera state position + euler angles (no orbit)
+    // Camera state
     private Float3 _position = new Float3(0, 5, -15);
     private float _yaw = 0f;
     private float _pitch = 15f;
     private float _moveSpeed = 5f;
+
+    // Orbit distance (pivot is always _position + forward * _orbitDistance)
+    private float _orbitDistance = 10f;
 
     // Toggles
     public bool ShowGrid { get; set; } = true;
@@ -153,9 +157,15 @@ public class EditorCamera
             scene.Remove(_cameraObject);
     }
 
+    // Cached cloned effects for the editor camera. Persistent across frames so
+    // temporal effects (TAA, motion blur) keep their history buffers intact.
+    private readonly List<ImageEffect> _clonedEffects = new();
+    private Camera? _lastSceneCamera;
+
     /// <summary>
-    /// Find the scene's main camera and copy its image effects to the editor camera.
-    /// Looks for a camera tagged "Main Camera", falling back to the first Camera in the scene.
+    /// Sync image effects from the scene's main camera. Clones effect instances on first
+    /// use or when the effect list changes, then uses DeserializeInto each frame to copy
+    /// settings without destroying internal state (TAA history, etc.).
     /// </summary>
     private void CopySceneEffects(Scene scene)
     {
@@ -163,30 +173,92 @@ public class EditorCamera
         if (sceneCamera == null || sceneCamera == _camera)
         {
             _camera.Effects.Clear();
+            DisposeClonedEffects();
+            _lastSceneCamera = null;
             return;
         }
 
-        // Clone effects via Echo serialize/deserialize so each camera has its own
-        // temporal state (TAA history buffers, motion blur, etc.) while mirroring settings.
-        _camera.Effects.Clear();
+        // Build a filtered list of non-null effects from the scene camera so null
+        // entries don't cause index misalignment between the source and clone lists.
+        var sourceEffects = new List<ImageEffect>();
         foreach (var effect in sceneCamera.Effects)
         {
-            try
+            if (effect != null)
+                sourceEffects.Add(effect);
+        }
+
+        // Check if the effect list structure changed (different types, count, or camera)
+        bool needsReclone = sceneCamera != _lastSceneCamera
+            || sourceEffects.Count != _clonedEffects.Count;
+
+        if (!needsReclone)
+        {
+            for (int i = 0; i < sourceEffects.Count; i++)
             {
-                var echo = Echo.Serializer.Serialize(effect);
-                var clone = Echo.Serializer.Deserialize(echo, effect.GetType()) as ImageEffect;
-                if (clone != null)
-                    _camera.Effects.Add(clone);
-            }
-            catch
-            {
-                // Fallback: share instance if clone fails
-                _camera.Effects.Add(effect);
+                if (sourceEffects[i].GetType() != _clonedEffects[i].GetType())
+                {
+                    needsReclone = true;
+                    break;
+                }
             }
         }
 
-        // Also match HDR setting so effects like tonemapping behave correctly
+        if (needsReclone)
+        {
+            // Dispose old clones first so persistent GPU resources (TAA history,
+            // adaptation buffers, etc.) are freed before creating new instances.
+            DisposeClonedEffects();
+
+            foreach (var effect in sourceEffects)
+            {
+                try
+                {
+                    var echo = Echo.Serializer.Serialize(effect);
+                    var clone = Echo.Serializer.Deserialize(echo, effect.GetType()) as ImageEffect;
+                    if (clone != null)
+                        _clonedEffects.Add(clone);
+                }
+                catch
+                {
+                    // Fallback: create a blank instance
+                    if (Activator.CreateInstance(effect.GetType()) is ImageEffect blank)
+                        _clonedEffects.Add(blank);
+                }
+            }
+            _lastSceneCamera = sceneCamera;
+        }
+        else
+        {
+            // Sync settings into existing clones (preserves internal state like TAA history)
+            for (int i = 0; i < sourceEffects.Count; i++)
+            {
+                try
+                {
+                    var echo = Echo.Serializer.Serialize(sourceEffects[i]);
+                    Echo.Serializer.DeserializeInto(echo, _clonedEffects[i]);
+                }
+                catch { }
+            }
+        }
+
+        // Apply cloned effects to editor camera
+        _camera.Effects.Clear();
+        _camera.Effects.AddRange(_clonedEffects);
         _camera.HDR = sceneCamera.HDR;
+    }
+
+    /// <summary>
+    /// Dispose all cloned effects so persistent GPU resources (history buffers, adaptation
+    /// RTs, etc.) are properly freed.
+    /// </summary>
+    private void DisposeClonedEffects()
+    {
+        foreach (var effect in _clonedEffects)
+        {
+            try { effect.OnDisable(); }
+            catch { }
+        }
+        _clonedEffects.Clear();
     }
 
     private static Camera? FindSceneCamera(Scene scene)
@@ -228,11 +300,38 @@ public class EditorCamera
         bool consumed = false;
         float scroll = Input.MouseWheelDelta;
 
-        // Scroll to move forward/back
+        // Scroll to dolly forward/back (also adjusts orbit distance)
         if (scroll != 0 && !Input.GetMouseButton(1))
         {
-            Float3 forward = _cameraObject.Transform.Forward;
-            _position += forward * scroll * _moveSpeed * 0.3f;
+            Float3 forward = GetForwardFromAngles();
+            float dolly = scroll * _orbitDistance * 0.1f;
+            _position += forward * dolly;
+            _orbitDistance = MathF.Max(0.1f, _orbitDistance - dolly);
+            UpdateTransform();
+            consumed = true;
+        }
+
+        // Alt + Left mouse = orbit around pivot (pivot = position + forward * distance)
+        if (Input.IsAltPressed && Input.GetMouseButton(0))
+        {
+            Float2 delta = Input.MouseDelta;
+            Float3 pivot = _position + GetForwardFromAngles() * _orbitDistance;
+
+            _yaw += delta.X * 0.3f;
+            _pitch += delta.Y * 0.3f;
+            _pitch = MathF.Max(-89f, MathF.Min(89f, _pitch));
+
+            _position = pivot - GetForwardFromAngles() * _orbitDistance;
+            UpdateTransform();
+            consumed = true;
+        }
+
+        // Alt + Right mouse = dolly zoom
+        if (Input.IsAltPressed && Input.GetMouseButton(1))
+        {
+            Float2 delta = Input.MouseDelta;
+            float zoomDelta = (delta.X + delta.Y) * 0.02f * _orbitDistance;
+            _orbitDistance = MathF.Max(0.1f, _orbitDistance - zoomDelta);
             UpdateTransform();
             consumed = true;
         }
@@ -353,13 +452,9 @@ public class EditorCamera
         float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
         dist = MathF.Max(dist, 0.5f);
 
-        // Look at target from the camera's current orientation subsequent F presses
-        // retighten the frame rather than being no-ops once we're "close enough".
-        Float3 forward = _cameraObject.Transform.Forward;
-        if (Float3.LengthSquared(forward) < 0.0001f) forward = new Float3(0, 0, 1);
-        forward = Float3.Normalize(forward);
-
-        _position = target - forward * dist;
+        // Set orbit distance and position camera to look at target
+        _orbitDistance = dist;
+        _position = target - GetForwardFromAngles() * dist;
         UpdateTransform();
     }
 
@@ -397,6 +492,19 @@ public class EditorCamera
         return _camera.ScreenPointToRay(screenPos, panelSize);
     }
 
+    /// <summary>Compute forward direction from yaw/pitch angles without reading the transform.</summary>
+    private Float3 GetForwardFromAngles()
+    {
+        float yawRad = _yaw * MathF.PI / 180f;
+        float pitchRad = _pitch * MathF.PI / 180f;
+        float cosPitch = MathF.Cos(pitchRad);
+        return new Float3(
+            MathF.Sin(yawRad) * cosPitch,
+            -MathF.Sin(pitchRad),
+            MathF.Cos(yawRad) * cosPitch
+        );
+    }
+
     private void UpdateTransform()
     {
         _cameraObject.Transform.Position = _position;
@@ -405,6 +513,7 @@ public class EditorCamera
 
     public void Dispose()
     {
+        DisposeClonedEffects();
         _renderTarget?.Dispose();
         _renderTarget = null;
     }

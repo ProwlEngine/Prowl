@@ -36,6 +36,12 @@ public class PointLight : Light
 
     public override void DrawGizmos()
     {
+        var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconLight);
+        if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
+    }
+
+    public override void DrawGizmosSelected()
+    {
         Debug.DrawWireSphere(Transform.Position, Range, Color.Yellow);
     }
 

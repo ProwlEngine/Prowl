@@ -131,13 +131,41 @@ internal class TerrainGrassRenderer
             {
                 renderMesh = _quadMesh!;
                 subMeshCount = 1;
+
+                // Per-prototype grass material override, falls back to the terrain's global grass material.
+                // baseMaterial already has terrain uniforms set by TerrainComponent.
+                // Per-prototype overrides need those same uniforms applied.
+                var protoMat = proto.GrassMaterial.Res;
+                Material grassMat;
+                if (protoMat != null)
+                {
+                    grassMat = protoMat.Clone();
+                    // Apply the same terrain uniforms that TerrainComponent sets on the base material
+                    Float4x4 tw = terrain.Transform.LocalToWorldMatrix;
+                    Float3 tUp = Float3.Normalize(Float4x4.TransformPoint(Float3.UnitY, tw) - Float4x4.TransformPoint(Float3.Zero, tw));
+                    grassMat.SetVector("_TerrainUp", tUp);
+                    grassMat.SetMatrix("_TerrainWorldToLocal", terrain.Transform.WorldToLocalMatrix);
+                    grassMat.SetMatrix("_TerrainLocalToWorld", tw);
+                    grassMat.SetFloat("_TerrainSize", data.Size);
+                    grassMat.SetFloat("_TerrainHeight", data.Height);
+                    grassMat.SetFloat("_GrassDistance", terrain.GrassDistance);
+                    float fadeStartWorld = terrain.GrassDistance * Math.Clamp(terrain.GrassFadeStart, 0f, 0.99f);
+                    grassMat.SetFloat("_GrassFadeStart", fadeStartWorld);
+                    var htex = data.GetHeightmapTexture();
+                    if (htex != null) grassMat.SetTexture("_Heightmap", htex);
+                }
+                else
+                {
+                    grassMat = baseMaterial;
+                }
+
                 s_defaultWhite ??= Texture2D.LoadDefault(DefaultTexture.White);
                 var tex = proto.Texture.Res ?? s_defaultWhite;
-                baseMaterial.SetTexture("_MainTex", tex);
+                grassMat.SetTexture("_MainTex", tex);
                 // Pass billboard flag to shader via uniform
-                baseMaterial.SetFloat("_Billboard", proto.RenderMode == DetailRenderMode.TextureBillboard ? 1f : 0f);
-                baseMaterial.SetFloat("_AlignToNormal", proto.AlignToNormal ? 1f : 0f);
-                renderMat = baseMaterial;
+                grassMat.SetFloat("_Billboard", proto.RenderMode == DetailRenderMode.TextureBillboard ? 1f : 0f);
+                grassMat.SetFloat("_AlignToNormal", proto.AlignToNormal ? 1f : 0f);
+                renderMat = grassMat;
             }
 
             for (int pz = minPZ; pz <= maxPZ; pz++)
@@ -343,6 +371,7 @@ internal class TerrainGrassRenderer
         h ^= h >> 16; h *= 0x45d9f3b; h ^= h >> 16;
         return (h & 0xFFFF) / 65535f;
     }
+
 
     private static Mesh CreateQuadMesh()
     {

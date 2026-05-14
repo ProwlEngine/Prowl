@@ -1,0 +1,57 @@
+using System;
+
+using Prowl.Runtime;
+using Prowl.Vector;
+
+public class {[className]} : MonoBehaviour
+{
+    public float MoveSpeed = 5f;
+    public float SprintMultiplier = 3f;
+    public float Sensitivity = 0.15f;
+    public float MinPitch = -89f;
+    public float MaxPitch = 89f;
+
+    private float _yaw;
+    private float _pitch;
+
+    public override void Start()
+    {
+        Float3 euler = Transform.LocalEulerAngles;
+        _pitch = euler.X;
+        _yaw = euler.Y;
+    }
+
+    public override void Update()
+    {
+        // Right-click to enter fly mode
+        if (Input.GetMouseButtonDown(1))
+            Input.LockCursor();
+
+        if (Input.GetMouseButtonUp(1))
+            Input.UnlockCursor();
+
+        if (!Input.CursorLocked) return;
+
+        // Mouse look
+        Float2 delta = Input.MouseDelta;
+        _yaw += delta.X * Sensitivity;
+        _pitch = Math.Clamp(_pitch - (-delta.Y) * Sensitivity, MinPitch, MaxPitch);
+        Transform.LocalEulerAngles = new Float3(_pitch, _yaw, 0f);
+
+        // WASD + EQ movement
+        Float3 move = Float3.Zero;
+        if (Input.GetKey(KeyCode.W)) move += Transform.Forward;
+        if (Input.GetKey(KeyCode.S)) move -= Transform.Forward;
+        if (Input.GetKey(KeyCode.D)) move += Transform.Right;
+        if (Input.GetKey(KeyCode.A)) move -= Transform.Right;
+        if (Input.GetKey(KeyCode.E) || Input.GetKey(KeyCode.Space)) move += Float3.UnitY;
+        if (Input.GetKey(KeyCode.Q)) move -= Float3.UnitY;
+
+        if (Float3.LengthSquared(move) > 0f)
+        {
+            float speed = MoveSpeed * Time.DeltaTime;
+            if (Input.IsShiftPressed) speed *= SprintMultiplier;
+            Transform.Position += Float3.Normalize(move) * speed;
+        }
+    }
+}

@@ -1015,6 +1015,9 @@ public class EditorApplication : Game
     //  Script Compilation
     // ================================================================
 
+    /// <summary>Called by ScriptAssemblyManager after hot-reload to re-scan all registries.</summary>
+    public void ReinitializeAfterReload() => ReinitializeRegistries();
+
     private void ReinitializeRegistries()
     {
         _registeredPanels.Clear();
@@ -1050,7 +1053,7 @@ public class EditorApplication : Game
         CreateGameObjectMenuRegistry.RegisterMenuBarItems();
     }
 
-    private void RestoreAutoSavedScene(string path)
+    public void RestoreAutoSavedScene(string path)
     {
         try
         {
@@ -1354,6 +1357,16 @@ public class EditorApplication : Game
         // Always allow gizmos in editor (even when not playing)
         if (scene != null)
             scene.DrawGizmos();
+
+        if(Selection.Count > 0)
+        {
+            // Draw selection gizmo
+            var selectedGOs = Selection.GetSelected<GameObject>();
+            foreach (var comp in selectedGOs.SelectMany(e => e.GetComponents()))
+            {
+                comp.DrawGizmosSelected();
+            }
+        }
     }
 
     /// <summary>

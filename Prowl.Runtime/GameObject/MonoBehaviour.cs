@@ -320,6 +320,11 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public virtual void DrawGizmos() { }
 
     /// <summary>
+    /// Called for rendering and handling GUI gizmos.
+    /// </summary>
+    public virtual void DrawGizmosSelected() { }
+
+    /// <summary>
     /// Called for drawing and handling interaction with Runtime/Ingame UI
     /// </summary>
     /// <param name="paper"></param>
@@ -331,43 +336,49 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         if (HasStarted) return;
         if (!ShouldExecuteGameplay) return;
         HasStarted = true;
-        Start();
+        try { Start(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Start() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     /// <summary>Gated Update only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalUpdate()
     {
-        if (ShouldExecuteGameplay)
-            Update();
+        if (!ShouldExecuteGameplay) return;
+        try { Update(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Update() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     /// <summary>Gated LateUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalLateUpdate()
     {
-        if (ShouldExecuteGameplay)
-            LateUpdate();
+        if (!ShouldExecuteGameplay) return;
+        try { LateUpdate(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] LateUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     /// <summary>Gated FixedUpdate only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalFixedUpdate()
     {
-        if (ShouldExecuteGameplay)
-            FixedUpdate();
+        if (!ShouldExecuteGameplay) return;
+        try { FixedUpdate(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] FixedUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     /// <summary>Gated OnEnable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnEnable()
     {
         _hasBeenEnabled = true;
-        if (ShouldExecuteGameplay)
-            OnEnable();
+        if (!ShouldExecuteGameplay) return;
+        try { OnEnable(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnEnable() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     /// <summary>Gated OnDisable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnDisable()
     {
-        if (ShouldExecuteGameplay)
-            OnDisable();
+        if (!ShouldExecuteGameplay) return;
+        try { OnDisable(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnDisable() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     public void OnBeforeSerialize() { }

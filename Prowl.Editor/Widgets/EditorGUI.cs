@@ -6,9 +6,6 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
 
-using static System.Net.Mime.MediaTypeNames;
-using static Prowl.PaperUI.ElementBuilder;
-
 using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.Widgets;
@@ -75,19 +72,6 @@ public static class EditorGUI
         return s;
     }
 
-    // Shared callback storage: widgets register their callbacks here,
-    // Paper's end-of-frame events invoke them.
-    // We use a simple list that's drained each frame.
-    private static readonly System.Collections.Generic.List<Action> _pendingCallbacks = new();
-
-    /// <summary>Call at end of frame to flush any pending widget callbacks. Not needed
-    /// if widgets use Paper's own OnClick/OnDrag callbacks (which fire automatically).</summary>
-    public static void FlushCallbacks()
-    {
-        foreach (var cb in _pendingCallbacks) cb();
-        _pendingCallbacks.Clear();
-    }
-
     // ================================================================
     //  Label
     // ================================================================
@@ -122,18 +106,6 @@ public static class EditorGUI
     }
 
 
-    public static void RoundedRectFilled(Prowl.Quill.Canvas canvas, float rectX, float rectY, float rectWidth, float rectHeight,
-        float radiusTopLeft, float radiusTopRight, float radiusBottomLeft, float radiusBottomRight, Color color)
-    {
-        /*canvas.RoundedRectFilled(rectX, rectY, rectWidth, rectHeight,
-            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft,
-            color);*/
-        canvas.RoundedRect(rectX, rectY, rectWidth, rectHeight,
-            radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft);
-        canvas.SetFillColor(color);
-        canvas.FillComplexAA();
-    }
-
     // ================================================================
     //  Separator
     // ================================================================
@@ -146,132 +118,7 @@ public static class EditorGUI
             .BackgroundColor(EditorTheme.Ink100);
     }
 
-    // ================================================================
-    //  Button
-    // ================================================================
-
-    public static WidgetResult<bool> Button(Paper paper, string id, string label, float width = 0)
-    {
-        Action<bool>? userCallback = null;
-
-        var el = paper.Box(id)
-            .Height(EditorTheme.RowHeight)
-            .BackgroundColor(EditorTheme.Ink100)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Rounded(3)
-            .BorderColor(EditorTheme.Ink100)
-            .BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true));
-
-        if (width > 0) el.Width(width);
-        using (el.Enter())
-        {
-            if (Font != null) 
-                paper.Box($"{id}_label")
-                    .Height(EditorTheme.RowHeight)
-                    .Margin(EditorTheme.RowHeight/4, 0)
-                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .Text(label, Font)
-                    .TextColor(EditorTheme.Ink500)
-                    .FontSize(FontSz);
-        }
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
-
-    public static WidgetResult<bool> ButtonGhost(Paper paper, string id, string label, float width = 0)
-    {
-        Action<bool>? userCallback = null;
-
-        var el = paper.Box(id)
-            .Height(EditorTheme.RowHeight)
-            // .BackgroundColor(EditorTheme.Ink100)
-            .Hovered.BackgroundColor(EditorTheme.Ink100).End()
-            .Rounded(3)
-            .BorderColor(EditorTheme.Ink100)
-            .BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true));
-
-        if (width > 0) el.Width(width);
-        using (el.Enter())
-        {
-            if (Font != null) 
-                paper.Box($"{id}_label")
-                    .Height(EditorTheme.RowHeight)
-                    .Margin(EditorTheme.RowHeight/4, 0)
-                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .Text(label, Font)
-                    .TextColor(EditorTheme.Ink500)
-                    .FontSize(FontSz);
-        }
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
-
-    public static WidgetResult<bool> ButtonSquare(Paper paper, string id, string icon)
-    {
-        Action<bool>? userCallback = null;
-
-        paper.Box(id)
-            .Alignment(PaperUI.TextAlignment.MiddleCenter)
-            .Text(icon, Font)
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(FontSz)
-            .Height(EditorTheme.RowHeight)
-            .Width(EditorTheme.RowHeight)
-            .BackgroundColor(EditorTheme.Ink100)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Rounded(3)
-            .BorderColor(EditorTheme.Ink100)
-            .BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true));
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
-
-    public static WidgetResult<bool> ButtonSquareWithHandle(Paper paper, string id, string icon, out ElementHandle buttonEl)
-    {
-        Action<bool>? userCallback = null;
-
-        buttonEl = paper.Box(id)
-            .Alignment(PaperUI.TextAlignment.MiddleCenter)
-            .Text(icon, Font)
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(FontSz)
-            .Height(EditorTheme.RowHeight)
-            .Width(EditorTheme.RowHeight)
-            .BackgroundColor(EditorTheme.Ink100)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-            .Rounded(3)
-            .BorderColor(EditorTheme.Ink100)
-            .BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true))
-            ._handle;
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
-
-    public static WidgetResult<bool> ButtonSquareGhost(Paper paper, string id, string icon)
-    {
-        Action<bool>? userCallback = null;
-
-        paper.Box(id)
-            .Alignment(PaperUI.TextAlignment.MiddleCenter)
-            .Text(icon, Font)
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(FontSz)
-            .Height(EditorTheme.RowHeight)
-            .Width(EditorTheme.RowHeight)
-            // .BackgroundColor(EditorTheme.Ink100)
-            .Hovered.BackgroundColor(EditorTheme.Ink100).End()
-            .Rounded(3)
-            .BorderColor(EditorTheme.Ink100)
-            .BorderWidth(1)
-            .OnClick(e => userCallback?.Invoke(true));
-
-        return new WidgetResult<bool>(cb => userCallback = cb);
-    }
-
+    // Button removed (use Origami.Button).
 
     // Toggle removed (use Origami.Checkbox / Origami.Switch with .LabelRight(...)).
 
@@ -657,13 +504,17 @@ public static class EditorGUI
                     float trackR = trackH * 0.5f;
 
                     // ── Track background ──────────────────────────────────
-                    RoundedRectFilled(canvas, rx, trackY, rw, trackH, trackR, trackR, trackR, trackR,
-                        EditorTheme.Ink100);
+                    canvas.RoundedRect(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR);
+                    canvas.SetFillColor(EditorTheme.Ink100);
+                    canvas.Fill();
 
                     // ── Track fill ────────────────────────────────────────
                     if (progress > 0f)
-                        RoundedRectFilled(canvas, rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR,
-                            EditorTheme.Purple400);
+                    {
+                        canvas.RoundedRect(rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR);
+                        canvas.SetFillColor(EditorTheme.Purple400);
+                        canvas.Fill();
+                    }
                 }));
 
             if (Font != null)

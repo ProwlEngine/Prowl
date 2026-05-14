@@ -533,6 +533,164 @@ vec3 CalculateForwardLightingAniso(vec3 worldPos, vec3 worldNormal, vec3 viewDir
 }
 
 // ============================================================
+//  Local light with translucency (shared attenuation + shadow)
+// ============================================================
+
+vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                                    vec3 albedo, float metallic, float roughness, float ao, vec3 F0,
+                                    float translucency, float scatterPower, float scatterDist, float scatterScale)
+{
+    vec3 lightToPixel = worldPos - L.Position;
+    float dist2 = dot(lightToPixel, lightToPixel);
+    float dist = sqrt(dist2);
+    vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
+
+    if (L.Type == 2) {
+        float spotAxisCos = dot(normalize(L.Direction), -lightDir);
+        if (spotAxisCos <= L.SpotCos) return vec3(0.0);
+    }
+
+    float invR2 = 1.0 / (L.Range * L.Range);
+    float factor = dist2 * invR2;
+    float window = clamp(1.0 - factor * factor, 0.0, 1.0);
+    window *= window;
+    float invSqr = 1.0 / max(dist2, 0.01);
+    float attenuation = invSqr * window;
+
+    if (L.Type == 2) {
+        float lightAngleCos = dot(normalize(L.Direction), -lightDir);
+        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, lightAngleCos);
+    }
+
+    if (attenuation <= 0.0001) return vec3(0.0);
+
+    float shadowFactor;
+#ifdef SG_NO_SHADOWS
+    shadowFactor = 1.0;
+#else
+    float shadow = 0.0;
+    if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
+        if (L.Type == 1) shadow = SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal);
+        else shadow = SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
+    }
+    shadowFactor = 1.0 - shadow;
+#endif
+
+    vec3 radiance = L.Color * (L.Intensity * 8.0) * attenuation;
+    vec3 result = vec3(0.0);
+
+    // PBR (front-lit only)
+    float NdotL = dot(worldNormal, lightDir);
+    if (NdotL > 0.0) {
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float NdotV = abs(dot(worldNormal, viewDir));
+        float LdotH = max(dot(lightDir, halfDir), 0.0);
+
+        float NDF = DistributionGGX(worldNormal, halfDir, roughness);
+        float G = GeometrySmith(worldNormal, viewDir, lightDir, roughness);
+        vec3 F = FresnelSchlick(LdotH, F0);
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        vec3 specular = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);
+        float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
+        result = (kD * albedo * diffuseTerm + specular) * radiance * NdotL * shadowFactor * ao;
+    }
+
+    // Translucency (uses same attenuation and shadow, works regardless of NdotL)
+    if (translucency > 0.0) {
+        vec3 scatter = CalculateTranslucency(lightDir, viewDir, worldNormal,
+                           translucency, scatterPower, scatterDist, scatterScale,
+                           L.Color * L.Intensity * attenuation);
+        result += scatter * albedo * shadowFactor;
+    }
+
+    return result;
+}
+
+// ============================================================
+//  Forward lighting with translucency (single-pass, unified)
+//  PBR + translucency share the same attenuation and shadow.
+// ============================================================
+
+vec3 CalculateForwardLighting(vec3 worldPos, vec3 worldNormal, vec3 viewDir,
+                              vec3 albedo, float metallic, float roughness, float ao,
+                              float translucency, float scatterPower,
+                              float scatterDist, float scatterScale)
+{
+    roughness = ApplySpecularAA(roughness, worldNormal);
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    bool hasTrans = translucency > 0.0;
+
+    vec3 totalLight = vec3(0.0);
+
+    // ---- Directional light ----
+    if (_DirectionalLightEnabled != 0) {
+        vec3 lightDir = normalize(_DirectionalLightDirection);
+        vec3 radiance = _DirectionalLightColor * (_DirectionalLightIntensity * 8.0);
+
+        float shadowFactor;
+#ifdef SG_NO_SHADOWS
+        shadowFactor = 1.0;
+#else
+        float shadow = (_DirectionalLightShadowEnabled != 0)
+            ? SampleDirectionalShadow(worldPos, worldNormal) : 0.0;
+        shadowFactor = 1.0 - shadow;
+#endif
+
+        // PBR
+        float NdotL = max(dot(worldNormal, lightDir), 0.0);
+        if (NdotL > 0.0) {
+            vec3 halfDir = normalize(lightDir + viewDir);
+            float NdotV = abs(dot(worldNormal, viewDir));
+            float LdotH = max(dot(lightDir, halfDir), 0.0);
+
+            float NDF = DistributionGGX(worldNormal, halfDir, roughness);
+            float G = GeometrySmith(worldNormal, viewDir, lightDir, roughness);
+            vec3 F = FresnelSchlick(LdotH, F0);
+            vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+            vec3 specular = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);
+            float diffuseTerm = DisneyDiffuse(NdotV, NdotL, LdotH, roughness);
+            totalLight += (kD * albedo * diffuseTerm + specular) * radiance * NdotL * shadowFactor * ao;
+        }
+
+        // Translucency (same shadow, no distance attenuation for directional)
+        if (hasTrans) {
+            vec3 scatter = CalculateTranslucency(lightDir, viewDir, worldNormal,
+                               translucency, scatterPower, scatterDist, scatterScale,
+                               _DirectionalLightColor * _DirectionalLightIntensity);
+            totalLight += scatter * albedo * shadowFactor;
+        }
+    }
+
+    // ---- Static BVH ----
+    if (_StaticLightRoot >= 0) {
+        LBVH_Iter it;
+        LBVH_Begin(it, _StaticLightRoot);
+        int slot;
+        while ((slot = LBVH_Next(it, _StaticLightNodes, _StaticNodeTexSize, _StaticNodeTexShift, worldPos)) >= 0) {
+            LightSample L = LBVH_FetchLight(_StaticLightData, _StaticLightTexSize, _StaticLightTexShift, slot);
+            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, viewDir,
+                              albedo, metallic, roughness, ao, F0,
+                              translucency, scatterPower, scatterDist, scatterScale);
+        }
+    }
+
+    // ---- Dynamic BVH ----
+    if (_DynamicLightRoot >= 0) {
+        LBVH_Iter it;
+        LBVH_Begin(it, _DynamicLightRoot);
+        int slot;
+        while ((slot = LBVH_Next(it, _DynamicLightNodes, _DynamicNodeTexSize, _DynamicNodeTexShift, worldPos)) >= 0) {
+            LightSample L = LBVH_FetchLight(_DynamicLightData, _DynamicLightTexSize, _DynamicLightTexShift, slot);
+            totalLight += EvaluateLocalLightTranslucent(L, worldPos, worldNormal, viewDir,
+                              albedo, metallic, roughness, ao, F0,
+                              translucency, scatterPower, scatterDist, scatterScale);
+        }
+    }
+
+    return totalLight;
+}
+
+// ============================================================
 //  Ambient lighting
 // ============================================================
 
