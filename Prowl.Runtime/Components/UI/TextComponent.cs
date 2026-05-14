@@ -190,27 +190,15 @@ public class TextComponent : UIBehaviour
 
     private static ScribeAlign ToScribeAlignment(TAlignment a) => a switch
     {
-        TAlignment.Center       or TAlignment.CenterMiddle or TAlignment.BottomCenter => ScribeAlign.Center,
-        TAlignment.Right        or TAlignment.CenterRight  or TAlignment.BottomRight  => ScribeAlign.Right,
-        _ => ScribeAlign.Left,
-    };
+        if ((a & TAlignment.Right)  != 0) return ScribeAlign.Right;
+        if ((a & TAlignment.Middle) != 0) return ScribeAlign.Center;
+        return ScribeAlign.Left;
+    }
 
     private static float ComputeVerticalOffset(TAlignment a, float boxHeight, float layoutHeight)
     {
-        // Top row in the PaperUI enum is { Left, Center, Right } (no "Top" prefix);
-        // the next two rows are explicit Middle / Bottom.
-        switch (a)
-        {
-            case TAlignment.CenterLeft:
-            case TAlignment.CenterMiddle:
-            case TAlignment.CenterRight:
-                return Maths.Max(0f, (boxHeight - layoutHeight) * 0.5f);
-            case TAlignment.BottomLeft:
-            case TAlignment.BottomCenter:
-            case TAlignment.BottomRight:
-                return Maths.Max(0f, boxHeight - layoutHeight);
-            default:
-                return 0f; // Top
-        }
+        if ((a & TAlignment.Bottom) != 0) return Maths.Max(0f, boxHeight - layoutHeight);
+        if ((a & TAlignment.Center) != 0) return Maths.Max(0f, (boxHeight - layoutHeight) * 0.5f);
+        return 0f; // Top (default)
     }
 }
