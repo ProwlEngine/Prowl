@@ -141,48 +141,6 @@ public sealed class UIMeshBuilder
         }
     }
 
-    /// <summary>
-    /// STUB. Real text rendering requires Scribe <c>FontSystem</c> integration —
-    /// see UI_FRAMEWORK_PLAN §3.4 Step 4.B. Until that lands, this method is
-    /// intentionally empty so callers compile and the framework's dirty/layout
-    /// paths can still be exercised by <see cref="TextComponent"/>.
-    /// </summary>
-    /// <remarks>
-    /// The "real" body (commented out below) illustrates the *future* shape of the
-    /// API. <c>FontFile.UnitsPerEm</c>, <c>FontFile.Ascent</c>, <c>FontFile.TryGetGlyph</c>,
-    /// and <c>FontAsset.GetAtlasUVs</c> do **not** exist on the current types — they
-    /// will be added (or wrapped) when Scribe atlas integration is implemented.
-    /// </remarks>
-    public void AddText(FontAsset font, ReadOnlySpan<char> s, Rect bounds, Color tint, int sizePx, Prowl.PaperUI.TextAlignment align)
-    {
-        if (font?.FontFile is null || s.IsEmpty) return;
-
-        // Scribe gives us per-glyph metrics in font units; we multiply by sizePx / unitsPerEm.
-        /*var ff = font.FontFile;
-        float scale = sizePx / (float)ff.UnitsPerEm;
-        float ascent = ff.Ascent * scale;
-
-        Float2 cursor = new(bounds.Min.X, bounds.Min.Y + ascent);
-        var c = (Color32)tint;
-
-        foreach (char ch in s)
-        {
-            if (!ff.TryGetGlyph(ch, out var glyph)) continue;
-
-            // Position the glyph quad relative to baseline cursor:
-            float gx0 = cursor.X + glyph.BearingX * scale;
-            float gy0 = cursor.Y - glyph.BearingY * scale;
-            float gx1 = gx0 + glyph.Width  * scale;
-            float gy1 = gy0 + glyph.Height * scale;
-
-            // Glyph atlas UVs — provided by the per-canvas Scribe FontSystem (see §3.4).
-            var (u0, v0, u1, v1) = font.GetAtlasUVs(ch, sizePx);
-            AddQuad(new Rect(gx0, gy0, gx1, gy1), tint, new Float2(u0, v0), new Float2(u1, v1));
-
-            cursor.X += glyph.Advance * scale;
-        }*/
-    }
-
     // ---------- Bake / Reset ----------
 
     /// <summary>

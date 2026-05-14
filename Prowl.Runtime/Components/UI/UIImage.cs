@@ -38,7 +38,7 @@ public class UIImage : UIBehaviour
     public Texture2D? Texture
     {
         get => _texture;
-        set { if (ReferenceEquals(_texture, value)) return; _texture = value; MarkDirty(UIDirtyFlags.Material); }
+        set => SetField(ref _texture, value, UIDirtyFlags.Material);
     }
 
     // ---- Material override ----
@@ -46,7 +46,7 @@ public class UIImage : UIBehaviour
     public Material? Material
     {
         get => _material;
-        set { if (ReferenceEquals(_material, value)) return; _material = value; MarkDirty(UIDirtyFlags.Material); }
+        set => SetField(ref _material, value, UIDirtyFlags.Material);
     }
 
     /// <summary>The tint color of the image. Alpha is modulated by the parent <see cref="CanvasGroup"/>.</summary>
@@ -54,7 +54,7 @@ public class UIImage : UIBehaviour
     public Color Color
     {
         get => _color;
-        set { if (_color == value) return; _color = value; MarkDirty(UIDirtyFlags.Vertices); }
+        set => SetField(ref _color, value, UIDirtyFlags.Vertices);
     }
 
     /// <summary>Whether the image should preserve the source texture's aspect ratio.</summary>
@@ -62,7 +62,7 @@ public class UIImage : UIBehaviour
     public bool PreserveAspect
     {
         get => _preserveAspect;
-        set { if (_preserveAspect == value) return; _preserveAspect = value; MarkDirty(UIDirtyFlags.Vertices); }
+        set => SetField(ref _preserveAspect, value, UIDirtyFlags.Vertices);
     }
 
     /// <summary>Corner radius for rounded rectangles (in pixels). 0 = sharp corners.</summary>
@@ -70,7 +70,7 @@ public class UIImage : UIBehaviour
     public float CornerRadius
     {
         get => _cornerRadius;
-        set { if (_cornerRadius == value) return; _cornerRadius = value; MarkDirty(UIDirtyFlags.Vertices); }
+        set => SetField(ref _cornerRadius, value, UIDirtyFlags.Vertices);
     }
 
     /// <summary>
@@ -81,7 +81,7 @@ public class UIImage : UIBehaviour
     public bool RaycastTarget
     {
         get => _raycastTarget;
-        set { if (_raycastTarget == value) return; _raycastTarget = value; MarkDirty(UIDirtyFlags.Hierarchy); }
+        set => SetField(ref _raycastTarget, value, UIDirtyFlags.Hierarchy);
     }
 
     public override Material GetMaterial() => _material ?? base.GetMaterial();
@@ -120,9 +120,7 @@ public class UIImage : UIBehaviour
         p.SetVector("_Offset", Float2.Zero);
     }
 
-    public override void OnValidate()
-    {
-        Debug.Log("UIImage.OnValidate");
-        MarkDirty(UIDirtyFlags.All);
-    }
+    // No OnValidate override: every property routes through SetField (for code) or its
+    // public setter (for inspector edits / undo, see PropertyGrid.ApplyFieldValue), so the
+    // precise dirty flags are always marked. UIBehaviour.OnValidate remains the catch-all.
 }

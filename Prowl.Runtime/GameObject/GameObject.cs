@@ -106,7 +106,6 @@ public class GameObject : EngineObject, ISerializable
 
     public int ChildCount => Children.Count;
 
-
     /// <summary>
     /// The GameObjects parent <see cref="Prowl.Runtime.Resources.Scene"/>. Each GameObject can belong to
     /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Resources.Scene.Add(GameObject)"/> and
@@ -1096,6 +1095,17 @@ public class GameObject : EngineObject, ISerializable
                 sb.Append($"{childIndent}{connector}");
                 PrintRecursive(obj.Children[i], sb, nextIndent, false);
             }
+        }
+    }
+
+
+    public override void OnValidate()
+    {
+        base.OnValidate();
+        var targets = GetComponentsInChildren<MonoBehaviour>();
+        foreach (var target in targets)
+        {
+            target.OnValidate();
         }
     }
 

@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.UI;
@@ -34,7 +36,7 @@ public class RectTransform : Transform
     public Float2 AnchorMin
     {
         get => _anchorMin;
-        set { if (_anchorMin.Equals(value)) return; _anchorMin = value; MarkLayoutDirty(); }
+        set => SetField(ref _anchorMin, value);
     }
 
     /// <summary>
@@ -44,7 +46,7 @@ public class RectTransform : Transform
     public Float2 AnchorMax
     {
         get => _anchorMax;
-        set { if (_anchorMax.Equals(value)) return; _anchorMax = value; MarkLayoutDirty(); }
+        set => SetField(ref _anchorMax, value);
     }
 
     /// <summary>
@@ -55,7 +57,7 @@ public class RectTransform : Transform
     public Float2 Pivot
     {
         get => _pivot;
-        set { if (_pivot.Equals(value)) return; _pivot = value; MarkLayoutDirty(); }
+        set => SetField(ref _pivot, value);
     }
 
     /// <summary>
@@ -66,7 +68,7 @@ public class RectTransform : Transform
     public Float2 SizeDelta
     {
         get => _sizeDelta;
-        set { if (_sizeDelta.Equals(value)) return; _sizeDelta = value; MarkLayoutDirty(); }
+        set => SetField(ref _sizeDelta, value);
     }
 
     /// <summary>
@@ -76,7 +78,7 @@ public class RectTransform : Transform
     public Float2 AnchoredPosition
     {
         get => _anchoredPosition;
-        set { if (_anchoredPosition.Equals(value)) return; _anchoredPosition = value; MarkLayoutDirty(); }
+        set => SetField(ref _anchoredPosition, value);
     }
 
     /// <summary>
@@ -254,5 +256,19 @@ public class RectTransform : Transform
         foreach (UIBehaviour ui in GameObject.GetComponents<UIBehaviour>())
             ui.MarkDirty(UIDirtyFlags.Layout | UIDirtyFlags.Vertices);
         GameObject.GetComponentInParent<GameCanvas>(includeSelf: true)?.MarkDirty(UIDirtyFlags.Layout);
+    }
+
+    /// <summary>
+    /// Backing-field setter for the layout properties above. Assigns only on a real change
+    /// and flags the owning elements + canvas for a layout rebuild. Mirrors
+    /// <see cref="UIBehaviour.SetField{T}"/> — the single value-change check for the UI,
+    /// shared by code, inspector edits, and undo (via <c>PropertyGrid.ApplyFieldValue</c>).
+    /// </summary>
+    private bool SetField<T>(ref T field, T value)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        MarkLayoutDirty();
+        return true;
     }
 }

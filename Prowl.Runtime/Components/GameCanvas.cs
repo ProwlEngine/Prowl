@@ -48,7 +48,7 @@ public class GameCanvas : MonoBehaviour
     public RenderMode RenderMode
     {
         get => _renderMode;
-        set { if (_renderMode == value) return; _renderMode = value; MarkDirty(UIDirtyFlags.Layout | UIDirtyFlags.Hierarchy); }
+        set => SetField(ref _renderMode, value, UIDirtyFlags.Layout | UIDirtyFlags.Hierarchy);
     }
 
     [SerializeField] private float _scaleFactor = 1f;
@@ -56,7 +56,7 @@ public class GameCanvas : MonoBehaviour
     public float ScaleFactor
     {
         get => _scaleFactor;
-        set { if (Maths.Abs(_scaleFactor - value) < 1e-6f) return; _scaleFactor = value; MarkDirty(UIDirtyFlags.Layout); }
+        set => SetField(ref _scaleFactor, value, UIDirtyFlags.Layout);
     }
 
     [SerializeField] private int _sortOrder;
@@ -64,20 +64,20 @@ public class GameCanvas : MonoBehaviour
     public int SortOrder
     {
         get => _sortOrder;
-        set { if (_sortOrder == value) return; _sortOrder = value; MarkDirty(UIDirtyFlags.Hierarchy); }
+        set => SetField(ref _sortOrder, value, UIDirtyFlags.Hierarchy);
     }
 
     [SerializeField] private ScaleMode _uiScaleMode = ScaleMode.ConstantPixelSize;
-    public ScaleMode UIScaleMode { get => _uiScaleMode; set { if (_uiScaleMode == value) return; _uiScaleMode = value; MarkDirty(UIDirtyFlags.Layout); } }
+    public ScaleMode UIScaleMode { get => _uiScaleMode; set => SetField(ref _uiScaleMode, value, UIDirtyFlags.Layout); }
 
     [SerializeField] private Float2 _referenceResolution = new(1920f, 1080f);
-    public Float2 ReferenceResolution { get => _referenceResolution; set { if (_referenceResolution.Equals(value)) return; _referenceResolution = value; MarkDirty(UIDirtyFlags.Layout); } }
+    public Float2 ReferenceResolution { get => _referenceResolution; set => SetField(ref _referenceResolution, value, UIDirtyFlags.Layout); }
 
     [SerializeField] private float _matchWidthOrHeight = 0.5f;
-    public float MatchWidthOrHeight { get => _matchWidthOrHeight; set { if (Maths.Abs(_matchWidthOrHeight - value) < 1e-6f) return; _matchWidthOrHeight = value; MarkDirty(UIDirtyFlags.Layout); } }
+    public float MatchWidthOrHeight { get => _matchWidthOrHeight; set => SetField(ref _matchWidthOrHeight, value, UIDirtyFlags.Layout); }
 
     [SerializeField] private ScreenMatchMode _screenMatchMode = ScreenMatchMode.MatchWidthOrHeight;
-    public ScreenMatchMode ScreenMatchMode { get => _screenMatchMode; set { if (_screenMatchMode == value) return; _screenMatchMode = value; MarkDirty(UIDirtyFlags.Layout); } }
+    public ScreenMatchMode ScreenMatchMode { get => _screenMatchMode; set => SetField(ref _screenMatchMode, value, UIDirtyFlags.Layout); }
 
     // ----------------------------------------------------------------
     // NEW: WorldSpace-only configuration
@@ -89,7 +89,7 @@ public class GameCanvas : MonoBehaviour
     public float ReferencePixelsPerUnit
     {
         get => _referencePixelsPerUnit;
-        set { if (Maths.Abs(_referencePixelsPerUnit - value) < 1e-6f) return; _referencePixelsPerUnit = Maths.Max(value, 0.001f); MarkDirty(UIDirtyFlags.Layout); }
+        set => SetField(ref _referencePixelsPerUnit, Maths.Max(value, 0.001f), UIDirtyFlags.Layout);
     }
 
     // ----------------------------------------------------------------
@@ -126,6 +126,32 @@ public class GameCanvas : MonoBehaviour
     {
         _aggregateDirty |= flags;
         _isDirty = true;
+    }
+
+    /// <summary>
+    /// Backing-field setter for this canvas's properties: assigns only on a real change and
+    /// marks <paramref name="flags"/> dirty when it does. Mirrors <see cref="UIBehaviour.SetField{T}"/>
+    /// so code, inspector edits, and undo all funnel value-change detection through one place.
+    /// </summary>
+    private bool SetField<T>(ref T field, T value, UIDirtyFlags flags)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        MarkDirty(flags);
+        return true;
+    }
+
+    /// <summary>
+    /// Float overload that compares with an epsilon. Layout-driving values (scale factor,
+    /// pixels-per-unit) are recomputed every rebuild from float math; an exact compare would
+    /// let sub-ULP jitter re-trigger rebuilds, so we treat near-equal values as unchanged.
+    /// </summary>
+    private bool SetField(ref float field, float value, UIDirtyFlags flags, float epsilon = 1e-6f)
+    {
+        if (Maths.Abs(field - value) < epsilon) return false;
+        field = value;
+        MarkDirty(flags);
+        return true;
     }
 
     // ============================================================
@@ -371,6 +397,20 @@ public class GameCanvas : MonoBehaviour
             case ScaleMode.ScaleWithScreenSize:  return ComputeScreenSizeScale();
             default:                              return 1f;
         }
+    }
+
+    // ============================================================
+    // Scene-view gizmos
+    // ============================================================
+
+    public override void DrawGizmos()
+    {
+        UIGizmos.DrawCanvasRect(this, UIGizmos.UnselectedColor);
+    }
+
+    public override void DrawGizmosSelected()
+    {
+        UIGizmos.DrawCanvasRect(this, UIGizmos.SelectedColor);
     }
 
     private float ComputeScreenSizeScale()

@@ -30,35 +30,35 @@ public class TextComponent : UIBehaviour
     public FontAsset Font
     {
         get => _font;
-        set { if (ReferenceEquals(_font, value)) return; _font = value; MarkDirty(UIDirtyFlags.Vertices | UIDirtyFlags.Material); }
+        set => SetField(ref _font, value, UIDirtyFlags.Vertices | UIDirtyFlags.Material);
     }
 
     [SerializeField] private Color _textColor = Color.White;
     public Color TextColor
     {
         get => _textColor;
-        set { if (_textColor == value) return; _textColor = value; MarkDirty(UIDirtyFlags.Vertices); }
+        set => SetField(ref _textColor, value, UIDirtyFlags.Vertices);
     }
 
     [SerializeField] private string _text = string.Empty;
     public string Text
     {
         get => _text;
-        set { if (_text == value) return; _text = value ?? string.Empty; MarkDirty(UIDirtyFlags.Vertices); }
+        set => SetField(ref _text, value ?? string.Empty, UIDirtyFlags.Vertices);
     }
 
     [SerializeField] private TAlignment _alignment = TAlignment.CenterMiddle;
     public TAlignment Alignment
     {
         get => _alignment;
-        set { if (_alignment == value) return; _alignment = value; MarkDirty(UIDirtyFlags.Vertices); }
+        set => SetField(ref _alignment, value, UIDirtyFlags.Vertices);
     }
 
     [SerializeField] private int _size = 20;
     public int Size
     {
         get => _size;
-        set { if (_size == value) return; _size = Maths.Max(1, value); MarkDirty(UIDirtyFlags.Vertices); }
+        set => SetField(ref _size, Maths.Max(1, value), UIDirtyFlags.Vertices);
     }
 
     // ---- Material override ----
@@ -66,7 +66,7 @@ public class TextComponent : UIBehaviour
     public Material? Material
     {
         get => _material;
-        set { if (ReferenceEquals(_material, value)) return; _material = value; MarkDirty(UIDirtyFlags.Material); }
+        set => SetField(ref _material, value, UIDirtyFlags.Material);
     }
 
     public override Material GetMaterial() => _material ?? base.GetMaterial();

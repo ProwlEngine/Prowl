@@ -23,13 +23,11 @@ public class CanvasGroup : UIBehaviour
         get => _alpha;
         set
         {
-            if (_alpha == value) return;
-            _alpha = value;
-            // Alpha is baked into vertex color during GenerateMesh, so every descendant
-            // UIBehaviour needs its mesh re-baked. MarkDirty on each descendant also
-            // bubbles a Vertices flag up to the canvas via UIBehaviour.MarkDirty.
-            MarkDescendantsDirty(UIDirtyFlags.Vertices);
-            MarkDirty(UIDirtyFlags.Vertices);
+            // SetField marks this component + the canvas dirty when the value changes.
+            // Alpha is also baked into every descendant's vertex color during GenerateMesh,
+            // so on a real change we additionally re-dirty the whole subtree.
+            if (SetField(ref _alpha, value, UIDirtyFlags.Vertices))
+                MarkDescendantsDirty(UIDirtyFlags.Vertices);
         }
     }
 
@@ -67,7 +65,7 @@ public class CanvasGroup : UIBehaviour
     public bool Interactable
     {
         get => _interactable;
-        set { if (_interactable == value) return; _interactable = value; MarkDirty(UIDirtyFlags.Hierarchy); }
+        set => SetField(ref _interactable, value, UIDirtyFlags.Hierarchy);
     }
 
     /// <summary>When <c>false</c>, raycasts pass through all descendant elements.</summary>
@@ -75,7 +73,7 @@ public class CanvasGroup : UIBehaviour
     public bool BlocksRaycasts
     {
         get => _blocksRaycasts;
-        set { if (_blocksRaycasts == value) return; _blocksRaycasts = value; MarkDirty(UIDirtyFlags.Hierarchy); }
+        set => SetField(ref _blocksRaycasts, value, UIDirtyFlags.Hierarchy);
     }
 
     /// <summary>When <c>true</c>, this group and its children ignore parent <see cref="CanvasGroup"/> settings.</summary>
@@ -85,11 +83,9 @@ public class CanvasGroup : UIBehaviour
         get => _ignoreParentGroups;
         set
         {
-            if (_ignoreParentGroups == value) return;
-            _ignoreParentGroups = value;
             // Toggling this changes every descendant's effective alpha — re-bake them.
-            MarkDescendantsDirty(UIDirtyFlags.Vertices);
-            MarkDirty(UIDirtyFlags.Vertices);
+            if (SetField(ref _ignoreParentGroups, value, UIDirtyFlags.Vertices))
+                MarkDescendantsDirty(UIDirtyFlags.Vertices);
         }
     }
 

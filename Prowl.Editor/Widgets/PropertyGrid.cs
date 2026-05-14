@@ -56,6 +56,9 @@ public static class PropertyGrid
                 _validationRoot = target as EngineObject;
             }
 
+            // Save a snapshot of the found root so that the callbacks can be executed correctly
+            var currentRoot = _validationRoot;
+
             var type = target.GetType();
             var fields = GetSerializableFields(type);
 
@@ -97,7 +100,7 @@ public static class PropertyGrid
                 if (range != null)
                 {
                     bool handled = TryDrawRangeAttribute(paper, fieldId, label, fieldType, value, range,
-                        v => { field.SetValue(target, v); onChanged?.Invoke(target); NotifyValidation(); });
+                        v => { ApplyFieldValue(target, field, v); onChanged?.Invoke(target); NotifyValidation(currentRoot); });
                     if (handled) continue;
                 }
 
@@ -119,9 +122,9 @@ public static class PropertyGrid
                         {
                             DrawField(paper, fieldId, label, fieldType, value, newVal =>
                             {
-                                field.SetValue(target, newVal);
+                                ApplyFieldValue(target, field, newVal);
                                 onChanged?.Invoke(target);
-                                NotifyValidation();
+                                NotifyValidation(currentRoot);
                             }, depth);
                         }
                     }
@@ -130,8 +133,9 @@ public static class PropertyGrid
                 {
                     DrawField(paper, fieldId, label, fieldType, value, newVal =>
                     {
-                        field.SetValue(target, newVal);
+                        ApplyFieldValue(target, field, newVal);
                         onChanged?.Invoke(target);
+                        NotifyValidation(currentRoot);
                     }, depth);
                 }
             }
@@ -141,14 +145,19 @@ public static class PropertyGrid
 
             // Clear root at depth 0 exit
             if (depth == 0)
+            {
                 _validationRoot = null;
+            }
         }
     }
 
     /// <summary>Call OnValidate on the root EngineObject if one is being edited.</summary>
-    private static void NotifyValidation()
+    private static void NotifyValidation(EngineObject? root = null)
     {
-        try { _validationRoot?.OnValidate(); }
+        try
+        {
+            root?.OnValidate();
+        }
         catch (Exception ex) { Runtime.Debug.LogWarning($"OnValidate error: {ex.Message}"); }
     }
 
@@ -412,6 +421,16 @@ public static class PropertyGrid
         var prop = type.GetProperty(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         if (prop != null) return prop.GetValue(target) is true;
         return true;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="value"/> onto <paramref name="target"/>, routing through the
+    /// field's backing property setter when one exists so value-change checks, dirty-marking,
+    /// and clamping all run. Falls back to a direct field write otherwise.
+    /// </summary>
+    public static void ApplyFieldValue(object target, FieldInfo field, object? value)
+    {
+        field.SetValue(target, value);
     }
 
     public static FieldInfo[] GetSerializableFields(Type type)

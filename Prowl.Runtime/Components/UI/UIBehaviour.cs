@@ -40,10 +40,20 @@ public abstract class UIBehaviour : MonoBehaviour
         MarkDirty(UIDirtyFlags.Hierarchy);
     }
 
+    /// <summary>
+    /// Coarse catch-all for mutations that bypass the per-property setters — most importantly
+    /// undo/redo restores and deserialization. Editor inspector edits are routed through the
+    /// property setters (which mark precise flags via <see cref="SetField{T}"/>), so the common
+    /// path never relies on this; it stays as a safety net only.
+    /// </summary>
     public override void OnValidate()
     {
-        GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);
-        MarkDirty(UIDirtyFlags.All);
+        // Run the OnValide only in the editor- During runtime, dirtying should be driven by the fields themselves.
+        if (!Application.IsPlaying)
+        {
+            GetCanvas()?.MarkDirty(UIDirtyFlags.All);
+            MarkDirty(UIDirtyFlags.All);
+        }
     }
 
     public override void OnAddedToScene()
@@ -77,5 +87,41 @@ public abstract class UIBehaviour : MonoBehaviour
         GetCanvas()?.MarkDirty(flags);
     }
 
+    /// <summary>
+    /// Backing-field setter used by every <see cref="UIBehaviour"/> property. Assigns
+    /// <paramref name="value"/> only when it differs from <paramref name="field"/>, and
+    /// marks <paramref name="flags"/> dirty when it does. Returns <c>true</c> if the value
+    /// changed — callers can branch on it for additional work (see <c>CanvasGroup.Alpha</c>).
+    /// </summary>
+    /// <remarks>
+    /// This is the single place the UI's value-change check lives. <see cref="EqualityComparer{T}.Default"/>
+    /// resolves correctly for every property type in use: structs (<c>Color</c>, <c>Float2</c>)
+    /// compare by value, and <see cref="EngineObject"/> references (<c>Texture2D</c>, <c>Material</c>,
+    /// <c>FontAsset</c>) compare by reference via <see cref="EngineObject"/>'s overridden equality.
+    /// </remarks>
+    protected bool SetField<T>(ref T field, T value, UIDirtyFlags flags)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+        field = value;
+        MarkDirty(flags);
+        return true;
+    }
+
     public GameCanvas? GetCanvas() => GetComponentInParent<GameCanvas>(includeSelf: true);
+
+    // ============================================================
+    // Scene-view gizmos (Unity-style RectTransform / UI gizmos)
+    // ============================================================
+
+    /// <summary>Faint rect outline while not selected, so authors can see where UI lives in the scene.</summary>
+    public override void DrawGizmos()
+    {
+        UIGizmos.DrawRect(this, UIGizmos.UnselectedColor, drawPivot: false, drawAnchors: false);
+    }
+
+    /// <summary>Bold rect outline plus pivot + anchor handles when this element is selected.</summary>
+    public override void DrawGizmosSelected()
+    {
+        UIGizmos.DrawRect(this, UIGizmos.SelectedColor, drawPivot: true, drawAnchors: true);
+    }
 }
