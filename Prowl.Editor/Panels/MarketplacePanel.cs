@@ -103,12 +103,11 @@ public class MarketplacePanel : DockPanel
 
             paper.Box("mkt_tb_stretch").Width(UnitValue.Stretch(1));
 
-            EditorGUI.Button(paper, "mkt_refresh", $"{EditorIcons.ArrowsRotate}  Refresh", width: 86)
-                .OnValueChanged(clicked =>
-                {
-                    if (!_isLoading)
-                        _ = LoadAsync();
-                });
+            Origami.Button(paper, "mkt_refresh", $"{EditorIcons.ArrowsRotate}  Refresh", () =>
+            {
+                if (!_isLoading)
+                    _ = LoadAsync();
+            }).Width(86f).Show();
         }
     }
 
@@ -390,18 +389,17 @@ public class MarketplacePanel : DockPanel
             {
                 if (ProwlService.IsSignedIn)
                 {
-                    EditorGUI.Button(paper, "mkt_d_import", $"{EditorIcons.Download}  Import Package", width: 150)
-                        .OnValueChanged(clicked => OpenImportDialog(pkg, ver));
+                    Origami.Button(paper, "mkt_d_import", $"{EditorIcons.Download}  Import Package",
+                        () => OpenImportDialog(pkg, ver)).Width(150f).Show();
                 }
                 else
                 {
                     string signInLabel = ProwlService.IsSigningIn ? "Signing in..." : $"{EditorIcons.ArrowRightToBracket}  Sign in to Import";
-                    EditorGUI.Button(paper, "mkt_d_signin_import", signInLabel, width: 160)
-                        .OnValueChanged(clicked =>
-                        {
-                            if (!ProwlService.IsSigningIn)
-                                _ = ProwlService.SignInWithGitHubAsync();
-                        });
+                    Origami.Button(paper, "mkt_d_signin_import", signInLabel, () =>
+                    {
+                        if (!ProwlService.IsSigningIn)
+                            _ = ProwlService.SignInWithGitHubAsync();
+                    }).Width(160f).Show();
                 }
             }
         }
@@ -640,9 +638,10 @@ public class MarketplacePanel : DockPanel
             // Expand/collapse arrow
             if (hasChildren)
             {
-                EditorGUI.ButtonSquareGhost(paper, $"imp_arr_{Math.Abs(relPath.GetHashCode())}",
-                        isOpen ? EditorIcons.AngleDown : EditorIcons.AngleRight)
-                    .OnValueChanged(clicked => _folderOpenState[stateKey] = !isOpen);
+                Origami.IconButton(paper, $"imp_arr_{Math.Abs(relPath.GetHashCode())}",
+                        isOpen ? EditorIcons.AngleDown : EditorIcons.AngleRight,
+                        () => _folderOpenState[stateKey] = !isOpen)
+                    .Ghost().Show();
             }
             else
             {
