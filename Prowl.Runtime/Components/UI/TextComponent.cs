@@ -159,10 +159,8 @@ public class TextComponent : UIBehaviour
                 if (m.Width <= 0 || m.Height <= 0) continue; // whitespace / invisible
 
                 // Glyph quad in canvas-design pixels, top-left origin.
-                // line.Position is the line's top-left; inst.Position is the pen position
-                // relative to the line; metrics.Offset is the bitmap offset from the pen.
-                float x0 = originX + line.Position.X + inst.Position.X + m.OffsetX;
-                float y0 = originY + verticalOffset + line.Position.Y + inst.Position.Y + m.OffsetY;
+                float x0 = originX + line.Position.X + inst.Position.X;
+                float y0 = originY + verticalOffset + line.Position.Y + inst.Position.Y;
                 float x1 = x0 + m.Width;
                 float y1 = y0 + m.Height;
 
