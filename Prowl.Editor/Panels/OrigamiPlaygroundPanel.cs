@@ -309,6 +309,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_SliderVertical(paper);
                 Section_RangeSliderShowcase(paper);
                 Section_Buttons(paper);
+                Section_Headers(paper);
                 Section_Tree(paper);
                 Section_State(paper);
             });
@@ -1859,6 +1860,46 @@ public class OrigamiPlaygroundPanel : DockPanel
                 StateLine(paper, "st_btn_dc",  $"Button double-click: {_btnDoubleClickCount}");
                 StateLine(paper, "st_bg_view", $"ButtonGroup view: {s_bgViewLabels[_bgViewMode]} (idx {_bgViewMode})");
                 StateLine(paper, "st_bg_align",$"ButtonGroup align: {s_bgAlignLabels[_bgAlign]} (idx {_bgAlign})");
+            }
+        });
+    }
+
+    // ── Headers & Separators ─────────────────────────────────
+
+    private void Section_Headers(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_headers", "Headers & Separators").Body(() =>
+        {
+            using (paper.Column("op_hdr_col").Height(UnitValue.Auto).ColBetween(4).Enter())
+            {
+                // Styles
+                Origami.Header(paper, "op_hdr_text", "Text Style (default)").Show();
+                Origami.Header(paper, "op_hdr_line", "Line Style").Line().Show();
+                Origami.Header(paper, "op_hdr_linec", "Centered Line").LineCentered().Show();
+                Origami.Header(paper, "op_hdr_box", "Box Style").Box().Show();
+                Origami.Header(paper, "op_hdr_ul", "Underline Style").Underline().Show();
+                Origami.Separator(paper, "op_hdr_sep");
+
+                // With icons
+                Origami.Header(paper, "op_hdr_ico_t", "With Icon").Icon(EditorIcons.Gear).Show();
+                Origami.Header(paper, "op_hdr_ico_l", "Icon + Line").Icon(EditorIcons.Cube).Line().Show();
+                Origami.Header(paper, "op_hdr_ico_b", "Icon + Box").Icon(EditorIcons.Star).Box().Show();
+
+                // With badges
+                Origami.Header(paper, "op_hdr_bdg", "Section Title").Badge("3 items").Line().Show();
+                Origami.Header(paper, "op_hdr_bdg2", "Settings").Badge("Advanced").Icon(EditorIcons.Gear).Box().Show();
+
+                // Variants
+                Origami.Header(paper, "op_hdr_v_pri", "Primary").Primary().Box().Show();
+                Origami.Header(paper, "op_hdr_v_suc", "Success").Success().Line().Show();
+                Origami.Header(paper, "op_hdr_v_wrn", "Warning").Warning().Underline().Show();
+                Origami.Header(paper, "op_hdr_v_dng", "Danger").Danger().Box().Show();
+                Origami.Header(paper, "op_hdr_v_inf", "Info").Info().LineCentered().Show();
+
+                // Thick separators
+                Origami.Separator(paper, "op_hdr_sep2");
+                Origami.Header(paper, "op_hdr_thick", "Thick Line").Line().Thickness(4).Show();
+                Origami.Header(paper, "op_hdr_thicc", "Thick Line B").Underline().Thickness(4).Primary().Show();
             }
         });
     }

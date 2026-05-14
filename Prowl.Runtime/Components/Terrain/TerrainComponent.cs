@@ -71,15 +71,13 @@ public class TerrainComponent : MonoBehaviour
     private Float4x4[] _transforms = Array.Empty<Float4x4>();
     private PropertyState _properties = new();
 
-    // Material instance (cloned from the assigned material so we don't modify the asset)
+    // Material instances (cloned from assets each frame so edits propagate immediately)
     [NonSerialized] private Material? _materialInstance;
-    [NonSerialized] private Guid _lastMaterialGuid;
+    [NonSerialized] private Material? _grassMaterialInstance;
 
     // Vegetation renderers
     [NonSerialized] private TerrainGrassRenderer? _grassRenderer;
     [NonSerialized] private TerrainTreeRenderer? _treeRenderer;
-    [NonSerialized] private Material? _grassMaterialInstance;
-    [NonSerialized] private Guid _lastGrassMaterialGuid;
 
     // Cached default materials and textures (avoid LoadDefault every frame)
     [NonSerialized] private static Material? s_defaultTerrainMat;
@@ -277,15 +275,9 @@ public class TerrainComponent : MonoBehaviour
         }
         if (sourceMat == null) return null;
 
-        var sourceGuid = Material.AssetID;
-
-        if (_materialInstance == null || (_lastMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
-        {
-            _materialInstance = sourceMat.Clone();
-            _materialInstance.Name = sourceMat.Name + " (Terrain Instance)";
-            _lastMaterialGuid = sourceGuid;
-        }
-
+        // Re-clone from source each frame so edits to the material asset
+        // are reflected immediately without requiring reimport or restart.
+        _materialInstance = sourceMat.Clone();
         return _materialInstance;
     }
 
@@ -299,15 +291,9 @@ public class TerrainComponent : MonoBehaviour
         }
         if (sourceMat == null) return null;
 
-        var sourceGuid = GrassMaterial.AssetID;
-
-        if (_grassMaterialInstance == null || (_lastGrassMaterialGuid != sourceGuid && sourceGuid != Guid.Empty))
-        {
-            _grassMaterialInstance = sourceMat.Clone();
-            _grassMaterialInstance.Name = sourceMat.Name + " (Grass Instance)";
-            _lastGrassMaterialGuid = sourceGuid;
-        }
-
+        // Re-clone from source each frame so edits to the material asset
+        // are reflected immediately.
+        _grassMaterialInstance = sourceMat.Clone();
         return _grassMaterialInstance;
     }
 

@@ -48,6 +48,11 @@ public class DetailPrototype
     /// default Standard material is used for that submesh.
     /// </summary>
     public List<AssetRef<Material>> Materials = [];
+    /// <summary>
+    /// Optional grass material override for texture render modes (Billboard / NonBillboard).
+    /// When null, the terrain's global GrassMaterial is used.
+    /// </summary>
+    public AssetRef<Material> GrassMaterial;
     public DetailRenderMode RenderMode = DetailRenderMode.TextureBillboard;
     public float MinWidth = 1f;
     public float MaxWidth = 2f;

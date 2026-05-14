@@ -54,11 +54,9 @@ public class TerrainEditor : CustomEditor
 
         Undo.Snapshot(terrain);
 
-        // Show Data and Material asset refs via default property grid
+        // Terrain Data asset ref (outside tabs - required before any tab content)
         PropertyGrid.DrawField(paper, $"{id}_data", "Terrain Data", typeof(AssetRef<TerrainData>), terrain.Data,
             v => terrain.Data = (AssetRef<TerrainData>)v!, 0);
-        PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), terrain.Material,
-            v => terrain.Material = (AssetRef<Material>)v!, 0);
 
         if (terrainData == null)
         {
@@ -292,6 +290,8 @@ public class TerrainEditor : CustomEditor
             {
                 PropertyGrid.DrawField(paper, $"{id}_tex", "Texture", typeof(AssetRef<Texture2D>), dp.Texture,
                     v => { dp.Texture = (AssetRef<Texture2D>)v!; MarkDetailsDirty(); }, 0);
+                PropertyGrid.DrawField(paper, $"{id}_gmat", "Grass Material", typeof(AssetRef<Material>), dp.GrassMaterial,
+                    v => { dp.GrassMaterial = (AssetRef<Material>)v!; MarkDetailsDirty(); }, 0);
             }
 
             InspectorRow.Draw(paper, $"{id}_minw", "Min Width", () =>
@@ -437,6 +437,14 @@ public class TerrainEditor : CustomEditor
 
     private void DrawSettingsTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainComponent terrain, TerrainData data)
     {
+        // Materials
+        PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), terrain.Material,
+            v => terrain.Material = (AssetRef<Material>)v!, 0);
+        PropertyGrid.DrawField(paper, $"{id}_grassmat", "Grass Material", typeof(AssetRef<Material>), terrain.GrassMaterial,
+            v => { terrain.GrassMaterial = (AssetRef<Material>)v!; terrain.InvalidateGrassCache(); }, 0);
+
+        paper.Box($"{id}_sp_mat").Height(6);
+
         InspectorRow.Draw(paper, $"{id}_size", "Terrain Size", () =>
             Origami.NumericField<float>(paper, $"{id}_size_v", data.Size,
                 v => { data.Size = MathF.Max(1f, v); _isDirty = true; }).Min(1f).Show());

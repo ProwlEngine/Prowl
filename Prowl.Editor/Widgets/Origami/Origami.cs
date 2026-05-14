@@ -223,6 +223,16 @@ public static class Origami
         where T : struct, System.Numerics.INumber<T>
         => new NumericFieldBuilder<T>(paper, id, value, setter, Current);
 
+    // ── Header / Separator factories ────────────────────────────
+
+    /// <summary>Begin building a header or section divider. Chain style/variant modifiers, then call <see cref="HeaderBuilder.Show"/>.</summary>
+    public static HeaderBuilder Header(Paper paper, string id, string label)
+        => new HeaderBuilder(paper, id, label, Current);
+
+    /// <summary>Shorthand for a text-less horizontal line separator.</summary>
+    public static HeaderBuilder Separator(Paper paper, string id)
+        => new HeaderBuilder(paper, id, "", Current).Separator();
+
     // ── Button factories ─────────────────────────────────────────
 
     /// <summary>Begin building a button. Construct the click handler at the call site.</summary>
