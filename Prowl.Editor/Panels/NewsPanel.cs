@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 
 using Prowl.Editor.Docking;
-using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -60,12 +59,11 @@ public class NewsPanel : DockPanel
             .RowBetween(8)
             .Enter())
         {
-            EditorGUI.Button(paper, "news_refresh", $"{EditorIcons.ArrowsRotate}  Refresh", width: 86)
-                .OnValueChanged(clicked =>
-                {
-                    if (!_isLoading)
-                        _ = LoadPostsAsync();
-                });
+            Origami.Button(paper, "news_refresh", $"{EditorIcons.ArrowsRotate}  Refresh", () =>
+            {
+                if (!_isLoading)
+                    _ = LoadPostsAsync();
+            }).Width(86f).Show();
         }
     }
 
@@ -164,8 +162,8 @@ public class NewsPanel : DockPanel
 
                 if (canOpen)
                 {
-                    EditorGUI.Button(paper, $"news_card_{index}_read", $"{EditorIcons.ArrowUpRightFromSquare}  Read More", width: 108)
-                        .OnValueChanged(clicked => OpenUrl($"https://prowlengine.com/news/{slug}"));
+                    Origami.Button(paper, $"news_card_{index}_read", $"{EditorIcons.ArrowUpRightFromSquare}  Read More",
+                        () => OpenUrl($"https://prowlengine.com/news/{slug}")).Width(108f).Show();
                 }
             }
         }

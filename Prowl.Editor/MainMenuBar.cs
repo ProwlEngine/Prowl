@@ -103,22 +103,37 @@ public static class MainMenuBar
 
         if (ProwlService.IsSignedIn)
         {
-            string email = ProwlService.GetCurrentUser()?.Email ?? "Signed in";
-            int atIdx = email.IndexOf('@');
-            string display = atIdx > 0 ? email[..atIdx] : email;
+            bool popupOpen = ProfilePopup.IsOpen;
 
-            paper.Box("mb_user")
+            using (paper.Row("mb_profile_btn")
                 .Height(EditorTheme.MenuBarHeight)
                 .Width(UnitValue.Auto)
-                .IsNotInteractable()
-                .Text($"{EditorIcons.User}  {display}", font)
-                .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize)
-                .Alignment(TextAlignment.MiddleCenter)
-                .Margin(0, 4, 0, 0);
+                .BackgroundColor(popupOpen ? EditorTheme.Ink200 : Color.Transparent)
+                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                .OnClick(_ => ProfilePopup.Toggle())
+                .Enter())
+            {
+                paper.Box("mb_pb_pl").Width(8).IsNotInteractable();
+                paper.Box("mb_pb_icon")
+                    .Width(UnitValue.Auto).Height(EditorTheme.MenuBarHeight)
+                    .IsNotInteractable()
+                    .Text(EditorIcons.PersonCircleCheck, font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleCenter);
+                paper.Box("mb_pb_gap").Width(5).IsNotInteractable();
+                paper.Box("mb_pb_chevron")
+                    .Width(UnitValue.Auto).Height(EditorTheme.MenuBarHeight)
+                    .IsNotInteractable()
+                    .Text(EditorIcons.AngleDown, font)
+                    .TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSize - 4)
+                    .Alignment(TextAlignment.MiddleCenter);
+                paper.Box("mb_pb_pr").Width(8).IsNotInteractable();
 
-            Origami.Button(paper, "mb_signout", "Sign Out", () => { _ = ProwlService.SignOutAsync(); })
-                .Ghost().Width(72f).Show();
+                // Popup anchored here via HookToParent — drawn inside trigger's scope
+                ProfilePopup.Draw(paper, font, EditorTheme.MenuBarHeight);
+            }
         }
         else
         {
@@ -126,7 +141,7 @@ public static class MainMenuBar
                 ? "Signing in..."
                 : $"{EditorIcons.ArrowRightToBracket}  Sign In";
 
-            Origami.Button(paper, "mb_signin", label, () =>
+            Origami.Button(paper, "mb_signin_btn", label, () =>
             {
                 if (!ProwlService.IsSigningIn)
                     _ = ProwlService.SignInWithGitHubAsync();

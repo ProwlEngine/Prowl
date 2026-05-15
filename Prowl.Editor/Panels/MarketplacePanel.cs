@@ -87,19 +87,23 @@ public class MarketplacePanel : DockPanel
             .BackgroundColor(EditorTheme.Neutral300)
             .Enter())
         {
-            Origami.SearchField(paper, "mkt_search", _searchText, v => _searchText = v).Show();
+            Origami.SearchField(paper, "mkt_search", _searchText, v => _searchText = v)
+                .Width(180f).Show();
 
             paper.Box("mkt_tb_sep").Width(1).BackgroundColor(EditorTheme.Ink200);
 
-            int catIdx = Array.FindIndex(s_categories, c => c.key == _activeCategory);
-            Origami.ButtonGroup(paper, "mkt_cats", catIdx < 0 ? 0 : catIdx, idx => _activeCategory = s_categories[idx].key)
-                .Small()
-                .Item(s_categories[0].label)
-                .Item(s_categories[1].label)
-                .Item(s_categories[2].label)
-                .Item(s_categories[3].label)
-                .Item(s_categories[4].label)
-                .Show();
+            using (paper.Row("mkt_cats").Width(UnitValue.Auto).Height(22f).RowBetween(3f).Enter())
+            {
+                foreach (var (key, label) in s_categories)
+                {
+                    string k = key;
+                    bool active = _activeCategory == k;
+                    var btn = Origami.Button(paper, $"mkt_cat_{k}", label, () => _activeCategory = k).Small();
+                    if (active) btn.Subtle();
+                    else btn.Ghost();
+                    btn.Show();
+                }
+            }
 
             paper.Box("mkt_tb_stretch").Width(UnitValue.Stretch(1));
 

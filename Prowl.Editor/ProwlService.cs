@@ -90,7 +90,10 @@ public static class ProwlService
             if (string.IsNullOrEmpty(code))
                 return null;
 
-            return await s_instance.Auth.ExchangeCodeForSession(signInState.PKCEVerifier, code);
+            Session? session = await s_instance.Auth.ExchangeCodeForSession(signInState.PKCEVerifier, code);
+            if (session != null)
+                _ = FetchProfileAsync();
+            return session;
         }
         finally
         {
@@ -107,10 +110,80 @@ public static class ProwlService
     {
         if (s_instance?.Auth.CurrentSession != null)
             await s_instance.Auth.SignOut();
+        ResetProfileCache();
     }
 
     public static bool IsSignedIn => s_instance?.Auth.CurrentUser != null;
     public static User? GetCurrentUser() => s_instance?.Auth.CurrentUser;
+
+    public static UserProfile? CachedProfile { get; private set; }
+    private static bool s_profileLoaded;
+
+    /// <summary>Fetches the profile for the signed-in user, caching the result.</summary>
+    public static async Task<UserProfile?> FetchProfileAsync()
+    {
+        if (s_instance == null || !IsSignedIn) return null;
+
+        var userId = s_instance.Auth.CurrentUser!.Id;
+        var response = await s_instance.From<UserProfile>()
+            .Where(p => p.UserId == userId)
+            .Limit(1)
+            .Get();
+
+        CachedProfile = response.Models.Count > 0 ? response.Models[0] : null;
+        s_profileLoaded = true;
+        return CachedProfile;
+    }
+
+    /// <summary>Creates a profile for the signed-in user with the given handle and display name.</summary>
+    /// <returns>The created profile, or null if the handle is already taken.</returns>
+    public static async Task<UserProfile?> CreateProfileAsync(string handle, string name)
+    {
+        if (s_instance == null || !IsSignedIn) return null;
+
+        var profile = new UserProfile
+        {
+            Handle = handle,
+            Name = name,
+            UserId = s_instance.Auth.CurrentUser!.Id
+        };
+
+        try
+        {
+            Supabase.Postgrest.Responses.ModeledResponse<UserProfile> response = await s_instance.From<UserProfile>().Insert(profile);
+            CachedProfile = response.Models.Count > 0 ? response.Models[0] : null;
+            s_profileLoaded = true;
+            return CachedProfile;
+        }
+        catch
+        {
+            // Unique constraint violation — handle is taken
+            return null;
+        }
+    }
+
+    /// <summary>Returns true if the handle is not yet taken by any profile.</summary>
+    public static async Task<bool> CheckHandleAvailableAsync(string handle)
+    {
+        if (s_instance == null)
+            await Initialize();
+
+        var response = await s_instance!.From<UserProfile>()
+            .Where(p => p.Handle == handle)
+            .Limit(1)
+            .Get();
+
+        return response.Models.Count == 0;
+    }
+
+    /// <summary>True once a profile fetch has been attempted after sign-in.</summary>
+    public static bool IsProfileLoaded => s_profileLoaded;
+
+    private static void ResetProfileCache()
+    {
+        CachedProfile = null;
+        s_profileLoaded = false;
+    }
 
     public static async Task<List<NewsPost>> FetchNewsPostsAsync()
     {
@@ -254,5 +327,27 @@ public class PackageVersion : BaseModel
     public DateTime CreatedAt { get; set; }
 
     public override bool Equals(object? obj) => obj is PackageVersion v && Id == v.Id;
+    public override int GetHashCode() => HashCode.Combine(Id);
+}
+
+[Table("profile")]
+public class UserProfile : BaseModel
+{
+    [PrimaryKey("id", false)]
+    public string Id { get; set; } = "";
+
+    [Column("handle")]
+    public string Handle { get; set; } = "";
+
+    [Column("name")]
+    public string Name { get; set; } = "";
+
+    [Column("user_id")]
+    public string UserId { get; set; } = "";
+
+    [Column("created_at")]
+    public DateTime CreatedAt { get; set; }
+
+    public override bool Equals(object? obj) => obj is UserProfile p && Id == p.Id;
     public override int GetHashCode() => HashCode.Combine(Id);
 }
