@@ -89,22 +89,6 @@ public static class EditorGUI
             .FontSize(FontSz);
     }
 
-    // ================================================================
-    //  Header
-    // ================================================================
-
-    public static void Header(Paper paper, string id, string text)
-    {
-        if (Font == null) return;
-        paper.Box(id)
-            .Height(EditorTheme.RowHeight + 4)
-            .Margin(8, 10, 0, 2)
-            .Text(text, Font)
-            .Clip()
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(FontSz + 2);
-    }
-
 
     // ================================================================
     //  Separator
