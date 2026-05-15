@@ -233,6 +233,95 @@ public static class Origami
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
 
+    // ── Vector field factories ───────────────────────────────────
+
+    // Float vectors
+    public static VectorField2Builder<float> Float2Field(Paper paper, string id,
+        Prowl.Vector.Float2 value, Action<Prowl.Vector.Float2> setter)
+    {
+        var v = value;
+        return new VectorField2Builder<float>(paper, id, Current,
+            (float)v.X, (float)v.Y,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
+    }
+
+    public static VectorField3Builder<float> Float3Field(Paper paper, string id,
+        Prowl.Vector.Float3 value, Action<Prowl.Vector.Float3> setter)
+    {
+        var v = value;
+        return new VectorField3Builder<float>(paper, id, Current,
+            (float)v.X, (float)v.Y, (float)v.Z,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
+    }
+
+    public static VectorField4Builder<float> Float4Field(Paper paper, string id,
+        Prowl.Vector.Float4 value, Action<Prowl.Vector.Float4> setter)
+    {
+        var v = value;
+        return new VectorField4Builder<float>(paper, id, Current,
+            (float)v.X, (float)v.Y, (float)v.Z, (float)v.W,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
+            z => { v.Z = z; setter(v); }, w => { v.W = w; setter(v); });
+    }
+
+    // Double vectors
+    public static VectorField2Builder<double> Double2Field(Paper paper, string id,
+        Prowl.Vector.Double2 value, Action<Prowl.Vector.Double2> setter)
+    {
+        var v = value;
+        return new VectorField2Builder<double>(paper, id, Current,
+            (double)v.X, (double)v.Y,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
+    }
+
+    public static VectorField3Builder<double> Double3Field(Paper paper, string id,
+        Prowl.Vector.Double3 value, Action<Prowl.Vector.Double3> setter)
+    {
+        var v = value;
+        return new VectorField3Builder<double>(paper, id, Current,
+            (double)v.X, (double)v.Y, (double)v.Z,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
+    }
+
+    public static VectorField4Builder<double> Double4Field(Paper paper, string id,
+        Prowl.Vector.Double4 value, Action<Prowl.Vector.Double4> setter)
+    {
+        var v = value;
+        return new VectorField4Builder<double>(paper, id, Current,
+            (double)v.X, (double)v.Y, (double)v.Z, (double)v.W,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
+            z => { v.Z = z; setter(v); }, w => { v.W = w; setter(v); });
+    }
+
+    // Int vectors
+    public static VectorField2Builder<int> Int2Field(Paper paper, string id,
+        Prowl.Vector.Int2 value, Action<Prowl.Vector.Int2> setter)
+    {
+        var v = value;
+        return new VectorField2Builder<int>(paper, id, Current,
+            v.X, v.Y,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
+    }
+
+    public static VectorField3Builder<int> Int3Field(Paper paper, string id,
+        Prowl.Vector.Int3 value, Action<Prowl.Vector.Int3> setter)
+    {
+        var v = value;
+        return new VectorField3Builder<int>(paper, id, Current,
+            v.X, v.Y, v.Z,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
+    }
+
+    public static VectorField4Builder<int> Int4Field(Paper paper, string id,
+        Prowl.Vector.Int4 value, Action<Prowl.Vector.Int4> setter)
+    {
+        var v = value;
+        return new VectorField4Builder<int>(paper, id, Current,
+            v.X, v.Y, v.Z, v.W,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
+            z => { v.Z = z; setter(v); }, w => { v.W = w; setter(v); });
+    }
+
     // ── Color field factory ─────────────────────────────────────
 
     /// <summary>Begin building a color field. Renders a swatch that opens a full picker popover.</summary>

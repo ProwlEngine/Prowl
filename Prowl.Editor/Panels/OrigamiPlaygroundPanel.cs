@@ -81,6 +81,13 @@ public class OrigamiPlaygroundPanel : DockPanel
     private Country _country = new("US", "United States", "North America");
     private Country _countryEqualityByCode = new("US", "United States v2", "North America");
 
+    // ── VectorField state ─────────────────────────────────────
+    private Prowl.Vector.Float2 _vfFloat2 = new(1.5f, 2.5f);
+    private Prowl.Vector.Float3 _vfFloat3 = new(1f, 2f, 3f);
+    private Prowl.Vector.Float4 _vfFloat4 = new(1f, 2f, 3f, 4f);
+    private Prowl.Vector.Int2 _vfInt2 = new(10, 20);
+    private Prowl.Vector.Double3 _vfDouble3 = new(1.1, 2.2, 3.3);
+
     // ── ColorField state ──────────────────────────────────────
     private Prowl.Vector.Color _cfBasic = new(0.3f, 0.6f, 0.9f, 1f);
     private Prowl.Vector.Color _cfNoAlpha = new(0.9f, 0.2f, 0.3f, 1f);
@@ -315,6 +322,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_SliderVertical(paper);
                 Section_RangeSliderShowcase(paper);
                 Section_Buttons(paper);
+                Section_VectorFields(paper);
                 Section_ColorFields(paper);
                 Section_Headers(paper);
                 Section_Tree(paper);
@@ -1867,6 +1875,28 @@ public class OrigamiPlaygroundPanel : DockPanel
                 StateLine(paper, "st_btn_dc",  $"Button double-click: {_btnDoubleClickCount}");
                 StateLine(paper, "st_bg_view", $"ButtonGroup view: {s_bgViewLabels[_bgViewMode]} (idx {_bgViewMode})");
                 StateLine(paper, "st_bg_align",$"ButtonGroup align: {s_bgAlignLabels[_bgAlign]} (idx {_bgAlign})");
+            }
+        });
+    }
+
+    // ── Vector Fields ──────────────────────────────────────────
+
+    private void Section_VectorFields(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_vec", "Vector Fields").Body(() =>
+        {
+            using (paper.Column("op_vf_col").Height(UnitValue.Auto).ColBetween(6).Enter())
+            {
+                LabelRow(paper, "vf_f2", "Float2", () =>
+                    Origami.Float2Field(paper, "op_vf_f2", _vfFloat2, v => _vfFloat2 = v).Show());
+                LabelRow(paper, "vf_f3", "Float3", () =>
+                    Origami.Float3Field(paper, "op_vf_f3", _vfFloat3, v => _vfFloat3 = v).Show());
+                LabelRow(paper, "vf_f4", "Float4", () =>
+                    Origami.Float4Field(paper, "op_vf_f4", _vfFloat4, v => _vfFloat4 = v).Show());
+                LabelRow(paper, "vf_i2", "Int2", () =>
+                    Origami.Int2Field(paper, "op_vf_i2", _vfInt2, v => _vfInt2 = v).Show());
+                LabelRow(paper, "vf_d3", "Double3", () =>
+                    Origami.Double3Field(paper, "op_vf_d3", _vfDouble3, v => _vfDouble3 = v).Show());
             }
         });
     }
