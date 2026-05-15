@@ -320,7 +320,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Progress Bar ===
             Origami.Header(paper, "h_prog", "Progress Bar").Show();
 
-            EditorGUI.ProgressBar(paper, "pb_1", "Loading", _progress);
+            Origami.ProgressBar(paper, "pb_1", _progress).Label("Loading").ShowPercent().Show();
             InspectorRow.Draw(paper, "pb_ctrl", "Progress", () =>
                 Origami.Slider(paper, "pb_ctrl_v", _progress, v => _progress = v, 0f, 1f)
                     .Format("F2").Show());

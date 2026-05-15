@@ -238,6 +238,32 @@ public static class Origami
     public static LabelBuilder Label(Paper paper, string id, string text)
         => new LabelBuilder(paper, id, text, Current);
 
+    // ── Loading widgets ─────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a progress bar. Pass <paramref name="value"/> in [0,1] for
+    /// determinate mode, or chain <see cref="ProgressBarBuilder.Indeterminate"/> for
+    /// a sliding-band loading state.
+    /// </summary>
+    public static ProgressBarBuilder ProgressBar(Paper paper, string id, float value)
+        => new ProgressBarBuilder(paper, id, value, Current);
+
+    /// <summary>
+    /// Begin building an animated spinner. Chain a style modifier
+    /// (<see cref="SpinnerBuilder.Arc"/>, <see cref="SpinnerBuilder.Dots"/>,
+    /// <see cref="SpinnerBuilder.Pulse"/>) and call <see cref="SpinnerBuilder.Show"/>.
+    /// </summary>
+    public static SpinnerBuilder Spinner(Paper paper, string id)
+        => new SpinnerBuilder(paper, id, Current);
+
+    /// <summary>
+    /// Begin building a skeleton loading placeholder. Choose shape via
+    /// <see cref="SkeletonBuilder.Rect"/> / <see cref="SkeletonBuilder.Pill"/> /
+    /// <see cref="SkeletonBuilder.Circle"/>, set size, call <see cref="SkeletonBuilder.Show"/>.
+    /// </summary>
+    public static SkeletonBuilder Skeleton(Paper paper, string id)
+        => new SkeletonBuilder(paper, id, Current);
+
     /// <summary>Shorthand for a text-less horizontal line separator.</summary>
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();

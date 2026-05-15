@@ -274,6 +274,9 @@ public class OrigamiPlaygroundPanel : DockPanel
     // ── Label state ────────────────────────────────────────────
     private int _labelClickCount;
 
+    // ── Loading state ──────────────────────────────────────────
+    private float _loadProgress = 0.42f;
+
     // ── OnGUI ──────────────────────────────────────────────────
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -329,6 +332,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_ColorFields(paper);
                 Section_Headers(paper);
                 Section_Labels(paper);
+                Section_Loading(paper);
                 Section_Tree(paper);
                 Section_State(paper);
             });
@@ -2095,6 +2099,122 @@ public class OrigamiPlaygroundPanel : DockPanel
                         Origami.Label(paper, "op_lbl_trunc_2",
                             "Centered overflowing label inside a fixed width box")
                             .Width(260).Ellipsis().AlignCenter().Border().Padding(6, 0).Show();
+                    }
+                });
+            }
+        });
+    }
+
+    private void Section_Loading(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_loading", "Loading (Progress, Spinner, Skeleton)").Body(() =>
+        {
+            using (paper.Column("op_load_col").Height(UnitValue.Auto).ColBetween(8).Enter())
+            {
+                // Progress sizes (determinate)
+                LabelRow(paper, "load_pb_sizes", "Sizes", () =>
+                {
+                    using (paper.Column("op_pb_sz_col").Height(UnitValue.Auto).ColBetween(4).Enter())
+                    {
+                        Origami.ProgressBar(paper, "op_pb_xs", _loadProgress).XS().ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_sm", _loadProgress).SM().ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_md", _loadProgress).MD().ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_lg", _loadProgress).LG().ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_xl", _loadProgress).XL().ShowPercent().Show();
+                    }
+                });
+
+                // Variants (all at LG so colour reads)
+                LabelRow(paper, "load_pb_variants", "Variants", () =>
+                {
+                    using (paper.Column("op_pb_var_col").Height(UnitValue.Auto).ColBetween(4).Enter())
+                    {
+                        Origami.ProgressBar(paper, "op_pb_v_pri", _loadProgress).LG().Primary().Label("Primary").ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_v_suc", _loadProgress).LG().Success().Label("Success").ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_v_war", _loadProgress).LG().Warning().Label("Warning").ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_v_dan", _loadProgress).LG().Danger().Label("Danger").ShowPercent().Show();
+                        Origami.ProgressBar(paper, "op_pb_v_inf", _loadProgress).LG().Info().Label("Info").ShowPercent().Show();
+                    }
+                });
+
+                // Striped + glow + square
+                LabelRow(paper, "load_pb_decor", "Striped / Glow / Square", () =>
+                {
+                    using (paper.Column("op_pb_dec_col").Height(UnitValue.Auto).ColBetween(4).Enter())
+                    {
+                        Origami.ProgressBar(paper, "op_pb_square", _loadProgress).LG().Info().Square().Label("Square").ShowPercent().Show();
+                    }
+                });
+
+                // Indeterminate
+                LabelRow(paper, "load_pb_indet", "Indeterminate", () =>
+                {
+                    using (paper.Column("op_pb_indet_col").Height(UnitValue.Auto).ColBetween(4).Enter())
+                    {
+                        Origami.ProgressBar(paper, "op_pb_indet_1", 0f).LG().Primary().Indeterminate().Label("Loading...").Show();
+                    }
+                });
+
+                // Driver slider for the determinate samples above
+                LabelRow(paper, "load_pb_drive", "Drive determinate value", () =>
+                    Origami.Slider(paper, "op_pb_drive_v", _loadProgress, v => _loadProgress = v, 0f, 1f).Format("F2").Show());
+
+                // Spinners — styles + sizes
+                LabelRow(paper, "load_spinner_styles", "Spinner styles", () =>
+                {
+                    using (paper.Row("op_sp_st_row").Height(40).RowBetween(20).Enter())
+                    {
+                        Origami.Spinner(paper, "op_sp_arc").Arc().LG().Label("Arc").Show();
+                        Origami.Spinner(paper, "op_sp_dual").DualArc().LG().Success().Label("DualArc").Show();
+                        Origami.Spinner(paper, "op_sp_dots").Dots().LG().Warning().Label("Dots").Show();
+                        Origami.Spinner(paper, "op_sp_pulse").Pulse().LG().Info().Label("Pulse").Show();
+                    }
+                });
+
+                LabelRow(paper, "load_spinner_sizes", "Spinner sizes", () =>
+                {
+                    using (paper.Row("op_sp_sz_row").Height(48).RowBetween(16).Enter())
+                    {
+                        Origami.Spinner(paper, "op_sp_xs").XS().Show();
+                        Origami.Spinner(paper, "op_sp_sm").SM().Show();
+                        Origami.Spinner(paper, "op_sp_md").MD().Show();
+                        Origami.Spinner(paper, "op_sp_lg").LG().Show();
+                        Origami.Spinner(paper, "op_sp_xl").XL().Show();
+                    }
+                });
+
+                // Skeletons
+                LabelRow(paper, "load_skeleton_text", "Skeleton: text lines", () =>
+                {
+                    using (paper.Column("op_sk_text_col").Height(UnitValue.Auto).ColBetween(6).Enter())
+                    {
+                        Origami.Skeleton(paper, "op_sk_l1").TextLine(280).Show();
+                        Origami.Skeleton(paper, "op_sk_l2").TextLine(220).Show();
+                        Origami.Skeleton(paper, "op_sk_l3").TextLine(160).Show();
+                    }
+                });
+
+                LabelRow(paper, "load_skeleton_shapes", "Skeleton: shapes", () =>
+                {
+                    using (paper.Row("op_sk_sh_row").Height(60).RowBetween(12).Enter())
+                    {
+                        Origami.Skeleton(paper, "op_sk_av").Avatar(48).Show();
+                        Origami.Skeleton(paper, "op_sk_pill").Pill().Size(110, 24).Show();
+                        Origami.Skeleton(paper, "op_sk_rect").Rect().Size(160, 50).Rounding(6).Show();
+                    }
+                });
+
+                LabelRow(paper, "load_skeleton_card", "Skeleton: card layout", () =>
+                {
+                    using (paper.Row("op_sk_card_row").Height(80).RowBetween(12).Enter())
+                    {
+                        Origami.Skeleton(paper, "op_sk_card_av").Avatar(64).Show();
+                        using (paper.Column("op_sk_card_col").Height(UnitValue.Auto).ColBetween(8).Enter())
+                        {
+                            Origami.Skeleton(paper, "op_sk_card_t1").TextLine(220).Show();
+                            Origami.Skeleton(paper, "op_sk_card_t2").TextLine(160).Show();
+                            Origami.Skeleton(paper, "op_sk_card_t3").TextLine(180).Show();
+                        }
                     }
                 });
             }

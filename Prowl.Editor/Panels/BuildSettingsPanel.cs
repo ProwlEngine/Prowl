@@ -173,7 +173,7 @@ public class BuildSettingsPanel : DockPanel
                 .Margin(24, 24)
                 .Enter())
             {
-                EditorGUI.ProgressBar(paper, "bp_progressBar", "", BuildProgress, 10);
+                Origami.ProgressBar(paper, "bp_progressBar", BuildProgress).Thickness(10).Show();
 
 
                 paper.Box("bp_sidebar_header")
