@@ -19,16 +19,16 @@ public class VolumetricFogEffectEditor : CustomEditor
         // ── Global ──
         Origami.Header(paper, $"{id}_h_global", "Global").Show();
         SliderRow(paper, $"{id}_dens", "Global Density", fx.GlobalDensity, 0, 0.2f, v => fx.GlobalDensity = v);
-        EditorGUI.ColorField(paper, $"{id}_tint", "Color Tint", fx.GlobalColorTint)
-            .OnValueChanged(v => fx.GlobalColorTint = v);
+        InspectorRow.Draw(paper, $"{id}_tint", "Color Tint", () =>
+                Origami.ColorField(paper, $"{id}_tint_cf", fx.GlobalColorTint, v => fx.GlobalColorTint = v).Show());
         SliderRow(paper, $"{id}_scat", "Scattering (Anisotropy)", fx.Scattering, -0.99f, 0.99f, v => fx.Scattering = v, bipolar: true);
         SliderRow(paper, $"{id}_ext", "Extinction", fx.Extinction, 0, 5, v => fx.Extinction = v);
         SliderRow(paper, $"{id}_dith", "Dithering", fx.Dithering, 0, 0.2f, v => fx.Dithering = v);
 
         // ── Ambient ──
         Origami.Header(paper, $"{id}_h_amb", "Ambient").Underline().Show();
-        EditorGUI.ColorField(paper, $"{id}_amb_col", "Ambient Color", fx.AmbientColor)
-            .OnValueChanged(v => fx.AmbientColor = v);
+        InspectorRow.Draw(paper, $"{id}_amb_col", "Ambient Color", () =>
+                Origami.ColorField(paper, $"{id}_amb_col_cf", fx.AmbientColor, v => fx.AmbientColor = v).Show());
         SliderRow(paper, $"{id}_amb_int", "Ambient Intensity", fx.AmbientIntensity, 0, 5, v => fx.AmbientIntensity = v);
 
         // ── Lights ──

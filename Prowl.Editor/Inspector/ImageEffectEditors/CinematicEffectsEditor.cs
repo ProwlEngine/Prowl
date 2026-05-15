@@ -53,12 +53,12 @@ public class CinematicEffectsEditor : CustomEditor
             Origami.Separator(paper, $"{id}_cg_sep_lgg").Show();
             EditorGUI.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain");
 
-            EditorGUI.ColorField(paper, $"{id}_cg_lift", "Lift (Shadows)", fx.Lift)
-                .OnValueChanged(v => fx.Lift = v);
-            EditorGUI.ColorField(paper, $"{id}_cg_gamma", "Gamma (Midtones)", fx.Gamma)
-                .OnValueChanged(v => fx.Gamma = v);
-            EditorGUI.ColorField(paper, $"{id}_cg_gain", "Gain (Highlights)", fx.Gain)
-                .OnValueChanged(v => fx.Gain = v);
+            InspectorRow.Draw(paper, $"{id}_cg_lift", "Lift (Shadows)", () =>
+                Origami.ColorField(paper, $"{id}_cg_lift_cf", fx.Lift, v => fx.Lift = v).Show());
+            InspectorRow.Draw(paper, $"{id}_cg_gamma", "Gamma (Midtones)", () =>
+                Origami.ColorField(paper, $"{id}_cg_gamma_cf", fx.Gamma, v => fx.Gamma = v).Show());
+            InspectorRow.Draw(paper, $"{id}_cg_gain", "Gain (Highlights)", () =>
+                Origami.ColorField(paper, $"{id}_cg_gain_cf", fx.Gain, v => fx.Gain = v).Show());
         });
 
         // ── LUT ───────────────────────────────────────────
@@ -87,8 +87,8 @@ public class CinematicEffectsEditor : CustomEditor
             fx.EnableEdgeDetection, v => fx.EnableEdgeDetection = v, () =>
         {
             SliderRow(paper, $"{id}_edg_int", "Intensity", fx.EdgeIntensity, 0, 5, v => fx.EdgeIntensity = v);
-            EditorGUI.ColorField(paper, $"{id}_edg_col", "Edge Color", fx.EdgeColor)
-                .OnValueChanged(v => fx.EdgeColor = v);
+            InspectorRow.Draw(paper, $"{id}_edg_col", "Edge Color", () =>
+                Origami.ColorField(paper, $"{id}_edg_col_cf", fx.EdgeColor, v => fx.EdgeColor = v).Show());
             SliderRow(paper, $"{id}_edg_bg", "Background Fade", fx.EdgeBackgroundFade, 0, 1, v => fx.EdgeBackgroundFade = v);
         });
 

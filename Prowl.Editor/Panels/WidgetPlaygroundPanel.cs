@@ -158,8 +158,8 @@ public class WidgetPlaygroundPanel : DockPanel
         {
             // === Color Field (at top for testing) ===
             Origami.Header(paper, "h_col_top", "Color Field").Show();
-            EditorGUI.ColorField(paper, "cf_top", "Tint", _color)
-                .OnValueChanged(v => _color = v);
+            InspectorRow.Draw(paper, "cf_top", "Tint", () =>
+                Origami.ColorField(paper, "cf_top_cf", _color, v => _color = v).Show());
 
             Origami.Separator(paper, "sep_col_top").Show();
 
@@ -312,7 +312,8 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Color Field ===
             Origami.Header(paper, "h_col", "Color Field").Show();
 
-            EditorGUI.ColorField(paper, "cf_1", "Tint", _color);
+            InspectorRow.Draw(paper, "cf_1", "Tint", () =>
+                Origami.ColorField(paper, "cf_1_cf", _color, v => _color = v).Show());
 
             Origami.Separator(paper, "sep8e").Show();
 

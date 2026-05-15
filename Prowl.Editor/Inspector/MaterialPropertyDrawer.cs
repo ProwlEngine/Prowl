@@ -108,8 +108,8 @@ public static class MaterialPropertyDrawer
                 var val = ps.HasColor(prop.Name)
                     ? ps.GetColor(prop.Name)
                     : new Prowl.Vector.Color((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z, (float)prop.Value.W);
-                EditorGUI.ColorField(paper, id, label, val)
-                    .OnValueChanged(v => { material.SetColor(prop.Name, new Prowl.Vector.Color(v.R, v.G, v.B, v.A)); onChanged?.Invoke(); });
+                InspectorRow.Draw(paper, id, label, () =>
+                    Origami.ColorField(paper, $"{id}_cf", val, v => { material.SetColor(prop.Name, new Prowl.Vector.Color(v.R, v.G, v.B, v.A)); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Vector2:

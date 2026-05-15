@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
@@ -190,10 +191,66 @@ public class Float4PropertyEditor : PropertyEditor
 [CustomPropertyEditor(typeof(Prowl.Vector.Color))]
 public class ColorPropertyEditor : PropertyEditor
 {
+    private static ColorPalette? s_palette;
+
+    private static ColorPalette GetEditorPalette()
+    {
+        if (s_palette != null) return s_palette;
+
+        var settings = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+        // Convert hex strings to Color list, keep in sync
+        var colors = new List<Prowl.Vector.Color>();
+        foreach (var hex in settings.ColorPalette)
+        {
+            var sc = ColorRamp.ParseHex(hex);
+            colors.Add(new Prowl.Vector.Color(sc.R / 255f, sc.G / 255f, sc.B / 255f, 1f));
+        }
+
+        s_palette = new ColorPalette(colors)
+        {
+            OnAdd = () =>
+            {
+                // Return the color to add - caller provides current color via the palette list
+                return null; // Will be overridden per-instance below
+            },
+            OnRemoved = idx =>
+            {
+                if (idx >= 0 && idx < settings.ColorPalette.Count)
+                {
+                    settings.ColorPalette.RemoveAt(idx);
+                    ProjectSettingsRegistry.SaveAll();
+                }
+            },
+        };
+        return s_palette;
+    }
+
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.ColorField(paper, id, label, (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1, 1, 1, 1)))
-            .OnValueChanged(v => onChange(v));
+        var color = (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1, 1, 1, 1));
+        var palette = GetEditorPalette();
+
+        // Set the OnAdd to capture the current color value
+        var capturedColor = color;
+        palette.OnAdd = () =>
+        {
+            var settings = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+            int r = Math.Clamp((int)(capturedColor.R * 255), 0, 255);
+            int g = Math.Clamp((int)(capturedColor.G * 255), 0, 255);
+            int b = Math.Clamp((int)(capturedColor.B * 255), 0, 255);
+            string hex = $"#{r:X2}{g:X2}{b:X2}";
+            if (!settings.ColorPalette.Contains(hex))
+            {
+                settings.ColorPalette.Add(hex);
+                palette.Colors.Add(new Prowl.Vector.Color(capturedColor.R, capturedColor.G, capturedColor.B, 1f));
+                ProjectSettingsRegistry.SaveAll();
+            }
+            return null; // Already added manually
+        };
+
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.ColorField(paper, $"{id}_cf", color, v => onChange(v))
+                .Palette(palette).Show());
     }
 }
 

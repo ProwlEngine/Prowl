@@ -221,12 +221,12 @@ public class PreferencesPanel : DockPanel
         Origami.Foldout(paper, $"pref_ramp_{name}", name).Body(() =>
         {
             var primaryColor = HexToVColor(ramp.Primary);
-            EditorGUI.ColorField(paper, $"pref_ramp_{name}_primary", $"{name} Primary", primaryColor)
-                .OnValueChanged(v =>
+            InspectorRow.Draw(paper, $"pref_ramp_{name}_primary", $"{name} Primary", () =>
+                Origami.ColorField(paper, $"pref_ramp_{name}_primary_cf", primaryColor, v =>
                 {
                     ramp.Primary = VColorToHex(v);
                     s.ApplyTheme();
-                });
+                }).Show());
 
             Origami.Checkbox(paper, $"pref_ramp_{name}_override", ramp.OverrideAll, v =>
                 {
@@ -247,12 +247,12 @@ public class PreferencesPanel : DockPanel
                     int idx = i;
                     string label = i < stopNames.Length ? stopNames[i] : $"Stop {i}";
                     var stopColor = HexToVColor(ramp.Overrides[i]);
-                    EditorGUI.ColorField(paper, $"pref_ramp_{name}_{i}", label, stopColor)
-                        .OnValueChanged(v =>
+                    InspectorRow.Draw(paper, $"pref_ramp_{name}_{i}", label, () =>
+                        Origami.ColorField(paper, $"pref_ramp_{name}_{idx}_cf", stopColor, v =>
                         {
                             ramp.Overrides![idx] = VColorToHex(v);
                             s.ApplyTheme();
-                        });
+                        }).Show());
                 }
             }
         });
