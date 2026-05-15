@@ -62,66 +62,6 @@ public static class EditorGUI
     }
 
     // ================================================================
-    //  Progress Bar
-    // ================================================================
-    public static void ProgressBar(Paper paper, string id, string label, float progress, float? height = null)
-    {
-        progress = Math.Clamp(progress, 0, 1);
-
-        using (paper.Row(id)
-            .Height(EditorTheme.RowHeight)
-            .RowBetween(6)
-            .Margin(UnitValue.Auto, EditorTheme.Spacing)
-            .Enter())
-        {
-            if (Font != null && !string.IsNullOrEmpty(label))
-                paper.Box($"{id}_lbl")
-                    .Width(LabelW).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .IsNotInteractable()
-                    .Text(label, Font).TextColor(EditorTheme.Ink500).FontSize(FontSz);
-
-            paper.Box($"{id}_track")
-                .Height(EditorTheme.RowHeight)
-                .Width(UnitValue.Stretch())
-                .IsNotInteractable()
-                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                {
-                    float rx = (float)r.Min.X;
-                    float ry = (float)r.Min.Y;
-                    float rw = (float)r.Size.X;
-                    float rh = (float)r.Size.Y;
-
-                    float trackH = height ?? 4f;
-                    float trackY = ry + rh * 0.5f - trackH * 0.5f;
-                    float trackR = trackH * 0.5f;
-
-                    // ── Track background ──────────────────────────────────
-                    canvas.RoundedRect(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR);
-                    canvas.SetFillColor(EditorTheme.Ink100);
-                    canvas.Fill();
-
-                    // ── Track fill ────────────────────────────────────────
-                    if (progress > 0f)
-                    {
-                        canvas.RoundedRect(rx, trackY, rw * progress, trackH, trackR, trackR, trackR, trackR);
-                        canvas.SetFillColor(EditorTheme.Purple400);
-                        canvas.Fill();
-                    }
-                }));
-
-            if (Font != null)
-                paper.Box($"{id}_pct")
-                    .Width(40).Height(EditorTheme.RowHeight)
-                    .IsNotInteractable()
-                    .Alignment(PaperUI.TextAlignment.MiddleCenter)
-                    .Text($"{(int)(progress * 100)}%", Font)
-                    .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                    .TextColor(EditorTheme.Ink500).FontSize(FontSz);
-        }
-    }
-
-    // ================================================================
     //  Context Menu
     // ================================================================
 
