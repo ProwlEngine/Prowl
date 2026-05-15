@@ -302,10 +302,10 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Vector Fields ===
             Origami.Header(paper, "h_vec", "Vector Fields").Show();
 
-            EditorGUI.Vector2Field(paper, "v2_1", "Position 2D", _vec2)
-                .OnValueChanged(v => _vec2 = v);
-            EditorGUI.Vector3Field(paper, "v3_1", "Position 3D", _vec3)
-                .OnValueChanged(v => _vec3 = v);
+            InspectorRow.Draw(paper, "v2_1", "Position 2D", () =>
+                Origami.Float2Field(paper, "v2_1_vf", _vec2, v => _vec2 = v).Show());
+            InspectorRow.Draw(paper, "v3_1", "Position 3D", () =>
+                Origami.Float3Field(paper, "v3_1_vf", _vec3, v => _vec3 = v).Show());
 
             Origami.Separator(paper, "sep8d").Show();
 

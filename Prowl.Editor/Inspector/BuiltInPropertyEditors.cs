@@ -163,8 +163,8 @@ public class Float2PropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Vector2Field(paper, id, label, (Float2)(value ?? Float2.Zero))
-            .OnValueChanged(v => onChange(v));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float2Field(paper, $"{id}_vf", (Float2)(value ?? Float2.Zero), v => onChange(v)).Show());
     }
 }
 
@@ -173,8 +173,8 @@ public class Float3PropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Vector3Field(paper, id, label, (Float3)(value ?? Float3.Zero))
-            .OnValueChanged(v => onChange(v));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float3Field(paper, $"{id}_vf", (Float3)(value ?? Float3.Zero), v => onChange(v)).Show());
     }
 }
 
@@ -183,8 +183,68 @@ public class Float4PropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Vector4Field(paper, id, label, (Float4)(value ?? Float4.Zero))
-            .OnValueChanged(v => onChange(v));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float4Field(paper, $"{id}_vf", (Float4)(value ?? Float4.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Double2))]
+public class Double2PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Double2Field(paper, $"{id}_vf", (Double2)(value ?? Double2.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Double3))]
+public class Double3PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Double3Field(paper, $"{id}_vf", (Double3)(value ?? Double3.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Double4))]
+public class Double4PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Double4Field(paper, $"{id}_vf", (Double4)(value ?? Double4.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Int2))]
+public class Int2PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Int2Field(paper, $"{id}_vf", (Int2)(value ?? Int2.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Int3))]
+public class Int3PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Int3Field(paper, $"{id}_vf", (Int3)(value ?? Int3.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Int4))]
+public class Int4PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Int4Field(paper, $"{id}_vf", (Int4)(value ?? Int4.Zero), v => onChange(v)).Show());
     }
 }
 
@@ -260,8 +320,8 @@ public class QuaternionPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         var q = (Quaternion)(value ?? Quaternion.Identity);
-        EditorGUI.Vector3Field(paper, id, label, q.EulerAngles)
-            .OnValueChanged(v => onChange(Quaternion.FromEuler(v)));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float3Field(paper, $"{id}_vf", q.EulerAngles, v => onChange(Quaternion.FromEuler(v))).Show());
     }
 }
 

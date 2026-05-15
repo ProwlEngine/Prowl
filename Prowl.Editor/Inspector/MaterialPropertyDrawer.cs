@@ -115,22 +115,22 @@ public static class MaterialPropertyDrawer
             case ShaderPropertyType.Vector2:
             {
                 var val = ps.HasVector2(prop.Name) ? ps.GetVector2(prop.Name) : new Float2((float)prop.Value.X, (float)prop.Value.Y);
-                EditorGUI.Vector2Field(paper, id, label, val)
-                    .OnValueChanged(v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); });
+                InspectorRow.Draw(paper, id, label, () =>
+                    Origami.Float2Field(paper, $"{id}_vf", val, v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Vector3:
             {
                 var val = ps.HasVector3(prop.Name) ? ps.GetVector3(prop.Name) : new Float3((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z);
-                EditorGUI.Vector3Field(paper, id, label, val)
-                    .OnValueChanged(v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); });
+                InspectorRow.Draw(paper, id, label, () =>
+                    Origami.Float3Field(paper, $"{id}_vf", val, v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Vector4:
             {
                 var val = ps.HasVector4(prop.Name) ? ps.GetVector4(prop.Name) : prop.Value;
-                EditorGUI.Vector4Field(paper, id, label, val)
-                    .OnValueChanged(v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); });
+                InspectorRow.Draw(paper, id, label, () =>
+                    Origami.Float4Field(paper, $"{id}_vf", val, v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Texture2D:

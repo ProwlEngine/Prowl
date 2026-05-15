@@ -115,8 +115,9 @@ public class PhysicsSettings : ProjectSettingsBase
         // Gravity
         Origami.Header(paper, "phys_h_grav", $"{EditorIcons.Atom}  Gravity").Underline().Show();
 
-        EditorGUI.Vector3Field(paper, "phys_gravity", "Gravity", new Float3(GravityX, GravityY, GravityZ))
-            .OnValueChanged(v => { GravityX = v.X; GravityY = v.Y; GravityZ = v.Z; ProjectSettingsRegistry.SaveAll(); });
+        InspectorRow.Draw(paper, "phys_gravity", "Gravity", () =>
+            Origami.Float3Field(paper, "phys_gravity_vf", new Float3(GravityX, GravityY, GravityZ),
+                v => { GravityX = v.X; GravityY = v.Y; GravityZ = v.Z; ProjectSettingsRegistry.SaveAll(); }).Show());
 
         paper.Box("phys_sp1").Height(8);
 
