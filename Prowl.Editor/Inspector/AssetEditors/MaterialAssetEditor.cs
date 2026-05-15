@@ -42,7 +42,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         var material = asset as Material;
 
         Origami.Header(paper, $"{id}_h_info", $"{EditorIcons.Palette}  Material").Show();
-        EditorGUI.Label(paper, $"{id}_path", $"Path: {entry.Path}");
+        Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
 
         if (material == null) return;
 

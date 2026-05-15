@@ -61,7 +61,7 @@ public class MeshAssetEditor : AssetImporterEditor
 
         if (mesh == null)
         {
-            EditorGUI.Label(paper, $"{id}_noasset", "Mesh asset failed to load.");
+            Origami.Label(paper, $"{id}_noasset", "Mesh asset failed to load.").Show();
             return;
         }
 
@@ -80,11 +80,11 @@ public class MeshAssetEditor : AssetImporterEditor
         int tris = (mesh.Indices?.Length ?? 0) / 3;
         var size = mesh.bounds.Max - mesh.bounds.Min;
 
-        EditorGUI.Label(paper, $"{id}_verts", $"Vertices: {verts:N0}");
-        EditorGUI.Label(paper, $"{id}_tris", $"Triangles: {tris:N0}");
-        EditorGUI.Label(paper, $"{id}_sub", $"Sub-Meshes: {mesh.SubMeshCount}");
-        EditorGUI.Label(paper, $"{id}_bounds", $"Bounds: {size.X:F3}, {size.Y:F3}, {size.Z:F3}");
-        EditorGUI.Label(paper, $"{id}_fmt", $"Index Format: {mesh.IndexFormat}");
+        Origami.Label(paper, $"{id}_verts", $"Vertices: {verts:N0}").Show();
+        Origami.Label(paper, $"{id}_tris", $"Triangles: {tris:N0}").Show();
+        Origami.Label(paper, $"{id}_sub", $"Sub-Meshes: {mesh.SubMeshCount}").Show();
+        Origami.Label(paper, $"{id}_bounds", $"Bounds: {size.X:F3}, {size.Y:F3}, {size.Z:F3}").Show();
+        Origami.Label(paper, $"{id}_fmt", $"Index Format: {mesh.IndexFormat}").Show();
 
         var attrs = "";
         if (mesh.HasNormals) attrs += "Normals ";
@@ -94,7 +94,7 @@ public class MeshAssetEditor : AssetImporterEditor
         if (mesh.HasColors || mesh.HasColors32) attrs += "Colors ";
         if (mesh.HasBoneIndices) attrs += "Bones ";
         if (attrs.Length == 0) attrs = "(positions only)";
-        EditorGUI.Label(paper, $"{id}_attrs", $"Attributes: {attrs.TrimEnd()}");
+        Origami.Label(paper, $"{id}_attrs", $"Attributes: {attrs.TrimEnd()}").Show();
     }
 
     private static void DrawFeaturePanel(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
@@ -103,10 +103,10 @@ public class MeshAssetEditor : AssetImporterEditor
 
         var sdf = FindSDF(parentEntry, subEntry, mesh);
         if (sdf != null)
-            EditorGUI.Label(paper, $"{id}_sdf_info",
-                $"SDF: {sdf.Resolution.X}³  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}");
+            Origami.Label(paper, $"{id}_sdf_info",
+                $"SDF: {sdf.Resolution.X}³  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}").Show();
         else
-            EditorGUI.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)");
+            Origami.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)").Show();
     }
 
     private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state)

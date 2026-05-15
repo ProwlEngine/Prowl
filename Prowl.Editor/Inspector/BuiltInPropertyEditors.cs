@@ -344,6 +344,6 @@ public class GuidPropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Label(paper, id, $"{label}: {value}");
+        Origami.Label(paper, id, $"{label}: {value}").Show();
     }
 }

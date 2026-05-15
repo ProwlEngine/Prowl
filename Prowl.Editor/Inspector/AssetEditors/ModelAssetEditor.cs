@@ -63,12 +63,12 @@ public class ModelAssetEditor : AssetImporterEditor
 
         Origami.Header(paper, $"{id}_h_info", "Model Info").Show();
 
-        EditorGUI.Label(paper, $"{id}_path", $"Path: {entry.Path}");
-        EditorGUI.Label(paper, $"{id}_guid", $"GUID: {entry.Guid}");
+        Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
+        Origami.Label(paper, $"{id}_guid", $"GUID: {entry.Guid}").Show();
 
         if (model != null)
         {
-            EditorGUI.Label(paper, $"{id}_subs", $"Sub-Assets: {entry.SubAssets.Length}");
+            Origami.Label(paper, $"{id}_subs", $"Sub-Assets: {entry.SubAssets.Length}").Show();
         }
 
         // Sub-assets
@@ -81,10 +81,10 @@ public class ModelAssetEditor : AssetImporterEditor
             {
                 var sub = entry.SubAssets[i];
                 string typeName = sub.Type?.Name ?? "Unknown";
-                EditorGUI.Label(paper, $"{id}_sub_{i}", $"  {sub.Name} ({typeName})");
+                Origami.Label(paper, $"{id}_sub_{i}", $"  {sub.Name} ({typeName})").Show();
             }
             if (entry.SubAssets.Length > 30)
-                EditorGUI.Label(paper, $"{id}_sub_more", $"  ... and {entry.SubAssets.Length - 30} more");
+                Origami.Label(paper, $"{id}_sub_more", $"  ... and {entry.SubAssets.Length - 30} more").Show();
         }
 
         // Import settings

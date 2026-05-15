@@ -27,11 +27,11 @@ public class PrefabAssetEditor : AssetImporterEditor
         // Info
         if (prefab.GameObjectData != null)
         {
-            EditorGUI.Label(paper, $"{id}_info", "Contains a serialized GameObject hierarchy.");
+            Origami.Label(paper, $"{id}_info", "Contains a serialized GameObject hierarchy.").Show();
         }
         else
         {
-            EditorGUI.Label(paper, $"{id}_empty", "Empty prefab (no data).");
+            Origami.Label(paper, $"{id}_empty", "Empty prefab (no data).").Show();
         }
 
         paper.Box($"{id}_sp").Height(8);

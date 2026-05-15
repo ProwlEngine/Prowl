@@ -21,14 +21,14 @@ public class ShaderGraphAssetEditor : AssetImporterEditor
 
         if (asset is not ShaderGraph graph)
         {
-            EditorGUI.Label(paper, $"{id}_noasset", "Asset failed to load.");
+            Origami.Label(paper, $"{id}_noasset", "Asset failed to load.").Show();
             return;
         }
 
-        EditorGUI.Label(paper, $"{id}_path", $"Path: {entry.Path}");
-        EditorGUI.Label(paper, $"{id}_nodes", $"Nodes: {graph.Nodes.Count}");
-        EditorGUI.Label(paper, $"{id}_edges", $"Edges: {graph.Edges.Count}");
-        EditorGUI.Label(paper, $"{id}_vars", $"Variables: {graph.Blackboard.Count}");
+        Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
+        Origami.Label(paper, $"{id}_nodes", $"Nodes: {graph.Nodes.Count}").Show();
+        Origami.Label(paper, $"{id}_edges", $"Edges: {graph.Edges.Count}").Show();
+        Origami.Label(paper, $"{id}_vars", $"Variables: {graph.Blackboard.Count}").Show();
 
         paper.Box($"{id}_sp").Height(8);
 

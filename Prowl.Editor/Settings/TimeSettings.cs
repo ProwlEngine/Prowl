@@ -41,8 +41,8 @@ public class TimeSettings : ProjectSettingsBase
                 ProjectSettingsRegistry.SaveAll();
             }).Min(0.0001f).Show());
 
-        EditorGUI.Label(paper, "time_fixed_info",
-            $"  {(int)(1f / FixedTimestep + 0.5f)} Hz ({FixedTimestep * 1000f:F2} ms)");
+        Origami.Label(paper, "time_fixed_info",
+            $"  {(int)(1f / FixedTimestep + 0.5f)} Hz ({FixedTimestep * 1000f:F2} ms)").Show();
 
         InspectorRow.Draw(paper, "time_maxiter", "Max Fixed Iterations", () =>
             Origami.IntSlider(paper, "time_maxiter_v", MaxFixedIterations, v =>

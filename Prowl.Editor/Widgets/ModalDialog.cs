@@ -63,7 +63,7 @@ public static class ModalDialog
     {
         Show(new ModalDialogEntry(title, message, paper =>
         {
-            EditorGUI.Label(paper, "modal_msg", message);
+            Origami.Label(paper, "modal_msg", message).Show();
         }, 350)
         .Button("Yes", () => { onYes(); Close(); })
         .Button("No", () => { onNo?.Invoke(); Close(); }));
@@ -76,7 +76,7 @@ public static class ModalDialog
     {
         Show(new ModalDialogEntry(title, message, paper =>
         {
-            EditorGUI.Label(paper, "modal_msg", message);
+            Origami.Label(paper, "modal_msg", message).Show();
         }, 350)
         .Button("OK", Close));
     }

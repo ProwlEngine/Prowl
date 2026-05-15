@@ -45,8 +45,8 @@ public class PackageSettings : ProjectSettingsBase
 
         Origami.Header(paper, "pkg_hdr", $"{EditorIcons.Cubes}  NuGet Packages").Underline().Show();
 
-        EditorGUI.Label(paper, "pkg_info",
-            "Packages flow to both Game and Editor scripts. Mark a package Editor Only to keep it out of player builds.");
+        Origami.Label(paper, "pkg_info",
+            "Packages flow to both Game and Editor scripts. Mark a package Editor Only to keep it out of player builds.").Show();
 
         paper.Box("pkg_sp1").Height(4);
 

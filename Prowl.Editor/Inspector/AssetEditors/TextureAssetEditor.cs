@@ -28,9 +28,9 @@ public class TextureAssetEditor : AssetImporterEditor
 
         if (texture != null)
         {
-            EditorGUI.Label(paper, $"{id}_size", $"Size: {texture.Width} x {texture.Height}");
-            EditorGUI.Label(paper, $"{id}_format", $"Format: {texture.ImageFormat}");
-            EditorGUI.Label(paper, $"{id}_mip", $"Mipmaps: {(texture.IsMipmapped ? "Yes" : "No")}");
+            Origami.Label(paper, $"{id}_size", $"Size: {texture.Width} x {texture.Height}").Show();
+            Origami.Label(paper, $"{id}_format", $"Format: {texture.ImageFormat}").Show();
+            Origami.Label(paper, $"{id}_mip", $"Mipmaps: {(texture.IsMipmapped ? "Yes" : "No")}").Show();
 
             paper.Box($"{id}_sp1").Height(8);
 

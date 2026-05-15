@@ -184,7 +184,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 Origami.Button(paper, "btn2", "Reset", () => ResetAll()).Show();
                 Origami.Button(paper, "btn3", "Wide Button").Width(160).Show();
             }
-            EditorGUI.Label(paper, "btn_count", $"Click count: {_clickCount}");
+            Origami.Label(paper, "btn_count", $"Click count: {_clickCount}").Show();
 
             Origami.Separator(paper, "sep1").Show();
 
@@ -424,24 +424,24 @@ public class WidgetPlaygroundPanel : DockPanel
 
             // === Live State ===
             Origami.Header(paper, "h_state", "Current State").Show();
-            EditorGUI.Label(paper, "st_click", $"Clicks: {_clickCount}");
-            EditorGUI.Label(paper, "st_togbtn", $"Wireframe: {_toggleBtnA}  Grid: {_toggleBtnB}");
-            EditorGUI.Label(paper, "st_tog", $"Shadows: {_toggleA}  Reflections: {_toggleB}");
-            EditorGUI.Label(paper, "st_text", $"Message: {_textValue}");
-            EditorGUI.Label(paper, "st_name", $"Name: {_nameValue}");
-            EditorGUI.Label(paper, "st_float", $"Speed: {_floatValue:F2}");
-            EditorGUI.Label(paper, "st_int", $"Health: {_intValue}");
-            EditorGUI.Label(paper, "st_sl1", $"Opacity: {_sliderValue:F2}");
-            EditorGUI.Label(paper, "st_sl2", $"Volume: {_sliderRange:F1}");
-            EditorGUI.Label(paper, "st_dd1", $"Fruit: {Fruits[_dropdownIndex]}");
-            EditorGUI.Label(paper, "st_dd2", $"Mode: {Modes[_dropdown2Index]}");
-            EditorGUI.Label(paper, "st_search", $"Search: \"{_searchText}\"");
-            EditorGUI.Label(paper, "st_enum", $"Enum: {_testEnum}");
-            EditorGUI.Label(paper, "st_isl", $"IntSlider: {_intSlider}");
-            EditorGUI.Label(paper, "st_vec2", $"Vec2: ({_vec2.X:F1}, {_vec2.Y:F1})");
-            EditorGUI.Label(paper, "st_vec3", $"Vec3: ({_vec3.X:F1}, {_vec3.Y:F1}, {_vec3.Z:F1})");
-            EditorGUI.Label(paper, "st_col", $"Color: R={_color.R:F2} G={_color.G:F2} B={_color.B:F2}");
-            EditorGUI.Label(paper, "st_prog", $"Progress: {_progress:P0}");
+            Origami.Label(paper, "st_click", $"Clicks: {_clickCount}").Show();
+            Origami.Label(paper, "st_togbtn", $"Wireframe: {_toggleBtnA}  Grid: {_toggleBtnB}").Show();
+            Origami.Label(paper, "st_tog", $"Shadows: {_toggleA}  Reflections: {_toggleB}").Show();
+            Origami.Label(paper, "st_text", $"Message: {_textValue}").Show();
+            Origami.Label(paper, "st_name", $"Name: {_nameValue}").Show();
+            Origami.Label(paper, "st_float", $"Speed: {_floatValue:F2}").Show();
+            Origami.Label(paper, "st_int", $"Health: {_intValue}").Show();
+            Origami.Label(paper, "st_sl1", $"Opacity: {_sliderValue:F2}").Show();
+            Origami.Label(paper, "st_sl2", $"Volume: {_sliderRange:F1}").Show();
+            Origami.Label(paper, "st_dd1", $"Fruit: {Fruits[_dropdownIndex]}").Show();
+            Origami.Label(paper, "st_dd2", $"Mode: {Modes[_dropdown2Index]}").Show();
+            Origami.Label(paper, "st_search", $"Search: \"{_searchText}\"").Show();
+            Origami.Label(paper, "st_enum", $"Enum: {_testEnum}").Show();
+            Origami.Label(paper, "st_isl", $"IntSlider: {_intSlider}").Show();
+            Origami.Label(paper, "st_vec2", $"Vec2: ({_vec2.X:F1}, {_vec2.Y:F1})").Show();
+            Origami.Label(paper, "st_vec3", $"Vec3: ({_vec3.X:F1}, {_vec3.Y:F1}, {_vec3.Z:F1})").Show();
+            Origami.Label(paper, "st_col", $"Color: R={_color.R:F2} G={_color.G:F2} B={_color.B:F2}").Show();
+            Origami.Label(paper, "st_prog", $"Progress: {_progress:P0}").Show();
 
             // ── File Dialog ──
             Origami.Header(paper, "h_filedialog", "File Dialog").Show();

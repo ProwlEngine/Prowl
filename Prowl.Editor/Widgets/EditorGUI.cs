@@ -55,24 +55,6 @@ public static class EditorGUI
     }
 
     // ================================================================
-    //  Label
-    // ================================================================
-
-    public static void Label(Paper paper, string id, string text, Color? color = null)
-    {
-        if (Font == null) return;
-        paper.Box(id)
-            .Height(EditorTheme.RowHeight)
-            .ChildLeft(4)
-            .Text(text, Font)
-            .TextColor(color ?? EditorTheme.Ink500)
-            .Alignment(PaperUI.TextAlignment.MiddleLeft)
-            .ChildBottom(EditorTheme.Spacing)
-            .FontSize(FontSz);
-    }
-
-
-    // ================================================================
     //  Separator
     // ================================================================
 

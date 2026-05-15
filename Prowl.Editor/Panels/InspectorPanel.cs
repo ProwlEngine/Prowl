@@ -126,7 +126,7 @@ public class InspectorPanel : DockPanel
             if (Selection.Count > 1)
             {
                                 Origami.Header(paper, "insp_h_multi", "Selection").Underline().Show();
-                EditorGUI.Label(paper, "insp_multi_count", $"{Selection.Count} objects selected");
+                Origami.Label(paper, "insp_multi_count", $"{Selection.Count} objects selected").Show();
 
                 for (int i = 0; i < Selection.Count && i < 20; i++)
                 {
@@ -137,11 +137,11 @@ public class InspectorPanel : DockPanel
                         EngineObject eo => $"{EditorIcons.Cube} {eo.Name}",
                         _ => obj.ToString() ?? "Unknown"
                     };
-                    EditorGUI.Label(paper, $"insp_sel_{i}", name);
+                    Origami.Label(paper, $"insp_sel_{i}", name).Show();
                 }
 
                 if (Selection.Count > 20)
-                    EditorGUI.Label(paper, "insp_more", $"... and {Selection.Count - 20} more");
+                    Origami.Label(paper, "insp_more", $"... and {Selection.Count - 20} more").Show();
             }
 
             paper.Box("insp_bottom_pad").Height(20);
@@ -256,19 +256,19 @@ public class InspectorPanel : DockPanel
         // Fallback: generic asset info
         Origami.Header(paper, "insp_h_asset", "Asset Info").Show();
 
-        EditorGUI.Label(paper, "insp_path", $"Path: {item.RelativePath}");
+        Origami.Label(paper, "insp_path", $"Path: {item.RelativePath}").Show();
 
         if (entry != null)
         {
-            EditorGUI.Label(paper, "insp_guid", $"GUID: {entry.Guid}");
-            EditorGUI.Label(paper, "insp_importer", $"Importer: {entry.ImporterType}");
+            Origami.Label(paper, "insp_guid", $"GUID: {entry.Guid}").Show();
+            Origami.Label(paper, "insp_importer", $"Importer: {entry.ImporterType}").Show();
 
             if (entry.MainAssetType != null)
-                EditorGUI.Label(paper, "insp_maintype", $"Type: {entry.MainAssetType.Name}");
+                Origami.Label(paper, "insp_maintype", $"Type: {entry.MainAssetType.Name}").Show();
 
             // Last modified
             var lastMod = new DateTime(entry.LastModifiedTicks, DateTimeKind.Utc).ToLocalTime();
-            EditorGUI.Label(paper, "insp_lastmod", $"Modified: {lastMod:yyyy-MM-dd HH:mm:ss}");
+            Origami.Label(paper, "insp_lastmod", $"Modified: {lastMod:yyyy-MM-dd HH:mm:ss}").Show();
 
             // Dependencies
             if (entry.Dependencies.Length > 0)
@@ -389,7 +389,7 @@ public class InspectorPanel : DockPanel
     private void DrawFolderInfo(Paper paper, Prowl.Scribe.FontFile font, ContentItem item)
     {
         Origami.Header(paper, "insp_h_folder", "Folder").Show();
-        EditorGUI.Label(paper, "insp_folder_path", $"Path: {item.RelativePath}");
+        Origami.Label(paper, "insp_folder_path", $"Path: {item.RelativePath}").Show();
 
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
         if (Directory.Exists(absPath))
@@ -399,8 +399,8 @@ public class InspectorPanel : DockPanel
                 int fileCount = Directory.GetFiles(absPath, "*", SearchOption.AllDirectories)
                     .Count(f => !f.EndsWith(".meta"));
                 int folderCount = Directory.GetDirectories(absPath, "*", SearchOption.AllDirectories).Length;
-                EditorGUI.Label(paper, "insp_folder_files", $"Files: {fileCount}");
-                EditorGUI.Label(paper, "insp_folder_folders", $"Subfolders: {folderCount}");
+                Origami.Label(paper, "insp_folder_files", $"Files: {fileCount}").Show();
+                Origami.Label(paper, "insp_folder_folders", $"Subfolders: {folderCount}").Show();
             }
             catch { }
         }
@@ -447,10 +447,10 @@ public class InspectorPanel : DockPanel
         Origami.Separator(paper, "insp_sub_sep1").Show();
 
         // Info
-        EditorGUI.Label(paper, "insp_sub_type", $"Type: {item.TypeLabel}");
-        EditorGUI.Label(paper, "insp_sub_guid", $"GUID: {item.Guid}");
+        Origami.Label(paper, "insp_sub_type", $"Type: {item.TypeLabel}").Show();
+        Origami.Label(paper, "insp_sub_guid", $"GUID: {item.Guid}").Show();
         if (parentEntry != null)
-            EditorGUI.Label(paper, "insp_sub_parent", $"Parent: {parentEntry.Path}");
+            Origami.Label(paper, "insp_sub_parent", $"Parent: {parentEntry.Path}").Show();
 
         Origami.Separator(paper, "insp_sub_sep2").Show();
 
@@ -478,8 +478,8 @@ public class InspectorPanel : DockPanel
                             (float)r.Size.X, (float)r.Size.Y);
                     }));
 
-                EditorGUI.Label(paper, "insp_sub_tex_size", $"Size: {tex.Width} x {tex.Height}");
-                EditorGUI.Label(paper, "insp_sub_tex_fmt", $"Format: {tex.ImageFormat}");
+                Origami.Label(paper, "insp_sub_tex_size", $"Size: {tex.Width} x {tex.Height}").Show();
+                Origami.Label(paper, "insp_sub_tex_fmt", $"Format: {tex.ImageFormat}").Show();
             }
             else if (asset is Prowl.Runtime.Resources.Mesh mesh && parentEntry != null && subEntry != null)
             {
@@ -495,7 +495,7 @@ public class InspectorPanel : DockPanel
                 {
                     object? val = field.GetValue(asset);
                     string label = Widgets.PropertyGrid.NicifyName(field.Name);
-                    EditorGUI.Label(paper, $"insp_sub_prop_{field.Name}", $"{label}: {val ?? "(null)"}");
+                    Origami.Label(paper, $"insp_sub_prop_{field.Name}", $"{label}: {val ?? "(null)"}").Show();
                 }
             }
         }
@@ -555,13 +555,13 @@ public class InspectorPanel : DockPanel
     {
         Origami.Header(paper, "insp_h_eo", obj.GetType().Name).Show();
 
-        EditorGUI.Label(paper, "insp_eo_name", $"Name: {obj.Name}");
-        EditorGUI.Label(paper, "insp_eo_id", $"Instance ID: {obj.InstanceID}");
+        Origami.Label(paper, "insp_eo_name", $"Name: {obj.Name}").Show();
+        Origami.Label(paper, "insp_eo_id", $"Instance ID: {obj.InstanceID}").Show();
 
         if (obj.AssetID != Guid.Empty)
-            EditorGUI.Label(paper, "insp_eo_assetid", $"Asset ID: {obj.AssetID}");
+            Origami.Label(paper, "insp_eo_assetid", $"Asset ID: {obj.AssetID}").Show();
         if (!string.IsNullOrEmpty(obj.AssetPath))
-            EditorGUI.Label(paper, "insp_eo_assetpath", $"Asset Path: {obj.AssetPath}");
+            Origami.Label(paper, "insp_eo_assetpath", $"Asset Path: {obj.AssetPath}").Show();
 
         // Use PropertyGrid for reflection-based editing
                 Origami.Header(paper, "insp_h_props", "Properties").Underline().Show();
@@ -593,9 +593,9 @@ public class InspectorPanel : DockPanel
         // Time + count
         using (paper.Row("log_meta").Height(EditorTheme.RowHeight).RowBetween(8).Enter())
         {
-            EditorGUI.Label(paper, "log_time", $"Time: {log.Time}");
+            Origami.Label(paper, "log_time", $"Time: {log.Time}").Show();
             if (log.Count > 1)
-                EditorGUI.Label(paper, "log_count", $"Count: {log.Count}");
+                Origami.Label(paper, "log_count", $"Count: {log.Count}").Show();
         }
 
         Origami.Separator(paper, "log_sep1").Show();
@@ -638,7 +638,7 @@ public class InspectorPanel : DockPanel
     private void DrawGenericInspector(Paper paper, Prowl.Scribe.FontFile font, object obj)
     {
         Origami.Header(paper, "insp_h_generic", obj.GetType().Name).Show();
-        EditorGUI.Label(paper, "insp_generic_str", obj.ToString() ?? "null");
+        Origami.Label(paper, "insp_generic_str", obj.ToString() ?? "null").Show();
 
                 Origami.Header(paper, "insp_h_gprops", "Properties").Underline().Show();
         PropertyGrid.Draw(paper, "insp_gpg", obj);

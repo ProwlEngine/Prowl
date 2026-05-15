@@ -267,7 +267,9 @@ public sealed class LabelBuilder
         // Pre-measure for content-width sizing if no explicit width is given.
         float measuredW = MeasureContentWidth(font, fontSize);
         float boxWidth = _widthOverride ?? measuredW;
-        float boxHeight = _heightOverride ?? (fontSize + _padY * 2f + 4f);
+        // Default box height to the theme's row-height metric so a bare
+        // Origami.Label(...).Show() matches the editor's row geometry.
+        float boxHeight = _heightOverride ?? _theme.Metrics.HeaderHeight;
 
         var snap = new LabelSnapshot
         {

@@ -47,18 +47,6 @@ public class ProjectsEditorSettings : ProjectSettingsBase
 
     public override void OnGUI(Paper paper, float width)
     {
-        // Color Palette
-        Origami.Header(paper, "pal_color_hdr", $"{EditorIcons.Palette}  Color Palette ({ColorPalette.Count})").Underline().Show();
-
-        Widgets.PaletteUI.DrawColorPalette(paper, "pal_c", ColorPalette, width - 16, swatchSize: 22f,
-            onAdd: () => "#FFFFFF");
-
-        paper.Box("pal_sp1").Height(12);
-
-        // Curve Palette
-        Origami.Header(paper, "pal_curve_hdr", $"{EditorIcons.ChartLine}  Curve Presets ({CurvePalette.Count})").Underline().Show();
-
-        Widgets.PaletteUI.DrawCurvePresets(paper, "pal_cv", CurvePalette, width - 16, maxRows: 10);
     }
 
     // ── Default game/UI color palette ──

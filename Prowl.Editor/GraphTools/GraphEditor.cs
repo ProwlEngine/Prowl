@@ -258,7 +258,7 @@ public class GraphEditor
 
         if (_graph == null)
         {
-            EditorGUI.Label(paper, "graph_empty", "No graph loaded.");
+            Origami.Label(paper, "graph_empty", "No graph loaded.").Show();
             return;
         }
         _view ??= new GraphCanvasView(_graph);

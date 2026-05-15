@@ -51,7 +51,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_cg_tmp", "Temperature", fx.Temperature, -1, 1, v => fx.Temperature = v, bipolar: true);
 
             Origami.Separator(paper, $"{id}_cg_sep_lgg").Show();
-            EditorGUI.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain");
+            Origami.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain").Show();
 
             InspectorRow.Draw(paper, $"{id}_cg_lift", "Lift (Shadows)", () =>
                 Origami.ColorField(paper, $"{id}_cg_lift_cf", fx.Lift, v => fx.Lift = v).Show());
