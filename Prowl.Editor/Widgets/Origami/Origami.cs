@@ -229,6 +229,15 @@ public static class Origami
     public static HeaderBuilder Header(Paper paper, string id, string label)
         => new HeaderBuilder(paper, id, label, Current);
 
+    // ── Label factory ───────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a label. Chain variant/size/decoration modifiers and call
+    /// <see cref="LabelBuilder.Show"/> to render.
+    /// </summary>
+    public static LabelBuilder Label(Paper paper, string id, string text)
+        => new LabelBuilder(paper, id, text, Current);
+
     /// <summary>Shorthand for a text-less horizontal line separator.</summary>
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
