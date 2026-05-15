@@ -27,9 +27,9 @@ public static class GameObjectInspector
             DrawPrefabHeader(paper, font, go);
 
         DrawHeader(paper, font, go);
-        EditorGUI.Separator(paper, "gi_sep_header");
+        Origami.Separator(paper, "gi_sep_header").Show();
         DrawTransform(paper, font, go);
-        EditorGUI.Separator(paper, "gi_sep_transform");
+        Origami.Separator(paper, "gi_sep_transform").Show();
         DrawComponents(paper, font, go);
 
         // Only show Add Component if not a prefab instance (structure is fixed)
@@ -174,18 +174,18 @@ public static class GameObjectInspector
 
         // Position
         var pos = t.LocalPosition;
-        EditorGUI.Vector3Field(paper, "gi_pos", "Position", pos)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, v, (g, x) => g.Transform.LocalPosition = x, coalesce: true); t.LocalPosition = v; });
+        InspectorRow.Draw(paper, "gi_pos", "Position", () =>
+            Origami.Float3Field(paper, "gi_pos_vf", pos, v => { Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, v, (g, x) => g.Transform.LocalPosition = x, coalesce: true); t.LocalPosition = v; }).Show());
 
         // Rotation (as euler)
         var euler = t.LocalEulerAngles;
-        EditorGUI.Vector3Field(paper, "gi_rot", "Rotation", euler)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; });
+        InspectorRow.Draw(paper, "gi_rot", "Rotation", () =>
+            Origami.Float3Field(paper, "gi_rot_vf", euler, v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; }).Show());
 
         // Scale
         var scale = t.LocalScale;
-        EditorGUI.Vector3Field(paper, "gi_scale", "Scale", scale)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; });
+        InspectorRow.Draw(paper, "gi_scale", "Scale", () =>
+            Origami.Float3Field(paper, "gi_scale_vf", scale, v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; }).Show());
     }
 
     // ================================================================
@@ -289,7 +289,7 @@ public static class GameObjectInspector
             // Draw [Button] attributed methods
             DrawButtonMethods(paper, $"{compId}_btns", comp);
 
-            EditorGUI.Separator(paper, $"{compId}_sep");
+            Origami.Separator(paper, $"{compId}_sep").Show();
         }
     }
 

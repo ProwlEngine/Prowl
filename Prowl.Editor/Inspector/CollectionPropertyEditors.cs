@@ -163,7 +163,7 @@ public class DictionaryPropertyEditor : PropertyEditor
 
                     using (paper.Row($"{id}_entry_{i}").Height(UnitValue.Auto).RowBetween(4).Enter())
                     {
-                        EditorGUI.Label(paper, $"{id}_key_{i}", $"[{keyObj}]");
+                        Origami.Label(paper, $"{id}_key_{i}", $"[{keyObj}]").Show();
 
                         using (paper.Column($"{id}_val_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
                         {
@@ -175,7 +175,7 @@ public class DictionaryPropertyEditor : PropertyEditor
                     }
                 }
 
-                EditorGUI.Separator(paper, $"{id}_sep");
+                Origami.Separator(paper, $"{id}_sep").Show();
 
                 using (paper.Row($"{id}_addrow").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
                 {

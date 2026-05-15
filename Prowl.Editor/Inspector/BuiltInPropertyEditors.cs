@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
@@ -162,8 +163,8 @@ public class Float2PropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Vector2Field(paper, id, label, (Float2)(value ?? Float2.Zero))
-            .OnValueChanged(v => onChange(v));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float2Field(paper, $"{id}_vf", (Float2)(value ?? Float2.Zero), v => onChange(v)).Show());
     }
 }
 
@@ -172,8 +173,8 @@ public class Float3PropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Vector3Field(paper, id, label, (Float3)(value ?? Float3.Zero))
-            .OnValueChanged(v => onChange(v));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float3Field(paper, $"{id}_vf", (Float3)(value ?? Float3.Zero), v => onChange(v)).Show());
     }
 }
 
@@ -182,18 +183,134 @@ public class Float4PropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Vector4Field(paper, id, label, (Float4)(value ?? Float4.Zero))
-            .OnValueChanged(v => onChange(v));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float4Field(paper, $"{id}_vf", (Float4)(value ?? Float4.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Double2))]
+public class Double2PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Double2Field(paper, $"{id}_vf", (Double2)(value ?? Double2.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Double3))]
+public class Double3PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Double3Field(paper, $"{id}_vf", (Double3)(value ?? Double3.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Double4))]
+public class Double4PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Double4Field(paper, $"{id}_vf", (Double4)(value ?? Double4.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Int2))]
+public class Int2PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Int2Field(paper, $"{id}_vf", (Int2)(value ?? Int2.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Int3))]
+public class Int3PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Int3Field(paper, $"{id}_vf", (Int3)(value ?? Int3.Zero), v => onChange(v)).Show());
+    }
+}
+
+[CustomPropertyEditor(typeof(Int4))]
+public class Int4PropertyEditor : PropertyEditor
+{
+    public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
+    {
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Int4Field(paper, $"{id}_vf", (Int4)(value ?? Int4.Zero), v => onChange(v)).Show());
     }
 }
 
 [CustomPropertyEditor(typeof(Prowl.Vector.Color))]
 public class ColorPropertyEditor : PropertyEditor
 {
+    private static ColorPalette? s_palette;
+
+    private static ColorPalette GetEditorPalette()
+    {
+        if (s_palette != null) return s_palette;
+
+        var settings = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+        // Convert hex strings to Color list, keep in sync
+        var colors = new List<Prowl.Vector.Color>();
+        foreach (var hex in settings.ColorPalette)
+        {
+            var sc = ColorRamp.ParseHex(hex);
+            colors.Add(new Prowl.Vector.Color(sc.R / 255f, sc.G / 255f, sc.B / 255f, 1f));
+        }
+
+        s_palette = new ColorPalette(colors)
+        {
+            OnAdd = () =>
+            {
+                // Return the color to add - caller provides current color via the palette list
+                return null; // Will be overridden per-instance below
+            },
+            OnRemoved = idx =>
+            {
+                if (idx >= 0 && idx < settings.ColorPalette.Count)
+                {
+                    settings.ColorPalette.RemoveAt(idx);
+                    ProjectSettingsRegistry.SaveAll();
+                }
+            },
+        };
+        return s_palette;
+    }
+
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.ColorField(paper, id, label, (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1, 1, 1, 1)))
-            .OnValueChanged(v => onChange(v));
+        var color = (Prowl.Vector.Color)(value ?? new Prowl.Vector.Color(1, 1, 1, 1));
+        var palette = GetEditorPalette();
+
+        // Set the OnAdd to capture the current color value
+        var capturedColor = color;
+        palette.OnAdd = () =>
+        {
+            var settings = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+            int r = Math.Clamp((int)(capturedColor.R * 255), 0, 255);
+            int g = Math.Clamp((int)(capturedColor.G * 255), 0, 255);
+            int b = Math.Clamp((int)(capturedColor.B * 255), 0, 255);
+            string hex = $"#{r:X2}{g:X2}{b:X2}";
+            if (!settings.ColorPalette.Contains(hex))
+            {
+                settings.ColorPalette.Add(hex);
+                palette.Colors.Add(new Prowl.Vector.Color(capturedColor.R, capturedColor.G, capturedColor.B, 1f));
+                ProjectSettingsRegistry.SaveAll();
+            }
+            return null; // Already added manually
+        };
+
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.ColorField(paper, $"{id}_cf", color, v => onChange(v))
+                .Palette(palette).Show());
     }
 }
 
@@ -203,8 +320,8 @@ public class QuaternionPropertyEditor : PropertyEditor
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
         var q = (Quaternion)(value ?? Quaternion.Identity);
-        EditorGUI.Vector3Field(paper, id, label, q.EulerAngles)
-            .OnValueChanged(v => onChange(Quaternion.FromEuler(v)));
+        InspectorRow.Draw(paper, id, label, () =>
+            Origami.Float3Field(paper, $"{id}_vf", q.EulerAngles, v => onChange(Quaternion.FromEuler(v))).Show());
     }
 }
 
@@ -227,6 +344,6 @@ public class GuidPropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        EditorGUI.Label(paper, id, $"{label}: {value}");
+        Origami.Label(paper, id, $"{label}: {value}").Show();
     }
 }

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 
@@ -46,20 +47,6 @@ public class ProjectsEditorSettings : ProjectSettingsBase
 
     public override void OnGUI(Paper paper, float width)
     {
-        // Color Palette
-        EditorGUI.Header(paper, "pal_color_hdr", $"{EditorIcons.Palette}  Color Palette ({ColorPalette.Count})");
-        EditorGUI.Separator(paper, "pal_color_sep");
-
-        Widgets.PaletteUI.DrawColorPalette(paper, "pal_c", ColorPalette, width - 16, swatchSize: 22f,
-            onAdd: () => "#FFFFFF");
-
-        paper.Box("pal_sp1").Height(12);
-
-        // Curve Palette
-        EditorGUI.Header(paper, "pal_curve_hdr", $"{EditorIcons.ChartLine}  Curve Presets ({CurvePalette.Count})");
-        EditorGUI.Separator(paper, "pal_curve_sep");
-
-        Widgets.PaletteUI.DrawCurvePresets(paper, "pal_cv", CurvePalette, width - 16, maxRows: 10);
     }
 
     // ── Default game/UI color palette ──

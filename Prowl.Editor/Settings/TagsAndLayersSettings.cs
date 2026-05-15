@@ -37,8 +37,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
         if (font == null) return;
 
         // Tags section
-        EditorGUI.Header(paper, "tl_tags_header", $"{EditorIcons.Tags}  Tags");
-        EditorGUI.Separator(paper, "tl_tags_sep");
+        Origami.Header(paper, "tl_tags_header", $"{EditorIcons.Tags}  Tags").Underline().Show();
 
         for (int i = 0; i < Tags.Count; i++)
         {
@@ -85,8 +84,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
         paper.Box("tl_spacer1").Height(16);
 
         // Layers section
-        EditorGUI.Header(paper, "tl_layers_header", $"{EditorIcons.LayerGroup}  Layers");
-        EditorGUI.Separator(paper, "tl_layers_sep");
+        Origami.Header(paper, "tl_layers_header", $"{EditorIcons.LayerGroup}  Layers").Underline().Show();
 
         for (int i = 0; i < Layers.Length; i++)
         {

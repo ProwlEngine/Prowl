@@ -223,14 +223,14 @@ public class GradientPropertyEditor : PropertyEditor
                             onChange(gradient);
                         }, 0f, 1f).Format("F3").Show());
 
-                    EditorGUI.ColorField(paper, $"{id}_sel_color", "Color", key.Color)
-                        .OnValueChanged(v =>
+                    InspectorRow.Draw(paper, $"{id}_sel_color", "Color", () =>
+                        Origami.ColorField(paper, $"{id}_sel_color_cf", key.Color, v =>
                         {
                             var k = gradient.ColorKeys[idx];
                             k.Color = v;
                             gradient.ColorKeys[idx] = k;
                             onChange(gradient);
-                        });
+                        }).Show());
                 }
             }
             else if (!_selectedIsColor && _selectedKeyIndex < gradient.AlphaKeys.Count)
@@ -368,8 +368,8 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
             switch (gradient.Mode)
             {
                 case MinMaxGradientMode.Color:
-                    EditorGUI.ColorField(paper, $"{id}_color", "Color", gradient.ConstantColor)
-                        .OnValueChanged(v => { gradient.ConstantColor = v; onChange(gradient); });
+                    InspectorRow.Draw(paper, $"{id}_color", "Color", () =>
+                        Origami.ColorField(paper, $"{id}_color_cf", gradient.ConstantColor, v => { gradient.ConstantColor = v; onChange(gradient); }).Show());
                     break;
 
                 case MinMaxGradientMode.Gradient:
@@ -378,10 +378,10 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
                     break;
 
                 case MinMaxGradientMode.RandomBetweenTwoColors:
-                    EditorGUI.ColorField(paper, $"{id}_minc", "Min Color", gradient.MinColor)
-                        .OnValueChanged(v => { gradient.MinColor = v; onChange(gradient); });
-                    EditorGUI.ColorField(paper, $"{id}_maxc", "Max Color", gradient.MaxColor)
-                        .OnValueChanged(v => { gradient.MaxColor = v; onChange(gradient); });
+                    InspectorRow.Draw(paper, $"{id}_minc", "Min Color", () =>
+                        Origami.ColorField(paper, $"{id}_minc_cf", gradient.MinColor, v => { gradient.MinColor = v; onChange(gradient); }).Show());
+                    InspectorRow.Draw(paper, $"{id}_maxc", "Max Color", () =>
+                        Origami.ColorField(paper, $"{id}_maxc_cf", gradient.MaxColor, v => { gradient.MaxColor = v; onChange(gradient); }).Show());
                     break;
 
                 case MinMaxGradientMode.RandomBetweenTwoGradients:

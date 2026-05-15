@@ -229,9 +229,140 @@ public static class Origami
     public static HeaderBuilder Header(Paper paper, string id, string label)
         => new HeaderBuilder(paper, id, label, Current);
 
+    // ── Label factory ───────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a label. Chain variant/size/decoration modifiers and call
+    /// <see cref="LabelBuilder.Show"/> to render.
+    /// </summary>
+    public static LabelBuilder Label(Paper paper, string id, string text)
+        => new LabelBuilder(paper, id, text, Current);
+
+    // ── Loading widgets ─────────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a progress bar. Pass <paramref name="value"/> in [0,1] for
+    /// determinate mode, or chain <see cref="ProgressBarBuilder.Indeterminate"/> for
+    /// a sliding-band loading state.
+    /// </summary>
+    public static ProgressBarBuilder ProgressBar(Paper paper, string id, float value)
+        => new ProgressBarBuilder(paper, id, value, Current);
+
+    /// <summary>
+    /// Begin building an animated spinner. Chain a style modifier
+    /// (<see cref="SpinnerBuilder.Arc"/>, <see cref="SpinnerBuilder.Dots"/>,
+    /// <see cref="SpinnerBuilder.Pulse"/>) and call <see cref="SpinnerBuilder.Show"/>.
+    /// </summary>
+    public static SpinnerBuilder Spinner(Paper paper, string id)
+        => new SpinnerBuilder(paper, id, Current);
+
+    /// <summary>
+    /// Begin building a skeleton loading placeholder. Choose shape via
+    /// <see cref="SkeletonBuilder.Rect"/> / <see cref="SkeletonBuilder.Pill"/> /
+    /// <see cref="SkeletonBuilder.Circle"/>, set size, call <see cref="SkeletonBuilder.Show"/>.
+    /// </summary>
+    public static SkeletonBuilder Skeleton(Paper paper, string id)
+        => new SkeletonBuilder(paper, id, Current);
+
     /// <summary>Shorthand for a text-less horizontal line separator.</summary>
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
+
+    // ── Vector field factories ───────────────────────────────────
+
+    // Float vectors
+    public static VectorField2Builder<float> Float2Field(Paper paper, string id,
+        Prowl.Vector.Float2 value, Action<Prowl.Vector.Float2> setter)
+    {
+        var v = value;
+        return new VectorField2Builder<float>(paper, id, Current,
+            (float)v.X, (float)v.Y,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
+    }
+
+    public static VectorField3Builder<float> Float3Field(Paper paper, string id,
+        Prowl.Vector.Float3 value, Action<Prowl.Vector.Float3> setter)
+    {
+        var v = value;
+        return new VectorField3Builder<float>(paper, id, Current,
+            (float)v.X, (float)v.Y, (float)v.Z,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
+    }
+
+    public static VectorField4Builder<float> Float4Field(Paper paper, string id,
+        Prowl.Vector.Float4 value, Action<Prowl.Vector.Float4> setter)
+    {
+        var v = value;
+        return new VectorField4Builder<float>(paper, id, Current,
+            (float)v.X, (float)v.Y, (float)v.Z, (float)v.W,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
+            z => { v.Z = z; setter(v); }, w => { v.W = w; setter(v); });
+    }
+
+    // Double vectors
+    public static VectorField2Builder<double> Double2Field(Paper paper, string id,
+        Prowl.Vector.Double2 value, Action<Prowl.Vector.Double2> setter)
+    {
+        var v = value;
+        return new VectorField2Builder<double>(paper, id, Current,
+            (double)v.X, (double)v.Y,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
+    }
+
+    public static VectorField3Builder<double> Double3Field(Paper paper, string id,
+        Prowl.Vector.Double3 value, Action<Prowl.Vector.Double3> setter)
+    {
+        var v = value;
+        return new VectorField3Builder<double>(paper, id, Current,
+            (double)v.X, (double)v.Y, (double)v.Z,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
+    }
+
+    public static VectorField4Builder<double> Double4Field(Paper paper, string id,
+        Prowl.Vector.Double4 value, Action<Prowl.Vector.Double4> setter)
+    {
+        var v = value;
+        return new VectorField4Builder<double>(paper, id, Current,
+            (double)v.X, (double)v.Y, (double)v.Z, (double)v.W,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
+            z => { v.Z = z; setter(v); }, w => { v.W = w; setter(v); });
+    }
+
+    // Int vectors
+    public static VectorField2Builder<int> Int2Field(Paper paper, string id,
+        Prowl.Vector.Int2 value, Action<Prowl.Vector.Int2> setter)
+    {
+        var v = value;
+        return new VectorField2Builder<int>(paper, id, Current,
+            v.X, v.Y,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
+    }
+
+    public static VectorField3Builder<int> Int3Field(Paper paper, string id,
+        Prowl.Vector.Int3 value, Action<Prowl.Vector.Int3> setter)
+    {
+        var v = value;
+        return new VectorField3Builder<int>(paper, id, Current,
+            v.X, v.Y, v.Z,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
+    }
+
+    public static VectorField4Builder<int> Int4Field(Paper paper, string id,
+        Prowl.Vector.Int4 value, Action<Prowl.Vector.Int4> setter)
+    {
+        var v = value;
+        return new VectorField4Builder<int>(paper, id, Current,
+            v.X, v.Y, v.Z, v.W,
+            x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
+            z => { v.Z = z; setter(v); }, w => { v.W = w; setter(v); });
+    }
+
+    // ── Color field factory ─────────────────────────────────────
+
+    /// <summary>Begin building a color field. Renders a swatch that opens a full picker popover.</summary>
+    public static ColorFieldBuilder ColorField(Paper paper, string id,
+        Prowl.Vector.Color value, Action<Prowl.Vector.Color> setter)
+        => new ColorFieldBuilder(paper, id, value, setter, Current);
 
     // ── Button factories ─────────────────────────────────────────
 

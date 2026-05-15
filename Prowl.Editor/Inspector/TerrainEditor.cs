@@ -511,7 +511,7 @@ public class TerrainEditor : CustomEditor
                 v => { terrain.LODQuality = MathF.Max(0.1f, v); }, 0.1f, 5f).Format("F1").Show());
 
         paper.Box($"{id}_sp3").Height(10);
-        EditorGUI.Label(paper, $"{id}_veg_hdr", "Vegetation");
+        Origami.Label(paper, $"{id}_veg_hdr", "Vegetation").Show();
 
         InspectorRow.Draw(paper, $"{id}_grassdist", "Grass View Distance", () =>
             Origami.Slider(paper, $"{id}_grassdist_v", terrain.GrassDistance,

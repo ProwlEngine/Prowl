@@ -77,7 +77,7 @@ public class OrmPackerPanel : DockPanel
             .ColSpacing(10)
             .Body(() =>
             {
-                EditorGUI.Header(paper, "orm_h_root", "ORM Packer");
+                Origami.Header(paper, "orm_h_root", "ORM Packer").Show();
 
                 Section_Inputs(paper);
                 Section_Output(paper);

@@ -58,6 +58,8 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private string? _leadingIconGlyph;
     private string? _trailingIconGlyph;
     private Action? _trailingIconClick;
+    private string? _prefixText;
+    private Color? _prefixColor;
 
     internal NumericFieldBuilder(Paper paper, string id, T value, Action<T> setter, OrigamiTheme theme)
     {
@@ -115,6 +117,12 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     public NumericFieldBuilder<T> Validator(Func<T, (bool ok, string? message)> validator) { _validator = validator; return this; }
 
     public NumericFieldBuilder<T> LeadingIcon(string glyph) { _leadingIconGlyph = glyph; return this; }
+
+    /// <summary>
+    /// Show a small colored label badge inside the field, before the text input.
+    /// Useful for channel labels like "H", "S", "V" or "R", "G", "B".
+    /// </summary>
+    public NumericFieldBuilder<T> Prefix(string text, Color color) { _prefixText = text; _prefixColor = color; return this; }
     public NumericFieldBuilder<T> TrailingIcon(string glyph, Action? onClick = null)
     {
         _trailingIconGlyph = glyph;
@@ -158,6 +166,8 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             tb.LeadingIcon(_leadingIconGlyph!);
         if (!string.IsNullOrEmpty(_trailingIconGlyph))
             tb.TrailingIcon(_trailingIconGlyph!, _trailingIconClick);
+        if (!string.IsNullOrEmpty(_prefixText))
+            tb.Prefix(_prefixText!, _prefixColor ?? Color.FromArgb(255, 200, 200, 200));
 
         if (_error != null) tb.Error(_error);
         if (_helperText != null) tb.HelperText(_helperText);

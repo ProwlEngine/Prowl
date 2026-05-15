@@ -57,20 +57,20 @@ public class MeshAssetEditor : AssetImporterEditor
         id = $"{id}_{parentEntry.Guid:N}";
         if (subEntry != null) id = $"{id}_{subEntry.Guid:N}";
 
-        EditorGUI.Header(paper, $"{id}_h_info", subEntry != null ? $"Mesh: {subEntry.Name}" : "Mesh");
+        Origami.Header(paper, $"{id}_h_info", subEntry != null ? $"Mesh: {subEntry.Name}" : "Mesh").Show();
 
         if (mesh == null)
         {
-            EditorGUI.Label(paper, $"{id}_noasset", "Mesh asset failed to load.");
+            Origami.Label(paper, $"{id}_noasset", "Mesh asset failed to load.").Show();
             return;
         }
 
         DrawInfoPanel(paper, id, mesh);
 
-        EditorGUI.Separator(paper, $"{id}_sep_feat");
+        Origami.Separator(paper, $"{id}_sep_feat").Show();
         DrawFeaturePanel(paper, id, parentEntry, subEntry, mesh);
 
-        EditorGUI.Separator(paper, $"{id}_sep_preview");
+        Origami.Separator(paper, $"{id}_sep_preview").Show();
         DrawPreview(paper, id, parentEntry, subEntry, mesh, state);
     }
 
@@ -80,11 +80,11 @@ public class MeshAssetEditor : AssetImporterEditor
         int tris = (mesh.Indices?.Length ?? 0) / 3;
         var size = mesh.bounds.Max - mesh.bounds.Min;
 
-        EditorGUI.Label(paper, $"{id}_verts", $"Vertices: {verts:N0}");
-        EditorGUI.Label(paper, $"{id}_tris", $"Triangles: {tris:N0}");
-        EditorGUI.Label(paper, $"{id}_sub", $"Sub-Meshes: {mesh.SubMeshCount}");
-        EditorGUI.Label(paper, $"{id}_bounds", $"Bounds: {size.X:F3}, {size.Y:F3}, {size.Z:F3}");
-        EditorGUI.Label(paper, $"{id}_fmt", $"Index Format: {mesh.IndexFormat}");
+        Origami.Label(paper, $"{id}_verts", $"Vertices: {verts:N0}").Show();
+        Origami.Label(paper, $"{id}_tris", $"Triangles: {tris:N0}").Show();
+        Origami.Label(paper, $"{id}_sub", $"Sub-Meshes: {mesh.SubMeshCount}").Show();
+        Origami.Label(paper, $"{id}_bounds", $"Bounds: {size.X:F3}, {size.Y:F3}, {size.Z:F3}").Show();
+        Origami.Label(paper, $"{id}_fmt", $"Index Format: {mesh.IndexFormat}").Show();
 
         var attrs = "";
         if (mesh.HasNormals) attrs += "Normals ";
@@ -94,19 +94,19 @@ public class MeshAssetEditor : AssetImporterEditor
         if (mesh.HasColors || mesh.HasColors32) attrs += "Colors ";
         if (mesh.HasBoneIndices) attrs += "Bones ";
         if (attrs.Length == 0) attrs = "(positions only)";
-        EditorGUI.Label(paper, $"{id}_attrs", $"Attributes: {attrs.TrimEnd()}");
+        Origami.Label(paper, $"{id}_attrs", $"Attributes: {attrs.TrimEnd()}").Show();
     }
 
     private static void DrawFeaturePanel(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
     {
-        EditorGUI.Header(paper, $"{id}_h_feat", "Mesh Features");
+        Origami.Header(paper, $"{id}_h_feat", "Mesh Features").Show();
 
         var sdf = FindSDF(parentEntry, subEntry, mesh);
         if (sdf != null)
-            EditorGUI.Label(paper, $"{id}_sdf_info",
-                $"SDF: {sdf.Resolution.X}³  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}");
+            Origami.Label(paper, $"{id}_sdf_info",
+                $"SDF: {sdf.Resolution.X}³  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}").Show();
         else
-            EditorGUI.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)");
+            Origami.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)").Show();
     }
 
     private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state)
@@ -115,7 +115,7 @@ public class MeshAssetEditor : AssetImporterEditor
 
         using (paper.Row($"{id}_preview_header").Height(28).RowBetween(6).ChildLeft(4).ChildRight(4).Enter())
         {
-            EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
+            Origami.Header(paper, $"{id}_h_preview", "Preview").Show();
 
             // Mutually exclusive view modes — radios so the user can see both options and
             // the active one is unambiguously highlighted.

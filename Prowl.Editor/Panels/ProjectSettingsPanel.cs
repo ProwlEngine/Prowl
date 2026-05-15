@@ -101,7 +101,7 @@ public class ProjectSettingsPanel : DockPanel
                     .Text("Settings", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-                EditorGUI.Separator(paper, "ps_sidebar_sep");
+                Origami.Separator(paper, "ps_sidebar_sep").Show();
 
                 for (int i = 0; i < entries.Count; i++)
                 {

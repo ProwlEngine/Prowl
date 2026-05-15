@@ -17,8 +17,7 @@ public class GeneralSettings : ProjectSettingsBase
 
     public override void OnGUI(Paper paper, float width)
     {
-        EditorGUI.Header(paper, "gen_header", $"{EditorIcons.Gear}  General");
-        EditorGUI.Separator(paper, "gen_sep");
+        Origami.Header(paper, "gen_header", $"{EditorIcons.Gear}  General").Underline().Show();
 
         InspectorRow.Draw(paper, "gen_company", "Company Name", () =>
             Origami.TextField(paper, "gen_company_v", CompanyName,
