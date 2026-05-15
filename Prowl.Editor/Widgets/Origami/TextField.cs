@@ -47,6 +47,8 @@ public sealed class TextFieldBuilder
     private string? _trailingIconGlyph;
     private Action? _trailingIconClick;
     private bool _showClearButton;
+    private string? _prefixText;
+    private Color? _prefixColor;
 
     // Modes
     private bool _isSearch;
@@ -152,6 +154,12 @@ public sealed class TextFieldBuilder
 
     /// <summary>Show a small "X" clear button on the right while the value is non-empty.</summary>
     public TextFieldBuilder ClearButton(bool enabled = true) { _showClearButton = enabled; return this; }
+
+    /// <summary>
+    /// Show a small colored label badge inside the field, before the text input.
+    /// Useful for channel labels like "X", "Y", "Z" in vector fields or "H", "S", "V" in color fields.
+    /// </summary>
+    public TextFieldBuilder Prefix(string text, Color color) { _prefixText = text; _prefixColor = color; return this; }
 
     // ── Filtering ──────────────────────────────────────────────────────
 
@@ -271,6 +279,26 @@ public sealed class TextFieldBuilder
                 else if (!string.IsNullOrEmpty(_leadingIconGlyph))
                 {
                     DrawIcon($"{_id}_lead", _leadingIconGlyph!, ink.C400, leftPad: 8, rightPad: 4, click: _leadingIconClick, font);
+                }
+
+                // Prefix badge ────────────────────────────────────────
+                if (!string.IsNullOrEmpty(_prefixText) && font != null)
+                {
+                    float pfxH = _height - 2;
+                    var pfxBg = _prefixColor.HasValue
+                        ? Color.FromArgb(20, _prefixColor.Value.R, _prefixColor.Value.G, _prefixColor.Value.B)
+                        : Color.FromArgb(20, ink.C400.R, ink.C400.G, ink.C400.B);
+                    var pfxFg = _prefixColor ?? ink.C500;
+                    _paper.Box($"{_id}_pfx")
+                        .Height(pfxH).Width(pfxH)
+                        .Margin(1, 0, 1, 0)
+                        .Rounded(_theme.Metrics.Rounding)
+                        .BackgroundColor(pfxBg)
+                        .Text(_prefixText!, font)
+                        .TextColor(pfxFg)
+                        .FontSize(_theme.Metrics.FontSize - 1)
+                        .Alignment(TextAlignment.MiddleCenter)
+                        .IsNotInteractable();
                 }
 
                 // The edit element ─────────────────────────────────────
