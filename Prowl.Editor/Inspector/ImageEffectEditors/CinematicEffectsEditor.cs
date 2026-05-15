@@ -126,5 +126,9 @@ public class CinematicEffectsEditor : CustomEditor
 
     private static void DrawSection(Paper paper, string id, string icon, string title,
         bool enabled, System.Action<bool> setEnabled, System.Action drawContent)
-        => EditorGUI.ToggleSection(paper, id, $"{icon}  {title}", enabled, setEnabled, drawContent);
+    {
+        Origami.Foldout(paper, id, $"{icon}  {title}")
+            .Toggle(enabled, setEnabled)
+            .Body(drawContent);
+    }
 }

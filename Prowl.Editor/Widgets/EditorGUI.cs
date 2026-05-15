@@ -76,28 +76,6 @@ public static class EditorGUI
         );
     }
 
-    /// <summary>
-    /// Section gated by an enable toggle, with no separate expand state.
-    /// Body is drawn whenever <paramref name="enabled"/> is true.
-    /// Useful for "feature flag"-style groups where collapsed-but-enabled doesn't make sense.
-    /// </summary>
-    public static void ToggleSection(Paper paper, string id, string label,
-        bool enabled, Action<bool> setEnabled, Action drawContents)
-    {
-        Separator(paper, $"{id}_sep");
-
-        Origami.Checkbox(paper, $"{id}_tog", enabled, v => setEnabled(v))
-            .LabelRight(label).Show();
-
-        if (enabled)
-        {
-            using (paper.Column($"{id}_body").Height(UnitValue.Auto).Enter())
-            {
-                drawContents();
-            }
-        }
-    }
-
     // ================================================================
     //  Progress Bar
     // ================================================================
