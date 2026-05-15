@@ -111,8 +111,7 @@ public sealed class BuildSettings : ProjectSettingsBase
         if (font == null) return;
 
         // Scene List
-        EditorGUI.Header(paper, "bld_scenes_h", $"{EditorIcons.Film}  Scenes");
-        EditorGUI.Separator(paper, "bld_scenes_sep");
+        Origami.Header(paper, "bld_scenes_h", $"{EditorIcons.Film}  Scenes").Underline().Show();
 
         for (int i = 0; i < Scenes.Count; i++)
         {
@@ -192,8 +191,7 @@ public sealed class BuildSettings : ProjectSettingsBase
         paper.Box("bld_sp1").Height(12);
 
         // Build Configuration
-        EditorGUI.Header(paper, "bld_config_h", $"{EditorIcons.Gear}  Configuration");
-        EditorGUI.Separator(paper, "bld_config_sep");
+        Origami.Header(paper, "bld_config_h", $"{EditorIcons.Gear}  Configuration").Underline().Show();
 
         InspectorRow.Draw(paper, "bld_config", "Configuration", () =>
             Origami.EnumDropdown(paper, "bld_config_v", Config,

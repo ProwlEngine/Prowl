@@ -119,7 +119,7 @@ public class BuildSettingsPanel : DockPanel
                         .Text("Platforms", font).TextColor(EditorTheme.Ink500)
                         .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-                    EditorGUI.Separator(paper, "bp_sidebar_sep");
+                    Origami.Separator(paper, "bp_sidebar_sep").Show();
 
                     for (int i = 0; i < _buildPlatforms.Count; i++)
                     {

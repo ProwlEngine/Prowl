@@ -175,7 +175,7 @@ public class DictionaryPropertyEditor : PropertyEditor
                     }
                 }
 
-                EditorGUI.Separator(paper, $"{id}_sep");
+                Origami.Separator(paper, $"{id}_sep").Show();
 
                 using (paper.Row($"{id}_addrow").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
                 {

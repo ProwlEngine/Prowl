@@ -110,7 +110,7 @@ public class InspectorPanel : DockPanel
             else
             {
                 DrawSelectionHeader(paper, font, active);
-                EditorGUI.Separator(paper, "insp_sep_header");
+                Origami.Separator(paper, "insp_sep_header").Show();
 
                 if (active is ContentItem contentItem)
                     DrawAssetInspector(paper, font, contentItem);
@@ -125,8 +125,7 @@ public class InspectorPanel : DockPanel
             // Multi-selection summary
             if (Selection.Count > 1)
             {
-                EditorGUI.Separator(paper, "insp_sep_multi");
-                EditorGUI.Header(paper, "insp_h_multi", "Selection");
+                                Origami.Header(paper, "insp_h_multi", "Selection").Underline().Show();
                 EditorGUI.Label(paper, "insp_multi_count", $"{Selection.Count} objects selected");
 
                 for (int i = 0; i < Selection.Count && i < 20; i++)
@@ -255,7 +254,7 @@ public class InspectorPanel : DockPanel
         }
 
         // Fallback: generic asset info
-        EditorGUI.Header(paper, "insp_h_asset", "Asset Info");
+        Origami.Header(paper, "insp_h_asset", "Asset Info").Show();
 
         EditorGUI.Label(paper, "insp_path", $"Path: {item.RelativePath}");
 
@@ -274,8 +273,8 @@ public class InspectorPanel : DockPanel
             // Dependencies
             if (entry.Dependencies.Length > 0)
             {
-                EditorGUI.Separator(paper, "insp_sep_deps");
-                EditorGUI.Header(paper, "insp_h_deps", $"Dependencies ({entry.Dependencies.Length})");
+                Origami.Separator(paper, "insp_sep_deps").Show();
+                Origami.Header(paper, "insp_h_deps", $"Dependencies ({entry.Dependencies.Length})").Show();
                 for (int i = 0; i < entry.Dependencies.Length && i < 20; i++)
                 {
                     var depGuid = entry.Dependencies[i];
@@ -287,8 +286,8 @@ public class InspectorPanel : DockPanel
             var dependents = db.Dependencies.GetDependents(entry.Guid);
             if (dependents.Count > 0)
             {
-                EditorGUI.Separator(paper, "insp_sep_refs");
-                EditorGUI.Header(paper, "insp_h_refs", $"Used By ({dependents.Count})");
+                Origami.Separator(paper, "insp_sep_refs").Show();
+                Origami.Header(paper, "insp_h_refs", $"Used By ({dependents.Count})").Show();
                 int count = 0;
                 foreach (var depGuid in dependents)
                 {
@@ -316,8 +315,7 @@ public class InspectorPanel : DockPanel
                     var settings = meta.Settings ?? importer.DefaultSettings();
                     if (settings != null && settings.TagType == Echo.EchoType.Compound)
                     {
-                        EditorGUI.Separator(paper, "insp_sep_settings");
-                        EditorGUI.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  Import Settings");
+                                                Origami.Header(paper, "insp_h_settings", $"{EditorIcons.Gear}  Import Settings").Underline().Show();
 
                         foreach (var kvp in settings.Tags.ToList())
                         {
@@ -366,7 +364,7 @@ public class InspectorPanel : DockPanel
         }
 
         // Reimport button
-        EditorGUI.Separator(paper, "insp_sep_actions");
+        Origami.Separator(paper, "insp_sep_actions").Show();
         if (entry != null)
         {
             Origami.Button(paper, "insp_reimport", $"{EditorIcons.ArrowsRotate}  Reimport", () => db.Reimport(entry.Guid)).Show();
@@ -390,7 +388,7 @@ public class InspectorPanel : DockPanel
 
     private void DrawFolderInfo(Paper paper, Prowl.Scribe.FontFile font, ContentItem item)
     {
-        EditorGUI.Header(paper, "insp_h_folder", "Folder");
+        Origami.Header(paper, "insp_h_folder", "Folder").Show();
         EditorGUI.Label(paper, "insp_folder_path", $"Path: {item.RelativePath}");
 
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
@@ -446,7 +444,7 @@ public class InspectorPanel : DockPanel
                 .Alignment(TextAlignment.MiddleLeft);
         }
 
-        EditorGUI.Separator(paper, "insp_sub_sep1");
+        Origami.Separator(paper, "insp_sub_sep1").Show();
 
         // Info
         EditorGUI.Label(paper, "insp_sub_type", $"Type: {item.TypeLabel}");
@@ -454,7 +452,7 @@ public class InspectorPanel : DockPanel
         if (parentEntry != null)
             EditorGUI.Label(paper, "insp_sub_parent", $"Parent: {parentEntry.Path}");
 
-        EditorGUI.Separator(paper, "insp_sub_sep2");
+        Origami.Separator(paper, "insp_sub_sep2").Show();
 
         // Load the sub-asset and show its properties read-only
         var asset = Runtime.AssetDatabase.Get(item.Guid);
@@ -490,7 +488,7 @@ public class InspectorPanel : DockPanel
             else
             {
                 // Generic read-only property grid
-                EditorGUI.Header(paper, "insp_sub_h_props", "Properties (Read-Only)");
+                Origami.Header(paper, "insp_sub_h_props", "Properties (Read-Only)").Show();
                 // Show properties as labels
                 var fields = Widgets.PropertyGrid.GetSerializableFields(asset.GetType());
                 foreach (var field in fields)
@@ -502,7 +500,7 @@ public class InspectorPanel : DockPanel
             }
         }
 
-        EditorGUI.Separator(paper, "insp_sub_sep3");
+        Origami.Separator(paper, "insp_sub_sep3").Show();
 
         // Extract button clone sub-asset to a standalone file
         Origami.Button(paper, "insp_sub_extract", $"{EditorIcons.FileExport}  Extract as Asset", () => ExtractSubAsset(item, parentEntry, subEntry, asset)).Show();
@@ -555,7 +553,7 @@ public class InspectorPanel : DockPanel
 
     private void DrawEngineObjectInspector(Paper paper, Prowl.Scribe.FontFile font, EngineObject obj)
     {
-        EditorGUI.Header(paper, "insp_h_eo", obj.GetType().Name);
+        Origami.Header(paper, "insp_h_eo", obj.GetType().Name).Show();
 
         EditorGUI.Label(paper, "insp_eo_name", $"Name: {obj.Name}");
         EditorGUI.Label(paper, "insp_eo_id", $"Instance ID: {obj.InstanceID}");
@@ -566,8 +564,7 @@ public class InspectorPanel : DockPanel
             EditorGUI.Label(paper, "insp_eo_assetpath", $"Asset Path: {obj.AssetPath}");
 
         // Use PropertyGrid for reflection-based editing
-        EditorGUI.Separator(paper, "insp_sep_props");
-        EditorGUI.Header(paper, "insp_h_props", "Properties");
+                Origami.Header(paper, "insp_h_props", "Properties").Underline().Show();
         PropertyGrid.Draw(paper, "insp_pg", obj);
     }
 
@@ -591,7 +588,7 @@ public class InspectorPanel : DockPanel
             _ => EditorTheme.Ink500
         };
 
-        EditorGUI.Header(paper, "log_hdr", $"{icon}  {log.Severity}");
+        Origami.Header(paper, "log_hdr", $"{icon}  {log.Severity}").Show();
 
         // Time + count
         using (paper.Row("log_meta").Height(EditorTheme.RowHeight).RowBetween(8).Enter())
@@ -601,10 +598,10 @@ public class InspectorPanel : DockPanel
                 EditorGUI.Label(paper, "log_count", $"Count: {log.Count}");
         }
 
-        EditorGUI.Separator(paper, "log_sep1");
+        Origami.Separator(paper, "log_sep1").Show();
 
         // Full message (word-wrapped)
-        EditorGUI.Header(paper, "log_msg_hdr", "Message");
+        Origami.Header(paper, "log_msg_hdr", "Message").Show();
         paper.Box("log_msg")
             .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(40)
             .BackgroundColor(EditorTheme.Neutral400).Rounded(3)
@@ -617,8 +614,7 @@ public class InspectorPanel : DockPanel
         if (log.StackTrace != null && log.StackTrace.StackFrames.Length > 0)
         {
             paper.Box("log_sp").Height(8);
-            EditorGUI.Separator(paper, "log_sep2");
-            EditorGUI.Header(paper, "log_st_hdr", "Stack Trace");
+                        Origami.Header(paper, "log_st_hdr", "Stack Trace").Underline().Show();
 
             for (int i = 0; i < log.StackTrace.StackFrames.Length; i++)
             {
@@ -641,11 +637,10 @@ public class InspectorPanel : DockPanel
 
     private void DrawGenericInspector(Paper paper, Prowl.Scribe.FontFile font, object obj)
     {
-        EditorGUI.Header(paper, "insp_h_generic", obj.GetType().Name);
+        Origami.Header(paper, "insp_h_generic", obj.GetType().Name).Show();
         EditorGUI.Label(paper, "insp_generic_str", obj.ToString() ?? "null");
 
-        EditorGUI.Separator(paper, "insp_sep_gprops");
-        EditorGUI.Header(paper, "insp_h_gprops", "Properties");
+                Origami.Header(paper, "insp_h_gprops", "Properties").Underline().Show();
         PropertyGrid.Draw(paper, "insp_gpg", obj);
     }
 

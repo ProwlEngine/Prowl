@@ -41,13 +41,13 @@ public class MaterialAssetEditor : AssetImporterEditor
         if (font == null) return;
         var material = asset as Material;
 
-        EditorGUI.Header(paper, $"{id}_h_info", $"{EditorIcons.Palette}  Material");
+        Origami.Header(paper, $"{id}_h_info", $"{EditorIcons.Palette}  Material").Show();
         EditorGUI.Label(paper, $"{id}_path", $"Path: {entry.Path}");
 
         if (material == null) return;
 
         // Shader reference
-        EditorGUI.Separator(paper, $"{id}_sep_shader");
+        Origami.Separator(paper, $"{id}_sep_shader").Show();
         EngineObjectPropertyEditor.SetFieldType(typeof(Shader));
         PropertyGrid.DrawField(paper, $"{id}_shader", "Shader", typeof(Shader), material.Shader,
             newVal =>
@@ -67,8 +67,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         var shader = material.Shader;
         if (shader != null)
         {
-            EditorGUI.Separator(paper, $"{id}_sep_props");
-            EditorGUI.Header(paper, $"{id}_h_props", "Properties");
+                        Origami.Header(paper, $"{id}_h_props", "Properties").Underline().Show();
 
             foreach (var prop in shader.Properties)
             {
@@ -81,13 +80,12 @@ public class MaterialAssetEditor : AssetImporterEditor
         // Save button writes material to disk then reimports
         if (_dirty)
         {
-            EditorGUI.Separator(paper, $"{id}_sep_save");
+            Origami.Separator(paper, $"{id}_sep_save").Show();
             Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material", () => { SaveMaterial(material, entry); }).Show();
         }
 
         // 3D Preview
-        EditorGUI.Separator(paper, $"{id}_sep_preview");
-        EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
+                Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
         _preview ??= new PreviewRenderer(256, 256);
         if (_lastPreviewAsset != material)

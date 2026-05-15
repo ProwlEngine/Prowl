@@ -44,7 +44,7 @@ public class PreferencesPanel : DockPanel
                     .Text("Preferences", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-                EditorGUI.Separator(paper, "pref_sidebar_sep");
+                Origami.Separator(paper, "pref_sidebar_sep").Show();
 
                 DrawTabBtn(paper, font, "General", EditorIcons.Gear, Tab.General);
                 DrawTabBtn(paper, font, "Theme", EditorIcons.Palette, Tab.Theme);
@@ -88,8 +88,7 @@ public class PreferencesPanel : DockPanel
 
     private void DrawGeneral(Paper paper, EditorSettings s)
     {
-        EditorGUI.Header(paper, "pref_gen_hdr", $"{EditorIcons.Gear}  General");
-        EditorGUI.Separator(paper, "pref_gen_sep");
+        Origami.Header(paper, "pref_gen_hdr", $"{EditorIcons.Gear}  General").Underline().Show();
 
         InspectorRow.Draw(paper, "pref_proj_path", "Default Projects Path", () =>
             Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
@@ -124,8 +123,7 @@ public class PreferencesPanel : DockPanel
     {
         var theme = s.Theme;
 
-        EditorGUI.Header(paper, "pref_theme_hdr", $"{EditorIcons.Palette}  Theme");
-        EditorGUI.Separator(paper, "pref_theme_sep");
+        Origami.Header(paper, "pref_theme_hdr", $"{EditorIcons.Palette}  Theme").Underline().Show();
 
         InspectorRow.Draw(paper, "pref_theme_name", "Theme Name", () =>
             Origami.TextField(paper, "pref_theme_name_v", theme.Name,
@@ -329,8 +327,7 @@ public class PreferencesPanel : DockPanel
             }
         }
 
-        EditorGUI.Header(paper, "pref_sc_hdr", $"{EditorIcons.Keyboard}  Shortcuts");
-        EditorGUI.Separator(paper, "pref_sc_sep");
+        Origami.Header(paper, "pref_sc_hdr", $"{EditorIcons.Keyboard}  Shortcuts").Underline().Show();
 
         // Search bar
         Origami.SearchField(paper, "pref_sc_search", _shortcutSearch,
@@ -361,8 +358,7 @@ public class PreferencesPanel : DockPanel
             {
                 lastCategory = shortcut.Category;
                 paper.Box($"pref_sc_sp_{lastCategory}").Height(4);
-                EditorGUI.Header(paper, $"pref_sc_cat_{lastCategory}", lastCategory);
-                EditorGUI.Separator(paper, $"pref_sc_catsep_{lastCategory}");
+                Origami.Header(paper, $"pref_sc_cat_{lastCategory}", lastCategory).Underline().Show();
             }
 
             bool isRebinding = _rebindingId == shortcut.Id;

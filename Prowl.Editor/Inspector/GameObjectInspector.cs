@@ -27,9 +27,9 @@ public static class GameObjectInspector
             DrawPrefabHeader(paper, font, go);
 
         DrawHeader(paper, font, go);
-        EditorGUI.Separator(paper, "gi_sep_header");
+        Origami.Separator(paper, "gi_sep_header").Show();
         DrawTransform(paper, font, go);
-        EditorGUI.Separator(paper, "gi_sep_transform");
+        Origami.Separator(paper, "gi_sep_transform").Show();
         DrawComponents(paper, font, go);
 
         // Only show Add Component if not a prefab instance (structure is fixed)
@@ -289,7 +289,7 @@ public static class GameObjectInspector
             // Draw [Button] attributed methods
             DrawButtonMethods(paper, $"{compId}_btns", comp);
 
-            EditorGUI.Separator(paper, $"{compId}_sep");
+            Origami.Separator(paper, $"{compId}_sep").Show();
         }
     }
 

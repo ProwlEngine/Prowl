@@ -43,8 +43,7 @@ public class PackageSettings : ProjectSettingsBase
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        EditorGUI.Header(paper, "pkg_hdr", $"{EditorIcons.Cubes}  NuGet Packages");
-        EditorGUI.Separator(paper, "pkg_sep");
+        Origami.Header(paper, "pkg_hdr", $"{EditorIcons.Cubes}  NuGet Packages").Underline().Show();
 
         EditorGUI.Label(paper, "pkg_info",
             "Packages flow to both Game and Editor scripts. Mark a package Editor Only to keep it out of player builds.");
@@ -101,10 +100,10 @@ public class PackageSettings : ProjectSettingsBase
         }
 
         paper.Box("pkg_sp2").Height(8);
-        EditorGUI.Separator(paper, "pkg_add_sep");
+        Origami.Separator(paper, "pkg_add_sep").Show();
 
         // Add new package
-        EditorGUI.Header(paper, "pkg_add_hdr", "Add Package");
+        Origami.Header(paper, "pkg_add_hdr", "Add Package").Show();
 
         InspectorRow.Draw(paper, "pkg_add_name", "Package Name", () =>
             Origami.TextField(paper, "pkg_add_name_v", _newName, v => _newName = v).Show());

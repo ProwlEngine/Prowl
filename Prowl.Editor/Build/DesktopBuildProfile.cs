@@ -56,8 +56,7 @@ public class DesktopBuildProfile : PlatformBuildProfile
             .LabelRight("Publish Trimmed").Show();
 
         paper.Box("bld_sp2").Height(8);
-        EditorGUI.Header(paper, "bld_window_h", "Window");
-        EditorGUI.Separator(paper, "bld_window_sep");
+        Origami.Header(paper, "bld_window_h", "Window").Underline().Show();
 
         InspectorRow.Draw(paper, "bld_width", "Width", () =>
             Origami.NumericField<int>(paper, "bld_width_v", WindowWidth,

@@ -24,7 +24,7 @@ public class TextureAssetEditor : AssetImporterEditor
         if (font == null) return;
         var texture = asset as Texture2D;
 
-        EditorGUI.Header(paper, $"{id}_hdr", $"{EditorIcons.Image}  Texture");
+        Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.Image}  Texture").Show();
 
         if (texture != null)
         {
@@ -81,8 +81,7 @@ public class TextureAssetEditor : AssetImporterEditor
         var settings = _cachedSettings;
 
         paper.Box($"{id}_sp2").Height(8);
-        EditorGUI.Separator(paper, $"{id}_sep");
-        EditorGUI.Header(paper, $"{id}_settings_hdr", $"{EditorIcons.Gear}  Import Settings");
+                Origami.Header(paper, $"{id}_settings_hdr", $"{EditorIcons.Gear}  Import Settings").Underline().Show();
 
         bool genMips = settings.TryGet("generateMipmaps", out var mipTag) && mipTag.BoolValue;
         Origami.Checkbox(paper, $"{id}_mips", genMips,

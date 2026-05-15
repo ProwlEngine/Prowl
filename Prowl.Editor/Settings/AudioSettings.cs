@@ -23,8 +23,7 @@ public class AudioSettings : ProjectSettingsBase
 
     public override void OnGUI(Paper paper, float width)
     {
-        EditorGUI.Header(paper, "audio_hdr", $"{EditorIcons.VolumeHigh}  Audio");
-        EditorGUI.Separator(paper, "audio_sep");
+        Origami.Header(paper, "audio_hdr", $"{EditorIcons.VolumeHigh}  Audio").Underline().Show();
 
         InspectorRow.Draw(paper, "audio_vol", "Global Volume", () =>
             Origami.Slider(paper, "audio_vol_v", GlobalVolume,

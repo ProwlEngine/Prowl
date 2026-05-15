@@ -17,7 +17,7 @@ public class ShaderGraphAssetEditor : AssetImporterEditor
 {
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        EditorGUI.Header(paper, $"{id}_hdr", $"{EditorIcons.DiagramProject}  Shader Graph");
+        Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.DiagramProject}  Shader Graph").Show();
 
         if (asset is not ShaderGraph graph)
         {

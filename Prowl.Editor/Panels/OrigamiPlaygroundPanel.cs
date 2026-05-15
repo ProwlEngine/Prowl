@@ -270,7 +270,7 @@ public class OrigamiPlaygroundPanel : DockPanel
             .ColSpacing(8)
             .Body(() =>
             {
-                EditorGUI.Header(paper, "op_h_root", "Origami Dropdown Playground");
+                Origami.Header(paper, "op_h_root", "Origami Dropdown Playground").Show();
 
                 paper.Box("op_intro").Height(20)
                     .Alignment(TextAlignment.MiddleLeft).IsNotInteractable()

@@ -57,7 +57,7 @@ public class MeshAssetEditor : AssetImporterEditor
         id = $"{id}_{parentEntry.Guid:N}";
         if (subEntry != null) id = $"{id}_{subEntry.Guid:N}";
 
-        EditorGUI.Header(paper, $"{id}_h_info", subEntry != null ? $"Mesh: {subEntry.Name}" : "Mesh");
+        Origami.Header(paper, $"{id}_h_info", subEntry != null ? $"Mesh: {subEntry.Name}" : "Mesh").Show();
 
         if (mesh == null)
         {
@@ -67,10 +67,10 @@ public class MeshAssetEditor : AssetImporterEditor
 
         DrawInfoPanel(paper, id, mesh);
 
-        EditorGUI.Separator(paper, $"{id}_sep_feat");
+        Origami.Separator(paper, $"{id}_sep_feat").Show();
         DrawFeaturePanel(paper, id, parentEntry, subEntry, mesh);
 
-        EditorGUI.Separator(paper, $"{id}_sep_preview");
+        Origami.Separator(paper, $"{id}_sep_preview").Show();
         DrawPreview(paper, id, parentEntry, subEntry, mesh, state);
     }
 
@@ -99,7 +99,7 @@ public class MeshAssetEditor : AssetImporterEditor
 
     private static void DrawFeaturePanel(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
     {
-        EditorGUI.Header(paper, $"{id}_h_feat", "Mesh Features");
+        Origami.Header(paper, $"{id}_h_feat", "Mesh Features").Show();
 
         var sdf = FindSDF(parentEntry, subEntry, mesh);
         if (sdf != null)
@@ -115,7 +115,7 @@ public class MeshAssetEditor : AssetImporterEditor
 
         using (paper.Row($"{id}_preview_header").Height(28).RowBetween(6).ChildLeft(4).ChildRight(4).Enter())
         {
-            EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
+            Origami.Header(paper, $"{id}_h_preview", "Preview").Show();
 
             // Mutually exclusive view modes — radios so the user can see both options and
             // the active one is unambiguously highlighted.

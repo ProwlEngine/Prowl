@@ -77,7 +77,7 @@ public static class PropertyGrid
                 // [Header]
                 var header = field.GetCustomAttribute<HeaderAttribute>();
                 if (header != null)
-                    EditorGUI.Header(paper, $"{fieldId}_header", header.Text);
+                    Origami.Header(paper, $"{fieldId}_header", header.Text).Show();
 
                 string label = NicifyName(field.Name);
                 object? value = field.GetValue(target);
@@ -254,7 +254,7 @@ public static class PropertyGrid
                 if (type.IsAbstract || type.IsInterface)
                 {
                     DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
-                    EditorGUI.Separator(paper, $"{id}_tpsep");
+                    Origami.Separator(paper, $"{id}_tpsep").Show();
                 }
                 customEditor.OnGUI(paper, id, value);
             });
@@ -273,7 +273,7 @@ public static class PropertyGrid
             if (type.IsAbstract || type.IsInterface)
             {
                 DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
-                EditorGUI.Separator(paper, $"{id}_tpsep");
+                Origami.Separator(paper, $"{id}_tpsep").Show();
             }
 
             using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).ColBetween(6).Margin(0, 0, 6, 0).Enter())

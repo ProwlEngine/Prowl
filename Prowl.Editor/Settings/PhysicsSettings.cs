@@ -113,8 +113,7 @@ public class PhysicsSettings : ProjectSettingsBase
         if (font == null) return;
 
         // Gravity
-        EditorGUI.Header(paper, "phys_h_grav", $"{EditorIcons.Atom}  Gravity");
-        EditorGUI.Separator(paper, "phys_sep_grav");
+        Origami.Header(paper, "phys_h_grav", $"{EditorIcons.Atom}  Gravity").Underline().Show();
 
         EditorGUI.Vector3Field(paper, "phys_gravity", "Gravity", new Float3(GravityX, GravityY, GravityZ))
             .OnValueChanged(v => { GravityX = v.X; GravityY = v.Y; GravityZ = v.Z; ProjectSettingsRegistry.SaveAll(); });
@@ -122,8 +121,7 @@ public class PhysicsSettings : ProjectSettingsBase
         paper.Box("phys_sp1").Height(8);
 
         // Solver
-        EditorGUI.Header(paper, "phys_h_solver", "Solver");
-        EditorGUI.Separator(paper, "phys_sep_solver");
+        Origami.Header(paper, "phys_h_solver", "Solver").Underline().Show();
 
         InspectorRow.Draw(paper, "phys_solver_iter", "Solver Iterations", () =>
             Origami.IntSlider(paper, "phys_solver_iter_v", SolverIterations,
@@ -140,8 +138,7 @@ public class PhysicsSettings : ProjectSettingsBase
         paper.Box("phys_sp2").Height(8);
 
         // Behavior
-        EditorGUI.Header(paper, "phys_h_behavior", "Behavior");
-        EditorGUI.Separator(paper, "phys_sep_behavior");
+        Origami.Header(paper, "phys_h_behavior", "Behavior").Underline().Show();
 
         Origami.Checkbox(paper, "phys_sleep", AllowSleep,
                 v => { AllowSleep = v; ProjectSettingsRegistry.SaveAll(); })
@@ -158,8 +155,7 @@ public class PhysicsSettings : ProjectSettingsBase
         paper.Box("phys_sp_adv").Height(8);
 
         // Advanced
-        EditorGUI.Header(paper, "phys_h_adv", "Advanced");
-        EditorGUI.Separator(paper, "phys_sep_adv");
+        Origami.Header(paper, "phys_h_adv", "Advanced").Underline().Show();
 
         Origami.Checkbox(paper, "phys_determ", EnhancedDeterminism,
                 v => { EnhancedDeterminism = v; ProjectSettingsRegistry.SaveAll(); })
@@ -185,8 +181,7 @@ public class PhysicsSettings : ProjectSettingsBase
         paper.Box("phys_sp3").Height(8);
 
         // Collision Matrix
-        EditorGUI.Header(paper, "phys_h_coll", "Layer Collision Matrix");
-        EditorGUI.Separator(paper, "phys_sep_coll");
+        Origami.Header(paper, "phys_h_coll", "Layer Collision Matrix").Underline().Show();
 
         DrawCollisionMatrix(paper, font, width);
     }

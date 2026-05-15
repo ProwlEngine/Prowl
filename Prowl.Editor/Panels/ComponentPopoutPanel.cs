@@ -99,7 +99,7 @@ public class ComponentPopoutPanel : DockPanel
                     .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
             }
 
-            EditorGUI.Separator(paper, "cpop_sep");
+            Origami.Separator(paper, "cpop_sep").Show();
 
             // Draw the component editor
             string compId = $"cpop_{comp.Identifier}";

@@ -14,11 +14,10 @@ public class VolumetricFogEffectEditor : CustomEditor
     {
         var fx = (VolumetricFogEffect)target;
 
-        EditorGUI.Header(paper, $"{id}_h_main", $"{EditorIcons.Cloud}  Volumetric Fog");
-        EditorGUI.Separator(paper, $"{id}_sep_main");
+        Origami.Header(paper, $"{id}_h_main", $"{EditorIcons.Cloud}  Volumetric Fog").Underline().Show();
 
         // ── Global ──
-        EditorGUI.Header(paper, $"{id}_h_global", "Global");
+        Origami.Header(paper, $"{id}_h_global", "Global").Show();
         SliderRow(paper, $"{id}_dens", "Global Density", fx.GlobalDensity, 0, 0.2f, v => fx.GlobalDensity = v);
         EditorGUI.ColorField(paper, $"{id}_tint", "Color Tint", fx.GlobalColorTint)
             .OnValueChanged(v => fx.GlobalColorTint = v);
@@ -27,15 +26,13 @@ public class VolumetricFogEffectEditor : CustomEditor
         SliderRow(paper, $"{id}_dith", "Dithering", fx.Dithering, 0, 0.2f, v => fx.Dithering = v);
 
         // ── Ambient ──
-        EditorGUI.Header(paper, $"{id}_h_amb", "Ambient");
-        EditorGUI.Separator(paper, $"{id}_sep_amb");
+        Origami.Header(paper, $"{id}_h_amb", "Ambient").Underline().Show();
         EditorGUI.ColorField(paper, $"{id}_amb_col", "Ambient Color", fx.AmbientColor)
             .OnValueChanged(v => fx.AmbientColor = v);
         SliderRow(paper, $"{id}_amb_int", "Ambient Intensity", fx.AmbientIntensity, 0, 5, v => fx.AmbientIntensity = v);
 
         // ── Lights ──
-        EditorGUI.Header(paper, $"{id}_h_lights", "Light Types");
-        EditorGUI.Separator(paper, $"{id}_sep_lights");
+        Origami.Header(paper, $"{id}_h_lights", "Light Types").Underline().Show();
 
         Origami.Checkbox(paper, $"{id}_dir", fx.EnableDirectional, v => fx.EnableDirectional = v)
             .LabelRight("Directional Light").Show();
@@ -53,8 +50,7 @@ public class VolumetricFogEffectEditor : CustomEditor
             .LabelRight("  └ Spot Shadows").Show();
 
         // ── Performance ──
-        EditorGUI.Header(paper, $"{id}_h_perf", "Performance");
-        EditorGUI.Separator(paper, $"{id}_sep_perf");
+        Origami.Header(paper, $"{id}_h_perf", "Performance").Underline().Show();
 
         SliderRow(paper, $"{id}_maxd", "Max Distance", fx.MaxDistance, 1, 500, v => fx.MaxDistance = v);
         IntSliderRow(paper, $"{id}_steps", "Steps", fx.Steps, 8, 128, v => fx.Steps = v);

@@ -50,7 +50,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_cg_sat", "Saturation", fx.Saturation, -1, 1, v => fx.Saturation = v, bipolar: true);
             SliderRow(paper, $"{id}_cg_tmp", "Temperature", fx.Temperature, -1, 1, v => fx.Temperature = v, bipolar: true);
 
-            EditorGUI.Separator(paper, $"{id}_cg_sep_lgg");
+            Origami.Separator(paper, $"{id}_cg_sep_lgg").Show();
             EditorGUI.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain");
 
             EditorGUI.ColorField(paper, $"{id}_cg_lift", "Lift (Shadows)", fx.Lift)
