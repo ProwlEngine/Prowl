@@ -81,6 +81,12 @@ public class OrigamiPlaygroundPanel : DockPanel
     private Country _country = new("US", "United States", "North America");
     private Country _countryEqualityByCode = new("US", "United States v2", "North America");
 
+    // ── ColorField state ──────────────────────────────────────
+    private Prowl.Vector.Color _cfBasic = new(0.3f, 0.6f, 0.9f, 1f);
+    private Prowl.Vector.Color _cfNoAlpha = new(0.9f, 0.2f, 0.3f, 1f);
+    private Prowl.Vector.Color _cfReadOnly = new(0.2f, 0.8f, 0.4f, 1f);
+    private Prowl.Vector.Color _cfNoPalette = new(0.7f, 0.5f, 0.1f, 1f);
+
     // ── TextField state ────────────────────────────────────────
     private string _txtPlain = "";
     private string _txtSearch = "";
@@ -309,6 +315,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_SliderVertical(paper);
                 Section_RangeSliderShowcase(paper);
                 Section_Buttons(paper);
+                Section_ColorFields(paper);
                 Section_Headers(paper);
                 Section_Tree(paper);
                 Section_State(paper);
@@ -1860,6 +1867,29 @@ public class OrigamiPlaygroundPanel : DockPanel
                 StateLine(paper, "st_btn_dc",  $"Button double-click: {_btnDoubleClickCount}");
                 StateLine(paper, "st_bg_view", $"ButtonGroup view: {s_bgViewLabels[_bgViewMode]} (idx {_bgViewMode})");
                 StateLine(paper, "st_bg_align",$"ButtonGroup align: {s_bgAlignLabels[_bgAlign]} (idx {_bgAlign})");
+            }
+        });
+    }
+
+    // ── Color Fields ───────────────────────────────────────────
+
+    private void Section_ColorFields(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_color", "Color Fields").Body(() =>
+        {
+            using (paper.Column("op_cf_col").Height(UnitValue.Auto).ColBetween(6).Enter())
+            {
+                LabelRow(paper, "cf_basic", "Basic", () =>
+                    Origami.ColorField(paper, "op_cf_basic", _cfBasic, v => _cfBasic = v).Show());
+
+                LabelRow(paper, "cf_noalpha", "No Alpha", () =>
+                    Origami.ColorField(paper, "op_cf_noalpha", _cfNoAlpha, v => _cfNoAlpha = v).Alpha(false).Show());
+
+                LabelRow(paper, "cf_readonly", "Read-Only", () =>
+                    Origami.ColorField(paper, "op_cf_readonly", _cfReadOnly, _ => { }).ReadOnly().Show());
+
+                LabelRow(paper, "cf_nopal", "No Palette", () =>
+                    Origami.ColorField(paper, "op_cf_nopal", _cfNoPalette, v => _cfNoPalette = v).Palette(null).Show());
             }
         });
     }

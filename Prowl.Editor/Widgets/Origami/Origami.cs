@@ -233,6 +233,13 @@ public static class Origami
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
 
+    // ── Color field factory ─────────────────────────────────────
+
+    /// <summary>Begin building a color field. Renders a swatch that opens a full picker popover.</summary>
+    public static ColorFieldBuilder ColorField(Paper paper, string id,
+        Prowl.Vector.Color value, Action<Prowl.Vector.Color> setter)
+        => new ColorFieldBuilder(paper, id, value, setter, Current);
+
     // ── Button factories ─────────────────────────────────────────
 
     /// <summary>Begin building a button. Construct the click handler at the call site.</summary>

@@ -284,15 +284,16 @@ public sealed class TextFieldBuilder
                 // Prefix badge ────────────────────────────────────────
                 if (!string.IsNullOrEmpty(_prefixText) && font != null)
                 {
-                    float pfxH = _height - 2;
+                    float pfxH = _height - 4;
+                    float pfxRound = MathF.Max(1, _theme.Metrics.Rounding - 2);
                     var pfxBg = _prefixColor.HasValue
                         ? Color.FromArgb(20, _prefixColor.Value.R, _prefixColor.Value.G, _prefixColor.Value.B)
                         : Color.FromArgb(20, ink.C400.R, ink.C400.G, ink.C400.B);
                     var pfxFg = _prefixColor ?? ink.C500;
                     _paper.Box($"{_id}_pfx")
                         .Height(pfxH).Width(pfxH)
-                        .Margin(1, 0, 1, 0)
-                        .Rounded(_theme.Metrics.Rounding)
+                        .Margin(2, 0, 2, 0)
+                        .Rounded(pfxRound)
                         .BackgroundColor(pfxBg)
                         .Text(_prefixText!, font)
                         .TextColor(pfxFg)
