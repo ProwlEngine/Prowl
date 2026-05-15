@@ -21,9 +21,6 @@ public static class EditorGUI
     private static float FontSz => EditorTheme.FontSize;
     private static float LabelW => EditorTheme.LabelWidth;
 
-    /// <summary>Foldout disclosure icon: AngleDown when expanded, AngleRight when collapsed.</summary>
-    public static string FoldoutIcon(bool expanded) => expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight;
-
     /// <summary>
     /// Fullscreen backdrop element. Two flavours:
     /// <list type="bullet">
@@ -52,18 +49,6 @@ public static class EditorGUI
 
         if (onClose != null)
             box.OnClick(0, (_, _) => onClose());
-    }
-
-    // ================================================================
-    //  Separator
-    // ================================================================
-
-    public static void Separator(Paper paper, string id)
-{
-        paper.Box(id + "_line")
-            .Height(1)
-            .Margin(6, 6)
-            .BackgroundColor(EditorTheme.Ink100);
     }
 
     public static Color LerpRGB(Color a, Color b, float t)

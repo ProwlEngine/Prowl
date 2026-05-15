@@ -1239,7 +1239,7 @@ public class ProjectPanel : DockPanel
                     .Position(2, 2)
                     .Size(16, 16).Rounded(3)
                     .BackgroundColor(Color.FromArgb(160, 30, 30, 30))
-                    .Text(EditorGUI.FoldoutIcon(expanded), font)
+                    .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(8f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(item.Guid, (guid, _) =>
