@@ -60,25 +60,33 @@ public sealed class CurveFieldBuilder
         var theme = Origami.Current;
         var m = theme.Metrics;
 
-        using (_paper.Box($"{_id}_swatch")
+        var swatch = _paper.Box($"{_id}_swatch")
             .Width(_width).Height(_previewHeight)
             .BackgroundColor(theme.Neutral.C200)
             .BorderColor(theme.Neutral.C400).BorderWidth(1)
             .Hovered.BorderColor(theme.Primary.C400).End()
-            .Rounded(m.Rounding)
-            .Enter())
-        {
-            bool isOpen = _paper.IsParentFocusWithin && !_readOnly;
+            .Rounded(m.Rounding);
 
-            // Draw the curve preview via canvas
+        if (!_readOnly)
+        {
+            var curve = _value;
+            var setter = _setter;
+            var id = _id;
+            swatch.OnClick(e =>
+            {
+                float anchorX = (float)e.ElementRect.Min.X;
+                float anchorY = (float)e.ElementRect.Max.Y + 2;
+                Modal.Push(new CurveEditorModal(id, curve, setter, anchorX, anchorY));
+            });
+        }
+
+        using (swatch.Enter())
+        {
             _paper.Box($"{_id}_preview")
                 .Width(UnitValue.Stretch()).Height(_previewHeight)
                 .IsNotInteractable()
                 .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
                     CurveRenderer.DrawPreview(canvas, r, _value, theme)));
-
-            if (isOpen)
-                CurvePopover.Draw(_paper, _id, _value, _setter, theme);
         }
     }
 }
@@ -302,25 +310,24 @@ internal static class CurvePopover
     private const float RulerSize = 24f;
     private const float TangentHandleLen = 40f;
 
-    public static void Draw(Paper paper, string id, AnimationCurve curve, Action<AnimationCurve> onChange, OrigamiTheme theme)
+    public static float EditorWidth => EditorW;
+    public static float EditorHeight
+    {
+        get
+        {
+            var m = Origami.Current.Metrics;
+            return RulerSize + GraphH + m.Spacing + m.RowHeight + m.Spacing;
+        }
+    }
+
+    /// <summary>Draw the curve editor content (no container). Used by the modal.</summary>
+    public static void DrawContent(Paper paper, string id, AnimationCurve curve, Action<AnimationCurve> onChange, OrigamiTheme theme)
     {
         var m = theme.Metrics;
         float graphX = RulerSize, graphY = RulerSize;
         float graphW = EditorW - RulerSize - m.SpacingLarge;
         float barY = graphY + GraphH + m.Spacing;
-        float editorH = barY + m.RowHeight + m.Spacing;
 
-        using (paper.Column($"{id}_pop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, 44)
-            .Size(EditorW, editorH)
-            .BackgroundColor(theme.Neutral.C300)
-            .BorderColor(theme.Ink.C200).BorderWidth(1)
-            .Rounded(m.ContainerRounding)
-            .Layer(Layer.Topmost)
-            .ClampToScreen()
-            .StopEventPropagation()
-            .Enter())
         {
             var el = paper.CurrentParent;
 
@@ -525,5 +532,52 @@ internal static class CurvePopover
                 }
                 onChange(curve);
             });
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Curve Editor Modal - wraps the popover in the modal stack
+// ════════════════════════════════════════════════════════════════
+
+internal sealed class CurveEditorModal : IModal
+{
+    private readonly string _id;
+    private readonly AnimationCurve _curve;
+    private readonly Action<AnimationCurve> _setter;
+    private readonly float _anchorX;
+    private readonly float _anchorY;
+
+    public bool CloseOnBackdrop => true;
+    public bool CloseOnEscape => true;
+
+    public CurveEditorModal(string id, AnimationCurve curve, Action<AnimationCurve> setter, float anchorX, float anchorY)
+    {
+        _id = id;
+        _curve = curve;
+        _setter = setter;
+        _anchorX = anchorX;
+        _anchorY = anchorY;
+    }
+
+    public void Draw(Paper paper, int layer, int stackIndex)
+    {
+        var theme = Origami.Current;
+        var m = theme.Metrics;
+
+        using (paper.Column($"{_id}_modal")
+            .PositionType(PositionType.SelfDirected)
+            .Position(_anchorX, _anchorY)
+            .Size(CurvePopover.EditorWidth, CurvePopover.EditorHeight)
+            .BackgroundColor(theme.Neutral.C300)
+            .BorderColor(theme.Ink.C200).BorderWidth(1)
+            .Rounded(m.ContainerRounding)
+            .BoxShadow(0, 4, 24, 0, Color.FromArgb(100, 0, 0, 0))
+            .Layer(layer)
+            .ClampToScreen()
+            .StopEventPropagation()
+            .Enter())
+        {
+            CurvePopover.DrawContent(paper, _id, _curve, _setter, theme);
+        }
     }
 }
