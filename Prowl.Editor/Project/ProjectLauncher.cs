@@ -26,12 +26,54 @@ public static class ProjectLauncher
     private static bool _showNewProject;
     private static float _animTime;
 
+    // Cycled tip strip drawn at the bottom of the launcher background.
+    private static readonly string[] _tipKeys =
+    {
+        "launcher.tip.orbit",
+        "launcher.tip.dolly",
+        "launcher.tip.pan",
+        "launcher.tip.fly",
+        "launcher.tip.fly_speed",
+        "launcher.tip.fly_updown",
+        "launcher.tip.focus",
+        "launcher.tip.gizmos",
+        "launcher.tip.snap",
+        "launcher.tip.duplicate",
+        "launcher.tip.rename",
+        "launcher.tip.math",
+        "launcher.tip.math_ops",
+        "launcher.tip.drag_asset",
+        "launcher.tip.orient_cube",
+        "launcher.tip.undo",
+        "launcher.tip.discord",
+        "launcher.tip.assignref",
+        "launcher.tip.pingref",
+        "launcher.tip.pickref",
+        "launcher.tip.go_to_component",
+        "launcher.tip.create_menu",
+        "launcher.tip.component_menu",
+        "launcher.tip.escape_unlock",
+    };
+
+    private const float _tipDuration = 8f;
+    private const float _tipFadeTime = 0.45f;
+    private static int _tipIndex;
+    private static float _tipTimer;
+
     public static void Initialize()
     {
         _newProjectPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Prowl Projects");
         IsOpen = true;
         _showNewProject = false;
         _animTime = 0;
+        _tipIndex = Random.Shared.Next(_tipKeys.Length);
+        _tipTimer = 0;
+    }
+
+    private static void AdvanceTip()
+    {
+        _tipIndex = (_tipIndex + 1) % _tipKeys.Length;
+        _tipTimer = 0;
     }
 
     public static void Close()
@@ -223,6 +265,75 @@ public static class ProjectLauncher
                     DrawRecentProjects(paper, font, cardW, cardH - 60 - 46 - (_showNewProject ? 80 : 0));
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Draws the cycling tip strip at the bottom of the screen. Called separately from
+    /// <see cref="Draw"/> so it can render on top of the intro animation while the project loads.
+    /// </summary>
+    public static void DrawTipStrip(Paper paper, float dt, float globalAlpha = 1f)
+    {
+        if (globalAlpha <= 0f) return;
+
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        float w = paper.ScreenRect.Size.X;
+        float h = paper.ScreenRect.Size.Y;
+
+        _tipTimer += dt;
+        if (_tipTimer >= _tipDuration)
+            AdvanceTip();
+
+        float fadeIn = Math.Min(_tipTimer / _tipFadeTime, 1f);
+        float fadeOut = Math.Min((_tipDuration - _tipTimer) / _tipFadeTime, 1f);
+        float alpha = Math.Clamp(Math.Min(fadeIn, fadeOut), 0f, 1f) * Math.Clamp(globalAlpha, 0f, 1f);
+
+        var iconBase = EditorTheme.Purple500;
+        var textBase = EditorTheme.Ink400;
+        var labelBase = EditorTheme.Ink300;
+        var iconColor = Color.FromArgb((int)(iconBase.A * alpha), iconBase.R, iconBase.G, iconBase.B);
+        var textColor = Color.FromArgb((int)(textBase.A * alpha), textBase.R, textBase.G, textBase.B);
+        var labelColor = Color.FromArgb((int)(labelBase.A * alpha), labelBase.R, labelBase.G, labelBase.B);
+
+        const float stripHeight = 36f;
+        float y = h - stripHeight - 16f;
+        string tipText = Loc.Get(_tipKeys[_tipIndex]);
+
+        using (paper.Row("pl_tip_strip")
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, y)
+            .Size(w, stripHeight)
+            .ChildLeft(UnitValue.StretchOne)
+            .ChildRight(UnitValue.StretchOne)
+            .RowBetween(6)
+            .OnClick(_ => AdvanceTip())
+            .Enter())
+        {
+            paper.Box("pl_tip_icon")
+                .Width(20)
+                .Height(stripHeight)
+                .Text(EditorIcons.Lightbulb, font)
+                .TextColor(iconColor)
+                .FontSize(EditorTheme.FontSize)
+                .Alignment(TextAlignment.MiddleCenter);
+
+            paper.Box("pl_tip_label")
+                .Width(UnitValue.Auto)
+                .Height(stripHeight)
+                .Text(Loc.Get("launcher.tip_label"), font)
+                .TextColor(labelColor)
+                .FontSize(EditorTheme.FontSize - 1)
+                .Alignment(TextAlignment.MiddleLeft);
+
+            paper.Box("pl_tip_text")
+                .Width(UnitValue.Auto)
+                .Height(stripHeight)
+                .Text(tipText, font)
+                .TextColor(textColor)
+                .FontSize(EditorTheme.FontSize - 1)
+                .Alignment(TextAlignment.MiddleLeft);
         }
     }
 

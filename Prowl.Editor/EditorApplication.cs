@@ -720,6 +720,30 @@ public class EditorApplication : Game
             DrawIntro(paper);
         }
 
+        // Cycling tip strip drawn last so it sits on top of both the launcher card
+        // and the intro animation bars, giving the user something to read while the
+        // project loads. The strip fades out as the bars slide away to reveal the
+        // editor so it never lingers over a loaded project.
+        if (ProjectLauncher.IsOpen || _introTime < IntroDuration)
+        {
+            float tipAlpha = 1f;
+            // Only run the fade while the intro is actually playing. Before any project
+            // is opened _introTime sits at double.MaxValue, which would otherwise read
+            // as "past the open phase" and zero the tip out on the launcher.
+            if (_introTime < IntroDuration)
+            {
+                const double openStart = IntroCloseDuration + 0.5;
+                const double fadeOutDuration = 0.8;
+                if (_introTime >= openStart)
+                {
+                    float t = (float)((_introTime - openStart) / fadeOutDuration);
+                    tipAlpha = 1f - Math.Clamp(t, 0f, 1f);
+                }
+            }
+
+            ProjectLauncher.DrawTipStrip(paper, (float)Time.UnscaledDeltaTime, tipAlpha);
+        }
+
         // Pop the editor Origami theme now that all rendering (including overlays) is done.
         _origamiScope?.Dispose();
         _origamiScope = null;
