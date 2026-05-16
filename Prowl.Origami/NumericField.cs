@@ -185,29 +185,22 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
         if (char.IsDigit(c)) return true;
 
-        // Sign: allowed at the start, or right after an exponent for floats.
-        if (s_isSigned && (c == '-' || c == '+'))
-        {
-            if (current.Length == 0) return true;
-            if (s_isFloatingPoint && (current.EndsWith('e') || current.EndsWith('E'))) return true;
-            return false;
-        }
+        // Math expression characters: operators, parentheses, letters (for pi, e, tau)
+        if (c == '*' || c == '/' || c == '^' || c == '(' || c == ')') return true;
+        if (char.IsLetter(c)) return true; // allows pi, e, tau
 
-        // Decimal separator (only floating-point, only once, and only if not already after an exponent).
+        // Sign: + and - allowed anywhere (they're also math operators)
+        if (c == '-' || c == '+') return true;
+
+        // Decimal separator
         if (s_isFloatingPoint)
         {
             string dec = nf.NumberDecimalSeparator;
-            if (dec.Length == 1 && c == dec[0])
-            {
-                if (current.Contains(dec)) return false;
-                if (current.IndexOfAny(new[] { 'e', 'E' }) >= 0) return false;
-                return true;
-            }
-
-            // Exponent: a single 'e'/'E' after at least one digit.
-            if ((c == 'e' || c == 'E') && current.Length > 0 && current.IndexOfAny(new[] { 'e', 'E' }) < 0)
-                return true;
+            if (dec.Length == 1 && c == dec[0]) return true;
         }
+
+        // Space (ignored by math parser)
+        if (c == ' ') return true;
 
         return false;
     }
