@@ -6,6 +6,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
@@ -146,6 +147,16 @@ public static class ProjectLauncher
 
                     paper.Box("spacer");
 
+
+                    // Language selector
+                    using (paper.Box("pl_lang").Width(100).Height(60).Margin(0, 0, 8, 0)
+                        .ChildTop(UnitValue.StretchOne).ChildBottom(UnitValue.StretchOne).Enter())
+                    {
+                        Origami.Dropdown(paper, "pl_lang_dd",
+                            LocaleHelper.GetIndex(Rosetta.Loc.CurrentLocale),
+                            LocaleHelper.SetLocale, LocaleHelper.Names)
+                            .Subtle().Height(22).Show();
+                    }
 
                     paper.Box("pl_version")
                         .Height(60)

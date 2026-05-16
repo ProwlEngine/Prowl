@@ -24,6 +24,7 @@ public class EditorSettings
     // Preferences
     public string DefaultProjectsPath { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ProwlProjects");
+    public string Locale { get; set; } = "en";
     public bool AutoSaveLayout { get; set; } = true;
     public bool ReimportOnFocusOnly { get; set; } = true;
     public int ThumbnailSize { get; set; } = 32;

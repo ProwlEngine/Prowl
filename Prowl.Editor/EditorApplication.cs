@@ -103,7 +103,7 @@ public class EditorApplication : Game
             .SetFallbackLocale("en")
             .AddProvider(new Prowl.Rosetta.EmbeddedResourceProvider(
                 System.Reflection.Assembly.GetExecutingAssembly(), "Prowl.Editor.Localization"))
-            .SetLocale("en")
+            .SetLocale(EditorSettings.Instance.Locale)
             .OnMissingKey(Prowl.Rosetta.MissingKeyBehavior.ReturnKey)
         );
 

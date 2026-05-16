@@ -91,6 +91,11 @@ public class PreferencesPanel : DockPanel
     {
         Origami.Header(paper, "pref_gen_hdr", $"{EditorIcons.Gear}  General").Underline().Show();
 
+        InspectorRow.Draw(paper, "pref_lang", "Language", () =>
+            Origami.Dropdown(paper, "pref_lang_dd",
+                LocaleHelper.GetIndex(Loc.CurrentLocale),
+                LocaleHelper.SetLocale, LocaleHelper.Names).Show());
+
         InspectorRow.Draw(paper, "pref_proj_path", "Default Projects Path", () =>
             Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
                 v => { s.DefaultProjectsPath = v; s.Save(); }).Show());
