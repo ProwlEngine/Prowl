@@ -134,6 +134,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _readOnly = true;
         // Format current value to a string for the underlying TextField. The text reflects
         // the live value every frame, which means a parse failure (e.g. user typed a stray
         // letter) gracefully reverts to the last good value as soon as we re-render.

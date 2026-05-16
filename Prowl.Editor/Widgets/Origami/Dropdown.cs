@@ -35,6 +35,7 @@ public sealed class DropdownBuilder<T>
     private readonly Action<T> _setter;
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
+    private bool _disabled;
     private Func<T, string>? _display;
     private Func<T, string>? _icon;
     private Func<T, string>? _secondary;
@@ -137,6 +138,7 @@ public sealed class DropdownBuilder<T>
     /// <summary>Render the dropdown.</summary>
     public void Show()
     {
+        if (Origami.IsReadOnly) _disabled = true;
         var ramp = _theme.Get(_variant);
         var ink = _theme.Ink;
         var font = _theme.Font;
@@ -173,6 +175,7 @@ public sealed class DropdownBuilder<T>
             .Rounded(_theme.Metrics.Rounding)
             .OnClick(e =>
             {
+                if (_disabled) return;
                 bool cur = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyOpen, false);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyOpen, !cur);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyHighlight, selectedIdx);

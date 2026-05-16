@@ -22,6 +22,19 @@ public static class Origami
 
     private static OrigamiTheme _root = OrigamiTheme.CreateDefaults();
 
+    // ── Read-only state ────────────────────────────────────────
+    private static int _readOnlyDepth;
+
+    /// <summary>True when inside a BeginReadOnly/EndReadOnly block.</summary>
+    public static bool IsReadOnly => _readOnlyDepth > 0;
+
+    /// <summary>Begin a read-only scope. All Origami widgets rendered between
+    /// Begin/EndReadOnly will be disabled/non-interactive. Nestable.</summary>
+    public static void BeginReadOnly() => _readOnlyDepth++;
+
+    /// <summary>End a read-only scope.</summary>
+    public static void EndReadOnly() { if (_readOnlyDepth > 0) _readOnlyDepth--; }
+
     // Transition state (lerp from start → target over duration).
     private static OrigamiTheme? _transitionStart;
     private static OrigamiTheme? _transitionTarget;

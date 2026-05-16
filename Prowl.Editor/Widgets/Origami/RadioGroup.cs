@@ -104,6 +104,7 @@ public sealed class RadioGroupBuilder<T>
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _disabled = true;
         var disp = _display ?? (t => t?.ToString() ?? string.Empty);
         bool hasError = !string.IsNullOrEmpty(_error);
         string? helpLine = hasError ? _error : _helperText;

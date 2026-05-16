@@ -92,6 +92,7 @@ public sealed class ColorFieldBuilder
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _readOnly = true;
         var font = _theme.Font;
         var ink = _theme.Ink;
         var metrics = _theme.Metrics;

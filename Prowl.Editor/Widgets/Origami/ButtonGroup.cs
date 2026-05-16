@@ -92,6 +92,7 @@ public sealed class ButtonGroupBuilder
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _disabled = true;
         if (_items.Count == 0) return;
 
         var ramp = _theme.Get(_variant);
