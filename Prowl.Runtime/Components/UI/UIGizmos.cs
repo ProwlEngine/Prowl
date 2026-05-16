@@ -47,12 +47,12 @@ internal static class UIGizmos
         float w = cr.Size.X;
         float h = cr.Size.Y;
 
-        // Element-local pivot-centered space — matches UIImage.GenerateMesh /
+        // Element-local pivot-centered space (+Y up) — matches UIImage.GenerateMesh /
         // TextComponent.GenerateMesh.
-        Float3 ltl = new Float3(-pivot.X * w,        -pivot.Y * h,        0);
-        Float3 ltr = new Float3((1 - pivot.X) * w,   -pivot.Y * h,        0);
-        Float3 lbr = new Float3((1 - pivot.X) * w,   (1 - pivot.Y) * h,   0);
-        Float3 lbl = new Float3(-pivot.X * w,        (1 - pivot.Y) * h,   0);
+        Float3 lbl = new Float3(-pivot.X * w,        -pivot.Y * h,        0);  // bottom-left
+        Float3 lbr = new Float3((1 - pivot.X) * w,   -pivot.Y * h,        0);  // bottom-right
+        Float3 ltr = new Float3((1 - pivot.X) * w,   (1 - pivot.Y) * h,   0);  // top-right
+        Float3 ltl = new Float3(-pivot.X * w,        (1 - pivot.Y) * h,   0);  // top-left
 
         Float4x4 model = canvas.BuildItemModel(ui);
         Float3 tl = Float4x4.TransformPoint(ltl, model);
@@ -67,26 +67,26 @@ internal static class UIGizmos
 
         // In-plane axes for any sub-handles. Fall back to identity if degenerate.
         Float3 rightW = tr - tl;
-        Float3 downW  = bl - tl;
+        Float3 upW    = tl - bl;
         float rLen = Float3.Length(rightW);
-        float dLen = Float3.Length(downW);
-        if (rLen < 1e-6f || dLen < 1e-6f) return;
+        float uLen = Float3.Length(upW);
+        if (rLen < 1e-6f || uLen < 1e-6f) return;
         Float3 rightU = rightW / rLen;
-        Float3 downU  = downW  / dLen;
+        Float3 upU    = upW    / uLen;
 
         if (drawPivot)
         {
             // Pivot is the origin in element-local space — TransformPoint(Zero, model) gives world.
             Float3 pivotW = Float4x4.TransformPoint(Float3.Zero, model);
-            float r = Maths.Max(Maths.Min(rLen, dLen) * 0.05f, 1e-4f);
+            float r = Maths.Max(Maths.Min(rLen, uLen) * 0.05f, 1e-4f);
             Debug.DrawLine(pivotW - rightU * r, pivotW + rightU * r, PivotColor);
-            Debug.DrawLine(pivotW - downU  * r, pivotW + downU  * r, PivotColor);
-            Float3 normal = Float3.Normalize(Float3.Cross(rightU, downU));
+            Debug.DrawLine(pivotW - upU    * r, pivotW + upU    * r, PivotColor);
+            Float3 normal = Float3.Normalize(Float3.Cross(rightU, upU));
             Debug.DrawWireCircle(pivotW, normal, r * 0.6f, PivotColor, 16);
         }
 
         if (drawAnchors)
-            DrawAnchorHandles(ui, canvas, rt, rightU, downU);
+            DrawAnchorHandles(ui, canvas, rt, rightU, upU);
     }
 
     /// <summary>
@@ -94,7 +94,7 @@ internal static class UIGizmos
     /// AnchorMin / AnchorMax positions. When AnchorMin == AnchorMax the four
     /// handles collapse to a single quartet at the same point (Unity behavior).
     /// </summary>
-    private static void DrawAnchorHandles(UIBehaviour ui, GameCanvas canvas, RectTransform rt, Float3 rightU, Float3 downU)
+    private static void DrawAnchorHandles(UIBehaviour ui, GameCanvas canvas, RectTransform rt, Float3 rightU, Float3 upU)
     {
         GameObject? parent = ui.GameObject.Parent;
         if (parent is null) return;
@@ -130,16 +130,18 @@ internal static class UIGizmos
         float pixelW = Float3.Length(Float4x4.TransformPoint(new Float3(1, 0, 0), parentModel) - originW);
         float size = pixelW * 8f; // 8 design pixels — readable at typical zoom
 
-        DrawAnchorTriangle(a00, rightU, downU, size, +1, +1);
-        DrawAnchorTriangle(a10, rightU, downU, size, -1, +1);
-        DrawAnchorTriangle(a11, rightU, downU, size, -1, -1);
-        DrawAnchorTriangle(a01, rightU, downU, size, +1, -1);
+        // a00 = bottom-left anchor, a10 = bottom-right, a11 = top-right, a01 = top-left.
+        // Legs point inward: +rightU/-rightU horizontally, +upU/-upU vertically.
+        DrawAnchorTriangle(a00, rightU, upU, size, +1, +1);
+        DrawAnchorTriangle(a10, rightU, upU, size, -1, +1);
+        DrawAnchorTriangle(a11, rightU, upU, size, -1, -1);
+        DrawAnchorTriangle(a01, rightU, upU, size, +1, -1);
     }
 
     /// <summary>
     /// Builds the world-space matrix that maps a RectTransform's pivot-centered
-    /// design-pixel space to world space. Mirrors <see cref="GameCanvas.BuildItemModel"/>'s
-    /// WorldSpace branch; needed because BuildItemModel takes a UIBehaviour, not a Transform.
+    /// design-pixel space to world space. Mirrors <see cref="GameCanvas.BuildItemModel"/>;
+    /// kept here because that one takes a UIBehaviour, not a bare RectTransform.
     /// </summary>
     private static Float4x4 BuildRectModel(GameCanvas canvas, RectTransform rt)
     {
@@ -153,10 +155,7 @@ internal static class UIGizmos
             rt.LocalRotation,
             rt.LocalScale);
 
-        float rpu = Maths.Max(canvas.ReferencePixelsPerUnit, 0.001f);
-        return canvas.Transform.LocalToWorldMatrix
-             * Float4x4.CreateScale(1f / rpu)
-             * elementTRS;
+        return canvas.CanvasToWorld * elementTRS;
     }
 
     /// <summary>
@@ -164,11 +163,11 @@ internal static class UIGizmos
     /// <paramref name="cornerWorld"/> and whose legs point along the rect axes.
     /// <paramref name="sx"/>/<paramref name="sy"/> point the legs into the parent rect.
     /// </summary>
-    private static void DrawAnchorTriangle(Float3 cornerWorld, Float3 rightU, Float3 downU, float size, int sx, int sy)
+    private static void DrawAnchorTriangle(Float3 cornerWorld, Float3 rightU, Float3 upU, float size, int sx, int sy)
     {
         Float3 a = cornerWorld;
         Float3 b = cornerWorld + rightU * (sx * size);
-        Float3 c = cornerWorld + downU  * (sy * size);
+        Float3 c = cornerWorld + upU    * (sy * size);
 
         Debug.DrawLine(a, b, AnchorColor);
         Debug.DrawLine(b, c, AnchorColor);
@@ -198,15 +197,16 @@ internal static class UIGizmos
         float pivotX = cr.Min.X + pivot.X * cr.Size.X;
         float pivotY = cr.Min.Y + pivot.Y * cr.Size.Y;
         // Corners in pivot-centered space, matching BuildRectModel's translation.
+        // cr.Min is the bottom-left corner, cr.Max the top-right (+Y up).
         float minX = cr.Min.X - pivotX;
         float minY = cr.Min.Y - pivotY;
         float maxX = cr.Max.X - pivotX;
         float maxY = cr.Max.Y - pivotY;
 
-        Float3 tl = Float4x4.TransformPoint(new Float3(minX, minY, 0), model);
-        Float3 tr = Float4x4.TransformPoint(new Float3(maxX, minY, 0), model);
-        Float3 br = Float4x4.TransformPoint(new Float3(maxX, maxY, 0), model);
-        Float3 bl = Float4x4.TransformPoint(new Float3(minX, maxY, 0), model);
+        Float3 bl = Float4x4.TransformPoint(new Float3(minX, minY, 0), model);
+        Float3 br = Float4x4.TransformPoint(new Float3(maxX, minY, 0), model);
+        Float3 tr = Float4x4.TransformPoint(new Float3(maxX, maxY, 0), model);
+        Float3 tl = Float4x4.TransformPoint(new Float3(minX, maxY, 0), model);
 
         Debug.DrawLine(tl, tr, color);
         Debug.DrawLine(tr, br, color);

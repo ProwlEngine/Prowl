@@ -146,6 +146,7 @@ public class EditorCamera
         {
             DisplayGizmos = ShowGizmos,
             DisplayGrid = ShowGrid,
+            IsSceneView = true
         };
 
         // Render

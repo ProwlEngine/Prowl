@@ -17,6 +17,9 @@ public struct RenderingData
 
     /// <summary>Whether to draw the editor grid.</summary>
     public bool DisplayGrid;
+
+    /// <summary>Whether the render is happening from the Scene View.</summary>
+    public bool IsSceneView;
 }
 
 /// <summary>

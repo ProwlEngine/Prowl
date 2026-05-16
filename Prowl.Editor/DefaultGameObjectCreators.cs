@@ -9,6 +9,7 @@ using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
+using Prowl.Runtime.UI;
 using Prowl.Vector;
 
 namespace Prowl.Editor;
@@ -172,11 +173,87 @@ internal static class DefaultGameObjectCreators
 
     // ---- UI ----
 
-    [CreateGameObjectMenu("UI/World Canvas", Icon = EditorIcons.Display, Order = 50, Separator = true)]
+    [CreateGameObjectMenu("UI/Canvas", Icon = EditorIcons.BorderAll, Order = 50, Separator = true)]
+    static void CreateCanvas(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Canvas", parent);
+        go.EnsureRectTransform();
+        go.AddComponent<GameCanvas>();
+    }
+
+    [CreateGameObjectMenu("UI/Text", Icon = EditorIcons.Font, Order = 51)]
+    static void CreateUIText(GameObject? parent)
+    {
+        var go = NewUIElement("Text", parent);
+        go.RectTransform!.SizeDelta = new Float2(200f, 50f);
+        var text = go.AddComponent<TextComponent>();
+        text.Text = "New Text";
+    }
+
+    [CreateGameObjectMenu("UI/Image", Icon = EditorIcons.Image, Order = 52)]
+    static void CreateUIImage(GameObject? parent)
+    {
+        var go = NewUIElement("Image", parent);
+        go.RectTransform!.SizeDelta = new Float2(100f, 100f);
+        go.AddComponent<UIImage>();
+    }
+
+    [CreateGameObjectMenu("UI/Panel", Icon = EditorIcons.WindowMaximize, Order = 53)]
+    static void CreateUIPanel(GameObject? parent)
+    {
+        var go = NewUIElement("Panel", parent);
+
+        // Panels stretch to fill their parent rect (anchors at the corners, zero size delta).
+        var rt = go.RectTransform!;
+        rt.AnchorMin = Float2.Zero;
+        rt.AnchorMax = Float2.One;
+        rt.SizeDelta = Float2.Zero;
+        rt.AnchoredPosition = Float2.Zero;
+
+        var img = go.AddComponent<UIImage>();
+        img.Color = new Color(1f, 1f, 1f, 0.4f);
+    }
+
+    [CreateGameObjectMenu("UI/World Canvas", Icon = EditorIcons.Display, Order = 54)]
     static void CreateWorldCanvas(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("World Canvas", parent);
         go.AddComponent<WorldCanvas>();
+    }
+
+    /// <summary>
+    /// Creates a UI element GameObject parented under a Canvas with a RectTransform ready.
+    /// If <paramref name="parent"/> already lives under a <see cref="GameCanvas"/> the element
+    /// is nested there; otherwise the first canvas in the scene is reused, or a new one is
+    /// spawned at the root.
+    /// </summary>
+    private static GameObject NewUIElement(string name, GameObject? parent)
+    {
+        GameObject uiParent = ResolveCanvasParent(parent);
+        var go = HierarchyPanel.CreateGameObject(name, uiParent);
+        go.EnsureRectTransform();
+        return go;
+    }
+
+    private static GameObject ResolveCanvasParent(GameObject? parent)
+    {
+        GameCanvas? canvas = parent?.GetComponentInParent<GameCanvas>(includeSelf: true);
+        if (canvas != null)
+            return parent!;
+
+        var scene = Scene.Current;
+        if (scene != null)
+        {
+            foreach (GameCanvas? c in scene.FindObjectsOfType<GameCanvas>())
+                if (c != null)
+                    return c.GameObject;
+        }
+
+        // None exists — create one at the root (not selected / no rename, it's a side effect).
+        var canvasGo = HierarchyPanel.CreateGameObject("Canvas", null, select: false, beginRename: false);
+        canvasGo.EnsureRectTransform();
+        canvasGo.AddComponent<GameCanvas>();
+        return canvasGo;
     }
 
     // ---- Particle System ----

@@ -130,14 +130,14 @@ public class TextComponent : UIBehaviour
         TextLayout layout = fs.System.CreateLayout(_text, settings);
         layout.EnsureUpToDate(fs.System);
 
-        // Element-local pivot-centered space (matches GameCanvas.BuildItemModel).
-        // Inside this space the rect's TOP-LEFT is at (-pivot.X * w, -pivot.Y * h);
-        // we lay glyphs out relative to that point.
+        // Element-local pivot-centered space (matches GameCanvas.BuildItemModel), +Y up.
+        // Inside this space the rect's TOP-LEFT is at (-pivot.X * w, (1 - pivot.Y) * h);
+        // Scribe's layout Y grows downward, so we subtract it from this origin.
         float w = r.Size.X;
         float h = r.Size.Y;
         Float2 pivot = rt.Pivot;
         float originX = -pivot.X * w;
-        float originY = -pivot.Y * h;
+        float originY = (1f - pivot.Y) * h;
 
         // Vertical alignment is not handled by Scribe (its TextAlignment is horizontal-only),
         // so we shift the whole layout box ourselves.
@@ -158,17 +158,20 @@ public class TextComponent : UIBehaviour
                 GlyphMetrics m = ag.Metrics;
                 if (m.Width <= 0 || m.Height <= 0) continue; // whitespace / invisible
 
-                // Glyph quad in canvas-design pixels, top-left origin.
+                // Glyph quad in canvas-design pixels. Scribe lays text out downward, so its
+                // Y offsets are subtracted from the top-left origin (+Y up). The atlas V
+                // axis runs top-to-bottom (V0 = glyph top), hence V1 maps to the quad's
+                // bottom-left corner and V0 to its top-right.
                 float x0 = originX + line.Position.X + inst.Position.X;
-                float y0 = originY + verticalOffset + line.Position.Y + inst.Position.Y;
+                float yTop = originY - verticalOffset - line.Position.Y - inst.Position.Y;
                 float x1 = x0 + m.Width;
-                float y1 = y0 + m.Height;
+                float yBottom = yTop - m.Height;
 
                 builder.AddQuad(
-                    new Rect(x0, y0, x1, y1),
+                    new Rect(x0, yBottom, x1, yTop),
                     tinted,
-                    new Float2(ag.U0, ag.V0),
-                    new Float2(ag.U1, ag.V1));
+                    new Float2(ag.U0, ag.V1),
+                    new Float2(ag.U1, ag.V0));
             }
         }
     }
@@ -188,7 +191,11 @@ public class TextComponent : UIBehaviour
     // Alignment helpers
     // ============================================================
 
-    private static ScribeAlign ToScribeAlignment(TAlignment a) => a switch
+    // TAlignment is a [Flags] enum with one bit per axis position, so both helpers test the
+    // individual axis flags rather than switching on the nine named combinations — that way
+    // every combination (including TopCenter / TopRight) resolves correctly.
+
+    private static ScribeAlign ToScribeAlignment(TAlignment a)
     {
         if ((a & TAlignment.Right)  != 0) return ScribeAlign.Right;
         if ((a & TAlignment.Middle) != 0) return ScribeAlign.Center;

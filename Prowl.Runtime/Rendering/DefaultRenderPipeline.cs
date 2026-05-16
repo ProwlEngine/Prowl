@@ -111,7 +111,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static readonly List<IRenderable> s_uiTmp = new(64);
 
-    private void RenderUIQueue(Camera cam, CameraSnapshot css, RenderTexture? colorRT, UISurface surface)
+    private void RenderUIQueue(Camera cam, CameraSnapshot css, RenderTexture? colorRT, UISurface surface, in RenderingData data)
     {
         // Tell every screen-space GameCanvas the size of the surface it is being drawn onto.
         // This MUST match the orthographic projection built by BuildScreenOrtho below — otherwise
@@ -129,39 +129,47 @@ public class DefaultRenderPipeline : RenderPipeline
             // Items already in hierarchical order per-canvas. Stable-sort by SortKey across canvases.
             s_uiTmp.Sort((a, b) => ((UIRenderItem)a).SortKey.CompareTo(((UIRenderItem)b).SortKey));
 
-            switch (surface)
+            if (!data.IsSceneView)
             {
-                case UISurface.Camera:
-                    Graphics.BindFramebuffer(colorRT!.frameBuffer);
-                    AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
-                    break;
-                case UISurface.Overlay:
-                    if (colorRT != null)
-                    {
-                        // Editor
-                        Graphics.BindFramebuffer(colorRT.frameBuffer);
+                switch (surface)
+                {
+                    case UISurface.Camera:
+                        Graphics.BindFramebuffer(colorRT!.frameBuffer);
                         AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
-                    }
-                    else
-                    {
-                        // Build / fullscreen
-                        Graphics.UnbindFramebuffer();
-                        uint fbW = (uint)Window.InternalWindow.FramebufferSize.X;
-                        uint fbH = (uint)Window.InternalWindow.FramebufferSize.Y;
-                        Graphics.Viewport(0, 0, fbW, fbH);
-                        AssignCameraMatrices(
-                            Float4x4.Identity,
-                            Float4x4.CreateOrthoOffCenter(0, fbW, fbH, 0, -1000f, 1000f));
-                    }
-                    break;
-                case UISurface.World:
-                    return; // world items go through the UI stage right after transparents.
+                        break;
+                    case UISurface.Overlay:
+                        if (colorRT != null)
+                        {
+                            // Editor
+                            Graphics.BindFramebuffer(colorRT.frameBuffer);
+                            AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
+                        }
+                        else
+                        {
+                            // Build / fullscreen
+                            Graphics.UnbindFramebuffer();
+                            uint fbW = (uint)Window.InternalWindow.FramebufferSize.X;
+                            uint fbH = (uint)Window.InternalWindow.FramebufferSize.Y;
+                            Graphics.Viewport(0, 0, fbW, fbH);
+                            AssignCameraMatrices(
+                                Float4x4.Identity,
+                                // +Y up: bottom=0, top=fbH (canvas-design pixel Y grows upward).
+                                Float4x4.CreateOrthoOffCenter(0, fbW, 0, fbH, -1000f, 1000f));
+                        }
+
+                        break;
+                    case UISurface.World:
+                        return; // world items go through the UI stage right after transparents.
+                }
             }
 
             DrawRenderables(s_uiTmp, "RenderOrder", "UI", new ViewerData(css), null, false);
 
-            if (surface != UISurface.World)
-                AssignCameraMatrices(css.View, css.Projection); // restore for subsequent stages
+            if (!data.IsSceneView)
+            {
+                if (surface != UISurface.World)
+                    AssignCameraMatrices(css.View, css.Projection); // restore for subsequent stages
+            }
         }
         finally
         {
@@ -171,7 +179,10 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static Float4x4 BuildScreenOrtho(CameraSnapshot css)
     {
-        return Float4x4.CreateOrthoOffCenter(0, css.PixelWidth, css.PixelHeight, 0, -1000f, 1000f);
+        // +Y up: bottom=0, top=PixelHeight. The origin sits at the bottom-left of the
+        // surface so canvas-design-pixel Y grows upward, matching RectTransform layout
+        // (AnchoredPosition.Y+ moves up) and the world-space camera projection.
+        return Float4x4.CreateOrthoOffCenter(0, css.PixelWidth, 0, css.PixelHeight, -1000f, 1000f);
     }
 
     #region Main Rendering
@@ -455,7 +466,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // =======================================================
         // 13b. ScreenSpaceCamera UI — drawn before PostProcess so post-FX (bloom, tonemap, ...) composite over UI
-        RenderUIQueue(camera, css, colorRT, UISurface.Camera);
+        RenderUIQueue(camera, css, colorRT, UISurface.Camera, data);
 
         // =======================================================
         // 14. PostProcess effects
@@ -483,6 +494,11 @@ public class DefaultRenderPipeline : RenderPipeline
             }
         }
 
+        if (data.IsSceneView)
+        {
+            RenderUIQueue(camera, css, target, UISurface.Overlay, data); // 16b (NEW)
+        }
+
         // =======================================================
         // 15. Gizmos
         if (data.DisplayGizmos)
@@ -495,7 +511,10 @@ public class DefaultRenderPipeline : RenderPipeline
         // 16. Final blit to target (null = screen)
         Blit(colorRT, target, null, 0, false, false);
 
-        RenderUIQueue(camera, css, target,  UISurface.Overlay);    // 16b (NEW)
+        if (!data.IsSceneView)
+        {
+            RenderUIQueue(camera, css, target, UISurface.Overlay, data); // 16b (NEW)
+        }
 
         // =======================================================
         // 17. Save previous VP for next frame's motion vectors (before OnPostRender resets jitter)

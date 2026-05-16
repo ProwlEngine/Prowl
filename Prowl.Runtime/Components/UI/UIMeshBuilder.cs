@@ -90,7 +90,8 @@ public sealed class UIMeshBuilder
                 float a = startAngles[corner] + (MathF.PI * 0.5f) * (s / (float)cornerSegments);
                 Float2 p = corners[corner] + new Float2(MathF.Cos(a), MathF.Sin(a)) * radius;
                 _verts.Add(new Float3(p.X, p.Y, 0));
-                _uvs.Add(new Float2((p.X - r.Min.X) / r.Size.X, 1 - ((p.Y - r.Min.Y) / r.Size.Y)));
+                // UV (0,0) at the rect's bottom-left, (1,1) at its top-right (+Y up).
+                _uvs.Add(new Float2((p.X - r.Min.X) / r.Size.X, (p.Y - r.Min.Y) / r.Size.Y));
                 _colors.Add(c);
             }
         }
@@ -114,16 +115,18 @@ public sealed class UIMeshBuilder
     /// </summary>
     public void AddNineSlice(Rect outer, Float4 inner, Float4 uvBorders, Color tint)
     {
-        // Compute the 4 horizontal x-positions and 4 vertical y-positions:
+        // Compute the 4 horizontal x-positions and 4 vertical y-positions.
+        // inner / uvBorders are ordered (left, top, right, bottom). +Y is up, so the
+        // bottom border (W) sits next to Min.Y and the top border (Y) next to Max.Y.
         float x0 = outer.Min.X, x3 = outer.Max.X;
         float x1 = x0 + inner.X, x2 = x3 - inner.Z;
         float y0 = outer.Min.Y, y3 = outer.Max.Y;
-        float y1 = y0 + inner.Y, y2 = y3 - inner.W;
+        float y1 = y0 + inner.W, y2 = y3 - inner.Y;
 
         float ux0 = 0,           ux3 = 1;
         float ux1 = uvBorders.X, ux2 = 1 - uvBorders.Z;
         float uy0 = 0,           uy3 = 1;
-        float uy1 = uvBorders.Y, uy2 = 1 - uvBorders.W;
+        float uy1 = uvBorders.W, uy2 = 1 - uvBorders.Y;
 
         // Emit 9 quads via AddQuad (the redundant vertices cost ~36 floats per element;
         // acceptable for current scale, and keeps this method trivial).

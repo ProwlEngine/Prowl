@@ -28,7 +28,7 @@ public static class GameObjectInspector
             DrawPrefabHeader(paper, font, go);
 
         DrawHeader(paper, font, go);
-        EditorGUI.Separator(paper, "gi_sep_header");
+        Origami.Separator(paper, "gi_sep_header");
         if (go.RectTransform != null)
         {
             DrawRectTransform(paper, font, go);
@@ -38,7 +38,7 @@ public static class GameObjectInspector
             DrawTransform(paper, font, go);
         }
 
-        EditorGUI.Separator(paper, "gi_sep_transform");
+        Origami.Separator(paper, "gi_sep_transform");
         DrawComponents(paper, font, go);
 
         // Only show Add Component if not a prefab instance (structure is fixed)
@@ -201,15 +201,16 @@ public static class GameObjectInspector
     /// Anchor presets arranged as a 4x4 grid, mirroring Unity's RectTransform popup:
     /// the inner 3x3 are fixed-corner anchors, the outer row/column are stretch presets,
     /// and the bottom-right corner is "stretch all". Item is (AnchorMin, AnchorMax).
+    /// Anchor space is +Y up, so the visually-top row uses Y=1 and the bottom row Y=0.
     /// </summary>
     private static readonly (Float2 min, Float2 max)[,] AnchorPresets = new (Float2, Float2)[4, 4]
     {
-        // Row 0: top fixed (TL, TC, TR) + horizontal-stretch top
-        { (new(0f, 0f), new(0f, 0f)),     (new(0.5f, 0f), new(0.5f, 0f)),     (new(1f, 0f), new(1f, 0f)),     (new(0f, 0f), new(1f, 0f)) },
+        // Row 0: top fixed (TL, TC, TR) + horizontal-stretch top  — Y=1 (+Y up)
+        { (new(0f, 1f), new(0f, 1f)),     (new(0.5f, 1f), new(0.5f, 1f)),     (new(1f, 1f), new(1f, 1f)),     (new(0f, 1f), new(1f, 1f)) },
         // Row 1: middle fixed (ML, MC, MR) + horizontal-stretch middle
         { (new(0f, 0.5f), new(0f, 0.5f)), (new(0.5f, 0.5f), new(0.5f, 0.5f)), (new(1f, 0.5f), new(1f, 0.5f)), (new(0f, 0.5f), new(1f, 0.5f)) },
-        // Row 2: bottom fixed (BL, BC, BR) + horizontal-stretch bottom
-        { (new(0f, 1f), new(0f, 1f)),     (new(0.5f, 1f), new(0.5f, 1f)),     (new(1f, 1f), new(1f, 1f)),     (new(0f, 1f), new(1f, 1f)) },
+        // Row 2: bottom fixed (BL, BC, BR) + horizontal-stretch bottom  — Y=0 (+Y up)
+        { (new(0f, 0f), new(0f, 0f)),     (new(0.5f, 0f), new(0.5f, 0f)),     (new(1f, 0f), new(1f, 0f)),     (new(0f, 0f), new(1f, 0f)) },
         // Row 3: vertical-stretch (left, center, right) + stretch-all
         { (new(0f, 0f), new(0f, 1f)),     (new(0.5f, 0f), new(0.5f, 1f)),     (new(1f, 0f), new(1f, 1f)),     (new(0f, 0f), new(1f, 1f)) },
     };
@@ -240,31 +241,58 @@ public static class GameObjectInspector
             }
         }
 
+
         // Anchors (Min/Max) — exposed for fine-grained tweaking outside the preset grid.
-        EditorGUI.Vector2Field(paper, "gi_rt_amin", "Anchor Min", rt.AnchorMin)
-            .OnValueChanged(v =>
+        InspectorRow.Draw(paper, "gi_rt_amin", "Anchor Min", () =>
+        {
+            Origami.Float2Field(paper, "gi_rt_amin_vf", rt.AnchorMin, v =>
             {
                 Undo.RecordGameObjectChange(go, "Change Anchor Min", rt.AnchorMin, v,
-                    (g, x) => { var r = g.RectTransform; if (r != null) r.AnchorMin = x; }, coalesce: true);
+                    (g, x) =>
+                    {
+                        var r = g.RectTransform;
+                        if (r != null) r.AnchorMin = x;
+                    }, coalesce: true);
                 rt.AnchorMin = v;
-            });
+            }).Show();
+        });
 
-        EditorGUI.Vector2Field(paper, "gi_rt_amax", "Anchor Max", rt.AnchorMax)
-            .OnValueChanged(v =>
+        InspectorRow.Draw(paper, "gi_rt_amax", "Anchor Max", () =>
+        {
+            Origami.Float2Field(paper, "gi_rt_amax_vf", rt.AnchorMax, v =>
             {
                 Undo.RecordGameObjectChange(go, "Change Anchor Max", rt.AnchorMax, v,
-                    (g, x) => { var r = g.RectTransform; if (r != null) r.AnchorMax = x; }, coalesce: true);
+                    (g, x) =>
+                    {
+                        var r = g.RectTransform;
+                        if (r != null) r.AnchorMax = x;
+                    }, coalesce: true);
                 rt.AnchorMax = v;
-            });
+            }).Show();
+        });
 
         // Rotation (as euler) and scale come from the underlying Transform.
         var euler = t.LocalEulerAngles;
-        EditorGUI.Vector3Field(paper, "gi_rt_rot", "Rotation", euler)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; });
+        InspectorRow.Draw(paper, "gi_rt_rot", "Rotation", () =>
+        {
+            Origami.Float3Field(paper, "gi_rt_rot_vf", euler, v =>
+            {
+                Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v,
+                    (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true);
+                t.LocalEulerAngles = v;
+            }).Show();
+        });
 
         var scale = t.LocalScale;
-        EditorGUI.Vector3Field(paper, "gi_rt_scale", "Scale", scale)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; });
+        InspectorRow.Draw(paper, "gi_rt_scale", "Scale", () =>
+        {
+            Origami.Float3Field(paper, "gi_rt_scale_vf", scale, v =>
+            {
+                Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x,
+                    coalesce: true);
+                t.LocalScale = v;
+            }).Show();
+        });
     }
 
     /// <summary>
@@ -340,10 +368,12 @@ public static class GameObjectInspector
             if (isFixed)
             {
                 // Fixed anchor: small dot positioned at the preset corner of the cell.
+                // The cell is drawn in the editor's Y-down PaperUI, so flip the anchor's
+                // +Y-up Y to place a Y=1 (top) anchor at the visual top of the cell.
                 const float DotSize = 4f;
                 float range = inner - DotSize;
                 float dx = 2f + (float)minPreset.X * range;
-                float dy = 2f + (float)minPreset.Y * range;
+                float dy = 2f + (1f - (float)minPreset.Y) * range;
                 paper.Box($"{id}_dot")
                     .PositionType(PositionType.SelfDirected)
                     .Position(dx, dy)
@@ -363,8 +393,9 @@ public static class GameObjectInspector
 
                 if (stretchX && !stretchY)
                 {
+                    // Horizontal bar at a fixed Y — flip the +Y-up anchor Y for Y-down PaperUI.
                     bx = 2f;
-                    by = 2f + (float)minPreset.Y * (inner - BarThickness);
+                    by = 2f + (1f - (float)minPreset.Y) * (inner - BarThickness);
                     bw = inner;
                     bh = BarThickness;
                 }
@@ -401,7 +432,27 @@ public static class GameObjectInspector
     /// </summary>
     private static void DrawPositionRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt, Transform t)
     {
-        using (paper.Row("gi_rt_pos").Height(EditorTheme.RowHeight).RowBetween(4)
+        // Position
+        var pos = rt.AnchoredPosition;
+        var locPos = t.LocalPosition;
+
+        InspectorRow.Draw(paper, "gi_rt_pos", "Position", () =>
+        {
+            Action<Float2> setterf2 = v =>
+            {
+                Undo.RecordGameObjectChange(go, "Change Position", rt.AnchoredPosition, v, (g, x) => g.RectTransform.AnchoredPosition = x, coalesce: true); rt.AnchoredPosition = v;
+            };
+            Action<Float3> setterf3 = v3 =>
+            {
+                Undo.RecordGameObjectChange(go, "Change Position", rt.LocalPosition, v3, (g, x) => g.Transform.LocalPosition = x, coalesce: true); rt.LocalPosition = v3;
+            };
+            new VectorField3Builder<float>(paper, "gi_rt_pos_vf", Origami.Current,
+                rt.AnchoredPosition.X, rt.AnchoredPosition.Y, rt.LocalPosition.Z,
+                x => { pos.X = x; setterf2(pos); }, y => { pos.Y = y; setterf2(pos); }, z => { locPos.Z = z; setterf3(locPos); })
+                .Show();
+        }, EditorTheme.LabelWidth/2f);
+
+        /*using (paper.Row("gi_rt_pos").Height(EditorTheme.RowHeight).RowBetween(4)
             .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
         {
             paper.Box("gi_rt_pos_lbl")
@@ -410,7 +461,7 @@ public static class GameObjectInspector
                 .Alignment(TextAlignment.MiddleLeft)
                 .Text("Position", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
 
-            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_posx", (float)rt.AnchoredPosition.X, "X",
+            Origami.FloatFieldWithInternalLabel(paper, "gi_rt_posx", (float)rt.AnchoredPosition.X, "X",
                 Color.FromArgb(255, 200, 80, 80))
                 .OnValueChanged(v =>
                 {
@@ -442,13 +493,23 @@ public static class GameObjectInspector
                         (g, x) => g.Transform.LocalPosition = x, coalesce: true);
                     t.LocalPosition = newVal;
                 });
-        }
+        }*/
     }
 
     /// <summary>Width / Height row driven by RectTransform.SizeDelta.</summary>
     private static void DrawSizeRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
     {
-        using (paper.Row("gi_rt_size").Height(EditorTheme.RowHeight).RowBetween(4)
+        InspectorRow.Draw(paper, "gi_rt_size", "Size", () =>
+        {
+            Origami.Float2Field(paper, "gi_rt_size_vf", rt.SizeDelta,v =>
+            {
+                Undo.RecordGameObjectChange(go, "Change SizeDelta", rt.SizeDelta, v,
+                    (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
+                rt.SizeDelta = v;
+            }).Show();
+        }, EditorTheme.LabelWidth/2f);
+
+        /*using (paper.Row("gi_rt_size").Height(EditorTheme.RowHeight).RowBetween(4)
             .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
         {
             paper.Box("gi_rt_size_lbl")
@@ -478,12 +539,23 @@ public static class GameObjectInspector
                         (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
                     rt.SizeDelta = newVal;
                 });
-        }
+        }*/
     }
 
     private static void DrawPivotRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
     {
-        using (paper.Row("gi_rt_pivot").Height(EditorTheme.RowHeight).RowBetween(4)
+
+        InspectorRow.Draw(paper, "gi_rt_pivot", "Pivot", () =>
+        {
+            Origami.Float2Field(paper, "gi_rt_pivot_vf", rt.Pivot,v =>
+            {
+                Undo.RecordGameObjectChange(go, "Change Pivot", rt.Pivot, v,
+                    (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
+                rt.Pivot = v;
+            }).Show();
+        }, EditorTheme.LabelWidth/2f);
+
+        /*using (paper.Row("gi_rt_pivot").Height(EditorTheme.RowHeight).RowBetween(4)
             .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
         {
             paper.Box("gi_rt_pivot_lbl")
@@ -513,7 +585,7 @@ public static class GameObjectInspector
                         (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
                     rt.Pivot = newVal;
                 });
-        }
+        }*/
     }
 
     // ================================================================

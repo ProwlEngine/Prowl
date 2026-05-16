@@ -109,7 +109,8 @@ public class UIImage : UIBehaviour
         if (CornerRadius > 0)
             b.AddRoundedRect(local, CornerRadius, tinted);
         else
-            b.AddQuad(local, tinted, new Float2(0,1), new Float2(1,0));
+            // UV (0,0) at the rect's bottom-left, (1,1) at its top-right (+Y up).
+            b.AddQuad(local, tinted, Float2.Zero, Float2.One);
     }
 
     public override void PopulateProperties(PropertyState p, in UIContext _)

@@ -323,19 +323,36 @@ public class GameCanvas : MonoBehaviour
     }
 
     /// <summary>
+    /// Base canvas → world transform without per-element pivot / rotation / scale. Per-mode:
+    ///   • WorldSpace → <see cref="Transform.LocalToWorldMatrix"/> × scale(1 / <see cref="ReferencePixelsPerUnit"/>)
+    ///   • ScreenSpaceOverlay / ScreenSpaceCamera → scale(<see cref="ScaleFactor"/>)
+    /// </summary>
+    /// <remarks>
+    /// Exposed so the scene-view editor and gizmos stay in sync with the actual rendering by
+    /// consuming the same matrix — duplicating this math is what produced the previous
+    /// ".855 / ScaleFactor" mis-alignment between gizmos and the rendered overlay.
+    /// <see cref="ScaleFactor"/> is recomputed inside <see cref="RebuildIfDirty"/>, so callers
+    /// that need an up-to-date value should call that first.
+    /// </remarks>
+    public Float4x4 CanvasToWorld => RenderMode switch
+    {
+        RenderMode.WorldSpace
+            => Transform.LocalToWorldMatrix
+             * Float4x4.CreateScale(1f / Maths.Max(ReferencePixelsPerUnit, 0.001f)),
+        _ => Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f)),
+    };
+
+    /// <summary>
     /// Returns the model matrix for a UI element under this canvas.
     ///
-    /// Convention: a <see cref="UIBehaviour"/>'s mesh is built in <b>element-local pixel space</b>,
-    /// with the element's pivot at the origin (0, 0). <see cref="BuildItemModel"/>:
+    /// Convention: a <see cref="UIBehaviour"/>'s mesh is built in <b>element-local pixel space</b>
+    /// (+X right, +Y up), with the element's pivot at the origin (0, 0). <see cref="BuildItemModel"/>:
     ///   1. translates the pivot to its absolute canvas-design-pixel position (computed from
     ///      <see cref="RectTransform.ComputedRect"/> + <see cref="RectTransform.Pivot"/>),
     ///   2. applies any per-element <see cref="Transform.LocalRotation"/> /
     ///      <see cref="Transform.LocalScale"/> around that pivot,
-    ///   3. converts design-pixel space to whatever the current <see cref="RenderMode"/> needs:
-    ///        • ScreenSpaceOverlay / ScreenSpaceCamera → multiply by <see cref="ScaleFactor"/>
-    ///          so design-pixel layout maps to real pixels for the screen ortho V/P.
-    ///        • WorldSpace → divide by <see cref="ReferencePixelsPerUnit"/> to get world units,
-    ///          then prepend the canvas's own <see cref="Transform.LocalToWorldMatrix"/>.
+    ///   3. prepends <see cref="CanvasToWorld"/> to land the element in the canvas's
+    ///      target space (screen real-pixels for Overlay / Camera, world units for WorldSpace).
     ///
     /// Note: <see cref="RectTransform.LocalToWorldMatrix"/> is intentionally <b>not</b> used here.
     /// It treats <see cref="RectTransform.AnchoredPosition"/> as a TRS translation, but the real
@@ -360,20 +377,7 @@ public class GameCanvas : MonoBehaviour
             rt.LocalRotation,
             rt.LocalScale);
 
-        return RenderMode switch
-        {
-            // WorldSpace: design pixels → world units (÷ RPU) → canvas world transform.
-            RenderMode.WorldSpace
-                => Transform.LocalToWorldMatrix
-                 * Float4x4.CreateScale(1f / Maths.Max(ReferencePixelsPerUnit, 0.001f))
-                 * elementTRS,
-
-            // ScreenSpace surfaces: the screen ortho V/P uses real pixel dimensions, but the
-            // mesh + layout live in canvas-design pixels (= real_pixels / ScaleFactor).
-            // Multiply by ScaleFactor to convert design pixels back to real pixels so the
-            // ortho projects them correctly. This is what makes UI scale with the screen.
-            _ => Float4x4.CreateScale(ScaleFactor) * elementTRS,
-        };
+        return CanvasToWorld * elementTRS;
     }
 
     // ============================================================

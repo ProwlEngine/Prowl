@@ -40,12 +40,6 @@ public abstract class UIBehaviour : MonoBehaviour
         MarkDirty(UIDirtyFlags.Hierarchy);
     }
 
-    /// <summary>
-    /// Coarse catch-all for mutations that bypass the per-property setters — most importantly
-    /// undo/redo restores and deserialization. Editor inspector edits are routed through the
-    /// property setters (which mark precise flags via <see cref="SetField{T}"/>), so the common
-    /// path never relies on this; it stays as a safety net only.
-    /// </summary>
     public override void OnValidate()
     {
         // Run the OnValide only in the editor- During runtime, dirtying should be driven by the fields themselves.

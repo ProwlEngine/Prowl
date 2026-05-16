@@ -44,11 +44,17 @@ public class TextComponentEditor : CustomEditor
         PropertyGrid.DrawField(paper, $"{id}_font", "Font Asset", typeof(FontAsset), text.Font,
             v => text.Font = (FontAsset)v!, 0);
 
+        paper.Box($"{id}_sp0.1").Height(6);
+
         InspectorRow.Draw(paper, $"{id}_size", "Font Size", () =>
             Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => text.Size = v).Show());
 
-        EditorGUI.ColorField(paper, $"{id}_color", "Color", text.TextColor)
-            .OnValueChanged(v => text.TextColor = v);
+        paper.Box($"{id}_sp0.2").Height(6);
+
+        InspectorRow.Draw(paper, $"{id}_color", "Text Color", () =>
+        Origami.ColorField(paper, $"{id}_color_f", text.TextColor, v => text.TextColor = v).Show());
+
+        paper.Box($"{id}_sp0.3").Height(6);
 
         AlignmentRow(paper, $"{id}_align", text);
 

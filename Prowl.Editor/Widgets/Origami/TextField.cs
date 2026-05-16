@@ -340,7 +340,7 @@ public sealed class TextFieldBuilder
                 var editBuilder = _paper.Box($"{_id}_tf")
                     .Width(UnitValue.Stretch())
                     .Height(_multiLine ? UnitValue.Stretch() : _theme.Metrics.FontSize)
-                    .Margin(editLeftPad, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Margin(editLeftPad, 0, _multiLine ? 8 : UnitValue.Stretch(), _multiLine ? 8 : UnitValue.Stretch())
                     .HookToParent()
                     .IsNotInteractable()
                     .FontSize(_theme.Metrics.FontSize);

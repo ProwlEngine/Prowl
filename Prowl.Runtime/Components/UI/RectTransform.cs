@@ -16,15 +16,21 @@ namespace Prowl.Vector;
 /// </summary>
 /// <remarks>
 /// <para>
+/// The UI coordinate system is <b>+Y up</b>: anchors, pivots and
+/// <see cref="AnchoredPosition"/> all grow upward, so increasing
+/// <c>AnchoredPosition.Y</c> moves an element toward the top of the screen.
+/// </para>
+/// <para>
 /// <b>Anchors</b> define how the element's edges attach to its parent rect.
-/// Values are normalized (0–1): (0,0) is top-left, (1,1) is bottom-right.
+/// Values are normalized (0–1): (0,0) is bottom-left, (1,1) is top-right.
 /// When <see cref="AnchorMin"/> == <see cref="AnchorMax"/>, the element has a
 /// fixed size controlled by <see cref="SizeDelta"/>. When they differ, the
 /// element stretches to fill the anchor range and <see cref="SizeDelta"/>
 /// acts as a padding offset.
 /// </para>
 /// <para>
-/// <b>Pivot</b> is the local origin of the element (0–1). (0.5, 0.5) is center.
+/// <b>Pivot</b> is the local origin of the element (0–1). (0,0) is bottom-left,
+/// (1,1) is top-right, (0.5, 0.5) is center.
 /// </para>
 /// </remarks>
 public class RectTransform : Transform
@@ -230,7 +236,7 @@ public class RectTransform : Transform
             posX = left + AnchoredPosition.X;
         }
 
-        // Vertical
+        // Vertical (+Y up: anchorMinY is the lower edge, anchorMaxY the upper edge).
         if (Approximately(AnchorMin.Y, AnchorMax.Y))
         {
             // Fixed height
@@ -241,12 +247,13 @@ public class RectTransform : Transform
         else
         {
             // Stretch
-            float top = anchorMinY + SizeDelta.Y * 0.5f;
-            float bottom = anchorMaxY - SizeDelta.Y * 0.5f;
-            height = bottom - top;
-            posY = top + AnchoredPosition.Y;
+            float lower = anchorMinY + SizeDelta.Y * 0.5f;
+            float upper = anchorMaxY - SizeDelta.Y * 0.5f;
+            height = upper - lower;
+            posY = lower + AnchoredPosition.Y;
         }
 
+        // Rect.Min is the bottom-left corner, Rect.Max the top-right (+Y up).
         ComputedRect = new Rect(posX, posY, posX + width, posY + height);
         return ComputedRect;
     }
