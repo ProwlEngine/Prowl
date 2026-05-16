@@ -8,7 +8,9 @@ using System.Runtime.InteropServices;
 using Prowl.Editor.Docking;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.Panels;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -157,8 +159,8 @@ public class EditorApplication : Game
             ProjectLauncher.Initialize();
         }
 
-        // Initialize status bar (after project loaded so it can show project-specific messages)
-        StatusBar.Initialize();
+        // Initialize status bar log tracking
+        InitializeStatusBar();
 
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();

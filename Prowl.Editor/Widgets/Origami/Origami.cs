@@ -268,6 +268,12 @@ public static class Origami
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
 
+    // ── App bar factory ────────────────────────────────────────
+
+    /// <summary>Begin building an app bar (menubar or footer). Chain .Menu(), .Center(), .Right(), then .Show().</summary>
+    public static AppBarBuilder AppBar(Paper paper, string id)
+        => new AppBarBuilder(paper, id, Current);
+
     // ── Vector field factories ───────────────────────────────────
 
     // Float vectors
