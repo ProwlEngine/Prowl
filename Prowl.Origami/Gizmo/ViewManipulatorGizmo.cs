@@ -3,11 +3,10 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Runtime;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-namespace Prowl.Editor.Gizmo;
+namespace Prowl.OrigamiUI.Gizmo;
 
 /// <summary>
 /// Orientation cube gizmo drawn in the top-right corner of the scene view.

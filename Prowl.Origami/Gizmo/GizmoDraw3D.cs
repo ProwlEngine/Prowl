@@ -8,7 +8,7 @@ using Prowl.Quill;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-namespace Prowl.Editor.Gizmo;
+namespace Prowl.OrigamiUI.Gizmo;
 
 public struct Stroke3D
 {

@@ -4,6 +4,7 @@ using System.Linq;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
+using Gizmo = Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
@@ -674,8 +675,11 @@ public class SceneViewPanel : DockPanel
 
         bool blockPicking = Input.GetMouseButton(1) || Input.GetMouseButton(2); // Don't pick while camera moving
 
-        // Snapping: Ctrl key toggles snap mode on the gizmo (draws increment guides for rotation)
+        // Input state for the gizmo (Origami gizmo has no Runtime dependency)
         _transformGizmo.Snapping = Input.GetKey(KeyCode.ControlLeft) || Input.GetKey(KeyCode.ControlRight);
+        _transformGizmo.IsShiftDown = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
+        _transformGizmo.IsMouseDown = Input.GetMouseButtonDown(0);
+        _transformGizmo.IsMouseUp = Input.GetMouseButtonUp(0);
 
         var result = _transformGizmo.Update(ray, mouseAbs, blockPicking);
 

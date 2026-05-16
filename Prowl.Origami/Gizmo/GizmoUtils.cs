@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-namespace Prowl.Editor.Gizmo;
+namespace Prowl.OrigamiUI.Gizmo;
 
 public static class GizmoUtils
 {

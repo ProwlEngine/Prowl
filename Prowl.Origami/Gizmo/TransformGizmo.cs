@@ -3,11 +3,10 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Runtime;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-namespace Prowl.Editor.Gizmo;
+namespace Prowl.OrigamiUI.Gizmo;
 
 public enum GizmoDirection { X, Y, Z, View }
 
@@ -86,6 +85,9 @@ public class TransformGizmo
     public GizmoOrientation Orientation = GizmoOrientation.Local;
 
     public bool Snapping = false;
+    public bool IsShiftDown = false;
+    public bool IsMouseDown = false;
+    public bool IsMouseUp = false;
     public float SnapDistance = 1f;
     public float SnapAngle = 15f;
 
@@ -227,7 +229,7 @@ public class TransformGizmo
                 _hoveredGizmo = pickResults[0].Item1;
                 _hoveredGizmo.SetFocused(true);
 
-                if (Input.GetMouseButtonDown(0))
+                if (IsMouseDown)
                     _focusedGizmo = _hoveredGizmo;
             }
         }
@@ -237,7 +239,7 @@ public class TransformGizmo
             _hoveredGizmo = _focusedGizmo;
             _focusedGizmo.SetFocused(true);
 
-            if (Input.GetMouseButtonUp(0))
+            if (IsMouseUp)
             {
                 _focusedGizmo = null;
             }

@@ -2,7 +2,7 @@
 
 using Prowl.Vector;
 
-namespace Prowl.Editor.Gizmo;
+namespace Prowl.OrigamiUI.Gizmo;
 
 public interface ISubGizmo
 {

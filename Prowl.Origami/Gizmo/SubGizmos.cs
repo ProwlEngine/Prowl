@@ -5,9 +5,9 @@ using System;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-using static Prowl.Editor.Gizmo.TransformGizmo;
+using static Prowl.OrigamiUI.Gizmo.TransformGizmo;
 
-namespace Prowl.Editor.Gizmo;
+namespace Prowl.OrigamiUI.Gizmo;
 
 public class RotationSubGizmo : ISubGizmo
 {
@@ -373,7 +373,7 @@ public class ScaleSubGizmo : ISubGizmo
             if (_gizmo.Mode.HasFlag(TransformGizmoMode.TranslateView))
             {
                 // then we only show if ctrl is pressed
-                if (!Prowl.Runtime.Input.IsShiftPressed)
+                if (!_gizmo.IsShiftDown)
                 {
                     t = float.NaN;
                     return false;
@@ -453,7 +453,7 @@ public class ScaleSubGizmo : ISubGizmo
             if (_gizmo.Mode.HasFlag(TransformGizmoMode.TranslateView))
             {
                 // then we only show if ctrl is pressed
-                if (!Prowl.Runtime.Input.IsShiftPressed)
+                if (!_gizmo.IsShiftDown)
                     return;
             }
         }
@@ -522,7 +522,7 @@ public class TranslationSubGizmo : ISubGizmo
             if (_gizmo.Mode.HasFlag(TransformGizmoMode.ScaleUniform))
             {
                 // then we only show if ctrl is notpressed
-                if (Prowl.Runtime.Input.IsShiftPressed)
+                if (_gizmo.IsShiftDown)
                 {
                     t = float.NaN;
                     return false;
@@ -605,7 +605,7 @@ public class TranslationSubGizmo : ISubGizmo
             if (_gizmo.Mode.HasFlag(TransformGizmoMode.ScaleUniform))
             {
                 // then we only show if ctrl is notpressed
-                if (Prowl.Runtime.Input.IsShiftPressed)
+                if (_gizmo.IsShiftDown)
                     return;
             }
         }
