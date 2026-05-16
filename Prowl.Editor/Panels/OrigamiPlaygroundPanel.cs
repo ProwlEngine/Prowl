@@ -2091,7 +2091,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 .BackgroundColor(System.Drawing.Color.FromArgb(20, 255, 255, 255))
                 .Rounded(4).Enter())
             {
-                Origami.DrawPropertyGrid(paper, "pg_demo1", _pgTarget);
+                Origami.PropertyGrid(paper, "pg_demo1", _pgTarget, EditorApplication.PropertyGridConfig).Show();
             }
 
             Origami.Header(paper, "pg_h2", "Second Instance (different defaults)").Underline().Show();
@@ -2104,7 +2104,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 .BackgroundColor(System.Drawing.Color.FromArgb(20, 255, 255, 255))
                 .Rounded(4).Enter())
             {
-                Origami.DrawPropertyGrid(paper, "pg_demo2", _pgTarget2);
+                Origami.PropertyGrid(paper, "pg_demo2", _pgTarget2, EditorApplication.PropertyGridConfig).Show();
             }
         });
     }

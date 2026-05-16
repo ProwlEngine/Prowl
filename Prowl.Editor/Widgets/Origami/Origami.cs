@@ -317,9 +317,9 @@ public static class Origami
 
     // ── Property grid helpers ────────────────────────────────
 
-    /// <summary>Draw a property grid for the given object.</summary>
-    public static void DrawPropertyGrid(PaperUI.Paper paper, string id, object target, Action<object>? onChange = null, int depth = 0)
-        => PropertyGrid.Draw(paper, id, target, onChange, depth);
+    /// <summary>Create a property grid builder for the given object.</summary>
+    public static PropertyGridBuilder PropertyGrid(PaperUI.Paper paper, string id, object target, PropertyGridConfig config)
+        => new PropertyGridBuilder(paper, id, target, config);
 
     // ── File dialog helpers ──────────────────────────────────
 

@@ -121,29 +121,29 @@ public class ColorDrawer : FieldDrawer
 
 // ── Registration ────────────────────────────────────────────
 
-/// <summary>Registers all built-in field drawers. Called at editor startup.</summary>
+/// <summary>Registers all built-in field drawers into the given registry.</summary>
 public static class BuiltInFieldDrawers
 {
-    public static void Register()
+    public static void Register(FieldDrawerRegistry registry)
     {
-        FieldDrawerRegistry.Register<bool>(new BoolDrawer());
-        FieldDrawerRegistry.Register<int>(new IntDrawer());
-        FieldDrawerRegistry.Register<float>(new FloatDrawer());
-        FieldDrawerRegistry.Register<double>(new DoubleDrawer());
-        FieldDrawerRegistry.Register<string>(new StringDrawer());
-        FieldDrawerRegistry.Register<byte>(new ByteDrawer());
-        FieldDrawerRegistry.Register<long>(new LongDrawer());
+        registry.Register<bool>(new BoolDrawer());
+        registry.Register<int>(new IntDrawer());
+        registry.Register<float>(new FloatDrawer());
+        registry.Register<double>(new DoubleDrawer());
+        registry.Register<string>(new StringDrawer());
+        registry.Register<byte>(new ByteDrawer());
+        registry.Register<long>(new LongDrawer());
 
-        FieldDrawerRegistry.Register<Float2>(new Float2Drawer());
-        FieldDrawerRegistry.Register<Float3>(new Float3Drawer());
-        FieldDrawerRegistry.Register<Float4>(new Float4Drawer());
-        FieldDrawerRegistry.Register<Double2>(new Double2Drawer());
-        FieldDrawerRegistry.Register<Double3>(new Double3Drawer());
-        FieldDrawerRegistry.Register<Double4>(new Double4Drawer());
-        FieldDrawerRegistry.Register<Int2>(new Int2Drawer());
-        FieldDrawerRegistry.Register<Int3>(new Int3Drawer());
-        FieldDrawerRegistry.Register<Int4>(new Int4Drawer());
+        registry.Register<Float2>(new Float2Drawer());
+        registry.Register<Float3>(new Float3Drawer());
+        registry.Register<Float4>(new Float4Drawer());
+        registry.Register<Double2>(new Double2Drawer());
+        registry.Register<Double3>(new Double3Drawer());
+        registry.Register<Double4>(new Double4Drawer());
+        registry.Register<Int2>(new Int2Drawer());
+        registry.Register<Int3>(new Int3Drawer());
+        registry.Register<Int4>(new Int4Drawer());
 
-        FieldDrawerRegistry.Register<Prowl.Vector.Color>(new ColorDrawer());
+        registry.Register<Prowl.Vector.Color>(new ColorDrawer());
     }
 }

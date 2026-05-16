@@ -173,14 +173,14 @@ public class TextAreaAttributeHandler : OrigamiUI.AttributeHandler
 /// </summary>
 public static class BuiltInAttributeHandlers
 {
-    public static void Register()
+    public static void Register(OrigamiUI.AttributeHandlerRegistry registry)
     {
-        OrigamiUI.AttributeHandlerRegistry.Register<HeaderAttribute>(new HeaderAttributeHandler());
-        OrigamiUI.AttributeHandlerRegistry.Register<SpaceAttribute>(new SpaceAttributeHandler());
-        OrigamiUI.AttributeHandlerRegistry.Register<ShowIfAttribute>(new ShowIfAttributeHandler());
-        OrigamiUI.AttributeHandlerRegistry.Register<ReadOnlyAttribute>(new ReadOnlyAttributeHandler());
-        OrigamiUI.AttributeHandlerRegistry.Register<RangeAttribute>(new RangeAttributeHandler());
-        OrigamiUI.AttributeHandlerRegistry.Register<TextAreaAttribute>(new TextAreaAttributeHandler());
+        registry.Register<HeaderAttribute>(new HeaderAttributeHandler());
+        registry.Register<SpaceAttribute>(new SpaceAttributeHandler());
+        registry.Register<ShowIfAttribute>(new ShowIfAttributeHandler());
+        registry.Register<ReadOnlyAttribute>(new ReadOnlyAttributeHandler());
+        registry.Register<RangeAttribute>(new RangeAttributeHandler());
+        registry.Register<TextAreaAttribute>(new TextAreaAttributeHandler());
         // TooltipAttribute is handled inline by PropertyGrid row rendering
     }
 }

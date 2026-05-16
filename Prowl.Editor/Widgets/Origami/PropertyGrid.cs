@@ -26,43 +26,33 @@ namespace Prowl.OrigamiUI;
 /// </summary>
 public abstract class FieldDrawer
 {
-    /// <summary>Draw the control for this field type.</summary>
-    /// <param name="paper">Paper instance.</param>
-    /// <param name="id">Unique element ID.</param>
-    /// <param name="value">Current field value.</param>
-    /// <param name="fieldType">Declared type of the field.</param>
-    /// <param name="onChange">Callback when value changes.</param>
-    /// <param name="depth">Current nesting depth.</param>
     public abstract void Draw(Paper paper, string id, object? value, Type fieldType,
         Action<object?> onChange, int depth);
 }
 
-/// <summary>Static registry mapping types to their FieldDrawer instances.</summary>
-public static class FieldDrawerRegistry
+/// <summary>Registry mapping types to their FieldDrawer instances.</summary>
+public sealed class FieldDrawerRegistry
 {
-    private static readonly Dictionary<Type, FieldDrawer> _drawers = new();
+    private readonly Dictionary<Type, FieldDrawer> _drawers = new();
 
-    public static void Register<T>(FieldDrawer drawer) => _drawers[typeof(T)] = drawer;
-    public static void Register(Type type, FieldDrawer drawer) => _drawers[type] = drawer;
+    public void Register<T>(FieldDrawer drawer) => _drawers[typeof(T)] = drawer;
+    public void Register(Type type, FieldDrawer drawer) => _drawers[type] = drawer;
 
-    public static FieldDrawer? GetDrawer(Type type)
+    public FieldDrawer? GetDrawer(Type type)
     {
-        // Exact match
         if (_drawers.TryGetValue(type, out var drawer)) return drawer;
-        // Walk base types
         var current = type.BaseType;
         while (current != null && current != typeof(object))
         {
             if (_drawers.TryGetValue(current, out drawer)) return drawer;
             current = current.BaseType;
         }
-        // Check interfaces
         foreach (var iface in type.GetInterfaces())
             if (_drawers.TryGetValue(iface, out drawer)) return drawer;
         return null;
     }
 
-    public static void Clear() => _drawers.Clear();
+    public void Clear() => _drawers.Clear();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -70,8 +60,7 @@ public static class FieldDrawerRegistry
 // ════════════════════════════════════════════════════════════════
 
 /// <summary>
-/// Base class for attribute-driven rendering modifications. Register via
-/// <see cref="AttributeHandlerRegistry.Register{TAttr}(AttributeHandler)"/>.
+/// Base class for attribute-driven rendering modifications.
 /// </summary>
 public abstract class AttributeHandler
 {
@@ -88,44 +77,42 @@ public abstract class AttributeHandler
         FieldInfo field, object target, int depth) { }
 }
 
-/// <summary>Static registry mapping attribute types to their handlers.</summary>
-public static class AttributeHandlerRegistry
+/// <summary>Registry mapping attribute types to their handlers.</summary>
+public sealed class AttributeHandlerRegistry
 {
-    private static readonly Dictionary<Type, AttributeHandler> _handlers = new();
+    private readonly Dictionary<Type, AttributeHandler> _handlers = new();
 
-    public static void Register<TAttr>(AttributeHandler handler) where TAttr : Attribute
+    public void Register<TAttr>(AttributeHandler handler) where TAttr : Attribute
         => _handlers[typeof(TAttr)] = handler;
 
-    public static AttributeHandler? GetHandler(Type attrType)
+    public AttributeHandler? GetHandler(Type attrType)
         => _handlers.GetValueOrDefault(attrType);
 
-    public static void Clear() => _handlers.Clear();
+    public void Clear() => _handlers.Clear();
 }
 
 // ════════════════════════════════════════════════════════════════
-//  Custom Editor - whole-object editor override
+//  Custom Object Editor - whole-object editor override
 // ════════════════════════════════════════════════════════════════
 
 /// <summary>
 /// Base class for custom whole-object editors. When a nested object's type has
 /// a registered CustomObjectEditor, it replaces the default field-by-field rendering.
-/// Register via <see cref="CustomObjectEditorRegistry"/>.
 /// </summary>
 public abstract class CustomObjectEditor
 {
-    /// <summary>Draw the entire editor for this object.</summary>
     public abstract void OnGUI(Paper paper, string id, object target);
 }
 
-/// <summary>Static registry mapping types to their CustomObjectEditor.</summary>
-public static class CustomObjectEditorRegistry
+/// <summary>Registry mapping types to their CustomObjectEditor.</summary>
+public sealed class CustomObjectEditorRegistry
 {
-    private static readonly Dictionary<Type, CustomObjectEditor> _editors = new();
+    private readonly Dictionary<Type, CustomObjectEditor> _editors = new();
 
-    public static void Register<T>(CustomObjectEditor editor) => _editors[typeof(T)] = editor;
-    public static void Register(Type type, CustomObjectEditor editor) => _editors[type] = editor;
+    public void Register<T>(CustomObjectEditor editor) => _editors[typeof(T)] = editor;
+    public void Register(Type type, CustomObjectEditor editor) => _editors[type] = editor;
 
-    public static CustomObjectEditor? GetEditor(Type type)
+    public CustomObjectEditor? GetEditor(Type type)
     {
         if (_editors.TryGetValue(type, out var editor)) return editor;
         var current = type.BaseType;
@@ -139,76 +126,127 @@ public static class CustomObjectEditorRegistry
         return null;
     }
 
-    public static void Clear() => _editors.Clear();
+    public void Clear() => _editors.Clear();
 }
 
 // ════════════════════════════════════════════════════════════════
-//  Property Grid - the main reflection-based editor
+//  PropertyGrid Config - holds all registries and callbacks
 // ════════════════════════════════════════════════════════════════
 
 /// <summary>
-/// Standalone reflection-based property grid for Origami. Discovers serializable
-/// fields, routes to registered FieldDrawers, processes attribute handlers,
-/// handles enums, collections, dictionaries, and nested objects.
-///
-/// Configure via static callbacks and settings before first use.
+/// Configuration for a PropertyGrid instance. Create one per context (e.g., one for
+/// the editor, one for game UI) and pass it to the builder. Each config has its own
+/// registries, callbacks, and settings so they don't interfere.
 /// </summary>
-public static class PropertyGrid
+public sealed class PropertyGridConfig
 {
-    // ── Configuration (set by host at startup) ────────────────
+    /// <summary>Type-specific field drawers (bool, float, Color, etc.).</summary>
+    public FieldDrawerRegistry Drawers { get; } = new();
+
+    /// <summary>Attribute-driven rendering modifiers ([Range], [Header], etc.).</summary>
+    public AttributeHandlerRegistry Handlers { get; } = new();
+
+    /// <summary>Custom whole-object editors.</summary>
+    public CustomObjectEditorRegistry CustomEditors { get; } = new();
 
     /// <summary>Max recursion depth. Default 10.</summary>
-    public static int MaxDepth = 10;
+    public int MaxDepth = 10;
 
     /// <summary>Called at depth 0 before any field is drawn (e.g., for undo snapshots).</summary>
-    public static Action<object>? OnBeginRoot;
+    public Action<object>? OnBeginRoot;
 
     /// <summary>Called after any field value changes (e.g., for OnValidate).</summary>
-    public static Action<object>? OnFieldChanged;
-
-    /// <summary>Optional set of field names to highlight as overridden (prefab system).</summary>
-    public static HashSet<string>? OverriddenFields;
+    public Action<object>? OnFieldChanged;
 
     /// <summary>
-    /// Optional callback invoked before drawing a field. Hosts can use this to set
-    /// up state needed by custom FieldDrawers (e.g., passing the declared field type
-    /// for EngineObject drawers). Parameters: (fieldType, value).
+    /// Called before drawing each field. Hosts can set up state needed by custom drawers
+    /// (e.g., passing the declared field type for EngineObject drawers).
     /// </summary>
-    public static Action<Type, object?>? OnBeforeDrawField;
+    public Action<Type, object?>? OnBeforeDrawField;
 
     /// <summary>
-    /// Optional callback for drawing a type picker dropdown when a field's declared
-    /// type is abstract/interface. Parameters: (paper, id, baseType, currentValue, onChange).
-    /// If null, no type picker is drawn.
+    /// Draws a type picker for polymorphic fields (abstract/interface).
+    /// Parameters: (paper, id, baseType, currentValue, onChange).
     /// </summary>
-    public static Action<Paper, string, Type, object?, Action<object?>>? DrawTypePicker;
+    public Action<Paper, string, Type, object?, Action<object?>>? DrawTypePicker;
 
     /// <summary>
-    /// Optional fallback for drawing a field when no FieldDrawer is registered.
+    /// Fallback for drawing a field when no FieldDrawer is registered.
     /// The host can route to its own editor registry (e.g., PropertyEditorRegistry).
     /// Parameters: (paper, id, label, fieldType, value, onChange, depth).
-    /// Return true if handled, false to continue with built-in fallbacks.
+    /// Return true if handled.
     /// </summary>
-    public static Func<Paper, string, string, Type, object?, Action<object?>, int, bool>? FallbackFieldDrawer;
+    public Func<Paper, string, string, Type, object?, Action<object?>, int, bool>? FallbackFieldDrawer;
+}
 
-    // ── Internal state ───────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  PropertyGrid Builder - fluent API following Origami conventions
+// ════════════════════════════════════════════════════════════════
 
+/// <summary>
+/// Fluent builder for a property grid. Construct via
+/// <see cref="Origami.PropertyGrid(Paper, string, object, PropertyGridConfig)"/>
+/// and call <see cref="Show"/> to render.
+/// </summary>
+public sealed class PropertyGridBuilder
+{
+    private readonly Paper _paper;
+    private readonly string _id;
+    private readonly object _target;
+    private readonly PropertyGridConfig _config;
+
+    private Action<object>? _onChange;
+    private HashSet<string>? _overrides;
+    private int _depth;
+
+    internal PropertyGridBuilder(Paper paper, string id, object target, PropertyGridConfig config)
+    {
+        _paper = paper;
+        _id = id;
+        _target = target;
+        _config = config;
+    }
+
+    /// <summary>Callback when any field value changes.</summary>
+    public PropertyGridBuilder OnChanged(Action<object> onChange) { _onChange = onChange; return this; }
+
+    /// <summary>Set of field names to highlight as overridden (prefab system).</summary>
+    public PropertyGridBuilder Overrides(HashSet<string>? overrides) { _overrides = overrides; return this; }
+
+    /// <summary>Starting nesting depth (default 0).</summary>
+    public PropertyGridBuilder Depth(int depth) { _depth = depth; return this; }
+
+    /// <summary>Render the property grid.</summary>
+    public void Show()
+    {
+        PropertyGridRenderer.Draw(_paper, _id, _target, _config, _onChange, _overrides, _depth);
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PropertyGrid Renderer - internal drawing logic
+// ════════════════════════════════════════════════════════════════
+
+/// <summary>Internal rendering logic for the PropertyGrid builder.</summary>
+internal static class PropertyGridRenderer
+{
     [ThreadStatic] private static object? _rootTarget;
+    [ThreadStatic] private static PropertyGridConfig? _activeConfig;
 
-    // ── Entry Point ──────────────────────────────────────────
-
-    /// <summary>Draw a property grid for the given object.</summary>
-    public static void Draw(Paper paper, string id, object target, Action<object>? onChange = null, int depth = 0)
+    public static void Draw(Paper paper, string id, object target, PropertyGridConfig config,
+        Action<object>? onChange, HashSet<string>? overrides, int depth)
     {
         if (target == null) return;
-        if (depth > MaxDepth) return;
+        if (depth > config.MaxDepth) return;
 
         var m = Origami.Current.Metrics;
+        bool isRoot = depth == 0;
 
-        if (depth == 0)
+        if (isRoot)
         {
             _rootTarget = target;
-            OnBeginRoot?.Invoke(target);
+            _activeConfig = config;
+            config.OnBeginRoot?.Invoke(target);
         }
 
         using (paper.Column($"{id}_root").ColBetween(m.SpacingMedium).Height(UnitValue.Auto).Enter())
@@ -216,7 +254,6 @@ public static class PropertyGrid
             var type = target.GetType();
             var fields = GetSerializableFields(type);
 
-            // Process [Button] methods at the end (check by attribute name to avoid Runtime dependency)
             var buttonMethods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                 .Where(m2 => m2.GetCustomAttributes().Any(a => a.GetType().Name == "ButtonAttribute") && m2.GetParameters().Length == 0)
                 .ToArray();
@@ -226,32 +263,31 @@ public static class PropertyGrid
                 var field = fields[i];
                 string fieldId = $"{id}_{field.Name}";
 
-                // Process attributes (before draw)
                 var attrs = field.GetCustomAttributes(true).OfType<Attribute>().ToArray();
                 bool skip = false;
                 bool handled = false;
 
+                // Pre-draw attribute handlers
                 foreach (var attr in attrs)
                 {
-                    var handler = AttributeHandlerRegistry.GetHandler(attr.GetType());
+                    var handler = config.Handlers.GetHandler(attr.GetType());
                     if (handler != null && !handler.OnBeforeDraw(paper, fieldId, attr, field, target, depth))
                     {
                         skip = true;
                         break;
                     }
                 }
-
                 if (skip) continue;
 
-                // Check for attribute-driven draw replacement
+                // Attribute-driven draw replacement
                 foreach (var attr in attrs)
                 {
-                    var handler = AttributeHandlerRegistry.GetHandler(attr.GetType());
+                    var handler = config.Handlers.GetHandler(attr.GetType());
                     if (handler != null)
                     {
                         string label = FormatFieldName(field.Name);
                         if (handler.OnDraw(paper, fieldId, label, attr, field, target,
-                            v => SetFieldAndNotify(field, target, v, onChange), depth))
+                            v => SetFieldAndNotify(config, field, target, v, onChange), depth))
                         {
                             handled = true;
                             break;
@@ -261,30 +297,26 @@ public static class PropertyGrid
 
                 if (!handled)
                 {
-                    // Default rendering
                     var value = field.GetValue(target);
                     var fieldType = field.FieldType;
                     string label = FormatFieldName(field.Name);
+                    bool isOverridden = overrides?.Contains(field.Name) ?? false;
 
-                    // Prefab override highlight
-                    bool isOverridden = OverriddenFields?.Contains(field.Name) ?? false;
-
-                    DrawField(paper, fieldId, label, fieldType, value,
-                        v => SetFieldAndNotify(field, target, v, onChange), depth, isOverridden);
+                    DrawField(paper, fieldId, label, fieldType, value, config,
+                        v => SetFieldAndNotify(config, field, target, v, onChange), depth, isOverridden);
                 }
 
-                // Post-draw attributes
+                // Post-draw attribute handlers
                 foreach (var attr in attrs)
                 {
-                    var handler = AttributeHandlerRegistry.GetHandler(attr.GetType());
+                    var handler = config.Handlers.GetHandler(attr.GetType());
                     handler?.OnAfterDraw(paper, fieldId, attr, field, target, depth);
                 }
             }
 
-            // Draw [Button] methods
+            // [Button] methods
             foreach (var method in buttonMethods)
             {
-                // Get label from attribute via reflection (avoid Runtime type dependency)
                 var btnAttr = method.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
                 var labelProp = btnAttr.GetType().GetProperty("Label");
                 string label = (labelProp?.GetValue(btnAttr) as string) ?? FormatFieldName(method.Name);
@@ -296,29 +328,26 @@ public static class PropertyGrid
             }
         }
 
-        if (depth == 0)
+        if (isRoot)
+        {
             _rootTarget = null;
+            _activeConfig = null;
+        }
     }
 
-    // ── Field (label + control, public for external callers) ──
+    // ── DrawField (public for external callers like MaterialPropertyDrawer) ──
 
-    /// <summary>
-    /// Draw a single field with label and control. Routes through FieldDrawerRegistry,
-    /// then enums, collections, dictionaries, nested objects, and fallback.
-    /// Public so callers like MaterialPropertyDrawer can reuse the routing logic.
-    /// </summary>
     public static void DrawField(Paper paper, string id, string label, Type fieldType,
-        object? value, Action<object?> onChange, int depth, bool isOverridden = false)
+        object? value, PropertyGridConfig config, Action<object?> onChange, int depth, bool isOverridden = false)
     {
-        // Notify host before drawing (e.g., to set field type for EngineObject drawers)
-        OnBeforeDrawField?.Invoke(fieldType, value);
+        // Notify host before drawing
+        config.OnBeforeDrawField?.Invoke(fieldType, value);
 
-        // Check FieldDrawerRegistry first - if no drawer, try fallback (host's PropertyEditorRegistry).
-        // Fallback draws the entire row (label + control) itself since legacy editors use InspectorRow.
-        var drawer = FieldDrawerRegistry.GetDrawer(fieldType);
-        if (drawer == null && FallbackFieldDrawer != null)
+        // Try fallback (host's PropertyEditorRegistry) before our own layout
+        var drawer = config.Drawers.GetDrawer(fieldType);
+        if (drawer == null && config.FallbackFieldDrawer != null)
         {
-            if (FallbackFieldDrawer(paper, id, label, fieldType, value, onChange, depth))
+            if (config.FallbackFieldDrawer(paper, id, label, fieldType, value, onChange, depth))
                 return;
         }
 
@@ -330,14 +359,12 @@ public static class PropertyGrid
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
             .RowBetween(m.SpacingMedium).Margin(0, 0, 0, m.SpacingSmall).Enter())
         {
-            // Override highlight bar
             if (isOverridden)
             {
                 paper.Box($"{id}_ov").Width(3).Height(m.RowHeight)
                     .BackgroundColor(theme.Primary.C400).Rounded(m.SmallRounding);
             }
 
-            // Label
             if (font != null && !string.IsNullOrEmpty(label))
             {
                 paper.Box($"{id}_lbl")
@@ -347,20 +374,20 @@ public static class PropertyGrid
                     .FontSize(m.FontSize);
             }
 
-            // Control
             using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
             {
-                DrawFieldControl(paper, $"{id}_v", fieldType, value, onChange, depth);
+                DrawFieldControl(paper, $"{id}_v", fieldType, value, config, onChange, depth);
             }
         }
     }
 
-    /// <summary>Draw just the control part (no label/row wrapper).</summary>
+    // ── DrawFieldControl ─────────────────────────────────────
+
     public static void DrawFieldControl(Paper paper, string id, Type fieldType,
-        object? value, Action<object?> onChange, int depth)
+        object? value, PropertyGridConfig config, Action<object?> onChange, int depth)
     {
         // 1. Registered FieldDrawer
-        var drawer = FieldDrawerRegistry.GetDrawer(fieldType);
+        var drawer = config.Drawers.GetDrawer(fieldType);
         if (drawer != null)
         {
             drawer.Draw(paper, id, value, fieldType, onChange, depth);
@@ -377,32 +404,31 @@ public static class PropertyGrid
         // 3. Collections (IList: List<T>, T[])
         if (typeof(IList).IsAssignableFrom(fieldType) && fieldType != typeof(string))
         {
-            DrawCollection(paper, id, fieldType, value as IList, onChange, depth);
+            DrawCollection(paper, id, fieldType, value as IList, config, onChange, depth);
             return;
         }
 
         // 4. Dictionary<K,V>
         if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
         {
-            DrawDictionary(paper, id, fieldType, value as IDictionary, onChange, depth);
+            DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth);
             return;
         }
 
-        // 5. Nested object with serializable fields
+        // 5. Nested object
         if (value != null)
         {
-            // Check for a custom whole-object editor first
-            var customEditor = CustomObjectEditorRegistry.GetEditor(value.GetType());
+            var customEditor = config.CustomEditors.GetEditor(value.GetType());
             if (customEditor != null)
             {
-                DrawNestedObjectWithCustomEditor(paper, id, fieldType, value, onChange, depth, customEditor);
+                DrawNestedObjectWithCustomEditor(paper, id, fieldType, value, config, onChange, depth, customEditor);
                 return;
             }
 
             var nestedFields = GetSerializableFields(value.GetType());
             if (nestedFields.Length > 0)
             {
-                DrawNestedObject(paper, id, fieldType, value, onChange, depth);
+                DrawNestedObject(paper, id, fieldType, value, config, onChange, depth);
                 return;
             }
         }
@@ -410,7 +436,7 @@ public static class PropertyGrid
         // 6. Null reference-type with "Create" button
         if (value == null && !fieldType.IsValueType)
         {
-            DrawNullObject(paper, id, fieldType, onChange);
+            DrawNullObject(paper, id, fieldType, config, onChange);
             return;
         }
 
@@ -441,7 +467,7 @@ public static class PropertyGrid
     // ── Collection ───────────────────────────────────────────
 
     private static void DrawCollection(Paper paper, string id, Type collectionType,
-        IList? list, Action<object?> onChange, int depth)
+        IList? list, PropertyGridConfig config, Action<object?> onChange, int depth)
     {
         Type elementType = collectionType.IsArray
             ? collectionType.GetElementType()!
@@ -471,7 +497,6 @@ public static class PropertyGrid
                     int idx = i;
                     using (paper.Row($"{id}_item_{i}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
                     {
-                        // Reorder buttons
                         Origami.IconButton(paper, $"{id}_up_{i}", theme.Icons.ChevronUp, () =>
                         {
                             if (idx <= 0) return;
@@ -488,7 +513,7 @@ public static class PropertyGrid
 
                         using (paper.Column($"{id}_val_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
                         {
-                            DrawField(paper, $"{id}_el_{i}", $"[{idx}]", elementType, list[i],
+                            DrawField(paper, $"{id}_el_{i}", $"[{idx}]", elementType, list[i], config,
                                 v => { list[idx] = v; onChange(list); }, depth + 1);
                         }
 
@@ -539,7 +564,7 @@ public static class PropertyGrid
     // ── Dictionary ───────────────────────────────────────────
 
     private static void DrawDictionary(Paper paper, string id, Type dictType,
-        IDictionary? dict, Action<object?> onChange, int depth)
+        IDictionary? dict, PropertyGridConfig config, Action<object?> onChange, int depth)
     {
         var typeArgs = dictType.GetGenericArguments();
         Type keyType = typeArgs[0];
@@ -563,28 +588,23 @@ public static class PropertyGrid
             using (paper.Column($"{id}_items").Height(UnitValue.Auto).Padding(m.IndentWidth, 0, 0, 0).ColBetween(m.Spacing).Enter())
             {
                 int idx = 0;
-                var keysToRemove = new List<object>();
                 foreach (DictionaryEntry entry in dict)
                 {
                     int localIdx = idx;
                     using (paper.Row($"{id}_entry_{localIdx}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
                     {
-                        // Key (read-only display)
                         using (paper.Box($"{id}_key_{localIdx}").Width(m.LabelWidth).Height(m.RowHeight).Enter())
                         {
-                            DrawFieldControl(paper, $"{id}_kv_{localIdx}", keyType, entry.Key,
-                                _ => { }, depth + 1);
+                            DrawFieldControl(paper, $"{id}_kv_{localIdx}", keyType, entry.Key, config, _ => { }, depth + 1);
                         }
 
-                        // Value
                         using (paper.Column($"{id}_val_{localIdx}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
                         {
                             var capturedKey = entry.Key;
-                            DrawFieldControl(paper, $"{id}_vv_{localIdx}", valueType, entry.Value,
+                            DrawFieldControl(paper, $"{id}_vv_{localIdx}", valueType, entry.Value, config,
                                 v => { dict[capturedKey] = v; onChange(dict); }, depth + 1);
                         }
 
-                        // Remove
                         var keyToRemove = entry.Key;
                         Origami.IconButton(paper, $"{id}_rm_{localIdx}", theme.Icons.Close, () =>
                         {
@@ -614,39 +634,32 @@ public static class PropertyGrid
     // ── Nested Object ────────────────────────────────────────
 
     private static void DrawNestedObject(Paper paper, string id, Type declaredType,
-        object value, Action<object?> onChange, int depth)
+        object value, PropertyGridConfig config, Action<object?> onChange, int depth)
     {
-        if (depth + 1 > MaxDepth) return;
+        if (depth + 1 > config.MaxDepth) return;
         var actualType = value.GetType();
-        var m = Origami.Current.Metrics;
 
-        string typeName = actualType.Name;
-        Origami.Foldout(paper, $"{id}_fold", typeName).Body(() =>
+        Origami.Foldout(paper, $"{id}_fold", actualType.Name).Body(() =>
         {
-            // Type picker for polymorphic fields
             if (declaredType.IsAbstract || declaredType.IsInterface)
-                DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
+                config.DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
 
-            Draw(paper, $"{id}_inner", value, changed =>
+            Draw(paper, $"{id}_inner", value, config, changed =>
             {
-                if (actualType.IsValueType)
-                    onChange(changed);
-                else
-                    onChange(value); // reference type already mutated
-            }, depth + 1);
+                if (actualType.IsValueType) onChange(changed); else onChange(value);
+            }, null, depth + 1);
         });
     }
 
     private static void DrawNestedObjectWithCustomEditor(Paper paper, string id, Type declaredType,
-        object value, Action<object?> onChange, int depth, CustomObjectEditor editor)
+        object value, PropertyGridConfig config, Action<object?> onChange, int depth, CustomObjectEditor editor)
     {
-        if (depth + 1 > MaxDepth) return;
-        var actualType = value.GetType();
+        if (depth + 1 > config.MaxDepth) return;
 
-        Origami.Foldout(paper, $"{id}_fold", $"{actualType.Name}").Body(() =>
+        Origami.Foldout(paper, $"{id}_fold", value.GetType().Name).Body(() =>
         {
             if (declaredType.IsAbstract || declaredType.IsInterface)
-                DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
+                config.DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
 
             editor.OnGUI(paper, $"{id}_custom", value);
         });
@@ -654,7 +667,7 @@ public static class PropertyGrid
 
     // ── Null Object ──────────────────────────────────────────
 
-    private static void DrawNullObject(Paper paper, string id, Type fieldType, Action<object?> onChange)
+    private static void DrawNullObject(Paper paper, string id, Type fieldType, PropertyGridConfig config, Action<object?> onChange)
     {
         var theme = Origami.Current;
         var m = theme.Metrics;
@@ -678,17 +691,18 @@ public static class PropertyGrid
             }
             else
             {
-                DrawTypePicker?.Invoke(paper, $"{id}_pick", fieldType, null, onChange);
+                config.DrawTypePicker?.Invoke(paper, $"{id}_pick", fieldType, null, onChange);
             }
         }
     }
 
     // ── Helpers ───────────────────────────────────────────────
 
-    private static void SetFieldAndNotify(FieldInfo field, object target, object? value, Action<object>? rootOnChange)
+    private static void SetFieldAndNotify(PropertyGridConfig config, FieldInfo field,
+        object target, object? value, Action<object>? rootOnChange)
     {
         field.SetValue(target, value);
-        if (_rootTarget != null) OnFieldChanged?.Invoke(_rootTarget);
+        if (_rootTarget != null) config.OnFieldChanged?.Invoke(_rootTarget);
         rootOnChange?.Invoke(target);
     }
 
@@ -696,7 +710,6 @@ public static class PropertyGrid
     public static string FormatFieldName(string name)
     {
         if (string.IsNullOrEmpty(name)) return name;
-        // Strip leading _ or m_
         if (name.StartsWith("m_") && name.Length > 2) name = name[2..];
         else if (name.StartsWith('_') && name.Length > 1) name = name[1..];
 
@@ -728,7 +741,6 @@ public static class PropertyGrid
                 bool shouldIgnore = field.GetCustomAttribute<SerializeIgnoreAttribute>() != null
                     || field.GetCustomAttribute<NonSerializedAttribute>() != null;
                 if (shouldIgnore) continue;
-                // Check for HideInInspector (runtime attribute)
                 if (field.GetCustomAttributes().Any(a => a.GetType().Name == "HideInInspectorAttribute"))
                     continue;
                 fields.Add(field);

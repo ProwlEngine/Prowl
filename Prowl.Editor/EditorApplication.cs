@@ -20,6 +20,9 @@ public class EditorApplication : Game
 {
     public static EditorApplication? Instance { get; private set; }
 
+    /// <summary>The editor's PropertyGrid configuration (drawers, handlers, callbacks).</summary>
+    public static OrigamiUI.PropertyGridConfig PropertyGridConfig { get; private set; } = null!;
+
     private DockSpace _dockSpace = null!;
     private double _time;
     private double _introTime = double.MaxValue;
@@ -162,24 +165,23 @@ public class EditorApplication : Game
         // Initialize status bar log tracking
         InitializeStatusBar();
 
-        // Register Origami PropertyGrid field drawers and attribute handlers
-        OrigamiUI.BuiltInFieldDrawers.Register();
-        AttributeHandlers.BuiltInAttributeHandlers.Register();
-        OrigamiUI.PropertyGrid.OnBeginRoot = target => Undo.Snapshot(target);
-        OrigamiUI.PropertyGrid.OnFieldChanged = target => (target as Runtime.EngineObject)?.OnValidate();
-        OrigamiUI.PropertyGrid.OnBeforeDrawField = (fieldType, value) =>
+        // Build the editor's PropertyGrid config
+        PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
+        OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
+        AttributeHandlers.BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
+        PropertyGridConfig.OnBeginRoot = target => Undo.Snapshot(target);
+        PropertyGridConfig.OnFieldChanged = target => (target as Runtime.EngineObject)?.OnValidate();
+        PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
                 Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
         };
-        OrigamiUI.PropertyGrid.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
+        PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
         {
             Widgets.PropertyGrid.DrawTypePicker(paper, id, baseType, currentValue, onChange);
         };
-        OrigamiUI.PropertyGrid.FallbackFieldDrawer = (paper, id, label, fieldType, value, onChange, depth) =>
+        PropertyGridConfig.FallbackFieldDrawer = (paper, id, label, fieldType, value, onChange, depth) =>
         {
-            // Route to the editor's PropertyEditorRegistry for types like
-            // EngineObject, AssetRef, AnimationCurve, Gradient, Quaternion, etc.
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
                 Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
             var editor = Inspector.PropertyEditorRegistry.GetEditor(fieldType);
