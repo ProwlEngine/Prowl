@@ -419,8 +419,13 @@ public class GameCanvas : MonoBehaviour
 
     private float ComputeScreenSizeScale()
     {
-        float screenW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
-        float screenH = ScreenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y;
+        return ComputeScreenSizeScale(ScreenSizeOverride);
+    }
+
+    public float ComputeScreenSizeScale(Float2? screenSizeOverride)
+    {
+        float screenW = screenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
+        float screenH = screenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y;
         if (screenW <= 0 || screenH <= 0) return 1f;
 
         float refW = Maths.Max(ReferenceResolution.X, 1f);

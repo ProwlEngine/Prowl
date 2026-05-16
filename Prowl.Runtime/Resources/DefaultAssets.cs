@@ -78,6 +78,9 @@ public enum DefaultTexture
     Grid,
     Noise,
 
+    // Scene helpers
+    Handle,
+
     // Gizmo icons
     IconCamera,
     IconLight,

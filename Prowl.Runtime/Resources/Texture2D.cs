@@ -355,6 +355,7 @@ public sealed class Texture2D : Texture, ISerializable
             DefaultTexture.Surface => "default_surface.png",
             DefaultTexture.Emission => "default_emission.png",
             DefaultTexture.Grid => "grid.png",
+            DefaultTexture.Handle => "handle_ui.png",
             DefaultTexture.Noise => "noise.png",
             DefaultTexture.IconCamera => "icon_camera.png",
             DefaultTexture.IconLight => "icon_light.png",

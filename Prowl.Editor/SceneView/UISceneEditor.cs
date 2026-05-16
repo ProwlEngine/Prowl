@@ -16,6 +16,8 @@ namespace Prowl.Editor;
 [SceneViewEditorFor(typeof(UIBehaviour))]
 public sealed class UISceneEditor : ISceneViewEditor
 {
+    private Texture2D _handleTexture = Texture2D.ParseDefault(DefaultTexture.Handle);
+
     /// <summary>The grabbable handles, plus <see cref="Move"/> for the rect body.</summary>
     private enum Handle
     {
@@ -100,7 +102,7 @@ public sealed class UISceneEditor : ISceneViewEditor
     //  Constants / colors
     // ================================================================
 
-    private static readonly Color ResizeColor = new(0.20f, 0.95f, 0.40f, 1.00f);  // green
+    private static readonly Color ResizeColor = new(0.80f, 0.75f, 0.80f, 1.00f);  // green
     private static readonly Color PivotColor  = new(0.20f, 0.80f, 1.00f, 1.00f);  // cyan
     private static readonly Color AnchorColor = new(1.00f, 0.85f, 0.20f, 1.00f);  // amber
     private static readonly Color MoveColor   = new(0.40f, 1.00f, 0.60f, 1.00f);  // bright green
@@ -174,110 +176,108 @@ public sealed class UISceneEditor : ISceneViewEditor
             return false;
         }
 
-        // Pick up any edits applied on previous frames so ComputedRect is current.
-        canvas.RebuildIfDirty();
+        RenderTexture? sceneRT = camera.Target;
+        Float2? prevScreenOverride = GameCanvas.ScreenSizeOverride;
+        if (sceneRT != null && sceneRT.Width > 0 && sceneRT.Height > 0)
+            GameCanvas.ScreenSizeOverride = new Float2(sceneRT.Width, sceneRT.Height);
 
-        // Right / middle mouse drives the camera — yield unless we're mid-drag.
-        bool camNav = Input.GetMouseButton(1) || Input.GetMouseButton(2);
-        if (camNav && _active == Handle.None)
+        try
         {
-            _hover = Handle.None;
-            return false;
-        }
+            // Pick up any edits applied on previous frames so ComputedRect is current.
+            canvas.RebuildIfDirty();
 
-        // Canvas design-pixel space <-> world. Defer to GameCanvas.CanvasToWorld — the same
-        // matrix BuildItemModel prepends to every UI element — so the gizmos render at the
-        // exact world position of the rendered UI for every RenderMode, including the Overlay
-        // / Camera surfaces (scale = ScaleFactor) that previously used a hand-tuned constant.
-        Float4x4 designToWorld = canvas.CanvasToWorld;
-        Float4x4 worldToDesign = designToWorld.Invert();
-
-        Float3 originW = Float4x4.TransformPoint(Float3.Zero, designToWorld);
-        Float3 rightW = Float4x4.TransformPoint(Float3.UnitX, designToWorld) - originW;
-        Float3 upW = Float4x4.TransformPoint(Float3.UnitY, designToWorld) - originW;
-        float worldPerPixel = Float3.Length(rightW);
-        if (worldPerPixel < 1e-9f)
-            return _active != Handle.None;
-        rightW /= worldPerPixel;
-        upW = Float3.Normalize(upW);
-        Float3 normalW = Float3.Normalize(Float3.Cross(rightW, upW));
-
-        // Intersect the mouse ray with the canvas plane and convert to design pixels.
-        if (!GizmoUtils.IntersectPlane(normalW, originW, mouseRay.Origin, mouseRay.Direction, out float tHit))
-        {
-            // Ray parallel to the plane. Hold state if dragging, otherwise idle.
-            if (_active != Handle.None) return true;
-            _hover = Handle.None;
-            return false;
-        }
-        Float3 worldHit = mouseRay.Origin + mouseRay.Direction * tHit;
-        Float3 designHit3 = Float4x4.TransformPoint(worldHit, worldToDesign);
-        Float2 designHit = new(designHit3.X, designHit3.Y);
-
-        Rect cr = rt.ComputedRect;
-        if (cr.Size.X <= 0 || cr.Size.Y <= 0)
-        {
-            _hover = Handle.None;
-            _active = Handle.None;
-            return false;
-        }
-
-        Rect parentRect = ResolveParentRect(rt);
-
-        // Keep the handles a roughly constant size on screen by scaling with camera
-        // distance, with a floor so they never collapse to nothing up close.
-        Float3 camPos = camera.GameObject.Transform.Position;
-        Float3 centerW = Float4x4.TransformPoint(
-            new Float3(cr.Min.X + cr.Size.X * 0.5f, cr.Min.Y + cr.Size.Y * 0.5f, 0), designToWorld);
-        float handleWorld = Maths.Max(Float3.Distance(camPos, centerW) * 0.018f, worldPerPixel * 4f);
-        float pickRadius = handleWorld / worldPerPixel; // design pixels
-
-        bool leftDown = Input.GetMouseButton(0);
-        bool leftPressed = Input.GetMouseButtonDown(0);
-
-        // ---- Begin a drag ----
-        if (_active == Handle.None)
-        {
-            _hover = HitTest(rt, cr, parentRect, designHit, pickRadius);
-
-            if (leftPressed && viewportHovered && !camNav)
+            bool camNav = Input.GetMouseButton(1) || Input.GetMouseButton(2);
+            if (camNav && _active == Handle.None)
             {
-                if (_hover != Handle.None)
+                _hover = Handle.None;
+                return false;
+            }
+
+            Float4x4 designToWorld = canvas.CanvasToWorld;
+            Float4x4 worldToDesign = designToWorld.Invert();
+
+            Float3 originW = Float4x4.TransformPoint(Float3.Zero, designToWorld);
+            Float3 rightW = Float4x4.TransformPoint(Float3.UnitX, designToWorld) - originW;
+            Float3 upW = Float4x4.TransformPoint(Float3.UnitY, designToWorld) - originW;
+            float worldPerPixel = Float3.Length(rightW);
+            if (worldPerPixel < 1e-9f)
+                return _active != Handle.None;
+            rightW /= worldPerPixel;
+            upW = Float3.Normalize(upW);
+            Float3 normalW = Float3.Normalize(Float3.Cross(rightW, upW));
+
+            if (!GizmoUtils.IntersectPlane(normalW, originW, mouseRay.Origin, mouseRay.Direction, out float tHit))
+            {
+                if (_active != Handle.None) return true;
+                _hover = Handle.None;
+                return false;
+            }
+            Float3 worldHit = mouseRay.Origin + mouseRay.Direction * tHit;
+            Float3 designHit3 = Float4x4.TransformPoint(worldHit, worldToDesign);
+            Float2 designHit = new(designHit3.X, designHit3.Y);
+
+            Rect cr = rt.ComputedRect;
+            if (cr.Size.X <= 0 || cr.Size.Y <= 0)
+            {
+                _hover = Handle.None;
+                _active = Handle.None;
+                return false;
+            }
+
+            Rect parentRect = ResolveParentRect(rt);
+
+            Float3 camPos = camera.GameObject.Transform.Position;
+            Float3 centerW = Float4x4.TransformPoint(
+                new Float3(cr.Min.X + cr.Size.X * 0.5f, cr.Min.Y + cr.Size.Y * 0.5f, 0), designToWorld);
+            float handleWorld = Maths.Max(Float3.Distance(camPos, centerW) * 0.018f, worldPerPixel * 4f);
+            float pickRadius = handleWorld / worldPerPixel; // design pixels
+
+            bool leftDown = Input.GetMouseButton(0);
+            bool leftPressed = Input.GetMouseButtonDown(0);
+
+            // ---- Begin a drag ----
+            if (_active == Handle.None)
+            {
+                _hover = HitTest(rt, cr, parentRect, designHit, pickRadius);
+
+                if (leftPressed && viewportHovered && !camNav)
                 {
-                    _active = _hover;
-                    _dragStartDesign = designHit;
-                    _dragStartRect = cr;
-                    _dragStartState = LayoutState.Capture(rt);
+                    if (_hover != Handle.None)
+                    {
+                        _active = _hover;
+                        _dragStartDesign = designHit;
+                        _dragStartRect = cr;
+                        _dragStartState = LayoutState.Capture(rt);
+                    }
+                    else
+                    {
+                        Selection.Clear();
+                    }
+                }
+            }
+
+            if (_active != Handle.None)
+            {
+                if (leftDown)
+                {
+                    ApplyDrag(rt, parentRect, designHit);
+                    canvas.RebuildIfDirty();
+                    EditorSceneManager.IsDirty = true;
                 }
                 else
                 {
-                    // Click on empty space deselects, matching the default scene view.
-                    Selection.Clear();
+                    RegisterUndo(_target.GameObject, _dragStartState, LayoutState.Capture(rt));
+                    _active = Handle.None;
                 }
             }
-        }
 
-        // ---- Continue / finish a drag ----
-        if (_active != Handle.None)
+            DrawHandles(rt, designToWorld, rightW, upW, handleWorld);
+            return true;
+        }
+        finally
         {
-            if (leftDown)
-            {
-                ApplyDrag(rt, parentRect, designHit);
-                canvas.RebuildIfDirty(); // reflect the edit in the handles this frame
-                EditorSceneManager.IsDirty = true;
-            }
-            else
-            {
-                RegisterUndo(_target.GameObject, _dragStartState, LayoutState.Capture(rt));
-                _active = Handle.None;
-            }
+            GameCanvas.ScreenSizeOverride = prevScreenOverride;
         }
-
-        DrawHandles(rt, designToWorld, rightW, upW, handleWorld);
-
-        // Take over input entirely for world-space UI: the transform gizmo can't
-        // meaningfully edit a RectTransform, and our own picking handles selection.
-        return true;
     }
 
     // ================================================================
@@ -302,7 +302,6 @@ public sealed class UISceneEditor : ISceneViewEditor
         Handle best = Handle.None;
         float bestDist = radius;
 
-        // Earlier entries win ties — corners before edges before pivot before anchors.
         void Test(Handle h, Float2 c)
         {
             float d = Distance(p, c);
@@ -413,7 +412,7 @@ public sealed class UISceneEditor : ISceneViewEditor
         float nx = Maths.Clamp((designHit.X - parentRect.Min.X) / parentRect.Size.X, 0f, 1f);
         float ny = Maths.Clamp((designHit.Y - parentRect.Min.Y) / parentRect.Size.Y, 0f, 1f);
 
-        // Hold Ctrl to snap anchors to quarter steps (0, ¼, ½, ¾, 1).
+        // Hold Ctrl to snap anchors to quarter steps
         if (Input.GetKey(KeyCode.ControlLeft) || Input.GetKey(KeyCode.ControlRight))
         {
             nx = MathF.Round(nx * 4f) / 4f;
@@ -444,18 +443,11 @@ public sealed class UISceneEditor : ISceneViewEditor
         rt.AnchorMin = min;
         rt.AnchorMax = max;
 
-        // Re-anchoring keeps the element's on-screen rect fixed; size-delta and
-        // anchored-position absorb the change.
         ApplyDesiredRect(rt, parentRect,
             _dragStartRect.Min.X, _dragStartRect.Min.Y,
             _dragStartRect.Size.X, _dragStartRect.Size.Y);
     }
 
-    /// <summary>
-    /// Inverts <see cref="RectTransform.ComputeRect"/>: given a desired pixel rect and
-    /// the element's current anchors / pivot, solves for the <see cref="RectTransform.SizeDelta"/>
-    /// and <see cref="RectTransform.AnchoredPosition"/> that reproduce it.
-    /// </summary>
     private static void ApplyDesiredRect(RectTransform rt, Rect parentRect, float posX, float posY, float width, float height)
     {
         float pX = parentRect.Min.X, pY = parentRect.Min.Y;
@@ -566,12 +558,8 @@ public sealed class UISceneEditor : ISceneViewEditor
         Float3 c = centerW + r + u;
         Float3 d = centerW - r + u;
 
-        Debug.DrawLine(a, b, color);
-        Debug.DrawLine(b, c, color);
-        Debug.DrawLine(c, d, color);
-        Debug.DrawLine(d, a, color);
-        Debug.DrawLine(a, c, color); // cross fill, so the marker reads as solid
-        Debug.DrawLine(b, d, color);
+
+        Debug.DrawIcon(_handleTexture, centerW, 7.5f, color);
     }
 
     // ================================================================
