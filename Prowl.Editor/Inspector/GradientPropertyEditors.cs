@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.PropertyEditors;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -332,8 +333,9 @@ public class MinMaxCurvePropertyEditor : PropertyEditor
                     break;
 
                 case MinMaxCurveMode.Curve:
-                    CurveEditor.CurveField(paper, $"{id}_curve", "Curve", curve.Curve)
-                        .OnValueChanged(v => { curve.Curve = v; onChange(curve); });
+                    InspectorRow.Draw(paper, $"{id}_curve", "Curve", () =>
+                        CurveField.Create(paper, $"{id}_curve_cf", curve.Curve,
+                            v => { curve.Curve = v; onChange(curve); }).Show());
                     break;
 
                 case MinMaxCurveMode.Random:

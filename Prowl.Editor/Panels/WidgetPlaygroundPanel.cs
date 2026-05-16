@@ -411,8 +411,9 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Animation Curve ===
             Origami.Header(paper, "h_curve", "Animation Curve").Show();
 
-            CurveEditor.CurveField(paper, "curve_1", "Speed Curve", _curve)
-                .OnValueChanged(v => _curve = v);
+            InspectorRow.Draw(paper, "curve_1", "Speed Curve", () =>
+                Widgets.PropertyEditors.CurveField.Create(paper, "curve_1_cf", _curve,
+                    v => _curve = v).Show());
 
             Origami.Separator(paper, "sep14").Show();
 

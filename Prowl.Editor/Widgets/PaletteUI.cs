@@ -60,7 +60,7 @@ public static class PaletteUI
                             .Size(presetW, presetH)
                             .IsNotInteractable()
                             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                                CurveEditor.DrawCurvePreviewStatic(canvas, r, tempCurve)));
+                                PropertyEditors.CurveRenderer.DrawPreview(canvas, r, tempCurve, OrigamiUI.Origami.Current)));
                     }
                 }
             }

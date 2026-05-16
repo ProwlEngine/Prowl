@@ -23,7 +23,7 @@ internal static class InspectorRow
     public static void Draw(Paper paper, string id, string label, Action drawControl)
     {
         var font = EditorTheme.DefaultFont;
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(6).Margin(0, 0, 0, EditorTheme.Spacing).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(EditorTheme.RowHeight).RowBetween(6).Margin(0, 0, 0, EditorTheme.Spacing).Enter())
         {
             if (!string.IsNullOrEmpty(label) && font != null)
             {
@@ -36,7 +36,7 @@ internal static class InspectorRow
 
             using (paper.Box($"{id}_ctl")
                 .Width(UnitValue.Stretch())
-                .Height(EditorTheme.RowHeight)
+                .Height(UnitValue.Auto).MinHeight(EditorTheme.RowHeight)
                 .Enter())
             {
                 drawControl();
