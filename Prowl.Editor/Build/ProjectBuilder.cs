@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Editor.Panels;
+using Prowl.OrigamiUI;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;
@@ -140,7 +141,7 @@ public static class ProjectBuilder
     {
         BuildProgress progress = null;
         // Ask for output folder
-        Widgets.FileDialog.Open(Widgets.FileDialogMode.SelectFolder, outputPath => {
+        Widgets.FileDialog.Open(FileDialogMode.SelectFolder, outputPath => {
             {
                 Runtime.Debug.Log($"{Project.Current.RootPath}");
                 Runtime.Debug.Log($"{outputPath}");

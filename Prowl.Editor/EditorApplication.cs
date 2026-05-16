@@ -670,7 +670,6 @@ public class EditorApplication : Game
         DragDrop.DrawVisual(paper);
 
         // Systems drawn on top (Overlay/Topmost layers)
-        Widgets.FileDialog.Draw(paper);
         Packages.PackageExportDialog.Draw(paper);
         Packages.PackageImportDialog.Draw(paper);
         Widgets.SelectorModal.Draw(paper);
@@ -1006,7 +1005,7 @@ public class EditorApplication : Game
     private void PromptSaveAs()
     {
         if (Project.Current == null) return;
-        Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+        Widgets.FileDialog.Open(FileDialogMode.Save, path =>
         {
             if (path == null || Project.Current == null) return;
             string rel = EditorAssetDatabase.NormalizePath(
@@ -1027,7 +1026,7 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/New Scene", () => EditorSceneManager.NewScene());
         MenuRegistry.Register("File/Open Scene", () =>
         {
-            Widgets.FileDialog.Open(Widgets.FileDialogMode.Open, path =>
+            Widgets.FileDialog.Open(FileDialogMode.Open, path =>
             {
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetDatabase.NormalizePath(
@@ -1043,7 +1042,7 @@ public class EditorApplication : Game
             {
                 // No path yet prompt Save As
                 if (Project.Current == null) return;
-                Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+                Widgets.FileDialog.Open(FileDialogMode.Save, path =>
                 {
                     if (path == null || Project.Current == null) return;
                     string rel = EditorAssetDatabase.NormalizePath(
@@ -1057,7 +1056,7 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/Save Scene As...", () =>
         {
             if (Project.Current == null) return;
-            Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+            Widgets.FileDialog.Open(FileDialogMode.Save, path =>
             {
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetDatabase.NormalizePath(
@@ -1092,7 +1091,7 @@ public class EditorApplication : Game
         MenuRegistry.RegisterSeparator("Assets");
         MenuRegistry.Register("Assets/Import Package...", () =>
         {
-            Widgets.FileDialog.Open(Widgets.FileDialogMode.Open, path =>
+            Widgets.FileDialog.Open(FileDialogMode.Open, path =>
             {
                 if (path != null && System.IO.File.Exists(path))
                     Packages.PackageImportDialog.Open(path);

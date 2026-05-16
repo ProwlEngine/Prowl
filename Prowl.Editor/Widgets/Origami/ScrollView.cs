@@ -30,6 +30,9 @@ public sealed class ScrollViewBuilder
     // Cleared once consumed by the matching ScrollView render.
     internal static readonly Dictionary<string, Float2> s_pendingScrollTo = new();
 
+    // Delta-based scroll nudges (added to current scroll, consumed each frame)
+    internal static readonly Dictionary<string, Float2> s_pendingScrollBy = new();
+
     private readonly Paper _paper;
     private readonly string _id;
     private readonly float _width;
@@ -162,6 +165,16 @@ public sealed class ScrollViewBuilder
             {
                 _paper.SetElementStorage(outerHandle, "scrollX", MathF.Max(0f, (float)pending.Value.X));
                 _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, (float)pending.Value.Y));
+            }
+
+            // Apply pending scroll-by (delta nudges).
+            if (s_pendingScrollBy.TryGetValue(_id, out var delta))
+            {
+                s_pendingScrollBy.Remove(_id);
+                float curX = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
+                float curY = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
+                _paper.SetElementStorage(outerHandle, "scrollX", MathF.Max(0f, curX + (float)delta.X));
+                _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, curY + (float)delta.Y));
             }
 
             float scrollX = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
