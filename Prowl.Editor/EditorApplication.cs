@@ -328,9 +328,6 @@ public class EditorApplication : Game
             Input.UnlockCursor();
         }
 
-        // Save system update (Ctrl+S + auto-save)
-        SaveManager.Update((float)Time.UnscaledDeltaTime);
-
         // Global keyboard shortcuts
         if (!ShortcutManager.IsRebinding)
         {
@@ -370,6 +367,9 @@ public class EditorApplication : Game
         _origamiScope?.Dispose();
         _origamiScope = EditorTheme.PushOrigami();
         OrigamiUI.Origami.BeginFrame(paper, (float)Time.UnscaledDeltaTime);
+
+        // Save system update (Ctrl+S + auto-save) - after theme push so toasts get icons
+        SaveManager.Update((float)Time.UnscaledDeltaTime);
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)

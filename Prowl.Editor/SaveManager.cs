@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
@@ -103,19 +102,16 @@ public static class SaveManager
         if (labels.Count == 0)
         {
             if (!isAutoSave)
-                Toasts.Info("Nothing to save", "All files are up to date.");
+                Origami.Toast("Nothing to save").Message("All files are up to date.").Info().Show();
             return;
         }
 
-        var sb = new StringBuilder();
-        for (int i = 0; i < labels.Count; i++)
-        {
-            if (i > 0) sb.Append('\n');
-            sb.Append(labels[i]);
-        }
+        string title = isAutoSave ? "Auto-saved" : "Saved";
+        string message = labels.Count == 1
+            ? labels[0]
+            : string.Join(", ", labels);
 
-        string prefix = isAutoSave ? "Auto-saved:" : "Saved:";
-        Toasts.Success(prefix, sb.ToString());
+        Origami.Toast(title).Message(message).Success().Show();
     }
 
     /// <summary>Reset the auto-save timer (e.g. after a manual save).</summary>
