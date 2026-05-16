@@ -272,6 +272,13 @@ public class HierarchyPanel : DockPanel
                         var go = (GameObject)e.Node.UserData!;
                         Selection.HandleListClick(go, (IReadOnlyList<object>)flatObjects, e.Index, ctrl, shift);
                     })
+                    .OnDoubleClick(e =>
+                    {
+                        // Focus the scene view camera on the double-clicked object
+                        var go = (GameObject)e.Node.UserData!;
+                        Selection.Select(go);
+                        SceneViewPanel.ActiveCamera?.FocusSelection();
+                    })
                     .OnRightClick(e =>
                     {
                         var go = (GameObject)e.Node.UserData!;
