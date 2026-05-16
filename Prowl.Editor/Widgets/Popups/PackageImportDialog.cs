@@ -432,7 +432,7 @@ public static class PackageImportDialog
 
         using (paper.Column("pkgimp_detail")
             .Width(detailWidth).Height(height)
-            .ChildLeft(16).ChildRight(16).ChildTop(16)
+            .Padding(16, 16, 16, 0)
             .ColBetween(8)
             .Enter())
         {

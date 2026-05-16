@@ -322,7 +322,7 @@ public static class FileDialog
     {
         using (paper.Column("ofd_side").Width(SidebarW)
             .BackgroundColor(theme.Neutral.C200)
-            .ChildTop(8).ChildLeft(4).ChildRight(4).ColBetween(2).Enter())
+            .Padding(4, 4, 8, 0).ColBetween(2).Enter())
         {
             if (_config?.QuickAccess.Count > 0)
             {
@@ -718,7 +718,7 @@ public static class FileDialog
     {
         using (paper.Column("ofd_bot").Height(BottomH)
             .BackgroundColor(theme.Neutral.C200)
-            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6).ColBetween(6).Enter())
+            .Padding(8, 8, 6, 6).ColBetween(6).Enter())
         {
             using (paper.Row("ofd_nr").Height(24).RowBetween(8).Enter())
             {

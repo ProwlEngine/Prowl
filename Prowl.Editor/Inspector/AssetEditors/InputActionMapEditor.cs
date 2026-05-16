@@ -70,7 +70,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Width(paper.Percent(28)).MinWidth(120)
             .Height(UnitValue.Auto)
             .BackgroundColor(EditorTheme.Neutral400).Rounded(4)
-            .ChildTop(4).ChildBottom(4).ChildLeft(4).ChildRight(4)
+            .Padding(4, 4, 4, 4)
             .Enter())
         {
             // Header
@@ -133,7 +133,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)
             .BackgroundColor(EditorTheme.Neutral400).Rounded(4)
-            .ChildTop(6).ChildBottom(6).ChildLeft(6).ChildRight(6)
+            .Padding(6, 6, 6, 6)
             .Enter())
         {
             var action = _selectedAction != null ? map.FindAction(_selectedAction) : null;
@@ -356,7 +356,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Height(UnitValue.Auto)
             .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
             .Rounded(3).Margin(12, 0, 0, 2)
-            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
+            .Padding(8, 8, 6, 6)
             .Enter())
         {
             // "Listen" button press any key to rebind
@@ -409,7 +409,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Height(UnitValue.Auto)
             .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
             .Rounded(3).Margin(12, 0, 0, 2)
-            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
+            .Padding(8, 8, 6, 6)
             .Enter())
         {
             // Vector2-specific options
@@ -604,7 +604,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 .Height(UnitValue.Auto)
                 .BackgroundColor(EditorTheme.Neutral300).Rounded(3)
                 .Margin(0, 0, 0, 2)
-                .ChildLeft(6).ChildRight(6).ChildTop(3).ChildBottom(3)
+                .Padding(6, 6, 3, 3)
                 .Enter())
             {
                 // Header with name and remove button

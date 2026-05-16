@@ -189,7 +189,7 @@ public class InspectorPanel : DockPanel
         }
 
         using (paper.Row("insp_header")
-            .Height(40).ChildLeft(4).RowBetween(8).ChildTop(4).ChildBottom(4)
+            .Height(40).Padding(4, 0, 4, 4).RowBetween(8)
             .Enter())
         {
             // Large icon
@@ -605,7 +605,7 @@ public class InspectorPanel : DockPanel
         paper.Box("log_msg")
             .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(40)
             .BackgroundColor(EditorTheme.Neutral400).Rounded(3)
-            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
+            .Padding(8, 8, 6, 6)
             .Text(log.Message, font).TextColor(textColor)
             .Wrap(Scribe.TextWrapMode.Wrap)
             .FontSize(fs - 1);
@@ -628,7 +628,7 @@ public class InspectorPanel : DockPanel
                 paper.Box($"log_frame_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(18)
                     .BackgroundColor(frameBg).Rounded(2)
-                    .ChildLeft(8).ChildTop(2).ChildBottom(2)
+                    .Padding(8, 0, 2, 2)
                     .Text(frameText, font).TextColor(EditorTheme.Ink400)
                     .FontSize(fs - 2);
             }

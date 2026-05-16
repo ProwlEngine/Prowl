@@ -227,7 +227,7 @@ public sealed class AppBarBuilder
             .BackgroundColor(theme.Neutral.C300)
             .BorderColor(ink.C200).BorderWidth(1)
             .Rounded(6)
-            .ChildTop(3).ChildBottom(3).ChildLeft(3).ChildRight(3)
+            .Padding(3, 3, 3, 3)
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .BoxShadow(0, 2, 16, -4, Color.FromArgb(100, 0, 0, 0))

@@ -99,7 +99,7 @@ public sealed class DialogModal : IModal
             using (paper.Column($"omd_body_{stackIndex}")
                 .Width(UnitValue.Stretch())
                 .Height(UnitValue.Auto)
-                .ChildLeft(16).ChildRight(16).ChildTop(12).ChildBottom(12)
+                .Padding(16, 16, 12, 12)
                 .ColBetween(6)
                 .Enter())
             {

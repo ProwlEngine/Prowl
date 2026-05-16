@@ -121,7 +121,7 @@ public static class TooltipSystem
             .BorderColor(ink.C200).BorderWidth(1)
             .Rounded(4)
             .BoxShadow(0, 2, 8, -2, Color.FromArgb(80, 0, 0, 0))
-            .ChildLeft(padX).ChildRight(padX).ChildTop(padY).ChildBottom(padY)
+            .Padding(padX, padX, padY, padY)
             .ColBetween(2)
             .Layer(Layer.Topmost + 1000)
             .ClampToScreen()

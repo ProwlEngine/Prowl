@@ -190,7 +190,7 @@ public class GradientPropertyEditor : PropertyEditor
 
                 using (paper.Column($"{id}_sel").Height(UnitValue.Auto)
                     .BackgroundColor(Color.FromArgb(20, EditorTheme.Purple400))
-                    .Rounded(3).ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4)
+                    .Rounded(3).Padding(4, 4, 4, 4)
                     .Enter())
                 {
                     using (paper.Row($"{id}_sel_hdr").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
@@ -240,7 +240,7 @@ public class GradientPropertyEditor : PropertyEditor
 
                 using (paper.Column($"{id}_sel").Height(UnitValue.Auto)
                     .BackgroundColor(Color.FromArgb(20, EditorTheme.Purple400))
-                    .Rounded(3).ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4)
+                    .Rounded(3).Padding(4, 4, 4, 4)
                     .Enter())
                 {
                     using (paper.Row($"{id}_sel_hdr").Height(EditorTheme.RowHeight).RowBetween(4).Enter())

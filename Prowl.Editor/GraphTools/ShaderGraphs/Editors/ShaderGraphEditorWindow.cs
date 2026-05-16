@@ -145,7 +145,7 @@ public class ShaderGraphEditorWindow : DockPanel
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 32, 34, 40))
             .BorderColor(System.Drawing.Color.FromArgb(255, 50, 52, 60))
             .BorderWidth(1)
-            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(8).ColBetween(4)
+            .Padding(8, 8, 6, 8).ColBetween(4)
             .Clip()
             .Enter())
         {

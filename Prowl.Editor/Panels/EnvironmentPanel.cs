@@ -35,7 +35,7 @@ public class EnvironmentPanel : DockPanel
             return;
         }
 
-        using (paper.Column("env_root").Width(width).Height(height).ChildLeft(8).ChildRight(8).ChildTop(8).ColBetween(4).Clip().Enter())
+        using (paper.Column("env_root").Width(width).Height(height).Padding(8, 8, 8, 0).ColBetween(4).Clip().Enter())
         {
             DrawSkyboxSection(paper, "env_sky", font, scene);
             paper.Box("env_sp1").Height(8);

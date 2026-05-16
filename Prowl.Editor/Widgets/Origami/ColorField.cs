@@ -197,7 +197,7 @@ public sealed class ColorFieldBuilder
             .BackgroundColor(_theme.Neutral.C300)
             .BorderColor(ink.C200).BorderWidth(1)
             .Rounded(rounding + 2)
-            .ChildLeft(pad).ChildRight(pad).ChildTop(pad).ChildBottom(pad)
+            .Padding(pad, pad, pad, pad)
             .ColBetween(gap)
             .Layer(Layer.Topmost)
             .ClampToScreen()

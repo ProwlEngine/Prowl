@@ -309,7 +309,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                 .Height(UnitValue.Auto)
                 .BackgroundColor(EditorTheme.Neutral300).Rounded(3)
                 .Margin(0, 0, 0, 2)
-                .ChildLeft(6).ChildRight(6).ChildTop(3).ChildBottom(3)
+                .Padding(6, 6, 3, 3)
                 .Enter())
             {
                 using (paper.Row($"{id}_bh{i}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())

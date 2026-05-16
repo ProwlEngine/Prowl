@@ -358,7 +358,7 @@ public static class PackageExportDialog
     {
         using (paper.Column("pkgexp_options")
             .Height(90)
-            .ChildLeft(12).ChildRight(12).ChildTop(8)
+            .Padding(12, 12, 8, 0)
             .ColBetween(6)
             .Enter())
         {

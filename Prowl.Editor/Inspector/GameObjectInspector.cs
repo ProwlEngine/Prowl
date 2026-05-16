@@ -497,7 +497,7 @@ public static class GameObjectInspector
             .BackgroundColor(barColor)
             .BorderColor(borderColor).BorderWidth(1)
             .Rounded(4).Margin(0, 4, 0, 4)
-            .ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4)
+            .Padding(4, 4, 4, 4)
             .Enter())
         {
             // Top row: label + buttons

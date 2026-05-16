@@ -98,7 +98,7 @@ public static class AddComponentPopup
 
             // Search bar
             using (paper.Row("acp_search_row")
-                .Height(28).ChildLeft(8).ChildRight(8).ChildTop(4).ChildBottom(4)
+                .Height(28).Padding(8, 8, 4, 4)
                 .Enter())
             {
                 Origami.SearchField(paper, "acp_search", _searchText, v => _searchText = v, "Search components...").Show();

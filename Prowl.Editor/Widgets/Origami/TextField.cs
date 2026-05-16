@@ -518,7 +518,7 @@ public sealed class TextFieldBuilder
             .BackgroundColor(_theme.Neutral.C200)
             .BorderColor(popBorder).BorderWidth(1)
             .Rounded(_theme.Metrics.Rounding)
-            .ChildLeft(4).ChildRight(4).ChildTop(padY).ChildBottom(padY)
+            .Padding(4, 4, padY, padY)
             .HookToParent()
             .Layer(Layer.Topmost)
             .ClampToScreen()

@@ -294,7 +294,7 @@ internal static class DropdownInternal
             .BackgroundColor(p.Theme.Neutral.C200)
             .BorderColor(popBorder).BorderWidth(1)
             .Rounded(p.Theme.Metrics.Rounding)
-            .ChildLeft(padX).ChildRight(padX).ChildTop(padY).ChildBottom(padY)
+            .Padding(padX, padX, padY, padY)
             .ColBetween(searchGap)
             .HookToParent()
             .Layer(Layer.Topmost)
