@@ -1,0 +1,47 @@
+{
+  "panel.build": "构建项目",
+  "panel.console": "控制台",
+  "panel.environment": "环境",
+  "panel.game": "游戏",
+  "panel.hierarchy": "层级",
+  "panel.inspector": "检查器",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "偏好设置",
+  "panel.project": "项目",
+  "panel.project_settings": "项目设置",
+  "panel.scene": "场景",
+
+  "save.auto_saved": "自动保存完成",
+  "save.cant_play_mode": "播放模式下无法保存",
+  "save.cant_play_mode_msg": "退出播放模式以保存场景、预制体或图表。",
+  "save.graph": "图表: {{name}}",
+  "save.layout": "编辑器布局",
+  "save.nothing": "没有需要保存的内容",
+  "save.nothing_msg": "所有文件均为最新。",
+  "save.prefab": "预制体: {{name}}",
+  "save.saved": "已保存",
+  "save.scene": "场景: {{name}}",
+
+  "dialog.delete_assets": "删除资产",
+
+  "hierarchy.delete": "删除",
+  "hierarchy.duplicate": "复制",
+  "hierarchy.rename": "重命名",
+
+  "project.copy_path": "复制路径",
+  "project.delete": "删除",
+  "project.reimport": "重新导入",
+  "project.rename": "重命名",
+  "project.show_in_explorer": "在资源管理器中显示",
+
+  "toast.cursor_locked": "光标已锁定",
+  "toast.cursor_locked_msg": "按Escape释放。",
+  "toast.cursor_lock_failed": "光标锁定失败",
+  "toast.cursor_lock_failed_msg": "没有可用的游戏视图。",
+  "toast.prefab_structure": "预制体结构",
+  "toast.prefab_cant_add": "无法向预制体实例添加子对象。请先断开预制体。",
+  "toast.prefab_cant_delete": "无法删除预制体子对象。请先断开预制体。",
+  "toast.prefab_cant_move": "无法移动预制体子对象。请先断开预制体。",
+  "toast.rename_exists": "名为'{{name}}'的文件或文件夹已存在。",
+  "toast.rename_failed": "重命名失败"
+}

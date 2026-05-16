@@ -1,0 +1,47 @@
+{
+  "panel.build": "Build Project",
+  "panel.console": "Console",
+  "panel.environment": "Environment",
+  "panel.game": "Game",
+  "panel.hierarchy": "Hierarchy",
+  "panel.inspector": "Inspector",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "Preferences",
+  "panel.project": "Project",
+  "panel.project_settings": "Project Settings",
+  "panel.scene": "Scene",
+
+  "save.auto_saved": "Auto-saved",
+  "save.cant_play_mode": "Can't save during Play Mode",
+  "save.cant_play_mode_msg": "Exit Play Mode to save your scene, prefab, or graph.",
+  "save.graph": "Graph: {{name}}",
+  "save.layout": "Editor Layout",
+  "save.nothing": "Nothing to save",
+  "save.nothing_msg": "All files are up to date.",
+  "save.prefab": "Prefab: {{name}}",
+  "save.saved": "Saved",
+  "save.scene": "Scene: {{name}}",
+
+  "dialog.delete_assets": "Delete Assets",
+
+  "hierarchy.delete": "Delete",
+  "hierarchy.duplicate": "Duplicate",
+  "hierarchy.rename": "Rename",
+
+  "project.copy_path": "Copy Path",
+  "project.delete": "Delete",
+  "project.reimport": "Reimport",
+  "project.rename": "Rename",
+  "project.show_in_explorer": "Show in Explorer",
+
+  "toast.cursor_locked": "Cursor Locked",
+  "toast.cursor_locked_msg": "Press Escape to release.",
+  "toast.cursor_lock_failed": "Cursor Lock Failed",
+  "toast.cursor_lock_failed_msg": "No valid game view is available.",
+  "toast.prefab_structure": "Prefab Structure",
+  "toast.prefab_cant_add": "Cannot add children to a prefab instance. Break the prefab first.",
+  "toast.prefab_cant_delete": "Cannot delete a prefab child. Break the prefab first.",
+  "toast.prefab_cant_move": "Cannot move a prefab child. Break the prefab first.",
+  "toast.rename_exists": "A file or folder named '{{name}}' already exists.",
+  "toast.rename_failed": "Rename Failed"
+}

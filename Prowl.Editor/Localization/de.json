@@ -1,0 +1,47 @@
+{
+  "panel.build": "Projekt erstellen",
+  "panel.console": "Konsole",
+  "panel.environment": "Umgebung",
+  "panel.game": "Spiel",
+  "panel.hierarchy": "Hierarchie",
+  "panel.inspector": "Inspektor",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "Einstellungen",
+  "panel.project": "Projekt",
+  "panel.project_settings": "Projekteinstellungen",
+  "panel.scene": "Szene",
+
+  "save.auto_saved": "Automatisch gespeichert",
+  "save.cant_play_mode": "Speichern im Spielmodus nicht erlaubt",
+  "save.cant_play_mode_msg": "Beenden Sie den Spielmodus, um Ihre Szene, Prefab oder Graphen zu speichern.",
+  "save.graph": "Graph: {{name}}",
+  "save.layout": "Editor-Layout",
+  "save.nothing": "Nichts zu speichern",
+  "save.nothing_msg": "Alle Dateien sind aktuell.",
+  "save.prefab": "Prefab: {{name}}",
+  "save.saved": "Gespeichert",
+  "save.scene": "Szene: {{name}}",
+
+  "dialog.delete_assets": "Assets entfernen",
+
+  "hierarchy.delete": "Entfernen",
+  "hierarchy.duplicate": "Duplizieren",
+  "hierarchy.rename": "Umbenennen",
+
+  "project.copy_path": "Pfad kopieren",
+  "project.delete": "Entfernen",
+  "project.reimport": "Reimportieren",
+  "project.rename": "Umbenennen",
+  "project.show_in_explorer": "Im Explorer anzeigen",
+
+  "toast.cursor_locked": "Cursor gesperrt",
+  "toast.cursor_locked_msg": "Escape zum Freigeben.",
+  "toast.cursor_lock_failed": "Cursorsperre fehlgeschlagen",
+  "toast.cursor_lock_failed_msg": "Keine Spielansicht verfuegbar.",
+  "toast.prefab_structure": "Prefab-Struktur",
+  "toast.prefab_cant_add": "Kann keine Kinder zu einer Prefab-Instanz hinzufuegen. Prefab zuerst aufloesen.",
+  "toast.prefab_cant_delete": "Kann kein Prefab-Kind entfernen. Prefab zuerst aufloesen.",
+  "toast.prefab_cant_move": "Kann kein Prefab-Kind verschieben. Prefab zuerst aufloesen.",
+  "toast.rename_exists": "Eine Datei oder ein Ordner mit dem Namen '{{name}}' existiert bereits.",
+  "toast.rename_failed": "Umbenennung fehlgeschlagen"
+}

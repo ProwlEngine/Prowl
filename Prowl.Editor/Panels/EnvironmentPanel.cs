@@ -7,6 +7,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -19,7 +20,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Environment")]
 public class EnvironmentPanel : DockPanel
 {
-    public override string Title => "Environment";
+    public override string Title => Loc.Get("panel.environment");
     public override string Icon => EditorIcons.Sun;
 
     public override void OnGUI(Paper paper, float width, float height)

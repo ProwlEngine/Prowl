@@ -11,6 +11,7 @@ using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -97,6 +98,15 @@ public class EditorApplication : Game
             }
         }
 
+        // Initialize localization
+        Prowl.Rosetta.Loc.Configure(cfg => cfg
+            .SetFallbackLocale("en")
+            .AddProvider(new Prowl.Rosetta.EmbeddedResourceProvider(
+                System.Reflection.Assembly.GetExecutingAssembly(), "Prowl.Editor.Localization"))
+            .SetLocale("en")
+            .OnMissingKey(Prowl.Rosetta.MissingKeyBehavior.ReturnKey)
+        );
+
         // Initialize editor registries (now sees user types if assemblies loaded above)
         InitializeOnLoadRegistry.Initialize();
         Inspector.PropertyEditorRegistry.Initialize();
@@ -118,9 +128,9 @@ public class EditorApplication : Game
 
         // Cursor lock toasts
         Input.OnCursorLocked += () =>
-            Toasts.Show("Cursor Locked", "Press Escape to release.", ToastType.Info, 3f);
+            Toasts.Show(Loc.Get("toast.cursor_locked"), Loc.Get("toast.cursor_locked_msg"), ToastType.Info, 3f);
         Input.OnCursorLockFailed += () =>
-            Toasts.Show("Cursor Lock Failed", "No valid game view is available.", ToastType.Warning, 3f);
+            Toasts.Show(Loc.Get("toast.cursor_lock_failed"), Loc.Get("toast.cursor_lock_failed_msg"), ToastType.Warning, 3f);
 
         // Menus depend on registries above, so register after initialization
         ScanAndRegisterPanels();
@@ -199,18 +209,18 @@ public class EditorApplication : Game
             if (Prefabs.PrefabEditingMode.IsEditing)
             {
                 return Prefabs.PrefabEditingMode.Save()
-                    ? $"Prefab: {System.IO.Path.GetFileNameWithoutExtension(Prefabs.PrefabEditingMode.EditingPrefabPath)}"
+                    ? Loc.Get("save.prefab", new { name = System.IO.Path.GetFileNameWithoutExtension(Prefabs.PrefabEditingMode.EditingPrefabPath) })
                     : null;
             }
             if (EditorSceneManager.Save())
-                return $"Scene: {Runtime.Resources.Scene.Current?.Name ?? "Untitled"}";
+                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" });
             return null;
         };
         SaveManager.OnSave += () =>
         {
             if (Project.Current == null) return null;
             SaveProjectState();
-            return "Editor Layout";
+            return Loc.Get("save.layout");
         };
 
         // Set Windows title bar to match Darkest theme color
@@ -334,8 +344,8 @@ public class EditorApplication : Game
             if (ShortcutManager.IsPressed("Global/SaveAs"))
             {
                 if (Application.IsPlaying)
-                    Toasts.Warning("Can't save during Play Mode",
-                        "Exit Play Mode to save your scene.");
+                    Toasts.Warning(Loc.Get("save.cant_play_mode"),
+                        Loc.Get("save.cant_play_mode_msg"));
                 else
                     PromptSaveAs();
             }

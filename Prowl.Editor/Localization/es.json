@@ -1,0 +1,47 @@
+{
+  "panel.build": "Compilar proyecto",
+  "panel.console": "Consola",
+  "panel.environment": "Entorno",
+  "panel.game": "Juego",
+  "panel.hierarchy": "Jerarquia",
+  "panel.inspector": "Inspector",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "Preferencias",
+  "panel.project": "Proyecto",
+  "panel.project_settings": "Ajustes del proyecto",
+  "panel.scene": "Escena",
+
+  "save.auto_saved": "Guardado automatico",
+  "save.cant_play_mode": "No se puede guardar en modo juego",
+  "save.cant_play_mode_msg": "Salga del modo juego para guardar su escena, prefab o grafo.",
+  "save.graph": "Grafo: {{name}}",
+  "save.layout": "Disposicion del editor",
+  "save.nothing": "Nada que guardar",
+  "save.nothing_msg": "Todos los archivos estan actualizados.",
+  "save.prefab": "Prefab: {{name}}",
+  "save.saved": "Guardado",
+  "save.scene": "Escena: {{name}}",
+
+  "dialog.delete_assets": "Eliminar assets",
+
+  "hierarchy.delete": "Eliminar",
+  "hierarchy.duplicate": "Duplicar",
+  "hierarchy.rename": "Renombrar",
+
+  "project.copy_path": "Copiar ruta",
+  "project.delete": "Eliminar",
+  "project.reimport": "Reimportar",
+  "project.rename": "Renombrar",
+  "project.show_in_explorer": "Mostrar en explorador",
+
+  "toast.cursor_locked": "Cursor bloqueado",
+  "toast.cursor_locked_msg": "Pulse Escape para liberar.",
+  "toast.cursor_lock_failed": "Bloqueo de cursor fallido",
+  "toast.cursor_lock_failed_msg": "No hay vista de juego disponible.",
+  "toast.prefab_structure": "Estructura del prefab",
+  "toast.prefab_cant_add": "No se pueden agregar hijos a una instancia de prefab. Rompa el prefab primero.",
+  "toast.prefab_cant_delete": "No se puede eliminar un hijo de prefab. Rompa el prefab primero.",
+  "toast.prefab_cant_move": "No se puede mover un hijo de prefab. Rompa el prefab primero.",
+  "toast.rename_exists": "Ya existe un archivo o carpeta con el nombre '{{name}}'.",
+  "toast.rename_failed": "Error al renombrar"
+}

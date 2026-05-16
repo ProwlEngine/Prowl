@@ -6,6 +6,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
@@ -20,7 +21,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Game")]
 public class GameViewPanel : DockPanel
 {
-    public override string Title => "Game";
+    public override string Title => Loc.Get("panel.game");
     public override string Icon => EditorIcons.Gamepad;
 
     private RenderTexture? _rt;

@@ -12,6 +12,7 @@ using Prowl.Editor.Widgets.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -23,7 +24,7 @@ namespace Prowl.Editor.Panels;
 public class ProjectPanel : DockPanel
 {
     public static ProjectPanel Instance;
-    public override string Title => "Project";
+    public override string Title => Loc.Get("panel.project");
     public override string Icon => EditorIcons.Folder;
 
     // Handled Virtual (Placeholder) content to be displayed with normal objects
@@ -876,11 +877,11 @@ public class ProjectPanel : DockPanel
 
             builder.Separator();
 
-            builder.Item($"Show in Explorer", () => ShowInExplorer(item), icon: EditorIcons.FolderOpen);
+            builder.Item(Loc.Get("project.show_in_explorer"), () => ShowInExplorer(item), icon: EditorIcons.FolderOpen);
 
             if (!item.IsFolder)
             {
-                builder.Item($"Reimport", () =>
+                builder.Item(Loc.Get("project.reimport"), () =>
                 {
                     var db = EditorAssetDatabase.Instance;
                     if (db == null) return;
@@ -889,7 +890,7 @@ public class ProjectPanel : DockPanel
                 }, icon: EditorIcons.ArrowsRotate);
             }
 
-            builder.Item($"Copy Path", () =>
+            builder.Item(Loc.Get("project.copy_path"), () =>
             {
                 Runtime.Debug.Log($"Path: {item.RelativePath}");
             }, icon: EditorIcons.Copy);
@@ -925,9 +926,9 @@ public class ProjectPanel : DockPanel
             builder.Separator();
 
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
-            builder.Item($"Rename", () => StartRename(item, inTree), enabled: !isMulti && !isRoot, icon: EditorIcons.PenToSquare);
+            builder.Item(Loc.Get("project.rename"), () => StartRename(item, inTree), enabled: !isMulti && !isRoot, icon: EditorIcons.PenToSquare);
 
-            builder.Item($"Delete", () => DeleteSelectedItems(), enabled: !isRoot, icon: EditorIcons.Trash);
+            builder.Item(Loc.Get("project.delete"), () => DeleteSelectedItems(), enabled: !isRoot, icon: EditorIcons.Trash);
         });
     }
 
@@ -953,7 +954,7 @@ public class ProjectPanel : DockPanel
             builder.Submenu("Create", sub => AssetCreateMenu.Build(sub, folder, OnCreated), icon: EditorIcons.FileCirclePlus);
             builder.Separator();
 
-            builder.Item("Show in Explorer", () =>
+            builder.Item(Loc.Get("project.show_in_explorer"), () =>
             {
                 string absPath = Path.Combine(Project.Current!.AssetsPath, folder);
                 EditorUtils.OpenFileSystemPath(absPath);
@@ -993,7 +994,7 @@ public class ProjectPanel : DockPanel
 
         string names = selected.Count == 1 ? selected[0].Name : $"{selected.Count} items";
 
-        Origami.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
+        Origami.Confirm(Loc.Get("dialog.delete_assets"), $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
         {
             var db = EditorAssetDatabase.Instance;
             if (db == null) return;
@@ -1042,7 +1043,7 @@ public class ProjectPanel : DockPanel
                 string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
                 if (Directory.Exists(newAbs) || File.Exists(newAbs))
                 {
-                    Toasts.Show("Rename Failed", $"A file or folder named '{newName}' already exists.", ToastType.Warning, 3f);
+                    Toasts.Show(Loc.Get("toast.rename_failed"), Loc.Get("toast.rename_exists", new { name = newName }), ToastType.Warning, 3f);
                 }
                 else if (Directory.Exists(oldAbs))
                 {
@@ -1058,7 +1059,7 @@ public class ProjectPanel : DockPanel
             {
                 bool success = EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath) ?? false;
                 if (!success)
-                    Toasts.Show("Rename Failed", $"A file named '{newName}' already exists.", ToastType.Warning, 3f);
+                    Toasts.Show(Loc.Get("toast.rename_failed"), Loc.Get("toast.rename_exists", new { name = newName }), ToastType.Warning, 3f);
             }
         });
     }

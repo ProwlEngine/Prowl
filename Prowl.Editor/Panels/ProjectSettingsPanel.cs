@@ -6,6 +6,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
@@ -15,7 +16,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Project Settings")]
 public class ProjectSettingsPanel : DockPanel
 {
-    public override string Title => "Project Settings";
+    public override string Title => Loc.Get("panel.project_settings");
     public override string Icon => EditorIcons.Gear;
 
     private int _selectedIndex;

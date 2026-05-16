@@ -6,6 +6,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Scribe;
 using Prowl.Vector;
@@ -17,7 +18,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Console")]
 public class ConsolePanel : DockPanel
 {
-    public override string Title => "Console";
+    public override string Title => Loc.Get("panel.console");
     public override string Icon => EditorIcons.Terminal;
 
     private const float ToolbarHeight = 26f;

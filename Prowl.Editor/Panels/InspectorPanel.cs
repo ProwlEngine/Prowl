@@ -8,6 +8,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
@@ -18,7 +19,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Inspector")]
 public class InspectorPanel : DockPanel
 {
-    public override string Title => "Inspector";
+    public override string Title => Loc.Get("panel.inspector");
     public override string Icon => EditorIcons.Sliders;
 
     // Remember the last non-folder selection so navigating folders doesn't clear the inspector.

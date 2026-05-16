@@ -13,6 +13,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -31,7 +32,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("Tools/ORM Packer")]
 public class OrmPackerPanel : DockPanel
 {
-    public override string Title => "ORM Packer";
+    public override string Title => Loc.Get("panel.orm_packer");
     public override string Icon => EditorIcons.LayerGroup;
 
     public enum SourceChannel { R, G, B, A, Luminance }

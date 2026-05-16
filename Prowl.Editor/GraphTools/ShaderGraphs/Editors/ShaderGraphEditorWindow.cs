@@ -9,6 +9,7 @@ using Prowl.Editor.Inspector;
 using Prowl.Editor.Widgets;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.GraphTools;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
@@ -73,7 +74,7 @@ public class ShaderGraphEditorWindow : DockPanel
     {
         if (_graph == null || !_editor.IsDirty) return null;
         _editor.Save();
-        return $"Graph: {_graph.Name ?? "Untitled"}";
+        return Loc.Get("save.graph", new { name = _graph.Name ?? "Untitled" });
     }
 
     /// <summary>Open a floating shader-graph editor bound to the given graph. Routed

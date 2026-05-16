@@ -1,0 +1,47 @@
+{
+  "panel.build": "Proje Derle",
+  "panel.console": "Konsol",
+  "panel.environment": "Ortam",
+  "panel.game": "Oyun",
+  "panel.hierarchy": "Hiyerarsi",
+  "panel.inspector": "Denetleyici",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "Tercihler",
+  "panel.project": "Proje",
+  "panel.project_settings": "Proje Ayarlari",
+  "panel.scene": "Sahne",
+
+  "save.auto_saved": "Otomatik kaydedildi",
+  "save.cant_play_mode": "Oyun modunda kaydedilemez",
+  "save.cant_play_mode_msg": "Sahne, prefab veya grafi kaydetmek icin oyun modundan cikin.",
+  "save.graph": "Graf: {{name}}",
+  "save.layout": "Editor Duzeni",
+  "save.nothing": "Kaydedilecek bir sey yok",
+  "save.nothing_msg": "Tum dosyalar guncel.",
+  "save.prefab": "Prefab: {{name}}",
+  "save.saved": "Kaydedildi",
+  "save.scene": "Sahne: {{name}}",
+
+  "dialog.delete_assets": "Varliklari Sil",
+
+  "hierarchy.delete": "Sil",
+  "hierarchy.duplicate": "Cogalt",
+  "hierarchy.rename": "Yeniden Adlandir",
+
+  "project.copy_path": "Yolu Kopyala",
+  "project.delete": "Sil",
+  "project.reimport": "Yeniden Ice Aktar",
+  "project.rename": "Yeniden Adlandir",
+  "project.show_in_explorer": "Gezginde Goster",
+
+  "toast.cursor_locked": "Imlec Kilitlendi",
+  "toast.cursor_locked_msg": "Serbest birakmak icin Escape'e basin.",
+  "toast.cursor_lock_failed": "Imlec Kilitleme Basarisiz",
+  "toast.cursor_lock_failed_msg": "Gecerli bir oyun gorunumu yok.",
+  "toast.prefab_structure": "Prefab Yapisi",
+  "toast.prefab_cant_add": "Bir prefab ornegine alt nesne eklenemez. Once prefabi kirin.",
+  "toast.prefab_cant_delete": "Bir prefab alt nesnesi silinemez. Once prefabi kirin.",
+  "toast.prefab_cant_move": "Bir prefab alt nesnesi tasinamaz. Once prefabi kirin.",
+  "toast.rename_exists": "'{{name}}' adinda bir dosya veya klasor zaten mevcut.",
+  "toast.rename_failed": "Yeniden Adlandirma Basarisiz"
+}

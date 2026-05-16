@@ -1,0 +1,47 @@
+{
+  "panel.build": "Сборка проекта",
+  "panel.console": "Консоль",
+  "panel.environment": "Окружение",
+  "panel.game": "Игра",
+  "panel.hierarchy": "Иерархия",
+  "panel.inspector": "Инспектор",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "Настройки",
+  "panel.project": "Проект",
+  "panel.project_settings": "Настройки проекта",
+  "panel.scene": "Сцена",
+
+  "save.auto_saved": "Автосохранение",
+  "save.cant_play_mode": "Невозможно сохранить в режиме игры",
+  "save.cant_play_mode_msg": "Выйдите из режима игры, чтобы сохранить сцену, префаб или граф.",
+  "save.graph": "Граф: {{name}}",
+  "save.layout": "Макет редактора",
+  "save.nothing": "Нечего сохранять",
+  "save.nothing_msg": "Все файлы актуальны.",
+  "save.prefab": "Префаб: {{name}}",
+  "save.saved": "Сохранено",
+  "save.scene": "Сцена: {{name}}",
+
+  "dialog.delete_assets": "Удалить ассеты",
+
+  "hierarchy.delete": "Удалить",
+  "hierarchy.duplicate": "Дублировать",
+  "hierarchy.rename": "Переименовать",
+
+  "project.copy_path": "Копировать путь",
+  "project.delete": "Удалить",
+  "project.reimport": "Переимпортировать",
+  "project.rename": "Переименовать",
+  "project.show_in_explorer": "Показать в проводнике",
+
+  "toast.cursor_locked": "Курсор заблокирован",
+  "toast.cursor_locked_msg": "Нажмите Escape для разблокировки.",
+  "toast.cursor_lock_failed": "Не удалось заблокировать курсор",
+  "toast.cursor_lock_failed_msg": "Нет доступного игрового окна.",
+  "toast.prefab_structure": "Структура префаба",
+  "toast.prefab_cant_add": "Невозможно добавить дочерние объекты в экземпляр префаба. Сначала разорвите связь.",
+  "toast.prefab_cant_delete": "Невозможно удалить дочерний объект префаба. Сначала разорвите связь.",
+  "toast.prefab_cant_move": "Невозможно переместить дочерний объект префаба. Сначала разорвите связь.",
+  "toast.rename_exists": "Файл или папка с именем '{{name}}' уже существует.",
+  "toast.rename_failed": "Ошибка переименования"
+}

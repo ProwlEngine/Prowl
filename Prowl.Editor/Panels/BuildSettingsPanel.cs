@@ -13,6 +13,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Silk.NET.Vulkan;
@@ -54,7 +55,7 @@ public class BuildSettingsPanel : DockPanel
     public static bool IsBuildRunning =>
        BuildPipelineThread != null && BuildPipelineThread.IsAlive;
 
-    public override string Title => "Build Project";
+    public override string Title => Loc.Get("panel.build");
 
     public override string Icon => EditorIcons.Hammer;
 

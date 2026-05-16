@@ -1,0 +1,47 @@
+{
+  "panel.build": "프로젝트 빌드",
+  "panel.console": "콘솔",
+  "panel.environment": "환경",
+  "panel.game": "게임",
+  "panel.hierarchy": "계층구조",
+  "panel.inspector": "인스펙터",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "환경설정",
+  "panel.project": "프로젝트",
+  "panel.project_settings": "프로젝트 설정",
+  "panel.scene": "씬",
+
+  "save.auto_saved": "자동 저장 완료",
+  "save.cant_play_mode": "플레이 모드에서는 저장할 수 없습니다",
+  "save.cant_play_mode_msg": "씬, 프리팹 또는 그래프를 저장하려면 플레이 모드를 종료하세요.",
+  "save.graph": "그래프: {{name}}",
+  "save.layout": "에디터 레이아웃",
+  "save.nothing": "저장할 항목 없음",
+  "save.nothing_msg": "모든 파일이 최신 상태입니다.",
+  "save.prefab": "프리팹: {{name}}",
+  "save.saved": "저장 완료",
+  "save.scene": "씬: {{name}}",
+
+  "dialog.delete_assets": "에셋 삭제",
+
+  "hierarchy.delete": "삭제",
+  "hierarchy.duplicate": "복제",
+  "hierarchy.rename": "이름 변경",
+
+  "project.copy_path": "경로 복사",
+  "project.delete": "삭제",
+  "project.reimport": "재가져오기",
+  "project.rename": "이름 변경",
+  "project.show_in_explorer": "탐색기에서 표시",
+
+  "toast.cursor_locked": "커서 잠김",
+  "toast.cursor_locked_msg": "Escape를 눌러 해제하세요.",
+  "toast.cursor_lock_failed": "커서 잠금 실패",
+  "toast.cursor_lock_failed_msg": "유효한 게임 뷰가 없습니다.",
+  "toast.prefab_structure": "프리팹 구조",
+  "toast.prefab_cant_add": "프리팹 인스턴스에 자식을 추가할 수 없습니다. 먼저 프리팹을 해제하세요.",
+  "toast.prefab_cant_delete": "프리팹 자식을 삭제할 수 없습니다. 먼저 프리팹을 해제하세요.",
+  "toast.prefab_cant_move": "프리팹 자식을 이동할 수 없습니다. 먼저 프리팹을 해제하세요.",
+  "toast.rename_exists": "'{{name}}'이라는 이름의 파일 또는 폴더가 이미 존재합니다.",
+  "toast.rename_failed": "이름 변경 실패"
+}

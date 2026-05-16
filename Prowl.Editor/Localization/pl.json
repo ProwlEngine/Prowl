@@ -1,0 +1,47 @@
+{
+  "panel.build": "Kompiluj projekt",
+  "panel.console": "Konsola",
+  "panel.environment": "Otoczenie",
+  "panel.game": "Gra",
+  "panel.hierarchy": "Hierarchia",
+  "panel.inspector": "Inspektor",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "Preferencje",
+  "panel.project": "Projekt",
+  "panel.project_settings": "Ustawienia projektu",
+  "panel.scene": "Scena",
+
+  "save.auto_saved": "Automatycznie zapisano",
+  "save.cant_play_mode": "Nie mozna zapisac w trybie gry",
+  "save.cant_play_mode_msg": "Wyjdz z trybu gry, aby zapisac scene, prefab lub graf.",
+  "save.graph": "Graf: {{name}}",
+  "save.layout": "Uklad edytora",
+  "save.nothing": "Nic do zapisania",
+  "save.nothing_msg": "Wszystkie pliki sa aktualne.",
+  "save.prefab": "Prefab: {{name}}",
+  "save.saved": "Zapisano",
+  "save.scene": "Scena: {{name}}",
+
+  "dialog.delete_assets": "Usun assety",
+
+  "hierarchy.delete": "Usun",
+  "hierarchy.duplicate": "Duplikuj",
+  "hierarchy.rename": "Zmien nazwe",
+
+  "project.copy_path": "Kopiuj sciezke",
+  "project.delete": "Usun",
+  "project.reimport": "Reimportuj",
+  "project.rename": "Zmien nazwe",
+  "project.show_in_explorer": "Pokaz w eksploratorze",
+
+  "toast.cursor_locked": "Kursor zablokowany",
+  "toast.cursor_locked_msg": "Nacisnij Escape, aby odblokowac.",
+  "toast.cursor_lock_failed": "Blokada kursora nie powiodla sie",
+  "toast.cursor_lock_failed_msg": "Brak dostepnego widoku gry.",
+  "toast.prefab_structure": "Struktura prefabu",
+  "toast.prefab_cant_add": "Nie mozna dodac potomkow do instancji prefabu. Najpierw rozlacz prefab.",
+  "toast.prefab_cant_delete": "Nie mozna usunac potomka prefabu. Najpierw rozlacz prefab.",
+  "toast.prefab_cant_move": "Nie mozna przeniesc potomka prefabu. Najpierw rozlacz prefab.",
+  "toast.rename_exists": "Plik lub folder o nazwie '{{name}}' juz istnieje.",
+  "toast.rename_failed": "Zmiana nazwy nie powiodla sie"
+}

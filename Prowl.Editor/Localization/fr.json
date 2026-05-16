@@ -1,0 +1,47 @@
+{
+  "panel.build": "Compiler le projet",
+  "panel.console": "Console",
+  "panel.environment": "Environnement",
+  "panel.game": "Jeu",
+  "panel.hierarchy": "Hierarchie",
+  "panel.inspector": "Inspecteur",
+  "panel.orm_packer": "ORM Packer",
+  "panel.preferences": "Preferences",
+  "panel.project": "Projet",
+  "panel.project_settings": "Parametres du projet",
+  "panel.scene": "Scene",
+
+  "save.auto_saved": "Sauvegarde automatique",
+  "save.cant_play_mode": "Impossible de sauvegarder en mode jeu",
+  "save.cant_play_mode_msg": "Quittez le mode jeu pour sauvegarder votre scene, prefab ou graphe.",
+  "save.graph": "Graphe : {{name}}",
+  "save.layout": "Disposition de l'editeur",
+  "save.nothing": "Rien a sauvegarder",
+  "save.nothing_msg": "Tous les fichiers sont a jour.",
+  "save.prefab": "Prefab : {{name}}",
+  "save.saved": "Sauvegarde",
+  "save.scene": "Scene : {{name}}",
+
+  "dialog.delete_assets": "Supprimer les assets",
+
+  "hierarchy.delete": "Supprimer",
+  "hierarchy.duplicate": "Dupliquer",
+  "hierarchy.rename": "Renommer",
+
+  "project.copy_path": "Copier le chemin",
+  "project.delete": "Supprimer",
+  "project.reimport": "Reimporter",
+  "project.rename": "Renommer",
+  "project.show_in_explorer": "Afficher dans l'explorateur",
+
+  "toast.cursor_locked": "Curseur verrouille",
+  "toast.cursor_locked_msg": "Appuyez sur Echap pour liberer.",
+  "toast.cursor_lock_failed": "Verrouillage du curseur echoue",
+  "toast.cursor_lock_failed_msg": "Aucune vue de jeu disponible.",
+  "toast.prefab_structure": "Structure du prefab",
+  "toast.prefab_cant_add": "Impossible d'ajouter des enfants a une instance de prefab. Cassez d'abord le prefab.",
+  "toast.prefab_cant_delete": "Impossible de supprimer un enfant de prefab. Cassez d'abord le prefab.",
+  "toast.prefab_cant_move": "Impossible de deplacer un enfant de prefab. Cassez d'abord le prefab.",
+  "toast.rename_exists": "Un fichier ou dossier nomme '{{name}}' existe deja.",
+  "toast.rename_failed": "Echec du renommage"
+}

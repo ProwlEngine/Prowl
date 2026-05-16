@@ -12,6 +12,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
+using Prowl.Rosetta;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -21,7 +22,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Hierarchy")]
 public class HierarchyPanel : DockPanel
 {
-    public override string Title => "Hierarchy";
+    public override string Title => Loc.Get("panel.hierarchy");
     public override string Icon => EditorIcons.Sitemap;
 
     private string _searchText = "";
@@ -526,7 +527,7 @@ public class HierarchyPanel : DockPanel
                 int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
                 if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
                 {
-                    Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", ToastType.Warning, 3f);
+                    Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_move"), ToastType.Warning, 3f);
                     continue;
                 }
             }
@@ -542,7 +543,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Into:
                     if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
                     {
-                        Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", ToastType.Warning, 3f);
+                        Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_add"), ToastType.Warning, 3f);
                         continue;
                     }
                     dragged.SetParent(target);
@@ -725,18 +726,18 @@ public class HierarchyPanel : DockPanel
 
             if (multiSelect)
             {
-                builder.Item($"Duplicate ({selectedGOs.Count})", () =>
+                builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
                 {
                     var dupes = GameObjectClipboard.Duplicate(selectedGOs);
                     foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
                 }, icon: EditorIcons.Copy);
 
-                builder.Item($"Rename ({selectedGOs.Count})", () =>
+                builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
                 {
                     StartRenameGO(firstSelected!, selectedGOs);
                 }, icon: EditorIcons.PenToSquare);
 
-                builder.Item($"Delete ({selectedGOs.Count})", () =>
+                builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
                 {
                     foreach (var go in selectedGOs.ToList()) DeleteGameObject(go);
                 }, icon: EditorIcons.Trash);
@@ -757,16 +758,16 @@ public class HierarchyPanel : DockPanel
             else
             {
                 var go = firstSelected!;
-                builder.Item("Duplicate", () =>
+                builder.Item(Loc.Get("hierarchy.duplicate"), () =>
                 {
                     var dupes = GameObjectClipboard.Duplicate([go]);
                     foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
                 }, icon: EditorIcons.Copy);
-                builder.Item("Rename", () =>
+                builder.Item(Loc.Get("hierarchy.rename"), () =>
                 {
                     StartRenameGO(go, [go]);
                 }, icon: EditorIcons.PenToSquare);
-                builder.Item("Delete", () => DeleteGameObject(go), icon: EditorIcons.Trash);
+                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash);
                 builder.Separator();
                 builder.Item(go.Enabled ? "Disable" : "Enable", () =>
                 {
@@ -839,7 +840,7 @@ public class HierarchyPanel : DockPanel
             int childIdx = go.Parent.Children.IndexOf(go);
             if (childIdx >= 0 && childIdx < go.Parent.PrefabChildCount)
             {
-                Toasts.Show("Prefab Structure", "Cannot delete a prefab child. Break the prefab first.", ToastType.Warning, 3f);
+                Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_delete"), ToastType.Warning, 3f);
                 return;
             }
         }

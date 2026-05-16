@@ -6,6 +6,7 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
@@ -16,7 +17,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Preferences")]
 public class PreferencesPanel : DockPanel
 {
-    public override string Title => "Preferences";
+    public override string Title => Loc.Get("panel.preferences");
     public override string Icon => EditorIcons.Sliders;
 
     private enum Tab { General, Theme, Shortcuts }
