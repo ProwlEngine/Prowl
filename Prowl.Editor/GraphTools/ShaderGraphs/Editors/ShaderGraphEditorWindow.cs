@@ -14,6 +14,7 @@ using Prowl.Runtime.GraphTools;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
 using Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
+using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
 namespace Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 /// <summary>
@@ -63,6 +64,16 @@ public class ShaderGraphEditorWindow : DockPanel
         // Nested subgraphs of a shader graph are themselves shader graphs route
         // "Open Subgraph" back through this window type so they get the same sidebar.
         _editor.OnOpenSubgraph = OpenSubgraph;
+
+        // Register with SaveManager so Ctrl+S saves dirty graphs
+        SaveManager.OnSave += OnProjectSave;
+    }
+
+    private string? OnProjectSave()
+    {
+        if (_graph == null || !_editor.IsDirty) return null;
+        _editor.Save();
+        return $"Graph: {_graph.Name ?? "Untitled"}";
     }
 
     /// <summary>Open a floating shader-graph editor bound to the given graph. Routed

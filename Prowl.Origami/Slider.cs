@@ -253,6 +253,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _disabled = true;
         var ramp = _theme.Get(_variant);
         var ink = _theme.Ink;
         var font = _theme.Font;

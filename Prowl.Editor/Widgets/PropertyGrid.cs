@@ -365,7 +365,7 @@ public static class PropertyGrid
     //  Type Picker (for polymorphism)
     // ================================================================
 
-    static void DrawTypePicker(Paper paper, string id, Type baseType, object? currentValue, Action<object?> onChange)
+    public static void DrawTypePicker(Paper paper, string id, Type baseType, object? currentValue, Action<object?> onChange)
     {
         var types = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })

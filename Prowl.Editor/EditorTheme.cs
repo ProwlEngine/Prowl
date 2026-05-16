@@ -1,3 +1,4 @@
+using System;
 using System.Drawing;
 
 using Prowl.OrigamiUI;
@@ -136,12 +137,27 @@ public static class EditorTheme
 
         Metrics = new OrigamiMetrics
         {
-            Rounding     = Roundness,
-            HeaderHeight = RowHeight,
-            HeaderPadX   = 6f,
-            IconWidth    = 16f,
-            BadgePadLeft = 6f,
-            FontSize     = FontSize,
+            Rounding          = Roundness,
+            ContainerRounding = Roundness + 4f,
+            SmallRounding     = MathF.Max(2f, Roundness * 0.25f),
+            RowHeight         = RowHeight,
+            HeaderHeight      = RowHeight,
+            CompactHeight     = RowHeight - 2f,
+            SpacingSmall      = Spacing,
+            Spacing           = Spacing * 2f,
+            SpacingMedium     = 6f,
+            SpacingLarge      = 8f,
+            PaddingSmall      = Padding,
+            Padding           = Padding + 2f,
+            PaddingLarge      = Padding * 3f,
+            IndentWidth       = 16f,
+            HeaderPadX        = 6f,
+            IconWidth         = 16f,
+            IconBoxWidth      = 20f,
+            BadgePadLeft      = 6f,
+            FontSize          = FontSize,
+            FontSizeSmall     = FontSize - 2f,
+            LabelWidth        = LabelWidth,
         },
 
         Icons = new OrigamiIcons

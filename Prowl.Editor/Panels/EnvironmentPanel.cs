@@ -13,6 +13,7 @@ using Prowl.Vector;
 
 using VColor = Prowl.Vector.Color;
 
+using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
 namespace Prowl.Editor.Panels;
 
 [EditorWindow("General/Environment")]

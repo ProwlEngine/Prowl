@@ -82,23 +82,24 @@ public static class TooltipSystem
         _pending = null;
 
         var ink = theme.Ink;
-        float fontSize = theme.Metrics.FontSize - 1;
-        float titleFontSize = theme.Metrics.FontSize;
+        var m = theme.Metrics;
+        float fontSize = m.FontSize - 1;
+        float titleFontSize = m.FontSize;
 
         bool hasTitle = !string.IsNullOrEmpty(content.Title);
         bool hasIcon = !string.IsNullOrEmpty(content.Icon);
         bool hasShortcut = !string.IsNullOrEmpty(content.Shortcut);
         bool hasText = !string.IsNullOrEmpty(content.Text);
 
-        float padX = 8f, padY = 6f;
+        float padX = m.SpacingLarge, padY = m.Padding;
 
         // Estimate width
         float textW = 0;
         if (hasTitle) textW = MathF.Max(textW, (float)paper.MeasureText(content.Title!, titleFontSize, font).X);
         if (hasText) textW = MathF.Max(textW, (float)paper.MeasureText(content.Text, fontSize, font).X);
-        if (hasShortcut) textW += (float)paper.MeasureText(content.Shortcut!, fontSize, font).X + 12f;
+        if (hasShortcut) textW += (float)paper.MeasureText(content.Shortcut!, fontSize, font).X + m.PaddingLarge;
 
-        float tooltipW = MathF.Min(content.MaxWidth, textW + padX * 2 + (hasIcon ? 22f : 0f));
+        float tooltipW = MathF.Min(content.MaxWidth, textW + padX * 2 + (hasIcon ? m.HeaderHeight : 0f));
         if (tooltipW < 40) tooltipW = 40;
 
         // Position below cursor
@@ -119,10 +120,10 @@ public static class TooltipSystem
             .Width(tooltipW).Height(UnitValue.Auto)
             .BackgroundColor(bgColor)
             .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(4)
+            .Rounded(m.Rounding)
             .BoxShadow(0, 2, 8, -2, Color.FromArgb(80, 0, 0, 0))
             .Padding(padX, padX, padY, padY)
-            .ColBetween(2)
+            .ColBetween(m.SpacingSmall)
             .Layer(Layer.Topmost + 1000)
             .ClampToScreen()
             .IsNotInteractable()
@@ -130,10 +131,10 @@ public static class TooltipSystem
         {
             if (hasTitle || hasIcon)
             {
-                using (paper.Row("tt_hdr").Height(UnitValue.Auto).RowBetween(4).Enter())
+                using (paper.Row("tt_hdr").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
                 {
                     if (hasIcon)
-                        paper.Box("tt_ico").Width(16).Height(18)
+                        paper.Box("tt_ico").Width(m.IconWidth).Height(18)
                             .Text(content.Icon!, font).TextColor(ink.C400)
                             .FontSize(fontSize).Alignment(TextAlignment.MiddleCenter);
 

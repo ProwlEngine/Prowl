@@ -11,8 +11,96 @@ using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.Panels;
+
+// ── PropertyGrid demo types ────────────────────────────────
+
+public enum DemoWeaponType { Sword, Bow, Staff, Dagger, Hammer }
+
+[Flags]
+public enum DemoStatusFlags
+{
+    None = 0,
+    Poisoned = 1 << 0,
+    Burning = 1 << 1,
+    Frozen = 1 << 2,
+    Stunned = 1 << 3,
+    Blessed = 1 << 4,
+}
+
+public class DemoNestedStats
+{
+    public int Strength = 10;
+    public int Agility = 8;
+    public int Intelligence = 12;
+    [Range(1, 100)] public float CritChance = 15f;
+}
+
+public class DemoPropertyGridTarget
+{
+    // -- Basics --
+    [Header("Identity")]
+    public string Name = "Hero";
+    public bool IsActive = true;
+    public int Level = 5;
+    [Range(0, 100)] public float Health = 75f;
+    [Range(0, 1)] public float Armor = 0.3f;
+
+    [Space]
+    [Header("Appearance")]
+    public Prowl.Vector.Color TintColor = new(0.2f, 0.6f, 1f, 1f);
+    public Prowl.Vector.Float3 Position = new(1f, 2f, 3f);
+    public Prowl.Vector.Float2 UVOffset = new(0f, 0f);
+
+    [Space]
+    [Header("Combat")]
+    public DemoWeaponType Weapon = DemoWeaponType.Sword;
+    public DemoStatusFlags Status = DemoStatusFlags.Poisoned | DemoStatusFlags.Blessed;
+    [Tooltip("Damage dealt per hit before modifiers")]
+    public float BaseDamage = 25f;
+
+    [Space]
+    [Header("Description")]
+    [TextArea(3, 6)]
+    public string Bio = "A brave adventurer.\nReady for anything.";
+
+    [Space]
+    [Header("Inventory")]
+    public List<string> Inventory = new() { "Health Potion", "Iron Sword", "Torch" };
+    public List<int> LootTable = new() { 10, 25, 50, 100 };
+
+    [Space]
+    [Header("Stats")]
+    public DemoNestedStats Stats = new();
+
+    [Space]
+    [Header("Conditional Fields")]
+    public bool HasMagic = false;
+    [ShowIf("HasMagic")] public float ManaPool = 100f;
+    [ShowIf("HasMagic")] [Range(0, 10)] public int SpellSlots = 3;
+
+    [Space]
+    [Header("Read-Only Data")]
+    [ReadOnly] public string UniqueId = "hero_001";
+    [ReadOnly] public int CreatedFrame = 42;
+
+    [Space]
+    public double PreciseCoord = 3.14159265358979;
+    public long BigNumber = 9999999999L;
+    public byte SmallValue = 128;
+
+    [Button("Reset Health")]
+    public void ResetHealth() => Health = 100f;
+
+    [Button("Randomize Color")]
+    public void RandomizeColor()
+    {
+        var rng = new Random();
+        TintColor = new Prowl.Vector.Color((float)rng.NextDouble(), (float)rng.NextDouble(), (float)rng.NextDouble(), 1f);
+    }
+}
 
 /// <summary>
 /// Stress-test surface for every Origami widget. Currently focused on
@@ -271,6 +359,19 @@ public class OrigamiPlaygroundPanel : DockPanel
     private string? _treeSelectedId;
     private HashSet<string> _treeChecked = new() { "src", "main_cs" };
 
+    // ── PropertyGrid state ────────────────────────────────────
+    private DemoPropertyGridTarget _pgTarget = new();
+    private DemoPropertyGridTarget _pgTarget2 = new()
+    {
+        Name = "Goblin",
+        Level = 2,
+        Health = 30f,
+        Weapon = DemoWeaponType.Dagger,
+        TintColor = new Prowl.Vector.Color(0.4f, 0.8f, 0.2f, 1f),
+        HasMagic = true,
+        ManaPool = 50f,
+    };
+
     // ── Label state ────────────────────────────────────────────
     private int _labelClickCount;
 
@@ -334,6 +435,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_AppBar(paper);
                 Section_ContextMenus(paper);
                 Section_Modals(paper);
+                Section_PropertyGrid(paper);
                 Section_Labels(paper);
                 Section_Loading(paper);
                 Section_Tree(paper);
@@ -1971,6 +2073,38 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Origami.Separator(paper, "op_hdr_sep2");
                 Origami.Header(paper, "op_hdr_thick", "Thick Line").Line().Thickness(4).Show();
                 Origami.Header(paper, "op_hdr_thicc", "Thick Line B").Underline().Thickness(4).Primary().Show();
+            }
+        });
+    }
+
+    private void Section_PropertyGrid(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_pg", "PropertyGrid").DefaultExpanded().Body(() =>
+        {
+            Origami.Header(paper, "pg_h1", "Full Object (all attribute types)").Underline().Show();
+
+            StateLine(paper, "pg_info",
+                "Reflects serializable fields, respects [Header], [Space], [Range], [ShowIf], [ReadOnly], [TextArea], [Button], enums, lists, nested objects.");
+
+            using (paper.Column("pg_col1").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                .Padding(8, 8, 8, 8)
+                .BackgroundColor(System.Drawing.Color.FromArgb(20, 255, 255, 255))
+                .Rounded(4).Enter())
+            {
+                Origami.PropertyGrid(paper, "pg_demo1", _pgTarget, EditorApplication.PropertyGridConfig).Show();
+            }
+
+            Origami.Header(paper, "pg_h2", "Second Instance (different defaults)").Underline().Show();
+
+            StateLine(paper, "pg_info2",
+                "Same class, different initial values. HasMagic is true so conditional fields are visible.");
+
+            using (paper.Column("pg_col2").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                .Padding(8, 8, 8, 8)
+                .BackgroundColor(System.Drawing.Color.FromArgb(20, 255, 255, 255))
+                .Rounded(4).Enter())
+            {
+                Origami.PropertyGrid(paper, "pg_demo2", _pgTarget2, EditorApplication.PropertyGridConfig).Show();
             }
         });
     }

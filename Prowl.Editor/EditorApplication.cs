@@ -20,6 +20,9 @@ public class EditorApplication : Game
 {
     public static EditorApplication? Instance { get; private set; }
 
+    /// <summary>The editor's PropertyGrid configuration (drawers, handlers, callbacks).</summary>
+    public static OrigamiUI.PropertyGridConfig PropertyGridConfig { get; private set; } = null!;
+
     private DockSpace _dockSpace = null!;
     private double _time;
     private double _introTime = double.MaxValue;
@@ -162,6 +165,54 @@ public class EditorApplication : Game
         // Initialize status bar log tracking
         InitializeStatusBar();
 
+        // Build the editor's PropertyGrid config
+        PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
+        OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
+        AttributeHandlers.BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
+        PropertyGridConfig.OnBeginRoot = target => Undo.Snapshot(target);
+        PropertyGridConfig.OnFieldChanged = target => (target as Runtime.EngineObject)?.OnValidate();
+        PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
+        {
+            if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
+                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+        };
+        PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
+        {
+            Widgets.PropertyGrid.DrawTypePicker(paper, id, baseType, currentValue, onChange);
+        };
+        PropertyGridConfig.FallbackFieldDrawer = (paper, id, label, fieldType, value, onChange, depth) =>
+        {
+            if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
+                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+            var editor = Inspector.PropertyEditorRegistry.GetEditor(fieldType);
+            if (editor != null)
+            {
+                editor.OnGUI(paper, id, label, value, onChange, depth);
+                return true;
+            }
+            return false;
+        };
+
+        // Register save handlers
+        SaveManager.OnSave += () =>
+        {
+            if (Prefabs.PrefabEditingMode.IsEditing)
+            {
+                return Prefabs.PrefabEditingMode.Save()
+                    ? $"Prefab: {System.IO.Path.GetFileNameWithoutExtension(Prefabs.PrefabEditingMode.EditingPrefabPath)}"
+                    : null;
+            }
+            if (EditorSceneManager.Save())
+                return $"Scene: {Runtime.Resources.Scene.Current?.Name ?? "Untitled"}";
+            return null;
+        };
+        SaveManager.OnSave += () =>
+        {
+            if (Project.Current == null) return null;
+            SaveProjectState();
+            return "Editor Layout";
+        };
+
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
 
@@ -280,28 +331,7 @@ public class EditorApplication : Game
         // Global keyboard shortcuts
         if (!ShortcutManager.IsRebinding)
         {
-            if (ShortcutManager.IsPressed("Global/Save"))
-            {
-                // Block any save while the game is running scene state changes every frame
-                // during play mode, and writing that to disk silently overwrites the user's
-                // authoring state. Toast once per press so the shortcut isn't silent.
-                if (Application.IsPlaying)
-                {
-                    Toasts.Warning("Can't save during Play Mode",
-                        "Exit Play Mode to save your scene, prefab, or graph.");
-                }
-                else if (Prefabs.PrefabEditingMode.IsEditing)
-                {
-                    // Focus-dependent routing: when editing a prefab, Ctrl+S saves the prefab
-                    // rather than the temporary edit scene that wraps it.
-                    Prefabs.PrefabEditingMode.Save();
-                }
-                else if (!EditorSceneManager.Save())
-                {
-                    PromptSaveAs();
-                }
-            }
-            else if (ShortcutManager.IsPressed("Global/SaveAs"))
+            if (ShortcutManager.IsPressed("Global/SaveAs"))
             {
                 if (Application.IsPlaying)
                     Toasts.Warning("Can't save during Play Mode",
@@ -333,9 +363,13 @@ public class EditorApplication : Game
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
 
-        // Push the editor's Origami theme persists until EndGui disposes it
+        // Push the editor's Origami theme and begin frame
         _origamiScope?.Dispose();
         _origamiScope = EditorTheme.PushOrigami();
+        OrigamiUI.Origami.BeginFrame(paper, (float)Time.UnscaledDeltaTime);
+
+        // Save system update (Ctrl+S + auto-save) - after theme push so toasts get icons
+        SaveManager.Update((float)Time.UnscaledDeltaTime);
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -387,12 +421,7 @@ public class EditorApplication : Game
                 ThumbnailGenerator.EnqueueMissing();
         }
 
-        // Auto-save layout periodically (every ~30s). Skipped during play mode so the
-        // per-panel state snapshot always reflects authoring state, not the transient
-        // playmode snapshot (e.g. scene-view camera moved during play, selection pointing
-        // at a runtime-spawned GO that won't exist next session).
-        if (Project.Current != null && !Application.IsPlaying && _time % 30.0 < Time.UnscaledDeltaTime)
-            Docking.LayoutSerializer.Save(_dockSpace);
+        // Layout auto-save is handled by SaveManager's auto-save timer.
 
         // Show project launcher or intro close phase
         if (ProjectLauncher.IsOpen || _introClosing)
@@ -665,16 +694,8 @@ public class EditorApplication : Game
 
     public override void EndGui(Paper paper)
     {
-        // Drag & drop update + visual
-        DragDrop.Update(paper);
-        DragDrop.DrawVisual(paper);
-
-        // Systems drawn on top (Overlay/Topmost layers)
-        OrigamiUI.ContextMenu.Tick();
-        OrigamiUI.Modal.Draw(paper);
-        Widgets.SaveBatch.Flush();
-        Toasts.Draw(paper);
-        OrigamiUI.TooltipSystem.Draw(paper);
+        // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
+        OrigamiUI.Origami.EndFrame(paper);
 
         // Intro animation overlay
         if (_introTime < IntroDuration)

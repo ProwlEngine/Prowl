@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.PropertyEditors;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -334,8 +335,10 @@ public class AnimationCurvePropertyEditor : PropertyEditor
 {
     public override void OnGUI(Paper paper, string id, string label, object? value, Action<object?> onChange, int depth)
     {
-        CurveEditor.CurveField(paper, id, label, (AnimationCurve)(value ?? new AnimationCurve()))
-            .OnValueChanged(v => onChange(v));
+        InspectorRow.Draw(paper, id, label, () =>
+            Widgets.PropertyEditors.CurveField.Create(paper, $"{id}_cf",
+                (AnimationCurve)(value ?? new AnimationCurve()),
+                v => onChange(v)).Show());
     }
 }
 

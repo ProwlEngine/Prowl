@@ -107,13 +107,13 @@ public sealed class AppBarBuilder
             .Position(0, posY)
             .Size(_paper.Percent(100), _height)
             .BackgroundColor(bg)
-            .ChildLeft(6).RowBetween(0)
+            .ChildLeft(metrics.Padding).RowBetween(0)
             .Enter())
         {
             var barHandle = _paper.CurrentParent;
 
             // ── Left: Menus ─────────────────────────────────
-            float menuPad = metrics.HeaderPadX + 4;
+            float menuPad = metrics.HeaderPadX + metrics.Spacing;
             int openMenuIdx = _paper.GetElementStorage(barHandle, "openMenu", -1);
 
             for (int i = 0; i < _menus.Count; i++)
@@ -189,7 +189,7 @@ public sealed class AppBarBuilder
                         .OnClick(0, (_, _) => _paper.SetElementStorage(barHandle, "openMenu", -1));
 
                     // Calculate X position from measured menu button widths
-                    float ddX = 6f;
+                    float ddX = metrics.Padding;
                     for (int i = 0; i < openMenu; i++)
                     {
                         float tw = (float)_paper.MeasureText(_menus[i].Label, metrics.FontSize, font).X;
@@ -210,15 +210,12 @@ public sealed class AppBarBuilder
     // ── Dropdown rendering ───────────────────────────────────
 
     private const float DropdownW = 220f;
-    private const float ItemH = 24f;
 
     private static void RenderDropdown(Paper paper, string id, List<AppMenuItem> items,
         float x, float y, Scribe.FontFile font, OrigamiRamp ink, OrigamiTheme theme,
         Action close, bool openUpward = false)
     {
-        var pos = openUpward
-            ? PositionType.SelfDirected
-            : PositionType.SelfDirected;
+        var m = theme.Metrics;
 
         using (paper.Column(id)
             .PositionType(PositionType.SelfDirected)
@@ -226,8 +223,8 @@ public sealed class AppBarBuilder
             .Width(DropdownW).Height(UnitValue.Auto)
             .BackgroundColor(theme.Neutral.C300)
             .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(6)
-            .Padding(3, 3, 3, 3)
+            .Rounded(m.ContainerRounding)
+            .Padding(m.PaddingSmall, m.PaddingSmall, m.PaddingSmall, m.PaddingSmall)
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .BoxShadow(0, 2, 16, -4, Color.FromArgb(100, 0, 0, 0))
@@ -241,7 +238,7 @@ public sealed class AppBarBuilder
 
                 if (item.IsSeparator)
                 {
-                    paper.Box($"{id}_sep_{idx}").Height(1).Margin(4, 4, 4, 4)
+                    paper.Box($"{id}_sep_{idx}").Height(1).Margin(m.Spacing, m.Spacing, m.Spacing, m.Spacing)
                         .BackgroundColor(ink.C200);
                     continue;
                 }
@@ -250,8 +247,8 @@ public sealed class AppBarBuilder
                 var textColor = enabled ? ink.C500 : ink.C300;
                 string label = item.DisplayLabel;
 
-                var row = paper.Row($"{id}_i_{idx}").Height(ItemH)
-                    .Rounded(3)
+                var row = paper.Row($"{id}_i_{idx}").Height(m.RowHeight)
+                    .Rounded(m.SmallRounding)
                     .Hovered.BackgroundColor(enabled ? theme.Primary.C400 : Color.Transparent).End();
 
                 if (enabled && item.OnClick != null && !item.HasSubItems)
@@ -260,37 +257,37 @@ public sealed class AppBarBuilder
                 using (row.Enter())
                 {
                     // Check mark
-                    paper.Box($"{id}_chk_{idx}").Width(24).Height(ItemH)
+                    paper.Box($"{id}_chk_{idx}").Width(m.RowHeight).Height(m.RowHeight)
                         .Text(item.IsChecked ? theme.Icons.Check : "", font)
-                        .TextColor(textColor).FontSize(theme.Metrics.FontSize - 1)
+                        .TextColor(textColor).FontSize(m.FontSize - 1)
                         .Alignment(TextAlignment.MiddleCenter);
 
                     // Icon
                     if (!string.IsNullOrEmpty(item.Icon))
                     {
-                        paper.Box($"{id}_ico_{idx}").Width(20).Height(ItemH)
+                        paper.Box($"{id}_ico_{idx}").Width(m.IconBoxWidth).Height(m.RowHeight)
                             .Text(item.Icon, font).TextColor(textColor)
-                            .FontSize(theme.Metrics.FontSize - 1)
+                            .FontSize(m.FontSize - 1)
                             .Alignment(TextAlignment.MiddleCenter);
                     }
 
                     // Label
                     paper.Box($"{id}_lbl_{idx}")
-                        .Width(UnitValue.Stretch()).Height(ItemH)
+                        .Width(UnitValue.Stretch()).Height(m.RowHeight)
                         .Text(label, font).TextColor(textColor)
-                        .FontSize(theme.Metrics.FontSize)
+                        .FontSize(m.FontSize)
                         .Alignment(TextAlignment.MiddleLeft);
 
                     // Submenu arrow
                     if (item.HasSubItems)
                     {
-                        paper.Box($"{id}_arr_{idx}").Width(20).Height(ItemH)
+                        paper.Box($"{id}_arr_{idx}").Width(m.IconBoxWidth).Height(m.RowHeight)
                             .Text(theme.Icons.ChevronRight, font).TextColor(ink.C400)
-                            .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
+                            .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
                         if (paper.IsParentHovered)
                             RenderDropdown(paper, $"{id}_s_{idx}", item.SubItems,
-                                DropdownW - 8, 0, font, ink, theme, close);
+                                DropdownW - m.SpacingLarge, 0, font, ink, theme, close);
                     }
                 }
             }

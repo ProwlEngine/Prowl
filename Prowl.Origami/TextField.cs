@@ -225,6 +225,7 @@ public sealed class TextFieldBuilder
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _readOnly = true;
         var ramp = _theme.Get(_variant);
         var ink = _theme.Ink;
         var font = _theme.Font;

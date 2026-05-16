@@ -68,13 +68,14 @@ public sealed class ContextBuilder
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
             var ink = theme.Ink;
+            var m = theme.Metrics;
             var textColor = Enabled ? ink.C500 : ink.C300;
-            float rowH = theme.Metrics.HeaderHeight;
+            float rowH = m.RowHeight;
 
             var row = paper.Row($"{id}_i_{index}")
                 .Height(rowH)
                 .Hovered.BackgroundColor(Enabled ? theme.Primary.C400 : Color.Transparent).End()
-                .Rounded(3);
+                .Rounded(m.SmallRounding);
 
             if (Enabled)
                 row.OnClick(0, (_, _) => { OnClick?.Invoke(); close(); });
@@ -84,19 +85,19 @@ public sealed class ContextBuilder
                 if (!string.IsNullOrEmpty(Icon))
                 {
                     paper.Box($"{id}_ico_{index}")
-                        .Width(24).Height(rowH).ChildLeft(8)
+                        .Width(m.RowHeight).Height(rowH).ChildLeft(m.SpacingLarge)
                         .Text(Icon, font).TextColor(textColor)
-                        .FontSize(theme.Metrics.FontSize - 1).Alignment(TextAlignment.MiddleCenter);
+                        .FontSize(m.FontSize - 1).Alignment(TextAlignment.MiddleCenter);
                 }
                 else
                 {
-                    paper.Box($"{id}_pad_{index}").Width(8);
+                    paper.Box($"{id}_pad_{index}").Width(m.SpacingLarge);
                 }
 
                 paper.Box($"{id}_l_{index}")
                     .Width(UnitValue.Stretch()).Height(rowH)
                     .Text(Label, font).TextColor(textColor)
-                    .FontSize(theme.Metrics.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
             }
         }
     }
@@ -111,13 +112,14 @@ public sealed class ContextBuilder
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
             var ink = theme.Ink;
+            var m = theme.Metrics;
             var textColor = Enabled ? ink.C500 : ink.C300;
-            float rowH = theme.Metrics.HeaderHeight;
+            float rowH = m.RowHeight;
 
             var row = paper.Row($"{id}_i_{index}")
                 .Height(rowH)
                 .Hovered.BackgroundColor(Enabled ? theme.Primary.C400 : Color.Transparent).End()
-                .Rounded(3);
+                .Rounded(m.SmallRounding);
 
             if (Enabled)
                 row.OnClick(0, (_, _) => { OnClick?.Invoke(); });
@@ -130,9 +132,9 @@ public sealed class ContextBuilder
 
                 paper.Box($"{id}_l_{index}")
                     .Width(UnitValue.Stretch()).Height(rowH)
-                    .ChildLeft(4)
+                    .ChildLeft(m.Spacing)
                     .Text(Label, font).TextColor(textColor)
-                    .FontSize(theme.Metrics.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
             }
         }
     }
@@ -141,8 +143,9 @@ public sealed class ContextBuilder
     {
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
+            var m = theme.Metrics;
             paper.Box($"{id}_sep_{index}")
-                .Height(1).Margin(10, 5, 10, 5)
+                .Height(1).Margin(m.PaddingLarge, m.Spacing, m.PaddingLarge, m.Spacing)
                 .BackgroundColor(theme.Ink.C200);
         }
     }
@@ -155,34 +158,35 @@ public sealed class ContextBuilder
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
             var ink = theme.Ink;
-            float rowH = theme.Metrics.HeaderHeight;
+            var m = theme.Metrics;
+            float rowH = m.RowHeight;
 
             using (paper.Row($"{id}_i_{index}")
                 .Height(rowH)
                 .Hovered.BackgroundColor(theme.Primary.C400).End()
-                .Rounded(3).Enter())
+                .Rounded(m.SmallRounding).Enter())
             {
                 if (!string.IsNullOrEmpty(Icon))
                 {
                     paper.Box($"{id}_ico_{index}")
-                        .Width(24).Height(rowH).ChildLeft(8)
+                        .Width(m.RowHeight).Height(rowH).ChildLeft(m.SpacingLarge)
                         .Text(Icon, font).TextColor(ink.C500)
-                        .FontSize(theme.Metrics.FontSize - 1).Alignment(TextAlignment.MiddleCenter);
+                        .FontSize(m.FontSize - 1).Alignment(TextAlignment.MiddleCenter);
                 }
                 else
                 {
-                    paper.Box($"{id}_pad_{index}").Width(8);
+                    paper.Box($"{id}_pad_{index}").Width(m.SpacingLarge);
                 }
 
                 paper.Box($"{id}_l_{index}")
                     .Width(UnitValue.Stretch()).Height(rowH)
                     .Text(Label, font).TextColor(ink.C500)
-                    .FontSize(theme.Metrics.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box($"{id}_a_{index}")
-                    .Width(20).Height(rowH)
+                    .Width(m.CompactHeight).Height(rowH)
                     .Text(theme.Icons.ChevronRight, font).TextColor(ink.C400)
-                    .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
                 if (paper.IsParentHovered && Sub != null)
                     ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 192, 0, close);
@@ -277,6 +281,7 @@ public static class ContextMenu
         Action close, int layer = Layer.Topmost + 501)
     {
         var theme = Origami.Current;
+        var m = theme.Metrics;
         var font = theme.Font;
         if (font == null) return;
 
@@ -286,7 +291,7 @@ public static class ContextMenu
             .Width(200).Height(UnitValue.Auto)
             .BackgroundColor(theme.Neutral.C200)
             .BorderColor(theme.Ink.C200).BorderWidth(1)
-            .Rounded(6)
+            .Rounded(m.ContainerRounding)
             .Layer(layer)
             .ClampToScreen()
             .BoxShadow(0, 2, 16, -4, Color.FromArgb(120, 0, 0, 0))
@@ -294,7 +299,7 @@ public static class ContextMenu
 
         using (menuBox.Enter())
         {
-            using (paper.Column($"{id}_col").Margin(4, 4, 4, 4).Height(UnitValue.Auto).Enter())
+            using (paper.Column($"{id}_col").Margin(m.PaddingSmall, m.PaddingSmall, m.PaddingSmall, m.PaddingSmall).Height(UnitValue.Auto).Enter())
             {
                 for (int i = 0; i < builder.Items.Count; i++)
                     builder.Items[i].Draw(paper, id, i, font, theme, close);

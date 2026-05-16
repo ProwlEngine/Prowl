@@ -149,6 +149,7 @@ public static class DragDrop
 
         var theme = Origami.Current;
         var font = theme.Font;
+        var m = theme.Metrics;
         if (font == null) return;
 
         string text = Payload.DisplayName;
@@ -158,20 +159,20 @@ public static class DragDrop
         string display = hasIcon ? $"{icon}  {text}" : text;
 
         float mx = (float)DragPosition.X + 12;
-        float my = (float)DragPosition.Y + 4;
+        float my = (float)DragPosition.Y + m.Spacing;
 
         paper.Box("dd_ghost")
             .PositionType(PositionType.SelfDirected)
             .Position(mx, my)
-            .Width(UnitValue.Auto).Height(22)
+            .Width(UnitValue.Auto).Height(m.HeaderHeight)
             .BackgroundColor(Color.FromArgb(200, 40, 40, 45))
             .BorderColor(theme.Primary.C400).BorderWidth(1)
-            .Rounded(4).ChildLeft(6).ChildRight(6)
+            .Rounded(m.Rounding).ChildLeft(m.Padding).ChildRight(m.Padding)
             .IsNotInteractable()
             .Layer(Layer.Topmost + 500)
             .Text(display, font)
             .TextColor(theme.Ink.C500)
-            .FontSize(theme.Metrics.FontSize - 2)
+            .FontSize(m.FontSizeSmall)
             .Alignment(TextAlignment.MiddleLeft);
     }
 }

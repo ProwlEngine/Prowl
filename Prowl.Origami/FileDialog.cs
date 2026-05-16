@@ -221,7 +221,7 @@ public static class FileDialog
     // ── Draw ─────────────────────────────────────────────────
 
     private const float DialogW = 800f, DialogH = 550f;
-    private const float SidebarW = 170f, ToolbarH = 34f, HeaderH = 22f, BottomH = 72f, RowH = 24f;
+    private const float SidebarW = 170f, ToolbarH = 34f, BottomH = 72f;
 
     private static void DrawInternal(Paper paper, int layer)
     {
@@ -231,6 +231,8 @@ public static class FileDialog
         var ink = theme.Ink;
         var icons = theme.Icons;
         if (font == null) return;
+
+        var m = theme.Metrics;
 
         var displayEntries = string.IsNullOrEmpty(_searchFilter) ? _entries
             : _entries.Where(e => e.Name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -243,15 +245,15 @@ public static class FileDialog
             paper.Box("ofd_drag_tip")
                 .PositionType(PositionType.SelfDirected)
                 .Position(mx, my)
-                .Width(UnitValue.Auto).Height(20)
+                .Width(UnitValue.Auto).Height(m.CompactHeight)
                 .BackgroundColor(Color.FromArgb(200, 40, 40, 45))
                 .BorderColor(theme.Primary.C400).BorderWidth(1)
-                .Rounded(4).ChildLeft(6).ChildRight(6)
+                .Rounded(m.Rounding).ChildLeft(m.Padding).ChildRight(m.Padding)
                 .IsNotInteractable()
                 .Layer(layer + 1)
                 .Text($"{icons.File}  {_dragName}", font)
                 .TextColor(ink.C500)
-                .FontSize(theme.Metrics.FontSize - 2)
+                .FontSize(m.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
         }
 
@@ -260,7 +262,7 @@ public static class FileDialog
             .Size(DialogW, DialogH)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(theme.Neutral.C300)
-            .BorderColor(ink.C200).BorderWidth(1).Rounded(8)
+            .BorderColor(ink.C200).BorderWidth(1).Rounded(m.ContainerRounding)
             .Layer(layer)
             .StopEventPropagation()
             .Enter())
@@ -285,9 +287,10 @@ public static class FileDialog
 
     private static void DrawToolbar(Paper paper, Scribe.FontFile font, OrigamiIcons icons, OrigamiRamp ink, OrigamiTheme theme)
     {
+        var m = theme.Metrics;
         using (paper.Row("ofd_toolbar").Height(ToolbarH)
             .BackgroundColor(theme.Neutral.C200)
-            .ChildLeft(6).ChildRight(6).RowBetween(4).Enter())
+            .ChildLeft(m.Padding).ChildRight(m.Padding).RowBetween(m.Spacing).Enter())
         {
             TbBtn(paper, "ofd_back", icons.ArrowLeft, font, ink, _historyIndex > 0, NavigateBack);
             TbBtn(paper, "ofd_fwd", icons.ArrowRight, font, ink, _historyIndex < _history.Count - 1, NavigateForward);
@@ -309,9 +312,10 @@ public static class FileDialog
 
     private static void TbBtn(Paper paper, string id, string icon, Scribe.FontFile font, OrigamiRamp ink, bool enabled, Action onClick)
     {
+        var m = Origami.Current.Metrics;
         var box = paper.Box(id).Width(28).Height(28)
             .Text(icon, font).TextColor(enabled ? ink.C500 : ink.C300).FontSize(14f)
-            .Alignment(TextAlignment.MiddleCenter).Rounded(4);
+            .Alignment(TextAlignment.MiddleCenter).Rounded(m.Rounding);
         if (enabled)
             box.Hovered.BackgroundColor(ink.C200).End().OnClick(0, (_, _) => onClick());
     }
@@ -320,9 +324,10 @@ public static class FileDialog
 
     private static void DrawSidebar(Paper paper, Scribe.FontFile font, OrigamiIcons icons, OrigamiRamp ink, OrigamiTheme theme)
     {
+        var m = theme.Metrics;
         using (paper.Column("ofd_side").Width(SidebarW)
             .BackgroundColor(theme.Neutral.C200)
-            .Padding(4, 4, 8, 0).ColBetween(2).Enter())
+            .Padding(m.Spacing, m.Spacing, m.SpacingLarge, 0).ColBetween(m.SpacingSmall).Enter())
         {
             if (_config?.QuickAccess.Count > 0)
             {
@@ -335,14 +340,14 @@ public static class FileDialog
 
             if (_config != null && (_config.Favorites.Count > 0 || _config.OnAddFavorite != null))
             {
-                using (paper.Row("ofd_fav_h").Height(20).RowBetween(4).Enter())
+                using (paper.Row("ofd_fav_h").Height(m.CompactHeight).RowBetween(m.Spacing).Enter())
                 {
-                    paper.Box("ofd_fav_l").Height(20).ChildLeft(8)
+                    paper.Box("ofd_fav_l").Height(m.CompactHeight).ChildLeft(m.SpacingLarge)
                         .Text("Favorites", font).TextColor(ink.C400)
-                        .FontSize(theme.Metrics.FontSize - 3).Alignment(TextAlignment.MiddleLeft);
+                        .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleLeft);
                     if (_config.OnAddFavorite != null)
-                        paper.Box("ofd_fav_a").Width(20).Height(20).Rounded(3)
-                            .Text(icons.Plus, font).TextColor(ink.C400).FontSize(10f)
+                        paper.Box("ofd_fav_a").Width(m.IconBoxWidth).Height(m.CompactHeight).Rounded(m.SmallRounding)
+                            .Text(icons.Plus, font).TextColor(ink.C400).FontSize(m.FontSizeSmall)
                             .Alignment(TextAlignment.MiddleCenter)
                             .Hovered.BackgroundColor(ink.C200).End()
                             .OnClick(0, (_, _) => _config.OnAddFavorite(_currentPath));
@@ -389,26 +394,29 @@ public static class FileDialog
 
     private static void SLabel(Paper paper, string key, string text, Scribe.FontFile font, OrigamiRamp ink)
     {
-        paper.Box($"ofd_sl_{key}").Height(20).ChildLeft(8)
+        var m = Origami.Current.Metrics;
+        paper.Box($"ofd_sl_{key}").Height(m.CompactHeight).ChildLeft(m.SpacingLarge)
             .Text(text, font).TextColor(ink.C400)
-            .FontSize(Origami.Current.Metrics.FontSize - 3).Alignment(TextAlignment.MiddleLeft);
+            .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleLeft);
     }
 
     private static void SSep(Paper paper, string key, OrigamiRamp ink)
     {
-        paper.Box($"ofd_ss_{key}").Height(1).Margin(4, 8, 4, 8).BackgroundColor(ink.C200);
+        var m = Origami.Current.Metrics;
+        paper.Box($"ofd_ss_{key}").Height(1).Margin(m.Spacing, m.SpacingLarge, m.Spacing, m.SpacingLarge).BackgroundColor(ink.C200);
     }
 
     private static void SItem(Paper paper, string id, string text, Scribe.FontFile font, OrigamiRamp ink, OrigamiTheme theme,
         string targetPath, Action onClick, Action? onRightClick = null)
     {
+        var m = theme.Metrics;
         bool isCurrent = _currentPath.Equals(targetPath, StringComparison.OrdinalIgnoreCase);
-        var box = paper.Box(id).Height(24)
+        var box = paper.Box(id).Height(m.RowHeight)
             .BackgroundColor(isCurrent ? theme.Primary.C400 : Color.Transparent)
             .Hovered.BackgroundColor(isCurrent ? theme.Primary.C400 : ink.C200).End()
-            .Rounded(4).ChildLeft(8)
+            .Rounded(m.Rounding).ChildLeft(m.SpacingLarge)
             .Text(text, font).TextColor(ink.C500)
-            .FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleLeft)
+            .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
             .OnClick(0, (_, _) => onClick());
         if (onRightClick != null)
             box.OnRightClick(0, (_, _) => onRightClick());
@@ -420,11 +428,12 @@ public static class FileDialog
     {
         var theme = Origami.Current;
         var icons = theme.Icons;
+        var m = theme.Metrics;
 
-        using (paper.Row("ofd_colh").Height(HeaderH).BackgroundColor(theme.Neutral.C200).ChildLeft(8).RowBetween(0).Enter())
+        using (paper.Row("ofd_colh").Height(m.HeaderHeight).BackgroundColor(theme.Neutral.C200).ChildLeft(m.SpacingLarge).RowBetween(0).Enter())
         {
             // Icon placeholder to match file row icon width
-            paper.Box("ofd_ch_ico").Width(20).Height(HeaderH);
+            paper.Box("ofd_ch_ico").Width(m.IconBoxWidth).Height(m.HeaderHeight);
 
             void Col(string label, int col, float? w = null)
             {
@@ -432,12 +441,12 @@ public static class FileDialog
                     ? (_sortAscending ? $" {icons.ChevronUp}" : $" {icons.ChevronDown}")
                     : "";
 
-                var el = paper.Box($"ofd_ch_{col}").Height(HeaderH);
+                var el = paper.Box($"ofd_ch_{col}").Height(m.HeaderHeight);
                 if (w.HasValue) el.Width(w.Value);
                 else el.Width(UnitValue.Stretch());
 
-                el.ChildLeft(4).Text(label + arrow, font).TextColor(ink.C400)
-                    .FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleLeft)
+                el.ChildLeft(m.Spacing).Text(label + arrow, font).TextColor(ink.C400)
+                    .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
                     .Hovered.BackgroundColor(ink.C200).End()
                     .OnClick(col, (c, _) =>
                     {
@@ -458,8 +467,9 @@ public static class FileDialog
 
     private static void DrawFileList(Paper paper, Scribe.FontFile font, OrigamiIcons icons, OrigamiRamp ink, OrigamiTheme theme, List<FileEntry> display)
     {
+        var m = theme.Metrics;
         float listW = DialogW - SidebarW;
-        float listH = DialogH - ToolbarH - HeaderH - BottomH;
+        float listH = DialogH - ToolbarH - m.HeaderHeight - BottomH;
 
         // Reset drop target each frame - will be set by hovered dir rows below.
         _dropTargetPath = "";
@@ -481,7 +491,7 @@ public static class FileDialog
         // Compute scroll area bounds from the dialog position for auto-scroll
         float screenH = (float)paper.ScreenRect.Size.Y;
         float dialogTop = (screenH - DialogH) / 2f; // centered dialog
-        _scrollAreaTop = dialogTop + ToolbarH + HeaderH;
+        _scrollAreaTop = dialogTop + ToolbarH + m.HeaderHeight;
         _scrollAreaBottom = dialogTop + DialogH - BottomH;
 
         Origami.ScrollView(paper, "ofd_scroll", listW, listH).Body(() =>
@@ -494,10 +504,10 @@ public static class FileDialog
                 var dotdotBg = Color.Transparent;
                 var dotdotHover = isParentDropTarget ? theme.Green.C400 : ink.C200;
 
-                using (paper.Row("ofd_dotdot").Height(RowH)
+                using (paper.Row("ofd_dotdot").Height(m.RowHeight)
                     .BackgroundColor(dotdotBg)
                     .Hovered.BackgroundColor(dotdotHover).End()
-                    .ChildLeft(8).RowBetween(0)
+                    .ChildLeft(m.SpacingLarge).RowBetween(0)
                     .OnDoubleClick(0, (_, _) => NavigateUp())
                     .Enter())
                 {
@@ -522,21 +532,21 @@ public static class FileDialog
                         }
                     }
 
-                    paper.Box("ofd_dotdot_ico").Width(20).Height(RowH)
+                    paper.Box("ofd_dotdot_ico").Width(m.IconBoxWidth).Height(m.RowHeight)
                         .Text(icons.Folder, font).TextColor(Color.FromArgb(255, 220, 180, 80))
-                        .FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
-                    paper.Box("ofd_dotdot_name").Width(UnitValue.Stretch()).Height(RowH).ChildLeft(4)
+                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                    paper.Box("ofd_dotdot_name").Width(UnitValue.Stretch()).Height(m.RowHeight).ChildLeft(m.Spacing)
                         .Text("..", font).TextColor(ink.C500)
-                        .FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 }
             }
 
             if (_creatingFolder)
             {
-                using (paper.Row("ofd_nf").Height(RowH).BackgroundColor(theme.Primary.C400).ChildLeft(8).RowBetween(8).Enter())
+                using (paper.Row("ofd_nf").Height(m.RowHeight).BackgroundColor(theme.Primary.C400).ChildLeft(m.SpacingLarge).RowBetween(m.SpacingLarge).Enter())
                 {
-                    paper.Box("ofd_nf_i").Width(20).Height(RowH).Text(icons.Folder, font).TextColor(ink.C500)
-                        .FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    paper.Box("ofd_nf_i").Width(m.IconBoxWidth).Height(m.RowHeight).Text(icons.Folder, font).TextColor(ink.C500)
+                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     Origami.TextField(paper, "ofd_nf_n", _newFolderName, v => _newFolderName = v)
                         .Placeholder("Name").Width(UnitValue.Stretch()).Show();
                     Origami.Button(paper, "ofd_nf_ok", "Create", () =>
@@ -562,10 +572,10 @@ public static class FileDialog
                 var rowBg = isSel ? theme.Primary.C400 : (i % 2 == 0 ? Color.Transparent : Color.FromArgb(15, 255, 255, 255));
                 var rowHoverBg = isDropTarget ? theme.Green.C400 : (isSel ? theme.Primary.C400 : ink.C200);
 
-                var row = paper.Row($"ofd_r_{i}").Height(RowH)
+                var row = paper.Row($"ofd_r_{i}").Height(m.RowHeight)
                     .BackgroundColor(rowBg)
                     .Hovered.BackgroundColor(rowHoverBg).End()
-                    .ChildLeft(8).RowBetween(0);
+                    .ChildLeft(m.SpacingLarge).RowBetween(0);
 
                 row.OnClick(entry, (e, _) => { _selectedPath = e.FullPath; if (!e.IsDirectory) _fileName = e.Name; });
                 row.OnDoubleClick(entry, (e, _) => { if (e.IsDirectory) NavigateTo(e.FullPath); else ConfirmSelection(); });
@@ -636,12 +646,12 @@ public static class FileDialog
 
                     string icon = _config?.GetIcon != null ? _config.GetIcon(Path.GetExtension(entry.Name), entry.IsDirectory) : (entry.IsDirectory ? icons.Folder : icons.File);
                     var iconCol = entry.IsDirectory ? Color.FromArgb(255, 220, 180, 80) : ink.C400;
-                    paper.Box($"ofd_i_{i}").Width(20).Height(RowH).Text(icon, font).TextColor(iconCol)
-                        .FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    paper.Box($"ofd_i_{i}").Width(m.IconBoxWidth).Height(m.RowHeight).Text(icon, font).TextColor(iconCol)
+                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
                     if (isRen)
                     {
-                        using (paper.Row($"ofd_ren_{i}").Width(UnitValue.Stretch()).Height(RowH).RowBetween(4).Enter())
+                        using (paper.Row($"ofd_ren_{i}").Width(UnitValue.Stretch()).Height(m.RowHeight).RowBetween(m.Spacing).Enter())
                         {
                             Origami.TextField(paper, $"ofd_ren_t_{i}", _renameBuf, v => _renameBuf = v)
                                 .Width(UnitValue.Stretch()).Show();
@@ -665,24 +675,24 @@ public static class FileDialog
                     }
                     else
                     {
-                        paper.Box($"ofd_n_{i}").Width(UnitValue.Stretch()).Height(RowH).ChildLeft(4)
+                        paper.Box($"ofd_n_{i}").Width(UnitValue.Stretch()).Height(m.RowHeight).ChildLeft(m.Spacing)
                             .Text(entry.Name, font).TextColor(ink.C500)
-                            .FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+                            .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                     }
 
-                    paper.Box($"ofd_s_{i}").Width(80).Height(RowH)
+                    paper.Box($"ofd_s_{i}").Width(80).Height(m.RowHeight)
                         .Text(entry.IsDirectory ? "" : FormatSize(entry.Size), font).TextColor(ink.C400)
-                        .FontSize(theme.Metrics.FontSize - 3).Alignment(TextAlignment.MiddleRight).ChildRight(8);
+                        .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleRight).ChildRight(m.SpacingLarge);
 
-                    paper.Box($"ofd_d_{i}").Width(140).Height(RowH)
+                    paper.Box($"ofd_d_{i}").Width(140).Height(m.RowHeight)
                         .Text(entry.LastModified.ToString("yyyy-MM-dd  HH:mm"), font).TextColor(ink.C400)
-                        .FontSize(theme.Metrics.FontSize - 3).Alignment(TextAlignment.MiddleRight).ChildRight(8);
+                        .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleRight).ChildRight(m.SpacingLarge);
                 }
             }
 
             if (display.Count == 0)
                 paper.Box("ofd_empty").Height(60).Text("This folder is empty", font).TextColor(ink.C300)
-                    .FontSize(theme.Metrics.FontSize).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
         });
 
         // If no directory was hovered this frame, reset hover-to-open timer
@@ -716,15 +726,16 @@ public static class FileDialog
 
     private static void DrawBottomBar(Paper paper, Scribe.FontFile font, OrigamiRamp ink, OrigamiTheme theme)
     {
+        var m = theme.Metrics;
         using (paper.Column("ofd_bot").Height(BottomH)
             .BackgroundColor(theme.Neutral.C200)
-            .Padding(8, 8, 6, 6).ColBetween(6).Enter())
+            .Padding(m.SpacingLarge, m.SpacingLarge, m.Padding, m.Padding).ColBetween(m.SpacingMedium).Enter())
         {
-            using (paper.Row("ofd_nr").Height(24).RowBetween(8).Enter())
+            using (paper.Row("ofd_nr").Height(m.RowHeight).RowBetween(m.SpacingLarge).Enter())
             {
-                paper.Box("ofd_nl").Width(70).Height(24)
+                paper.Box("ofd_nl").Width(70).Height(m.RowHeight)
                     .Text(_mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font)
-                    .TextColor(ink.C400).FontSize(theme.Metrics.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+                    .TextColor(ink.C400).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
 
                 Origami.TextField(paper, "ofd_fn", _fileName, v => _fileName = v)
                     .Width(UnitValue.Stretch()).Show();
@@ -734,7 +745,7 @@ public static class FileDialog
                         v => { _activeFilterIndex = v; RefreshEntries(); }, _typeFilterLabels).Show();
             }
 
-            using (paper.Row("ofd_br").Height(26).RowBetween(8).Enter())
+            using (paper.Row("ofd_br").Height(m.RowHeight + 2).RowBetween(m.SpacingLarge).Enter())
             {
                 paper.Box("ofd_bsp");
                 string label = _mode switch { FileDialogMode.Save => "Save", FileDialogMode.SelectFolder => "Select Folder", _ => "Open" };

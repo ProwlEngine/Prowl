@@ -198,7 +198,7 @@ public static class EditorSceneManager
             OnSceneSaved?.Invoke();
 
             Debug.Log($"Saved scene: {relativePath}");
-            SaveBatch.Record($"Scene: {Scene.Current.Name}");
+            // Label reported via SaveManager.OnSave handler
             return true;
         }
         catch (Exception ex)

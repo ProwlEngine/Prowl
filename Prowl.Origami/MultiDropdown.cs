@@ -35,6 +35,7 @@ public sealed class MultiDropdownBuilder<T>
     private readonly Action<IReadOnlyList<T>> _setter;
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
+    private bool _disabled;
     private Func<T, string>? _display;
     private Func<T, string>? _icon;
     private Func<T, string>? _secondary;
@@ -125,6 +126,7 @@ public sealed class MultiDropdownBuilder<T>
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _disabled = true;
         var ramp = _theme.Get(_variant);
         var ink = _theme.Ink;
         var font = _theme.Font;

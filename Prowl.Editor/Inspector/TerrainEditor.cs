@@ -16,6 +16,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
+using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
 namespace Prowl.Editor.Inspector;
 
 public enum TerrainTab { Height, Paint, Holes, Details, Trees, Settings }

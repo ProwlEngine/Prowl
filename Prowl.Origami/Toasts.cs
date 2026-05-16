@@ -15,85 +15,124 @@ namespace Prowl.OrigamiUI;
 public enum ToastType { Info, Success, Warning, Error }
 
 /// <summary>
-/// Static toast notification system for Origami. Toasts stack in the bottom-right
-/// corner, fade in/out, and auto-dismiss after a configurable duration.
-/// Renders on top of everything (Layer.Overlay + 100000) with no interaction.
+/// Toast notification system for Origami. Manages the toast queue internally.
+/// Use the fluent builder returned by <see cref="Origami.Toast(string)"/> to fire toasts.
+/// Call <see cref="Draw"/> once per frame from the host's render loop.
 /// </summary>
-public static class Toasts
+public sealed class Toasts
 {
-    private sealed class ToastEntry
-    {
-        public string Title;
-        public string Message;
-        public ToastType Type;
-        public string Icon;
-        public float Duration;
-        public float Elapsed;
-    }
+    // ── Instance (builder) state ─────────────────────────────
 
-    private static readonly List<ToastEntry> _toasts = [];
-    private const float ToastWidth = 300f;
-    private const float Spacing = 6f;
-    private const float FadeInTime = 0.3f;
-    private const float FadeOutTime = 0.5f;
-    private const int ToastLayer = Layer.Overlay + 100000;
+    private string _title;
+    private string _message = "";
+    private ToastType _type = ToastType.Info;
+    private float _duration = 3f;
 
-    // ── Show ─────────────────────────────────────────────────
+    internal Toasts(string title) => _title = title;
 
-    /// <summary>Show a toast notification.</summary>
-    public static void Show(string title, string message, ToastType type = ToastType.Info, float duration = 3f)
+    /// <summary>Set the toast body message.</summary>
+    public Toasts Message(string message) { _message = message; return this; }
+
+    /// <summary>Set the toast type/severity (default Info).</summary>
+    public Toasts Type(ToastType type) { _type = type; return this; }
+
+    /// <summary>Set toast to Info style.</summary>
+    public Toasts Info() { _type = ToastType.Info; return this; }
+
+    /// <summary>Set toast to Success style.</summary>
+    public Toasts Success() { _type = ToastType.Success; return this; }
+
+    /// <summary>Set toast to Warning style.</summary>
+    public Toasts Warning() { _type = ToastType.Warning; return this; }
+
+    /// <summary>Set toast to Error style (default 5s duration).</summary>
+    public Toasts Error() { _type = ToastType.Error; _duration = 5f; return this; }
+
+    /// <summary>Set display duration in seconds (default 3).</summary>
+    public Toasts Duration(float seconds) { _duration = seconds; return this; }
+
+    /// <summary>Fire the toast notification.</summary>
+    public void Show()
     {
         var icons = Origami.Current.Icons;
-        string icon = type switch
+        string icon = _type switch
         {
             ToastType.Success => icons.Success,
             ToastType.Warning => icons.Warning,
             ToastType.Error   => icons.Danger,
             _                 => icons.Info,
         };
-        _toasts.Add(new ToastEntry { Title = title, Message = message, Type = type, Icon = icon, Duration = duration, Elapsed = 0 });
+        s_toasts.Add(new ToastEntry { Title = _title, Message = _message, Type = _type, Icon = icon, Duration = _duration, Elapsed = 0 });
     }
 
+    // ── Static convenience shortcuts ────────────────────────
+
+    /// <summary>Fire a toast immediately with the given parameters.</summary>
+    public static void Show(string title, string message, ToastType type = ToastType.Info, float duration = 3f)
+        => new Toasts(title) { _message = message, _type = type, _duration = duration }.Show();
+
+    /// <summary>Fire an Info toast.</summary>
     public static void Info(string title, string message) => Show(title, message, ToastType.Info);
+
+    /// <summary>Fire a Success toast.</summary>
     public static void Success(string title, string message) => Show(title, message, ToastType.Success);
+
+    /// <summary>Fire a Warning toast.</summary>
     public static void Warning(string title, string message) => Show(title, message, ToastType.Warning);
+
+    /// <summary>Fire an Error toast (5s duration).</summary>
     public static void Error(string title, string message) => Show(title, message, ToastType.Error, 5f);
 
-    // ── Draw ─────────────────────────────────────────────────
+    // ── Static system (queue + rendering) ────────────────────
 
-    /// <summary>Draw all active toasts. Call once per frame.</summary>
+    private sealed class ToastEntry
+    {
+        public string Title = "";
+        public string Message = "";
+        public ToastType Type;
+        public string Icon = "";
+        public float Duration;
+        public float Elapsed;
+    }
+
+    private static readonly List<ToastEntry> s_toasts = [];
+    private const float ToastWidth = 300f;
+    private const float FadeInTime = 0.3f;
+    private const float FadeOutTime = 0.5f;
+    private const int ToastLayer = Layer.Overlay + 100000;
+
+    /// <summary>Draw all active toasts. Call once per frame from the host render loop.</summary>
     public static void Draw(Paper paper)
     {
-        if (_toasts.Count == 0) return;
+        if (s_toasts.Count == 0) return;
 
         var theme = Origami.Current;
+        var metrics = theme.Metrics;
         var font = theme.Font;
         if (font == null) return;
 
         float dt = paper.DeltaTime;
         float screenW = (float)paper.ScreenRect.Size.X;
         float screenH = (float)paper.ScreenRect.Size.Y;
-        float yOffset = screenH - 36f;
+        float yOffset = screenH - metrics.PaddingLarge * 3f;
 
-        for (int i = _toasts.Count - 1; i >= 0; i--)
+        for (int i = s_toasts.Count - 1; i >= 0; i--)
         {
-            var toast = _toasts[i];
+            var toast = s_toasts[i];
             toast.Elapsed += dt;
 
             if (toast.Elapsed >= toast.Duration)
             {
-                _toasts.RemoveAt(i);
+                s_toasts.RemoveAt(i);
                 continue;
             }
 
-            // Fade progress (0..1)
             float fade = 1f;
             if (toast.Elapsed < FadeInTime)
                 fade = toast.Elapsed / FadeInTime;
             else if (toast.Elapsed > toast.Duration - FadeOutTime)
                 fade = (toast.Duration - toast.Elapsed) / FadeOutTime;
 
-            // Slide in from right
             float slideX = (1f - MathF.Min(1f, toast.Elapsed / 0.2f)) * 40f;
 
             byte alpha = (byte)(fade * 240);
@@ -102,16 +141,14 @@ public static class Toasts
             var border = Color.FromArgb(alpha, accent.R, accent.G, accent.B);
             var titleColor = Color.FromArgb(alpha, theme.Ink.C500.R, theme.Ink.C500.G, theme.Ink.C500.B);
             var msgColor = Color.FromArgb(alpha, theme.Ink.C400.R, theme.Ink.C400.G, theme.Ink.C400.B);
-            var iconColor = Color.FromArgb(alpha, accent.R, accent.G, accent.B);
 
-            // Size
             int msgLines = CountLines(toast.Message);
-            float msgH = MathF.Max(18f, msgLines * 16f);
-            float toastH = 34f + msgH;
-            yOffset -= toastH + Spacing;
+            float lineH = metrics.FontSize + metrics.Spacing;
+            float msgH = MathF.Max(metrics.FontSize + metrics.SpacingMedium, msgLines * lineH);
+            float toastH = metrics.RowHeight + metrics.Padding + metrics.Spacing + msgH;
+            yOffset -= toastH + metrics.SpacingMedium;
 
-            float x = screenW - ToastWidth - 16f + slideX;
-
+            float x = screenW - ToastWidth - metrics.PaddingLarge + slideX;
             float pill = toastH * 0.5f;
 
             using (paper.Row($"toast_{i}")
@@ -124,34 +161,32 @@ public static class Toasts
                 .BoxShadow(0, 3, 16, -2, Color.FromArgb((int)(fade * 80), 0, 0, 0))
                 .Layer(ToastLayer)
                 .IsNotInteractable()
-                .Padding(4, 12, 4, 4).RowBetween(8)
+                .Padding(metrics.PaddingSmall, metrics.PaddingLarge, metrics.PaddingSmall, metrics.PaddingSmall).RowBetween(metrics.SpacingLarge)
                 .Enter())
             {
-                // Circle icon badge
                 if (!string.IsNullOrEmpty(toast.Icon))
                 {
-                    float circleSize = toastH - 8;
+                    float circleSize = toastH - metrics.SpacingLarge;
                     paper.Box($"toast_ico_{i}")
                         .Width(circleSize).Height(circleSize)
                         .Rounded(circleSize * 0.5f)
                         .BackgroundColor(accent)
                         .Text(toast.Icon, font)
                         .TextColor(Color.FromArgb(alpha, 255, 255, 255))
-                        .FontSize(theme.Metrics.FontSize)
+                        .FontSize(metrics.FontSize)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
 
-                // Text
                 using (paper.Column($"toast_txt_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
-                    .ChildTop(6).ChildBottom(6)
+                    .ChildTop(metrics.Padding).ChildBottom(metrics.Padding)
                     .ColBetween(1)
                     .Enter())
                 {
                     paper.Box($"toast_t_{i}")
-                        .Height(18)
+                        .Height(metrics.FontSize + metrics.SpacingMedium)
                         .Text(toast.Title, font).TextColor(titleColor)
-                        .FontSize(theme.Metrics.FontSize)
+                        .FontSize(metrics.FontSize)
                         .Alignment(TextAlignment.MiddleLeft);
 
                     if (!string.IsNullOrEmpty(toast.Message))
@@ -159,15 +194,13 @@ public static class Toasts
                         paper.Box($"toast_m_{i}")
                             .Height(msgH)
                             .Text(toast.Message, font).TextColor(msgColor)
-                            .FontSize(theme.Metrics.FontSize - 2)
+                            .FontSize(metrics.FontSizeSmall)
                             .Alignment(TextAlignment.MiddleLeft);
                     }
                 }
             }
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────
 
     private static int CountLines(string s)
     {

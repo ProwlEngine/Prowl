@@ -92,6 +92,7 @@ public sealed class ColorFieldBuilder
 
     public void Show()
     {
+        if (Origami.IsReadOnly) _readOnly = true;
         var font = _theme.Font;
         var ink = _theme.Ink;
         var metrics = _theme.Metrics;
@@ -109,17 +110,26 @@ public sealed class ColorFieldBuilder
         var swatch = _paper.Box(_id)
             .Width(_width).Height(metrics.HeaderHeight);
 
+        if (!_readOnly)
+        {
+            var value = _value;
+            var setter = _setter;
+            var id = _id;
+            var showAlpha = _showAlpha;
+            var hdr = _hdr;
+            var palette = _palette;
+            swatch.OnClick(e =>
+            {
+                float anchorX = (float)e.ElementRect.Min.X;
+                float anchorY = (float)e.ElementRect.Max.Y + 2;
+                var modal = new ColorPickerModal(id, value, setter, showAlpha, hdr, palette, anchorX, anchorY);
+                Modal.Push(modal);
+            });
+        }
+
         using (swatch.Enter())
         {
-            var triggerHandle = _paper.CurrentParent;
             bool isHovered = _paper.IsParentHovered;
-
-            if (!_readOnly)
-                swatch.OnClick(_ =>
-                {
-                    bool cur = _paper.GetElementStorage(triggerHandle, "cf_open", false);
-                    _paper.SetElementStorage(triggerHandle, "cf_open", !cur);
-                });
 
             // Draw swatch background, border, and hex text in one canvas pass
             _paper.Draw((canvas, rect) =>
@@ -145,7 +155,7 @@ public sealed class ColorFieldBuilder
                 if (capturedFont != null)
                 {
                     var textSize = canvas.MeasureText(hexText, fontSize, capturedFont);
-                    float tx = x + 6f;
+                    float tx = x + metrics.Padding;
                     float ty = y + (h - (float)textSize.Y) * 0.5f;
 
                     // Dark outline behind text so it pops on white/bright backgrounds
@@ -159,23 +169,6 @@ public sealed class ColorFieldBuilder
                     canvas.DrawText(hexText, tx, ty, Color32.FromArgb(255, 255, 255, 255), fontSize, capturedFont);
                 }
             });
-
-            bool isOpen = _paper.GetElementStorage(triggerHandle, "cf_open", false);
-
-            if (isOpen && !_readOnly)
-            {
-                // Backdrop
-                _paper.Box($"{_id}_cf_bg")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(-9999, -9999)
-                    .Size(99999, 99999)
-                    .Layer(Layer.Overlay)
-                    .StopEventPropagation()
-                    .OnClick(_ => _paper.SetElementStorage(triggerHandle, "cf_open", false));
-
-                // Popover
-                RenderPopover(triggerHandle, font, ink, metrics, rounding);
-            }
         }
     }
 
@@ -184,25 +177,19 @@ public sealed class ColorFieldBuilder
     private const float BarWidth = 20f;
     private const float PopWidth = 300f;
 
-    private void RenderPopover(ElementHandle triggerHandle, Scribe.FontFile? font, OrigamiRamp ink, OrigamiMetrics metrics, float rounding)
+    internal void RenderPopover()
     {
-        float pad = 8f;
-        float gap = 6f;
+        var font = _theme.Font;
+        var ink = _theme.Ink;
+        var metrics = _theme.Metrics;
+        float pad = metrics.PaddingLarge;
+        float gap = metrics.SpacingMedium;
 
         using (_paper.Column($"{_id}_cf_pop")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, metrics.HeaderHeight + 2)
             .Width(PopWidth)
             .Height(UnitValue.Auto)
-            .BackgroundColor(_theme.Neutral.C300)
-            .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(rounding + 2)
             .Padding(pad, pad, pad, pad)
             .ColBetween(gap)
-            .Layer(Layer.Topmost)
-            .ClampToScreen()
-            .HookToParent()
-            .StopEventPropagation()
             .Enter())
         {
             var popEl = _paper.CurrentParent;
@@ -244,7 +231,7 @@ public sealed class ColorFieldBuilder
             var currentColor = HSVToColor(h, s, v, a);
 
             int ni = Clamp255(currentColor.R), ng = Clamp255(currentColor.G), nb = Clamp255(currentColor.B), na = Clamp255(currentColor.A);
-            _paper.Box($"{_id}_cf_new").Height(24).Rounded(3)
+            _paper.Box($"{_id}_cf_new").Height(metrics.RowHeight).Rounded(metrics.SmallRounding)
                 .BorderColor(ink.C200).BorderWidth(1)
                 .BackgroundColor(SysColor.FromArgb(na, ni, ng, nb));
 
@@ -262,9 +249,7 @@ public sealed class ColorFieldBuilder
                 DrawPalette(popEl);
             }
 
-            // Close on Escape
-            if (_paper.IsKeyPressed(PaperKey.Escape))
-                _paper.SetElementStorage(triggerHandle, "cf_open", false);
+            // Escape is handled by the modal stack
         }
     }
 
@@ -272,6 +257,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawSVSquare(ElementHandle popEl, float size, float h, float s, float v, float a)
     {
+        var svRound = _theme.Metrics.SmallRounding;
         _paper.Box($"{_id}_cf_sv").Size(size, size)
             .OnClick(e => SetSV(popEl, e, a))
             .OnDragging(e => SetSV(popEl, e, a))
@@ -280,19 +266,19 @@ public sealed class ColorFieldBuilder
                 float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, ht = (float)r.Size.Y;
                 var hc = HSVToColor32(h, 1, 1);
 
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, hc);
+                canvas.RoundedRectFilled(x, y, w, ht, svRound, svRound, svRound, svRound, hc);
                 canvas.SetLinearBrush(x, y + ht / 2, x + w, y + ht / 2,
                     Color32.FromArgb(255, 255, 255, 255), Color32.FromArgb(0, 255, 255, 255));
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, Color32.FromArgb(255, 255, 255, 255));
+                canvas.RoundedRectFilled(x, y, w, ht, svRound, svRound, svRound, svRound, Color32.FromArgb(255, 255, 255, 255));
                 canvas.ClearBrush();
                 canvas.SetLinearBrush(x + w / 2, y, x + w / 2, y + ht,
                     Color32.FromArgb(0, 0, 0, 0), Color32.FromArgb(255, 0, 0, 0));
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, Color32.FromArgb(255, 255, 255, 255));
+                canvas.RoundedRectFilled(x, y, w, ht, svRound, svRound, svRound, svRound, Color32.FromArgb(255, 255, 255, 255));
                 canvas.ClearBrush();
 
                 canvas.SetStrokeColor(_theme.Primary.C400);
                 canvas.SetStrokeWidth(1);
-                canvas.BeginPath(); canvas.RoundedRect(x, y, w, ht, 3, 3, 3, 3); canvas.Stroke();
+                canvas.BeginPath(); canvas.RoundedRect(x, y, w, ht, svRound, svRound, svRound, svRound); canvas.Stroke();
 
                 float cx = x + s * w, cy = y + (1f - v) * ht;
                 canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
@@ -355,7 +341,8 @@ public sealed class ColorFieldBuilder
 
     private void DrawAlphaBar(ElementHandle popEl, float height, float h, float s, float v, float a)
     {
-        _paper.Box($"{_id}_cf_alpha").Size(BarWidth, height).Rounded(3)
+        var alphaRound = _theme.Metrics.SmallRounding;
+        _paper.Box($"{_id}_cf_alpha").Size(BarWidth, height).Rounded(alphaRound)
             .OnClick(e => SetAlpha(popEl, e))
             .OnDragging(e => SetAlpha(popEl, e))
             .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
@@ -365,7 +352,7 @@ public sealed class ColorFieldBuilder
                 var col = HSVToColor32(h, s, v);
                 var colT = Color32.FromArgb(0, col.R, col.G, col.B);
                 canvas.SetLinearBrush(x + w / 2, y, x + w / 2, y + ht, col, colT);
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, Color32.FromArgb(255, 255, 255, 255));
+                canvas.RoundedRectFilled(x, y, w, ht, alphaRound, alphaRound, alphaRound, alphaRound, Color32.FromArgb(255, 255, 255, 255));
                 canvas.ClearBrush();
                 float cy = y + (1f - a) * ht;
                 canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
@@ -396,7 +383,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawHSVInputs(ElementHandle popEl, float h, float s, float v, float a)
     {
-        using (_paper.Row($"{_id}_cf_hsv_row").Height(UnitValue.Auto).RowBetween(4).Enter())
+        using (_paper.Row($"{_id}_cf_hsv_row").Height(UnitValue.Auto).RowBetween(_theme.Metrics.Spacing).Enter())
         {
             ChannelNumeric("H", $"{_id}_cf_h", (int)h, 0, 360, nh =>
             { _paper.SetElementStorage(popEl, "h", (float)nh); EmitFromHSV(popEl); }, HueCol);
@@ -414,7 +401,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawRGBInputs(ElementHandle popEl, Color c)
     {
-        using (_paper.Row($"{_id}_cf_rgb_row").Height(UnitValue.Auto).RowBetween(4).Enter())
+        using (_paper.Row($"{_id}_cf_rgb_row").Height(UnitValue.Auto).RowBetween(_theme.Metrics.Spacing).Enter())
         {
             ChannelNumeric("R", $"{_id}_cf_r", Clamp255(c.R), 0, 255, nr =>
             { var nc = new Color(nr / 255f, c.G, c.B, c.A); SyncHSV(popEl, nc); _setter(nc); }, RedCol);
@@ -469,9 +456,10 @@ public sealed class ColorFieldBuilder
 
         var colors = _palette.Colors;
         var ink = _theme.Ink;
+        var metrics = _theme.Metrics;
         float swatchSize = _palette.SwatchSize;
-        float gap = 2f;
-        float availWidth = PopWidth - 16f;
+        float gap = metrics.SpacingSmall;
+        float availWidth = PopWidth - metrics.PaddingLarge * 2;
         int cols = Math.Max(1, (int)((availWidth + gap) / (swatchSize + gap)));
         bool hasAdd = _palette.OnAdd != null;
         int totalItems = colors.Count + (hasAdd ? 1 : 0);
@@ -496,7 +484,7 @@ public sealed class ColorFieldBuilder
                         _paper.Box($"{_id}_cf_ps{idx}")
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(SysColor.FromArgb(pa, pr, pg, pb))
-                            .Rounded(2)
+                            .Rounded(metrics.SmallRounding)
                             .Hovered.BorderColor(_theme.Primary.C400).BorderWidth(1).End()
                             .OnClick(idx, (ci, _) =>
                             {
@@ -515,7 +503,7 @@ public sealed class ColorFieldBuilder
                         _paper.Box($"{_id}_cf_padd")
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(ink.C100)
-                            .Rounded(2)
+                            .Rounded(metrics.SmallRounding)
                             .BorderColor(ink.C200).BorderWidth(1)
                             .Hovered.BackgroundColor(ink.C200).End()
                             .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
@@ -621,5 +609,66 @@ public sealed class ColorFieldBuilder
     {
         var c = HSVToColor(h, s, v);
         return Color32.FromArgb(255, Clamp255(c.R), Clamp255(c.G), Clamp255(c.B));
+    }
+}
+
+/// <summary>
+/// Modal wrapper for the color picker popover. Pushed onto the modal stack
+/// when the color swatch is clicked.
+/// </summary>
+internal sealed class ColorPickerModal : IModal
+{
+    private readonly string _id;
+    private Color _value;
+    private readonly Action<Color> _setter;
+    private readonly bool _showAlpha;
+    private readonly bool _hdr;
+    private readonly ColorPalette? _palette;
+    private readonly float _anchorX;
+    private readonly float _anchorY;
+
+    public bool CloseOnBackdrop => true;
+    public bool CloseOnEscape => true;
+
+    public ColorPickerModal(string id, Color value, Action<Color> setter, bool showAlpha, bool hdr, ColorPalette? palette, float anchorX, float anchorY)
+    {
+        _id = id;
+        _value = value;
+        _setter = setter;
+        _showAlpha = showAlpha;
+        _hdr = hdr;
+        _palette = palette;
+        _anchorX = anchorX;
+        _anchorY = anchorY;
+    }
+
+    public void Draw(Paper paper, int layer, int stackIndex)
+    {
+        var theme = Origami.Current;
+        var m = theme.Metrics;
+
+        using (paper.Column($"{_id}_cpmod")
+            .PositionType(PositionType.SelfDirected)
+            .Position(_anchorX, _anchorY)
+            .Width(300f).Height(UnitValue.Auto)
+            .BackgroundColor(theme.Neutral.C300)
+            .BorderColor(theme.Ink.C200).BorderWidth(1)
+            .Rounded(m.ContainerRounding)
+            .BoxShadow(0, 4, 24, 0, SysColor.FromArgb(100, 0, 0, 0))
+            .Layer(layer)
+            .ClampToScreen()
+            .StopEventPropagation()
+            .Enter())
+        {
+            var builder = new ColorFieldBuilder(paper, _id, _value, v =>
+            {
+                _value = v;
+                _setter(v);
+            }, theme);
+            if (!_showAlpha) builder.Alpha(false);
+            if (_hdr) builder.HDR(true);
+            if (_palette != null) builder.Palette(_palette);
+            builder.RenderPopover();
+        }
     }
 }

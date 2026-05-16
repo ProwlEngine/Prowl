@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BananaMan", "Samples\Banana
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prowl.Editor", "Prowl.Editor\Prowl.Editor.csproj", "{F0DFDD68-2F29-4637-9C99-D42CC53F21A3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prowl.Origami", "Prowl.Origami\Prowl.Origami.csproj", "{804AB38D-D0FE-4BCF-A69D-7D05902F2607}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -197,6 +199,18 @@ Global
 		{F0DFDD68-2F29-4637-9C99-D42CC53F21A3}.Release|x64.Build.0 = Release|Any CPU
 		{F0DFDD68-2F29-4637-9C99-D42CC53F21A3}.Release|x86.ActiveCfg = Release|Any CPU
 		{F0DFDD68-2F29-4637-9C99-D42CC53F21A3}.Release|x86.Build.0 = Release|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Debug|x64.Build.0 = Debug|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Debug|x86.Build.0 = Debug|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Release|Any CPU.Build.0 = Release|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Release|x64.ActiveCfg = Release|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Release|x64.Build.0 = Release|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Release|x86.ActiveCfg = Release|Any CPU
+		{804AB38D-D0FE-4BCF-A69D-7D05902F2607}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

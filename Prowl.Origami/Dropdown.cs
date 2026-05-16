@@ -35,6 +35,7 @@ public sealed class DropdownBuilder<T>
     private readonly Action<T> _setter;
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
+    private bool _disabled;
     private Func<T, string>? _display;
     private Func<T, string>? _icon;
     private Func<T, string>? _secondary;
@@ -137,6 +138,7 @@ public sealed class DropdownBuilder<T>
     /// <summary>Render the dropdown.</summary>
     public void Show()
     {
+        if (Origami.IsReadOnly) _disabled = true;
         var ramp = _theme.Get(_variant);
         var ink = _theme.Ink;
         var font = _theme.Font;
@@ -173,6 +175,7 @@ public sealed class DropdownBuilder<T>
             .Rounded(_theme.Metrics.Rounding)
             .OnClick(e =>
             {
+                if (_disabled) return;
                 bool cur = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyOpen, false);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyOpen, !cur);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyHighlight, selectedIdx);
@@ -195,24 +198,25 @@ public sealed class DropdownBuilder<T>
                 if (font != null)
                 {
                     // Label stretches to consume the row; chevron sits flush against the right edge.
+                    var m = _theme.Metrics;
                     _paper.Box($"{_id}_lbl")
                         .Width(UnitValue.Stretch())
-                        .Margin(8, 4, 0, 0)
+                        .Margin(m.SpacingLarge, m.PaddingSmall, 0, 0)
                         .Alignment(TextAlignment.MiddleLeft)
                         .IsNotInteractable()
                         .Text(triggerText, font)
                         .TextColor(isEmpty ? ink.C300 : ink.C500)
-                        .FontSize(_theme.Metrics.FontSize);
+                        .FontSize(m.FontSize);
 
                     string chev = isOpen
                         ? (string.IsNullOrEmpty(icons.ChevronUp) ? "^" : icons.ChevronUp)
                         : (string.IsNullOrEmpty(icons.ChevronDown) ? "v" : icons.ChevronDown);
                     _paper.Box($"{_id}_chev")
-                        .Width(14)
-                        .Margin(0, 6, 0, 0)
+                        .Width(m.IconWidth)
+                        .Margin(0, m.Padding, 0, 0)
                         .Alignment(TextAlignment.MiddleCenter)
                         .IsNotInteractable()
-                        .Text(chev, font).TextColor(chevColor).FontSize(_theme.Metrics.FontSize * 0.85f);
+                        .Text(chev, font).TextColor(chevColor).FontSize(m.FontSize * 0.85f);
                 }
             }
 

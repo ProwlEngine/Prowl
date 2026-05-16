@@ -37,7 +37,7 @@ public sealed class OrigamiRamp
         C700 = LerpColor(a.C700, b.C700, t),
     };
 
-    internal static Color LerpColor(Color a, Color b, float t)
+    public static Color LerpColor(Color a, Color b, float t)
     {
         if (t <= 0f) return a;
         if (t >= 1f) return b;

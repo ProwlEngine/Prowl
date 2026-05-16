@@ -22,6 +22,19 @@ public static class Origami
 
     private static OrigamiTheme _root = OrigamiTheme.CreateDefaults();
 
+    // ── Read-only state ────────────────────────────────────────
+    private static int _readOnlyDepth;
+
+    /// <summary>True when inside a BeginReadOnly/EndReadOnly block.</summary>
+    public static bool IsReadOnly => _readOnlyDepth > 0;
+
+    /// <summary>Begin a read-only scope. All Origami widgets rendered between
+    /// Begin/EndReadOnly will be disabled/non-interactive. Nestable.</summary>
+    public static void BeginReadOnly() => _readOnlyDepth++;
+
+    /// <summary>End a read-only scope.</summary>
+    public static void EndReadOnly() { if (_readOnlyDepth > 0) _readOnlyDepth--; }
+
     // Transition state (lerp from start → target over duration).
     private static OrigamiTheme? _transitionStart;
     private static OrigamiTheme? _transitionTarget;
@@ -124,6 +137,34 @@ public static class Origami
             _popped = true;
             t_stack?.Pop();
         }
+    }
+
+    // ── Frame lifecycle ─────────────────────────────────────────
+
+    /// <summary>
+    /// Call once at the start of each frame before any Origami widgets are drawn.
+    /// Advances theme transitions and resets per-frame state.
+    /// </summary>
+    /// <param name="paper">Paper instance for this frame.</param>
+    /// <param name="deltaSeconds">Frame delta time in seconds.</param>
+    public static void BeginFrame(PaperUI.Paper paper, float deltaSeconds)
+    {
+        TickTransition(deltaSeconds);
+    }
+
+    /// <summary>
+    /// Call once at the end of each frame after all user widgets are drawn.
+    /// Renders overlay systems (drag-drop, context menus, modals, toasts, tooltips).
+    /// </summary>
+    /// <param name="paper">Paper instance for this frame.</param>
+    public static void EndFrame(PaperUI.Paper paper)
+    {
+        DragDrop.Update(paper);
+        DragDrop.DrawVisual(paper);
+        OrigamiUI.ContextMenu.Tick();
+        OrigamiUI.Modal.Draw(paper);
+        OrigamiUI.Toasts.Draw(paper);
+        TooltipSystem.Draw(paper);
     }
 
     // ── Widget factories ─────────────────────────────────────────
@@ -276,11 +317,14 @@ public static class Origami
 
     // ── Modal helpers ────────────────────────────────────────
 
-    /// <summary>Push a confirmation modal (Yes/No).</summary>
+    /// <summary>Begin building a dialog modal. Chain content, buttons, then call .Show() to push.</summary>
+    public static ModalBuilder Modal(string title) => new ModalBuilder(title);
+
+    /// <summary>Push a confirmation modal (Yes/No). Shorthand for Modal().Message().Button().Show().</summary>
     public static void Confirm(string title, string message, Action onYes, Action? onNo = null)
         => OrigamiUI.Modal.Confirm(title, message, onYes, onNo);
 
-    /// <summary>Push a message modal (OK).</summary>
+    /// <summary>Push a message modal (OK). Shorthand for Modal().Message().Button().Show().</summary>
     public static void Message(string title, string message)
         => OrigamiUI.Modal.Message(title, message);
 
@@ -292,6 +336,11 @@ public static class Origami
     public static CustomDrawModal PushModal(Action<PaperUI.Paper, int, int> draw, bool closeOnEscape = true, bool closeOnBackdrop = false)
         => OrigamiUI.Modal.PushCustomDraw(draw, closeOnEscape, closeOnBackdrop);
 
+    // ── Toast helpers ────────────────────────────────────────
+
+    /// <summary>Begin building a toast notification. Chain message, type, duration, then call .Show().</summary>
+    public static Toasts Toast(string title) => new Toasts(title);
+
     // ── Context menu helpers ─────────────────────────────────
 
     /// <summary>Open a context menu at the given position.</summary>
@@ -301,6 +350,12 @@ public static class Origami
     /// <summary>Attach a right-click context menu to the current parent element.</summary>
     public static void RightClickMenu(PaperUI.Paper paper, string id, Action<ContextBuilder> build)
         => OrigamiUI.ContextMenu.RightClickMenu(paper, id, build);
+
+    // ── Property grid helpers ────────────────────────────────
+
+    /// <summary>Create a property grid builder for the given object.</summary>
+    public static PropertyGridBuilder PropertyGrid(PaperUI.Paper paper, string id, object target, PropertyGridConfig config)
+        => new PropertyGridBuilder(paper, id, target, config);
 
     // ── File dialog helpers ──────────────────────────────────
 
