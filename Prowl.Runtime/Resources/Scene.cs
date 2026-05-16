@@ -600,7 +600,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         List<GameObject> activeGOs = [.. ActiveObjects];
         ForeachComponent(activeGOs, (x) =>
         {
-            x.DrawGizmos();
+            if (!x.HideFlags.HasFlag(HideFlags.NoGizmos))
+                x.DrawGizmos();
         });
 
         Flush();

@@ -240,6 +240,8 @@ public class Camera : MonoBehaviour
 
     public override void DrawGizmos()
     {
+        if (GameObject.HideFlags.HasFlag(HideFlags.NoGizmos)) return;
+        
         var icon = Resources.Texture2D.LoadDefault(Resources.DefaultTexture.IconCamera);
         if (icon != null) Debug.DrawIcon(icon, Transform.Position, 0.5f, Color.White);
 

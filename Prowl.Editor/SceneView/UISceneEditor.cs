@@ -242,7 +242,12 @@ public sealed class UISceneEditor : ISceneViewEditor
 
                 if (leftPressed && viewportHovered && !camNav)
                 {
-                    if (_hover != Handle.None)
+                    // Resize / pivot / anchor handles on the current target win first — that's
+                    // the active edit affordance. For Handle.Move (clicked inside the rect body)
+                    // and Handle.None we re-pick across every canvas so a click on a sibling /
+                    // child UI element switches the selection instead of starting a drag on the
+                    // currently-selected ancestor.
+                    if (_hover != Handle.None && _hover != Handle.Move)
                     {
                         _active = _hover;
                         _dragStartDesign = designHit;
@@ -251,7 +256,27 @@ public sealed class UISceneEditor : ISceneViewEditor
                     }
                     else
                     {
-                        Selection.Clear();
+                        GameObject? uiHit = UIPicker.Pick(scene, mouseRay);
+
+                        if (uiHit == _target.GameObject)
+                        {
+                            // Topmost UI under cursor IS the current target — start a Move drag.
+                            _active = Handle.Move;
+                            _dragStartDesign = designHit;
+                            _dragStartRect = cr;
+                            _dragStartState = LayoutState.Capture(rt);
+                        }
+                        else if (uiHit != null)
+                        {
+                            // Different UI element under cursor — switch selection. The registry
+                            // reactivates this editor against the new target on the next frame.
+                            if (Input.IsCtrlPressed) Selection.ToggleSelection(uiHit);
+                            else Selection.Select(uiHit);
+                        }
+                        else if (!Input.IsCtrlPressed && !Input.IsShiftPressed)
+                        {
+                            Selection.Clear();
+                        }
                     }
                 }
             }

@@ -403,6 +403,24 @@ public class SceneViewPanel : DockPanel
 
         }
 
+        // UI elements aren't visible to MeshRenderer raycasts but should still be selectable
+        // from the scene view. Push the same screen-size override the render pass uses so the
+        // canvases lay out / scale identically — otherwise the picker's design-space hit test
+        // would disagree with what's actually drawn.
+        RenderTexture? sceneRT = camera.Camera?.Target;
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        if (sceneRT != null && sceneRT.Width > 0 && sceneRT.Height > 0)
+            GameCanvas.ScreenSizeOverride = new Float2(sceneRT.Width, sceneRT.Height);
+        try
+        {
+            GameObject? uiHit = UIPicker.Pick(scene, ray);
+            if (uiHit != null) return uiHit;
+        }
+        finally
+        {
+            GameCanvas.ScreenSizeOverride = prevOverride;
+        }
+
         return bestHit;
     }
 
