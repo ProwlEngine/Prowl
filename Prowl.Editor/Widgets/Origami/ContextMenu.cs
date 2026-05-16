@@ -204,21 +204,35 @@ public static class OrigamiContextMenu
     private static float _x, _y;
     private static Action<ContextBuilder>? _buildMenu;
     private static bool _openedThisDraw;
+    private static IModal? _modalHandle;
 
     public static bool IsOpen => _isOpen;
 
     /// <summary>Open a context menu at the given screen position.</summary>
     public static void Show(float x, float y, Action<ContextBuilder> build)
     {
+        Close(); // close any existing
         _isOpen = true;
         _x = x;
         _y = y;
         _buildMenu = build;
+
+        _modalHandle = new CustomDrawModal((paper, layer, _) => DrawMenu(paper, layer))
+        {
+            CloseOnBackdrop = true,
+            CloseOnEscape = true,
+        };
+        OrigamiModal.Push(_modalHandle);
     }
 
     /// <summary>Close the current context menu.</summary>
     public static void Close()
     {
+        if (_modalHandle != null)
+        {
+            OrigamiModal.Remove(_modalHandle);
+            _modalHandle = null;
+        }
         _isOpen = false;
         _buildMenu = null;
     }
@@ -236,47 +250,31 @@ public static class OrigamiContextMenu
         paper.CurrentParent.Data.OnRightClick += e =>
         {
             if (_openedThisDraw) return;
-            Close();
-            _isOpen = true;
             _openedThisDraw = true;
-            _x = (float)paper.PointerPos.X;
-            _y = (float)paper.PointerPos.Y;
-            _buildMenu = build;
+            Show((float)paper.PointerPos.X, (float)paper.PointerPos.Y, build);
         };
     }
 
-    /// <summary>Draw the context menu. Call once per frame from your root draw.</summary>
-    public static void Draw(Paper paper)
+    /// <summary>Call once per frame to reset dedup state. The actual rendering is done by the modal system.</summary>
+    public static void Tick()
     {
-        _openedThisDraw = false; // Reset per-frame dedup flag
+        _openedThisDraw = false;
+    }
+
+    /// <summary>Called by the modal system via CustomDrawModal.</summary>
+    private static void DrawMenu(Paper paper, int layer)
+    {
         if (!_isOpen || _buildMenu == null) return;
 
-        var theme = Origami.Current;
-        var font = theme.Font;
-        if (font == null) return;
-
-        // Build the menu
         var builder = new ContextBuilder();
         _buildMenu(builder);
 
-        // Backdrop
-        paper.Box("octx_bg")
-            .PositionType(PositionType.SelfDirected)
-            .Position(-9999, -9999)
-            .Size(99999, 99999)
-            .BackgroundColor(Color.FromArgb(85, 0, 0, 0))
-            .Layer(Layer.Topmost + 500)
-            .StopEventPropagation()
-            .OnClick(0, (_, _) => Close())
-            .OnRightClick(0, (_, _) => Close());
-
-        // Menu at cursor position
-        RenderMenu(paper, "octx", builder, _x, _y, Close, absolute: true);
+        RenderMenu(paper, "octx", builder, _x, _y, Close, layer: layer);
     }
 
     /// <summary>Render a menu panel at the given position. Used internally and for submenus.</summary>
     internal static void RenderMenu(Paper paper, string id, ContextBuilder builder, float x, float y,
-        Action close, bool absolute = false)
+        Action close, int layer = Layer.Topmost + 501)
     {
         var theme = Origami.Current;
         var font = theme.Font;
@@ -289,7 +287,7 @@ public static class OrigamiContextMenu
             .BackgroundColor(theme.Neutral.C200)
             .BorderColor(theme.Ink.C200).BorderWidth(1)
             .Rounded(6)
-            .Layer(Layer.Topmost + 501)
+            .Layer(layer)
             .ClampToScreen()
             .BoxShadow(0, 2, 16, -4, Color.FromArgb(120, 0, 0, 0))
             .StopEventPropagation();

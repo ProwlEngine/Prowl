@@ -675,6 +675,7 @@ public class EditorApplication : Game
         Packages.PackageImportDialog.Draw(paper);
         Widgets.SelectorModal.Draw(paper);
         Inspector.AddComponentPopup.Draw(paper);
+        OrigamiUI.OrigamiContextMenu.Tick();
         Widgets.ModalDialog.Draw(paper);
         Widgets.SaveBatch.Flush();
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);

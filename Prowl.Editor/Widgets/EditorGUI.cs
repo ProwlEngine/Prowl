@@ -17,10 +17,6 @@ namespace Prowl.Editor.Widgets;
 /// </summary>
 public static class EditorGUI
 {
-    private static FontFile? Font => EditorTheme.DefaultFont;
-    private static float FontSz => EditorTheme.FontSize;
-    private static float LabelW => EditorTheme.LabelWidth;
-
     /// <summary>
     /// Fullscreen backdrop element. Two flavours:
     /// <list type="bullet">
@@ -60,9 +56,4 @@ public static class EditorGUI
             (int)(a.B + (b.B - a.B) * t)
         );
     }
-
-    // ================================================================
-    //  Context Menu
-    // ================================================================
-
 }
