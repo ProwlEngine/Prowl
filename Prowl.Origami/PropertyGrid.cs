@@ -367,11 +367,39 @@ internal static class PropertyGridRenderer
 
             if (font != null && !string.IsNullOrEmpty(label))
             {
-                paper.Box($"{id}_lbl")
+                bool isNumeric = IsNumericType(fieldType);
+                var lbl = paper.Box($"{id}_lbl")
                     .Width(m.LabelWidth).Height(m.RowHeight).Padding(m.PaddingSmall, 0, 0, 0)
-                    .IsNotInteractable()
                     .Text(label, font).TextColor(ink.C500)
                     .FontSize(m.FontSize);
+
+                if (isNumeric && !Origami.IsReadOnly)
+                {
+                    // Draggable label for numeric fields - horizontal drag adjusts value
+                    // Ctrl = x10, Shift = x0.01, default = x0.1
+                    lbl.OnDragStart(e =>
+                        {
+                            // Store initial value at drag start
+                            paper.SetElementStorage(paper.CurrentParent, "drag_start", ConvertToDouble(value));
+                        })
+                        .OnDragging(e =>
+                        {
+                            float multiplier = 0.1f;
+                            if (paper.IsKeyDown(PaperUI.PaperKey.LeftControl) || paper.IsKeyDown(PaperUI.PaperKey.RightControl))
+                                multiplier *= 10f;
+                            else if (paper.IsKeyDown(PaperUI.PaperKey.LeftShift) || paper.IsKeyDown(PaperUI.PaperKey.RightShift))
+                                multiplier *= 0.01f;
+
+                            double startVal = paper.GetElementStorage(paper.CurrentParent, "drag_start", ConvertToDouble(value));
+                            double newVal = startVal + (double)e.TotalDelta.X * multiplier;
+                            object? converted = ConvertFromDouble(newVal, fieldType);
+                            if (converted != null) onChange(converted);
+                        });
+                }
+                else
+                {
+                    lbl.IsNotInteractable();
+                }
             }
 
             using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
@@ -722,6 +750,44 @@ internal static class PropertyGridRenderer
             sb.Append(name[i]);
         }
         return sb.ToString();
+    }
+
+    // ── Numeric drag helpers ────────────────────────────────
+
+    private static readonly HashSet<Type> s_numericTypes = new()
+    {
+        typeof(float), typeof(double), typeof(decimal),
+        typeof(int), typeof(uint), typeof(long), typeof(ulong),
+        typeof(short), typeof(ushort), typeof(byte), typeof(sbyte),
+    };
+
+    private static bool IsNumericType(Type type) => s_numericTypes.Contains(type);
+
+    private static double ConvertToDouble(object? value)
+    {
+        if (value == null) return 0;
+        try { return Convert.ToDouble(value); }
+        catch { return 0; }
+    }
+
+    private static object? ConvertFromDouble(double value, Type targetType)
+    {
+        try
+        {
+            if (targetType == typeof(float)) return (float)value;
+            if (targetType == typeof(double)) return value;
+            if (targetType == typeof(int)) return (int)Math.Round(value);
+            if (targetType == typeof(uint)) return (uint)Math.Max(0, Math.Round(value));
+            if (targetType == typeof(long)) return (long)Math.Round(value);
+            if (targetType == typeof(ulong)) return (ulong)Math.Max(0, Math.Round(value));
+            if (targetType == typeof(short)) return (short)Math.Round(value);
+            if (targetType == typeof(ushort)) return (ushort)Math.Max(0, Math.Round(value));
+            if (targetType == typeof(byte)) return (byte)Math.Clamp(Math.Round(value), 0, 255);
+            if (targetType == typeof(sbyte)) return (sbyte)Math.Clamp(Math.Round(value), -128, 127);
+            if (targetType == typeof(decimal)) return (decimal)value;
+            return Convert.ChangeType(value, targetType);
+        }
+        catch { return null; }
     }
 
     /// <summary>Get serializable fields for a type (matches Echo's logic).</summary>
