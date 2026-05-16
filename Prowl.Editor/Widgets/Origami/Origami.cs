@@ -289,11 +289,14 @@ public static class Origami
 
     // ── Modal helpers ────────────────────────────────────────
 
-    /// <summary>Push a confirmation modal (Yes/No).</summary>
+    /// <summary>Begin building a dialog modal. Chain content, buttons, then call .Show() to push.</summary>
+    public static ModalBuilder Modal(string title) => new ModalBuilder(title);
+
+    /// <summary>Push a confirmation modal (Yes/No). Shorthand for Modal().Message().Button().Show().</summary>
     public static void Confirm(string title, string message, Action onYes, Action? onNo = null)
         => OrigamiUI.Modal.Confirm(title, message, onYes, onNo);
 
-    /// <summary>Push a message modal (OK).</summary>
+    /// <summary>Push a message modal (OK). Shorthand for Modal().Message().Button().Show().</summary>
     public static void Message(string title, string message)
         => OrigamiUI.Modal.Message(title, message);
 
@@ -304,6 +307,11 @@ public static class Origami
     /// <summary>Push a fully custom modal with caller-controlled rendering.</summary>
     public static CustomDrawModal PushModal(Action<PaperUI.Paper, int, int> draw, bool closeOnEscape = true, bool closeOnBackdrop = false)
         => OrigamiUI.Modal.PushCustomDraw(draw, closeOnEscape, closeOnBackdrop);
+
+    // ── Toast helpers ────────────────────────────────────────
+
+    /// <summary>Begin building a toast notification. Chain message, type, duration, then call .Show().</summary>
+    public static Toasts Toast(string title) => new Toasts(title);
 
     // ── Context menu helpers ─────────────────────────────────
 

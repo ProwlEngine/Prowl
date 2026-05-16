@@ -271,3 +271,74 @@ public static class Modal
         }
     }
 }
+
+/// <summary>
+/// Fluent builder for dialog modals. Construct via <see cref="Origami.Modal(string)"/>
+/// and call <see cref="Show"/> to push onto the modal stack.
+/// </summary>
+public sealed class ModalBuilder
+{
+    private string _title;
+    private Action<Paper>? _content;
+    private float _width = 400f;
+    private float _height;
+    private bool _closeOnBackdrop;
+    private bool _closeOnEscape = true;
+    private readonly List<(string Label, Action OnClick, OrigamiVariant Variant)> _buttons = [];
+
+    internal ModalBuilder(string title) => _title = title;
+
+    /// <summary>Set the modal body content via a draw callback.</summary>
+    public ModalBuilder Content(Action<Paper> draw) { _content = draw; return this; }
+
+    /// <summary>Set body content to a simple text message.</summary>
+    public ModalBuilder Message(string text)
+    {
+        _content = paper => Origami.Label(paper, "modal_msg", text).Show();
+        return this;
+    }
+
+    /// <summary>Set dialog width in pixels (default 400).</summary>
+    public ModalBuilder Width(float width) { _width = width; return this; }
+
+    /// <summary>Set dialog height in pixels (0 = auto-size to content).</summary>
+    public ModalBuilder Height(float height) { _height = height; return this; }
+
+    /// <summary>Allow closing by clicking the backdrop.</summary>
+    public ModalBuilder CloseOnBackdrop(bool value = true) { _closeOnBackdrop = value; return this; }
+
+    /// <summary>Allow closing with Escape key (default true).</summary>
+    public ModalBuilder CloseOnEscape(bool value = true) { _closeOnEscape = value; return this; }
+
+    /// <summary>Add a button to the dialog footer.</summary>
+    public ModalBuilder Button(string label, Action onClick, OrigamiVariant variant = OrigamiVariant.Default)
+    {
+        _buttons.Add((label, onClick, variant));
+        return this;
+    }
+
+    /// <summary>Add a primary-styled button.</summary>
+    public ModalBuilder PrimaryButton(string label, Action onClick)
+        => Button(label, onClick, OrigamiVariant.Primary);
+
+    /// <summary>Add a danger-styled button.</summary>
+    public ModalBuilder DangerButton(string label, Action onClick)
+        => Button(label, onClick, OrigamiVariant.Danger);
+
+    /// <summary>Push the configured modal onto the stack.</summary>
+    public void Show()
+    {
+        var entry = new DialogModal
+        {
+            Title = _title,
+            DrawContent = _content,
+            Width = _width,
+            Height = _height,
+            CloseOnBackdrop = _closeOnBackdrop,
+            CloseOnEscape = _closeOnEscape,
+        };
+        foreach (var (label, onClick, variant) in _buttons)
+            entry.Button(label, onClick, variant);
+        Modal.Push(entry);
+    }
+}
