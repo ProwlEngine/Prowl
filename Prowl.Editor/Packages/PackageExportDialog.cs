@@ -51,7 +51,11 @@ public static class PackageExportDialog
         ResolveDependencies();
         RebuildTreeAndEnabled();
         _isOpen = true;
+        _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer));
+        OrigamiUI.OrigamiModal.Push(_modal);
     }
+
+    private static OrigamiUI.IModal? _modal;
 
     public static void Close()
     {
@@ -59,6 +63,7 @@ public static class PackageExportDialog
         _explicitPaths.Clear();
         _dependencyPaths.Clear();
         _enabledPaths.Clear();
+        if (_modal != null) { OrigamiUI.OrigamiModal.Remove(_modal); _modal = null; }
     }
 
     /// <summary>
@@ -120,29 +125,27 @@ public static class PackageExportDialog
     //  Draw
     // ================================================================
 
-    public static void Draw(Paper paper)
+    public static void Draw(Paper paper) { } // Now handled by modal stack
+
+    private static void DrawInternal(Paper paper, int layer)
     {
         if (!_isOpen) return;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Detect toggle change and rebuild tree
         if (_includeDependencies != _lastIncludeDependencies)
         {
             _lastIncludeDependencies = _includeDependencies;
             RebuildTreeAndEnabled();
         }
 
-        // Fullscreen blocker
-        EditorGUI.Backdrop(paper, "pkgexp_overlay");
-
-        // Dialog centered
         using (paper.Column("pkgexp_window")
             .Size(DialogWidth, DialogHeight)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
-            .Layer(Layer.Overlay)
+            .Layer(layer)
+            .StopEventPropagation()
             .Enter())
         {
             DrawTitle(paper, font);

@@ -80,6 +80,8 @@ public static class PackageImportDialog
             }
 
             _isOpen = true;
+            _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer));
+            OrigamiUI.OrigamiModal.Push(_modal);
         }
         catch (Exception ex)
         {
@@ -87,6 +89,8 @@ public static class PackageImportDialog
             ModalDialog.Message("Import Error", $"Failed to open package: {ex.Message}");
         }
     }
+
+    private static OrigamiUI.IModal? _modal;
 
     public static void Close()
     {
@@ -96,11 +100,10 @@ public static class PackageImportDialog
         _assetActions.Clear();
         _enabledPaths.Clear();
         _selectedAssetPath = null;
-
-        // Dispose cached thumbnails
         foreach (var tex in _thumbCache.Values)
             tex?.Dispose();
         _thumbCache.Clear();
+        if (_modal != null) { OrigamiUI.OrigamiModal.Remove(_modal); _modal = null; }
     }
 
     private static void CloseArchive()
@@ -293,22 +296,21 @@ public static class PackageImportDialog
     //  Draw
     // ================================================================
 
-    public static void Draw(Paper paper)
+    public static void Draw(Paper paper) { } // Now handled by modal stack
+
+    private static void DrawInternal(Paper paper, int layer)
     {
         if (!_isOpen) return;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Fullscreen blocker
-        EditorGUI.Backdrop(paper, "pkgimp_overlay");
-
-        // Dialog centered
         using (paper.Column("pkgimp_window")
             .Size(DialogWidth, DialogHeight)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
-            .Layer(Layer.Overlay)
+            .Layer(layer)
+            .StopEventPropagation()
             .Enter())
         {
             DrawTitle(paper, font);

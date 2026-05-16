@@ -38,36 +38,41 @@ public static class AddComponentPopup
 
     public static bool IsOpen => _isOpen;
 
+    private static OrigamiUI.IModal? _modal;
+
     public static void Open(GameObject target)
     {
         _isOpen = true;
         _targetGo = target;
         _searchText = "";
         _cachedComponents ??= GatherComponents();
+        _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer)) { CloseOnBackdrop = true };
+        OrigamiUI.OrigamiModal.Push(_modal);
     }
 
     public static void Close()
     {
         _isOpen = false;
         _targetGo = null;
+        if (_modal != null) { OrigamiUI.OrigamiModal.Remove(_modal); _modal = null; }
     }
 
-    public static void Draw(Paper paper)
+    public static void Draw(Paper paper) { } // Now handled by modal stack
+
+    private static void DrawInternal(Paper paper, int layer)
     {
         if (!_isOpen || _targetGo == null) return;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Fullscreen blocker
-        EditorGUI.Backdrop(paper, "acp_overlay", Close);
-
-        // Modal window
+        // Modal window (backdrop handled by modal stack)
         using (paper.Column("acp_modal")
             .Size(320, 450)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
-            .Layer(Layer.Overlay)
+            .Layer(layer)
+            .StopEventPropagation()
             .Enter())
         {
             // Header

@@ -670,12 +670,8 @@ public class EditorApplication : Game
         DragDrop.DrawVisual(paper);
 
         // Systems drawn on top (Overlay/Topmost layers)
-        Packages.PackageExportDialog.Draw(paper);
-        Packages.PackageImportDialog.Draw(paper);
-        Widgets.SelectorModal.Draw(paper);
-        Inspector.AddComponentPopup.Draw(paper);
         OrigamiUI.OrigamiContextMenu.Tick();
-        Widgets.ModalDialog.Draw(paper);
+        Widgets.ModalDialog.Draw(paper); // draws OrigamiModal stack (all modals, file dialogs, etc.)
         Widgets.SaveBatch.Flush();
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
         Widgets.Tooltip.Draw(paper);
