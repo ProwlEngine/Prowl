@@ -1081,9 +1081,12 @@ public class EditorApplication : Game
 
     private void RegisterMenus()
     {
+        string file = Loc.Get("menu.file");
+        string edit = Loc.Get("menu.edit");
+
         // File menu
-        MenuRegistry.Register("File/New Scene", () => EditorSceneManager.NewScene());
-        MenuRegistry.Register("File/Open Scene", () =>
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", () => EditorSceneManager.NewScene());
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_scene")}", () =>
         {
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
@@ -1094,8 +1097,8 @@ public class EditorApplication : Game
             }, Project.Current?.AssetsPath,
                new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
         });
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Save Scene", () =>
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene")}", () =>
         {
             if (!EditorSceneManager.Save())
             {
@@ -1112,7 +1115,7 @@ public class EditorApplication : Game
                    new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
             }
         });
-        MenuRegistry.Register("File/Save Scene As...", () =>
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () =>
         {
             if (Project.Current == null) return;
             EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
@@ -1125,30 +1128,31 @@ public class EditorApplication : Game
             }, Project.Current.AssetsPath,
                new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
         });
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Open Project...", () => ReturnToLauncher());
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Build Project...", () => OpenPanel(typeof(Panels.BuildSettingsPanel)));
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Exit", () => Game.Quit());
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_project")}", () => ReturnToLauncher());
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel(typeof(Panels.BuildSettingsPanel)));
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.exit")}", () => Game.Quit());
 
         // Edit menu
-        MenuRegistry.Register("Edit/Undo", () => Undo.PerformUndo(),
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.undo")}", () => Undo.PerformUndo(),
             isEnabled: () => Undo.CanUndo,
             dynamicLabel: () => Undo.UndoDescription);
-        MenuRegistry.Register("Edit/Redo", () => Undo.PerformRedo(),
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.redo")}", () => Undo.PerformRedo(),
             isEnabled: () => Undo.CanRedo,
             dynamicLabel: () => Undo.RedoDescription);
-        MenuRegistry.RegisterSeparator("Edit");
-        MenuRegistry.Register("Edit/Project Settings...", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
-        MenuRegistry.Register("Edit/Save Layout", () => SaveProjectState());
-        MenuRegistry.RegisterSeparator("Edit");
-        MenuRegistry.Register("Edit/Preferences...", () => OpenPanel(typeof(Panels.PreferencesPanel)));
+        MenuRegistry.RegisterSeparator(edit);
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.project_settings")}", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.save_layout")}", () => SaveProjectState());
+        MenuRegistry.RegisterSeparator(edit);
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel(typeof(Panels.PreferencesPanel)));
 
         // Assets menu
+        string assets = Loc.Get("menu.assets");
         AssetCreateMenu.RegisterMenus();
-        MenuRegistry.RegisterSeparator("Assets");
-        MenuRegistry.Register("Assets/Import Package...", () =>
+        MenuRegistry.RegisterSeparator(assets);
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.import_package")}", () =>
         {
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {

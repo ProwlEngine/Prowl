@@ -9,6 +9,7 @@ using Prowl.Editor.Widgets.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -79,7 +80,7 @@ public static class GameObjectInspector
 
             Origami.Checkbox(paper, "gi_static", go.IsStatic,
                 v => { Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x); go.IsStatic = v; })
-                .LabelRight("Static").Show();
+                .LabelRight(Loc.Get("inspector.static")).Show();
         }
 
         // Tag + Layer row (dropdowns)
@@ -93,7 +94,7 @@ public static class GameObjectInspector
             int tagIdx = TagLayerManager.tags.IndexOf(go.Tag);
             if (tagIdx < 0) tagIdx = 0;
 
-            DrawInlineLabeled(paper, "gi_tag_row", "Tag", font, () =>
+            DrawInlineLabeled(paper, "gi_tag_row", Loc.Get("inspector.tag"), font, () =>
                 Origami.Dropdown(paper, "gi_tag", tagIdx,
                     v =>
                     {
@@ -122,7 +123,7 @@ public static class GameObjectInspector
             int selectedLayerIdx = layerIndices.IndexOf(go.LayerIndex);
             if (selectedLayerIdx < 0) selectedLayerIdx = 0;
 
-            DrawInlineLabeled(paper, "gi_layer_row", "Layer", font, () =>
+            DrawInlineLabeled(paper, "gi_layer_row", Loc.Get("inspector.layer"), font, () =>
                 Origami.Dropdown(paper, "gi_layer", selectedLayerIdx,
                     v =>
                     {
@@ -170,23 +171,23 @@ public static class GameObjectInspector
         var goId = go.Identifier;
 
         paper.Box("gi_transform_header").Height(22).ChildLeft(8)
-            .Text($"{EditorIcons.ArrowsUpDownLeftRight}  Transform", font)
+            .Text($"{EditorIcons.ArrowsUpDownLeftRight}  {Loc.Get("inspector.transform")}", font)
             .TextColor(EditorTheme.Ink500)
             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
         // Position
         var pos = t.LocalPosition;
-        InspectorRow.Draw(paper, "gi_pos", "Position", () =>
+        InspectorRow.Draw(paper, "gi_pos", Loc.Get("inspector.position"), () =>
             Origami.Float3Field(paper, "gi_pos_vf", pos, v => { Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, v, (g, x) => g.Transform.LocalPosition = x, coalesce: true); t.LocalPosition = v; }).Show());
 
         // Rotation (as euler)
         var euler = t.LocalEulerAngles;
-        InspectorRow.Draw(paper, "gi_rot", "Rotation", () =>
+        InspectorRow.Draw(paper, "gi_rot", Loc.Get("inspector.rotation"), () =>
             Origami.Float3Field(paper, "gi_rot_vf", euler, v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; }).Show());
 
         // Scale
         var scale = t.LocalScale;
-        InspectorRow.Draw(paper, "gi_scale", "Scale", () =>
+        InspectorRow.Draw(paper, "gi_scale", Loc.Get("inspector.scale"), () =>
             Origami.Float3Field(paper, "gi_scale_vf", scale, v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; }).Show());
     }
 
@@ -296,7 +297,7 @@ public static class GameObjectInspector
 
     private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
     {
-        builder.Item("Reset", () =>
+        builder.Item(Loc.Get("inspector.reset"), () =>
         {
             // TODO: Reset to default values
             Runtime.Debug.Log($"Reset {comp.GetType().Name}");
@@ -312,7 +313,7 @@ public static class GameObjectInspector
             if (compIdx >= 0 && compIdx < go.PrefabComponentCount)
                 canRemove = false;
         }
-        builder.Item("Remove Component", () =>
+        builder.Item(Loc.Get("inspector.remove_component"), () =>
         {
             var serialized = Echo.Serializer.Serialize(comp.GetType(), comp);
             var compType = comp.GetType();
@@ -339,7 +340,7 @@ public static class GameObjectInspector
         builder.Separator();
 
         var moveCompId = comp.Identifier;
-        builder.Item("Move Up", () =>
+        builder.Item(Loc.Get("inspector.move_up"), () =>
         {
             if (index > 0)
             {
@@ -351,7 +352,7 @@ public static class GameObjectInspector
             }
         }, icon: EditorIcons.ArrowUp, enabled: index > 0);
 
-        builder.Item("Move Down", () =>
+        builder.Item(Loc.Get("inspector.move_down"), () =>
         {
             var oldIdx = index; var newIdx = index + 1;
             Undo.RegisterAction("Move Component Down",
@@ -362,7 +363,7 @@ public static class GameObjectInspector
 
         builder.Separator();
 
-        builder.Item("Pop Out", () =>
+        builder.Item(Loc.Get("inspector.pop_out"), () =>
         {
             Panels.ComponentPopoutPanel.PopOut(go, comp);
         }, icon: EditorIcons.ArrowUpRightFromSquare);
@@ -399,7 +400,7 @@ public static class GameObjectInspector
                 .Height(28).Rounded(4)
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text($"{EditorIcons.Plus}  Add Component", font)
+                .Text($"{EditorIcons.Plus}  {Loc.Get("inspector.add_component")}", font)
                 .TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(go, (g, _) => AddComponentPopup.Open(g));
@@ -482,11 +483,11 @@ public static class GameObjectInspector
 
         var entry = EditorAssetDatabase.Instance?.GetEntry(go.PrefabAssetId);
         bool isMissing = entry == null;
-        string prefabName = isMissing ? "Missing" : System.IO.Path.GetFileNameWithoutExtension(entry!.Path);
+        string prefabName = isMissing ? Loc.Get("inspector.missing") : System.IO.Path.GetFileNameWithoutExtension(entry!.Path);
 
-        string label = isMissing ? "Missing Prefab!"
-            : isNested ? $"Nested Prefab: {prefabName}"
-            : $"Prefab: {prefabName}";
+        string label = isMissing ? Loc.Get("inspector.missing_prefab")
+            : isNested ? Loc.Get("inspector.nested_prefab", new { name = prefabName })
+            : Loc.Get("inspector.prefab", new { name = prefabName });
 
         var barColor = isMissing ? Color.FromArgb(40, 220, 80, 80) : Color.FromArgb(40, EditorTheme.Purple400);
         var borderColor = isMissing ? Color.FromArgb(255, 220, 80, 80) : EditorTheme.Purple300;
@@ -514,13 +515,13 @@ public static class GameObjectInspector
 
                 if (!isMissing)
                 {
-                    Origami.Button(paper, "gi_prefab_select", "Select", () => { Selection.Ping(go.PrefabAssetId); }).Width(55).Show();
+                    Origami.Button(paper, "gi_prefab_select", Loc.Get("inspector.select"), () => { Selection.Ping(go.PrefabAssetId); }).Width(55).Show();
 
                     if (isRoot && hasOverrides)
                     {
-                        Origami.Button(paper, "gi_prefab_revert", "Revert", () => { if (root != null) PrefabUtility.RevertOverrides(root); }).Width(55).Show();
+                        Origami.Button(paper, "gi_prefab_revert", Loc.Get("inspector.revert"), () => { if (root != null) PrefabUtility.RevertOverrides(root); }).Width(55).Show();
 
-                        Origami.Button(paper, "gi_prefab_apply", "Apply", () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
+                        Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
                     }
                 }
             }
@@ -568,7 +569,7 @@ public static class GameObjectInspector
                     paper.Box($"gi_ov_revert_{i}")
                         .Width(50).Height(EditorTheme.RowHeight).Rounded(3)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text("Revert", font).TextColor(EditorTheme.Ink400)
+                        .Text(Loc.Get("inspector.revert"), font).TextColor(EditorTheme.Ink400)
                         .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
                         .OnClick((go, idx), (cap, _) =>
                         {
@@ -583,7 +584,7 @@ public static class GameObjectInspector
                     paper.Box($"gi_ov_apply_{i}")
                         .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text("Apply", font).TextColor(EditorTheme.Ink400)
+                        .Text(Loc.Get("inspector.apply"), font).TextColor(EditorTheme.Ink400)
                         .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
                         .OnClick((go, idx), (cap, _) =>
                         {

@@ -181,9 +181,9 @@ public static class ProjectLauncher
                         .Enter())
                     {
                         // Spacer (search input is currently visual-only — no filter wired up)
-                        Origami.SearchField(paper, "search", "", _ => { }, "Search Projects").Show();
+                        Origami.SearchField(paper, "search", "", _ => { }, Loc.Get("launcher.search")).Show();
 
-                        Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", () =>
+                        Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  {Loc.Get("launcher.open_project")}", () =>
                             {
                                 EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, path =>
                                 {
@@ -207,7 +207,7 @@ public static class ProjectLauncher
                                 .Height(EditorTheme.RowHeight)
                                 .Margin(EditorTheme.RowHeight / 4, 0)
                                 .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                                .Text($" {EditorIcons.Plus}  New Project", EditorTheme.DefaultFont)
+                                .Text($" {EditorIcons.Plus}  {Loc.Get("launcher.new_project")}", EditorTheme.DefaultFont)
                                 .TextColor(EditorTheme.Ink500)
                                 .FontSize(EditorTheme.FontSize);
                         }
@@ -240,7 +240,7 @@ public static class ProjectLauncher
                 paper.Box("pl_np_lbl")
                     .Width(50)
                     .Height(EditorTheme.RowHeight)
-                    .Text("Name:", font)
+                    .Text(Loc.Get("launcher.name"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
@@ -254,7 +254,7 @@ public static class ProjectLauncher
                 paper.Box("pl_np_lbl2")
                     .Width(50)
                     .Height(EditorTheme.RowHeight)
-                    .Text("Path:", font)
+                    .Text(Loc.Get("launcher.path"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
@@ -282,7 +282,7 @@ public static class ProjectLauncher
                         }, _newProjectPath);
                     }).Width(30).Show();
 
-                Origami.Button(paper, "pl_np_create", "Create", () => { TryCreateProject(); }).Width(70).Show();
+                Origami.Button(paper, "pl_np_create", Loc.Get("launcher.create"), () => { TryCreateProject(); }).Width(70).Show();
             }
         }
     }
@@ -296,13 +296,13 @@ public static class ProjectLauncher
             if (entries.Count == 0)
             {
                 paper.Box("pl_empty").Height(100)
-                    .Text("No recent projects", font)
+                    .Text(Loc.Get("launcher.no_recent"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
                 paper.Box("pl_hint").Height(30)
-                    .Text("Create a new project or open an existing one to get started.", font)
+                    .Text(Loc.Get("launcher.hint"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 3)
                     .Alignment(TextAlignment.MiddleCenter);
@@ -372,7 +372,7 @@ public static class ProjectLauncher
                     if (!exists)
                     {
                         paper.Box($"pl_pmissing_{i}").Width(60).Height(52)
-                            .Text("Missing", font)
+                            .Text(Loc.Get("launcher.missing"), font)
                             .TextColor(EditorTheme.Red400)
                             .FontSize(EditorTheme.FontSize - 3)
                             .Alignment(TextAlignment.MiddleCenter);
@@ -394,7 +394,7 @@ public static class ProjectLauncher
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Failed to open project: {ex.Message}");
+            Runtime.Debug.LogError(Loc.Get("launcher.open_failed", new { message = ex.Message }));
         }
     }
 
@@ -402,14 +402,14 @@ public static class ProjectLauncher
     {
         if (string.IsNullOrWhiteSpace(_newProjectName))
         {
-            Toasts.Show("Invalid Name", "Project name cannot be empty.", ToastType.Warning, 3f);
+            Toasts.Show(Loc.Get("launcher.invalid_name"), Loc.Get("launcher.name_empty"), ToastType.Warning, 3f);
             return;
         }
 
         string targetPath = Path.Combine(_newProjectPath, _newProjectName);
         if (Directory.Exists(targetPath) && Directory.GetFileSystemEntries(targetPath).Length > 0)
         {
-            Toasts.Show("Folder Exists", $"'{_newProjectName}' already exists and is not empty. Choose a different name or location.", ToastType.Error, 5f);
+            Toasts.Show(Loc.Get("launcher.folder_exists"), Loc.Get("launcher.folder_exists_msg", new { name = _newProjectName }), ToastType.Error, 5f);
             return;
         }
 
@@ -421,18 +421,18 @@ public static class ProjectLauncher
         }
         catch (Exception ex)
         {
-            Toasts.Show("Create Failed", ex.Message, ToastType.Error, 5f);
+            Toasts.Show(Loc.Get("launcher.create_failed"), ex.Message, ToastType.Error, 5f);
         }
     }
 
     private static string FormatTimeAgo(DateTime utcTime)
     {
         var span = DateTime.UtcNow - utcTime;
-        if (span.TotalMinutes < 1) return "Just now";
-        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m ago";
-        if (span.TotalDays < 1) return $"{(int)span.TotalHours}h ago";
-        if (span.TotalDays < 30) return $"{(int)span.TotalDays}d ago";
-        if (span.TotalDays < 365) return $"{(int)(span.TotalDays / 30)}mo ago";
-        return $"{(int)(span.TotalDays / 365)}y ago";
+        if (span.TotalMinutes < 1) return Loc.Get("launcher.just_now");
+        if (span.TotalHours < 1) return Loc.Get("launcher.minutes_ago", new { count = (int)span.TotalMinutes });
+        if (span.TotalDays < 1) return Loc.Get("launcher.hours_ago", new { count = (int)span.TotalHours });
+        if (span.TotalDays < 30) return Loc.Get("launcher.days_ago", new { count = (int)span.TotalDays });
+        if (span.TotalDays < 365) return Loc.Get("launcher.months_ago", new { count = (int)(span.TotalDays / 30) });
+        return Loc.Get("launcher.years_ago", new { count = (int)(span.TotalDays / 365) });
     }
 }

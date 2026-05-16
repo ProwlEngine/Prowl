@@ -145,7 +145,7 @@ public class ConsolePanel : DockPanel
             .Margin(8)
             .Enter())
         {
-            Origami.Button(paper, "con_clear", "Clear", () => { _messages.Clear(); _filteredIndices.Clear(); }).Width(50).Show();
+            Origami.Button(paper, "con_clear", Loc.Get("console.clear"), () => { _messages.Clear(); _filteredIndices.Clear(); }).Width(50).Show();
 
             paper.Box("con_sep1").Width(1).Height(24).BackgroundColor(EditorTheme.Ink200);
 
@@ -158,7 +158,7 @@ public class ConsolePanel : DockPanel
             }
 
             Origami.Switch(paper, "con_collapse", _collapse, v => _collapse = v)
-                .LabelRight("Collapse").Show();
+                .LabelRight(Loc.Get("console.collapse")).Show();
 
             using (paper.Row("buttons").RowBetween(12).Enter())
             {
@@ -172,22 +172,22 @@ public class ConsolePanel : DockPanel
                     .Danger().LabelRight($"{EditorIcons.CircleExclamation} {errCount}").Show();
             }
 
-            Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, "Filter...").Show();
+            Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Show();
 
             Origami.IconButton(paper, "con_settingsButton", $"{EditorIcons.Gear}", () =>
             {
                 Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
                 {
-                    menu.Submenu("Log Tests", subMenu =>
+                    menu.Submenu(Loc.Get("console.log_tests"), subMenu =>
                     {
-                        subMenu.Item("Log", () => Debug.Log("This is a Normal Log."))
-                            .Item("LogWarning", () => Debug.LogWarning("This is a Warning Log."))
-                            .Item("LogError", () => Debug.LogError("This is an Error Log."))
-                            .Item("LogSuccess", () => Debug.LogSuccess("This is a Success Log."));
+                        subMenu.Item(Loc.Get("console.log"), () => Debug.Log("This is a Normal Log."))
+                            .Item(Loc.Get("console.log_warning"), () => Debug.LogWarning("This is a Warning Log."))
+                            .Item(Loc.Get("console.log_error"), () => Debug.LogError("This is an Error Log."))
+                            .Item(Loc.Get("console.log_success"), () => Debug.LogSuccess("This is a Success Log."));
                     }, EditorIcons.Flask)
                     .Separator()
-                    .Toggle("Show Time", () => _showTime = !_showTime, () => _showTime)
-                    .Toggle("Multi Line", () => _multiLine = !_multiLine, () => _multiLine);
+                    .Toggle(Loc.Get("console.show_time"), () => _showTime = !_showTime, () => _showTime)
+                    .Toggle(Loc.Get("console.multi_line"), () => _multiLine = !_multiLine, () => _multiLine);
                 });
             }).Show();
         }
