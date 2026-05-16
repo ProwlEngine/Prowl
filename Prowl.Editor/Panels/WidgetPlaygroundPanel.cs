@@ -344,7 +344,7 @@ public class WidgetPlaygroundPanel : DockPanel
                         .Text("Right-click here for a context menu", EditorTheme.DefaultFont)
                         .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize);
 
-                ContextMenuHelper.RightClickMenu(paper, "ctx_test", menu =>
+                OrigamiContextMenu.RightClickMenu(paper, "ctx_test", menu =>
                 {
                     menu.Item("Cut", () => _textValue = "Cut!")
                         .Item("Copy", () => _textValue = "Copy!")

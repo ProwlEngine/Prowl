@@ -290,7 +290,7 @@ public sealed class AppBarBuilder
 
                         if (paper.IsParentHovered)
                             RenderDropdown(paper, $"{id}_s_{idx}", item.SubItems,
-                                DropdownW - 5, 0, font, ink, theme, close);
+                                DropdownW - 8, 0, font, ink, theme, close);
                     }
                 }
             }

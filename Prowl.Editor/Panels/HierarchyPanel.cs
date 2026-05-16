@@ -443,9 +443,8 @@ public class HierarchyPanel : DockPanel
             {
                 if (paper.IsParentHovered)
                 {
-                    var builder = new ContextMenuBuilder();
-                    BuildCreateMenu(builder, null);
-                    builder.Render(paper, "hier_add_menu", 0, EditorTheme.RowHeight - 4);
+                    OrigamiContextMenu.Show((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                        BuildCreateMenu(b, null));
                 }
             }
 
@@ -650,7 +649,7 @@ public class HierarchyPanel : DockPanel
 
     private void BuildBackgroundContextMenu(Paper paper)
     {
-        ContextMenuHelper.RightClickMenu(paper, "hier_bg_ctx", builder =>
+        OrigamiContextMenu.RightClickMenu(paper, "hier_bg_ctx", builder =>
         {
             BuildCreateMenu(builder, null);
         });
@@ -658,7 +657,7 @@ public class HierarchyPanel : DockPanel
 
     private void BuildGameObjectContextMenu(Paper paper, string id)
     {
-        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        OrigamiContextMenu.RightClickMenu(paper, id, builder =>
         {
             var selectedGOs = Selection.GetSelected<GameObject>().ToList();
             var firstSelected = selectedGOs.FirstOrDefault();
@@ -781,7 +780,7 @@ public class HierarchyPanel : DockPanel
     //  Create Menu
     // ================================================================
 
-    private void BuildCreateMenu(ContextMenuBuilder builder, GameObject? parent)
+    private void BuildCreateMenu(ContextBuilder builder, GameObject? parent)
     {
         CreateGameObjectMenuRegistry.BuildMenu(builder, parent);
     }

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -100,7 +101,7 @@ public static class CreateGameObjectMenuRegistry
     /// Build the create menu for a context menu builder (used in Hierarchy panel).
     /// Items are organized into submenus based on their path separators.
     /// </summary>
-    public static void BuildMenu(ContextMenuBuilder builder, GameObject? parent)
+    public static void BuildMenu(ContextBuilder builder, GameObject? parent)
     {
         // Group entries by top-level path segment
         var topLevel = new List<MenuEntry>();

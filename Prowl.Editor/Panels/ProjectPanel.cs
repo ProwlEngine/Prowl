@@ -198,9 +198,8 @@ public class ProjectPanel : DockPanel
             {
                 if (paper.IsParentHovered)
                 {
-                    var addBuilder = new ContextMenuBuilder();
-                    AssetCreateMenu.Build(addBuilder, _currentFolder, OnCreated);
-                    addBuilder.Render(paper, "proj_add_menu", 0, ToolbarHeight - 6);
+                    OrigamiContextMenu.Show((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                        AssetCreateMenu.Build(b, _currentFolder, OnCreated));
                 }
             }
 
@@ -857,7 +856,7 @@ public class ProjectPanel : DockPanel
 
     private void BuildItemContextMenu(Paper paper, string id, ContentItem item, bool inTree = false)
     {
-        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        OrigamiContextMenu.RightClickMenu(paper, id, builder =>
         {
             // Right-click should select the item if not already selected
             if (!Selection.IsSelected(item))
@@ -946,7 +945,7 @@ public class ProjectPanel : DockPanel
 
     private void BuildBackgroundContextMenu(Paper paper, string id)
     {
-        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        OrigamiContextMenu.RightClickMenu(paper, id, builder =>
         {
             string folder = _currentFolder;
 

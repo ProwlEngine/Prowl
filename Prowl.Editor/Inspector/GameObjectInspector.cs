@@ -239,14 +239,13 @@ public static class GameObjectInspector
                     .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.Ink400)
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                    .OnClick(i, (ci, _) =>
+                    {
+                        OrigamiContextMenu.Show((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                            BuildComponentContextMenu(b, go, comp, ci));
+                    })
                     .Enter())
                 {
-                    if (paper.IsParentHovered)
-                    {
-                        var ctxBuilder = new ContextMenuBuilder();
-                        BuildComponentContextMenu(ctxBuilder, go, comp, i);
-                        ctxBuilder.Render(paper, $"{compId}_ctx", 0, 24);
-                    }
                 }
             }
 
@@ -293,7 +292,7 @@ public static class GameObjectInspector
         }
     }
 
-    private static void BuildComponentContextMenu(ContextMenuBuilder builder, GameObject go, MonoBehaviour comp, int index)
+    private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
     {
         builder.Item("Reset", () =>
         {
@@ -405,7 +404,7 @@ public static class GameObjectInspector
         }
     }
 
-    private static void BuildAddComponentMenu(ContextMenuBuilder builder, GameObject go)
+    private static void BuildAddComponentMenu(ContextBuilder builder, GameObject go)
     {
         // Gather all MonoBehaviour types
         var componentTypes = new List<(string path, string icon, Type type)>();

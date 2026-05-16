@@ -466,7 +466,7 @@ public class EditorApplication : Game
                 canvas.Fill();
             }));
 
-        MainMenuBar.Draw(paper);
+        DrawMenuBar(paper);
         DrawTitleFlap(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -474,7 +474,7 @@ public class EditorApplication : Game
         float dockH = h - dockY - pad - EditorTheme.MenuBarHeight;
         _dockSpace.Draw(paper, pad, dockY, w - pad * 2, dockH);
 
-        StatusBar.Draw(paper);
+        DrawStatusBar(paper);
     }
 
     private void DrawTitleFlap(Paper paper, float w, float h)
@@ -693,6 +693,90 @@ public class EditorApplication : Game
         // Pop the editor Origami theme now that all rendering (including overlays) is done.
         _origamiScope?.Dispose();
         _origamiScope = null;
+    }
+
+    // ================================================================
+    //  Menu Bar (Origami AppBar)
+    // ================================================================
+
+    private void DrawMenuBar(Paper paper)
+    {
+        var items = MenuRegistry.RootMenus;
+        var bar = Origami.AppBar(paper, "menubar")
+            .Height(EditorTheme.MenuBarHeight)
+            .Background(EditorTheme.Neutral200);
+
+        foreach (var root in items)
+            if (root.HasSubItems)
+                bar.Menu(root.Label, ConvertMenuItems(root.SubItems));
+
+        bar.Show();
+    }
+
+    private static List<AppMenuItem> ConvertMenuItems(List<MenuItem> source)
+    {
+        var result = new List<AppMenuItem>();
+        foreach (var item in source)
+        {
+            if (item.IsSeparator) { result.Add(AppMenuItem.Separator()); continue; }
+            var c = new AppMenuItem(item.Label, item.OnClick)
+            {
+                IsCheckedFunc = item.IsCheckedFunc,
+                IsEnabledFunc = item.IsEnabledFunc,
+                DynamicLabelFunc = item.DynamicLabelFunc,
+                IsEnabled = item.IsEnabled,
+            };
+            if (item.HasSubItems) c.SubItems = ConvertMenuItems(item.SubItems);
+            result.Add(c);
+        }
+        return result;
+    }
+
+    // ================================================================
+    //  Status Bar (Origami AppBar at bottom)
+    // ================================================================
+
+    private static string _statusBarMessage = "Ready";
+    private static string _statusBarIcon = "";
+    private static System.Drawing.Color _statusBarColor;
+
+    private static void InitializeStatusBar()
+    {
+        Runtime.Debug.OnLog += (message, _, severity) =>
+        {
+            _statusBarMessage = message.Contains('\n') ? message.Split('\n')[0] : message;
+            switch (severity)
+            {
+                case Runtime.LogSeverity.Warning:   _statusBarIcon = EditorIcons.TriangleExclamation; _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 200, 80); break;
+                case Runtime.LogSeverity.Error:
+                case Runtime.LogSeverity.Exception: _statusBarIcon = EditorIcons.CircleExclamation;   _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 80, 80); break;
+                case Runtime.LogSeverity.Success:   _statusBarIcon = EditorIcons.CircleCheck;         _statusBarColor = System.Drawing.Color.FromArgb(255, 80, 200, 80); break;
+                default:                            _statusBarIcon = EditorIcons.CircleInfo;          _statusBarColor = EditorTheme.Ink400; break;
+            }
+        };
+    }
+
+    private void DrawStatusBar(Paper paper)
+    {
+        var icon = string.IsNullOrEmpty(_statusBarIcon) ? EditorIcons.CircleInfo : _statusBarIcon;
+        var color = _statusBarColor.A == 0 ? EditorTheme.Ink400 : _statusBarColor;
+
+        Origami.AppBar(paper, "statusbar")
+            .Height(EditorTheme.MenuBarHeight)
+            .Bottom()
+            .Background(EditorTheme.Neutral200)
+            .Left(p =>
+            {
+                var font = EditorTheme.DefaultFont;
+                if (font == null) return;
+                p.Box("status_icon").Width(UnitValue.Auto).Height(EditorTheme.MenuBarHeight).ChildLeft(6)
+                    .IsNotInteractable().Text(icon, font).TextColor(color)
+                    .FontSize(EditorTheme.FontSize - 2).Alignment(PaperUI.TextAlignment.MiddleLeft);
+                p.Box("status_label").Width(UnitValue.Stretch()).Height(EditorTheme.MenuBarHeight).ChildLeft(4)
+                    .IsNotInteractable().Text(_statusBarMessage, font).TextColor(color)
+                    .FontSize(EditorTheme.FontSize - 2).Alignment(PaperUI.TextAlignment.MiddleLeft);
+            })
+            .Show();
     }
 
     private const int BarCount = 10;

@@ -331,6 +331,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_VectorFields(paper);
                 Section_ColorFields(paper);
                 Section_Headers(paper);
+                Section_ContextMenus(paper);
                 Section_Labels(paper);
                 Section_Loading(paper);
                 Section_Tree(paper);
@@ -2217,6 +2218,151 @@ public class OrigamiPlaygroundPanel : DockPanel
                         }
                     }
                 });
+            }
+        });
+    }
+
+    // ── App Bar ──────────────────────────────────────────────────
+
+    private void Section_AppBar(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_appbar", "App Bar (MenuBar / Footer)").Body(() =>
+        {
+            using (paper.Column("op_ab_col").Height(UnitValue.Auto).ColBetween(8).Enter())
+            {
+                Origami.Label(paper, "op_ab_info", "The editor's menubar and statusbar both use Origami.AppBar. Below is an inline demo:").Show();
+
+                // Inline demo menubar (not self-directed, just renders in flow)
+                var demoFileItems = new System.Collections.Generic.List<AppMenuItem>
+                {
+                    new("New", () => { }),
+                    new("Open", () => { }),
+                    new("Save", () => { }),
+                    AppMenuItem.Separator(),
+                    new("Exit", () => { }),
+                };
+                var demoEditItems = new System.Collections.Generic.List<AppMenuItem>
+                {
+                    new("Undo", () => { }),
+                    new("Redo", () => { }),
+                    AppMenuItem.Separator(),
+                    new("Cut", () => { }),
+                    new("Copy", () => { }),
+                    new("Paste", () => { }),
+                };
+                var demoViewItems = new System.Collections.Generic.List<AppMenuItem>
+                {
+                    new("Zoom In", () => { }),
+                    new("Zoom Out", () => { }),
+                    AppMenuItem.Separator(),
+                    new("Show Grid", () => _ctxToggleA = !_ctxToggleA) { IsCheckedFunc = () => _ctxToggleA },
+                };
+
+                // Note: This demo doesn't use SelfDirected positioning,
+                // so it renders inline. The real menubar uses .Position(0,0).
+                Origami.AppBar(paper, "op_ab_demo")
+                    .Height(28)
+                    .Menu("File", demoFileItems)
+                    .Menu("Edit", demoEditItems)
+                    .Menu("View", demoViewItems)
+                    .Center(p =>
+                    {
+                        var f = Origami.Current.Font;
+                        if (f != null)
+                            p.Box("op_ab_center").Height(28).Width(UnitValue.Auto)
+                                .Text("Center Content", f).TextColor(Origami.Current.Ink.C400)
+                                .FontSize(Origami.Current.Metrics.FontSize - 2)
+                                .Alignment(TextAlignment.MiddleCenter);
+                    })
+                    .Right(p =>
+                    {
+                        var f = Origami.Current.Font;
+                        if (f != null)
+                            p.Box("op_ab_right").Height(28).Width(UnitValue.Auto).ChildRight(8)
+                                .Text("v1.0.0", f).TextColor(Origami.Current.Ink.C400)
+                                .FontSize(Origami.Current.Metrics.FontSize - 2)
+                                .Alignment(TextAlignment.MiddleRight);
+                    })
+                    .Show();
+            }
+        });
+    }
+
+    // ── Context Menus ────────────────────────────────────────────
+
+    private bool _ctxToggleA = true;
+    private bool _ctxToggleB;
+
+    private void Section_ContextMenus(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_ctx", "Context Menus").Body(() =>
+        {
+            using (paper.Column("op_ctx_col").Height(UnitValue.Auto).ColBetween(6).Enter())
+            {
+                // Basic right-click area
+                using (paper.Box("op_ctx_basic")
+                    .Height(60)
+                    .BackgroundColor(Origami.Current.Neutral.C200)
+                    .Rounded(4)
+                    .Text("Right-click me for a basic menu", Origami.Current.Font)
+                    .TextColor(Origami.Current.Ink.C400)
+                    .FontSize(Origami.Current.Metrics.FontSize)
+                    .Alignment(TextAlignment.MiddleCenter)
+                    .Enter())
+                {
+                    OrigamiContextMenu.RightClickMenu(paper, "op_ctx_basic_m", b =>
+                    {
+                        b.Item("Cut", () => { }, icon: EditorIcons.Scissors);
+                        b.Item("Copy", () => { }, icon: EditorIcons.Copy);
+                        b.Item("Paste", () => { }, icon: EditorIcons.Paste);
+                        b.Separator();
+                        b.Item("Delete", () => { }, icon: EditorIcons.Trash);
+                    });
+                }
+
+                // With toggles and submenus
+                using (paper.Box("op_ctx_adv")
+                    .Height(60)
+                    .BackgroundColor(Origami.Current.Neutral.C200)
+                    .Rounded(4)
+                    .Text("Right-click for toggles + submenu", Origami.Current.Font)
+                    .TextColor(Origami.Current.Ink.C400)
+                    .FontSize(Origami.Current.Metrics.FontSize)
+                    .Alignment(TextAlignment.MiddleCenter)
+                    .Enter())
+                {
+                    OrigamiContextMenu.RightClickMenu(paper, "op_ctx_adv_m", b =>
+                    {
+                        b.Toggle("Show Grid", () => _ctxToggleA = !_ctxToggleA, () => _ctxToggleA);
+                        b.Toggle("Wireframe", () => _ctxToggleB = !_ctxToggleB, () => _ctxToggleB);
+                        b.Separator();
+                        b.Submenu("Transform", sub =>
+                        {
+                            sub.Item("Reset Position", () => { });
+                            sub.Item("Reset Rotation", () => { });
+                            sub.Item("Reset Scale", () => { });
+                        });
+                        b.Submenu("Create", sub =>
+                        {
+                            sub.Item("Empty Object", () => { }, icon: EditorIcons.Cube);
+                            sub.Item("Cube", () => { }, icon: EditorIcons.Cube);
+                            sub.Item("Sphere", () => { }, icon: EditorIcons.Circle);
+                        });
+                        b.Separator();
+                        b.Item("Disabled Item", () => { }, enabled: false);
+                    });
+                }
+
+                // Programmatic open
+                LabelRow(paper, "ctx_prog", "Programmatic Open", () =>
+                    Origami.Button(paper, "op_ctx_prog", "Open Menu Here", () =>
+                        OrigamiContextMenu.Show(400, 300, b =>
+                        {
+                            b.Item("Action A", () => { });
+                            b.Item("Action B", () => { });
+                        })).Show());
+
+                StateLine(paper, "ctx_state", $"Context menu open: {OrigamiContextMenu.IsOpen}");
             }
         });
     }
