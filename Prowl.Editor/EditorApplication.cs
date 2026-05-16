@@ -71,6 +71,9 @@ public class EditorApplication : Game
         LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
         LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
 
+        // Load CJK/international fallback fonts from system for localization support
+        LoadSystemFallbackFonts();
+
         // Load editor settings (global, persists across projects)
         _ = EditorSettings.Instance; // triggers load + ApplyTheme
 
@@ -986,6 +989,58 @@ public class EditorApplication : Game
         if (stream == null) { Runtime.Debug.LogWarning($"Could not load font resource: {resourceName}"); return; }
         Runtime.Debug.Log($"Loaded fallback font: {resourceName} ({stream.Length} bytes)");
         PaperInstance.AddFallbackFont(new Prowl.Scribe.FontFile(stream));
+    }
+
+    private void LoadSystemFallbackFonts()
+    {
+        // CJK and international font fallback chain. Tries common system fonts
+        // in priority order. These cover Japanese, Chinese, Korean, Cyrillic,
+        // Arabic, Thai, and other scripts not in the primary Latin font.
+        string[] fallbackFamilies =
+        [
+            // Japanese
+            "Yu Gothic UI",        // Windows 10+
+            "Meiryo",              // Windows Vista+
+            "Hiragino Sans",       // macOS
+
+            // Chinese (Simplified)
+            "Microsoft YaHei",     // Windows
+            "PingFang SC",         // macOS
+
+            // Chinese (Traditional)
+            "Microsoft JhengHei",  // Windows
+            "PingFang TC",         // macOS
+
+            // Korean
+            "Malgun Gothic",       // Windows
+            "Apple SD Gothic Neo", // macOS
+
+            // Universal CJK fallback
+            "Noto Sans CJK SC",    // Linux / installed
+            "Noto Sans CJK",       // Linux / installed
+
+            // Cyrillic/Greek (usually covered by primary font, but just in case)
+            "Noto Sans",           // Linux
+        ];
+
+        var systemFonts = PaperInstance.EnumerateSystemFonts().ToArray();
+        int loaded = 0;
+
+        foreach (var family in fallbackFamilies)
+        {
+            var font = systemFonts.FirstOrDefault(f =>
+                f.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)
+                && f.Style == Prowl.Scribe.FontStyle.Regular);
+
+            if (font != null)
+            {
+                PaperInstance.AddFallbackFont(font);
+                loaded++;
+            }
+        }
+
+        if (loaded > 0)
+            Runtime.Debug.Log($"Loaded {loaded} system fallback font(s) for international text.");
     }
 
     // ================================================================
