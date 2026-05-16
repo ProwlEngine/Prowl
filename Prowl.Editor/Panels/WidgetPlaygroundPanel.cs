@@ -447,15 +447,15 @@ public class WidgetPlaygroundPanel : DockPanel
             Origami.Header(paper, "h_filedialog", "File Dialog").Show();
 
             Origami.Button(paper, "btn_open_file", "Open File...", () => EditorApplication.OpenFileDialog(FileDialogMode.Open,
-                path => { if (path != null) Widgets.Toasts.Show("File", $"Selected: {path}"); },
+                path => { if (path != null) Toasts.Show("File", $"Selected: {path}"); },
                 filters: new[] { "*.cs;*.json;*.xml", "*.png;*.jpg", "*.*" },
                 filterLabels: new[] { "Code (*.cs, *.json, *.xml)", "Images (*.png, *.jpg)", "All Files (*.*)" })).Show();
 
             Origami.Button(paper, "btn_save_file", "Save File...", () => EditorApplication.OpenFileDialog(FileDialogMode.Save,
-                path => { if (path != null) Widgets.Toasts.Show("File", $"Save to: {path}", Widgets.ToastType.Success); })).Show();
+                path => { if (path != null) Toasts.Show("File", $"Save to: {path}", ToastType.Success); })).Show();
 
             Origami.Button(paper, "btn_select_folder", "Select Folder...", () => EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder,
-                path => { if (path != null) Widgets.Toasts.Show("Folder", $"Selected: {path}"); })).Show();
+                path => { if (path != null) Toasts.Show("Folder", $"Selected: {path}"); })).Show();
 
             Origami.Separator(paper, "sep_filedialog").Show();
 

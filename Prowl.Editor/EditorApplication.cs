@@ -115,9 +115,9 @@ public class EditorApplication : Game
 
         // Cursor lock toasts
         Input.OnCursorLocked += () =>
-            Widgets.Toasts.Show("Cursor Locked", "Press Escape to release.", Widgets.ToastType.Info, 3f);
+            Toasts.Show("Cursor Locked", "Press Escape to release.", ToastType.Info, 3f);
         Input.OnCursorLockFailed += () =>
-            Widgets.Toasts.Show("Cursor Lock Failed", "No valid game view is available.", Widgets.ToastType.Warning, 3f);
+            Toasts.Show("Cursor Lock Failed", "No valid game view is available.", ToastType.Warning, 3f);
 
         // Menus depend on registries above, so register after initialization
         ScanAndRegisterPanels();
@@ -287,7 +287,7 @@ public class EditorApplication : Game
                 // authoring state. Toast once per press so the shortcut isn't silent.
                 if (Application.IsPlaying)
                 {
-                    Widgets.Toasts.Warning("Can't save during Play Mode",
+                    Toasts.Warning("Can't save during Play Mode",
                         "Exit Play Mode to save your scene, prefab, or graph.");
                 }
                 else if (Prefabs.PrefabEditingMode.IsEditing)
@@ -304,7 +304,7 @@ public class EditorApplication : Game
             else if (ShortcutManager.IsPressed("Global/SaveAs"))
             {
                 if (Application.IsPlaying)
-                    Widgets.Toasts.Warning("Can't save during Play Mode",
+                    Toasts.Warning("Can't save during Play Mode",
                         "Exit Play Mode to save your scene.");
                 else
                     PromptSaveAs();
@@ -673,7 +673,7 @@ public class EditorApplication : Game
         OrigamiUI.ContextMenu.Tick();
         OrigamiUI.Modal.Draw(paper);
         Widgets.SaveBatch.Flush();
-        Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
+        Toasts.Draw(paper);
         OrigamiUI.TooltipSystem.Draw(paper);
 
         // Intro animation overlay

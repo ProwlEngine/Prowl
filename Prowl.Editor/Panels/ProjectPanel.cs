@@ -1042,7 +1042,7 @@ public class ProjectPanel : DockPanel
                 string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
                 if (Directory.Exists(newAbs) || File.Exists(newAbs))
                 {
-                    Widgets.Toasts.Show("Rename Failed", $"A file or folder named '{newName}' already exists.", Widgets.ToastType.Warning, 3f);
+                    Toasts.Show("Rename Failed", $"A file or folder named '{newName}' already exists.", ToastType.Warning, 3f);
                 }
                 else if (Directory.Exists(oldAbs))
                 {
@@ -1058,7 +1058,7 @@ public class ProjectPanel : DockPanel
             {
                 bool success = EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath) ?? false;
                 if (!success)
-                    Widgets.Toasts.Show("Rename Failed", $"A file named '{newName}' already exists.", Widgets.ToastType.Warning, 3f);
+                    Toasts.Show("Rename Failed", $"A file named '{newName}' already exists.", ToastType.Warning, 3f);
             }
         });
     }

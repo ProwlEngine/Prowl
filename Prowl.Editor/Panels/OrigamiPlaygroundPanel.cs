@@ -1768,7 +1768,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                     .Nodes(basicNodes)
                     .IsSelected(n => n.Id == _treeSelectedId)
                     .OnSelect(e => _treeSelectedId = e.Node.Id)
-                    .OnDoubleClick(e => Widgets.Toasts.Info("Tree", $"Double-clicked: {e.Node.Label}"))
+                    .OnDoubleClick(e => Toasts.Info("Tree", $"Double-clicked: {e.Node.Label}"))
                     .EmptyMessage("No items")
                     .Show();
 
@@ -1831,7 +1831,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                     .Nodes(fancyNodes)
                     .OnSelect(e => _treeSelectedId = e.Node.Id)
                     .IsSelected(n => n.Id == _treeSelectedId)
-                    .OnTrailingIconClick(n => Widgets.Toasts.Info("Tree", $"Action: {n.Label}"))
+                    .OnTrailingIconClick(n => Toasts.Info("Tree", $"Action: {n.Label}"))
                     .Show();
 
                 // ---- 4. Empty state ----

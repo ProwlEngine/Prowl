@@ -526,7 +526,7 @@ public class HierarchyPanel : DockPanel
                 int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
                 if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
                 {
-                    Widgets.Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                    Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", ToastType.Warning, 3f);
                     continue;
                 }
             }
@@ -542,7 +542,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Into:
                     if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
                     {
-                        Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                        Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", ToastType.Warning, 3f);
                         continue;
                     }
                     dragged.SetParent(target);
@@ -839,7 +839,7 @@ public class HierarchyPanel : DockPanel
             int childIdx = go.Parent.Children.IndexOf(go);
             if (childIdx >= 0 && childIdx < go.Parent.PrefabChildCount)
             {
-                Widgets.Toasts.Show("Prefab Structure", "Cannot delete a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                Toasts.Show("Prefab Structure", "Cannot delete a prefab child. Break the prefab first.", ToastType.Warning, 3f);
                 return;
             }
         }
