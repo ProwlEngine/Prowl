@@ -94,9 +94,9 @@ public class PreferencesPanel : DockPanel
             Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
                 v => { s.DefaultProjectsPath = v; s.Save(); }).Show());
 
-        Origami.Checkbox(paper, "pref_auto_save", s.AutoSaveLayout,
-                v => { s.AutoSaveLayout = v; s.Save(); })
-            .LabelRight("Auto-Save Layout").Show();
+        Origami.Checkbox(paper, "pref_auto_save", SaveManager.AutoSaveEnabled,
+                v => { SaveManager.AutoSaveEnabled = v; s.AutoSaveLayout = v; s.Save(); })
+            .LabelRight("Auto-Save").Show();
 
         Origami.Checkbox(paper, "pref_reimport_focus", s.ReimportOnFocusOnly,
                 v => { s.ReimportOnFocusOnly = v; s.Save(); })

@@ -576,7 +576,6 @@ public class GraphEditor
         {
             EditorAssetDatabase.Instance?.SaveAsset(_graph);
             Debug.Log($"Saved {_graph.AssetPath}");
-            SaveBatch.Record($"Graph: {_graph.Name ?? "Untitled"}");
             IsDirty = false;
         }
         catch (Exception ex) { Debug.LogError($"Save failed: {ex.Message}"); }

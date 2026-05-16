@@ -131,7 +131,7 @@ public static class PrefabEditingMode
             EditorAssetDatabase.Instance?.Reimport(EditingPrefabGuid);
 
             Debug.Log($"[Prefab] Saved prefab: {EditingPrefabPath}");
-            SaveBatch.Record($"Prefab: {Path.GetFileNameWithoutExtension(EditingPrefabPath)}");
+            // Label reported via SaveManager.OnSave handler
             return true;
         }
         return false;

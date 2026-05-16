@@ -193,6 +193,26 @@ public class EditorApplication : Game
             return false;
         };
 
+        // Register save handlers
+        SaveManager.OnSave += () =>
+        {
+            if (Prefabs.PrefabEditingMode.IsEditing)
+            {
+                return Prefabs.PrefabEditingMode.Save()
+                    ? $"Prefab: {System.IO.Path.GetFileNameWithoutExtension(Prefabs.PrefabEditingMode.EditingPrefabPath)}"
+                    : null;
+            }
+            if (EditorSceneManager.Save())
+                return $"Scene: {Runtime.Resources.Scene.Current?.Name ?? "Untitled"}";
+            return null;
+        };
+        SaveManager.OnSave += () =>
+        {
+            if (Project.Current == null) return null;
+            SaveProjectState();
+            return "Editor Layout";
+        };
+
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
 
@@ -308,31 +328,13 @@ public class EditorApplication : Game
             Input.UnlockCursor();
         }
 
+        // Save system update (Ctrl+S + auto-save)
+        SaveManager.Update((float)Time.UnscaledDeltaTime);
+
         // Global keyboard shortcuts
         if (!ShortcutManager.IsRebinding)
         {
-            if (ShortcutManager.IsPressed("Global/Save"))
-            {
-                // Block any save while the game is running scene state changes every frame
-                // during play mode, and writing that to disk silently overwrites the user's
-                // authoring state. Toast once per press so the shortcut isn't silent.
-                if (Application.IsPlaying)
-                {
-                    Toasts.Warning("Can't save during Play Mode",
-                        "Exit Play Mode to save your scene, prefab, or graph.");
-                }
-                else if (Prefabs.PrefabEditingMode.IsEditing)
-                {
-                    // Focus-dependent routing: when editing a prefab, Ctrl+S saves the prefab
-                    // rather than the temporary edit scene that wraps it.
-                    Prefabs.PrefabEditingMode.Save();
-                }
-                else if (!EditorSceneManager.Save())
-                {
-                    PromptSaveAs();
-                }
-            }
-            else if (ShortcutManager.IsPressed("Global/SaveAs"))
+            if (ShortcutManager.IsPressed("Global/SaveAs"))
             {
                 if (Application.IsPlaying)
                     Toasts.Warning("Can't save during Play Mode",
@@ -419,12 +421,7 @@ public class EditorApplication : Game
                 ThumbnailGenerator.EnqueueMissing();
         }
 
-        // Auto-save layout periodically (every ~30s). Skipped during play mode so the
-        // per-panel state snapshot always reflects authoring state, not the transient
-        // playmode snapshot (e.g. scene-view camera moved during play, selection pointing
-        // at a runtime-spawned GO that won't exist next session).
-        if (Project.Current != null && !Application.IsPlaying && _time % 30.0 < Time.UnscaledDeltaTime)
-            Docking.LayoutSerializer.Save(_dockSpace);
+        // Layout auto-save is handled by SaveManager's auto-save timer.
 
         // Show project launcher or intro close phase
         if (ProjectLauncher.IsOpen || _introClosing)
@@ -697,9 +694,6 @@ public class EditorApplication : Game
 
     public override void EndGui(Paper paper)
     {
-        // Flush save batch before overlays
-        Widgets.SaveBatch.Flush();
-
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
         OrigamiUI.Origami.EndFrame(paper);
 
