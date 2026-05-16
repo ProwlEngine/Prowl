@@ -279,7 +279,11 @@ public static class GameObjectInspector
             Origami.Float3Field(paper, "gi_rt_rot_vf", euler, v =>
             {
                 Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v,
-                    (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true);
+                    (g, x) =>
+                    {
+                        g.Transform.LocalEulerAngles = x;
+                        rt.MarkLayoutDirty();
+                    }, coalesce: true);
                 t.LocalEulerAngles = v;
                 rt.MarkLayoutDirty();
             }).Show();
@@ -290,7 +294,11 @@ public static class GameObjectInspector
         {
             Origami.Float3Field(paper, "gi_rt_scale_vf", scale, v =>
             {
-                Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x,
+                Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) =>
+                    {
+                        g.Transform.LocalScale = x;
+                        rt.MarkLayoutDirty();
+                    },
                     coalesce: true);
                 t.LocalScale = v;
                 rt.MarkLayoutDirty();
