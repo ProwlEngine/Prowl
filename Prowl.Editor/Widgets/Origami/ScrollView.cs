@@ -30,6 +30,9 @@ public sealed class ScrollViewBuilder
     // Cleared once consumed by the matching ScrollView render.
     internal static readonly Dictionary<string, Float2> s_pendingScrollTo = new();
 
+    // Delta-based scroll nudges (added to current scroll, consumed each frame)
+    internal static readonly Dictionary<string, Float2> s_pendingScrollBy = new();
+
     private readonly Paper _paper;
     private readonly string _id;
     private readonly float _width;
@@ -164,6 +167,16 @@ public sealed class ScrollViewBuilder
                 _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, (float)pending.Value.Y));
             }
 
+            // Apply pending scroll-by (delta nudges).
+            if (s_pendingScrollBy.TryGetValue(_id, out var delta))
+            {
+                s_pendingScrollBy.Remove(_id);
+                float curX = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
+                float curY = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
+                _paper.SetElementStorage(outerHandle, "scrollX", MathF.Max(0f, curX + (float)delta.X));
+                _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, curY + (float)delta.Y));
+            }
+
             float scrollX = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
             float scrollY = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
             float contentW = _paper.GetElementStorage(outerHandle, "contentW", _width);
@@ -222,6 +235,38 @@ public sealed class ScrollViewBuilder
                     .Width(vBarW).Height(hBarH)
                     .BackgroundColor(ramp.C200)
                     .IsNotInteractable();
+            }
+
+            // Auto-scroll when dragging near edges (DragDrop integration).
+            // Runs inside OnPostLayout so it has the final screen rect and can
+            // adjust scrollY directly - no cross-frame state needed.
+            if (_vertical && DragDrop.IsDragging)
+            {
+                var capturedOuter2 = outerHandle;
+                float capturedHeight = _height;
+                string capturedId = _id;
+                outer.OnPostLayout((handle, rect) =>
+                {
+                    float top = (float)rect.Min.Y;
+                    float bottom = top + capturedHeight;
+                    float my = (float)_paper.PointerPos.Y;
+                    float edgeZone = 40f;
+                    float speed = 300f * _paper.DeltaTime;
+
+                    float nudge = 0;
+                    if (my > top && my < top + edgeZone)
+                        nudge = -speed * (1f - (my - top) / edgeZone);
+                    else if (my < bottom && my > bottom - edgeZone)
+                        nudge = speed * (1f - (bottom - my) / edgeZone);
+
+                    if (nudge != 0)
+                    {
+                        float cur = _paper.GetElementStorage(capturedOuter2, "scrollY", 0f);
+                        float cH = _paper.GetElementStorage(capturedOuter2, "contentH", capturedHeight);
+                        float max = MathF.Max(0f, cH - capturedHeight);
+                        _paper.SetElementStorage(capturedOuter2, "scrollY", Clamp(cur + nudge, 0f, max));
+                    }
+                });
             }
         }
     }

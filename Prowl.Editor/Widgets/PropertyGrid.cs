@@ -46,7 +46,7 @@ public static class PropertyGrid
         {
 
             if (target == null) return;
-            if (depth > 10) { EditorGUI.Label(paper, $"{id}_deep", "(max depth)", EditorTheme.Ink400); return; }
+            if (depth > 10) { Origami.Label(paper, $"{id}_deep", "(max depth)").TextColor(EditorTheme.Ink400).Show(); return; }
 
             // Pre-snapshot at top level: captures state BEFORE any widgets mutate
             // nested objects, collections, curves, etc. in-place
@@ -80,7 +80,7 @@ public static class PropertyGrid
                 // [Header]
                 var header = field.GetCustomAttribute<HeaderAttribute>();
                 if (header != null)
-                    EditorGUI.Header(paper, $"{fieldId}_header", header.Text);
+                    Origami.Header(paper, $"{fieldId}_header", header.Text).Show();
 
                 string label = NicifyName(field.Name);
                 object? value = field.GetValue(target);
@@ -89,7 +89,7 @@ public static class PropertyGrid
                 // [ReadOnly]
                 if (field.GetCustomAttribute<ReadOnlyAttribute>() != null)
                 {
-                    EditorGUI.Label(paper, fieldId, $"{label}: {value ?? "(null)"}");
+                    Origami.Label(paper, fieldId, $"{label}: {value ?? "(null)"}").Show();
                     continue;
                 }
 
@@ -229,7 +229,7 @@ public static class PropertyGrid
         }
 
         // 7. Fallback
-        EditorGUI.Label(paper, id, $"{label}: {value ?? "(null)"}", EditorTheme.Ink400);
+        Origami.Label(paper, id, $"{label}: {value ?? "(null)"}").TextColor(EditorTheme.Ink400).Show();
     }
 
     // ================================================================
@@ -243,7 +243,7 @@ public static class PropertyGrid
         {
             using (paper.Row($"{id}_null").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
-                EditorGUI.Label(paper, $"{id}_lbl", $"{label}: (null)");
+                Origami.Label(paper, $"{id}_lbl", $"{label}: (null)").Show();
                 if (!type.IsAbstract && !type.IsInterface)
                     Origami.Button(paper, $"{id}_create", EditorIcons.Plus + " Create", () => { onChange(Activator.CreateInstance(type)); }).Show();
                 else
@@ -263,7 +263,7 @@ public static class PropertyGrid
                 if (type.IsAbstract || type.IsInterface)
                 {
                     DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
-                    EditorGUI.Separator(paper, $"{id}_tpsep");
+                    Origami.Separator(paper, $"{id}_tpsep").Show();
                 }
                 customEditor.OnGUI(paper, id, value);
             });
@@ -273,7 +273,7 @@ public static class PropertyGrid
         var fields = GetSerializableFields(actualType);
         if (fields.Length == 0)
         {
-            EditorGUI.Label(paper, id, $"{label}: {value}");
+            Origami.Label(paper, id, $"{label}: {value}").Show();
             return;
         }
 
@@ -282,7 +282,7 @@ public static class PropertyGrid
             if (type.IsAbstract || type.IsInterface)
             {
                 DrawTypePicker(paper, $"{id}_pick", type, value, onChange);
-                EditorGUI.Separator(paper, $"{id}_tpsep");
+                Origami.Separator(paper, $"{id}_tpsep").Show();
             }
 
             using (paper.Column($"{id}_nested").Height(UnitValue.Auto).ChildLeft(12).ColBetween(6).Margin(0, 0, 6, 0).Enter())
@@ -374,7 +374,7 @@ public static class PropertyGrid
 
         if (types.Length == 0)
         {
-            EditorGUI.Label(paper, $"{id}_none", "(no implementations)", EditorTheme.Ink400);
+            Origami.Label(paper, $"{id}_none", "(no implementations)").TextColor(EditorTheme.Ink400).Show();
             return;
         }
 

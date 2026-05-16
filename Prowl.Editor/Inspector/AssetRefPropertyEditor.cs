@@ -3,7 +3,9 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.PaperUI;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
@@ -180,6 +182,6 @@ public class AssetRefPropertyEditor : PropertyEditor
 
     private static void OpenAssetSelector(Type type, Action<object?> onChange)
     {
-        Widgets.SelectorModal.Open($"Select {type.Name}", type, Widgets.SelectorTabs.Assets, onChange);
+        SelectorModal.Open($"Select {type.Name}", type, SelectorTabs.Assets, onChange);
     }
 }

@@ -8,6 +8,7 @@ using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.Widgets;
+using Prowl.OrigamiUI;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -104,12 +105,12 @@ public static class CreateAssetMenuRegistry
     /// Names containing '/' are split into nested submenus (e.g. "Shader Graph/Surface"
     /// produces a "Shader Graph" submenu with a "Surface" item inside).
     /// </summary>
-    public static void BuildMenu(ContextMenuBuilder builder, string currentFolder, Action<string>? onCreated = null)
+    public static void BuildMenu(ContextBuilder builder, string currentFolder, Action<string>? onCreated = null)
     {
         BuildMenuRecursive(builder, _entries, "", currentFolder, onCreated);
     }
 
-    private static void BuildMenuRecursive(ContextMenuBuilder builder,
+    private static void BuildMenuRecursive(ContextBuilder builder,
         IEnumerable<Entry> entries, string prefix, string currentFolder,
         Action<string>? onCreated)
     {

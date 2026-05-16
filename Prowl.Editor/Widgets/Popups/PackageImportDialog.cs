@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 
+using Prowl.Editor.Packages;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -13,7 +14,7 @@ using Prowl.Runtime;
 using Color = System.Drawing.Color;
 using Texture2D = Prowl.Runtime.Resources.Texture2D;
 
-namespace Prowl.Editor.Packages;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Overlay dialog for importing a .prowlpackage file.
@@ -57,7 +58,7 @@ public static class PackageImportDialog
             if (_manifest == null)
             {
                 CloseArchive();
-                ModalDialog.Message("Import Error", "Invalid package: missing manifest.json");
+                Origami.Message("Import Error", "Invalid package: missing manifest.json");
                 return;
             }
 
@@ -80,13 +81,17 @@ public static class PackageImportDialog
             }
 
             _isOpen = true;
+            _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer));
+            Modal.Push(_modal);
         }
         catch (Exception ex)
         {
             CloseArchive();
-            ModalDialog.Message("Import Error", $"Failed to open package: {ex.Message}");
+            Origami.Message("Import Error", $"Failed to open package: {ex.Message}");
         }
     }
+
+    private static OrigamiUI.IModal? _modal;
 
     public static void Close()
     {
@@ -96,11 +101,10 @@ public static class PackageImportDialog
         _assetActions.Clear();
         _enabledPaths.Clear();
         _selectedAssetPath = null;
-
-        // Dispose cached thumbnails
         foreach (var tex in _thumbCache.Values)
             tex?.Dispose();
         _thumbCache.Clear();
+        if (_modal != null) { Modal.Remove(_modal); _modal = null; }
     }
 
     private static void CloseArchive()
@@ -293,22 +297,21 @@ public static class PackageImportDialog
     //  Draw
     // ================================================================
 
-    public static void Draw(Paper paper)
+    public static void Draw(Paper paper) { } // Now handled by modal stack
+
+    private static void DrawInternal(Paper paper, int layer)
     {
         if (!_isOpen) return;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Fullscreen blocker
-        EditorGUI.Backdrop(paper, "pkgimp_overlay");
-
-        // Dialog centered
         using (paper.Column("pkgimp_window")
             .Size(DialogWidth, DialogHeight)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
-            .Layer(Layer.Overlay)
+            .Layer(layer)
+            .StopEventPropagation()
             .Enter())
         {
             DrawTitle(paper, font);
@@ -429,7 +432,7 @@ public static class PackageImportDialog
 
         using (paper.Column("pkgimp_detail")
             .Width(detailWidth).Height(height)
-            .ChildLeft(16).ChildRight(16).ChildTop(16)
+            .Padding(16, 16, 16, 0)
             .ColBetween(8)
             .Enter())
         {

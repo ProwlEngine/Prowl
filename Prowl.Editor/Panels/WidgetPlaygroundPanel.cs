@@ -157,14 +157,14 @@ public class WidgetPlaygroundPanel : DockPanel
             .Body(() =>
         {
             // === Color Field (at top for testing) ===
-            EditorGUI.Header(paper, "h_col_top", "Color Field");
-            EditorGUI.ColorField(paper, "cf_top", "Tint", _color)
-                .OnValueChanged(v => _color = v);
+            Origami.Header(paper, "h_col_top", "Color Field").Show();
+            InspectorRow.Draw(paper, "cf_top", "Tint", () =>
+                Origami.ColorField(paper, "cf_top_cf", _color, v => _color = v).Show());
 
-            EditorGUI.Separator(paper, "sep_col_top");
+            Origami.Separator(paper, "sep_col_top").Show();
 
             // === Raw Paper TextField test ===
-            EditorGUI.Header(paper, "h_raw", "Raw Paper TextField");
+            Origami.Header(paper, "h_raw", "Raw Paper TextField").Show();
             paper.Box("raw_tf_bare")
                 .Height(EditorTheme.RowHeight)
                 .Width(Prowl.PaperUI.LayoutEngine.UnitValue.Stretch())
@@ -173,10 +173,10 @@ public class WidgetPlaygroundPanel : DockPanel
                     onChange: v => _textValue = v,
                     textColor: EditorTheme.Ink500);
 
-            EditorGUI.Separator(paper, "sep_raw");
+            Origami.Separator(paper, "sep_raw").Show();
 
             // === Buttons ===
-            EditorGUI.Header(paper, "h_btn", "Buttons");
+            Origami.Header(paper, "h_btn", "Buttons").Show();
 
             using (paper.Row("btn_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
@@ -184,12 +184,12 @@ public class WidgetPlaygroundPanel : DockPanel
                 Origami.Button(paper, "btn2", "Reset", () => ResetAll()).Show();
                 Origami.Button(paper, "btn3", "Wide Button").Width(160).Show();
             }
-            EditorGUI.Label(paper, "btn_count", $"Click count: {_clickCount}");
+            Origami.Label(paper, "btn_count", $"Click count: {_clickCount}").Show();
 
-            EditorGUI.Separator(paper, "sep1");
+            Origami.Separator(paper, "sep1").Show();
 
             // === Toggle switches ===
-            EditorGUI.Header(paper, "h_togbtn", "Toggles");
+            Origami.Header(paper, "h_togbtn", "Toggles").Show();
 
             using (paper.Row("togbtn_row").Height(EditorTheme.RowHeight).RowBetween(12).Enter())
             {
@@ -199,38 +199,38 @@ public class WidgetPlaygroundPanel : DockPanel
                     .Primary().LabelRight("Grid").Show();
             }
 
-            EditorGUI.Separator(paper, "sep1b");
+            Origami.Separator(paper, "sep1b").Show();
 
             // === Toggles ===
-            EditorGUI.Header(paper, "h_tog", "Toggles");
+            Origami.Header(paper, "h_tog", "Toggles").Show();
 
             Origami.Checkbox(paper, "tog_a", _toggleA, v => _toggleA = v).LabelRight("Enable Shadows").Show();
             Origami.Checkbox(paper, "tog_b", _toggleB, v => _toggleB = v).LabelRight("Cast Reflections").Show();
 
-            EditorGUI.Separator(paper, "sep2");
+            Origami.Separator(paper, "sep2").Show();
 
             // === Text Fields ===
-            EditorGUI.Header(paper, "h_txt", "Text Fields");
+            Origami.Header(paper, "h_txt", "Text Fields").Show();
 
             InspectorRow.Draw(paper, "tf_text", "Message", () =>
                 Origami.TextField(paper, "tf_text_v", _textValue, v => _textValue = v).Show());
             InspectorRow.Draw(paper, "tf_name", "Name", () =>
                 Origami.TextField(paper, "tf_name_v", _nameValue, v => _nameValue = v).Show());
 
-            EditorGUI.Separator(paper, "sep3");
+            Origami.Separator(paper, "sep3").Show();
 
             // === Numeric Fields ===
-            EditorGUI.Header(paper, "h_num", "Numeric Fields");
+            Origami.Header(paper, "h_num", "Numeric Fields").Show();
 
             InspectorRow.Draw(paper, "ff_float", "Speed", () =>
                 Origami.NumericField<float>(paper, "ff_float_v", _floatValue, v => _floatValue = v).Show());
             InspectorRow.Draw(paper, "if_int", "Health", () =>
                 Origami.NumericField<int>(paper, "if_int_v", _intValue, v => _intValue = v).Show());
 
-            EditorGUI.Separator(paper, "sep4");
+            Origami.Separator(paper, "sep4").Show();
 
             // === Sliders ===
-            EditorGUI.Header(paper, "h_sl", "Sliders");
+            Origami.Header(paper, "h_sl", "Sliders").Show();
 
             InspectorRow.Draw(paper, "sl_norm", "Opacity", () =>
                 Origami.Slider(paper, "sl_norm_v", _sliderValue, v => _sliderValue = v, 0f, 1f)
@@ -239,10 +239,10 @@ public class WidgetPlaygroundPanel : DockPanel
                 Origami.Slider(paper, "sl_range_v", _sliderRange, v => _sliderRange = v, 0f, 100f)
                     .Format("F1").Show());
 
-            EditorGUI.Separator(paper, "sep5");
+            Origami.Separator(paper, "sep5").Show();
 
             // === Foldouts ===
-            EditorGUI.Header(paper, "h_fold", "Foldouts");
+            Origami.Header(paper, "h_fold", "Foldouts").Show();
 
             Origami.Foldout(paper, "fo_1", "Advanced Settings").Body(() =>
             {
@@ -264,70 +264,71 @@ public class WidgetPlaygroundPanel : DockPanel
                 }
             });
 
-            EditorGUI.Separator(paper, "sep6");
+            Origami.Separator(paper, "sep6").Show();
 
             // === Dropdowns ===
-            EditorGUI.Header(paper, "h_dd", "Dropdowns");
+            Origami.Header(paper, "h_dd", "Dropdowns").Show();
 
             InspectorRow.Draw(paper, "dd_fruit", "Fruit", () =>
                 Origami.Dropdown(paper, "dd_fruit_v", _dropdownIndex, v => _dropdownIndex = v, Fruits).Show());
             InspectorRow.Draw(paper, "dd_mode", "Mode", () =>
                 Origami.Dropdown(paper, "dd_mode_v", _dropdown2Index, v => _dropdown2Index = v, Modes).Show());
 
-            EditorGUI.Separator(paper, "sep7");
+            Origami.Separator(paper, "sep7").Show();
 
             // === Search Bar ===
-            EditorGUI.Header(paper, "h_search", "Search Bar");
+            Origami.Header(paper, "h_search", "Search Bar").Show();
 
             Origami.SearchField(paper, "sb_1", _searchText, v => _searchText = v, "Type to search...").Show();
 
-            EditorGUI.Separator(paper, "sep8");
+            Origami.Separator(paper, "sep8").Show();
 
             // === Enum Dropdown ===
-            EditorGUI.Header(paper, "h_enum", "Enum Dropdown");
+            Origami.Header(paper, "h_enum", "Enum Dropdown").Show();
 
             InspectorRow.Draw(paper, "dd_enum", "Test Enum", () =>
                 Origami.EnumDropdown(paper, "dd_enum_v", _testEnum, v => _testEnum = v).Show());
 
-            EditorGUI.Separator(paper, "sep8b");
+            Origami.Separator(paper, "sep8b").Show();
 
             // === Int Slider ===
-            EditorGUI.Header(paper, "h_isl", "Int Slider");
+            Origami.Header(paper, "h_isl", "Int Slider").Show();
 
             InspectorRow.Draw(paper, "isl_1", "Count", () =>
                 Origami.IntSlider(paper, "isl_1_v", _intSlider, v => _intSlider = v, 0, 20).Show());
 
-            EditorGUI.Separator(paper, "sep8c");
+            Origami.Separator(paper, "sep8c").Show();
 
             // === Vector Fields ===
-            EditorGUI.Header(paper, "h_vec", "Vector Fields");
+            Origami.Header(paper, "h_vec", "Vector Fields").Show();
 
-            EditorGUI.Vector2Field(paper, "v2_1", "Position 2D", _vec2)
-                .OnValueChanged(v => _vec2 = v);
-            EditorGUI.Vector3Field(paper, "v3_1", "Position 3D", _vec3)
-                .OnValueChanged(v => _vec3 = v);
+            InspectorRow.Draw(paper, "v2_1", "Position 2D", () =>
+                Origami.Float2Field(paper, "v2_1_vf", _vec2, v => _vec2 = v).Show());
+            InspectorRow.Draw(paper, "v3_1", "Position 3D", () =>
+                Origami.Float3Field(paper, "v3_1_vf", _vec3, v => _vec3 = v).Show());
 
-            EditorGUI.Separator(paper, "sep8d");
+            Origami.Separator(paper, "sep8d").Show();
 
             // === Color Field ===
-            EditorGUI.Header(paper, "h_col", "Color Field");
+            Origami.Header(paper, "h_col", "Color Field").Show();
 
-            EditorGUI.ColorField(paper, "cf_1", "Tint", _color);
+            InspectorRow.Draw(paper, "cf_1", "Tint", () =>
+                Origami.ColorField(paper, "cf_1_cf", _color, v => _color = v).Show());
 
-            EditorGUI.Separator(paper, "sep8e");
+            Origami.Separator(paper, "sep8e").Show();
 
             // === Progress Bar ===
-            EditorGUI.Header(paper, "h_prog", "Progress Bar");
+            Origami.Header(paper, "h_prog", "Progress Bar").Show();
 
-            EditorGUI.ProgressBar(paper, "pb_1", "Loading", _progress);
+            Origami.ProgressBar(paper, "pb_1", _progress).Label("Loading").ShowPercent().Show();
             InspectorRow.Draw(paper, "pb_ctrl", "Progress", () =>
                 Origami.Slider(paper, "pb_ctrl_v", _progress, v => _progress = v, 0f, 1f)
                     .Format("F2").Show());
 
-            EditorGUI.Separator(paper, "sep9");
+            Origami.Separator(paper, "sep9").Show();
 
             // === Context Menu ===
-            EditorGUI.Header(paper, "h_ctx", "Context Menu (Right-Click)");
+            Origami.Header(paper, "h_ctx", "Context Menu (Right-Click)").Show();
 
             using (paper.Box("ctx_demo_area")
                 .Height(60)
@@ -343,7 +344,7 @@ public class WidgetPlaygroundPanel : DockPanel
                         .Text("Right-click here for a context menu", EditorTheme.DefaultFont)
                         .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize);
 
-                ContextMenuHelper.RightClickMenu(paper, "ctx_test", menu =>
+                Origami.RightClickMenu(paper, "ctx_test", menu =>
                 {
                     menu.Item("Cut", () => _textValue = "Cut!")
                         .Item("Copy", () => _textValue = "Copy!")
@@ -359,25 +360,25 @@ public class WidgetPlaygroundPanel : DockPanel
                 });
             }
 
-            EditorGUI.Separator(paper, "sep10");
+            Origami.Separator(paper, "sep10").Show();
 
             // === Modal Dialog ===
-            EditorGUI.Header(paper, "h_modal", "Modal Dialog");
+            Origami.Header(paper, "h_modal", "Modal Dialog").Show();
 
             using (paper.Row("modal_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
-                Origami.Button(paper, "btn_confirm", "Confirm Dialog", () => ModalDialog.Confirm("Delete Object",
+                Origami.Button(paper, "btn_confirm", "Confirm Dialog", () => Origami.Confirm("Delete Object",
                     "Are you sure you want to delete this object?",
                     () => Toasts.Success("Deleted", "Object was deleted"),
                     () => Toasts.Info("Cancelled", "Deletion cancelled"))).Show();
 
-                Origami.Button(paper, "btn_message", "Message Dialog", () => ModalDialog.Message("Info", "This is a message dialog.")).Show();
+                Origami.Button(paper, "btn_message", "Message Dialog", () => Origami.Message("Info", "This is a message dialog.")).Show();
             }
 
-            EditorGUI.Separator(paper, "sep11");
+            Origami.Separator(paper, "sep11").Show();
 
             // === Toasts ===
-            EditorGUI.Header(paper, "h_toast", "Toast Notifications");
+            Origami.Header(paper, "h_toast", "Toast Notifications").Show();
 
             using (paper.Row("toast_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
@@ -387,10 +388,10 @@ public class WidgetPlaygroundPanel : DockPanel
                 Origami.Button(paper, "btn_toast_err", "Error", () => Toasts.Error("Error", "Failed to compile shader")).Show();
             }
 
-            EditorGUI.Separator(paper, "sep12");
+            Origami.Separator(paper, "sep12").Show();
 
             // === Tooltip ===
-            EditorGUI.Header(paper, "h_tooltip", "Tooltip (hover the button)");
+            Origami.Header(paper, "h_tooltip", "Tooltip (hover the button)").Show();
 
             var tooltipBtn = paper.Box("tooltip_demo")
                 .Height(EditorTheme.RowHeight)
@@ -404,59 +405,59 @@ public class WidgetPlaygroundPanel : DockPanel
                 tooltipBtn.Text("Hover me for tooltip", EditorTheme.DefaultFont)
                     .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
 
-            EditorGUI.Separator(paper, "sep13");
+            Origami.Separator(paper, "sep13").Show();
 
             // === Animation Curve ===
-            EditorGUI.Header(paper, "h_curve", "Animation Curve");
+            Origami.Header(paper, "h_curve", "Animation Curve").Show();
 
             CurveEditor.CurveField(paper, "curve_1", "Speed Curve", _curve)
                 .OnValueChanged(v => _curve = v);
 
-            EditorGUI.Separator(paper, "sep14");
+            Origami.Separator(paper, "sep14").Show();
 
             // === Property Grid ===
-            EditorGUI.Header(paper, "h_propgrid", "Property Grid (Reflection)");
+            Origami.Header(paper, "h_propgrid", "Property Grid (Reflection)").Show();
 
             PropertyGrid.Draw(paper, "pg_test", _testObject, changed => _testObject = (TestComponent)changed);
 
-            EditorGUI.Separator(paper, "sep15");
+            Origami.Separator(paper, "sep15").Show();
 
             // === Live State ===
-            EditorGUI.Header(paper, "h_state", "Current State");
-            EditorGUI.Label(paper, "st_click", $"Clicks: {_clickCount}");
-            EditorGUI.Label(paper, "st_togbtn", $"Wireframe: {_toggleBtnA}  Grid: {_toggleBtnB}");
-            EditorGUI.Label(paper, "st_tog", $"Shadows: {_toggleA}  Reflections: {_toggleB}");
-            EditorGUI.Label(paper, "st_text", $"Message: {_textValue}");
-            EditorGUI.Label(paper, "st_name", $"Name: {_nameValue}");
-            EditorGUI.Label(paper, "st_float", $"Speed: {_floatValue:F2}");
-            EditorGUI.Label(paper, "st_int", $"Health: {_intValue}");
-            EditorGUI.Label(paper, "st_sl1", $"Opacity: {_sliderValue:F2}");
-            EditorGUI.Label(paper, "st_sl2", $"Volume: {_sliderRange:F1}");
-            EditorGUI.Label(paper, "st_dd1", $"Fruit: {Fruits[_dropdownIndex]}");
-            EditorGUI.Label(paper, "st_dd2", $"Mode: {Modes[_dropdown2Index]}");
-            EditorGUI.Label(paper, "st_search", $"Search: \"{_searchText}\"");
-            EditorGUI.Label(paper, "st_enum", $"Enum: {_testEnum}");
-            EditorGUI.Label(paper, "st_isl", $"IntSlider: {_intSlider}");
-            EditorGUI.Label(paper, "st_vec2", $"Vec2: ({_vec2.X:F1}, {_vec2.Y:F1})");
-            EditorGUI.Label(paper, "st_vec3", $"Vec3: ({_vec3.X:F1}, {_vec3.Y:F1}, {_vec3.Z:F1})");
-            EditorGUI.Label(paper, "st_col", $"Color: R={_color.R:F2} G={_color.G:F2} B={_color.B:F2}");
-            EditorGUI.Label(paper, "st_prog", $"Progress: {_progress:P0}");
+            Origami.Header(paper, "h_state", "Current State").Show();
+            Origami.Label(paper, "st_click", $"Clicks: {_clickCount}").Show();
+            Origami.Label(paper, "st_togbtn", $"Wireframe: {_toggleBtnA}  Grid: {_toggleBtnB}").Show();
+            Origami.Label(paper, "st_tog", $"Shadows: {_toggleA}  Reflections: {_toggleB}").Show();
+            Origami.Label(paper, "st_text", $"Message: {_textValue}").Show();
+            Origami.Label(paper, "st_name", $"Name: {_nameValue}").Show();
+            Origami.Label(paper, "st_float", $"Speed: {_floatValue:F2}").Show();
+            Origami.Label(paper, "st_int", $"Health: {_intValue}").Show();
+            Origami.Label(paper, "st_sl1", $"Opacity: {_sliderValue:F2}").Show();
+            Origami.Label(paper, "st_sl2", $"Volume: {_sliderRange:F1}").Show();
+            Origami.Label(paper, "st_dd1", $"Fruit: {Fruits[_dropdownIndex]}").Show();
+            Origami.Label(paper, "st_dd2", $"Mode: {Modes[_dropdown2Index]}").Show();
+            Origami.Label(paper, "st_search", $"Search: \"{_searchText}\"").Show();
+            Origami.Label(paper, "st_enum", $"Enum: {_testEnum}").Show();
+            Origami.Label(paper, "st_isl", $"IntSlider: {_intSlider}").Show();
+            Origami.Label(paper, "st_vec2", $"Vec2: ({_vec2.X:F1}, {_vec2.Y:F1})").Show();
+            Origami.Label(paper, "st_vec3", $"Vec3: ({_vec3.X:F1}, {_vec3.Y:F1}, {_vec3.Z:F1})").Show();
+            Origami.Label(paper, "st_col", $"Color: R={_color.R:F2} G={_color.G:F2} B={_color.B:F2}").Show();
+            Origami.Label(paper, "st_prog", $"Progress: {_progress:P0}").Show();
 
             // ── File Dialog ──
-            EditorGUI.Header(paper, "h_filedialog", "File Dialog");
+            Origami.Header(paper, "h_filedialog", "File Dialog").Show();
 
-            Origami.Button(paper, "btn_open_file", "Open File...", () => Widgets.FileDialog.Open(Widgets.FileDialogMode.Open,
-                path => { if (path != null) Widgets.Toasts.Show("File", $"Selected: {path}"); },
+            Origami.Button(paper, "btn_open_file", "Open File...", () => EditorApplication.OpenFileDialog(FileDialogMode.Open,
+                path => { if (path != null) Toasts.Show("File", $"Selected: {path}"); },
                 filters: new[] { "*.cs;*.json;*.xml", "*.png;*.jpg", "*.*" },
                 filterLabels: new[] { "Code (*.cs, *.json, *.xml)", "Images (*.png, *.jpg)", "All Files (*.*)" })).Show();
 
-            Origami.Button(paper, "btn_save_file", "Save File...", () => Widgets.FileDialog.Open(Widgets.FileDialogMode.Save,
-                path => { if (path != null) Widgets.Toasts.Show("File", $"Save to: {path}", Widgets.ToastType.Success); })).Show();
+            Origami.Button(paper, "btn_save_file", "Save File...", () => EditorApplication.OpenFileDialog(FileDialogMode.Save,
+                path => { if (path != null) Toasts.Show("File", $"Save to: {path}", ToastType.Success); })).Show();
 
-            Origami.Button(paper, "btn_select_folder", "Select Folder...", () => Widgets.FileDialog.Open(Widgets.FileDialogMode.SelectFolder,
-                path => { if (path != null) Widgets.Toasts.Show("Folder", $"Selected: {path}"); })).Show();
+            Origami.Button(paper, "btn_select_folder", "Select Folder...", () => EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder,
+                path => { if (path != null) Toasts.Show("Folder", $"Selected: {path}"); })).Show();
 
-            EditorGUI.Separator(paper, "sep_filedialog");
+            Origami.Separator(paper, "sep_filedialog").Show();
 
             paper.Box("bottom_pad").Height(20);
         });

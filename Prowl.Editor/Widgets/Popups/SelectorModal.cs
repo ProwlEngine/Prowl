@@ -16,7 +16,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Widgets;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Controls which tabs are available in the selector.
@@ -60,6 +60,8 @@ public static class SelectorModal
     /// <param name="targetType">The type being selected (e.g. typeof(Transform), typeof(Mesh), typeof(Rigidbody3D)).</param>
     /// <param name="tabs">Which tabs to show.</param>
     /// <param name="onSelect">Callback with the selected value, or null for "None".</param>
+    private static OrigamiUI.IModal? _modal;
+
     public static void Open(string title, Type targetType, SelectorTabs tabs, Action<object?> onSelect)
     {
         _title = title;
@@ -68,37 +70,36 @@ public static class SelectorModal
         _callback = onSelect;
         _searchText = "";
         _open = true;
-
-        // Default to the first available tab
         _activeTab = tabs.HasFlag(SelectorTabs.Scene) ? SelectorTabs.Scene : SelectorTabs.Assets;
+
+        _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer)) { CloseOnBackdrop = true };
+        OrigamiUI.Modal.Push(_modal);
     }
 
     public static void Close()
     {
         _open = false;
         _callback = null;
+        if (_modal != null) { OrigamiUI.Modal.Remove(_modal); _modal = null; }
     }
 
-    /// <summary>
-    /// Draw the modal overlay. Call once per frame from EditorApplication overlay drawing.
-    /// </summary>
-    public static void Draw(Paper paper)
+    public static void Draw(Paper paper) { } // Now handled by modal stack
+
+    private static void DrawInternal(Paper paper, int layer)
     {
         if (!_open) return;
 
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Fullscreen blocker
-        EditorGUI.Backdrop(paper, "sel_overlay", Close);
-
-        // Modal window
+        // Modal window (backdrop handled by modal stack)
         using (paper.Column("sel_modal")
             .Size(380, 460)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
-            .Layer(Layer.Overlay)
+            .Layer(layer)
+            .StopEventPropagation()
             .Enter())
         {
             DrawHeader(paper, font);

@@ -11,7 +11,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Inspector;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Searchable modal popup for adding components to a GameObject.
@@ -38,36 +38,41 @@ public static class AddComponentPopup
 
     public static bool IsOpen => _isOpen;
 
+    private static OrigamiUI.IModal? _modal;
+
     public static void Open(GameObject target)
     {
         _isOpen = true;
         _targetGo = target;
         _searchText = "";
         _cachedComponents ??= GatherComponents();
+        _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer)) { CloseOnBackdrop = true };
+        Modal.Push(_modal);
     }
 
     public static void Close()
     {
         _isOpen = false;
         _targetGo = null;
+        if (_modal != null) { Modal.Remove(_modal); _modal = null; }
     }
 
-    public static void Draw(Paper paper)
+    public static void Draw(Paper paper) { } // Now handled by modal stack
+
+    private static void DrawInternal(Paper paper, int layer)
     {
         if (!_isOpen || _targetGo == null) return;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Fullscreen blocker
-        EditorGUI.Backdrop(paper, "acp_overlay", Close);
-
-        // Modal window
+        // Modal window (backdrop handled by modal stack)
         using (paper.Column("acp_modal")
             .Size(320, 450)
             .Margin(UnitValue.StretchOne)
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Ink200).BorderWidth(1).Rounded(8)
-            .Layer(Layer.Overlay)
+            .Layer(layer)
+            .StopEventPropagation()
             .Enter())
         {
             // Header
@@ -93,7 +98,7 @@ public static class AddComponentPopup
 
             // Search bar
             using (paper.Row("acp_search_row")
-                .Height(28).ChildLeft(8).ChildRight(8).ChildTop(4).ChildBottom(4)
+                .Height(28).Padding(8, 8, 4, 4)
                 .Enter())
             {
                 Origami.SearchField(paper, "acp_search", _searchText, v => _searchText = v, "Search components...").Show();

@@ -22,17 +22,16 @@ public class PrefabAssetEditor : AssetImporterEditor
         var prefab = asset as PrefabAsset;
         if (prefab == null) return;
 
-        EditorGUI.Header(paper, $"{id}_hdr", $"{EditorIcons.Cubes}  Prefab: {prefab.Name}");
-        EditorGUI.Separator(paper, $"{id}_sep");
+        Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.Cubes}  Prefab: {prefab.Name}").Underline().Show();
 
         // Info
         if (prefab.GameObjectData != null)
         {
-            EditorGUI.Label(paper, $"{id}_info", "Contains a serialized GameObject hierarchy.");
+            Origami.Label(paper, $"{id}_info", "Contains a serialized GameObject hierarchy.").Show();
         }
         else
         {
-            EditorGUI.Label(paper, $"{id}_empty", "Empty prefab (no data).");
+            Origami.Label(paper, $"{id}_empty", "Empty prefab (no data).").Show();
         }
 
         paper.Box($"{id}_sp").Height(8);
@@ -43,8 +42,7 @@ public class PrefabAssetEditor : AssetImporterEditor
         // 3D Preview
         if (prefab.GameObjectData != null)
         {
-            EditorGUI.Separator(paper, $"{id}_sep_preview");
-            EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
+                        Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
             _preview ??= new PreviewRenderer(256, 256) { ShowGrid = true };
 

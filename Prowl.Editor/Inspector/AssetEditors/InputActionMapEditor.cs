@@ -43,12 +43,12 @@ public class InputActionMapEditor : AssetImporterEditor
         // Header
         using (paper.Row($"{id}_hdr").Height(EditorTheme.RowHeight + 4).RowBetween(8).Enter())
         {
-            EditorGUI.Header(paper, $"{id}_title", $"{EditorIcons.Gamepad}  Input Actions: {map.Name}");
+            Origami.Header(paper, $"{id}_title", $"{EditorIcons.Gamepad}  Input Actions: {map.Name}").Show();
 
             if (_dirty)
                 Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save", () => { SaveMap(map, entry); }).Width(80).Show();
         }
-        EditorGUI.Separator(paper, $"{id}_sep");
+        Origami.Separator(paper, $"{id}_sep").Show();
 
         // Two-column layout
         using (paper.Row($"{id}_body").Height(UnitValue.Auto).RowBetween(4).Enter())
@@ -70,7 +70,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Width(paper.Percent(28)).MinWidth(120)
             .Height(UnitValue.Auto)
             .BackgroundColor(EditorTheme.Neutral400).Rounded(4)
-            .ChildTop(4).ChildBottom(4).ChildLeft(4).ChildRight(4)
+            .Padding(4, 4, 4, 4)
             .Enter())
         {
             // Header
@@ -133,7 +133,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)
             .BackgroundColor(EditorTheme.Neutral400).Rounded(4)
-            .ChildTop(6).ChildBottom(6).ChildLeft(6).ChildRight(6)
+            .Padding(6, 6, 6, 6)
             .Enter())
         {
             var action = _selectedAction != null ? map.FindAction(_selectedAction) : null;
@@ -170,7 +170,7 @@ public class InputActionMapEditor : AssetImporterEditor
                     new[] { "float", "Float2" }).Show());
 
             paper.Box($"{id}_sp1").Height(6);
-            EditorGUI.Separator(paper, $"{id}_bsep");
+            Origami.Separator(paper, $"{id}_bsep").Show();
 
             // -- Bindings List --
             using (paper.Row($"{id}_bhdr").Height(20).RowBetween(4).Enter())
@@ -356,7 +356,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Height(UnitValue.Auto)
             .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
             .Rounded(3).Margin(12, 0, 0, 2)
-            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
+            .Padding(8, 8, 6, 6)
             .Enter())
         {
             // "Listen" button press any key to rebind
@@ -386,7 +386,7 @@ public class InputActionMapEditor : AssetImporterEditor
             DrawBindingControl(paper, $"{id}_ctrl", binding);
 
             paper.Box($"{id}_isep").Height(4);
-            EditorGUI.Separator(paper, $"{id}_isep2");
+            Origami.Separator(paper, $"{id}_isep2").Show();
 
             // Interaction
             InspectorRow.Draw(paper, $"{id}_inter", "Interaction", () =>
@@ -396,7 +396,7 @@ public class InputActionMapEditor : AssetImporterEditor
             DrawInteractionParams(paper, $"{id}_ip", binding);
 
             paper.Box($"{id}_psep").Height(4);
-            EditorGUI.Separator(paper, $"{id}_psep2");
+            Origami.Separator(paper, $"{id}_psep2").Show();
 
             // Processors
             DrawProcessorList(paper, $"{id}_proc", binding.Processors);
@@ -409,7 +409,7 @@ public class InputActionMapEditor : AssetImporterEditor
             .Height(UnitValue.Auto)
             .BackgroundColor(Color.FromArgb(30, EditorTheme.Purple400))
             .Rounded(3).Margin(12, 0, 0, 2)
-            .ChildLeft(8).ChildRight(8).ChildTop(6).ChildBottom(6)
+            .Padding(8, 8, 6, 6)
             .Enter())
         {
             // Vector2-specific options
@@ -428,7 +428,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 string partName = partNames[i];
                 var partBinding = composite.Parts[partName];
 
-                EditorGUI.Header(paper, $"{id}_ph{i}", $"{partName.ToUpper()}");
+                Origami.Header(paper, $"{id}_ph{i}", $"{partName.ToUpper()}").Show();
 
                 DrawListenButton(paper, $"{id}_pl{i}", partBinding, partName);
                 DrawBindingControl(paper, $"{id}_pc{i}", partBinding);
@@ -438,7 +438,7 @@ public class InputActionMapEditor : AssetImporterEditor
             }
 
             paper.Box($"{id}_procsep").Height(4);
-            EditorGUI.Separator(paper, $"{id}_procsep2");
+            Origami.Separator(paper, $"{id}_procsep2").Show();
 
             // Composite-level processors
             DrawProcessorList(paper, $"{id}_proc", composite.Processors);
@@ -604,7 +604,7 @@ public class InputActionMapEditor : AssetImporterEditor
                 .Height(UnitValue.Auto)
                 .BackgroundColor(EditorTheme.Neutral300).Rounded(3)
                 .Margin(0, 0, 0, 2)
-                .ChildLeft(6).ChildRight(6).ChildTop(3).ChildBottom(3)
+                .Padding(6, 6, 3, 3)
                 .Enter())
             {
                 // Header with name and remove button

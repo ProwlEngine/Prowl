@@ -57,6 +57,56 @@ public sealed class OrigamiIcons
     /// <summary>Success / OK badge.</summary>
     public string Success = string.Empty;
 
+    // ── File dialog icons ──────────────────────────────────────
+
+    /// <summary>Folder glyph (closed folder).</summary>
+    public string Folder = string.Empty;
+
+    /// <summary>Generic file glyph.</summary>
+    public string File = string.Empty;
+
+    /// <summary>Hard drive / disk glyph for drive listing.</summary>
+    public string Drive = string.Empty;
+
+    /// <summary>Star / bookmark glyph for favorites.</summary>
+    public string Star = string.Empty;
+
+    /// <summary>Clock / history glyph for recent files.</summary>
+    public string Clock = string.Empty;
+
+    /// <summary>Trash / delete glyph.</summary>
+    public string Trash = string.Empty;
+
+    /// <summary>Plus / add glyph.</summary>
+    public string Plus = string.Empty;
+
+    /// <summary>Left arrow for back navigation.</summary>
+    public string ArrowLeft = string.Empty;
+
+    /// <summary>Right arrow for forward navigation.</summary>
+    public string ArrowRight = string.Empty;
+
+    /// <summary>Up arrow for parent directory.</summary>
+    public string ArrowUp = string.Empty;
+
+    /// <summary>Pencil / edit glyph for rename.</summary>
+    public string Pencil = string.Empty;
+
+    /// <summary>Folder with plus for new folder.</summary>
+    public string FolderPlus = string.Empty;
+
+    /// <summary>Desktop glyph for quick access.</summary>
+    public string Desktop = string.Empty;
+
+    /// <summary>Download glyph for quick access.</summary>
+    public string Download = string.Empty;
+
+    /// <summary>User / home glyph.</summary>
+    public string User = string.Empty;
+
+    /// <summary>Document / file-lines glyph.</summary>
+    public string Document = string.Empty;
+
     /// <summary>Shallow copy.</summary>
     public OrigamiIcons Clone() => new()
     {
@@ -74,5 +124,21 @@ public sealed class OrigamiIcons
         Warning = Warning,
         Danger = Danger,
         Success = Success,
+        Folder = Folder,
+        File = File,
+        Drive = Drive,
+        Star = Star,
+        Clock = Clock,
+        Trash = Trash,
+        Plus = Plus,
+        ArrowLeft = ArrowLeft,
+        ArrowRight = ArrowRight,
+        ArrowUp = ArrowUp,
+        Pencil = Pencil,
+        FolderPlus = FolderPlus,
+        Desktop = Desktop,
+        Download = Download,
+        User = User,
+        Document = Document,
     };
 }

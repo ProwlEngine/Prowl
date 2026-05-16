@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Packages;
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -198,9 +199,8 @@ public class ProjectPanel : DockPanel
             {
                 if (paper.IsParentHovered)
                 {
-                    var addBuilder = new ContextMenuBuilder();
-                    AssetCreateMenu.Build(addBuilder, _currentFolder, OnCreated);
-                    addBuilder.Render(paper, "proj_add_menu", 0, ToolbarHeight - 6);
+                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                        AssetCreateMenu.Build(b, _currentFolder, OnCreated));
                 }
             }
 
@@ -857,7 +857,7 @@ public class ProjectPanel : DockPanel
 
     private void BuildItemContextMenu(Paper paper, string id, ContentItem item, bool inTree = false)
     {
-        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        Origami.RightClickMenu(paper, id, builder =>
         {
             // Right-click should select the item if not already selected
             if (!Selection.IsSelected(item))
@@ -946,7 +946,7 @@ public class ProjectPanel : DockPanel
 
     private void BuildBackgroundContextMenu(Paper paper, string id)
     {
-        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        Origami.RightClickMenu(paper, id, builder =>
         {
             string folder = _currentFolder;
 
@@ -993,7 +993,7 @@ public class ProjectPanel : DockPanel
 
         string names = selected.Count == 1 ? selected[0].Name : $"{selected.Count} items";
 
-        ModalDialog.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
+        Origami.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
         {
             var db = EditorAssetDatabase.Instance;
             if (db == null) return;
@@ -1042,7 +1042,7 @@ public class ProjectPanel : DockPanel
                 string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
                 if (Directory.Exists(newAbs) || File.Exists(newAbs))
                 {
-                    Widgets.Toasts.Show("Rename Failed", $"A file or folder named '{newName}' already exists.", Widgets.ToastType.Warning, 3f);
+                    Toasts.Show("Rename Failed", $"A file or folder named '{newName}' already exists.", ToastType.Warning, 3f);
                 }
                 else if (Directory.Exists(oldAbs))
                 {
@@ -1058,7 +1058,7 @@ public class ProjectPanel : DockPanel
             {
                 bool success = EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath) ?? false;
                 if (!success)
-                    Widgets.Toasts.Show("Rename Failed", $"A file named '{newName}' already exists.", Widgets.ToastType.Warning, 3f);
+                    Toasts.Show("Rename Failed", $"A file named '{newName}' already exists.", ToastType.Warning, 3f);
             }
         });
     }
@@ -1239,7 +1239,7 @@ public class ProjectPanel : DockPanel
                     .Position(2, 2)
                     .Size(16, 16).Rounded(3)
                     .BackgroundColor(Color.FromArgb(160, 30, 30, 30))
-                    .Text(EditorGUI.FoldoutIcon(expanded), font)
+                    .Text(expanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
                     .TextColor(EditorTheme.Ink400)
                     .FontSize(8f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(item.Guid, (guid, _) =>

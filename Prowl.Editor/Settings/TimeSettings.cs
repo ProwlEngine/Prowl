@@ -31,8 +31,7 @@ public class TimeSettings : ProjectSettingsBase
 
     public override void OnGUI(Paper paper, float width)
     {
-        EditorGUI.Header(paper, "time_hdr", $"{EditorIcons.Clock}  Time");
-        EditorGUI.Separator(paper, "time_sep");
+        Origami.Header(paper, "time_hdr", $"{EditorIcons.Clock}  Time").Underline().Show();
 
         InspectorRow.Draw(paper, "time_fixed", "Fixed Timestep", () =>
             Origami.NumericField<float>(paper, "time_fixed_v", FixedTimestep, v =>
@@ -42,8 +41,8 @@ public class TimeSettings : ProjectSettingsBase
                 ProjectSettingsRegistry.SaveAll();
             }).Min(0.0001f).Show());
 
-        EditorGUI.Label(paper, "time_fixed_info",
-            $"  {(int)(1f / FixedTimestep + 0.5f)} Hz ({FixedTimestep * 1000f:F2} ms)");
+        Origami.Label(paper, "time_fixed_info",
+            $"  {(int)(1f / FixedTimestep + 0.5f)} Hz ({FixedTimestep * 1000f:F2} ms)").Show();
 
         InspectorRow.Draw(paper, "time_maxiter", "Max Fixed Iterations", () =>
             Origami.IntSlider(paper, "time_maxiter_v", MaxFixedIterations, v =>

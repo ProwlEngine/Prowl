@@ -50,15 +50,15 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_cg_sat", "Saturation", fx.Saturation, -1, 1, v => fx.Saturation = v, bipolar: true);
             SliderRow(paper, $"{id}_cg_tmp", "Temperature", fx.Temperature, -1, 1, v => fx.Temperature = v, bipolar: true);
 
-            EditorGUI.Separator(paper, $"{id}_cg_sep_lgg");
-            EditorGUI.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain");
+            Origami.Separator(paper, $"{id}_cg_sep_lgg").Show();
+            Origami.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain").Show();
 
-            EditorGUI.ColorField(paper, $"{id}_cg_lift", "Lift (Shadows)", fx.Lift)
-                .OnValueChanged(v => fx.Lift = v);
-            EditorGUI.ColorField(paper, $"{id}_cg_gamma", "Gamma (Midtones)", fx.Gamma)
-                .OnValueChanged(v => fx.Gamma = v);
-            EditorGUI.ColorField(paper, $"{id}_cg_gain", "Gain (Highlights)", fx.Gain)
-                .OnValueChanged(v => fx.Gain = v);
+            InspectorRow.Draw(paper, $"{id}_cg_lift", "Lift (Shadows)", () =>
+                Origami.ColorField(paper, $"{id}_cg_lift_cf", fx.Lift, v => fx.Lift = v).Show());
+            InspectorRow.Draw(paper, $"{id}_cg_gamma", "Gamma (Midtones)", () =>
+                Origami.ColorField(paper, $"{id}_cg_gamma_cf", fx.Gamma, v => fx.Gamma = v).Show());
+            InspectorRow.Draw(paper, $"{id}_cg_gain", "Gain (Highlights)", () =>
+                Origami.ColorField(paper, $"{id}_cg_gain_cf", fx.Gain, v => fx.Gain = v).Show());
         });
 
         // ── LUT ───────────────────────────────────────────
@@ -87,8 +87,8 @@ public class CinematicEffectsEditor : CustomEditor
             fx.EnableEdgeDetection, v => fx.EnableEdgeDetection = v, () =>
         {
             SliderRow(paper, $"{id}_edg_int", "Intensity", fx.EdgeIntensity, 0, 5, v => fx.EdgeIntensity = v);
-            EditorGUI.ColorField(paper, $"{id}_edg_col", "Edge Color", fx.EdgeColor)
-                .OnValueChanged(v => fx.EdgeColor = v);
+            InspectorRow.Draw(paper, $"{id}_edg_col", "Edge Color", () =>
+                Origami.ColorField(paper, $"{id}_edg_col_cf", fx.EdgeColor, v => fx.EdgeColor = v).Show());
             SliderRow(paper, $"{id}_edg_bg", "Background Fade", fx.EdgeBackgroundFade, 0, 1, v => fx.EdgeBackgroundFade = v);
         });
 
@@ -126,5 +126,9 @@ public class CinematicEffectsEditor : CustomEditor
 
     private static void DrawSection(Paper paper, string id, string icon, string title,
         bool enabled, System.Action<bool> setEnabled, System.Action drawContent)
-        => EditorGUI.ToggleSection(paper, id, $"{icon}  {title}", enabled, setEnabled, drawContent);
+    {
+        Origami.Foldout(paper, id, $"{icon}  {title}")
+            .Toggle(enabled, setEnabled)
+            .Body(drawContent);
+    }
 }

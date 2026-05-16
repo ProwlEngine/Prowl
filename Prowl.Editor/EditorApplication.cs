@@ -8,7 +8,9 @@ using System.Runtime.InteropServices;
 using Prowl.Editor.Docking;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.Panels;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -113,9 +115,9 @@ public class EditorApplication : Game
 
         // Cursor lock toasts
         Input.OnCursorLocked += () =>
-            Widgets.Toasts.Show("Cursor Locked", "Press Escape to release.", Widgets.ToastType.Info, 3f);
+            Toasts.Show("Cursor Locked", "Press Escape to release.", ToastType.Info, 3f);
         Input.OnCursorLockFailed += () =>
-            Widgets.Toasts.Show("Cursor Lock Failed", "No valid game view is available.", Widgets.ToastType.Warning, 3f);
+            Toasts.Show("Cursor Lock Failed", "No valid game view is available.", ToastType.Warning, 3f);
 
         // Menus depend on registries above, so register after initialization
         ScanAndRegisterPanels();
@@ -157,8 +159,8 @@ public class EditorApplication : Game
             ProjectLauncher.Initialize();
         }
 
-        // Initialize status bar (after project loaded so it can show project-specific messages)
-        StatusBar.Initialize();
+        // Initialize status bar log tracking
+        InitializeStatusBar();
 
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
@@ -285,7 +287,7 @@ public class EditorApplication : Game
                 // authoring state. Toast once per press so the shortcut isn't silent.
                 if (Application.IsPlaying)
                 {
-                    Widgets.Toasts.Warning("Can't save during Play Mode",
+                    Toasts.Warning("Can't save during Play Mode",
                         "Exit Play Mode to save your scene, prefab, or graph.");
                 }
                 else if (Prefabs.PrefabEditingMode.IsEditing)
@@ -302,7 +304,7 @@ public class EditorApplication : Game
             else if (ShortcutManager.IsPressed("Global/SaveAs"))
             {
                 if (Application.IsPlaying)
-                    Widgets.Toasts.Warning("Can't save during Play Mode",
+                    Toasts.Warning("Can't save during Play Mode",
                         "Exit Play Mode to save your scene.");
                 else
                     PromptSaveAs();
@@ -464,7 +466,7 @@ public class EditorApplication : Game
                 canvas.Fill();
             }));
 
-        MainMenuBar.Draw(paper);
+        DrawMenuBar(paper);
         DrawTitleFlap(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
@@ -472,7 +474,7 @@ public class EditorApplication : Game
         float dockH = h - dockY - pad - EditorTheme.MenuBarHeight;
         _dockSpace.Draw(paper, pad, dockY, w - pad * 2, dockH);
 
-        StatusBar.Draw(paper);
+        DrawStatusBar(paper);
     }
 
     private void DrawTitleFlap(Paper paper, float w, float h)
@@ -664,19 +666,15 @@ public class EditorApplication : Game
     public override void EndGui(Paper paper)
     {
         // Drag & drop update + visual
-        DragDrop.UpdateDrag();
+        DragDrop.Update(paper);
         DragDrop.DrawVisual(paper);
 
         // Systems drawn on top (Overlay/Topmost layers)
-        Widgets.FileDialog.Draw(paper);
-        Packages.PackageExportDialog.Draw(paper);
-        Packages.PackageImportDialog.Draw(paper);
-        Widgets.SelectorModal.Draw(paper);
-        Inspector.AddComponentPopup.Draw(paper);
-        Widgets.ModalDialog.Draw(paper);
+        OrigamiUI.ContextMenu.Tick();
+        OrigamiUI.Modal.Draw(paper);
         Widgets.SaveBatch.Flush();
-        Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
-        Widgets.Tooltip.Draw(paper);
+        Toasts.Draw(paper);
+        OrigamiUI.TooltipSystem.Draw(paper);
 
         // Intro animation overlay
         if (_introTime < IntroDuration)
@@ -692,6 +690,122 @@ public class EditorApplication : Game
         _origamiScope?.Dispose();
         _origamiScope = null;
     }
+
+    // ================================================================
+    //  Menu Bar (Origami AppBar)
+    // ================================================================
+
+    private void DrawMenuBar(Paper paper)
+    {
+        var items = MenuRegistry.RootMenus;
+        var bar = Origami.AppBar(paper, "menubar")
+            .Height(EditorTheme.MenuBarHeight)
+            .Background(EditorTheme.Neutral200);
+
+        foreach (var root in items)
+            if (root.HasSubItems)
+                bar.Menu(root.Label, ConvertMenuItems(root.SubItems));
+
+        bar.Show();
+    }
+
+    private static List<AppMenuItem> ConvertMenuItems(List<MenuItem> source)
+    {
+        var result = new List<AppMenuItem>();
+        foreach (var item in source)
+        {
+            if (item.IsSeparator) { result.Add(AppMenuItem.Separator()); continue; }
+            var c = new AppMenuItem(item.Label, item.OnClick)
+            {
+                IsCheckedFunc = item.IsCheckedFunc,
+                IsEnabledFunc = item.IsEnabledFunc,
+                DynamicLabelFunc = item.DynamicLabelFunc,
+                IsEnabled = item.IsEnabled,
+            };
+            if (item.HasSubItems) c.SubItems = ConvertMenuItems(item.SubItems);
+            result.Add(c);
+        }
+        return result;
+    }
+
+    // ================================================================
+    //  Status Bar (Origami AppBar at bottom)
+    // ================================================================
+
+    private static string _statusBarMessage = "Ready";
+    private static string _statusBarIcon = "";
+    private static System.Drawing.Color _statusBarColor;
+
+    private static void InitializeStatusBar()
+    {
+        Runtime.Debug.OnLog += (message, _, severity) =>
+        {
+            _statusBarMessage = message.Contains('\n') ? message.Split('\n')[0] : message;
+            switch (severity)
+            {
+                case Runtime.LogSeverity.Warning:   _statusBarIcon = EditorIcons.TriangleExclamation; _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 200, 80); break;
+                case Runtime.LogSeverity.Error:
+                case Runtime.LogSeverity.Exception: _statusBarIcon = EditorIcons.CircleExclamation;   _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 80, 80); break;
+                case Runtime.LogSeverity.Success:   _statusBarIcon = EditorIcons.CircleCheck;         _statusBarColor = System.Drawing.Color.FromArgb(255, 80, 200, 80); break;
+                default:                            _statusBarIcon = EditorIcons.CircleInfo;          _statusBarColor = EditorTheme.Ink400; break;
+            }
+        };
+    }
+
+    private void DrawStatusBar(Paper paper)
+    {
+        var icon = string.IsNullOrEmpty(_statusBarIcon) ? EditorIcons.CircleInfo : _statusBarIcon;
+        var color = _statusBarColor.A == 0 ? EditorTheme.Ink400 : _statusBarColor;
+
+        Origami.AppBar(paper, "statusbar")
+            .Height(EditorTheme.MenuBarHeight)
+            .Bottom()
+            .Background(EditorTheme.Neutral200)
+            .Left(p =>
+            {
+                var font = EditorTheme.DefaultFont;
+                if (font == null) return;
+                p.Box("status_icon").Width(UnitValue.Auto).Height(EditorTheme.MenuBarHeight).ChildLeft(6)
+                    .IsNotInteractable().Text(icon, font).TextColor(color)
+                    .FontSize(EditorTheme.FontSize - 2).Alignment(PaperUI.TextAlignment.MiddleLeft);
+                p.Box("status_label").Width(UnitValue.Stretch()).Height(EditorTheme.MenuBarHeight).ChildLeft(4)
+                    .IsNotInteractable().Text(_statusBarMessage, font).TextColor(color)
+                    .FontSize(EditorTheme.FontSize - 2).Alignment(PaperUI.TextAlignment.MiddleLeft);
+            })
+            .Show();
+    }
+
+    // ================================================================
+    //  Editor File Dialog Helper
+    // ================================================================
+
+    private static OrigamiUI.FileDialogConfig? s_fileDialogConfig;
+
+    public static OrigamiUI.FileDialogConfig FileDialogConfig
+    {
+        get
+        {
+            s_fileDialogConfig ??= new OrigamiUI.FileDialogConfig
+            {
+                GetIcon = (ext, isDir) => isDir ? EditorIcons.Folder : FileIconRegistry.GetIconForFile("file" + ext),
+                QuickAccess =
+                [
+                    ("Desktop", EditorIcons.Desktop, Environment.GetFolderPath(Environment.SpecialFolder.Desktop)),
+                    ("Documents", EditorIcons.FolderOpen, Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
+                    ("Downloads", EditorIcons.Download, System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")),
+                    ("User", EditorIcons.User, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+                ],
+                GetDrives = () => System.IO.DriveInfo.GetDrives()
+                    .Where(d => d.IsReady).Select(d => (d.Name, d.Name)).ToArray(),
+            };
+            return s_fileDialogConfig;
+        }
+    }
+
+    /// <summary>Open a file dialog with editor config (icons, quick access, drives).</summary>
+    public static void OpenFileDialog(FileDialogMode mode, Action<string?> onComplete,
+        string? startPath = null, string[]? filters = null, string[]? filterLabels = null)
+        => OrigamiUI.FileDialog.Open(mode, onComplete, startPath, filters, filterLabels, FileDialogConfig);
 
     private const int BarCount = 10;
 
@@ -919,7 +1033,7 @@ public class EditorApplication : Game
     private void PromptSaveAs()
     {
         if (Project.Current == null) return;
-        Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (path == null || Project.Current == null) return;
             string rel = EditorAssetDatabase.NormalizePath(
@@ -940,7 +1054,7 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/New Scene", () => EditorSceneManager.NewScene());
         MenuRegistry.Register("File/Open Scene", () =>
         {
-            Widgets.FileDialog.Open(Widgets.FileDialogMode.Open, path =>
+            EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetDatabase.NormalizePath(
@@ -956,7 +1070,7 @@ public class EditorApplication : Game
             {
                 // No path yet prompt Save As
                 if (Project.Current == null) return;
-                Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+                EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
                 {
                     if (path == null || Project.Current == null) return;
                     string rel = EditorAssetDatabase.NormalizePath(
@@ -970,7 +1084,7 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/Save Scene As...", () =>
         {
             if (Project.Current == null) return;
-            Widgets.FileDialog.Open(Widgets.FileDialogMode.Save, path =>
+            EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
             {
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetDatabase.NormalizePath(
@@ -1005,10 +1119,10 @@ public class EditorApplication : Game
         MenuRegistry.RegisterSeparator("Assets");
         MenuRegistry.Register("Assets/Import Package...", () =>
         {
-            Widgets.FileDialog.Open(Widgets.FileDialogMode.Open, path =>
+            EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path != null && System.IO.File.Exists(path))
-                    Packages.PackageImportDialog.Open(path);
+                    Widgets.Popups.PackageImportDialog.Open(path);
             },
             startPath: Project.Current?.PackagesPath,
             filters: new[] { "*.prowlpackage" },
@@ -1045,7 +1159,7 @@ public class EditorApplication : Game
         GraphTools.NodePreviewRegistry.Reinitialize();
         Runtime.GraphTools.GraphValidatorRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
-        Inspector.AddComponentPopup.Reinitialize();
+        Widgets.Popups.AddComponentPopup.Reinitialize();
         Importers.ImporterRegistry.Reinitialize();
         ProjectSettingsRegistry.Reinitialize();
         CreateAssetMenuRegistry.Reinitialize();

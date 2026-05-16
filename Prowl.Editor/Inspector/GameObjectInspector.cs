@@ -5,6 +5,7 @@ using System.Reflection;
 
 using Prowl.Editor.Prefabs;
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -182,18 +183,18 @@ public static class GameObjectInspector
 
         // Position
         var pos = t.LocalPosition;
-        EditorGUI.Vector3Field(paper, "gi_pos", "Position", pos)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, v, (g, x) => g.Transform.LocalPosition = x, coalesce: true); t.LocalPosition = v; });
+        InspectorRow.Draw(paper, "gi_pos", "Position", () =>
+            Origami.Float3Field(paper, "gi_pos_vf", pos, v => { Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, v, (g, x) => g.Transform.LocalPosition = x, coalesce: true); t.LocalPosition = v; }).Show());
 
         // Rotation (as euler)
         var euler = t.LocalEulerAngles;
-        EditorGUI.Vector3Field(paper, "gi_rot", "Rotation", euler)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; });
+        InspectorRow.Draw(paper, "gi_rot", "Rotation", () =>
+            Origami.Float3Field(paper, "gi_rot_vf", euler, v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; }).Show());
 
         // Scale
         var scale = t.LocalScale;
-        EditorGUI.Vector3Field(paper, "gi_scale", "Scale", scale)
-            .OnValueChanged(v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; });
+        InspectorRow.Draw(paper, "gi_scale", "Scale", () =>
+            Origami.Float3Field(paper, "gi_scale_vf", scale, v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; }).Show());
     }
 
     /// <summary>
@@ -566,14 +567,13 @@ public static class GameObjectInspector
                     .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                     .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.Ink400)
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
+                    .OnClick(i, (ci, _) =>
+                    {
+                        Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                            BuildComponentContextMenu(b, go, comp, ci));
+                    })
                     .Enter())
                 {
-                    if (paper.IsParentHovered)
-                    {
-                        var ctxBuilder = new ContextMenuBuilder();
-                        BuildComponentContextMenu(ctxBuilder, go, comp, i);
-                        ctxBuilder.Render(paper, $"{compId}_ctx", 0, 24);
-                    }
                 }
             }
 
@@ -616,11 +616,11 @@ public static class GameObjectInspector
             // Draw [Button] attributed methods
             DrawButtonMethods(paper, $"{compId}_btns", comp);
 
-            EditorGUI.Separator(paper, $"{compId}_sep");
+            Origami.Separator(paper, $"{compId}_sep").Show();
         }
     }
 
-    private static void BuildComponentContextMenu(ContextMenuBuilder builder, GameObject go, MonoBehaviour comp, int index)
+    private static void BuildComponentContextMenu(ContextBuilder builder, GameObject go, MonoBehaviour comp, int index)
     {
         builder.Item("Reset", () =>
         {
@@ -732,7 +732,7 @@ public static class GameObjectInspector
         }
     }
 
-    private static void BuildAddComponentMenu(ContextMenuBuilder builder, GameObject go)
+    private static void BuildAddComponentMenu(ContextBuilder builder, GameObject go)
     {
         // Gather all MonoBehaviour types
         var componentTypes = new List<(string path, string icon, Type type)>();
@@ -824,7 +824,7 @@ public static class GameObjectInspector
             .BackgroundColor(barColor)
             .BorderColor(borderColor).BorderWidth(1)
             .Rounded(4).Margin(0, 4, 0, 4)
-            .ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4)
+            .Padding(4, 4, 4, 4)
             .Enter())
         {
             // Top row: label + buttons

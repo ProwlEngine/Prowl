@@ -88,12 +88,12 @@ public class ParticleSystemComponentEditor : CustomEditor
             // Shape
             EnumRow(paper, $"{id}_emit_shape", "Shape", ps.Emission.Shape, v => ps.Emission.Shape = v);
 
-            EditorGUI.Vector3Field(paper, $"{id}_emit_pos", "Position", ps.Emission.ShapePosition)
-                .OnValueChanged(v => { ps.Emission.ShapePosition = v; });
-            EditorGUI.Vector3Field(paper, $"{id}_emit_rot2", "Rotation", ps.Emission.ShapeRotation)
-                .OnValueChanged(v => { ps.Emission.ShapeRotation = v; });
-            EditorGUI.Vector3Field(paper, $"{id}_emit_scl", "Scale", ps.Emission.ShapeScale)
-                .OnValueChanged(v => { ps.Emission.ShapeScale = v; });
+            InspectorRow.Draw(paper, $"{id}_emit_pos", "Position", () =>
+                Origami.Float3Field(paper, $"{id}_emit_pos_vf", ps.Emission.ShapePosition, v => ps.Emission.ShapePosition = v).Show());
+            InspectorRow.Draw(paper, $"{id}_emit_rot2", "Rotation", () =>
+                Origami.Float3Field(paper, $"{id}_emit_rot2_vf", ps.Emission.ShapeRotation, v => ps.Emission.ShapeRotation = v).Show());
+            InspectorRow.Draw(paper, $"{id}_emit_scl", "Scale", () =>
+                Origami.Float3Field(paper, $"{id}_emit_scl_vf", ps.Emission.ShapeScale, v => ps.Emission.ShapeScale = v).Show());
 
             // Shape-specific fields
             switch (ps.Emission.Shape)
@@ -110,8 +110,8 @@ public class ParticleSystemComponentEditor : CustomEditor
                         v => ps.Emission.EmitFromShell = v);
                     break;
                 case EmissionShape.Box:
-                    EditorGUI.Vector3Field(paper, $"{id}_emit_box", "Box Size", ps.Emission.BoxSize)
-                        .OnValueChanged(v => { ps.Emission.BoxSize = v; });
+                    InspectorRow.Draw(paper, $"{id}_emit_box", "Box Size", () =>
+                        Origami.Float3Field(paper, $"{id}_emit_box_vf", ps.Emission.BoxSize, v => ps.Emission.BoxSize = v).Show());
                     break;
                 case EmissionShape.Cone:
                     FloatRow(paper, $"{id}_emit_rad2", "Radius", ps.Emission.Radius,
@@ -208,8 +208,8 @@ public class ParticleSystemComponentEditor : CustomEditor
                     v => ps.UV.UOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
                 PropertyGrid.DrawField(paper, $"{id}_uv_vo", "V Offset", typeof(AnimationCurve), ps.UV.VOffsetCurve,
                     v => ps.UV.VOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
-                EditorGUI.Vector2Field(paper, $"{id}_uv_ss", "Scroll Speed", ps.UV.ScrollSpeed)
-                    .OnValueChanged(v => { ps.UV.ScrollSpeed = v; });
+                InspectorRow.Draw(paper, $"{id}_uv_ss", "Scroll Speed", () =>
+                    Origami.Float2Field(paper, $"{id}_uv_ss_vf", ps.UV.ScrollSpeed, v => ps.UV.ScrollSpeed = v).Show());
             }
 
             BoolRow(paper, $"{id}_uv_fu", "Flip U", ps.UV.FlipU, v => ps.UV.FlipU = v);
@@ -309,7 +309,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                 .Height(UnitValue.Auto)
                 .BackgroundColor(EditorTheme.Neutral300).Rounded(3)
                 .Margin(0, 0, 0, 2)
-                .ChildLeft(6).ChildRight(6).ChildTop(3).ChildBottom(3)
+                .Padding(6, 6, 3, 3)
                 .Enter())
             {
                 using (paper.Row($"{id}_bh{i}").Height(EditorTheme.RowHeight).RowBetween(4).Enter())

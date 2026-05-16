@@ -77,7 +77,7 @@ public class OrmPackerPanel : DockPanel
             .ColSpacing(10)
             .Body(() =>
             {
-                EditorGUI.Header(paper, "orm_h_root", "ORM Packer");
+                Origami.Header(paper, "orm_h_root", "ORM Packer").Show();
 
                 Section_Inputs(paper);
                 Section_Output(paper);
@@ -298,7 +298,7 @@ public class OrmPackerPanel : DockPanel
     private void OpenSaveDialog()
     {
         string startPath = Project.Current?.AssetsPath ?? Environment.CurrentDirectory;
-        FileDialog.Open(FileDialogMode.Save, path =>
+        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (string.IsNullOrEmpty(path)) return;
             if (!path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) path += ".png";

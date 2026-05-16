@@ -61,35 +61,34 @@ public class ModelAssetEditor : AssetImporterEditor
             _settingsLoaded = true;
         }
 
-        EditorGUI.Header(paper, $"{id}_h_info", "Model Info");
+        Origami.Header(paper, $"{id}_h_info", "Model Info").Show();
 
-        EditorGUI.Label(paper, $"{id}_path", $"Path: {entry.Path}");
-        EditorGUI.Label(paper, $"{id}_guid", $"GUID: {entry.Guid}");
+        Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
+        Origami.Label(paper, $"{id}_guid", $"GUID: {entry.Guid}").Show();
 
         if (model != null)
         {
-            EditorGUI.Label(paper, $"{id}_subs", $"Sub-Assets: {entry.SubAssets.Length}");
+            Origami.Label(paper, $"{id}_subs", $"Sub-Assets: {entry.SubAssets.Length}").Show();
         }
 
         // Sub-assets
         if (entry.SubAssets.Length > 0)
         {
-            EditorGUI.Separator(paper, $"{id}_sep_subs");
-            EditorGUI.Header(paper, $"{id}_h_subs", $"Sub-Assets ({entry.SubAssets.Length})");
+            Origami.Separator(paper, $"{id}_sep_subs").Show();
+            Origami.Header(paper, $"{id}_h_subs", $"Sub-Assets ({entry.SubAssets.Length})").Show();
 
             for (int i = 0; i < entry.SubAssets.Length && i < 30; i++)
             {
                 var sub = entry.SubAssets[i];
                 string typeName = sub.Type?.Name ?? "Unknown";
-                EditorGUI.Label(paper, $"{id}_sub_{i}", $"  {sub.Name} ({typeName})");
+                Origami.Label(paper, $"{id}_sub_{i}", $"  {sub.Name} ({typeName})").Show();
             }
             if (entry.SubAssets.Length > 30)
-                EditorGUI.Label(paper, $"{id}_sub_more", $"  ... and {entry.SubAssets.Length - 30} more");
+                Origami.Label(paper, $"{id}_sub_more", $"  ... and {entry.SubAssets.Length - 30} more").Show();
         }
 
         // Import settings
-        EditorGUI.Separator(paper, $"{id}_sep_settings");
-        EditorGUI.Header(paper, $"{id}_h_settings", "Import Settings");
+                Origami.Header(paper, $"{id}_h_settings", "Import Settings").Underline().Show();
 
         Origami.Checkbox(paper, $"{id}_genNormals", _generateNormals,
                 v => { _generateNormals = v; _settingsDirty = true; })
@@ -116,8 +115,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 v => { _unitScale = v; _settingsDirty = true; }).Show());
 
         // Mesh features produces an SDF sub-asset alongside every imported mesh.
-        EditorGUI.Separator(paper, $"{id}_sep_features");
-        EditorGUI.Header(paper, $"{id}_h_features", "Mesh Features");
+                Origami.Header(paper, $"{id}_h_features", "Mesh Features").Underline().Show();
 
         Origami.Checkbox(paper, $"{id}_genSDF", _generateSDF,
                 v => { _generateSDF = v; _settingsDirty = true; })
@@ -140,7 +138,7 @@ public class ModelAssetEditor : AssetImporterEditor
         }
 
         // Save / Revert buttons
-        EditorGUI.Separator(paper, $"{id}_sep_btns");
+        Origami.Separator(paper, $"{id}_sep_btns").Show();
         if (_settingsDirty)
         {
             using (paper.Row($"{id}_btn_row").Height(28).RowBetween(8).ChildLeft(8).ChildRight(8).Enter())
@@ -174,8 +172,7 @@ public class ModelAssetEditor : AssetImporterEditor
         }
 
         // 3D Preview
-        EditorGUI.Separator(paper, $"{id}_sep_preview");
-        EditorGUI.Header(paper, $"{id}_h_preview", "Preview");
+                Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
         if (model != null)
         {

@@ -258,7 +258,7 @@ public class GraphEditor
 
         if (_graph == null)
         {
-            EditorGUI.Label(paper, "graph_empty", "No graph loaded.");
+            Origami.Label(paper, "graph_empty", "No graph loaded.").Show();
             return;
         }
         _view ??= new GraphCanvasView(_graph);
@@ -606,7 +606,7 @@ public class GraphEditor
             .ClampToScreen()
             .StopEventPropagation()
             .BoxShadow(0, 0, 40, -25, System.Drawing.Color.FromArgb(155, System.Drawing.Color.Black))
-            .ChildLeft(6).ChildRight(6).ChildTop(6).ChildBottom(6).ColBetween(4)
+            .Padding(6, 6, 6, 6).ColBetween(4)
             .Enter())
         {
             paper.Box("graph_popup_title").Height(20)
@@ -775,7 +775,7 @@ public class GraphEditor
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .StopEventPropagation()
-            .ChildLeft(4).ChildRight(4).ChildTop(4).ChildBottom(4).ColBetween(2)
+            .Padding(4, 4, 4, 4).ColBetween(2)
             .Enter())
         {
             DrawCtxItem(paper, "ctx_dup", $"{EditorIcons.Clone}  Duplicate", () => DuplicateSelection());

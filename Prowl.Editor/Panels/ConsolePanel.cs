@@ -181,26 +181,22 @@ public class ConsolePanel : DockPanel
 
             Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, "Filter...").Show();
 
-            ElementHandle settingsButton = default;
             Origami.IconButton(paper, "con_settingsButton", $"{EditorIcons.Gear}", () =>
             {
-                ContextMenuHelper.OpenContextMenu(paper, "con_settings", settingsButton);
-            }).WithHandle(h => settingsButton = h).Show();
-
-            ContextMenuHelper.ContextMenu(paper, "con_settings", menu =>
-            {
-                menu.Submenu("Log Tests", (subMenu) =>
+                Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
                 {
-                    subMenu.Item("Log", () => Debug.Log($"This is a Normal Log."))
-                    .Item("LogWarning", () => Debug.LogWarning($"This is a Warning Log."))
-                    .Item("LogError", () => Debug.LogError($"This is an Error Log."))
-                    .Item("LogSuccess", () => Debug.LogSuccess($"This is a Success Log."));
-                }, EditorIcons.Flask)
-                .Separator()
-                .Toggle("Show Time", () => _showTime = !_showTime, () => _showTime)
-                .Toggle("Multi Line", () => _multiLine = !_multiLine, () => _multiLine)
-                ;
-            }, settingsButton);
+                    menu.Submenu("Log Tests", subMenu =>
+                    {
+                        subMenu.Item("Log", () => Debug.Log("This is a Normal Log."))
+                            .Item("LogWarning", () => Debug.LogWarning("This is a Warning Log."))
+                            .Item("LogError", () => Debug.LogError("This is an Error Log."))
+                            .Item("LogSuccess", () => Debug.LogSuccess("This is a Success Log."));
+                    }, EditorIcons.Flask)
+                    .Separator()
+                    .Toggle("Show Time", () => _showTime = !_showTime, () => _showTime)
+                    .Toggle("Multi Line", () => _multiLine = !_multiLine, () => _multiLine);
+                });
+            }).Show();
         }
     }
 

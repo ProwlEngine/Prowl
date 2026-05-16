@@ -174,7 +174,7 @@ public static class ProjectLauncher
 
                         Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", () =>
                             {
-                                FileDialog.Open(FileDialogMode.SelectFolder, path =>
+                                EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, path =>
                                 {
                                     if (path == null) return;
                                     TryOpenProject(path);
@@ -265,7 +265,7 @@ public static class ProjectLauncher
 
                 Origami.Button(paper, "pl_np_browse", EditorIcons.FolderOpen, () =>
                     {
-                        FileDialog.Open(FileDialogMode.SelectFolder, path =>
+                        EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, path =>
                         {
                             if (path != null) _newProjectPath = path;
                         }, _newProjectPath);
@@ -391,14 +391,14 @@ public static class ProjectLauncher
     {
         if (string.IsNullOrWhiteSpace(_newProjectName))
         {
-            Widgets.Toasts.Show("Invalid Name", "Project name cannot be empty.", Widgets.ToastType.Warning, 3f);
+            Toasts.Show("Invalid Name", "Project name cannot be empty.", ToastType.Warning, 3f);
             return;
         }
 
         string targetPath = Path.Combine(_newProjectPath, _newProjectName);
         if (Directory.Exists(targetPath) && Directory.GetFileSystemEntries(targetPath).Length > 0)
         {
-            Widgets.Toasts.Show("Folder Exists", $"'{_newProjectName}' already exists and is not empty. Choose a different name or location.", Widgets.ToastType.Error, 5f);
+            Toasts.Show("Folder Exists", $"'{_newProjectName}' already exists and is not empty. Choose a different name or location.", ToastType.Error, 5f);
             return;
         }
 
@@ -410,7 +410,7 @@ public static class ProjectLauncher
         }
         catch (Exception ex)
         {
-            Widgets.Toasts.Show("Create Failed", ex.Message, Widgets.ToastType.Error, 5f);
+            Toasts.Show("Create Failed", ex.Message, ToastType.Error, 5f);
         }
     }
 

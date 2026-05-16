@@ -4,6 +4,7 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -443,9 +444,8 @@ public class HierarchyPanel : DockPanel
             {
                 if (paper.IsParentHovered)
                 {
-                    var builder = new ContextMenuBuilder();
-                    BuildCreateMenu(builder, null);
-                    builder.Render(paper, "hier_add_menu", 0, EditorTheme.RowHeight - 4);
+                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                        BuildCreateMenu(b, null));
                 }
             }
 
@@ -526,7 +526,7 @@ public class HierarchyPanel : DockPanel
                 int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
                 if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
                 {
-                    Widgets.Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                    Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", ToastType.Warning, 3f);
                     continue;
                 }
             }
@@ -542,7 +542,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Into:
                     if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
                     {
-                        Widgets.Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                        Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", ToastType.Warning, 3f);
                         continue;
                     }
                     dragged.SetParent(target);
@@ -650,7 +650,7 @@ public class HierarchyPanel : DockPanel
 
     private void BuildBackgroundContextMenu(Paper paper)
     {
-        ContextMenuHelper.RightClickMenu(paper, "hier_bg_ctx", builder =>
+        Origami.RightClickMenu(paper, "hier_bg_ctx", builder =>
         {
             BuildCreateMenu(builder, null);
         });
@@ -658,7 +658,7 @@ public class HierarchyPanel : DockPanel
 
     private void BuildGameObjectContextMenu(Paper paper, string id)
     {
-        ContextMenuHelper.RightClickMenu(paper, id, builder =>
+        Origami.RightClickMenu(paper, id, builder =>
         {
             var selectedGOs = Selection.GetSelected<GameObject>().ToList();
             var firstSelected = selectedGOs.FirstOrDefault();
@@ -781,7 +781,7 @@ public class HierarchyPanel : DockPanel
     //  Create Menu
     // ================================================================
 
-    private void BuildCreateMenu(ContextMenuBuilder builder, GameObject? parent)
+    private void BuildCreateMenu(ContextBuilder builder, GameObject? parent)
     {
         CreateGameObjectMenuRegistry.BuildMenu(builder, parent);
     }
@@ -839,7 +839,7 @@ public class HierarchyPanel : DockPanel
             int childIdx = go.Parent.Children.IndexOf(go);
             if (childIdx >= 0 && childIdx < go.Parent.PrefabChildCount)
             {
-                Widgets.Toasts.Show("Prefab Structure", "Cannot delete a prefab child. Break the prefab first.", Widgets.ToastType.Warning, 3f);
+                Toasts.Show("Prefab Structure", "Cannot delete a prefab child. Break the prefab first.", ToastType.Warning, 3f);
                 return;
             }
         }

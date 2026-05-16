@@ -3,7 +3,10 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Panels;
+using Prowl.OrigamiUI;
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
+using Prowl.OrigamiUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -18,7 +21,7 @@ public static class AssetCreateMenu
     /// <summary>
     /// Populates a context menu builder with asset creation options.
     /// </summary>
-    public static void Build(ContextMenuBuilder builder, string currentFolder, Action<string>? onCreated = null)
+    public static void Build(ContextBuilder builder, string currentFolder, Action<string>? onCreated = null)
     {
         builder.Item($"{EditorIcons.Folder}  Folder", () => {
 
