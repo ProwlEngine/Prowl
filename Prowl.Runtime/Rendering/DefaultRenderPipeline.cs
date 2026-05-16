@@ -113,6 +113,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private void RenderUIQueue(Camera cam, CameraSnapshot css, RenderTexture? colorRT, UISurface surface, in RenderingData data)
     {
+        if (data.SkipUI && surface != UISurface.World) return;
         // Tell every screen-space GameCanvas the size of the surface it is being drawn onto.
         // This MUST match the orthographic projection built by BuildScreenOrtho below — otherwise
         // canvas-design-pixel layout (computed from this size) will not align with the projection

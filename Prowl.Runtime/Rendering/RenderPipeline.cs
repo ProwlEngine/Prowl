@@ -20,6 +20,8 @@ public struct RenderingData
 
     /// <summary>Whether the render is happening from the Scene View.</summary>
     public bool IsSceneView;
+
+    public bool SkipUI;
 }
 
 /// <summary>

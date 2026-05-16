@@ -256,7 +256,7 @@ public sealed class ToggleBuilder
 
                 if (labelLeft)
                 {
-                    DrawLabelColumn(leftPad: 6, rightPad: 6, stretch: true);
+                    DrawLabelColumn(leftPad: 6, rightPad: 6, stretch: _stretch);
                     DrawVisual(t, ramp, ink, leftPad: 0, rightPad: 6);
                 }
                 else if (labelRight)

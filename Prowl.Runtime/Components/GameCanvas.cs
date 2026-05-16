@@ -254,12 +254,6 @@ public class GameCanvas : MonoBehaviour
         return new Rect(0, 0, screenW, screenH);
     }
 
-    /// <summary>
-    /// CHANGED: was BuildChildren, which called the (now-deleted) DrawUI on each
-    /// UIBehaviour. The new version (a) bakes meshes via UIMeshBuilder, (b) emits
-    /// UIRenderItems into Tree, and (c) propagates a depth-first-search index for
-    /// hierarchical sorting.
-    /// </summary>
     private void BuildRecursive(GameObject parent, Rect parentRect, UIContext ctx, ref int dfsIndex)
     {
         foreach (GameObject child in parent.Children)

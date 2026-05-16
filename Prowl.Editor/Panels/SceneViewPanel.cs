@@ -31,6 +31,7 @@ public class SceneViewPanel : DockPanel
     private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
+    private bool _overlayUIActive;
 
     // Pose restored from disk by RestoreState; applied the first time the camera is created
     // (the camera itself is constructed lazily inside OnGUI because it needs graphics ready).
@@ -102,6 +103,15 @@ public class SceneViewPanel : DockPanel
 
             // Spacer
             paper.Box("sv_spacer");
+
+            paper.Box("sv_middle").Width(UnitValue.Stretch());
+
+            Origami.Switch(paper, "sv_ui_toggle", _overlayUIActive, v => { _overlayUIActive = v;})
+                .Primary()
+                .Large()
+                .OnGlyph("✓").OffGlyph("✕")
+                .LabelLeft("UI")
+                .Show();
         }
     }
 
@@ -214,7 +224,7 @@ public class SceneViewPanel : DockPanel
 
         // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
         DrawSelectionGizmos();
-        _editorCamera.Render(scene);
+        _editorCamera.Render(scene, _overlayUIActive);
 
         if (rt != null && rt.MainTexture != null)
         {
