@@ -65,6 +65,12 @@ public sealed class TextFieldBuilder
     private string? _helperText;
     private Func<string, (bool ok, string? message)>? _validator;
 
+    // Prefix Dragging
+    private Action<Prowl.PaperUI.Events.DragEvent>? _prefixDragStart;
+    private Action<Prowl.PaperUI.Events.DragEvent>? _prefixDrag;
+    private Action<Prowl.PaperUI.Events.DragEvent>? _prefixDragEnd;
+
+
     // AutoComplete
     private IReadOnlyList<string>? _acItems;
     private Func<string, string, bool>? _acFilter;
@@ -159,7 +165,17 @@ public sealed class TextFieldBuilder
     /// Show a small colored label badge inside the field, before the text input.
     /// Useful for channel labels like "X", "Y", "Z" in vector fields or "H", "S", "V" in color fields.
     /// </summary>
-    public TextFieldBuilder Prefix(string text, Color color) { _prefixText = text; _prefixColor = color; return this; }
+    public TextFieldBuilder Prefix(string text, Color color,
+        Action<Prowl.PaperUI.Events.DragEvent> onDragStart = null,
+        Action<Prowl.PaperUI.Events.DragEvent> onDrag = null,
+        Action<Prowl.PaperUI.Events.DragEvent> onDragEnd = null)
+    {
+        _prefixText = text; _prefixColor = color;
+        _prefixDragStart = onDragStart;
+        _prefixDrag = onDrag;
+        _prefixDragEnd = onDragEnd;
+        return this;
+    }
 
     // ── Filtering ──────────────────────────────────────────────────────
 
@@ -291,7 +307,7 @@ public sealed class TextFieldBuilder
                         ? Color.FromArgb(20, _prefixColor.Value.R, _prefixColor.Value.G, _prefixColor.Value.B)
                         : Color.FromArgb(20, ink.C400.R, ink.C400.G, ink.C400.B);
                     var pfxFg = _prefixColor ?? ink.C500;
-                    _paper.Box($"{_id}_pfx")
+                    var pfxBox = _paper.Box($"{_id}_pfx")
                         .Height(pfxH).Width(pfxH)
                         .Margin(2, 0, 2, 0)
                         .Rounded(pfxRound)
@@ -299,8 +315,18 @@ public sealed class TextFieldBuilder
                         .Text(_prefixText!, font)
                         .TextColor(pfxFg)
                         .FontSize(_theme.Metrics.FontSize - 1)
-                        .Alignment(TextAlignment.MiddleCenter)
-                        .IsNotInteractable();
+                        .Alignment(TextAlignment.MiddleCenter);
+
+                    if (_prefixDragStart != null || _prefixDrag != null || _prefixDragEnd != null)
+                    {
+                        pfxBox.OnDragStart(_prefixDragStart)
+                            .OnDragging(_prefixDrag)
+                            .OnDragEnd(_prefixDragEnd);
+                    }
+                    else
+                    {
+                        pfxBox.IsNotInteractable();
+                    }
                 }
 
                 // The edit element ─────────────────────────────────────

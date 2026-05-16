@@ -168,7 +168,15 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         if (!string.IsNullOrEmpty(_trailingIconGlyph))
             tb.TrailingIcon(_trailingIconGlyph!, _trailingIconClick);
         if (!string.IsNullOrEmpty(_prefixText))
-            tb.Prefix(_prefixText!, _prefixColor ?? Color.FromArgb(255, 200, 200, 200));
+        {
+            tb.Prefix(_prefixText!, _prefixColor ?? Color.FromArgb(255, 200, 200, 200), onDrag: (e) =>
+            {
+                if (typeof(INumber<float>).IsAssignableFrom(typeof(T)))
+                    _setter(_value + (T)(object)(e.Delta.X * 0.1f));
+                else
+                    _setter(_value + (T)(object)e.Delta.X);
+            });
+        }
 
         if (_error != null) tb.Error(_error);
         if (_helperText != null) tb.HelperText(_helperText);
