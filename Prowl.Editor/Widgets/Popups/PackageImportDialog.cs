@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 
+using Prowl.Editor.Packages;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -13,7 +14,7 @@ using Prowl.Runtime;
 using Color = System.Drawing.Color;
 using Texture2D = Prowl.Runtime.Resources.Texture2D;
 
-namespace Prowl.Editor.Packages;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Overlay dialog for importing a .prowlpackage file.

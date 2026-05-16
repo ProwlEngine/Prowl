@@ -666,7 +666,7 @@ public class EditorApplication : Game
     public override void EndGui(Paper paper)
     {
         // Drag & drop update + visual
-        DragDrop.UpdateDrag();
+        DragDrop.Update(paper);
         DragDrop.DrawVisual(paper);
 
         // Systems drawn on top (Overlay/Topmost layers)
@@ -1122,7 +1122,7 @@ public class EditorApplication : Game
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path != null && System.IO.File.Exists(path))
-                    Packages.PackageImportDialog.Open(path);
+                    Widgets.Popups.PackageImportDialog.Open(path);
             },
             startPath: Project.Current?.PackagesPath,
             filters: new[] { "*.prowlpackage" },
@@ -1159,7 +1159,7 @@ public class EditorApplication : Game
         GraphTools.NodePreviewRegistry.Reinitialize();
         Runtime.GraphTools.GraphValidatorRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
-        Inspector.AddComponentPopup.Reinitialize();
+        Widgets.Popups.AddComponentPopup.Reinitialize();
         Importers.ImporterRegistry.Reinitialize();
         ProjectSettingsRegistry.Reinitialize();
         CreateAssetMenuRegistry.Reinitialize();

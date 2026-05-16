@@ -11,7 +11,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Inspector;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Searchable modal popup for adding components to a GameObject.

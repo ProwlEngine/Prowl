@@ -8,6 +8,7 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Editor.Panels;
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.Runtime;
 
 using static System.Net.Mime.MediaTypeNames;

@@ -16,7 +16,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Widgets;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Controls which tabs are available in the selector.

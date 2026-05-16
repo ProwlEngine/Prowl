@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Packages;
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

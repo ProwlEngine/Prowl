@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Prowl.Runtime;
+using Prowl.Editor.Widgets.Popups;
 
 namespace Prowl.Editor.Packages;
 

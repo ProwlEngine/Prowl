@@ -10,7 +10,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Widgets;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Modal for creating a new C# script. A file name is required (C# identifiers only) and

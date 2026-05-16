@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
+using Prowl.Editor.Packages;
 using Prowl.Editor.Widgets;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -10,7 +11,7 @@ using Prowl.PaperUI.LayoutEngine;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Packages;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Overlay dialog for exporting selected assets into a .prowlpackage file.

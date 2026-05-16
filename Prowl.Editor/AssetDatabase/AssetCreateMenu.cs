@@ -5,6 +5,7 @@ using System.Linq;
 using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;

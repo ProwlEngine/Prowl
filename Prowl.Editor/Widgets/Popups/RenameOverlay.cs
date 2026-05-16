@@ -7,7 +7,7 @@ using static Prowl.PaperUI.ElementBuilder;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Widgets;
+namespace Prowl.Editor.Widgets.Popups;
 
 /// <summary>
 /// Shared rename system. Same architecture as ContextMenuHelper backdrop + floating field

@@ -1,7 +1,9 @@
 using System;
 
 using Prowl.Editor.Widgets;
+using Prowl.Editor.Widgets.Popups;
 using Prowl.PaperUI;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
@@ -155,8 +157,8 @@ public class EngineObjectPropertyEditor : PropertyEditor
         // Scene types (GameObject, MonoBehaviour subclasses) → Scene tab
         // Asset types (Mesh, Material, etc.) → Assets tab
         bool isSceneType = typeof(GameObject).IsAssignableFrom(type) || typeof(MonoBehaviour).IsAssignableFrom(type);
-        var tabs = isSceneType ? Widgets.SelectorTabs.Scene : Widgets.SelectorTabs.Assets;
+        var tabs = isSceneType ? SelectorTabs.Scene : SelectorTabs.Assets;
 
-        Widgets.SelectorModal.Open($"Select {type.Name}", type, tabs, onChange);
+        SelectorModal.Open($"Select {type.Name}", type, tabs, onChange);
     }
 }
