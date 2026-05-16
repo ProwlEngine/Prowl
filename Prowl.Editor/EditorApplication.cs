@@ -167,6 +167,29 @@ public class EditorApplication : Game
         AttributeHandlers.BuiltInAttributeHandlers.Register();
         OrigamiUI.PropertyGrid.OnBeginRoot = target => Undo.Snapshot(target);
         OrigamiUI.PropertyGrid.OnFieldChanged = target => (target as Runtime.EngineObject)?.OnValidate();
+        OrigamiUI.PropertyGrid.OnBeforeDrawField = (fieldType, value) =>
+        {
+            if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
+                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+        };
+        OrigamiUI.PropertyGrid.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
+        {
+            Widgets.PropertyGrid.DrawTypePicker(paper, id, baseType, currentValue, onChange);
+        };
+        OrigamiUI.PropertyGrid.FallbackFieldDrawer = (paper, id, label, fieldType, value, onChange, depth) =>
+        {
+            // Route to the editor's PropertyEditorRegistry for types like
+            // EngineObject, AssetRef, AnimationCurve, Gradient, Quaternion, etc.
+            if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
+                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+            var editor = Inspector.PropertyEditorRegistry.GetEditor(fieldType);
+            if (editor != null)
+            {
+                editor.OnGUI(paper, id, label, value, onChange, depth);
+                return true;
+            }
+            return false;
+        };
 
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
