@@ -344,7 +344,7 @@ public class WidgetPlaygroundPanel : DockPanel
                         .Text("Right-click here for a context menu", EditorTheme.DefaultFont)
                         .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize);
 
-                OrigamiContextMenu.RightClickMenu(paper, "ctx_test", menu =>
+                Origami.RightClickMenu(paper, "ctx_test", menu =>
                 {
                     menu.Item("Cut", () => _textValue = "Cut!")
                         .Item("Copy", () => _textValue = "Copy!")
@@ -367,12 +367,12 @@ public class WidgetPlaygroundPanel : DockPanel
 
             using (paper.Row("modal_row").Height(EditorTheme.RowHeight).RowBetween(6).Enter())
             {
-                Origami.Button(paper, "btn_confirm", "Confirm Dialog", () => ModalDialog.Confirm("Delete Object",
+                Origami.Button(paper, "btn_confirm", "Confirm Dialog", () => Origami.Confirm("Delete Object",
                     "Are you sure you want to delete this object?",
                     () => Toasts.Success("Deleted", "Object was deleted"),
                     () => Toasts.Info("Cancelled", "Deletion cancelled"))).Show();
 
-                Origami.Button(paper, "btn_message", "Message Dialog", () => ModalDialog.Message("Info", "This is a message dialog.")).Show();
+                Origami.Button(paper, "btn_message", "Message Dialog", () => Origami.Message("Info", "This is a message dialog.")).Show();
             }
 
             Origami.Separator(paper, "sep11").Show();
@@ -446,15 +446,15 @@ public class WidgetPlaygroundPanel : DockPanel
             // ── File Dialog ──
             Origami.Header(paper, "h_filedialog", "File Dialog").Show();
 
-            Origami.Button(paper, "btn_open_file", "Open File...", () => Widgets.FileDialog.Open(FileDialogMode.Open,
+            Origami.Button(paper, "btn_open_file", "Open File...", () => EditorApplication.OpenFileDialog(FileDialogMode.Open,
                 path => { if (path != null) Widgets.Toasts.Show("File", $"Selected: {path}"); },
                 filters: new[] { "*.cs;*.json;*.xml", "*.png;*.jpg", "*.*" },
                 filterLabels: new[] { "Code (*.cs, *.json, *.xml)", "Images (*.png, *.jpg)", "All Files (*.*)" })).Show();
 
-            Origami.Button(paper, "btn_save_file", "Save File...", () => Widgets.FileDialog.Open(FileDialogMode.Save,
+            Origami.Button(paper, "btn_save_file", "Save File...", () => EditorApplication.OpenFileDialog(FileDialogMode.Save,
                 path => { if (path != null) Widgets.Toasts.Show("File", $"Save to: {path}", Widgets.ToastType.Success); })).Show();
 
-            Origami.Button(paper, "btn_select_folder", "Select Folder...", () => Widgets.FileDialog.Open(FileDialogMode.SelectFolder,
+            Origami.Button(paper, "btn_select_folder", "Select Folder...", () => EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder,
                 path => { if (path != null) Widgets.Toasts.Show("Folder", $"Selected: {path}"); })).Show();
 
             Origami.Separator(paper, "sep_filedialog").Show();

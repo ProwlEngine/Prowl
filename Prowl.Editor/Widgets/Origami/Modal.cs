@@ -162,7 +162,7 @@ public sealed class CustomDrawModal : IModal
 ///
 /// Convenience methods: <see cref="Confirm"/>, <see cref="Message"/>, <see cref="Custom"/>.
 /// </summary>
-public static class OrigamiModal
+public static class Modal
 {
     private static readonly List<IModal> _stack = [];
 

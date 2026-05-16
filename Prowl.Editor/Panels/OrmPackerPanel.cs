@@ -298,7 +298,7 @@ public class OrmPackerPanel : DockPanel
     private void OpenSaveDialog()
     {
         string startPath = Project.Current?.AssetsPath ?? Environment.CurrentDirectory;
-        FileDialog.Open(FileDialogMode.Save, path =>
+        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (string.IsNullOrEmpty(path)) return;
             if (!path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) path += ".png";

@@ -47,14 +47,14 @@ public static class AddComponentPopup
         _searchText = "";
         _cachedComponents ??= GatherComponents();
         _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer)) { CloseOnBackdrop = true };
-        OrigamiUI.OrigamiModal.Push(_modal);
+        Modal.Push(_modal);
     }
 
     public static void Close()
     {
         _isOpen = false;
         _targetGo = null;
-        if (_modal != null) { OrigamiUI.OrigamiModal.Remove(_modal); _modal = null; }
+        if (_modal != null) { Modal.Remove(_modal); _modal = null; }
     }
 
     public static void Draw(Paper paper) { } // Now handled by modal stack

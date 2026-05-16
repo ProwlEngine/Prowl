@@ -52,7 +52,7 @@ public static class PackageExportDialog
         RebuildTreeAndEnabled();
         _isOpen = true;
         _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer));
-        OrigamiUI.OrigamiModal.Push(_modal);
+        Modal.Push(_modal);
     }
 
     private static OrigamiUI.IModal? _modal;
@@ -63,7 +63,7 @@ public static class PackageExportDialog
         _explicitPaths.Clear();
         _dependencyPaths.Clear();
         _enabledPaths.Clear();
-        if (_modal != null) { OrigamiUI.OrigamiModal.Remove(_modal); _modal = null; }
+        if (_modal != null) { Modal.Remove(_modal); _modal = null; }
     }
 
     /// <summary>
@@ -388,7 +388,7 @@ public static class PackageExportDialog
 
                 Origami.Button(paper, "pkgexp_browse", "...", () =>
                     {
-                        FileDialog.Open(FileDialogMode.Save, path =>
+                        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
                         {
                             if (path != null)
                             {
@@ -435,13 +435,13 @@ public static class PackageExportDialog
     {
         if (string.IsNullOrWhiteSpace(_outputPath))
         {
-            ModalDialog.Message("Export Error", "Please specify an output path.");
+            Origami.Message("Export Error", "Please specify an output path.");
             return;
         }
 
         if (_enabledPaths.Count == 0)
         {
-            ModalDialog.Message("Export Error", "No assets selected for export.");
+            Origami.Message("Export Error", "No assets selected for export.");
             return;
         }
 
@@ -455,7 +455,7 @@ public static class PackageExportDialog
         }
         catch (Exception ex)
         {
-            ModalDialog.Message("Export Failed", ex.Message);
+            Origami.Message("Export Failed", ex.Message);
         }
     }
 

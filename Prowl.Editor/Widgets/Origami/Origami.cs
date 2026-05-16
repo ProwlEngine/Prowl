@@ -278,45 +278,45 @@ public static class Origami
 
     /// <summary>Push a confirmation modal (Yes/No).</summary>
     public static void Confirm(string title, string message, Action onYes, Action? onNo = null)
-        => OrigamiModal.Confirm(title, message, onYes, onNo);
+        => OrigamiUI.Modal.Confirm(title, message, onYes, onNo);
 
     /// <summary>Push a message modal (OK).</summary>
     public static void Message(string title, string message)
-        => OrigamiModal.Message(title, message);
+        => OrigamiUI.Modal.Message(title, message);
 
     /// <summary>Push a custom dialog modal. Returns the entry for chaining .Button().</summary>
     public static DialogModal Dialog(string title, Action<PaperUI.Paper> drawContent, float width = 400, float height = 0)
-        => OrigamiModal.Custom(title, drawContent, width, height);
+        => OrigamiUI.Modal.Custom(title, drawContent, width, height);
 
     /// <summary>Push a fully custom modal with caller-controlled rendering.</summary>
-    public static CustomDrawModal Modal(Action<PaperUI.Paper, int, int> draw, bool closeOnEscape = true, bool closeOnBackdrop = false)
-        => OrigamiModal.PushCustomDraw(draw, closeOnEscape, closeOnBackdrop);
+    public static CustomDrawModal PushModal(Action<PaperUI.Paper, int, int> draw, bool closeOnEscape = true, bool closeOnBackdrop = false)
+        => OrigamiUI.Modal.PushCustomDraw(draw, closeOnEscape, closeOnBackdrop);
 
     // ── Context menu helpers ─────────────────────────────────
 
     /// <summary>Open a context menu at the given position.</summary>
     public static void ContextMenu(float x, float y, Action<ContextBuilder> build)
-        => OrigamiContextMenu.Show(x, y, build);
+        => OrigamiUI.ContextMenu.Show(x, y, build);
 
     /// <summary>Attach a right-click context menu to the current parent element.</summary>
     public static void RightClickMenu(PaperUI.Paper paper, string id, Action<ContextBuilder> build)
-        => OrigamiContextMenu.RightClickMenu(paper, id, build);
+        => OrigamiUI.ContextMenu.RightClickMenu(paper, id, build);
 
     // ── File dialog helpers ──────────────────────────────────
 
     /// <summary>Open a file dialog.</summary>
-    public static void FileDialog(FileDialogMode mode, Action<string?> onComplete,
+    public static void OpenFileDialog(FileDialogMode mode, Action<string?> onComplete,
         string? startPath = null, string[]? filters = null, string[]? filterLabels = null,
         FileDialogConfig? config = null)
-        => OrigamiFileDialog.Open(mode, onComplete, startPath, filters, filterLabels, config);
+        => OrigamiUI.FileDialog.Open(mode, onComplete, startPath, filters, filterLabels, config);
 
     // ── Tooltip helpers ──────────────────────────────────────
 
     /// <summary>Notify the tooltip system that an element is hovered. Call from OnHover callbacks.</summary>
-    public static void Tooltip(int elementId, string text) => TooltipSystem.Hover(elementId, text);
+    public static void ShowTooltip(int elementId, string text) => TooltipSystem.Hover(elementId, text);
 
     /// <summary>Notify with rich tooltip content.</summary>
-    public static void Tooltip(int elementId, TooltipContent content) => TooltipSystem.Hover(elementId, content);
+    public static void ShowTooltip(int elementId, TooltipContent content) => TooltipSystem.Hover(elementId, content);
 
     // ── Vector field factories ───────────────────────────────────
 

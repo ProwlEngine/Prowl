@@ -670,11 +670,11 @@ public class EditorApplication : Game
         DragDrop.DrawVisual(paper);
 
         // Systems drawn on top (Overlay/Topmost layers)
-        OrigamiUI.OrigamiContextMenu.Tick();
-        Widgets.ModalDialog.Draw(paper); // draws OrigamiModal stack (all modals, file dialogs, etc.)
+        OrigamiUI.ContextMenu.Tick();
+        OrigamiUI.Modal.Draw(paper);
         Widgets.SaveBatch.Flush();
         Widgets.Toasts.Draw(paper, Time.UnscaledDeltaTime);
-        Widgets.Tooltip.Draw(paper);
+        OrigamiUI.TooltipSystem.Draw(paper);
 
         // Intro animation overlay
         if (_introTime < IntroDuration)
@@ -774,6 +774,38 @@ public class EditorApplication : Game
             })
             .Show();
     }
+
+    // ================================================================
+    //  Editor File Dialog Helper
+    // ================================================================
+
+    private static OrigamiUI.FileDialogConfig? s_fileDialogConfig;
+
+    public static OrigamiUI.FileDialogConfig FileDialogConfig
+    {
+        get
+        {
+            s_fileDialogConfig ??= new OrigamiUI.FileDialogConfig
+            {
+                GetIcon = (ext, isDir) => isDir ? EditorIcons.Folder : FileIconRegistry.GetIconForFile("file" + ext),
+                QuickAccess =
+                [
+                    ("Desktop", EditorIcons.Desktop, Environment.GetFolderPath(Environment.SpecialFolder.Desktop)),
+                    ("Documents", EditorIcons.FolderOpen, Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
+                    ("Downloads", EditorIcons.Download, System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")),
+                    ("User", EditorIcons.User, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+                ],
+                GetDrives = () => System.IO.DriveInfo.GetDrives()
+                    .Where(d => d.IsReady).Select(d => (d.Name, d.Name)).ToArray(),
+            };
+            return s_fileDialogConfig;
+        }
+    }
+
+    /// <summary>Open a file dialog with editor config (icons, quick access, drives).</summary>
+    public static void OpenFileDialog(FileDialogMode mode, Action<string?> onComplete,
+        string? startPath = null, string[]? filters = null, string[]? filterLabels = null)
+        => OrigamiUI.FileDialog.Open(mode, onComplete, startPath, filters, filterLabels, FileDialogConfig);
 
     private const int BarCount = 10;
 
@@ -1001,7 +1033,7 @@ public class EditorApplication : Game
     private void PromptSaveAs()
     {
         if (Project.Current == null) return;
-        Widgets.FileDialog.Open(FileDialogMode.Save, path =>
+        EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (path == null || Project.Current == null) return;
             string rel = EditorAssetDatabase.NormalizePath(
@@ -1022,7 +1054,7 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/New Scene", () => EditorSceneManager.NewScene());
         MenuRegistry.Register("File/Open Scene", () =>
         {
-            Widgets.FileDialog.Open(FileDialogMode.Open, path =>
+            EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetDatabase.NormalizePath(
@@ -1038,7 +1070,7 @@ public class EditorApplication : Game
             {
                 // No path yet prompt Save As
                 if (Project.Current == null) return;
-                Widgets.FileDialog.Open(FileDialogMode.Save, path =>
+                EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
                 {
                     if (path == null || Project.Current == null) return;
                     string rel = EditorAssetDatabase.NormalizePath(
@@ -1052,7 +1084,7 @@ public class EditorApplication : Game
         MenuRegistry.Register("File/Save Scene As...", () =>
         {
             if (Project.Current == null) return;
-            Widgets.FileDialog.Open(FileDialogMode.Save, path =>
+            EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
             {
                 if (path == null || Project.Current == null) return;
                 string rel = EditorAssetDatabase.NormalizePath(
@@ -1087,7 +1119,7 @@ public class EditorApplication : Game
         MenuRegistry.RegisterSeparator("Assets");
         MenuRegistry.Register("Assets/Import Package...", () =>
         {
-            Widgets.FileDialog.Open(FileDialogMode.Open, path =>
+            EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path != null && System.IO.File.Exists(path))
                     Packages.PackageImportDialog.Open(path);

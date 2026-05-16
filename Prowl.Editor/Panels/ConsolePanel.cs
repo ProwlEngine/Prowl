@@ -175,7 +175,7 @@ public class ConsolePanel : DockPanel
 
             Origami.IconButton(paper, "con_settingsButton", $"{EditorIcons.Gear}", () =>
             {
-                OrigamiContextMenu.Show((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
+                Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
                 {
                     menu.Submenu("Log Tests", subMenu =>
                     {

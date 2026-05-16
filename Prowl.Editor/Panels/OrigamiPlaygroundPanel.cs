@@ -2312,7 +2312,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                     .Alignment(TextAlignment.MiddleCenter)
                     .Enter())
                 {
-                    OrigamiContextMenu.RightClickMenu(paper, "op_ctx_basic_m", b =>
+                    Origami.RightClickMenu(paper, "op_ctx_basic_m", b =>
                     {
                         b.Item("Cut", () => { }, icon: EditorIcons.Scissors);
                         b.Item("Copy", () => { }, icon: EditorIcons.Copy);
@@ -2333,7 +2333,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                     .Alignment(TextAlignment.MiddleCenter)
                     .Enter())
                 {
-                    OrigamiContextMenu.RightClickMenu(paper, "op_ctx_adv_m", b =>
+                    Origami.RightClickMenu(paper, "op_ctx_adv_m", b =>
                     {
                         b.Toggle("Show Grid", () => _ctxToggleA = !_ctxToggleA, () => _ctxToggleA);
                         b.Toggle("Wireframe", () => _ctxToggleB = !_ctxToggleB, () => _ctxToggleB);
@@ -2358,13 +2358,13 @@ public class OrigamiPlaygroundPanel : DockPanel
                 // Programmatic open
                 LabelRow(paper, "ctx_prog", "Programmatic Open", () =>
                     Origami.Button(paper, "op_ctx_prog", "Open Menu Here", () =>
-                        OrigamiContextMenu.Show(400, 300, b =>
+                        Origami.ContextMenu(400, 300, b =>
                         {
                             b.Item("Action A", () => { });
                             b.Item("Action B", () => { });
                         })).Show());
 
-                StateLine(paper, "ctx_state", $"Context menu open: {OrigamiContextMenu.IsOpen}");
+                StateLine(paper, "ctx_state", $"Context menu open: {ContextMenu.IsOpen}");
             }
         });
     }
@@ -2379,25 +2379,25 @@ public class OrigamiPlaygroundPanel : DockPanel
             {
                 LabelRow(paper, "mod_confirm", "Confirm Dialog", () =>
                     Origami.Button(paper, "op_mod_confirm", "Show Confirm", () =>
-                        OrigamiModal.Confirm("Delete Item", "Are you sure you want to delete this item? This cannot be undone.",
+                        Origami.Confirm("Delete Item", "Are you sure you want to delete this item? This cannot be undone.",
                             () => { /* yes */ }, () => { /* no */ })).Show());
 
                 LabelRow(paper, "mod_message", "Message Dialog", () =>
                     Origami.Button(paper, "op_mod_message", "Show Message", () =>
-                        OrigamiModal.Message("Hello", "This is a simple informational message.")).Show());
+                        Origami.Message("Hello", "This is a simple informational message.")).Show());
 
                 LabelRow(paper, "mod_custom", "Custom Content", () =>
                     Origami.Button(paper, "op_mod_custom", "Show Custom", () =>
                     {
-                        var entry = OrigamiModal.Custom("Settings", p =>
+                        var entry = Origami.Dialog("Settings", p =>
                         {
                             Origami.Header(p, "mod_c_hdr", "Configuration").Underline().Show();
                             Origami.Label(p, "mod_c_info", "Modify settings below then click Apply.").Show();
                             Origami.Checkbox(p, "mod_c_chk", false, _ => { }).LabelRight("Enable feature X").Show();
                             Origami.Slider(p, "mod_c_sl", 0.5f, _ => { }, 0f, 1f).Show();
                         }, 450);
-                        entry.Button("Apply", () => OrigamiModal.Pop(), OrigamiVariant.Success);
-                        entry.Button("Cancel", () => OrigamiModal.Pop());
+                        entry.Button("Apply", () => Modal.Pop(), OrigamiVariant.Success);
+                        entry.Button("Cancel", () => Modal.Pop());
                     }).Show());
 
                 LabelRow(paper, "mod_stack", "Stacked Modals", () =>
@@ -2414,12 +2414,12 @@ public class OrigamiPlaygroundPanel : DockPanel
                                 {
                                     Origami.Label(p2, "mod_s2_msg", "Stacked on top! Press Escape or click Close.").Show();
                                 };
-                                second.Button("Close", () => OrigamiModal.Pop(), OrigamiVariant.Primary);
-                                OrigamiModal.Push(second);
+                                second.Button("Close", () => Modal.Pop(), OrigamiVariant.Primary);
+                                Modal.Push(second);
                             }).Primary().Show();
                         };
-                        first.Button("Close", () => OrigamiModal.Pop(), OrigamiVariant.Primary);
-                        OrigamiModal.Push(first);
+                        first.Button("Close", () => Modal.Pop(), OrigamiVariant.Primary);
+                        Modal.Push(first);
                     }).Show());
 
                 LabelRow(paper, "mod_danger", "Danger Confirm", () =>
@@ -2428,9 +2428,9 @@ public class OrigamiPlaygroundPanel : DockPanel
                         var entry = new DialogModal { Title = "Destructive Action", Width = 380, CloseOnEscape = true };
                         entry.DrawContent = p =>
                             Origami.Label(p, "mod_d_msg", "This will permanently delete everything. Are you absolutely sure?").Show();
-                        entry.Button("Delete Everything", () => OrigamiModal.Pop(), OrigamiVariant.Danger);
-                        entry.Button("Cancel", () => OrigamiModal.Pop());
-                        OrigamiModal.Push(entry);
+                        entry.Button("Delete Everything", () => Modal.Pop(), OrigamiVariant.Danger);
+                        entry.Button("Cancel", () => Modal.Pop());
+                        Modal.Push(entry);
                     }).Danger().Show());
 
                 LabelRow(paper, "mod_backdrop", "Close on Backdrop", () =>
@@ -2439,11 +2439,11 @@ public class OrigamiPlaygroundPanel : DockPanel
                         var entry = new DialogModal { Title = "Click Outside to Close", Width = 350, CloseOnBackdrop = true };
                         entry.DrawContent = p =>
                             Origami.Label(p, "mod_b_msg", "Click the darkened area outside this dialog to dismiss it.").Show();
-                        entry.Button("Or Click Here", () => OrigamiModal.Pop(), OrigamiVariant.Primary);
-                        OrigamiModal.Push(entry);
+                        entry.Button("Or Click Here", () => Modal.Pop(), OrigamiVariant.Primary);
+                        Modal.Push(entry);
                     }).Show());
 
-                StateLine(paper, "mod_count", $"Modal stack depth: {OrigamiModal.Count}");
+                StateLine(paper, "mod_count", $"Modal stack depth: {Modal.Count}");
             }
         });
     }

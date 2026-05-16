@@ -50,7 +50,7 @@ public static class NewScriptDialog
             return;
         }
 
-        ModalDialog.Show(new ModalDialogEntry("Create C# Script", DrawContent, width: 560));
+        Modal.Push(new DialogModal { Title = "Create C# Script", DrawContent = DrawContent, Width = 560 });
     }
 
     private static void DrawContent(Paper paper)
@@ -169,7 +169,7 @@ public static class NewScriptDialog
         // so the user sees the error hint rather than clicking a dead button.
         using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).ChildLeft(UnitValue.Stretch()).RowBetween(8).Enter())
         {
-            Origami.Button(paper, "scr_cancel", "Cancel", () => { ModalDialog.Close(); }).Width(90).Show();
+            Origami.Button(paper, "scr_cancel", "Cancel", () => { Modal.Pop(); }).Width(90).Show();
 
             if (ok)
             {
@@ -228,7 +228,7 @@ public static class NewScriptDialog
         string relPath = string.IsNullOrEmpty(s_folder) ? fileName : s_folder + "/" + fileName;
         Runtime.Debug.Log($"Created script: {relPath}");
         s_onCreated?.Invoke(relPath);
-        ModalDialog.Close();
+        Modal.Pop();
     }
 
     // ─── Validation ─────────────────────────────────────────────────────────────────

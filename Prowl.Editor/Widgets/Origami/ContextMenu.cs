@@ -185,7 +185,7 @@ public sealed class ContextBuilder
                     .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
                 if (paper.IsParentHovered && Sub != null)
-                    OrigamiContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 192, 0, close);
+                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 192, 0, close);
             }
         }
     }
@@ -198,7 +198,7 @@ public sealed class ContextBuilder
 /// Use <see cref="RightClickMenu"/> inside any element's scope to attach a right-click menu.
 /// Use <see cref="Show"/> to open programmatically at a position.
 /// </summary>
-public static class OrigamiContextMenu
+public static class ContextMenu
 {
     private static bool _isOpen;
     private static float _x, _y;
@@ -222,7 +222,7 @@ public static class OrigamiContextMenu
             CloseOnBackdrop = true,
             CloseOnEscape = true,
         };
-        OrigamiModal.Push(_modalHandle);
+        Modal.Push(_modalHandle);
     }
 
     /// <summary>Close the current context menu.</summary>
@@ -230,7 +230,7 @@ public static class OrigamiContextMenu
     {
         if (_modalHandle != null)
         {
-            OrigamiModal.Remove(_modalHandle);
+            Modal.Remove(_modalHandle);
             _modalHandle = null;
         }
         _isOpen = false;

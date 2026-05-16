@@ -198,7 +198,7 @@ public class ProjectPanel : DockPanel
             {
                 if (paper.IsParentHovered)
                 {
-                    OrigamiContextMenu.Show((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
                         AssetCreateMenu.Build(b, _currentFolder, OnCreated));
                 }
             }
@@ -856,7 +856,7 @@ public class ProjectPanel : DockPanel
 
     private void BuildItemContextMenu(Paper paper, string id, ContentItem item, bool inTree = false)
     {
-        OrigamiContextMenu.RightClickMenu(paper, id, builder =>
+        Origami.RightClickMenu(paper, id, builder =>
         {
             // Right-click should select the item if not already selected
             if (!Selection.IsSelected(item))
@@ -945,7 +945,7 @@ public class ProjectPanel : DockPanel
 
     private void BuildBackgroundContextMenu(Paper paper, string id)
     {
-        OrigamiContextMenu.RightClickMenu(paper, id, builder =>
+        Origami.RightClickMenu(paper, id, builder =>
         {
             string folder = _currentFolder;
 
@@ -992,7 +992,7 @@ public class ProjectPanel : DockPanel
 
         string names = selected.Count == 1 ? selected[0].Name : $"{selected.Count} items";
 
-        ModalDialog.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
+        Origami.Confirm("Delete Assets", $"Are you sure you want to delete {names}?\nThis cannot be undone.", () =>
         {
             var db = EditorAssetDatabase.Instance;
             if (db == null) return;

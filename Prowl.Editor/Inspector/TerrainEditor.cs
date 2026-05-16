@@ -469,7 +469,7 @@ public class TerrainEditor : CustomEditor
                     int newRes = int.Parse(hmOptions[v]);
                     if (newRes != data.HeightmapResolution)
                     {
-                        ModalDialog.Confirm("Reset Heightmap?",
+                        Origami.Confirm("Reset Heightmap?",
                             $"Changing heightmap resolution to {newRes} will reset all height data.",
                             () => { data.ResizeHeightmap(newRes); _isDirty = true; });
                     }
@@ -486,7 +486,7 @@ public class TerrainEditor : CustomEditor
                     int newRes = int.Parse(smOptions[v]);
                     if (newRes != data.SplatmapResolution)
                     {
-                        ModalDialog.Confirm("Reset Splatmap?",
+                        Origami.Confirm("Reset Splatmap?",
                             $"Changing splatmap resolution to {newRes} will reset all splat data.",
                             () => { data.ResizeSplatmap(newRes); _isDirty = true; });
                     }

@@ -140,7 +140,7 @@ public class PreferencesPanel : DockPanel
 
             Origami.Button(paper, "pref_export", $"{EditorIcons.Download}  Export", () =>
             {
-                FileDialog.Open(FileDialogMode.Save, path =>
+                EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
                 {
                     if (path == null) return;
                     if (!path.EndsWith(".prowltheme")) path += ".prowltheme";
@@ -151,7 +151,7 @@ public class PreferencesPanel : DockPanel
 
             Origami.Button(paper, "pref_import", $"{EditorIcons.Upload}  Import", () =>
             {
-                FileDialog.Open(FileDialogMode.Open, path =>
+                EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
                 {
                     if (path == null) return;
                     var imported = EditorThemeData.ImportFromFile(path);

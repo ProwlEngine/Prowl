@@ -57,7 +57,7 @@ public static class PackageImportDialog
             if (_manifest == null)
             {
                 CloseArchive();
-                ModalDialog.Message("Import Error", "Invalid package: missing manifest.json");
+                Origami.Message("Import Error", "Invalid package: missing manifest.json");
                 return;
             }
 
@@ -81,12 +81,12 @@ public static class PackageImportDialog
 
             _isOpen = true;
             _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer));
-            OrigamiUI.OrigamiModal.Push(_modal);
+            Modal.Push(_modal);
         }
         catch (Exception ex)
         {
             CloseArchive();
-            ModalDialog.Message("Import Error", $"Failed to open package: {ex.Message}");
+            Origami.Message("Import Error", $"Failed to open package: {ex.Message}");
         }
     }
 
@@ -103,7 +103,7 @@ public static class PackageImportDialog
         foreach (var tex in _thumbCache.Values)
             tex?.Dispose();
         _thumbCache.Clear();
-        if (_modal != null) { OrigamiUI.OrigamiModal.Remove(_modal); _modal = null; }
+        if (_modal != null) { Modal.Remove(_modal); _modal = null; }
     }
 
     private static void CloseArchive()

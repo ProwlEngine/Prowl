@@ -241,7 +241,7 @@ public static class GameObjectInspector
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(i, (ci, _) =>
                     {
-                        OrigamiContextMenu.Show((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                        Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
                             BuildComponentContextMenu(b, go, comp, ci));
                     })
                     .Enter())

@@ -141,7 +141,7 @@ public static class ProjectBuilder
     {
         BuildProgress progress = null;
         // Ask for output folder
-        Widgets.FileDialog.Open(FileDialogMode.SelectFolder, outputPath => {
+        EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, outputPath => {
             {
                 Runtime.Debug.Log($"{Project.Current.RootPath}");
                 Runtime.Debug.Log($"{outputPath}");

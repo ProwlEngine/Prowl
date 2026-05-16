@@ -73,14 +73,14 @@ public static class SelectorModal
         _activeTab = tabs.HasFlag(SelectorTabs.Scene) ? SelectorTabs.Scene : SelectorTabs.Assets;
 
         _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer)) { CloseOnBackdrop = true };
-        OrigamiUI.OrigamiModal.Push(_modal);
+        OrigamiUI.Modal.Push(_modal);
     }
 
     public static void Close()
     {
         _open = false;
         _callback = null;
-        if (_modal != null) { OrigamiUI.OrigamiModal.Remove(_modal); _modal = null; }
+        if (_modal != null) { OrigamiUI.Modal.Remove(_modal); _modal = null; }
     }
 
     public static void Draw(Paper paper) { } // Now handled by modal stack

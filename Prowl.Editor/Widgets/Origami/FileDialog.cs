@@ -36,7 +36,7 @@ public sealed class FileDialogConfig
 /// Static Origami file dialog. Only one can be open at a time.
 /// Call Open() to show, Draw() each frame, handles its own close.
 /// </summary>
-public static class OrigamiFileDialog
+public static class FileDialog
 {
     // ── State ────────────────────────────────────────────────
     private static bool _isOpen;
@@ -111,7 +111,7 @@ public static class OrigamiFileDialog
 
         // Push onto the modal stack so backdrops and layering are managed centrally
         _modalHandle = new CustomDrawModal((paper, layer, stackIndex) => DrawInternal(paper, layer)) { CloseOnEscape = false };
-        OrigamiModal.Push(_modalHandle);
+        Modal.Push(_modalHandle);
     }
 
     public static void Close(string? result = null)
@@ -119,7 +119,7 @@ public static class OrigamiFileDialog
         _isOpen = false;
         _isDragging = false; _dragPath = ""; _dragName = ""; _dropTargetPath = "";
         _hoverDirPath = ""; _hoverDirTime = 0;
-        if (_modalHandle != null) { OrigamiModal.Remove(_modalHandle); _modalHandle = null; }
+        if (_modalHandle != null) { Modal.Remove(_modalHandle); _modalHandle = null; }
         if (result != null) _config?.OnFileOpened?.Invoke(result);
         _onComplete?.Invoke(result);
         _onComplete = null;
@@ -605,7 +605,7 @@ public static class OrigamiFileDialog
 
                     // Right-click context menu
                     var ctxEntry = entry;
-                    OrigamiContextMenu.RightClickMenu(paper, $"ofd_ctx_{i}", b =>
+                    ContextMenu.RightClickMenu(paper, $"ofd_ctx_{i}", b =>
                     {
                         b.Item("Rename", () =>
                         {
@@ -618,7 +618,7 @@ public static class OrigamiFileDialog
                             string name = ctxEntry.Name;
                             string path = ctxEntry.FullPath;
                             bool isDir = ctxEntry.IsDirectory;
-                            OrigamiModal.Confirm("Delete", $"Are you sure you want to delete '{name}'?\nThis cannot be undone.", () =>
+                            Modal.Confirm("Delete", $"Are you sure you want to delete '{name}'?\nThis cannot be undone.", () =>
                             {
                                 try { if (isDir) Directory.Delete(path, true); else File.Delete(path); }
                                 catch { }
@@ -761,7 +761,7 @@ public static class OrigamiFileDialog
         {
             if (File.Exists(destPath) || Directory.Exists(destPath))
             {
-                OrigamiModal.Confirm("Overwrite?", $"'{name}' already exists in the destination. Overwrite?", () =>
+                Modal.Confirm("Overwrite?", $"'{name}' already exists in the destination. Overwrite?", () =>
                 {
                     try
                     {

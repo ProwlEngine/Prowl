@@ -174,7 +174,7 @@ public static class ProjectLauncher
 
                         Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", () =>
                             {
-                                FileDialog.Open(FileDialogMode.SelectFolder, path =>
+                                EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, path =>
                                 {
                                     if (path == null) return;
                                     TryOpenProject(path);
@@ -265,7 +265,7 @@ public static class ProjectLauncher
 
                 Origami.Button(paper, "pl_np_browse", EditorIcons.FolderOpen, () =>
                     {
-                        FileDialog.Open(FileDialogMode.SelectFolder, path =>
+                        EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, path =>
                         {
                             if (path != null) _newProjectPath = path;
                         }, _newProjectPath);
