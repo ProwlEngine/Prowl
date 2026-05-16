@@ -369,6 +369,9 @@ public class SceneViewPanel : DockPanel
                 }
             }
 
+            // Speed indicator (shows briefly when scroll changes fly speed)
+            DrawSpeedIndicator(paper, font, width, height);
+
             // View manipulator (orientation cube) drawn as 2D overlay on top-right
             DrawViewManipulator(paper, font, width, height);
         }
@@ -719,6 +722,33 @@ public class SceneViewPanel : DockPanel
     // ================================================================
     //  View Manipulator (orientation cube)
     // ================================================================
+
+    private void DrawSpeedIndicator(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    {
+        if (_editorCamera == null) return;
+
+        double elapsed = Time.UnscaledTotalTime - _editorCamera.SpeedChangedTime;
+        if (elapsed > 1.5) return; // Show for 1.5 seconds
+
+        float alpha = elapsed < 1.0 ? 1f : 1f - (float)(elapsed - 1.0) / 0.5f;
+        byte a = (byte)(alpha * 180);
+        byte ta = (byte)(alpha * 255);
+
+        float boxW = 80, boxH = 32;
+        float x = (width - boxW) / 2f;
+        float y = (height - boxH) / 2f;
+
+        paper.Box("sv_speed_hud")
+            .PositionType(PositionType.SelfDirected)
+            .Position(x, y).Size(boxW, boxH)
+            .BackgroundColor(Color.FromArgb(a, 30, 30, 34))
+            .Rounded(6)
+            .IsNotInteractable()
+            .Text($"{_editorCamera.MoveSpeed:F1}", font)
+            .TextColor(Color.FromArgb(ta, 255, 255, 255))
+            .FontSize(18f)
+            .Alignment(TextAlignment.MiddleCenter);
+    }
 
     private void DrawViewManipulator(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
     {
