@@ -224,6 +224,9 @@ namespace Prowl.PaperUI
             _focusedElementId = target.Data.ID;
         }
 
+        /// <summary>Clear focus from any currently focused element.</summary>
+        public void ClearFocus() => _focusedElementId = 0;
+
         public bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
 
         public bool SkipKeyboardNavigation = false;
