@@ -220,7 +220,21 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             ? NumberStyles.Float | NumberStyles.AllowThousands
             : NumberStyles.Integer | NumberStyles.AllowThousands;
 
-        return T.TryParse(s, styles, _culture, out result);
+        // Try direct parse first (fast path for plain numbers)
+        if (T.TryParse(s, styles, _culture, out result))
+            return true;
+
+        // If direct parse fails, try evaluating as a math expression
+        // This allows users to type things like "2*3+1", "360/16", "pi*2"
+        if (MathParser.TryEvaluate(s, out double evaluated))
+        {
+            // Convert the double result to T
+            string evalStr = evaluated.ToString("G15", System.Globalization.CultureInfo.InvariantCulture);
+            return T.TryParse(evalStr, NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out result);
+        }
+
+        result = default;
+        return false;
     }
 
     private void HandleChange(string raw)
