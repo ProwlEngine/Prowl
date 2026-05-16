@@ -58,6 +58,7 @@ public sealed class DialogModal : IModal
     public void Draw(Paper paper, int layer, int stackIndex)
     {
         var theme = Origami.Current;
+        var m = theme.Metrics;
         var font = theme.Font;
         var ink = theme.Ink;
         if (font == null) return;
@@ -79,7 +80,7 @@ public sealed class DialogModal : IModal
         using (dialogBuilder
             .BackgroundColor(theme.Neutral.C300)
             .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(8)
+            .Rounded(m.ContainerRounding)
             .BoxShadow(0, 4, 20, 0, Color.FromArgb(80, 0, 0, 0))
             .Layer(layer)
             .StopEventPropagation()
@@ -87,9 +88,9 @@ public sealed class DialogModal : IModal
         {
             // Title bar
             paper.Box($"omd_title_{stackIndex}")
-                .Height(36)
+                .Height(m.RowHeight + m.PaddingLarge)
                 .BackgroundColor(theme.Neutral.C200)
-                .Rounded(8, 8, 0, 0)
+                .Rounded(m.ContainerRounding, m.ContainerRounding, 0, 0)
                 .Text(Title, font)
                 .TextColor(ink.C500)
                 .FontSize(theme.Metrics.FontSize + 1)
@@ -99,8 +100,8 @@ public sealed class DialogModal : IModal
             using (paper.Column($"omd_body_{stackIndex}")
                 .Width(UnitValue.Stretch())
                 .Height(UnitValue.Auto)
-                .Padding(16, 16, 12, 12)
-                .ColBetween(6)
+                .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge)
+                .ColBetween(m.SpacingMedium)
                 .Enter())
             {
                 DrawContent?.Invoke(paper);
@@ -110,9 +111,9 @@ public sealed class DialogModal : IModal
             if (Buttons.Count > 0)
             {
                 using (paper.Row($"omd_btns_{stackIndex}")
-                    .Height(44)
-                    .ChildRight(12).ChildBottom(8)
-                    .RowBetween(8)
+                    .Height(m.RowHeight + m.CompactHeight)
+                    .ChildRight(m.PaddingLarge).ChildBottom(m.SpacingLarge)
+                    .RowBetween(m.SpacingLarge)
                     .ChildLeft(UnitValue.Stretch())
                     .Enter())
                 {

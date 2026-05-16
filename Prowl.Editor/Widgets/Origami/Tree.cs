@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 
-using Prowl.Editor;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
@@ -425,26 +424,29 @@ public sealed class TreeBuilder
         var capturedNode = node;
         bool disabled = node.Disabled;
 
+        var accentColor = _theme.Primary.C400;
+
         // Drop indicator above
         if (node.DropIndicator == TreeDropPosition.Above)
         {
             _paper.Box($"{rowId}_drop_above")
-                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
-                .BackgroundColor(EditorTheme.Purple400);
+                .Height(3).Margin(indent + _theme.Metrics.SpacingLarge, _theme.Metrics.Spacing, 0, 0)
+                .Rounded(_theme.Metrics.SmallRounding)
+                .BackgroundColor(accentColor);
         }
 
         bool isDropInto = node.DropIndicator == TreeDropPosition.Into;
-        Color rowBg = isSelected ? EditorTheme.Purple400
-            : isDropInto ? Color.FromArgb(60, EditorTheme.Purple400.R, EditorTheme.Purple400.G, EditorTheme.Purple400.B)
+        Color rowBg = isSelected ? accentColor
+            : isDropInto ? Color.FromArgb(60, accentColor.R, accentColor.G, accentColor.B)
             : Color.Transparent;
-        Color rowHover = isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200;
+        Color rowHover = isSelected ? accentColor : _theme.Ink.C200;
 
         // Build the row element
         var row = _paper.Row(rowId)
             .Height(_rowHeight)
             .BackgroundColor(rowBg)
             .Hovered.BackgroundColor(rowHover).End()
-            .Rounded(3)
+            .Rounded(_theme.Metrics.Rounding)
             .ChildLeft(indent);
 
         // Click handling
@@ -529,7 +531,7 @@ public sealed class TreeBuilder
             {
                 _paper.Box($"{rowId}_arr")
                     .Width(14).Height(_rowHeight)
-                    .Text(isExpanded ? EditorIcons.AngleDown : EditorIcons.AngleRight, font)
+                    .Text(isExpanded ? _theme.Icons.ChevronDown : _theme.Icons.ChevronRight, font)
                     .TextColor(ink.C400)
                     .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
                     .StopEventPropagation()
@@ -592,8 +594,9 @@ public sealed class TreeBuilder
         if (node.DropIndicator == TreeDropPosition.Below)
         {
             _paper.Box($"{rowId}_drop_below")
-                .Height(3).Margin(indent + 8, 4, 0, 0).Rounded(1)
-                .BackgroundColor(EditorTheme.Purple400);
+                .Height(3).Margin(indent + _theme.Metrics.SpacingLarge, _theme.Metrics.Spacing, 0, 0)
+                .Rounded(_theme.Metrics.SmallRounding)
+                .BackgroundColor(accentColor);
         }
     }
 

@@ -14,6 +14,7 @@ using Prowl.Runtime.GraphTools;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
 using Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
+using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
 namespace Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 /// <summary>

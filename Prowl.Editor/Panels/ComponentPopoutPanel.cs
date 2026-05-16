@@ -10,6 +10,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
+using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
 namespace Prowl.Editor.Panels;
 
 /// <summary>

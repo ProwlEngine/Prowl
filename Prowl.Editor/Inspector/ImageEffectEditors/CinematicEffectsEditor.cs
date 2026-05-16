@@ -7,6 +7,7 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
 namespace Prowl.Editor.Inspector;
 
 [CustomEditor(typeof(CinematicEffects))]

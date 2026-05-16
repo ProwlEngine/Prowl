@@ -146,7 +146,7 @@ public sealed class ColorFieldBuilder
                 if (capturedFont != null)
                 {
                     var textSize = canvas.MeasureText(hexText, fontSize, capturedFont);
-                    float tx = x + 6f;
+                    float tx = x + metrics.Padding;
                     float ty = y + (h - (float)textSize.Y) * 0.5f;
 
                     // Dark outline behind text so it pops on white/bright backgrounds
@@ -187,17 +187,17 @@ public sealed class ColorFieldBuilder
 
     private void RenderPopover(ElementHandle triggerHandle, Scribe.FontFile? font, OrigamiRamp ink, OrigamiMetrics metrics, float rounding)
     {
-        float pad = 8f;
-        float gap = 6f;
+        float pad = metrics.PaddingLarge;
+        float gap = metrics.SpacingMedium;
 
         using (_paper.Column($"{_id}_cf_pop")
             .PositionType(PositionType.SelfDirected)
-            .Position(0, metrics.HeaderHeight + 2)
+            .Position(0, metrics.HeaderHeight + metrics.SpacingSmall)
             .Width(PopWidth)
             .Height(UnitValue.Auto)
             .BackgroundColor(_theme.Neutral.C300)
             .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(rounding + 2)
+            .Rounded(metrics.ContainerRounding)
             .Padding(pad, pad, pad, pad)
             .ColBetween(gap)
             .Layer(Layer.Topmost)
@@ -245,7 +245,7 @@ public sealed class ColorFieldBuilder
             var currentColor = HSVToColor(h, s, v, a);
 
             int ni = Clamp255(currentColor.R), ng = Clamp255(currentColor.G), nb = Clamp255(currentColor.B), na = Clamp255(currentColor.A);
-            _paper.Box($"{_id}_cf_new").Height(24).Rounded(3)
+            _paper.Box($"{_id}_cf_new").Height(metrics.RowHeight).Rounded(metrics.SmallRounding)
                 .BorderColor(ink.C200).BorderWidth(1)
                 .BackgroundColor(SysColor.FromArgb(na, ni, ng, nb));
 
@@ -273,6 +273,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawSVSquare(ElementHandle popEl, float size, float h, float s, float v, float a)
     {
+        var svRound = _theme.Metrics.SmallRounding;
         _paper.Box($"{_id}_cf_sv").Size(size, size)
             .OnClick(e => SetSV(popEl, e, a))
             .OnDragging(e => SetSV(popEl, e, a))
@@ -281,19 +282,19 @@ public sealed class ColorFieldBuilder
                 float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, ht = (float)r.Size.Y;
                 var hc = HSVToColor32(h, 1, 1);
 
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, hc);
+                canvas.RoundedRectFilled(x, y, w, ht, svRound, svRound, svRound, svRound, hc);
                 canvas.SetLinearBrush(x, y + ht / 2, x + w, y + ht / 2,
                     Color32.FromArgb(255, 255, 255, 255), Color32.FromArgb(0, 255, 255, 255));
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, Color32.FromArgb(255, 255, 255, 255));
+                canvas.RoundedRectFilled(x, y, w, ht, svRound, svRound, svRound, svRound, Color32.FromArgb(255, 255, 255, 255));
                 canvas.ClearBrush();
                 canvas.SetLinearBrush(x + w / 2, y, x + w / 2, y + ht,
                     Color32.FromArgb(0, 0, 0, 0), Color32.FromArgb(255, 0, 0, 0));
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, Color32.FromArgb(255, 255, 255, 255));
+                canvas.RoundedRectFilled(x, y, w, ht, svRound, svRound, svRound, svRound, Color32.FromArgb(255, 255, 255, 255));
                 canvas.ClearBrush();
 
                 canvas.SetStrokeColor(_theme.Primary.C400);
                 canvas.SetStrokeWidth(1);
-                canvas.BeginPath(); canvas.RoundedRect(x, y, w, ht, 3, 3, 3, 3); canvas.Stroke();
+                canvas.BeginPath(); canvas.RoundedRect(x, y, w, ht, svRound, svRound, svRound, svRound); canvas.Stroke();
 
                 float cx = x + s * w, cy = y + (1f - v) * ht;
                 canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
@@ -356,7 +357,8 @@ public sealed class ColorFieldBuilder
 
     private void DrawAlphaBar(ElementHandle popEl, float height, float h, float s, float v, float a)
     {
-        _paper.Box($"{_id}_cf_alpha").Size(BarWidth, height).Rounded(3)
+        var alphaRound = _theme.Metrics.SmallRounding;
+        _paper.Box($"{_id}_cf_alpha").Size(BarWidth, height).Rounded(alphaRound)
             .OnClick(e => SetAlpha(popEl, e))
             .OnDragging(e => SetAlpha(popEl, e))
             .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
@@ -366,7 +368,7 @@ public sealed class ColorFieldBuilder
                 var col = HSVToColor32(h, s, v);
                 var colT = Color32.FromArgb(0, col.R, col.G, col.B);
                 canvas.SetLinearBrush(x + w / 2, y, x + w / 2, y + ht, col, colT);
-                canvas.RoundedRectFilled(x, y, w, ht, 3, 3, 3, 3, Color32.FromArgb(255, 255, 255, 255));
+                canvas.RoundedRectFilled(x, y, w, ht, alphaRound, alphaRound, alphaRound, alphaRound, Color32.FromArgb(255, 255, 255, 255));
                 canvas.ClearBrush();
                 float cy = y + (1f - a) * ht;
                 canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
@@ -397,7 +399,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawHSVInputs(ElementHandle popEl, float h, float s, float v, float a)
     {
-        using (_paper.Row($"{_id}_cf_hsv_row").Height(UnitValue.Auto).RowBetween(4).Enter())
+        using (_paper.Row($"{_id}_cf_hsv_row").Height(UnitValue.Auto).RowBetween(_theme.Metrics.Spacing).Enter())
         {
             ChannelNumeric("H", $"{_id}_cf_h", (int)h, 0, 360, nh =>
             { _paper.SetElementStorage(popEl, "h", (float)nh); EmitFromHSV(popEl); }, HueCol);
@@ -415,7 +417,7 @@ public sealed class ColorFieldBuilder
 
     private void DrawRGBInputs(ElementHandle popEl, Color c)
     {
-        using (_paper.Row($"{_id}_cf_rgb_row").Height(UnitValue.Auto).RowBetween(4).Enter())
+        using (_paper.Row($"{_id}_cf_rgb_row").Height(UnitValue.Auto).RowBetween(_theme.Metrics.Spacing).Enter())
         {
             ChannelNumeric("R", $"{_id}_cf_r", Clamp255(c.R), 0, 255, nr =>
             { var nc = new Color(nr / 255f, c.G, c.B, c.A); SyncHSV(popEl, nc); _setter(nc); }, RedCol);
@@ -470,9 +472,10 @@ public sealed class ColorFieldBuilder
 
         var colors = _palette.Colors;
         var ink = _theme.Ink;
+        var metrics = _theme.Metrics;
         float swatchSize = _palette.SwatchSize;
-        float gap = 2f;
-        float availWidth = PopWidth - 16f;
+        float gap = metrics.SpacingSmall;
+        float availWidth = PopWidth - metrics.PaddingLarge * 2;
         int cols = Math.Max(1, (int)((availWidth + gap) / (swatchSize + gap)));
         bool hasAdd = _palette.OnAdd != null;
         int totalItems = colors.Count + (hasAdd ? 1 : 0);
@@ -497,7 +500,7 @@ public sealed class ColorFieldBuilder
                         _paper.Box($"{_id}_cf_ps{idx}")
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(SysColor.FromArgb(pa, pr, pg, pb))
-                            .Rounded(2)
+                            .Rounded(metrics.SmallRounding)
                             .Hovered.BorderColor(_theme.Primary.C400).BorderWidth(1).End()
                             .OnClick(idx, (ci, _) =>
                             {
@@ -516,7 +519,7 @@ public sealed class ColorFieldBuilder
                         _paper.Box($"{_id}_cf_padd")
                             .Size(swatchSize, swatchSize)
                             .BackgroundColor(ink.C100)
-                            .Rounded(2)
+                            .Rounded(metrics.SmallRounding)
                             .BorderColor(ink.C200).BorderWidth(1)
                             .Hovered.BackgroundColor(ink.C200).End()
                             .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>

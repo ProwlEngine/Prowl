@@ -4,7 +4,7 @@
 using System;
 using System.Drawing;
 
-using Prowl.Editor;
+
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
@@ -231,8 +231,8 @@ public sealed class FoldoutBuilder
             var inner = _paper.Box($"{_id}_inner")
                 .Width(UnitValue.Stretch())
                 .Height(UnitValue.Lerp(0, UnitValue.Auto, anim))
-                .Margin(EditorTheme.Padding)
-                .Padding(EditorTheme.Padding)
+                .Margin(_theme.Metrics.PaddingSmall)
+                .Padding(_theme.Metrics.PaddingSmall)
                 .BackgroundColor(ramp.C100)
                 .Clip()
                 .Rounded(rounding);

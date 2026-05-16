@@ -33,7 +33,6 @@ public static class Toasts
 
     private static readonly List<ToastEntry> _toasts = [];
     private const float ToastWidth = 300f;
-    private const float Spacing = 6f;
     private const float FadeInTime = 0.3f;
     private const float FadeOutTime = 0.5f;
     private const int ToastLayer = Layer.Overlay + 100000;
@@ -67,13 +66,14 @@ public static class Toasts
         if (_toasts.Count == 0) return;
 
         var theme = Origami.Current;
+        var metrics = theme.Metrics;
         var font = theme.Font;
         if (font == null) return;
 
         float dt = paper.DeltaTime;
         float screenW = (float)paper.ScreenRect.Size.X;
         float screenH = (float)paper.ScreenRect.Size.Y;
-        float yOffset = screenH - 36f;
+        float yOffset = screenH - metrics.PaddingLarge * 3f;
 
         for (int i = _toasts.Count - 1; i >= 0; i--)
         {
@@ -106,11 +106,12 @@ public static class Toasts
 
             // Size
             int msgLines = CountLines(toast.Message);
-            float msgH = MathF.Max(18f, msgLines * 16f);
-            float toastH = 34f + msgH;
-            yOffset -= toastH + Spacing;
+            float lineH = metrics.FontSize + metrics.Spacing;
+            float msgH = MathF.Max(metrics.FontSize + metrics.SpacingMedium, msgLines * lineH);
+            float toastH = metrics.RowHeight + metrics.Padding + metrics.Spacing + msgH;
+            yOffset -= toastH + metrics.SpacingMedium;
 
-            float x = screenW - ToastWidth - 16f + slideX;
+            float x = screenW - ToastWidth - metrics.PaddingLarge + slideX;
 
             float pill = toastH * 0.5f;
 
@@ -124,34 +125,34 @@ public static class Toasts
                 .BoxShadow(0, 3, 16, -2, Color.FromArgb((int)(fade * 80), 0, 0, 0))
                 .Layer(ToastLayer)
                 .IsNotInteractable()
-                .Padding(4, 12, 4, 4).RowBetween(8)
+                .Padding(metrics.PaddingSmall, metrics.PaddingLarge, metrics.PaddingSmall, metrics.PaddingSmall).RowBetween(metrics.SpacingLarge)
                 .Enter())
             {
                 // Circle icon badge
                 if (!string.IsNullOrEmpty(toast.Icon))
                 {
-                    float circleSize = toastH - 8;
+                    float circleSize = toastH - metrics.SpacingLarge;
                     paper.Box($"toast_ico_{i}")
                         .Width(circleSize).Height(circleSize)
                         .Rounded(circleSize * 0.5f)
                         .BackgroundColor(accent)
                         .Text(toast.Icon, font)
                         .TextColor(Color.FromArgb(alpha, 255, 255, 255))
-                        .FontSize(theme.Metrics.FontSize)
+                        .FontSize(metrics.FontSize)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
 
                 // Text
                 using (paper.Column($"toast_txt_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
-                    .ChildTop(6).ChildBottom(6)
+                    .ChildTop(metrics.Padding).ChildBottom(metrics.Padding)
                     .ColBetween(1)
                     .Enter())
                 {
                     paper.Box($"toast_t_{i}")
-                        .Height(18)
+                        .Height(metrics.FontSize + metrics.SpacingMedium)
                         .Text(toast.Title, font).TextColor(titleColor)
-                        .FontSize(theme.Metrics.FontSize)
+                        .FontSize(metrics.FontSize)
                         .Alignment(TextAlignment.MiddleLeft);
 
                     if (!string.IsNullOrEmpty(toast.Message))
@@ -159,7 +160,7 @@ public static class Toasts
                         paper.Box($"toast_m_{i}")
                             .Height(msgH)
                             .Text(toast.Message, font).TextColor(msgColor)
-                            .FontSize(theme.Metrics.FontSize - 2)
+                            .FontSize(metrics.FontSizeSmall)
                             .Alignment(TextAlignment.MiddleLeft);
                     }
                 }

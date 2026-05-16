@@ -315,6 +315,12 @@ public static class Origami
     public static void RightClickMenu(PaperUI.Paper paper, string id, Action<ContextBuilder> build)
         => OrigamiUI.ContextMenu.RightClickMenu(paper, id, build);
 
+    // ── Property grid helpers ────────────────────────────────
+
+    /// <summary>Draw a property grid for the given object.</summary>
+    public static void DrawPropertyGrid(PaperUI.Paper paper, string id, object target, Action<object>? onChange = null, int depth = 0)
+        => PropertyGrid.Draw(paper, id, target, onChange, depth);
+
     // ── File dialog helpers ──────────────────────────────────
 
     /// <summary>Open a file dialog.</summary>

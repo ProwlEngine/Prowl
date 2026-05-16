@@ -198,24 +198,25 @@ public sealed class DropdownBuilder<T>
                 if (font != null)
                 {
                     // Label stretches to consume the row; chevron sits flush against the right edge.
+                    var m = _theme.Metrics;
                     _paper.Box($"{_id}_lbl")
                         .Width(UnitValue.Stretch())
-                        .Margin(8, 4, 0, 0)
+                        .Margin(m.SpacingLarge, m.PaddingSmall, 0, 0)
                         .Alignment(TextAlignment.MiddleLeft)
                         .IsNotInteractable()
                         .Text(triggerText, font)
                         .TextColor(isEmpty ? ink.C300 : ink.C500)
-                        .FontSize(_theme.Metrics.FontSize);
+                        .FontSize(m.FontSize);
 
                     string chev = isOpen
                         ? (string.IsNullOrEmpty(icons.ChevronUp) ? "^" : icons.ChevronUp)
                         : (string.IsNullOrEmpty(icons.ChevronDown) ? "v" : icons.ChevronDown);
                     _paper.Box($"{_id}_chev")
-                        .Width(14)
-                        .Margin(0, 6, 0, 0)
+                        .Width(m.IconWidth)
+                        .Margin(0, m.Padding, 0, 0)
                         .Alignment(TextAlignment.MiddleCenter)
                         .IsNotInteractable()
-                        .Text(chev, font).TextColor(chevColor).FontSize(_theme.Metrics.FontSize * 0.85f);
+                        .Text(chev, font).TextColor(chevColor).FontSize(m.FontSize * 0.85f);
                 }
             }
 

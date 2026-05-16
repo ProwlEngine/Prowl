@@ -4,7 +4,6 @@
 using System;
 using System.Drawing;
 
-using Prowl.Editor;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;

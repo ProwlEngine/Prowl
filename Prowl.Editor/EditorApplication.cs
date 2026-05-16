@@ -162,6 +162,12 @@ public class EditorApplication : Game
         // Initialize status bar log tracking
         InitializeStatusBar();
 
+        // Register Origami PropertyGrid field drawers and attribute handlers
+        OrigamiUI.BuiltInFieldDrawers.Register();
+        AttributeHandlers.BuiltInAttributeHandlers.Register();
+        OrigamiUI.PropertyGrid.OnBeginRoot = target => Undo.Snapshot(target);
+        OrigamiUI.PropertyGrid.OnFieldChanged = target => (target as Runtime.EngineObject)?.OnValidate();
+
         // Set Windows title bar to match Darkest theme color
         ApplyDarkTitleBar();
 

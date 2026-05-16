@@ -7,6 +7,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
+using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
 namespace Prowl.Editor.Panels;
 
 [EditorWindow("Debug/Widget Playground")]
