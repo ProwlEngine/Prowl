@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
+using Prowl.OrigamiUI;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Widgets;
