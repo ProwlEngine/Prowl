@@ -139,24 +139,12 @@ internal static class UIGizmos
     }
 
     /// <summary>
-    /// Builds the world-space matrix that maps a RectTransform's pivot-centered
-    /// design-pixel space to world space. Mirrors <see cref="GameCanvas.BuildItemModel"/>;
-    /// kept here because that one takes a UIBehaviour, not a bare RectTransform.
+    /// World-space matrix that maps a RectTransform's pivot-centered design-pixel space to
+    /// world space, with parent rotation/scale inheritance applied — delegates to
+    /// <see cref="GameCanvas.BuildRectModel"/> so gizmos and the rendered UI stay in lockstep.
     /// </summary>
     private static Float4x4 BuildRectModel(GameCanvas canvas, RectTransform rt)
-    {
-        Rect cr = rt.ComputedRect;
-        Float2 pivot = rt.Pivot;
-        float pivotX = cr.Min.X + pivot.X * cr.Size.X;
-        float pivotY = cr.Min.Y + pivot.Y * cr.Size.Y;
-
-        Float4x4 elementTRS = Float4x4.CreateTRS(
-            new Float3(pivotX, pivotY, 0),
-            rt.LocalRotation,
-            rt.LocalScale);
-
-        return canvas.CanvasToWorld * elementTRS;
-    }
+        => canvas.CanvasToWorld * canvas.BuildRectModel(rt);
 
     /// <summary>
     /// Draws a small right-triangle handle whose right-angle vertex sits at

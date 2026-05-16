@@ -258,7 +258,7 @@ public class RectTransform : Transform
         return ComputedRect;
     }
 
-    private void MarkLayoutDirty()
+    public void MarkLayoutDirty()
     {
         foreach (UIBehaviour ui in GameObject.GetComponents<UIBehaviour>())
             ui.MarkDirty(UIDirtyFlags.Layout | UIDirtyFlags.Vertices);

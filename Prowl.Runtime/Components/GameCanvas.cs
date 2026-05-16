@@ -337,41 +337,75 @@ public class GameCanvas : MonoBehaviour
     };
 
     /// <summary>
-    /// Returns the model matrix for a UI element under this canvas.
+    /// Returns the model matrix for a UI element under this canvas. Equivalent to
+    /// <see cref="CanvasToWorld"/> × <see cref="BuildRectModel(RectTransform)"/>.
+    /// </summary>
+    internal Float4x4 BuildItemModel(UIBehaviour b)
+        => CanvasToWorld * BuildRectModel(b.GameObject.RectTransform!);
+
+    /// <summary>
+    /// Builds the canvas-design-pixel space matrix that places a RectTransform's pivot-centered
+    /// mesh into the canvas frame, threading <b>parent rotation and scale</b> down the chain
+    /// (Unity behavior).
     ///
     /// Convention: a <see cref="UIBehaviour"/>'s mesh is built in <b>element-local pixel space</b>
-    /// (+X right, +Y up), with the element's pivot at the origin (0, 0). <see cref="BuildItemModel"/>:
-    ///   1. translates the pivot to its absolute canvas-design-pixel position (computed from
-    ///      <see cref="RectTransform.ComputedRect"/> + <see cref="RectTransform.Pivot"/>),
-    ///   2. applies any per-element <see cref="Transform.LocalRotation"/> /
-    ///      <see cref="Transform.LocalScale"/> around that pivot,
-    ///   3. prepends <see cref="CanvasToWorld"/> to land the element in the canvas's
-    ///      target space (screen real-pixels for Overlay / Camera, world units for WorldSpace).
+    /// (+X right, +Y up), with the element's pivot at the origin (0, 0). This function:
+    ///   1. places the element's pivot at its layout position in canvas-design pixels
+    ///      (computed from <see cref="RectTransform.ComputedRect"/> + <see cref="RectTransform.Pivot"/>),
+    ///      applying the element's own <see cref="Transform.LocalRotation"/> /
+    ///      <see cref="Transform.LocalScale"/> around that pivot.
+    ///   2. walks every ancestor <see cref="RectTransform"/> up to (but not including) the canvas
+    ///      itself, applying each parent's rotation and scale around the parent's pivot so the
+    ///      element inherits the parent's frame — i.e. rotating a parent rotates its children
+    ///      around the parent's pivot, and scaling a parent moves children outward while
+    ///      enlarging their meshes.
     ///
     /// Note: <see cref="RectTransform.LocalToWorldMatrix"/> is intentionally <b>not</b> used here.
     /// It treats <see cref="RectTransform.AnchoredPosition"/> as a TRS translation, but the real
     /// layout — anchors, pivot, SizeDelta, AnchoredPosition — is already baked into
-    /// <see cref="RectTransform.ComputedRect"/> by the layout pass. Multiplying the chain on top
-    /// of an absolute-positioned mesh would double-apply <see cref="RectTransform.AnchoredPosition"/>.
+    /// <see cref="RectTransform.ComputedRect"/> by the layout pass.
     /// </summary>
-    internal Float4x4 BuildItemModel(UIBehaviour b)
+    internal Float4x4 BuildRectModel(RectTransform rt)
     {
-        RectTransform rt = b.GameObject.RectTransform!;
         Rect cr = rt.ComputedRect;
         Float2 pivot = rt.Pivot;
 
-        // Absolute pivot position in canvas-design pixels.
+        // Element's pivot in canvas-axis-aligned design pixels.
         float pivotX = cr.Min.X + pivot.X * cr.Size.X;
         float pivotY = cr.Min.Y + pivot.Y * cr.Size.Y;
 
-        // Per-element TRS: rotation/scale apply around the pivot (mesh is pivot-centered),
-        // then the pivot is placed at its absolute design-pixel position.
-        Float4x4 elementTRS = Float4x4.CreateTRS(
+        // Element TRS: rotation/scale apply around the pivot (mesh is pivot-centered),
+        // then the pivot is placed at its layout position.
+        Float4x4 model = Float4x4.CreateTRS(
             new Float3(pivotX, pivotY, 0),
             rt.LocalRotation,
             rt.LocalScale);
 
-        return CanvasToWorld * elementTRS;
+        // Walk up ancestor RectTransforms (stop at this canvas's own RectTransform): each one
+        // contributes a "rotate/scale around its pivot" wrap, in canvas-axis-aligned space.
+        // The ComputedRects are laid out as if every ancestor were at identity rotation/scale,
+        // so threading those rotations/scales here reproduces Unity's parent inheritance.
+        RectTransform? canvasRT = GameObject.RectTransform;
+        GameObject? cur = rt.GameObject.Parent;
+        while (cur != null)
+        {
+            RectTransform? prt = cur.RectTransform;
+            if (prt == null || prt == canvasRT) break;
+
+            Rect pcr = prt.ComputedRect;
+            float pPivotX = pcr.Min.X + prt.Pivot.X * pcr.Size.X;
+            float pPivotY = pcr.Min.Y + prt.Pivot.Y * pcr.Size.Y;
+            Float3 pPivot = new Float3(pPivotX, pPivotY, 0);
+
+            // T(pivot) * R * S * T(-pivot): rotate/scale around the parent's axis-aligned pivot.
+            Float4x4 wrap = Float4x4.CreateTRS(pPivot, prt.LocalRotation, prt.LocalScale)
+                          * Float4x4.CreateTranslation(-pPivot);
+            model = wrap * model;
+
+            cur = cur.Parent;
+        }
+
+        return model;
     }
 
     // ============================================================

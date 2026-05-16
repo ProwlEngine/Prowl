@@ -394,6 +394,15 @@ public static class Origami
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
     }
 
+    public static VectorField3Builder<float> Float3FieldPerComponent(Paper paper, string id,
+        Prowl.Vector.Float3 value, Action<float> xSetter, Action<float> ySetter, Action<float> zSetter)
+    {
+        var v = value;
+        return new VectorField3Builder<float>(paper, id, Current,
+            (float)v.X, (float)v.Y, (float)v.Z,
+            x => { v.X = x; xSetter(v.X); }, y => { v.Y = y; ySetter(v.Y); }, z => { v.Z = z; zSetter(v.Z); });
+    }
+
     public static VectorField4Builder<float> Float4Field(Paper paper, string id,
         Prowl.Vector.Float4 value, Action<Prowl.Vector.Float4> setter)
     {

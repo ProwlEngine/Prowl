@@ -79,7 +79,7 @@ internal static class UIPicker
             int dfs = 0;
             GameObject? localHit = null;
             int localDfs = -1;
-            WalkRecurse(canvas.GameObject, pt, ref dfs, ref localHit, ref localDfs);
+            WalkRecurse(canvas, canvas.GameObject, pt, ref dfs, ref localHit, ref localDfs);
             if (localHit == null) continue;
 
             bool wins =
@@ -105,7 +105,7 @@ internal static class UIPicker
     // Mirrors GameCanvas.BuildRecursive: visit children in order, count one DFS step per
     // drawable UIBehaviour (so the dfs index matches what the renderer uses for SortKey),
     // descend after the parent's behaviours so children draw on top of their parent.
-    private static void WalkRecurse(GameObject parent, Float2 pt, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
+    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
     {
         foreach (GameObject child in parent.Children)
         {
@@ -115,10 +115,7 @@ internal static class UIPicker
             RectTransform? rt = child.RectTransform;
             if (rt != null)
             {
-                Rect cr = rt.ComputedRect;
-                bool inside = cr.Size.X > 0 && cr.Size.Y > 0 &&
-                              pt.X >= cr.Min.X && pt.X <= cr.Max.X &&
-                              pt.Y >= cr.Min.Y && pt.Y <= cr.Max.Y;
+                bool inside = UIRaycaster.ContainsCanvasPoint(canvas, rt, pt);
 
                 foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
                 {
@@ -132,7 +129,7 @@ internal static class UIPicker
                 }
             }
 
-            WalkRecurse(child, pt, ref dfs, ref bestGO, ref bestDfs);
+            WalkRecurse(canvas, child, pt, ref dfs, ref bestGO, ref bestDfs);
         }
     }
 }

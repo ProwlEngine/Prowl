@@ -281,6 +281,7 @@ public static class GameObjectInspector
                 Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v,
                     (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true);
                 t.LocalEulerAngles = v;
+                rt.MarkLayoutDirty();
             }).Show();
         });
 
@@ -292,6 +293,7 @@ public static class GameObjectInspector
                 Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x,
                     coalesce: true);
                 t.LocalScale = v;
+                rt.MarkLayoutDirty();
             }).Show();
         });
     }
@@ -439,62 +441,44 @@ public static class GameObjectInspector
 
         InspectorRow.Draw(paper, "gi_rt_pos", "Position", () =>
         {
-            Action<Float2> setterf2 = v =>
+            /*Action<Float2> setterf2 = v =>
             {
                 Undo.RecordGameObjectChange(go, "Change Position", rt.AnchoredPosition, v, (g, x) => g.RectTransform.AnchoredPosition = x, coalesce: true); rt.AnchoredPosition = v;
             };
-            Action<Float3> setterf3 = v3 =>
+            Action<float> setterf3 = v3 =>
             {
-                Undo.RecordGameObjectChange(go, "Change Position", rt.LocalPosition, v3, (g, x) => g.Transform.LocalPosition = x, coalesce: true); rt.LocalPosition = v3;
+                var newPos = new Float3(rt.LocalPosition.X, rt.LocalPosition.Y, v3);
+                Undo.RecordGameObjectChange(go, "Change Position", rt.LocalPosition, newPos, (g, x) => g.Transform.LocalPosition = x, coalesce: true); rt.LocalPosition = newPos;
+            };*/
+
+            Action<float> xsetter = x =>
+            {
+                var newPos = new Float2(x, rt.AnchoredPosition.Y);
+                Undo.RecordGameObjectChange(go, "Change Position", rt.AnchoredPosition, newPos, (g, x) => g.RectTransform.AnchoredPosition = x, coalesce: true);
+                rt.AnchoredPosition = newPos;
             };
-            new VectorField3Builder<float>(paper, "gi_rt_pos_vf", Origami.Current,
+            Action<float> ysetter = y =>
+            {
+                var newPos = new Float2(rt.AnchoredPosition.X, y);
+                Undo.RecordGameObjectChange(go, "Change Position", rt.AnchoredPosition, newPos, (g, x) => g.RectTransform.AnchoredPosition = x, coalesce: true);
+                rt.AnchoredPosition = newPos;
+            };
+            Action<float> zsetter = z =>
+            {
+                var newPos = new Float3(rt.LocalPosition.X, rt.LocalPosition.Y, z);
+                Undo.RecordGameObjectChange(go, "Change Position", rt.LocalPosition, newPos, (g, x) => g.Transform.LocalPosition = x, coalesce: true);
+                rt.LocalPosition = newPos;
+            };
+            /*new VectorField3Builder<float>(paper, "gi_rt_pos_vf", Origami.Current,
                 rt.AnchoredPosition.X, rt.AnchoredPosition.Y, rt.LocalPosition.Z,
                 x => { pos.X = x; setterf2(pos); }, y => { pos.Y = y; setterf2(pos); }, z => { locPos.Z = z; setterf3(locPos); })
-                .Show();
+                .Show();*/
+            var value = new Float3(rt.AnchoredPosition.X, rt.AnchoredPosition.Y, t.LocalPosition.Z);
+            Origami.Float3FieldPerComponent(paper, "gi_rt_apos_vf", value, xsetter, ysetter, zsetter).Show();
+            /*Origami.Float2Field(paper, "gi_rt_apos_vf", rt.AnchoredPosition, setterf2).Show();
+            Origami.NumericField<float>(paper, "gi_rt_lposz_vf", t.LocalPosition.Z, setterf3).Show();*/
         }, EditorTheme.LabelWidth/2f);
 
-        /*using (paper.Row("gi_rt_pos").Height(EditorTheme.RowHeight).RowBetween(4)
-            .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
-        {
-            paper.Box("gi_rt_pos_lbl")
-                .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
-                .IsNotInteractable()
-                .Alignment(TextAlignment.MiddleLeft)
-                .Text("Position", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
-
-            Origami.FloatFieldWithInternalLabel(paper, "gi_rt_posx", (float)rt.AnchoredPosition.X, "X",
-                Color.FromArgb(255, 200, 80, 80))
-                .OnValueChanged(v =>
-                {
-                    var oldVal = rt.AnchoredPosition;
-                    var newVal = new Float2(v, (float)oldVal.Y);
-                    Undo.RecordGameObjectChange(go, "Change AnchoredPosition", oldVal, newVal,
-                        (g, x) => { var r = g.RectTransform; if (r != null) r.AnchoredPosition = x; }, coalesce: true);
-                    rt.AnchoredPosition = newVal;
-                });
-
-            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_posy", (float)rt.AnchoredPosition.Y, "Y",
-                Color.FromArgb(255, 80, 200, 80))
-                .OnValueChanged(v =>
-                {
-                    var oldVal = rt.AnchoredPosition;
-                    var newVal = new Float2((float)oldVal.X, v);
-                    Undo.RecordGameObjectChange(go, "Change AnchoredPosition", oldVal, newVal,
-                        (g, x) => { var r = g.RectTransform; if (r != null) r.AnchoredPosition = x; }, coalesce: true);
-                    rt.AnchoredPosition = newVal;
-                });
-
-            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_posz", (float)t.LocalPosition.Z, "Z",
-                Color.FromArgb(255, 80, 80, 200))
-                .OnValueChanged(v =>
-                {
-                    var oldVal = t.LocalPosition;
-                    var newVal = new Float3((float)oldVal.X, (float)oldVal.Y, v);
-                    Undo.RecordGameObjectChange(go, "Change Position Z", oldVal, newVal,
-                        (g, x) => g.Transform.LocalPosition = x, coalesce: true);
-                    t.LocalPosition = newVal;
-                });
-        }*/
     }
 
     /// <summary>Width / Height row driven by RectTransform.SizeDelta.</summary>
@@ -509,38 +493,6 @@ public static class GameObjectInspector
                 rt.SizeDelta = v;
             }).Show();
         }, EditorTheme.LabelWidth/2f);
-
-        /*using (paper.Row("gi_rt_size").Height(EditorTheme.RowHeight).RowBetween(4)
-            .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
-        {
-            paper.Box("gi_rt_size_lbl")
-                .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
-                .IsNotInteractable()
-                .Alignment(TextAlignment.MiddleLeft)
-                .Text("Size", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
-
-            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_w", (float)rt.SizeDelta.X, "W",
-                Color.FromArgb(255, 200, 80, 80))
-                .OnValueChanged(v =>
-                {
-                    var oldVal = rt.SizeDelta;
-                    var newVal = new Float2(v, (float)oldVal.Y);
-                    Undo.RecordGameObjectChange(go, "Change SizeDelta", oldVal, newVal,
-                        (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
-                    rt.SizeDelta = newVal;
-                });
-
-            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_h", (float)rt.SizeDelta.Y, "H",
-                Color.FromArgb(255, 80, 200, 80))
-                .OnValueChanged(v =>
-                {
-                    var oldVal = rt.SizeDelta;
-                    var newVal = new Float2((float)oldVal.X, v);
-                    Undo.RecordGameObjectChange(go, "Change SizeDelta", oldVal, newVal,
-                        (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
-                    rt.SizeDelta = newVal;
-                });
-        }*/
     }
 
     private static void DrawPivotRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
@@ -556,37 +508,6 @@ public static class GameObjectInspector
             }).Show();
         }, EditorTheme.LabelWidth/2f);
 
-        /*using (paper.Row("gi_rt_pivot").Height(EditorTheme.RowHeight).RowBetween(4)
-            .Margin(UnitValue.Auto, EditorTheme.Spacing).Enter())
-        {
-            paper.Box("gi_rt_pivot_lbl")
-                .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
-                .IsNotInteractable()
-                .Alignment(TextAlignment.MiddleLeft)
-                .Text("Pivot", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
-
-            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_pivx", (float)rt.Pivot.X, "X",
-                Color.FromArgb(255, 200, 80, 80))
-                .OnValueChanged(v =>
-                {
-                    var oldVal = rt.Pivot;
-                    var newVal = new Float2(v, (float)oldVal.Y);
-                    Undo.RecordGameObjectChange(go, "Change Pivot", oldVal, newVal,
-                        (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
-                    rt.Pivot = newVal;
-                });
-
-            EditorGUI.FloatFieldWithInternalLabel(paper, "gi_rt_pivy", (float)rt.Pivot.Y, "Y",
-                Color.FromArgb(255, 80, 200, 80))
-                .OnValueChanged(v =>
-                {
-                    var oldVal = rt.Pivot;
-                    var newVal = new Float2((float)oldVal.X, v);
-                    Undo.RecordGameObjectChange(go, "Change Pivot", oldVal, newVal,
-                        (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
-                    rt.Pivot = newVal;
-                });
-        }*/
     }
 
     // ================================================================
