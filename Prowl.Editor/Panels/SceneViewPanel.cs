@@ -60,14 +60,14 @@ public class SceneViewPanel : DockPanel
         using (paper.Column("sv_root").Size(width, height).Enter())
         {
             DrawToolbar(paper, font);
-            DrawViewport(paper, font, width, height - EditorTheme.MenuBarHeight);
+            DrawViewport(paper, font, width, height - EditorTheme.RowHeight);
         }
     }
 
     private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Row("sv_toolbar")
-            .Height(EditorTheme.MenuBarHeight)
+            .Height(EditorTheme.RowHeight)
             .Enter())
         {
             // Let active scene view editor draw its toolbar first
@@ -734,7 +734,7 @@ public class SceneViewPanel : DockPanel
         // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
             .PositionType(PositionType.SelfDirected)
-            .Position(width - cubeSize - 8, 8 + EditorTheme.MenuBarHeight)
+            .Position(width - cubeSize - 8, 8 + EditorTheme.RowHeight)
             .Size(cubeSize, cubeSize)
             .OnPostLayout((handle, rect) => paper.DrawForeground(ref handle, (canvas, r) =>
             {

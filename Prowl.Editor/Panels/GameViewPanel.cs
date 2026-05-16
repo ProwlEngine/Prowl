@@ -59,7 +59,7 @@ public class GameViewPanel : DockPanel
         {
             DrawToolbar(paper, font, width);
 
-            float viewH = height - EditorTheme.MenuBarHeight;
+            float viewH = height - EditorTheme.RowHeight;
             DrawGameView(paper, font, width, viewH);
         }
     }
@@ -67,7 +67,7 @@ public class GameViewPanel : DockPanel
     private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
     {
         using (paper.Row("gv_toolbar")
-            .Height(EditorTheme.MenuBarHeight)
+            .Height(EditorTheme.RowHeight)
             .ChildLeft(6).ChildRight(6).RowBetween(6)
             .ChildTop(2).ChildBottom(2)
             .Enter())
