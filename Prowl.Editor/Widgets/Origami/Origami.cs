@@ -139,6 +139,34 @@ public static class Origami
         }
     }
 
+    // ── Frame lifecycle ─────────────────────────────────────────
+
+    /// <summary>
+    /// Call once at the start of each frame before any Origami widgets are drawn.
+    /// Advances theme transitions and resets per-frame state.
+    /// </summary>
+    /// <param name="paper">Paper instance for this frame.</param>
+    /// <param name="deltaSeconds">Frame delta time in seconds.</param>
+    public static void BeginFrame(PaperUI.Paper paper, float deltaSeconds)
+    {
+        TickTransition(deltaSeconds);
+    }
+
+    /// <summary>
+    /// Call once at the end of each frame after all user widgets are drawn.
+    /// Renders overlay systems (drag-drop, context menus, modals, toasts, tooltips).
+    /// </summary>
+    /// <param name="paper">Paper instance for this frame.</param>
+    public static void EndFrame(PaperUI.Paper paper)
+    {
+        DragDrop.Update(paper);
+        DragDrop.DrawVisual(paper);
+        OrigamiUI.ContextMenu.Tick();
+        OrigamiUI.Modal.Draw(paper);
+        OrigamiUI.Toasts.Draw(paper);
+        TooltipSystem.Draw(paper);
+    }
+
     // ── Widget factories ─────────────────────────────────────────
 
     /// <summary>Begin building a foldout. Terminate with <c>.Body(...)</c> to render.</summary>

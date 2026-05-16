@@ -364,9 +364,10 @@ public class EditorApplication : Game
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
 
-        // Push the editor's Origami theme persists until EndGui disposes it
+        // Push the editor's Origami theme and begin frame
         _origamiScope?.Dispose();
         _origamiScope = EditorTheme.PushOrigami();
+        OrigamiUI.Origami.BeginFrame(paper, (float)Time.UnscaledDeltaTime);
 
         // Detect project opened (launcher closed since last frame)
         if (!ProjectLauncher.IsOpen && !_introClosing && _launcherWasOpen)
@@ -696,16 +697,11 @@ public class EditorApplication : Game
 
     public override void EndGui(Paper paper)
     {
-        // Drag & drop update + visual
-        DragDrop.Update(paper);
-        DragDrop.DrawVisual(paper);
-
-        // Systems drawn on top (Overlay/Topmost layers)
-        OrigamiUI.ContextMenu.Tick();
-        OrigamiUI.Modal.Draw(paper);
+        // Flush save batch before overlays
         Widgets.SaveBatch.Flush();
-        Toasts.Draw(paper);
-        OrigamiUI.TooltipSystem.Draw(paper);
+
+        // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
+        OrigamiUI.Origami.EndFrame(paper);
 
         // Intro animation overlay
         if (_introTime < IntroDuration)
