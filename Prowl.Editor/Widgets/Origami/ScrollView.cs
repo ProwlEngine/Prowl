@@ -236,6 +236,38 @@ public sealed class ScrollViewBuilder
                     .BackgroundColor(ramp.C200)
                     .IsNotInteractable();
             }
+
+            // Auto-scroll when dragging near edges (DragDrop integration).
+            // Runs inside OnPostLayout so it has the final screen rect and can
+            // adjust scrollY directly - no cross-frame state needed.
+            if (_vertical && DragDrop.IsDragging)
+            {
+                var capturedOuter2 = outerHandle;
+                float capturedHeight = _height;
+                string capturedId = _id;
+                outer.OnPostLayout((handle, rect) =>
+                {
+                    float top = (float)rect.Min.Y;
+                    float bottom = top + capturedHeight;
+                    float my = (float)_paper.PointerPos.Y;
+                    float edgeZone = 40f;
+                    float speed = 300f * _paper.DeltaTime;
+
+                    float nudge = 0;
+                    if (my > top && my < top + edgeZone)
+                        nudge = -speed * (1f - (my - top) / edgeZone);
+                    else if (my < bottom && my > bottom - edgeZone)
+                        nudge = speed * (1f - (bottom - my) / edgeZone);
+
+                    if (nudge != 0)
+                    {
+                        float cur = _paper.GetElementStorage(capturedOuter2, "scrollY", 0f);
+                        float cH = _paper.GetElementStorage(capturedOuter2, "contentH", capturedHeight);
+                        float max = MathF.Max(0f, cH - capturedHeight);
+                        _paper.SetElementStorage(capturedOuter2, "scrollY", Clamp(cur + nudge, 0f, max));
+                    }
+                });
+            }
         }
     }
 
