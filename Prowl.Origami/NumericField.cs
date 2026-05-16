@@ -161,6 +161,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             .ReadOnly(_readOnly)
             .Placeholder(_placeholder)
             .SelectAllOnFocus(_selectAllOnFocus)
+            .SubmitOnEnter()
             .CharFilter(NumericCharFilter);
 
         if (!string.IsNullOrEmpty(_leadingIconGlyph))
