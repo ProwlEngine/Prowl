@@ -309,6 +309,12 @@ public static class Origami
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
 
+    // ── Chat bubble factory ────────────────────────────────────
+
+    /// <summary>Begin building a chat bubble. Provide content via the draw callback, then call .Show().</summary>
+    public static ChatBubbleBuilder ChatBubble(Paper paper, string id, Action<Paper> content)
+        => new ChatBubbleBuilder(paper, id, content, Current);
+
     // ── Breadcrumb factory ─────────────────────────────────────
 
     /// <summary>Begin building a breadcrumb navigation trail.</summary>
