@@ -6,7 +6,6 @@ using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
-using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;

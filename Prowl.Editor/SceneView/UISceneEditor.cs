@@ -3,7 +3,7 @@
 
 using System;
 
-using Prowl.Editor.Gizmo;
+using Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;

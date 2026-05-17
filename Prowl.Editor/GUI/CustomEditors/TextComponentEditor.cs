@@ -1,7 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -41,7 +41,7 @@ public class TextComponentEditor : CustomEditor
         // ── Main Settings ─────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_main", "Main Settings").Show();
 
-        PropertyGrid.DrawField(paper, $"{id}_font", "Font Asset", typeof(FontAsset), text.Font,
+        PropertyGridUtils.DrawField(paper, $"{id}_font", "Font Asset", typeof(FontAsset), text.Font,
             v => text.Font = (FontAsset)v!, 0);
 
         paper.Box($"{id}_sp0.1").Height(6);
@@ -63,7 +63,7 @@ public class TextComponentEditor : CustomEditor
         // ── Extra Settings ────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_extra", "Extra Settings").Show();
 
-        PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(Runtime.Resources.Material), text.Material,
+        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Runtime.Resources.Material), text.Material,
             v => text.Material = v as Runtime.Resources.Material, 0);
     }
 

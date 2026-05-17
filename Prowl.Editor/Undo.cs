@@ -757,11 +757,7 @@ public static class Undo
                     try
                     {
                         var value = field.GetValue(temp);
-                        // Route through the backing property setter when one exists, so the
-                        // value-change checks / dirty-marking that components rely on (e.g. a
-                        // GameCanvas being flagged for rebuild) also fire on undo/redo — a raw
-                        // field write would silently skip them.
-                        Widgets.PropertyGrid.ApplyFieldValue(target, field, value);
+                        field.SetValue(target, value);
                     }
                     catch
                     {
