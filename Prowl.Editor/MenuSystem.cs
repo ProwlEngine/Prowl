@@ -2,52 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.OrigamiUI;
+
 namespace Prowl.Editor;
-
-public class MenuItem
-{
-    public string Label;
-    public Action? OnClick;
-    public List<MenuItem> SubItems = new();
-    public bool IsSeparator;
-    public Func<bool>? IsCheckedFunc;
-
-    // Static enabled (set once at registration)
-    private bool _enabled = true;
-
-    // Dynamic overrides checked every frame if set
-    public Func<bool>? IsEnabledFunc;
-    public Func<string>? DynamicLabelFunc;
-
-    public bool IsEnabled
-    {
-        get => IsEnabledFunc?.Invoke() ?? _enabled;
-        set => _enabled = value;
-    }
-
-    public string DisplayLabel => DynamicLabelFunc?.Invoke() ?? Label;
-
-    public bool IsChecked => IsCheckedFunc?.Invoke() ?? false;
-    public bool HasSubItems => SubItems.Count > 0;
-
-    public MenuItem(string label, Action? onClick = null)
-    {
-        Label = label;
-        OnClick = onClick;
-    }
-
-    public static MenuItem Separator() => new("") { IsSeparator = true };
-}
 
 /// <summary>
 /// Central menu registry. Items are registered by path (e.g. "File/Save Scene").
 /// The menu bar reads from this to build dropdowns.
+/// Uses Origami's AppMenuItem directly - no conversion needed.
 /// </summary>
 public static class MenuRegistry
 {
-    private static readonly List<MenuItem> _rootMenus = new();
+    private static readonly List<AppMenuItem> _rootMenus = new();
 
-    public static IReadOnlyList<MenuItem> RootMenus => _rootMenus;
+    public static IReadOnlyList<AppMenuItem> RootMenus => _rootMenus;
 
     /// <summary>
     /// Register a menu item at the given path.
@@ -78,7 +46,7 @@ public static class MenuRegistry
                 }
                 else
                 {
-                    current.Add(new MenuItem(seg, onClick)
+                    current.Add(new AppMenuItem(seg, onClick)
                     {
                         IsEnabled = enabled,
                         IsCheckedFunc = isChecked,
@@ -91,7 +59,7 @@ public static class MenuRegistry
             {
                 if (existing == null)
                 {
-                    existing = new MenuItem(seg);
+                    existing = new AppMenuItem(seg);
                     current.Add(existing);
                 }
                 current = existing.SubItems;
@@ -114,7 +82,7 @@ public static class MenuRegistry
             current = existing.SubItems;
         }
 
-        current.Add(MenuItem.Separator());
+        current.Add(AppMenuItem.Separator());
     }
 
     public static void Clear() => _rootMenus.Clear();

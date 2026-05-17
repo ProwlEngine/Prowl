@@ -784,28 +784,9 @@ public class EditorApplication : Game
 
         foreach (var root in items)
             if (root.HasSubItems)
-                bar.Menu(root.Label, ConvertMenuItems(root.SubItems));
+                bar.Menu(root.Label, root.SubItems);
 
         bar.Show();
-    }
-
-    private static List<AppMenuItem> ConvertMenuItems(List<MenuItem> source)
-    {
-        var result = new List<AppMenuItem>();
-        foreach (var item in source)
-        {
-            if (item.IsSeparator) { result.Add(AppMenuItem.Separator()); continue; }
-            var c = new AppMenuItem(item.Label, item.OnClick)
-            {
-                IsCheckedFunc = item.IsCheckedFunc,
-                IsEnabledFunc = item.IsEnabledFunc,
-                DynamicLabelFunc = item.DynamicLabelFunc,
-                IsEnabled = item.IsEnabled,
-            };
-            if (item.HasSubItems) c.SubItems = ConvertMenuItems(item.SubItems);
-            result.Add(c);
-        }
-        return result;
     }
 
     // ================================================================
