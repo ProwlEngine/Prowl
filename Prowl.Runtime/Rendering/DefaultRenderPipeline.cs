@@ -140,6 +140,7 @@ public class DefaultRenderPipeline : RenderPipeline
         foreach (var effect in effects)
         {
             effect.OnRenderEffect(context);
+            RenderStats.AddImageEffect();
         }
     }
 
@@ -325,6 +326,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // =======================================================
         // 10. Forward Opaque Rendering shaders do PBR lighting inline
         //     Depth test is LEqual against pre-pass depth (same geometry = equal depth = passes)
+        RenderStats.BeginColorPass();
         DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
 
         // =======================================================
@@ -372,6 +374,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // =======================================================
         // 11. AfterOpaques effects (GTAO, SSR, etc.)
+        RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
             var afterContext = new RenderContext
@@ -387,14 +390,19 @@ public class DefaultRenderPipeline : RenderPipeline
             ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
         }
 
+        RenderStats.EndPostFx();
+
         // =======================================================
         // 13. Transparent geometry (forward, sorted back-to-front)
         Graphics.BindFramebuffer(colorRT.frameBuffer);
         List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
         DrawRenderables(sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false);
 
+        RenderStats.EndColorPass();
+
         // =======================================================
         // 14. PostProcess effects
+        RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.PostProcess].Count > 0)
         {
             var postContext = new RenderContext
@@ -418,6 +426,8 @@ public class DefaultRenderPipeline : RenderPipeline
                     RenderTexture.ReleaseTemporaryRT(oldRT);
             }
         }
+
+        RenderStats.EndPostFx();
 
         // =======================================================
         // 15. Gizmos

@@ -27,6 +27,7 @@ public class GameViewPanel : DockPanel
     private RenderTexture? _rt;
     private int _resolutionIndex = 0;
     private bool _showStats;
+    private RenderStats.Frame _gameStats; // snapshot from last game render (persists when paused)
 
     // Separate Paper instance for in-game UI
     private PaperRenderer? _gamePaperRenderer;
@@ -156,6 +157,7 @@ public class GameViewPanel : DockPanel
                 cam.Target = origTarget;
             }
             RenderStats.EndFrame();
+            _gameStats = RenderStats.Last; // snapshot for stats overlay (persists when paused/stepped)
 
             // Render game UI into the RT
             if (Application.IsPlaying && _rt != null)
@@ -264,100 +266,190 @@ public class GameViewPanel : DockPanel
 
     private void DrawStats(Paper paper, Prowl.Scribe.FontFile font, float rightEdge, float top, float displayW)
     {
-        const float panelW = 250f;
-        float pad = EditorTheme.Padding;
-        float margin = EditorTheme.Padding * 2f;
-        float x = rightEdge - panelW - margin;
-        float y = top + margin;
+        const float panelW = 220f;
+        const float graphH = 50f;
+        const float rowH = 13f;
+        float pad = 7f;
+        float x = rightEdge - panelW - 6;
+        float y = top + 6;
+        float fs = EditorTheme.FontSize - 4;
 
-        // Background card anchored top-right of the game viewport
+        var s = _gameStats;
+        float fps = s.FrameTimeMs > 0 ? 1000f / s.FrameTimeMs : 0;
+
         using (paper.Column("gv_stats")
             .PositionType(PositionType.SelfDirected)
             .Position(x, y)
             .Width(panelW).Height(UnitValue.Auto)
-            .BackgroundColor(Color.FromArgb(220, EditorTheme.Neutral200.R, EditorTheme.Neutral200.G, EditorTheme.Neutral200.B))
-            .Rounded(EditorTheme.Roundness)
-            .Padding(pad + 2, pad + 2, pad + 2, pad + 2)
-            .ColBetween(EditorTheme.Spacing)
+            .BackgroundColor(Color.FromArgb(230, 16, 16, 20))
+            .Rounded(5).Padding(pad, pad, pad, pad).ColBetween(1)
             .Enter())
         {
-            // Header
-            paper.Box("gv_stats_hdr")
-                .Height(EditorTheme.RowHeight - 4)
-                .Text("Statistics", font)
-                .TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 2)
-                .Alignment(TextAlignment.MiddleLeft);
+            // FPS + frame time
+            using (paper.Row("gv_st_fps").Height(16).Enter())
+            {
+                paper.Box("gv_st_fps_v")
+                    .Text($"{fps:F0} FPS", font).TextColor(FpsColor(fps))
+                    .FontSize(fs + 3).Alignment(TextAlignment.MiddleLeft);
+                paper.Box("gv_st_fps_ms")
+                    .Text($"{s.FrameTimeMs:F1}ms", font).TextColor(Dim)
+                    .FontSize(fs).Alignment(TextAlignment.MiddleRight);
+            }
 
-            paper.Box("gv_stats_sep")
-                .Height(1).BackgroundColor(EditorTheme.Ink200);
+            // Graph
+            paper.Box("gv_st_graph")
+                .Width(UnitValue.Stretch()).Height(graphH)
+                .IsNotInteractable()
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                    DrawFrameTimeGraph(canvas, r, font)));
 
-            // Frame timing
-            float fps = 1f / MathF.Max(0.0001f, (float)Time.UnscaledDeltaTime);
-            float ms = (float)Time.UnscaledDeltaTime * 1000f;
-            DrawStatRow(paper, font, "gv_st_fps", "FPS", $"{fps:F0}  ({ms:F2} ms)", EditorTheme.Ink500);
-
+            // General info
             if (_rt != null)
-                DrawStatRow(paper, font, "gv_st_res", "Resolution", $"{_rt.Width} x {_rt.Height}");
+                Row(paper, font, "gv_r", $"{_rt.Width}x{_rt.Height}", $"{s.Cameras} cam", fs, rowH);
 
-            var s = RenderStats.Last;
+            // Target (color pass)
+            int cullPct = s.RenderablesCollected > 0 ? (int)(s.RenderablesCulled * 100f / s.RenderablesCollected) : 0;
+            long colorTris = s.Triangles - s.ShadowTriangles;
+            long colorVerts = s.Vertices - s.ShadowVertices;
 
-            DrawStatHeader(paper, font, "gv_st_hdr_draw", "Render");
-            DrawStatRow(paper, font, "gv_st_draws", "Draw Calls", s.DrawCalls.ToString());
-            DrawStatRow(paper, font, "gv_st_inst", "Instanced", s.InstancedDrawCalls.ToString());
-            DrawStatRow(paper, font, "gv_st_batch", "Batches", s.Batches.ToString());
-            DrawStatRow(paper, font, "gv_st_tris", "Triangles", FormatCount(s.Triangles));
-            DrawStatRow(paper, font, "gv_st_verts", "Vertices", FormatCount(s.Vertices));
+            Section(paper, font, "gv_ht", "TARGET", $"{s.ColorPassMs:F2}ms", fs);
+            Row(paper, font, "gv_tdc", "Draws", $"{s.DrawCalls} ({s.InstancedDrawCalls} inst)", fs, rowH,
+                "Individual GPU draw commands issued this frame. Each draw sends geometry to the GPU. Instanced draws render multiple copies in a single call.");
+            Row(paper, font, "gv_tba", "Batches", s.Batches.ToString(), fs, rowH,
+                "Groups of draw calls sharing the same material and render state. Fewer batches means less CPU overhead from state changes between draws.");
+            Row(paper, font, "gv_ttr", "Tris / Verts", $"{FormatCount(colorTris)} / {FormatCount(colorVerts)}", fs, rowH,
+                "Total triangles and vertices submitted to the GPU for the color pass. High counts impact GPU fill rate and vertex processing.");
+            Row(paper, font, "gv_tcu", "Culled", $"{s.RenderablesCulled}/{s.RenderablesCollected} ({cullPct}%)", fs, rowH,
+                "Objects removed by frustum culling before rendering. Higher percentage means more objects are outside the camera view and skipped.");
+            Row(paper, font, "gv_tlt", "Lights", $"D:{s.DirectionalLights} P:{s.PointLights} S:{s.SpotLights}", fs, rowH,
+                "Active lights this frame. D = Directional (sun), P = Point (omni), S = Spot. Each light adds a lighting pass over affected geometry.");
 
-            DrawStatHeader(paper, font, "gv_st_hdr_cull", "Culling");
-            DrawStatRow(paper, font, "gv_st_coll", "Collected", s.RenderablesCollected.ToString());
-            DrawStatRow(paper, font, "gv_st_drawn", "Drawn", s.RenderablesDrawn.ToString());
-            DrawStatRow(paper, font, "gv_st_culled", "Culled", s.RenderablesCulled.ToString());
+            // Shadows
+            if (s.ShadowPasses > 0 || s.ShadowCasters > 0)
+            {
+                int shCullPct = s.ShadowRenderablesCollected > 0
+                    ? (int)(s.ShadowRenderablesCulled * 100f / s.ShadowRenderablesCollected) : 0;
 
-            DrawStatHeader(paper, font, "gv_st_hdr_light", "Lighting");
-            DrawStatRow(paper, font, "gv_st_lights",
-                "Lights",
-                $"{s.Lights}  (D:{s.DirectionalLights} P:{s.PointLights} S:{s.SpotLights})");
-            DrawStatRow(paper, font, "gv_st_shadow_casters", "Shadow Casters", s.ShadowCasters.ToString());
-            DrawStatRow(paper, font, "gv_st_shadow_draws", "Shadow Draws", s.ShadowDrawCalls.ToString());
+                Section(paper, font, "gv_hs", "SHADOWS", $"{s.ShadowPassMs:F2}ms", fs);
+                Row(paper, font, "gv_sdc", "Draws", $"{s.ShadowDrawCalls} ({s.ShadowInstancedDrawCalls} inst)", fs, rowH,
+                    "Draw calls for shadow map rendering. Each shadow-casting light renders the scene from its perspective to build depth maps.");
+                Row(paper, font, "gv_spa", "Passes", s.ShadowPasses.ToString(), fs, rowH,
+                    "Number of shadow map renders. Directional lights use cascaded shadow maps (multiple passes per light). Point lights use 6 passes (cube map).");
+                Row(paper, font, "gv_str", "Tris / Verts", $"{FormatCount(s.ShadowTriangles)} / {FormatCount(s.ShadowVertices)}", fs, rowH,
+                    "Geometry rendered into shadow maps. This is additional to the color pass geometry and can be a major cost with many shadow casters.");
+                Row(paper, font, "gv_scu", "Culled", $"{s.ShadowRenderablesCulled}/{s.ShadowRenderablesCollected} ({shCullPct}%)", fs, rowH,
+                    "Objects culled from shadow map rendering. Each shadow pass has its own frustum so culling rates differ from the camera.");
+                Row(paper, font, "gv_sca", "Casters", s.ShadowCasters.ToString(), fs, rowH,
+                    "Lights with shadow mapping enabled. Each shadow caster adds one or more shadow passes to the frame.");
+            }
+
+            // Post FX (only when active)
+            if (s.ImageEffects > 0)
+            {
+                Section(paper, font, "gv_hf", "POST FX", $"{s.PostFxMs:F2}ms", fs);
+                Row(paper, font, "gv_fx", $"{s.ImageEffects} effects", $"{s.ImageEffectPasses} passes", fs, rowH,
+                    "Post-processing effects applied after rendering (bloom, tone mapping, SSAO, etc). Each effect may use multiple full-screen passes.");
+            }
         }
     }
 
-    private static void DrawStatHeader(Paper paper, Prowl.Scribe.FontFile font, string id, string label)
-    {
-        paper.Box($"{id}_sp").Height(EditorTheme.Spacing);
-        paper.Box(id)
-            .Height(EditorTheme.RowHeight - 6)
-            .Text(label, font)
-            .TextColor(EditorTheme.Purple600)
-            .FontSize(EditorTheme.FontSize - 4)
-            .Alignment(TextAlignment.MiddleLeft);
-    }
+    private static readonly Color Dim = Color.FromArgb(140, 160, 160, 170);
+    private static readonly Color Val = Color.FromArgb(255, 220, 220, 230);
+    private static readonly Color Hdr = Color.FromArgb(255, 140, 115, 200);
 
-    private static void DrawStatRow(Paper paper, Prowl.Scribe.FontFile font, string id, string label, string value, Color? valueColor = null)
+    private static void DrawFrameTimeGraph(Prowl.Quill.Canvas canvas, Rect r, Prowl.Scribe.FontFile? font)
     {
-        using (paper.Row(id).Height(EditorTheme.RowHeight - 6).Enter())
+        float x = (float)r.Min.X, y = (float)r.Min.Y;
+        float w = (float)r.Size.X, h = (float)r.Size.Y;
+        var history = RenderStats.FrameTimeHistory;
+        int head = RenderStats.FrameTimeIndex;
+        int len = history.Length;
+
+        canvas.RoundedRectFilled(x, y, w, h, 3, 3, 3, 3,
+            Prowl.Vector.Color32.FromArgb(255, 10, 10, 14));
+
+        float maxMs = 8f;
+        for (int i = 0; i < len; i++)
+            if (history[i] > maxMs) maxMs = history[i];
+        maxMs = MathF.Ceiling(maxMs / 8f) * 8f;
+
+        float gx = x + 1, gy = y + 1, gw = w - 2, gh = h - 2;
+
+        // Target lines
+        DrawTargetLine(canvas, font, gx, gy, gw, gh, maxMs, 16.67f, "60",
+            Prowl.Vector.Color32.FromArgb(35, 80, 200, 100));
+        DrawTargetLine(canvas, font, gx, gy, gw, gh, maxMs, 33.33f, "30",
+            Prowl.Vector.Color32.FromArgb(35, 220, 180, 50));
+
+        // Bars
+        float barW = gw / len;
+        for (int i = 0; i < len; i++)
         {
-            paper.Box($"{id}_l")
-                .Text(label, font)
-                .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 3)
-                .Alignment(TextAlignment.MiddleLeft);
-
-            paper.Box($"{id}_v")
-                .Text(value, font)
-                .TextColor(valueColor ?? EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 3)
-                .Alignment(TextAlignment.MiddleRight);
+            float ms = history[(head + i) % len];
+            if (ms <= 0) continue;
+            float barH = MathF.Min((ms / maxMs) * gh, gh);
+            var col = ms < 16.67f ? Prowl.Vector.Color32.FromArgb(200, 70, 190, 110)
+                : ms < 33.33f ? Prowl.Vector.Color32.FromArgb(200, 210, 170, 50)
+                : Prowl.Vector.Color32.FromArgb(200, 210, 55, 55);
+            canvas.RectFilled(gx + i * barW, gy + gh - barH, MathF.Max(1, barW - 0.5f), barH, col);
         }
     }
 
-    private static string FormatCount(long n)
+    private static void DrawTargetLine(Prowl.Quill.Canvas canvas, Prowl.Scribe.FontFile? font,
+        float gx, float gy, float gw, float gh, float maxMs, float targetMs, string label,
+        Prowl.Vector.Color32 color)
     {
-        if (n >= 1_000_000) return $"{n / 1_000_000.0:F2}M";
-        if (n >= 1_000) return $"{n / 1_000.0:F2}K";
-        return n.ToString();
+        float ly = gy + gh - (targetMs / maxMs) * gh;
+        if (ly <= gy || ly >= gy + gh) return;
+        canvas.SetStrokeColor(color); canvas.SetStrokeWidth(0.5f);
+        canvas.BeginPath(); canvas.MoveTo(gx, ly); canvas.LineTo(gx + gw, ly); canvas.Stroke();
+        if (font != null)
+            canvas.DrawText(label, gx + 1, ly - 8, color, 7, font, 0);
     }
+
+    private static void Section(Paper paper, Prowl.Scribe.FontFile font, string id, string label, float fs)
+        => Section(paper, font, id, label, null, fs);
+
+    private static void Section(Paper paper, Prowl.Scribe.FontFile font, string id, string label, string? timing, float fs)
+    {
+        paper.Box($"{id}_s").Height(2);
+        if (timing != null)
+        {
+            using (paper.Row(id).Height(11).Enter())
+            {
+                paper.Box($"{id}_l").Text(label, font).TextColor(Hdr)
+                    .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
+                paper.Box($"{id}_t").Text(timing, font).TextColor(Dim)
+                    .FontSize(fs - 1).Alignment(TextAlignment.MiddleRight);
+            }
+        }
+        else
+        {
+            paper.Box(id).Height(11).Text(label, font).TextColor(Hdr)
+                .FontSize(fs - 1).Alignment(TextAlignment.MiddleLeft);
+        }
+    }
+
+    private static void Row(Paper paper, Prowl.Scribe.FontFile font, string id,
+        string left, string right, float fs, float h, string? tooltip = null)
+    {
+        using (paper.Row(id).Height(h).Enter())
+        {
+            var lbl = paper.Box($"{id}_l").Text(left, font).TextColor(Dim).FontSize(fs).Alignment(TextAlignment.MiddleLeft);
+            if (tooltip != null) lbl.Tooltip(tooltip);
+            paper.Box($"{id}_r").Text(right, font).TextColor(Val).FontSize(fs).Alignment(TextAlignment.MiddleRight);
+        }
+    }
+
+    private static Color FpsColor(float fps) =>
+        fps >= 55 ? Color.FromArgb(255, 90, 210, 120) :
+        fps >= 28 ? Color.FromArgb(255, 220, 190, 50) :
+        Color.FromArgb(255, 220, 65, 65);
+
+    private static string FormatCount(long n) =>
+        n >= 1_000_000 ? $"{n / 1_000_000.0:F1}M" :
+        n >= 1_000 ? $"{n / 1_000.0:F1}K" :
+        n.ToString();
 
     private void EnsureGamePaper(int w, int h)
     {
