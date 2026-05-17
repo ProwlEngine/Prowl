@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Core;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;

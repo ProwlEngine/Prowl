@@ -17,7 +17,6 @@ using Prowl.Vector;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.GUI;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Projects.Scripting;

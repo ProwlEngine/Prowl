@@ -7,7 +7,7 @@ using System.Reflection;
 
 using Prowl.Runtime;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Decorate a static method <c>string Generate(string className)</c> to register it as a

@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;

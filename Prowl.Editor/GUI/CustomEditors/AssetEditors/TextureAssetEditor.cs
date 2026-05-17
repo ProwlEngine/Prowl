@@ -2,7 +2,7 @@ using System;
 using System.IO;
 
 using Prowl.Echo;
-using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;

@@ -10,10 +10,10 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Projects;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Inspector")]

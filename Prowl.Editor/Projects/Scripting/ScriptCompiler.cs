@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Projects.Settings;
 
 namespace Prowl.Editor.Projects.Scripting;

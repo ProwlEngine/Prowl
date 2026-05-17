@@ -8,8 +8,8 @@ using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects;
 
 namespace Prowl.Editor;
 

@@ -13,11 +13,11 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Utils;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Projects;
 
 namespace Prowl.Editor.GUI.Panels;
 

@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Widgets;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Projects.Settings;

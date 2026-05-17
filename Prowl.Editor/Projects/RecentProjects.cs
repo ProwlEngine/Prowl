@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.Projects;
 
 public class RecentProjectEntry
 {

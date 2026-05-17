@@ -4,8 +4,8 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
-using Prowl.Editor.AssetsDatabase;
-using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;

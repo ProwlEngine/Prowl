@@ -10,8 +10,8 @@ using Prowl.Runtime.Resources;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.PropertyEditors;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Projects;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Material))]

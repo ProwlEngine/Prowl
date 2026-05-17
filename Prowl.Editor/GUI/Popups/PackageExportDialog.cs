@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;

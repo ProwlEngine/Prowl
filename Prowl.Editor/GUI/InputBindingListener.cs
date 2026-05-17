@@ -2,7 +2,7 @@ using System;
 
 using Prowl.Runtime;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Listens for the next key/mouse/gamepad input and reports it as an InputBinding.

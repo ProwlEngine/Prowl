@@ -1,6 +1,6 @@
 using System;
 
-using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

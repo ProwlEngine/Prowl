@@ -2,9 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 
-using Prowl.Editor.Core;
-
-namespace Prowl.Editor.AssetsDatabase;
+namespace Prowl.Editor.Projects;
 
 /// <summary>
 /// Represents a Prowl project on disk.

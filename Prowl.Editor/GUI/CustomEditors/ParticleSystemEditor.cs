@@ -13,6 +13,7 @@ using Gradient = Prowl.Runtime.Gradient;
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Inspector;
 
 // ================================================================

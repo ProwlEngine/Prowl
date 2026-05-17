@@ -4,7 +4,7 @@ using System.Reflection;
 
 using Prowl.PaperUI;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Attribute to register a custom editor for a specific type.

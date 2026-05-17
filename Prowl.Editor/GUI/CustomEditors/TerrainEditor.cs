@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;

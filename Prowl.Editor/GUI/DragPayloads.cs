@@ -9,7 +9,7 @@ using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.GUI;
 
 /// <summary>Payload for dragging assets from the Project panel.</summary>
 public class AssetDragPayload : DragPayload

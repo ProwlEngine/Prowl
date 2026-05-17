@@ -1,8 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;

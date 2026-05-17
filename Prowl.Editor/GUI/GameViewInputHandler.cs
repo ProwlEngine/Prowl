@@ -3,7 +3,7 @@ using System;
 using Prowl.Runtime;
 using Prowl.Vector;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Input handler for play mode that only forwards keyboard/mouse input

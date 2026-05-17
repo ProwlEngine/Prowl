@@ -1,4 +1,4 @@
-using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;

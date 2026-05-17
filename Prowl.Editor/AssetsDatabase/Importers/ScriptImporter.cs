@@ -1,6 +1,6 @@
 using System.IO;
 
-using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 
 namespace Prowl.Editor.Importers;

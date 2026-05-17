@@ -8,11 +8,11 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Core.Tasks;
+using Prowl.Editor.Projects;
 
 namespace Prowl.Editor;
 

@@ -12,7 +12,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.GUI;
 
 /// <summary>[Header("text")] - draws a header label above the field.</summary>
 public class HeaderAttributeHandler : OrigamiUI.AttributeHandler

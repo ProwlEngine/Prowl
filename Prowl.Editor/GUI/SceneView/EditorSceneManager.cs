@@ -8,9 +8,9 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Core;
+using Prowl.Editor.Projects;
 
 namespace Prowl.Editor.GUI.SceneView;
 

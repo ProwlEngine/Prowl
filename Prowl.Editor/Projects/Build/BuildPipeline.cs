@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
-using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
 

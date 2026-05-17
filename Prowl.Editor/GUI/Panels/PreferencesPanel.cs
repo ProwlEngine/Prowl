@@ -13,6 +13,7 @@ using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 
 namespace Prowl.Editor.GUI.Panels;
 

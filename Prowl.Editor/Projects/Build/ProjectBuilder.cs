@@ -6,9 +6,9 @@ using System.Diagnostics;
 using System.IO;
 
 using Prowl.Echo;
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;

@@ -8,8 +8,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Runtime;

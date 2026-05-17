@@ -17,6 +17,7 @@ using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>

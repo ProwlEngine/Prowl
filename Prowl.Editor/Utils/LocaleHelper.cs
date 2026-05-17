@@ -4,7 +4,7 @@
 using Prowl.Editor.Theming;
 using Prowl.Rosetta;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Editor.Utils;
 
 /// <summary>
 /// Shared locale data for the language dropdown in Preferences and the Project Launcher.
