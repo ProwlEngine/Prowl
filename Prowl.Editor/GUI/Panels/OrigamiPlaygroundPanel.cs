@@ -359,6 +359,18 @@ public class OrigamiPlaygroundPanel : DockPanel
     private string? _treeSelectedId;
     private HashSet<string> _treeChecked = new() { "src", "main_cs" };
 
+    // -- DatePicker state ----------------------------------------
+    private System.DateTime _dpDate = System.DateTime.Now;
+    private System.DateTime _dpTime = System.DateTime.Now;
+    private System.DateTime _dpDateTime = System.DateTime.Now;
+    private System.DateTime _dpRangeStart = System.DateTime.Now;
+    private System.DateTime _dpRangeEnd = System.DateTime.Now.AddDays(7);
+    private System.DateTime _dpDisabled = System.DateTime.Now;
+
+    // -- Image diff state --------------------------------------
+    private Runtime.Resources.Texture2D? _diffTexA;
+    private Runtime.Resources.Texture2D? _diffTexB;
+
     // -- Breadcrumb state --------------------------------------
     private string _bcSelected = "Home > Products > Electronics > Phones";
     private int _bcSepIndex = 0;
@@ -441,6 +453,9 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_Modals(paper);
                 Section_PropertyGrid(paper);
                 Section_Breadcrumbs(paper);
+                Section_ChatBubbles(paper);
+                Section_ImageDiff(paper);
+                Section_DatePicker(paper);
                 Section_Labels(paper);
                 Section_Loading(paper);
                 Section_Tree(paper);
@@ -2172,6 +2187,157 @@ public class OrigamiPlaygroundPanel : DockPanel
                     item => _bcSelected = $"Clicked: {item.Label}").ActiveIndex(1).Primary().Show());
 
             StateLine(paper, "bc_status", _bcSelected);
+        });
+    }
+
+    private void Section_DatePicker(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_dp", "Date Picker").Body(() =>
+        {
+            LabelRow(paper, "dp_date", "Date only", () =>
+                Origami.DatePicker(paper, "dp_date_v", _dpDate, v => _dpDate = v).Show());
+
+            LabelRow(paper, "dp_time", "Time only", () =>
+                Origami.DatePicker(paper, "dp_time_v", _dpTime, v => _dpTime = v)
+                    .TimeOnly().Show());
+
+            LabelRow(paper, "dp_time24", "Time (24h)", () =>
+                Origami.DatePicker(paper, "dp_time24_v", _dpTime, v => _dpTime = v)
+                    .TimeOnly().Use24Hour().Show());
+
+            LabelRow(paper, "dp_datetime", "Date + Time", () =>
+                Origami.DatePicker(paper, "dp_dt_v", _dpDateTime, v => _dpDateTime = v)
+                    .DateTime().Show());
+
+            LabelRow(paper, "dp_range", "Range", () =>
+                Origami.DatePicker(paper, "dp_range_v", _dpRangeStart, v => _dpRangeStart = v)
+                    .Range(_dpRangeEnd, v => _dpRangeEnd = v).Show());
+
+            LabelRow(paper, "dp_disabled", "Weekends disabled", () =>
+                Origami.DatePicker(paper, "dp_dis_v", _dpDisabled, v => _dpDisabled = v)
+                    .DisabledDates(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday)
+                    .Show());
+
+            LabelRow(paper, "dp_error", "Error state", () =>
+                Origami.DatePicker(paper, "dp_err_v", _dpDate, v => _dpDate = v)
+                    .Error("Date is in the past").Show());
+
+            LabelRow(paper, "dp_success", "Success state", () =>
+                Origami.DatePicker(paper, "dp_suc_v", _dpDate, v => _dpDate = v)
+                    .Success().Show());
+
+            LabelRow(paper, "dp_readonly", "Read-only", () =>
+                Origami.DatePicker(paper, "dp_ro_v", _dpDate, v => { })
+                    .ReadOnly().Show());
+
+            LabelRow(paper, "dp_fmt", "Custom format", () =>
+                Origami.DatePicker(paper, "dp_fmt_v", _dpDate, v => _dpDate = v)
+                    .Format("yyyy/MM/dd").Show());
+        });
+    }
+
+    private void Section_ImageDiff(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_imgdiff", "Image Diff").Body(() =>
+        {
+            // Generate test textures on first use
+            if (_diffTexA == null)
+            {
+                const int sz = 128;
+                _diffTexA = new Runtime.Resources.Texture2D((uint)sz, (uint)sz);
+                _diffTexB = new Runtime.Resources.Texture2D((uint)sz, (uint)sz);
+                var pixA = new byte[sz * sz * 4];
+                var pixB = new byte[sz * sz * 4];
+                for (int y = 0; y < sz; y++)
+                for (int x = 0; x < sz; x++)
+                {
+                    int i = (y * sz + x) * 4;
+                    // Image A: purple/blue gradient with grid
+                    bool grid = ((x / 16) + (y / 16)) % 2 == 0;
+                    pixA[i + 0] = (byte)(grid ? 80 + x : 40 + x / 2);
+                    pixA[i + 1] = (byte)(40 + y / 3);
+                    pixA[i + 2] = (byte)(grid ? 180 : 120 + y / 2);
+                    pixA[i + 3] = 255;
+                    // Image B: warm orange/red gradient with circles
+                    float dx = x - 64, dy = y - 64;
+                    float dist = MathF.Sqrt(dx * dx + dy * dy);
+                    bool circle = ((int)dist / 16) % 2 == 0;
+                    pixB[i + 0] = (byte)(circle ? 200 + (55 * x / sz) : 140);
+                    pixB[i + 1] = (byte)(circle ? 100 + y / 3 : 60);
+                    pixB[i + 2] = (byte)(40 + x / 4);
+                    pixB[i + 3] = 255;
+                }
+                _diffTexA.SetData<byte>(pixA);
+                _diffTexB.SetData<byte>(pixB);
+            }
+
+            Origami.ImageDiff(paper, "imgdiff_demo", _diffTexA, _diffTexB)
+                .Height(200)
+                .Show();
+
+            StateLine(paper, "imgdiff_hint", "Drag the bar to compare the two generated images.");
+        });
+    }
+
+    private void Section_ChatBubbles(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_chat", "Chat Bubbles").Body(() =>
+        {
+            // Left tail with initials avatar
+            Origami.ChatBubble(paper, "chat_left", p =>
+                Origami.Label(p, "chat_left_msg", "Hey, how's the new UI coming along?").Show())
+                .TailLeft()
+                .Avatar("JD", System.Drawing.Color.FromArgb(255, 80, 140, 200))
+                .Header("John Doe")
+                .Footer("2:34 PM")
+                .Show();
+
+            paper.Box("chat_sp1").Height(8);
+
+            // Right tail, primary variant
+            Origami.ChatBubble(paper, "chat_right", p =>
+                Origami.Label(p, "chat_right_msg", "Looking great! Just shipped the breadcrumb widget.").Show())
+                .TailRight()
+                .Avatar("ME", System.Drawing.Color.FromArgb(255, 120, 80, 200))
+                .Header("You")
+                .Footer("2:35 PM")
+                .Primary()
+                .Show();
+
+            paper.Box("chat_sp2").Height(8);
+
+            // No tail
+            Origami.ChatBubble(paper, "chat_notail", p =>
+                Origami.Label(p, "chat_notail_msg", "System notification: Build succeeded.").Show())
+                .NoTail()
+                .Info()
+                .Header("System")
+                .Show();
+
+            paper.Box("chat_sp3").Height(8);
+
+            // Top tail
+            Origami.ChatBubble(paper, "chat_top", p =>
+                Origami.Label(p, "chat_top_msg", "Tooltip-style bubble pointing up.").Show())
+                .TailTop()
+                .MaxWidth(250)
+                .Show();
+
+            paper.Box("chat_sp4").Height(8);
+
+            // Bottom tail with rich content
+            Origami.ChatBubble(paper, "chat_rich", p =>
+            {
+                Origami.Label(p, "chat_rich_t", "Multi-line content with widgets:").Show();
+                Origami.ProgressBar(p, "chat_prog", 0.72f).Success().Show();
+                Origami.Label(p, "chat_rich_b", "Build progress: 72%").Show();
+            })
+                .TailBottom()
+                .Success()
+                .Header("Build Server")
+                .Footer("Just now")
+                .MaxWidth(280)
+                .Show();
         });
     }
 
