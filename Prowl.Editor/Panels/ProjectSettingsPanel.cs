@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json;
 
-using Prowl.Editor.Docking;
+using Prowl.OrigamiUI;
 using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;

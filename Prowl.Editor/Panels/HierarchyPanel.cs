@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Editor.Docking;
+using Prowl.OrigamiUI;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.OrigamiUI;

@@ -4,7 +4,7 @@
 using System;
 
 using Prowl.OrigamiUI;
-using Prowl.Editor.Docking;
+using Prowl.OrigamiUI;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.GUI;
 using Prowl.PaperUI;

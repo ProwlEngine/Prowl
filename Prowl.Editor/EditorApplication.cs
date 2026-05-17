@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 using Prowl.Editor.Thumbnails;
-using Prowl.Editor.Docking;
+using Prowl.OrigamiUI;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Panels;
@@ -151,7 +151,7 @@ public class EditorApplication : Game
             ProjectSettingsRegistry.OnProjectOpened();
 
             // Restore layout
-            var savedLayout = Docking.LayoutSerializer.Load(_dockSpace);
+            var savedLayout = LoadDockLayout();
             if (savedLayout != null)
                 _dockSpace.Root = savedLayout;
 
@@ -425,7 +425,7 @@ public class EditorApplication : Game
                 ProjectSettingsRegistry.OnProjectOpened();
 
                 // Restore layout from project (or use default)
-                var savedLayout = Docking.LayoutSerializer.Load(_dockSpace);
+                var savedLayout = LoadDockLayout();
                 if (savedLayout != null)
                     _dockSpace.Root = savedLayout;
                 else
@@ -1375,6 +1375,48 @@ public class EditorApplication : Game
         EditorSettings.Instance.Save();
     }
 
+    private void SaveDockLayout()
+    {
+        if (Project.Current == null) return;
+        try
+        {
+            string json = DockSerializer.Serialize(_dockSpace);
+            System.IO.File.WriteAllText(Project.Current.EditorStatePath, json);
+        }
+        catch (Exception ex) { Runtime.Debug.LogError($"Failed to save layout: {ex.Message}"); }
+    }
+
+    private DockNode? LoadDockLayout()
+    {
+        if (Project.Current == null) return null;
+        string path = Project.Current.EditorStatePath;
+        if (!System.IO.File.Exists(path)) return null;
+        try
+        {
+            string json = System.IO.File.ReadAllText(path);
+            return DockSerializer.Deserialize(json, _dockSpace.FloatingWindows, (typeName, state) =>
+            {
+                Type? type = null;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    type = asm.GetType(typeName);
+                    if (type != null && typeof(DockPanel).IsAssignableFrom(type)) break;
+                    type = null;
+                }
+                if (type == null) return null;
+                var panel = Activator.CreateInstance(type) as DockPanel;
+                if (panel != null && state != null)
+                    try { panel.RestoreState(state); } catch { }
+                return panel;
+            });
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to load layout: {ex.Message}");
+            return null;
+        }
+    }
+
     /// <summary>Save layout and settings for the current project.</summary>
     public void SaveProjectState()
     {
@@ -1385,7 +1427,7 @@ public class EditorApplication : Game
         // (selection, scene-view camera) would capture the transient playmode state
         // and overwrite authoring state on next open.
         if (!Application.IsPlaying)
-            Docking.LayoutSerializer.Save(_dockSpace);
+            SaveDockLayout();
 
         ProjectSettingsRegistry.SaveAll();
     }

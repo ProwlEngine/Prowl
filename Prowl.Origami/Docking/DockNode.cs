@@ -1,11 +1,19 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 
-namespace Prowl.Editor.Docking;
+namespace Prowl.OrigamiUI;
 
 public enum SplitDirection { Horizontal, Vertical }
 
-public enum DockZone { None, Top, Bottom, Left, Right, Center }
+public enum DockZone
+{
+    None, Top, Bottom, Left, Right, Center,
+    // Root-level zones (dock to DockSpace outer edges)
+    RootTop, RootBottom, RootLeft, RootRight,
+}
 
 public class DockNode
 {
@@ -54,9 +62,6 @@ public class DockNode
         ActiveTabIndex = Tabs.IndexOf(panel);
     }
 
-    /// <summary>
-    /// Replace a child node reference. Used when splitting a leaf.
-    /// </summary>
     public bool ReplaceChild(DockNode target, DockNode replacement)
     {
         if (ChildA == target) { ChildA = replacement; return true; }

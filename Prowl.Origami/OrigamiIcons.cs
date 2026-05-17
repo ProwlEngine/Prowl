@@ -107,6 +107,14 @@ public sealed class OrigamiIcons
     /// <summary>Document / file-lines glyph.</summary>
     public string Document = string.Empty;
 
+    // ── Docking icons ─────────────────────────────────────────
+
+    /// <summary>Down arrow for dock indicator.</summary>
+    public string ArrowDown = string.Empty;
+
+    /// <summary>Clone / duplicate glyph for dock-to-center indicator.</summary>
+    public string Duplicate = string.Empty;
+
     /// <summary>Shallow copy.</summary>
     public OrigamiIcons Clone() => new()
     {
@@ -140,5 +148,7 @@ public sealed class OrigamiIcons
         Download = Download,
         User = User,
         Document = Document,
+        ArrowDown = ArrowDown,
+        Duplicate = Duplicate,
     };
 }

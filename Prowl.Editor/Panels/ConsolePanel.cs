@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.Docking;
+using Prowl.OrigamiUI;
 using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;

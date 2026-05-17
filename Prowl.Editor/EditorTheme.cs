@@ -158,6 +158,14 @@ public static class EditorTheme
             FontSize          = FontSize,
             FontSizeSmall     = FontSize - 2f,
             LabelWidth        = LabelWidth,
+            TabBarHeight      = TabBarHeight,
+            TabPadding        = TabPadding,
+            TabGap            = TabGap,
+            TabCloseSize      = TabCloseSize,
+            SplitterSize      = SplitterSize,
+            DockPadding       = DockPadding,
+            IndicatorSize     = IndicatorSize,
+            IndicatorGap      = IndicatorGap,
         },
 
         Icons = new OrigamiIcons
@@ -192,6 +200,8 @@ public static class EditorTheme
             Download     = EditorIcons.Download,
             User         = EditorIcons.User,
             Document     = EditorIcons.FolderOpen,
+            ArrowDown    = EditorIcons.ArrowDown,
+            Duplicate    = EditorIcons.Clone,
         },
         Font = DefaultFont,
     };

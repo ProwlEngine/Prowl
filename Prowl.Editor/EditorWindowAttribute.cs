@@ -1,6 +1,6 @@
 using System;
 
-namespace Prowl.Editor.Docking;
+namespace Prowl.Editor;
 
 /// <summary>
 /// Register a DockPanel subclass so it appears in the Window menu.

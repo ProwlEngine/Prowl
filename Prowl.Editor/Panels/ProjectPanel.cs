@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-using Prowl.Editor.Docking;
+using Prowl.OrigamiUI;
 using Prowl.Editor.Packages;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;

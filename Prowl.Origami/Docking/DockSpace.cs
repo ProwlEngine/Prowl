@@ -1,21 +1,27 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.Panels;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
 using Color = System.Drawing.Color;
+using TextAlignment = Prowl.PaperUI.TextAlignment;
 
-namespace Prowl.Editor.Docking;
+namespace Prowl.OrigamiUI;
 
 public class DockSpace
 {
     public DockNode Root { get; set; }
     public List<FloatingWindow> FloatingWindows { get; } = new();
 
-    // --- Drag state (one unified mode: dragging a tab) ---
+// --- Drag state (one unified mode: dragging a tab) ---
     private bool _isDragging;
     private DockPanel? _draggedPanel;
     private DockNode? _dragSourceNode;
@@ -28,6 +34,10 @@ public class DockSpace
     private DockZone _hoveredZone;
     private Rect _hoveredLeafRect;
 
+    // --- Root docking ---
+    private DockZone _rootHoveredZone;
+    private Rect _dockSpaceBounds;
+
     // --- Splitter ---
     private DockNode? _splitterDragNode;
 
@@ -35,24 +45,32 @@ public class DockSpace
     private readonly Dictionary<DockNode, Rect> _leafRects = new();
 
     // --- Drop preview animation ---
-    // Keeps a single animated preview rect. When nothing is hovered, the preview fades out;
-    // once it's fully hidden, the next appearance snaps instantly to the new target. While
-    // visible, target changes interpolate smoothly (one rect moves between zones).
     private Rect _previewRect;
     private float _previewAlpha;
     private bool _previewVisible;
+
+    // --- Cached delta time for methods without paper access ---
+    private float _lastDeltaTime;
 
 
     public DockSpace(DockNode root) { Root = root; }
 
     public void Draw(Paper paper, float x, float y, float w, float h)
     {
+        var theme = Origami.Current;
+        var m = theme.Metrics;
+        var icons = theme.Icons;
+        var font = theme.Font;
+        _lastDeltaTime = paper.DeltaTime;
+
+        _dockSpaceBounds = new Rect(new Float2(x, y), new Float2(x + w, y + h));
+
         bool mouseUp = !paper.IsPointerDown(PaperMouseBtn.Left);
 
         // Handle drag end
         if (_isDragging && mouseUp)
         {
-            ExecuteDrop();
+            ExecuteDrop(m);
             _isDragging = false;
             _draggedPanel = null;
             _dragSourceNode = null;
@@ -66,13 +84,14 @@ public class DockSpace
         _leafRects.Clear();
         _hoveredLeaf = null;
         _hoveredZone = DockZone.None;
+        _rootHoveredZone = DockZone.None;
 
         // 1. Root dock space
-        DrawNodeTree(paper, Root, null, x, y, w, h, null);
+        DrawNodeTree(paper, Root, null, x, y, w, h, null, theme, m, icons, font);
 
         // 2. Floating windows (z-ordered)
         for (int i = 0; i < FloatingWindows.Count; i++)
-            DrawFloatingWindow(paper, FloatingWindows[i], i);
+            DrawFloatingWindow(paper, FloatingWindows[i], i, theme, m, icons, font);
 
         // 3. While dragging: move source floating window, compute hover, draw indicators
         if (_isDragging && _draggedPanel != null)
@@ -92,9 +111,10 @@ public class DockSpace
                 _dragSourceWindow.Position += delta;
             }
 
-            ComputeHoveredZone(paper);
+            ComputeHoveredZone(paper, m);
             if (_hoveredLeaf != null)
-                DrawDockIndicators(paper);
+                DrawDockIndicators(paper, m, icons, font);
+            DrawRootDockIndicators(paper, m, theme);
         }
     }
 
@@ -103,33 +123,34 @@ public class DockSpace
     // ================================================================
 
     private void DrawNodeTree(Paper paper, DockNode node, DockNode? parent,
-                               float x, float y, float w, float h, FloatingWindow? fw)
+                               float x, float y, float w, float h, FloatingWindow? fw,
+                               OrigamiTheme theme, OrigamiMetrics m, OrigamiIcons icons, FontFile? font)
     {
         if (node == null || w <= 0 || h <= 0) return;
         node.Parent = parent;
 
         if (node.IsLeaf)
         {
-            DrawLeaf(paper, node, x, y, w, h, fw);
+            DrawLeaf(paper, node, x, y, w, h, fw, theme, m, icons, font);
             return;
         }
 
-        float sp = EditorTheme.SplitterSize;
+        float sp = m.SplitterSize;
         if (node.Direction == SplitDirection.Horizontal)
         {
             float aw = (w - sp) * node.SplitRatio;
             float bw = w - aw - sp;
-            DrawNodeTree(paper, node.ChildA!, node, x, y, aw, h, fw);
-            DrawSplitter(paper, node, x + aw, y, sp, h, true);
-            DrawNodeTree(paper, node.ChildB!, node, x + aw + sp, y, bw, h, fw);
+            DrawNodeTree(paper, node.ChildA!, node, x, y, aw, h, fw, theme, m, icons, font);
+            DrawSplitter(paper, node, x + aw, y, sp, h, true, theme);
+            DrawNodeTree(paper, node.ChildB!, node, x + aw + sp, y, bw, h, fw, theme, m, icons, font);
         }
         else
         {
             float ah = (h - sp) * node.SplitRatio;
             float bh = h - ah - sp;
-            DrawNodeTree(paper, node.ChildA!, node, x, y, w, ah, fw);
-            DrawSplitter(paper, node, x, y + ah, w, sp, false);
-            DrawNodeTree(paper, node.ChildB!, node, x, y + ah + sp, w, bh, fw);
+            DrawNodeTree(paper, node.ChildA!, node, x, y, w, ah, fw, theme, m, icons, font);
+            DrawSplitter(paper, node, x, y + ah, w, sp, false, theme);
+            DrawNodeTree(paper, node.ChildB!, node, x, y + ah + sp, w, bh, fw, theme, m, icons, font);
         }
     }
 
@@ -137,13 +158,14 @@ public class DockSpace
     //  SPLITTER
     // ================================================================
 
-    private void DrawSplitter(Paper paper, DockNode node, float x, float y, float w, float h, bool horiz)
+    private void DrawSplitter(Paper paper, DockNode node, float x, float y, float w, float h, bool horiz,
+                               OrigamiTheme theme)
     {
         bool active = _splitterDragNode == node;
         paper.Box($"spl_{node.GetHashCode()}")
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
-            .Hovered.BackgroundColor(EditorTheme.Purple500).End()
-            .Active.BackgroundColor(EditorTheme.Purple400).End()
+            .Hovered.BackgroundColor(theme.Primary.C500).End()
+            .Active.BackgroundColor(theme.Primary.C400).End()
             .OnDragStart(node, (n, e) => _splitterDragNode = n)
             .OnDragging(node, (n, e) =>
             {
@@ -174,11 +196,11 @@ public class DockSpace
     //  LEAF
     // ================================================================
 
-
-    private void DrawLeaf(Paper paper, DockNode node, float x, float y, float w, float h, FloatingWindow? fw)
+    private void DrawLeaf(Paper paper, DockNode node, float x, float y, float w, float h, FloatingWindow? fw,
+                           OrigamiTheme theme, OrigamiMetrics m, OrigamiIcons icons, FontFile? font)
     {
         if (node.Tabs == null || node.Tabs.Count == 0) return;
-        float tabH = EditorTheme.TabBarHeight;
+        float tabH = m.TabBarHeight;
 
         if (fw == null)
             _leafRects[node] = new Rect(new Float2(x, y), new Float2(x + w, y + h));
@@ -188,8 +210,6 @@ public class DockSpace
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
             .Enter())
         {
-            var font = EditorTheme.DefaultFont;
-
             // Compute tab widths based on text
             float iconW = 10f; // Space for icon
             float[] tabWidths = new float[node.Tabs.Count];
@@ -198,29 +218,34 @@ public class DockSpace
                 float textW = 60;
                 if (font != null)
                 {
-                    var measured = paper.MeasureText(node.Tabs[i].Title, EditorTheme.FontSize, font, 0);
+                    var measured = paper.MeasureText(node.Tabs[i].Title, m.FontSize, font, 0);
                     textW = (float)measured.X;
                 }
                 bool hasIcon = !string.IsNullOrEmpty(node.Tabs[i].Icon);
-                tabWidths[i] = (hasIcon ? iconW : 0) + textW + EditorTheme.TabPadding * 3 + EditorTheme.TabCloseSize + 3;
+                tabWidths[i] = (hasIcon ? iconW : 0) + textW + m.TabPadding * 3 + m.TabCloseSize + 3;
             }
 
             // Draw merged background via canvas (inactive tab bgs + active tab shape + panel body)
             int activeIdx = node.ActiveTabIndex;
+            var panelColor = theme.Neutral.C400;
+            var neutralColor = theme.Neutral.C300;
+            var rounding = m.Rounding;
+            var tabGap = m.TabGap;
             paper.Box($"leaf_bg_{node.GetHashCode()}")
                 .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
                 .IsNotInteractable()
                 .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                 {
-                    DrawMergedTabShape(canvas, r, tabWidths, activeIdx, tabH);
+                    DrawMergedTabShape(canvas, r, tabWidths, activeIdx, tabH, panelColor, neutralColor, rounding, tabGap);
                 }));
 
             // Outline drawn via DrawForeground on the leaf container (renders after all children)
             {
+                var inkColor = theme.Ink.C200;
                 var leafParent = paper.CurrentParent;
                 paper.DrawForeground(ref leafParent, (canvas, r) =>
                 {
-                    StrokeMergedTabShape(canvas, r, tabWidths, activeIdx, tabH);
+                    StrokeMergedTabShape(canvas, r, tabWidths, activeIdx, tabH, inkColor, rounding, tabGap);
                 });
             }
 
@@ -230,7 +255,7 @@ public class DockSpace
             for (int i = 0; i < node.Tabs.Count; i++)
             {
                 tabPositions[i] = tabX;
-                tabX += tabWidths[i] + EditorTheme.TabGap;
+                tabX += tabWidths[i] + m.TabGap;
             }
 
             // Draw inactive tabs FIRST (behind), then active tab ON TOP
@@ -253,7 +278,7 @@ public class DockSpace
                 var tabEl = paper.Box($"t_{node.GetHashCode()}_{i}")
                     .PositionType(PositionType.SelfDirected)
                     .Position(tx, inactiveOffset).Size(tw, inactiveH)
-                    .RoundedTop(EditorTheme.Roundness)
+                    .RoundedTop(m.Rounding)
                     .StopEventPropagation()
                     .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
                     .OnDragStart((node, ci, fw), (cap, e) =>
@@ -289,7 +314,7 @@ public class DockSpace
                     });
 
                 bool hasIcon = !string.IsNullOrEmpty(tab.Icon);
-                float contentX = tx + EditorTheme.TabPadding;
+                float contentX = tx + m.TabPadding;
 
                 // Icon
                 if (hasIcon && font != null)
@@ -299,8 +324,8 @@ public class DockSpace
                         .Position(contentX, inactiveOffset).Size(iconW, inactiveH)
                         .IsNotInteractable()
                         .Text(tab.Icon, font)
-                        .TextColor(isActive ? EditorTheme.Blue400 : EditorTheme.Ink300)
-                        .FontSize((EditorTheme.FontSize - 1) * 0.75f)
+                        .TextColor(isActive ? theme.Blue.C400 : theme.Ink.C300)
+                        .FontSize((m.FontSize - 1) * 0.75f)
                         .Alignment(TextAlignment.MiddleCenter);
                     contentX += iconW;
                 }
@@ -312,27 +337,27 @@ public class DockSpace
                         .PositionType(PositionType.SelfDirected)
                         .Position(contentX, inactiveOffset)
                         .Height(inactiveH)
-                        .Width(tw - EditorTheme.TabPadding * 2 - EditorTheme.TabCloseSize - (hasIcon ? iconW : 0) + 4)
+                        .Width(tw - m.TabPadding * 2 - m.TabCloseSize - (hasIcon ? iconW : 0) + 4)
                         .IsNotInteractable()
                         .Text(tab.Title, font)
-                        .TextColor(isActive ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                        .FontSize(EditorTheme.FontSize)
+                        .TextColor(isActive ? theme.Ink.C500 : theme.Ink.C300)
+                        .FontSize(m.FontSize)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
 
                 // Close button (X)
                 paper.Box($"t_close_{node.GetHashCode()}_{i}")
                     .PositionType(PositionType.SelfDirected)
-                    .Position(tx + tw - EditorTheme.TabCloseSize - EditorTheme.TabPadding + 2, inactiveOffset + (inactiveH - EditorTheme.TabCloseSize) / 2)
-                    .Size(EditorTheme.TabCloseSize, EditorTheme.TabCloseSize)
-                    .Rounded(EditorTheme.TabCloseSize / 2)
+                    .Position(tx + tw - m.TabCloseSize - m.TabPadding + 2, inactiveOffset + (inactiveH - m.TabCloseSize) / 2)
+                    .Size(m.TabCloseSize, m.TabCloseSize)
+                    .Rounded(m.TabCloseSize / 2)
                     .StopEventPropagation()
                     .OnClick((node, ci, fw), (cap, e) =>
                     {
                         cap.Item1.RemoveTab(cap.Item2);
                     })
-                    .Text(EditorIcons.Xmark, EditorTheme.DefaultFont)
-                    .TextColor(isActive ? EditorTheme.Ink400 : EditorTheme.Ink300)
+                    .Text(icons.Close, font!)
+                    .TextColor(isActive ? theme.Ink.C400 : theme.Ink.C300)
                     .FontSize(15f)
                     .Alignment(TextAlignment.MiddleCenter);
             }
@@ -343,36 +368,25 @@ public class DockSpace
             {
                 using (paper.Box($"c_{node.GetHashCode()}")
                     .PositionType(PositionType.SelfDirected).Position(0, cy).Size(w, ch)
-                    .Padding(EditorTheme.Padding)
                     .Enter())
                 {
                     if (node.ActiveTabIndex < node.Tabs.Count)
-                        node.Tabs[node.ActiveTabIndex].OnGUI(paper, w - (EditorTheme.Padding * 2), ch - (EditorTheme.Padding * 2));
+                        node.Tabs[node.ActiveTabIndex].OnGUI(paper, w, ch);
 
-
-
-                    if (BuildSettingsPanel.IsBuildRunning && node.Tabs[node.ActiveTabIndex] is not BuildSettingsPanel buildPanel)
-                    {
-                        paper.Box("build_overlay")
-                        .PositionType(PositionType.SelfDirected).Position(0, 0)
-                        .Size(w, ch)
-                        .BackgroundColor(new Vector.Color(0, 0, 0, 120))
-                        .IsNotInteractable();
-                    }
                 }
             }
         }
     }
 
-    private static void DrawMergedTabShape(Prowl.Quill.Canvas canvas, Rect r,
-        float[] tabWidths, int activeIdx, float tabH)
+    private static void DrawMergedTabShape(Canvas canvas, Rect r,
+        float[] tabWidths, int activeIdx, float tabH,
+        Color panelColor, Color neutralColor, float rounding, float tabGap)
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
         float w = (float)r.Size.X, h = (float)r.Size.Y;
-        float rad = EditorTheme.Roundness;
-        float ir = EditorTheme.Roundness + 2;
+        float rad = rounding;
+        float ir = rounding + 2;
 
-        var panelColor = EditorTheme.Neutral400;
         float panelTop = y + tabH;
 
         if (activeIdx < 0 || activeIdx >= tabWidths.Length)
@@ -390,15 +404,15 @@ public class DockSpace
             if (i != activeIdx)
             {
                 canvas.RoundedRectFilled(itx, y + inactiveOffset, tabWidths[i], tabH - inactiveOffset,
-                    rad, rad, 0, 0, EditorTheme.Neutral300);
+                    rad, rad, 0, 0, neutralColor);
             }
-            itx += tabWidths[i] + EditorTheme.TabGap;
+            itx += tabWidths[i] + tabGap;
         }
 
         // Compute active tab X position
         float tabX = x;
         for (int i = 0; i < activeIdx; i++)
-            tabX += tabWidths[i] + EditorTheme.TabGap;
+            tabX += tabWidths[i] + tabGap;
         float tw = tabWidths[activeIdx];
 
         bool isFirst = activeIdx == 0;
@@ -485,20 +499,21 @@ public class DockSpace
     /// <summary>
     /// Draw the outline of the merged tab+panel shape. Called via DrawForeground so it renders on top of all content.
     /// </summary>
-    private static void StrokeMergedTabShape(Prowl.Quill.Canvas canvas, Rect r,
-        float[] tabWidths, int activeIdx, float tabH)
+    private static void StrokeMergedTabShape(Canvas canvas, Rect r,
+        float[] tabWidths, int activeIdx, float tabH,
+        Color strokeColor, float rounding, float tabGap)
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
         float w = (float)r.Size.X, h = (float)r.Size.Y;
-        float rad = EditorTheme.Roundness;
-        float ir = EditorTheme.Roundness + 2;
+        float rad = rounding;
+        float ir = rounding + 2;
         float panelTop = y + tabH;
 
         if (activeIdx < 0 || activeIdx >= tabWidths.Length) return;
 
         float tabX = x;
         for (int i = 0; i < activeIdx; i++)
-            tabX += tabWidths[i] + EditorTheme.TabGap;
+            tabX += tabWidths[i] + tabGap;
         float tw = tabWidths[activeIdx];
 
         bool isFirst = activeIdx == 0;
@@ -506,7 +521,7 @@ public class DockSpace
         float bottom = y + h;
         float right = x + w;
 
-        canvas.SetStrokeColor(EditorTheme.Ink200);
+        canvas.SetStrokeColor(strokeColor);
         canvas.SetStrokeWidth(1f);
         canvas.BeginPath();
 
@@ -563,7 +578,8 @@ public class DockSpace
     private const float MinWindowWidth = 150f;
     private const float MinWindowHeight = 80f;
 
-    private void DrawFloatingWindow(Paper paper, FloatingWindow fw, int index)
+    private void DrawFloatingWindow(Paper paper, FloatingWindow fw, int index,
+                                     OrigamiTheme theme, OrigamiMetrics m, OrigamiIcons icons, FontFile? font)
     {
         using (paper.Box($"fw_{index}")
             .PositionType(PositionType.SelfDirected)
@@ -572,7 +588,7 @@ public class DockSpace
             .OnClick(index, (idx, e) => BringToFront(idx))
             .Enter())
         {
-            DrawNodeTree(paper, fw.Node, null, 0, 0, fw.Size.X, fw.Size.Y, fw);
+            DrawNodeTree(paper, fw.Node, null, 0, 0, fw.Size.X, fw.Size.Y, fw, theme, m, icons, font);
 
             // Resize handles
             float w = fw.Size.X, h = fw.Size.Y;
@@ -641,9 +657,46 @@ public class DockSpace
     //  DOCK ZONE
     // ================================================================
 
-    private void ComputeHoveredZone(Paper paper)
+    private void ComputeHoveredZone(Paper paper, OrigamiMetrics m)
     {
         Float2 mouse = paper.PointerPos;
+
+        // Check root edge zones first
+        float edgeW = m.IndicatorSize + m.IndicatorGap;
+        float bx = _dockSpaceBounds.Min.X, by = _dockSpaceBounds.Min.Y;
+        float bw = _dockSpaceBounds.Size.X, bh = _dockSpaceBounds.Size.Y;
+
+        if (mouse.X >= bx && mouse.X <= bx + bw && mouse.Y >= by && mouse.Y <= by + bh)
+        {
+            // Top root zone
+            if (mouse.Y >= by && mouse.Y <= by + edgeW)
+            {
+                _rootHoveredZone = DockZone.RootTop;
+                return;
+            }
+            // Bottom root zone
+            if (mouse.Y >= by + bh - edgeW && mouse.Y <= by + bh)
+            {
+                _rootHoveredZone = DockZone.RootBottom;
+                return;
+            }
+            // Left root zone
+            if (mouse.X >= bx && mouse.X <= bx + edgeW)
+            {
+                _rootHoveredZone = DockZone.RootLeft;
+                return;
+            }
+            // Right root zone
+            if (mouse.X >= bx + bw - edgeW && mouse.X <= bx + bw)
+            {
+                _rootHoveredZone = DockZone.RootRight;
+                return;
+            }
+        }
+
+        _rootHoveredZone = DockZone.None;
+
+        // Check leaf zones
         foreach (var (node, rect) in _leafRects)
         {
             // Don't show dock indicators on the panel we're dragging from
@@ -657,19 +710,19 @@ public class DockSpace
             _hoveredLeafRect = rect;
             float cx = rect.Min.X + rect.Size.X / 2;
             float cy = rect.Min.Y + rect.Size.Y / 2;
-            _hoveredZone = GetZoneFromIndicator(mouse, cx, cy);
+            _hoveredZone = GetZoneFromIndicator(mouse, cx, cy, m);
             return;
         }
     }
 
-    private DockZone GetZoneFromIndicator(Float2 m, float cx, float cy)
+    private DockZone GetZoneFromIndicator(Float2 mouse, float cx, float cy, OrigamiMetrics m)
     {
-        float s = EditorTheme.IndicatorSize, g = EditorTheme.IndicatorGap, hs = s / 2;
-        if (Hit(m, cx - hs, cy - hs, s, s)) return DockZone.Center;
-        if (Hit(m, cx - hs, cy - hs - g - s, s, s)) return DockZone.Top;
-        if (Hit(m, cx - hs, cy + hs + g, s, s)) return DockZone.Bottom;
-        if (Hit(m, cx - hs - g - s, cy - hs, s, s)) return DockZone.Left;
-        if (Hit(m, cx + hs + g, cy - hs, s, s)) return DockZone.Right;
+        float s = m.IndicatorSize, g = m.IndicatorGap, hs = s / 2;
+        if (Hit(mouse, cx - hs, cy - hs, s, s)) return DockZone.Center;
+        if (Hit(mouse, cx - hs, cy - hs - g - s, s, s)) return DockZone.Top;
+        if (Hit(mouse, cx - hs, cy + hs + g, s, s)) return DockZone.Bottom;
+        if (Hit(mouse, cx - hs - g - s, cy - hs, s, s)) return DockZone.Left;
+        if (Hit(mouse, cx + hs + g, cy - hs, s, s)) return DockZone.Right;
         return DockZone.None;
     }
 
@@ -680,30 +733,58 @@ public class DockSpace
     //  INDICATORS + PREVIEW
     // ================================================================
 
-    private void DrawDockIndicators(Paper paper)
+    private void DrawDockIndicators(Paper paper, OrigamiMetrics m, OrigamiIcons icons, FontFile? font)
     {
         // Animated drop preview runs every frame so fade-out + snap-on-reappear works.
-        DrawDropPreview(paper);
+        DrawDropPreview(paper, m);
 
         if (_hoveredLeaf == null) return;
         var rect = _hoveredLeafRect;
         float cx = rect.Min.X + rect.Size.X / 2, cy = rect.Min.Y + rect.Size.Y / 2;
-        float s = EditorTheme.IndicatorSize, g = EditorTheme.IndicatorGap, hs = s / 2;
+        float s = m.IndicatorSize, g = m.IndicatorGap, hs = s / 2;
 
-        var bg = Color.FromArgb(85, EditorTheme.Blue400);
-        var hi = Color.FromArgb(85, EditorTheme.Blue500);
-        var bd = Color.FromArgb(85, EditorTheme.Blue600);
+        var theme = Origami.Current;
+        var bg = Color.FromArgb(85, theme.Blue.C400);
+        var hi = Color.FromArgb(85, theme.Blue.C500);
+        var bd = Color.FromArgb(85, theme.Blue.C600);
 
-        Ind(paper, "di_c", cx - hs, cy - hs, s, _hoveredZone == DockZone.Center ? hi : bg, bd, EditorIcons.Clone);
-        Ind(paper, "di_t", cx - hs, cy - hs - g - s, s, _hoveredZone == DockZone.Top ? hi : bg, bd, EditorIcons.ArrowUp);
-        Ind(paper, "di_b", cx - hs, cy + hs + g, s, _hoveredZone == DockZone.Bottom ? hi : bg, bd, EditorIcons.ArrowDown);
-        Ind(paper, "di_l", cx - hs - g - s, cy - hs, s, _hoveredZone == DockZone.Left ? hi : bg, bd, EditorIcons.ArrowLeft);
-        Ind(paper, "di_r", cx + hs + g, cy - hs, s, _hoveredZone == DockZone.Right ? hi : bg, bd, EditorIcons.ArrowRight);
+        Ind(paper, "di_c", cx - hs, cy - hs, s, _hoveredZone == DockZone.Center ? hi : bg, bd, icons.Duplicate, font);
+        Ind(paper, "di_t", cx - hs, cy - hs - g - s, s, _hoveredZone == DockZone.Top ? hi : bg, bd, icons.ArrowUp, font);
+        Ind(paper, "di_b", cx - hs, cy + hs + g, s, _hoveredZone == DockZone.Bottom ? hi : bg, bd, icons.ArrowDown, font);
+        Ind(paper, "di_l", cx - hs - g - s, cy - hs, s, _hoveredZone == DockZone.Left ? hi : bg, bd, icons.ArrowLeft, font);
+        Ind(paper, "di_r", cx + hs + g, cy - hs, s, _hoveredZone == DockZone.Right ? hi : bg, bd, icons.ArrowRight, font);
     }
 
-    private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, string icon)
+    private void DrawRootDockIndicators(Paper paper, OrigamiMetrics m, OrigamiTheme theme)
     {
-        var font = EditorTheme.DefaultFont;
+        if (_rootHoveredZone == DockZone.None) return;
+
+        float bx = _dockSpaceBounds.Min.X, by = _dockSpaceBounds.Min.Y;
+        float bw = _dockSpaceBounds.Size.X, bh = _dockSpaceBounds.Size.Y;
+        float stripSize = m.IndicatorSize + m.IndicatorGap;
+
+        float hx = bx, hy = by, hw = bw, hh = bh;
+        switch (_rootHoveredZone)
+        {
+            case DockZone.RootTop:    hh = stripSize; break;
+            case DockZone.RootBottom: hy = by + bh - stripSize; hh = stripSize; break;
+            case DockZone.RootLeft:   hw = stripSize; break;
+            case DockZone.RootRight:  hx = bx + bw - stripSize; hw = stripSize; break;
+        }
+
+        paper.Box("root_dock_highlight")
+            .PositionType(PositionType.SelfDirected)
+            .Position(hx, hy).Size(hw, hh)
+            .IsNotInteractable()
+            .BackgroundColor(Color.FromArgb(60, theme.Blue.C400))
+            .BorderColor(Color.FromArgb(120, theme.Blue.C500)).BorderWidth(2);
+
+        // Also run the drop preview animation for root zones
+        DrawDropPreview(paper, m);
+    }
+
+    private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, string icon, FontFile? font)
+    {
         paper.Box(id).PositionType(PositionType.SelfDirected).Position(x, y).Size(s, s)
             .BackgroundColor(bg).BorderColor(bd).BorderWidth(1).Rounded(4)
             .Text(icon, font!)
@@ -712,11 +793,27 @@ public class DockSpace
             .Alignment(TextAlignment.MiddleCenter);
     }
 
-    private void DrawDropPreview(Paper paper)
+    private void DrawDropPreview(Paper paper, OrigamiMetrics m)
     {
         // Compute the target rect this frame, or null when no zone is hovered.
         Rect? target = null;
-        if (_hoveredLeaf != null && _hoveredZone != DockZone.None)
+
+        // Check root zones first
+        if (_rootHoveredZone != DockZone.None)
+        {
+            float bx = _dockSpaceBounds.Min.X, by = _dockSpaceBounds.Min.Y;
+            float bw = _dockSpaceBounds.Size.X, bh = _dockSpaceBounds.Size.Y;
+            float hx = bx, hy = by, hw = bw, hh = bh;
+            switch (_rootHoveredZone)
+            {
+                case DockZone.RootTop:    hh *= 0.25f; break;
+                case DockZone.RootBottom: hy += hh * 0.75f; hh *= 0.25f; break;
+                case DockZone.RootLeft:   hw *= 0.25f; break;
+                case DockZone.RootRight:  hx += hw * 0.75f; hw *= 0.25f; break;
+            }
+            target = new Rect(new Float2(hx, hy), new Float2(hx + hw, hy + hh));
+        }
+        else if (_hoveredLeaf != null && _hoveredZone != DockZone.None)
         {
             var r = _hoveredLeafRect;
             float hx = r.Min.X, hy = r.Min.Y, hw = r.Size.X, hh = r.Size.Y;
@@ -733,7 +830,7 @@ public class DockSpace
         // Exponential smoothing frame-rate independent. `tMove` follows the target rect;
         // `tAlpha` fades the preview in/out. The chosen rates feel snappy (~120ms to settle)
         // without the perceptible lag of a slower interpolation.
-        float dt = MathF.Max(0f, (float)Runtime.Time.DeltaTime);
+        float dt = MathF.Max(0f, _lastDeltaTime);
         float tMove  = 1f - MathF.Exp(-dt * 18f);
         float tAlpha = 1f - MathF.Exp(-dt * 20f);
 
@@ -741,7 +838,7 @@ public class DockSpace
         {
             if (!_previewVisible)
             {
-                // Fully hidden → snap to target on first appearance. The user sees the preview
+                // Fully hidden -> snap to target on first appearance. The user sees the preview
                 // arrive at the right zone immediately; subsequent zone changes animate.
                 _previewRect = target.Value;
                 _previewVisible = true;
@@ -788,9 +885,53 @@ public class DockSpace
     //  DROP
     // ================================================================
 
-    private void ExecuteDrop()
+    private void ExecuteDrop(OrigamiMetrics m)
     {
         if (_draggedPanel == null || _dragSourceNode == null) return;
+
+        // Handle root-level docking
+        if (_rootHoveredZone != DockZone.None)
+        {
+            // Remove tab from source
+            int srcIdx = _dragSourceNode.Tabs!.IndexOf(_draggedPanel);
+            if (srcIdx < 0) return;
+            _dragSourceNode.RemoveTab(srcIdx);
+
+            // Create new leaf with the panel
+            var newLeaf = DockNode.Leaf(_draggedPanel);
+
+            // Split at root level with 25/75 ratio
+            SplitDirection dir;
+            bool newFirst;
+            switch (_rootHoveredZone)
+            {
+                case DockZone.RootLeft:
+                    dir = SplitDirection.Horizontal;
+                    newFirst = true;
+                    break;
+                case DockZone.RootRight:
+                    dir = SplitDirection.Horizontal;
+                    newFirst = false;
+                    break;
+                case DockZone.RootTop:
+                    dir = SplitDirection.Vertical;
+                    newFirst = true;
+                    break;
+                case DockZone.RootBottom:
+                    dir = SplitDirection.Vertical;
+                    newFirst = false;
+                    break;
+                default:
+                    return;
+            }
+
+            Root = DockNode.Split(dir, newFirst ? 0.25f : 0.75f,
+                newFirst ? newLeaf : Root,
+                newFirst ? Root : newLeaf);
+
+            CleanupTree();
+            return;
+        }
 
         if (_hoveredLeaf != null && _hoveredZone != DockZone.None)
         {
@@ -810,7 +951,7 @@ public class DockSpace
 
             CleanupTree();
         }
-        // Otherwise: dropped on nothing → floating window stays where it is
+        // Otherwise: dropped on nothing -> floating window stays where it is
     }
 
     private void SplitLeaf(DockNode target, DockPanel panel, DockZone zone)

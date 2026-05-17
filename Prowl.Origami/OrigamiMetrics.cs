@@ -86,6 +86,32 @@ public sealed class OrigamiMetrics
     /// <summary>Default label width in property grids and forms.</summary>
     public float LabelWidth = 120f;
 
+    // ── Docking ───────────────────────────────────────────────
+
+    /// <summary>Tab bar height in dock leaves.</summary>
+    public float TabBarHeight = 26f;
+
+    /// <summary>Horizontal padding inside each tab.</summary>
+    public float TabPadding = 12f;
+
+    /// <summary>Gap between tabs.</summary>
+    public float TabGap = 0f;
+
+    /// <summary>Size of the close button inside a tab.</summary>
+    public float TabCloseSize = 14f;
+
+    /// <summary>Width/height of the splitter handle between dock panes.</summary>
+    public float SplitterSize = 14f;
+
+    /// <summary>Content padding inside a dock leaf.</summary>
+    public float DockPadding = 4f;
+
+    /// <summary>Size of each dock zone indicator square.</summary>
+    public float IndicatorSize = 28f;
+
+    /// <summary>Gap between dock zone indicator squares.</summary>
+    public float IndicatorGap = 4f;
+
     /// <summary>Linearly interpolate between two metrics blocks. Used during theme transitions.</summary>
     public static OrigamiMetrics Lerp(OrigamiMetrics a, OrigamiMetrics b, float t) => new()
     {
@@ -110,6 +136,14 @@ public sealed class OrigamiMetrics
         FontSize          = LerpF(a.FontSize,          b.FontSize,          t),
         FontSizeSmall     = LerpF(a.FontSizeSmall,     b.FontSizeSmall,     t),
         LabelWidth        = LerpF(a.LabelWidth,        b.LabelWidth,        t),
+        TabBarHeight      = LerpF(a.TabBarHeight,      b.TabBarHeight,      t),
+        TabPadding        = LerpF(a.TabPadding,        b.TabPadding,        t),
+        TabGap            = LerpF(a.TabGap,            b.TabGap,            t),
+        TabCloseSize      = LerpF(a.TabCloseSize,      b.TabCloseSize,      t),
+        SplitterSize      = LerpF(a.SplitterSize,      b.SplitterSize,      t),
+        DockPadding       = LerpF(a.DockPadding,       b.DockPadding,       t),
+        IndicatorSize     = LerpF(a.IndicatorSize,     b.IndicatorSize,     t),
+        IndicatorGap      = LerpF(a.IndicatorGap,      b.IndicatorGap,      t),
     };
 
     /// <summary>Shallow copy.</summary>
@@ -136,6 +170,14 @@ public sealed class OrigamiMetrics
         FontSize          = FontSize,
         FontSizeSmall     = FontSizeSmall,
         LabelWidth        = LabelWidth,
+        TabBarHeight      = TabBarHeight,
+        TabPadding        = TabPadding,
+        TabGap            = TabGap,
+        TabCloseSize      = TabCloseSize,
+        SplitterSize      = SplitterSize,
+        DockPadding       = DockPadding,
+        IndicatorSize     = IndicatorSize,
+        IndicatorGap      = IndicatorGap,
     };
 
     private static float LerpF(float a, float b, float t) => a + (b - a) * t;
