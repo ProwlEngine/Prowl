@@ -11,6 +11,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
+using Prowl.Editor.AssetDatabase.Thumbnails;
 
 namespace Prowl.Editor.Panels;
 
