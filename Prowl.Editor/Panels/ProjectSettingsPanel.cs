@@ -98,7 +98,7 @@ public class ProjectSettingsPanel : DockPanel
                 .Enter())
             {
                 paper.Box("ps_sidebar_header")
-                    .Height(28).ChildLeft(8)
+                    .Height(EditorTheme.RowHeight).ChildLeft(EditorTheme.Padding)
                     .Text("Settings", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
@@ -115,7 +115,8 @@ public class ProjectSettingsPanel : DockPanel
                     string icon = string.IsNullOrEmpty(entry.Icon) ? EditorIcons.Gear : entry.Icon;
 
                     paper.Box($"ps_cat_{i}")
-                        .Height(30).ChildLeft(8).Rounded(3)
+                        .Height(EditorTheme.RowHeight + 4).ChildLeft(EditorTheme.Padding)
+                        .Rounded(EditorTheme.Roundness * 0.5f)
                         .Margin(0,0,0,EditorTheme.VerticalNavbarSpacing)
                         .BackgroundColor(isSelected ? EditorTheme.Purple400 : Color.Transparent)
                         .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
@@ -148,9 +149,9 @@ public class ProjectSettingsPanel : DockPanel
                 .Padding(EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding)
                 .Body(() =>
             {
-                paper.Box("ps_content_pad").Height(8);
-                currentEntry.Instance.OnGUI(paper, contentW - 16);
-                paper.Box("ps_content_pad2").Height(16);
+                paper.Box("ps_content_pad").Height(EditorTheme.Padding * 2);
+                currentEntry.Instance.OnGUI(paper, contentW - EditorTheme.SidePixelPadding * 2);
+                paper.Box("ps_content_pad2").Height(EditorTheme.Padding * 4);
             });
 
             if (beforeJson != null) DiffAndRegisterUndo(currentEntry, beforeJson);
