@@ -8,7 +8,7 @@ using System.Reflection;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
-namespace Prowl.Editor.AssetDatabase.Thumbnails;
+namespace Prowl.Editor.Thumbnails;
 
 /// <summary>
 /// Attribute to register a custom thumbnail generator for a specific asset type.

@@ -7,7 +7,7 @@ using Prowl.Runtime.Resources;
 
 using ImageMagick;
 
-namespace Prowl.Editor.AssetDatabase.Thumbnails;
+namespace Prowl.Editor.Thumbnails;
 
 /// <summary>
 /// Lazily generates small thumbnail images for assets. Queues work and processes

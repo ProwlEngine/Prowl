@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
+using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Docking;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.PropertyEditors;
