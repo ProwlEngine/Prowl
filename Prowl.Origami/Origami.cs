@@ -309,6 +309,12 @@ public static class Origami
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
 
+    // ── Image diff factory ─────────────────────────────────────
+
+    /// <summary>Begin building an image diff slider. Two images overlaid with a draggable split bar.</summary>
+    public static ImageDiffBuilder ImageDiff(Paper paper, string id, object imageA, object imageB)
+        => new ImageDiffBuilder(paper, id, imageA, imageB, Current);
+
     // ── Chat bubble factory ────────────────────────────────────
 
     /// <summary>Begin building a chat bubble. Provide content via the draw callback, then call .Show().</summary>
