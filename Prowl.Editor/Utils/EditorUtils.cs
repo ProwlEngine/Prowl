@@ -59,7 +59,7 @@ public static class EditorUtils
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 // Linux varies by distro; 'dbus-send' or 'xdg-open' are common alternatives
-                Process.Start("xdg-open", $"\"{System.IO.Path.GetDirectoryName(absPath)}\"");
+                Process.Start("xdg-open", $"\"{Path.GetDirectoryName(absPath)}\"");
             }
         }
         catch { }

@@ -51,7 +51,6 @@ public class ConsolePanel : DockPanel
     private static bool _lastCollapseState;
     private static readonly List<int> _filteredIndices = new();
 
-
     // Selected entry for inspector display
     private static int _selectedFilteredIndex = -1;
 
@@ -286,8 +285,6 @@ public class ConsolePanel : DockPanel
                             msg.IconLayout ??= canvas.CreateLayout(icon, new TextLayoutSettings { Font = font, PixelSize = size });
                             msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new TextLayoutSettings { Font = font, PixelSize = size });
                             msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new TextLayoutSettings { Font = font, PixelSize = size });
-                            
-
 
                             float padStack = 4;
                             // Draw using cached layouts

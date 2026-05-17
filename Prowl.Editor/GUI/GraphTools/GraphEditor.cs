@@ -354,7 +354,7 @@ public class GraphEditor
             _view.PanBy(paper.PointerDelta);
 
         // Pan for trackpads: shift+two-finger-drag also pans the canvas. Like middle-mouse pan, polled manually
-        // because Paper's drag events are left-mouse only and trackpad drags don't trigger mouse button events at all. 
+        // because Paper's drag events are left-mouse only and trackpad drags don't trigger mouse button events at all.
         // Only pan when the shift key is held to avoid interfering with regular one-finger trackpad scrolling.
         if (Input.IsShiftPressed && Input.GetMouseButton(0))
             _view.PanBy(paper.PointerDelta);
@@ -581,7 +581,6 @@ public class GraphEditor
         }
         catch (Exception ex) { Debug.LogError($"Save failed: {ex.Message}"); }
     }
-
 
     // --- Node creation popup ---------------------------------------------------------
     private void DrawNodeCreationPopup(Paper paper)

@@ -190,7 +190,6 @@ public static class ProjectLauncher
 
                     paper.Box("spacer");
 
-
                     // Language selector
                     using (paper.Box("pl_lang").Width(100).Height(60).Margin(0, 0, 8, 0)
                         .ChildTop(UnitValue.StretchOne).ChildBottom(UnitValue.StretchOne).Enter())
@@ -210,7 +209,6 @@ public static class ProjectLauncher
                         .FontSize(12f)
                         .Alignment(TextAlignment.MiddleRight);
                 }
-
 
                 using (paper.Column("content")
                     .Size(cardW, cardH - 90)

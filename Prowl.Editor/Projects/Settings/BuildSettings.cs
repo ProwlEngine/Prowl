@@ -9,7 +9,6 @@ using Prowl.Runtime;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 
-
 namespace Prowl.Editor.Projects.Settings;
 
 public enum BuildTarget { Windows, Linux, MacOS }
@@ -23,14 +22,12 @@ public class SceneBuildEntry
     public bool Enabled = true;
 }
 
-
 [ProjectSettings("Build", EditorIcons.Hammer, order: 50, exportToBuild: false)]
 public sealed class BuildSettings : ProjectSettingsBase
 {
     public override bool DrawInProjectSettingsPanel => false;
 
     public List<SceneBuildEntry> Scenes = new();
-
 
     public BuildConfiguration Config = BuildConfiguration.Release;
     public string OutputDirectory = "Builds";
@@ -217,7 +214,6 @@ public sealed class BuildSettings : ProjectSettingsBase
                     v => { MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); },
                     256, 4096).Show());
         }
-
 
         paper.Box("bld_sp3").Height(12);
 

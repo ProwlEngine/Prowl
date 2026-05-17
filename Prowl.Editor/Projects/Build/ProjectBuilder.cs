@@ -227,7 +227,6 @@ public static class ProjectBuilder
         return progress;
     }
 
-
     private static void HandleBuildResult(BuildPipeline pipeline, BuildResult result, BuildSettings settings, bool andRun)
     {
         if (result.Success)

@@ -276,7 +276,6 @@ public class PreferencesPanel : DockPanel
         });
     }
 
-
     private void PrefTextField(Paper paper, EditorSettings s, string label, string value, Action<string> set)
     {
         string baseId = $"pref_ft_{label.Replace(" ", "_")}";
@@ -288,7 +287,6 @@ public class PreferencesPanel : DockPanel
                 s.Save();
             }).Show());
     }
-
 
     private void SzSlider(Paper paper, EditorSettings s, string label, float value, float min, float max, Action<float> set, bool applyOnSlide = true)
     {

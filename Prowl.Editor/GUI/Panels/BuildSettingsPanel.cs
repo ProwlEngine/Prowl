@@ -15,7 +15,6 @@ using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 
-
 namespace Prowl.Editor.GUI.Panels;
 
 public class BuildSettingsPanel : DockPanel
@@ -173,13 +172,11 @@ public class BuildSettingsPanel : DockPanel
             {
                 Origami.ProgressBar(paper, "bp_progressBar", BuildProgress).Thickness(10).Show();
 
-
                 paper.Box("bp_sidebar_header")
                     .Height(28).ChildLeft(8)
                     .Clip()
                     .Text(BuildState, font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
-
 
                 // Build buttons
                 using (paper.Row("bp_bld_buttons").Height(32).RowBetween(8).ChildLeft(4).Enter())
@@ -201,7 +198,6 @@ public class BuildSettingsPanel : DockPanel
 
         }
     }
-
 
     public List<BuildPipelineInfo> GetBuildPlatforms()
     {

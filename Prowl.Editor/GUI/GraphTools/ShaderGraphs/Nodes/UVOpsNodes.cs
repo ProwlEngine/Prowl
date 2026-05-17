@@ -3,7 +3,6 @@
 
 using Prowl.Vector;
 
-
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
 // -----------------------------------------------------------------------------

@@ -91,7 +91,7 @@ public class EditorSettings
 
         EditorTheme.DefaultFontName = t.DefaultFontName;
         EditorTheme.DefaultBoldFontName = t.DefaultBoldFontName;
-                
+
         EditorApplication.Instance?.InitializeFont();
 
         EditorTheme.UserScale = t.UserScale;

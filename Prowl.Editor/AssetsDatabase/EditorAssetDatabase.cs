@@ -997,7 +997,6 @@ public class EditorAssetDatabase : IAssetDatabase
             MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
             OnAssetsImported?.Invoke(new[] { entry.Path });
 
-
             // Reload the asset and enqueue thumbnail regeneration
             var reloaded = Get(guid);
             if (reloaded != null)

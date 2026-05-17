@@ -36,7 +36,6 @@ public class CreateGameObjectMenuAttribute : Attribute
     }
 }
 
-
 /// <summary>
 /// Discovers static methods decorated with <see cref="CreateGameObjectMenuAttribute"/>
 /// and provides menu-building helpers for the Hierarchy panel and GameObject menu bar.

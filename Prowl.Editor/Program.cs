@@ -49,7 +49,6 @@ public static class Program
             // Load user script assemblies before registry scanning
             ScriptAssemblyManager.LoadAssemblies(project);
 
-
             // Initialize asset database for the already-opened project
             var db = new EditorAssetDatabase(Project.Current!);
             db.Initialize();
@@ -57,18 +56,11 @@ public static class Program
             // Load project settings
             ProjectSettingsRegistry.OnProjectOpened();
 
-
             Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath+"/../Builds");
             return;
         }
 
-
-
-        var instance = EditorSettings.Instance;
-
         var editor = new EditorApplication();
-        //editor.Run("Prowl Editor", instance.WindowWidth, instance.WindowHeight);
-
         editor.Run("Prowl Editor", 1200, 800);
 
         Runtime.Window.InternalWindow.WindowState = EditorSettings.Instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal;

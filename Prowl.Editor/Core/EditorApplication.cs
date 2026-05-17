@@ -64,7 +64,6 @@ public class EditorApplication : Game
             instance.WindowY > 0 ? instance.WindowY : Window.Position.Y);
     }
 
-
     public override void Initialize()
     {
         Instance = this;

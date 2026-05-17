@@ -696,7 +696,7 @@ public class ProjectPanel : DockPanel
                         .FontSize(8f)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
-                
+
                 using (paper.Box($"proj_bc_{i}")
                     .Width(UnitValue.Auto)
                     .Height(EditorTheme.RowHeight)
@@ -1065,7 +1065,6 @@ public class ProjectPanel : DockPanel
         });
     }
 
-
     private static void OpenWithSystem(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
@@ -1091,7 +1090,6 @@ public class ProjectPanel : DockPanel
         float cellSize = _thumbnailSize + 8f;
         float labelH = 18f;
 
-
         float totalCellH = cellSize + labelH;
         float gap = 6f;
         // Available width minus padding (12 = 6 left margin + 6 right margin from parent)
@@ -1114,7 +1112,6 @@ public class ProjectPanel : DockPanel
                     int idx = i + j;
                     var item = entries[idx];
                     bool isSelected = Selection.IsSelected(item);
-
 
                     var size = paper.MeasureText(item.Name, EditorTheme.FontSize - 3, font);
 

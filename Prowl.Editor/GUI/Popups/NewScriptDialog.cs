@@ -408,7 +408,6 @@ public static class NewScriptDialog
             .Replace("{[className]}", className);
     }
 
-
     [ScriptTemplate("Look At Target",
         "Rotates the GameObject each frame to face an assigned target Transform (turrets, NPC heads, billboards).",
         EditorIcons.Eye, Order = 50)]

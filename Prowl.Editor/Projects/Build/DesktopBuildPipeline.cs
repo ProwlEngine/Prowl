@@ -29,7 +29,6 @@ public class DesktopBuildPipeline : BuildPipeline
         return BuildAsync(Project.Current!.RootPath, settings, settings.OutputDirectory).GetAwaiter().GetResult();
     }
 
-
     public override async Task<BuildResult> BuildAsync(
         string projectPath,
         BuildSettings settings,
@@ -74,8 +73,6 @@ public class DesktopBuildPipeline : BuildPipeline
             if (Directory.Exists(outputDirectory))
                 Directory.Delete(outputDirectory, recursive: true);
             Directory.CreateDirectory(outputDirectory);
-
-
 
             string contentDir = Path.Combine(outputDirectory, "Content");
             string settingsDir = Path.Combine(contentDir, "Settings");
@@ -234,8 +231,6 @@ public class DesktopBuildPipeline : BuildPipeline
             {
                 foreach (var file in Directory.EnumerateFiles(engineRuntimes, "*.*", SearchOption.AllDirectories))
                 {
-                    //if (!IsEngineNativeLib(Path.GetFileName(file))) continue;
-
                     string relative = Path.GetRelativePath(engineRuntimes, file);
                     string dest = Path.Combine(outputDirectory, "runtimes", relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
@@ -540,7 +535,6 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine($"    <DefineConstants>PROWL;{versionDefine};{FinalizeDefineString(settings, this)}</DefineConstants>"); // NO PROWL_EDITOR
         sb.AppendLine($"    <RuntimeIdentifier>{desktopProfile.RuntimeIdentifier}</RuntimeIdentifier>");
 
-
         sb.AppendLine("    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>");
 
         if (desktopProfile.SelfContained)
@@ -579,7 +573,6 @@ public class DesktopBuildPipeline : BuildPipeline
         // User NuGet packages from ProjectSettings/Packages.json. Desktop builds bundle the
         // runtime / non-editor packages (EditorOnly packages live only inside the editor).
         ScriptCompiler.AppendNuGetPackages(sb, project, isEditorAssembly: false);
-
 
         // Compile items just the generated Program.cs (user scripts are a separate pre-compiled DLL)
         sb.AppendLine("  <ItemGroup>");
@@ -694,8 +687,6 @@ public class DesktopBuildPipeline : BuildPipeline
             // Skip native (unmanaged) DLLs - only move managed assemblies
             try { AssemblyName.GetAssemblyName(file); }
             catch (BadImageFormatException) { continue; }
-
-
 
             string dest = Path.Combine(libsDir, fileName);
             //Runtime.Debug.Log($"WillMove to: {dest}");

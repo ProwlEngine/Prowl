@@ -308,7 +308,6 @@ public static class EditorTheme
     /// </summary>
     public static Color Neutral500 = ColorTranslator.FromHtml("#2E2D35");
 
-
     // -------------------------------------------------------------
     //  PURPLE Primary brand / interactive ramp
     //  ★ Primary = Purple400 (#563784)
@@ -362,7 +361,6 @@ public static class EditorTheme
     /// that sits on a purple-tinted surface.
     /// </summary>
     public static Color Purple700 = ColorTranslator.FromHtml("#D4B8F4");
-
 
     // -------------------------------------------------------------
     //  BLUE Secondary / informational ramp
@@ -418,7 +416,6 @@ public static class EditorTheme
     /// </summary>
     public static Color Blue700 = ColorTranslator.FromHtml("#E8F2F9");
 
-
     // -------------------------------------------------------------
     //  RED Danger / error / destructive ramp
     //  ★ Primary = Red400 (#CB594F)
@@ -470,7 +467,6 @@ public static class EditorTheme
     /// Faintest danger wash. Barely-perceptible red tint for error state backgrounds.
     /// </summary>
     public static Color Red700 = ColorTranslator.FromHtml("#FDE0DE");
-
 
     // -------------------------------------------------------------
     //  INK Text and border hierarchy
