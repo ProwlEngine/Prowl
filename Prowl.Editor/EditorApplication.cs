@@ -193,7 +193,24 @@ public class EditorApplication : Game
         };
         PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
         {
-            GUI.PropertyGrid.DrawTypePicker(paper, id, baseType, currentValue, onChange);
+            // Find all concrete types implementing the base type
+            var types = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
+                .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
+                .Take(20).ToArray();
+
+            if (types.Length == 0) return;
+
+            Type? currentType = currentValue?.GetType();
+            int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) + 1 : 0;
+            var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
+
+            OrigamiUI.Origami.Dropdown(paper, $"{id}_dd", selectedIndex,
+                idx =>
+                {
+                    if (idx == 0) onChange(null);
+                    else if (idx >= 1 && idx <= types.Length) onChange(Activator.CreateInstance(types[idx - 1]));
+                }, names).Show();
         };
         PropertyGridConfig.FallbackFieldDrawer = (paper, id, label, fieldType, value, onChange, depth) =>
         {

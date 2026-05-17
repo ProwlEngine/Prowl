@@ -227,8 +227,8 @@ public sealed class PropertyGridBuilder
 //  PropertyGrid Renderer - internal drawing logic
 // ════════════════════════════════════════════════════════════════
 
-/// <summary>Internal rendering logic for the PropertyGrid builder.</summary>
-internal static class PropertyGridRenderer
+/// <summary>Rendering logic for the PropertyGrid builder.</summary>
+public static class PropertyGridRenderer
 {
     [ThreadStatic] private static object? _rootTarget;
     [ThreadStatic] private static PropertyGridConfig? _activeConfig;
@@ -534,7 +534,27 @@ internal static class PropertyGridRenderer
 
                     using (paper.Row($"{id}_item_{sk}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
                     {
-                        // Reorder buttons
+                        // Compact index label (sized to content, not full LabelWidth)
+                        string indexLabel = $"[{idx}]";
+                        float indexW = indexLabel.Length * m.FontSize * 0.55f + m.PaddingSmall * 2;
+                        var font = theme.Font;
+                        if (font != null)
+                        {
+                            paper.Box($"{id}_idx_{sk}")
+                                .Width(indexW).Height(m.RowHeight)
+                                .IsNotInteractable()
+                                .Text(indexLabel, font).TextColor(theme.Ink.C400)
+                                .FontSize(m.FontSize).Alignment(TextAlignment.MiddleRight);
+                        }
+
+                        // Element value (full width)
+                        using (paper.Box($"{id}_val_{sk}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
+                        {
+                            DrawFieldControl(paper, $"{id}_el_{sk}", elementType, list[i], config,
+                                v => { list[idx] = v; onChange(list); }, depth + 1);
+                        }
+
+                        // Reorder + remove buttons (right side)
                         Origami.IconButton(paper, $"{id}_up_{sk}", theme.Icons.ChevronUp, () =>
                         {
                             if (idx <= 0) return;
@@ -553,14 +573,6 @@ internal static class PropertyGridRenderer
                             onChange(list);
                         }).Disabled(idx >= list.Count - 1).Height(m.CompactHeight).Show();
 
-                        // Element value
-                        using (paper.Column($"{id}_val_{sk}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
-                        {
-                            DrawField(paper, $"{id}_el_{sk}", $"[{idx}]", elementType, list[i], config,
-                                v => { list[idx] = v; onChange(list); }, depth + 1);
-                        }
-
-                        // Remove button
                         Origami.IconButton(paper, $"{id}_rm_{sk}", theme.Icons.Close, () =>
                         {
                             stableIds.RemoveAt(idx);
