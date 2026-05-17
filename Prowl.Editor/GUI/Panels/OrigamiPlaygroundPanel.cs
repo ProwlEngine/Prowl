@@ -359,6 +359,10 @@ public class OrigamiPlaygroundPanel : DockPanel
     private string? _treeSelectedId;
     private HashSet<string> _treeChecked = new() { "src", "main_cs" };
 
+    // -- Breadcrumb state --------------------------------------
+    private string _bcSelected = "Home > Products > Electronics > Phones";
+    private int _bcSepIndex = 0;
+
     // -- PropertyGrid state ------------------------------------
     private DemoPropertyGridTarget _pgTarget = new();
     private DemoPropertyGridTarget _pgTarget2 = new()
@@ -436,6 +440,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 Section_ContextMenus(paper);
                 Section_Modals(paper);
                 Section_PropertyGrid(paper);
+                Section_Breadcrumbs(paper);
                 Section_Labels(paper);
                 Section_Loading(paper);
                 Section_Tree(paper);
@@ -2106,6 +2111,67 @@ public class OrigamiPlaygroundPanel : DockPanel
             {
                 Origami.PropertyGrid(paper, "pg_demo2", _pgTarget2, EditorApplication.PropertyGridConfig).Show();
             }
+        });
+    }
+
+    private void Section_Breadcrumbs(Paper paper)
+    {
+        Origami.Foldout(paper, "op_fo_bc", "Breadcrumbs").Body(() =>
+        {
+            // File system style
+            var fsItems = new List<BreadcrumbItem>
+            {
+                new("Home", EditorIcons.Folder),
+                new("Documents", EditorIcons.Folder),
+                new("Projects", EditorIcons.Folder),
+                new("Prowl", EditorIcons.Folder),
+            };
+
+            LabelRow(paper, "bc_chev", "Chevron (default)", () =>
+                Origami.Breadcrumb(paper, "bc_demo_chev", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").Show());
+
+            LabelRow(paper, "bc_slash", "Slash", () =>
+                Origami.Breadcrumb(paper, "bc_demo_slash", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").Slashes().Show());
+
+            LabelRow(paper, "bc_dot", "Dot", () =>
+                Origami.Breadcrumb(paper, "bc_demo_dot", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").Dots().Show());
+
+            LabelRow(paper, "bc_arrow", "Arrow", () =>
+                Origami.Breadcrumb(paper, "bc_demo_arrow", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").Arrows().Show());
+
+            LabelRow(paper, "bc_custom", "Custom ( :: )", () =>
+                Origami.Breadcrumb(paper, "bc_demo_custom", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").CustomSeparator(" :: ").Show());
+
+            LabelRow(paper, "bc_nosep", "No separator", () =>
+                Origami.Breadcrumb(paper, "bc_demo_nosep", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").NoSeparator().Show());
+
+            // Truncate first (icon only for root)
+            LabelRow(paper, "bc_trunc", "Truncate first (icon root)", () =>
+                Origami.Breadcrumb(paper, "bc_demo_trunc", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").TruncateFirst().Show());
+
+            // Primary variant
+            LabelRow(paper, "bc_primary", "Primary active", () =>
+                Origami.Breadcrumb(paper, "bc_demo_primary", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").Primary().Show());
+
+            // No highlight
+            LabelRow(paper, "bc_nohl", "No highlight", () =>
+                Origami.Breadcrumb(paper, "bc_demo_nohl", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").HighlightLast(false).Show());
+
+            // Active index override
+            LabelRow(paper, "bc_active", "Active index = 1", () =>
+                Origami.Breadcrumb(paper, "bc_demo_active", fsItems,
+                    item => _bcSelected = $"Clicked: {item.Label}").ActiveIndex(1).Primary().Show());
+
+            StateLine(paper, "bc_status", _bcSelected);
         });
     }
 

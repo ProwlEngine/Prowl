@@ -309,6 +309,13 @@ public static class Origami
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
 
+    // ── Breadcrumb factory ─────────────────────────────────────
+
+    /// <summary>Begin building a breadcrumb navigation trail.</summary>
+    public static BreadcrumbBuilder Breadcrumb(Paper paper, string id,
+        IReadOnlyList<BreadcrumbItem> items, Action<BreadcrumbItem> onClick)
+        => new BreadcrumbBuilder(paper, id, items, onClick, Current);
+
     // ── App bar factory ────────────────────────────────────────
 
     /// <summary>Begin building an app bar (menubar or footer). Chain .Menu(), .Center(), .Right(), then .Show().</summary>

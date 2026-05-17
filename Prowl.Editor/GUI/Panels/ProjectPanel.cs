@@ -665,57 +665,22 @@ public class ProjectPanel : DockPanel
 
     private void DrawBreadcrumb(Paper paper, Scribe.FontFile font, float width, float height)
     {
-        using (paper.Row("proj_breadcrumb")
-            .Height(height)
-            .Margin(6, 6)
-            .RowBetween(2)
-            .Enter())
+        // Build breadcrumb items from current folder path
+        var items = new List<BreadcrumbItem> { new("Assets", EditorIcons.Folder, "") };
+        if (!string.IsNullOrEmpty(_currentFolder))
         {
-            // Split current folder into parts
-            var parts = new List<(string name, string path)> { ("Assets", "") };
-            if (!string.IsNullOrEmpty(_currentFolder))
+            string accumulated = "";
+            foreach (var part in _currentFolder.Split('/'))
             {
-                string accumulated = "";
-                foreach (var part in _currentFolder.Split('/'))
-                {
-                    accumulated = accumulated.Length > 0 ? accumulated + "/" + part : part;
-                    parts.Add((part, accumulated));
-                }
-            }
-
-            for (int i = 0; i < parts.Count; i++)
-            {
-                var (name, path) = parts[i];
-                if (i > 0)
-                {
-                    paper.Box($"proj_bc_sep_{i}")
-                        .Width(UnitValue.Auto)
-                        .Height(EditorTheme.RowHeight)
-                        .Text(EditorIcons.AngleRight, font)
-                        .TextColor(EditorTheme.Ink300)
-                        .FontSize(8f)
-                        .Alignment(TextAlignment.MiddleCenter);
-                }
-
-                using (paper.Box($"proj_bc_{i}")
-                    .Width(UnitValue.Auto)
-                    .Height(EditorTheme.RowHeight)
-                    .Hovered.BackgroundColor(EditorTheme.Neutral500).End()
-                    .Rounded(3)
-                    .OnClick(path, (p, _) => _currentFolder = p)
-                    .Enter())
-                {
-                    paper.Box("breadcrump")
-                        .Width(UnitValue.Auto)
-                        .Height(EditorTheme.RowHeight)
-                        .Margin(5, 0)
-                        .Text(name, font)
-                        .TextColor(i == parts.Count - 1 ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                        .FontSize(EditorTheme.FontSize - 2)
-                        .Alignment(TextAlignment.MiddleCenter);
-                }
+                accumulated = accumulated.Length > 0 ? accumulated + "/" + part : part;
+                items.Add(new BreadcrumbItem(part, "", accumulated));
             }
         }
+
+        Origami.Breadcrumb(paper, "proj_bc", items, item =>
+        {
+            _currentFolder = (string)(item.UserData ?? "");
+        }).Height(height).TruncateFirst().Show();
     }
 
     // ================================================================
