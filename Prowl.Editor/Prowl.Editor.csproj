@@ -20,10 +20,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
-    <ProjectReference Include="..\Prowl.Origami\Prowl.Origami.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Prowl.Origami" Version="1.0.0" />
     <PackageReference Include="Prowl.Rosetta" Version="1.1.0" />
   </ItemGroup>
 
