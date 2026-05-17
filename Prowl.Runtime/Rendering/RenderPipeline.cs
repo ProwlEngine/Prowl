@@ -566,6 +566,9 @@ public abstract class RenderPipeline : EngineObject
             batches.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
         }
 
+        for (int i = 0; i < batches.Count; i++)
+            RenderStats.AddBatch();
+
         // ========== PHASE 2: Draw Batches ==========
         // For each batch, bind state once then draw all objects in that batch
         foreach (RenderBatch batch in batches)

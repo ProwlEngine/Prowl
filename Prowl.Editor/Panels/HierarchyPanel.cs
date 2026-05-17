@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Docking;
-using Prowl.Editor.Widgets;
-using Prowl.Editor.Widgets.Popups;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -12,6 +12,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
+using Prowl.Rosetta;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -21,7 +22,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Hierarchy")]
 public class HierarchyPanel : DockPanel
 {
-    public override string Title => "Hierarchy";
+    public override string Title => Loc.Get("panel.hierarchy");
     public override string Icon => EditorIcons.Sitemap;
 
     private string _searchText = "";
@@ -92,7 +93,7 @@ public class HierarchyPanel : DockPanel
                 {
                     paper.Box("hier_prefab_back")
                         .Width(UnitValue.Auto).Height(24)
-                        .Text($"{EditorIcons.ArrowLeft}  Back", font)
+                        .Text($"{EditorIcons.ArrowLeft}  {Loc.Get("hierarchy.back")}", font)
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
@@ -127,7 +128,7 @@ public class HierarchyPanel : DockPanel
 
                     paper.Box("hier_prefab_spacer");
 
-                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  Save & Exit", () => Prefabs.PrefabEditingMode.SaveAndExit()).Width(100).Show();
+                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  {Loc.Get("hierarchy.save_and_exit")}", () => Prefabs.PrefabEditingMode.SaveAndExit()).Width(100).Show();
                 }
             }
 
@@ -138,12 +139,12 @@ public class HierarchyPanel : DockPanel
             {
                 paper.Box("hier_empty")
                     .Height(60)
-                    .Text("No Scene Loaded", font)
+                    .Text(Loc.Get("hierarchy.no_scene_loaded"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
-                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  New Scene", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
+                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
                 return;
             }
 
@@ -271,6 +272,13 @@ public class HierarchyPanel : DockPanel
                         var go = (GameObject)e.Node.UserData!;
                         Selection.HandleListClick(go, (IReadOnlyList<object>)flatObjects, e.Index, ctrl, shift);
                     })
+                    .OnDoubleClick(e =>
+                    {
+                        // Focus the scene view camera on the double-clicked object
+                        var go = (GameObject)e.Node.UserData!;
+                        Selection.Select(go);
+                        SceneViewPanel.ActiveCamera?.FocusSelection();
+                    })
                     .OnRightClick(e =>
                     {
                         var go = (GameObject)e.Node.UserData!;
@@ -340,7 +348,7 @@ public class HierarchyPanel : DockPanel
                     })
                     .IsPinged(n => _pingedGameObjects.Contains((GameObject)n.UserData!) && Selection.PingedGuid != Guid.Empty)
                     .PingAlpha(() => Selection.GetPingAlpha())
-                    .EmptyMessage("Scene is empty")
+                    .EmptyMessage(Loc.Get("hierarchy.scene_empty"))
                     .Show();
 
                 // --- All drop handling uses hier_bg (the stable outer background) ---
@@ -352,7 +360,7 @@ public class HierarchyPanel : DockPanel
                     paper.Box("hier_drop_zone").Height(24)
                         .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
                         .Rounded(3)
-                        .Text("Drop to spawn here", font)
+                        .Text(Loc.Get("hierarchy.drop_to_spawn"), font)
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSize - 2)
                         .Alignment(TextAlignment.MiddleCenter);
@@ -526,7 +534,7 @@ public class HierarchyPanel : DockPanel
                 int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
                 if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
                 {
-                    Toasts.Show("Prefab Structure", "Cannot move a prefab child. Break the prefab first.", ToastType.Warning, 3f);
+                    Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_move"), ToastType.Warning, 3f);
                     continue;
                 }
             }
@@ -542,7 +550,7 @@ public class HierarchyPanel : DockPanel
                 case DropPosition.Into:
                     if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
                     {
-                        Toasts.Show("Prefab Structure", "Cannot add children to a prefab instance. Break the prefab first.", ToastType.Warning, 3f);
+                        Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_add"), ToastType.Warning, 3f);
                         continue;
                     }
                     dragged.SetParent(target);
@@ -670,7 +678,7 @@ public class HierarchyPanel : DockPanel
             var cam = SceneViewPanel.ActiveCamera;
             if (cam != null)
             {
-                builder.Item("Move to View", () =>
+                builder.Item(Loc.Get("hierarchy.move_to_view"), () =>
                 {
                     foreach (var go in selectedGOs)
                     {
@@ -680,7 +688,7 @@ public class HierarchyPanel : DockPanel
                     EditorSceneManager.IsDirty = true;
                 }, icon: EditorIcons.ArrowRight);
 
-                builder.Item("Move View To", () =>
+                builder.Item(Loc.Get("hierarchy.move_view_to"), () =>
                 {
                     cam.SetPosition(firstSelected!.Transform.Position);
                     cam.SetOrientation((float)firstSelected!.Transform.LocalEulerAngles.Y, (float)firstSelected!.Transform.LocalEulerAngles.X);
@@ -692,26 +700,26 @@ public class HierarchyPanel : DockPanel
             // Prefab operations
             if (!multiSelect && firstSelected!.IsPrefabInstance)
             {
-                builder.Item("Select Prefab Asset", () =>
+                builder.Item(Loc.Get("hierarchy.select_prefab_asset"), () =>
                 {
                     Selection.Ping(firstSelected.PrefabAssetId);
                 }, icon: EditorIcons.Cubes);
 
                 bool hasOverrides = Prefabs.PrefabUtility.HasAnyOverrides(firstSelected);
 
-                builder.Item("Apply Prefab Overrides", () =>
+                builder.Item(Loc.Get("hierarchy.apply_prefab_overrides"), () =>
                 {
                     var root = Prefabs.PrefabUtility.GetPrefabInstanceRoot(firstSelected);
                     if (root != null) Prefabs.PrefabUtility.ApplyOverrides(root);
                 }, enabled: hasOverrides, icon: EditorIcons.Check);
 
-                builder.Item("Revert to Prefab", () =>
+                builder.Item(Loc.Get("hierarchy.revert_to_prefab"), () =>
                 {
                     var root = Prefabs.PrefabUtility.GetPrefabInstanceRoot(firstSelected);
                     if (root != null) Prefabs.PrefabUtility.RevertOverrides(root);
                 }, enabled: hasOverrides, icon: EditorIcons.ArrowsRotate);
 
-                builder.Item("Break Prefab Instance", () =>
+                builder.Item(Loc.Get("hierarchy.break_prefab_instance"), () =>
                 {
                     Prefabs.PrefabUtility.BreakPrefabInstance(firstSelected);
                 }, icon: EditorIcons.LinkSlash);
@@ -725,18 +733,18 @@ public class HierarchyPanel : DockPanel
 
             if (multiSelect)
             {
-                builder.Item($"Duplicate ({selectedGOs.Count})", () =>
+                builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
                 {
                     var dupes = GameObjectClipboard.Duplicate(selectedGOs);
                     foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
                 }, icon: EditorIcons.Copy);
 
-                builder.Item($"Rename ({selectedGOs.Count})", () =>
+                builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
                 {
                     StartRenameGO(firstSelected!, selectedGOs);
                 }, icon: EditorIcons.PenToSquare);
 
-                builder.Item($"Delete ({selectedGOs.Count})", () =>
+                builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
                 {
                     foreach (var go in selectedGOs.ToList()) DeleteGameObject(go);
                 }, icon: EditorIcons.Trash);
@@ -744,7 +752,7 @@ public class HierarchyPanel : DockPanel
                 builder.Separator();
 
                 bool anyEnabled = selectedGOs.Any(g => g.Enabled);
-                builder.Item(anyEnabled ? "Disable All" : "Enable All", () =>
+                builder.Item(anyEnabled ? Loc.Get("hierarchy.disable_all") : Loc.Get("hierarchy.enable_all"), () =>
                 {
                     bool newState = !anyEnabled;
                     var oldStates = selectedGOs.Select(g => (g.Identifier, g.Enabled)).ToList();
@@ -757,18 +765,18 @@ public class HierarchyPanel : DockPanel
             else
             {
                 var go = firstSelected!;
-                builder.Item("Duplicate", () =>
+                builder.Item(Loc.Get("hierarchy.duplicate"), () =>
                 {
                     var dupes = GameObjectClipboard.Duplicate([go]);
                     foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
                 }, icon: EditorIcons.Copy);
-                builder.Item("Rename", () =>
+                builder.Item(Loc.Get("hierarchy.rename"), () =>
                 {
                     StartRenameGO(go, [go]);
                 }, icon: EditorIcons.PenToSquare);
-                builder.Item("Delete", () => DeleteGameObject(go), icon: EditorIcons.Trash);
+                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash);
                 builder.Separator();
-                builder.Item(go.Enabled ? "Disable" : "Enable", () =>
+                builder.Item(go.Enabled ? Loc.Get("hierarchy.disable") : Loc.Get("hierarchy.enable"), () =>
                 {
                     Undo.RecordGameObjectChange(go, "Toggle Visibility", go.Enabled, !go.Enabled, (g, e) => g.Enabled = e);
                     go.Enabled = !go.Enabled;
@@ -850,7 +858,7 @@ public class HierarchyPanel : DockPanel
             int childIdx = go.Parent.Children.IndexOf(go);
             if (childIdx >= 0 && childIdx < go.Parent.PrefabChildCount)
             {
-                Toasts.Show("Prefab Structure", "Cannot delete a prefab child. Break the prefab first.", ToastType.Warning, 3f);
+                Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_delete"), ToastType.Warning, 3f);
                 return;
             }
         }

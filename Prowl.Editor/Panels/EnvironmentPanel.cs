@@ -3,23 +3,24 @@
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using VColor = Prowl.Vector.Color;
 
-using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Panels;
 
 [EditorWindow("General/Environment")]
 public class EnvironmentPanel : DockPanel
 {
-    public override string Title => "Environment";
+    public override string Title => Loc.Get("panel.environment");
     public override string Icon => EditorIcons.Sun;
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -59,14 +60,14 @@ public class EnvironmentPanel : DockPanel
             switch (sky.Mode)
             {
                 case Scene.SkyboxMode.SolidColor:
-                    PropertyGrid.DrawField(paper, $"{id}_solid", "Color", typeof(VColor), sky.SolidColor,
+                    PropertyGridUtils.DrawField(paper, $"{id}_solid", "Color", typeof(VColor), sky.SolidColor,
                         v => { sky.SolidColor = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
                     break;
 
                 case Scene.SkyboxMode.Gradient:
-                    PropertyGrid.DrawField(paper, $"{id}_top", "Top Color", typeof(VColor), sky.GradientTop,
+                    PropertyGridUtils.DrawField(paper, $"{id}_top", "Top Color", typeof(VColor), sky.GradientTop,
                         v => { sky.GradientTop = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
-                    PropertyGrid.DrawField(paper, $"{id}_bot", "Bottom Color", typeof(VColor), sky.GradientBottom,
+                    PropertyGridUtils.DrawField(paper, $"{id}_bot", "Bottom Color", typeof(VColor), sky.GradientBottom,
                         v => { sky.GradientBottom = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
                     InspectorRow.Draw(paper, $"{id}_exp", "Exponent", () =>
                         Origami.Slider(paper, $"{id}_exp_v", sky.GradientExponent,
@@ -75,7 +76,7 @@ public class EnvironmentPanel : DockPanel
                     break;
 
                 case Scene.SkyboxMode.Material:
-                    PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), sky.CustomMaterial,
+                    PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), sky.CustomMaterial,
                         v => { sky.CustomMaterial = (AssetRef<Material>)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
                     break;
 
@@ -100,7 +101,7 @@ public class EnvironmentPanel : DockPanel
 
             if (fog.Mode != Scene.FogParams.FogMode.Off)
             {
-                PropertyGrid.DrawField(paper, $"{id}_color", "Color", typeof(VColor), fog.Color,
+                PropertyGridUtils.DrawField(paper, $"{id}_color", "Color", typeof(VColor), fog.Color,
                     v => { fog.Color = (VColor)v!; scene.Fog = fog; EditorSceneManager.IsDirty = true; }, 0);
 
                 if (fog.Mode == Scene.FogParams.FogMode.Linear)
@@ -140,14 +141,14 @@ public class EnvironmentPanel : DockPanel
 
             if (ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform)
             {
-                PropertyGrid.DrawField(paper, $"{id}_color", "Color", typeof(Float4), ambient.Color,
+                PropertyGridUtils.DrawField(paper, $"{id}_color", "Color", typeof(Float4), ambient.Color,
                     v => { ambient.Color = (Float4)v!; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }, 0);
             }
             else
             {
-                PropertyGrid.DrawField(paper, $"{id}_sky", "Sky Color", typeof(Float4), ambient.SkyColor,
+                PropertyGridUtils.DrawField(paper, $"{id}_sky", "Sky Color", typeof(Float4), ambient.SkyColor,
                     v => { ambient.SkyColor = (Float4)v!; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }, 0);
-                PropertyGrid.DrawField(paper, $"{id}_gnd", "Ground Color", typeof(Float4), ambient.GroundColor,
+                PropertyGridUtils.DrawField(paper, $"{id}_gnd", "Ground Color", typeof(Float4), ambient.GroundColor,
                     v => { ambient.GroundColor = (Float4)v!; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }, 0);
             }
         });

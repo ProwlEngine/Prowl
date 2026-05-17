@@ -289,6 +289,24 @@ public class DefaultRenderPipeline : RenderPipeline
 
         HashSet<int> culledRenderableIndices = CullRenderables(renderables, css.WorldFrustum, css.CullingMask);
 
+        RenderStats.AddCamera();
+        int collected = renderables.Count;
+        int culled = culledRenderableIndices.Count;
+        RenderStats.AddRenderables(collected, culled, collected - culled);
+
+        int dirCount = 0, pointCount = 0, spotCount = 0, shadowCount = 0;
+        foreach (var l in lights)
+        {
+            switch (l.GetLightType())
+            {
+                case LightType.Directional: dirCount++; break;
+                case LightType.Point: pointCount++; break;
+                case LightType.Spot: spotCount++; break;
+            }
+            if (l.DoCastShadows()) shadowCount++;
+        }
+        RenderStats.AddLightCounts(lights.Count, dirCount, pointCount, spotCount, shadowCount);
+
         // =======================================================
         // 4. Pre Render
         foreach (ImageEffect effect in allEffects)
@@ -304,7 +322,9 @@ public class DefaultRenderPipeline : RenderPipeline
 
         Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
         Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
+        RenderStats.BeginShadowPass();
         lightSystem.RenderShadows(this, css.CameraPosition, renderables);
+        RenderStats.EndShadowPass();
 
         AssignCameraMatrices(css.View, css.Projection);
         lightSystem.UploadGlobalUniforms();

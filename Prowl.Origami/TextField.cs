@@ -57,6 +57,9 @@ public sealed class TextFieldBuilder
     private bool _multiLine;
     private int _multiLineRows = 4;
 
+    // Behaviour
+    private bool _submitOnEnter;
+
     // Filtering
     private Func<char, string, bool>? _charFilter;
 
@@ -112,6 +115,8 @@ public sealed class TextFieldBuilder
     public TextFieldBuilder MaxLength(int maxLength) { _maxLength = Math.Max(0, maxLength); return this; }
     public TextFieldBuilder Placeholder(string text) { _placeholder = text ?? string.Empty; return this; }
     public TextFieldBuilder SelectAllOnFocus(bool select = true) { _selectAllOnFocus = select; return this; }
+    /// <summary>When true, pressing Enter in a single-line field commits the value and defocuses.</summary>
+    public TextFieldBuilder SubmitOnEnter(bool submit = true) { _submitOnEnter = submit; return this; }
 
     // ── Modes ──────────────────────────────────────────────────────────
 
@@ -425,6 +430,13 @@ public sealed class TextFieldBuilder
                 // AutoComplete popover ─────────────────────────────────
                 if (_acItems != null && _acItems.Count > 0)
                     DrawAutoCompletePopover(rowHandle, ramp);
+
+                // Submit on Enter: defocus the field when Enter is pressed (single-line only)
+                if (_submitOnEnter && !_multiLine && _paper.IsParentFocusWithin
+                    && _paper.IsKeyPressed(PaperKey.Enter))
+                {
+                    _paper.ClearFocus();
+                }
             }
 
             // ── Helper / error line ───────────────────────────────────

@@ -227,8 +227,8 @@ public sealed class PropertyGridBuilder
 //  PropertyGrid Renderer - internal drawing logic
 // ════════════════════════════════════════════════════════════════
 
-/// <summary>Internal rendering logic for the PropertyGrid builder.</summary>
-internal static class PropertyGridRenderer
+/// <summary>Rendering logic for the PropertyGrid builder.</summary>
+public static class PropertyGridRenderer
 {
     [ThreadStatic] private static object? _rootTarget;
     [ThreadStatic] private static PropertyGridConfig? _activeConfig;
@@ -367,11 +367,39 @@ internal static class PropertyGridRenderer
 
             if (font != null && !string.IsNullOrEmpty(label))
             {
-                paper.Box($"{id}_lbl")
+                bool isNumeric = IsNumericType(fieldType);
+                var lbl = paper.Box($"{id}_lbl")
                     .Width(m.LabelWidth).Height(m.RowHeight).Padding(m.PaddingSmall, 0, 0, 0)
-                    .IsNotInteractable()
                     .Text(label, font).TextColor(ink.C500)
                     .FontSize(m.FontSize);
+
+                if (isNumeric && !Origami.IsReadOnly)
+                {
+                    // Draggable label for numeric fields - horizontal drag adjusts value
+                    // Ctrl = x10, Shift = x0.01, default = x0.1
+                    lbl.OnDragStart(e =>
+                        {
+                            // Store initial value at drag start
+                            paper.SetElementStorage(paper.CurrentParent, "drag_start", ConvertToDouble(value));
+                        })
+                        .OnDragging(e =>
+                        {
+                            float multiplier = 0.1f;
+                            if (paper.IsKeyDown(PaperUI.PaperKey.LeftControl) || paper.IsKeyDown(PaperUI.PaperKey.RightControl))
+                                multiplier *= 10f;
+                            else if (paper.IsKeyDown(PaperUI.PaperKey.LeftShift) || paper.IsKeyDown(PaperUI.PaperKey.RightShift))
+                                multiplier *= 0.01f;
+
+                            double startVal = paper.GetElementStorage(paper.CurrentParent, "drag_start", ConvertToDouble(value));
+                            double newVal = startVal + (double)e.TotalDelta.X * multiplier;
+                            object? converted = ConvertFromDouble(newVal, fieldType);
+                            if (converted != null) onChange(converted);
+                        });
+                }
+                else
+                {
+                    lbl.IsNotInteractable();
+                }
             }
 
             using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
@@ -490,35 +518,65 @@ internal static class PropertyGridRenderer
                 return;
             }
 
+            // Stable IDs so reorder doesn't break Paper element identity
+            var colEl = paper.CurrentParent;
+            var stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!) ?? new List<string>();
+            while (stableIds.Count < list.Count) stableIds.Add(Guid.NewGuid().ToString("N")[..8]);
+            while (stableIds.Count > list.Count) stableIds.RemoveAt(stableIds.Count - 1);
+            paper.SetElementStorage(colEl, "stableIds", stableIds);
+
             using (paper.Column($"{id}_items").Height(UnitValue.Auto).Padding(m.IndentWidth, 0, 0, 0).ColBetween(m.Spacing).Enter())
             {
                 for (int i = 0; i < list.Count; i++)
                 {
                     int idx = i;
-                    using (paper.Row($"{id}_item_{i}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
+                    string sk = stableIds[i];
+
+                    using (paper.Row($"{id}_item_{sk}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
                     {
-                        Origami.IconButton(paper, $"{id}_up_{i}", theme.Icons.ChevronUp, () =>
+                        // Compact index label (sized to content, not full LabelWidth)
+                        string indexLabel = $"[{idx}]";
+                        float indexW = indexLabel.Length * m.FontSize * 0.55f + m.PaddingSmall * 2;
+                        var font = theme.Font;
+                        if (font != null)
                         {
-                            if (idx <= 0) return;
-                            (list[idx], list[idx - 1]) = (list[idx - 1], list[idx]);
-                            onChange(list);
-                        }).Disabled(idx == 0).Height(m.CompactHeight).Show();
+                            paper.Box($"{id}_idx_{sk}")
+                                .Width(indexW).Height(m.RowHeight)
+                                .IsNotInteractable()
+                                .Text(indexLabel, font).TextColor(theme.Ink.C400)
+                                .FontSize(m.FontSize).Alignment(TextAlignment.MiddleRight);
+                        }
 
-                        Origami.IconButton(paper, $"{id}_dn_{i}", theme.Icons.ChevronDown, () =>
+                        // Element value (full width)
+                        using (paper.Box($"{id}_val_{sk}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
                         {
-                            if (idx >= list.Count - 1) return;
-                            (list[idx], list[idx + 1]) = (list[idx + 1], list[idx]);
-                            onChange(list);
-                        }).Disabled(idx >= list.Count - 1).Height(m.CompactHeight).Show();
-
-                        using (paper.Column($"{id}_val_{i}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
-                        {
-                            DrawField(paper, $"{id}_el_{i}", $"[{idx}]", elementType, list[i], config,
+                            DrawFieldControl(paper, $"{id}_el_{sk}", elementType, list[i], config,
                                 v => { list[idx] = v; onChange(list); }, depth + 1);
                         }
 
-                        Origami.IconButton(paper, $"{id}_rm_{i}", theme.Icons.Close, () =>
+                        // Reorder + remove buttons (right side)
+                        Origami.IconButton(paper, $"{id}_up_{sk}", theme.Icons.ChevronUp, () =>
                         {
+                            if (idx <= 0) return;
+                            (list[idx], list[idx - 1]) = (list[idx - 1], list[idx]);
+                            (stableIds[idx], stableIds[idx - 1]) = (stableIds[idx - 1], stableIds[idx]);
+                            paper.SetElementStorage(colEl, "stableIds", stableIds);
+                            onChange(list);
+                        }).Disabled(idx == 0).Height(m.CompactHeight).Show();
+
+                        Origami.IconButton(paper, $"{id}_dn_{sk}", theme.Icons.ChevronDown, () =>
+                        {
+                            if (idx >= list.Count - 1) return;
+                            (list[idx], list[idx + 1]) = (list[idx + 1], list[idx]);
+                            (stableIds[idx], stableIds[idx + 1]) = (stableIds[idx + 1], stableIds[idx]);
+                            paper.SetElementStorage(colEl, "stableIds", stableIds);
+                            onChange(list);
+                        }).Disabled(idx >= list.Count - 1).Height(m.CompactHeight).Show();
+
+                        Origami.IconButton(paper, $"{id}_rm_{sk}", theme.Icons.Close, () =>
+                        {
+                            stableIds.RemoveAt(idx);
+                            paper.SetElementStorage(colEl, "stableIds", stableIds);
                             if (collectionType.IsArray)
                             {
                                 var newArr = Array.CreateInstance(elementType, list.Count - 1);
@@ -542,6 +600,8 @@ internal static class PropertyGridRenderer
                     object? newElement = elementType.IsValueType
                         ? Activator.CreateInstance(elementType)
                         : elementType == typeof(string) ? "" : null;
+                    stableIds.Add(Guid.NewGuid().ToString("N")[..8]);
+                    paper.SetElementStorage(colEl, "stableIds", stableIds);
                     if (collectionType.IsArray)
                     {
                         var newArr = Array.CreateInstance(elementType, list.Count + 1);
@@ -587,46 +647,75 @@ internal static class PropertyGridRenderer
 
             using (paper.Column($"{id}_items").Height(UnitValue.Auto).Padding(m.IndentWidth, 0, 0, 0).ColBetween(m.Spacing).Enter())
             {
-                int idx = 0;
-                foreach (DictionaryEntry entry in dict)
+                // Gather keys into a list for indexed access
+                var keys = new List<object>();
+                foreach (var key in dict.Keys) keys.Add(key);
+
+                for (int i = 0; i < keys.Count; i++)
                 {
-                    int localIdx = idx;
+                    int localIdx = i;
+                    var keyObj = keys[i];
+
                     using (paper.Row($"{id}_entry_{localIdx}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
                     {
-                        using (paper.Box($"{id}_key_{localIdx}").Width(m.LabelWidth).Height(m.RowHeight).Enter())
+                        // Key display (read-only)
+                        var font = theme.Font;
+                        if (font != null)
                         {
-                            DrawFieldControl(paper, $"{id}_kv_{localIdx}", keyType, entry.Key, config, _ => { }, depth + 1);
+                            paper.Box($"{id}_key_{localIdx}")
+                                .Width(m.LabelWidth).Height(m.RowHeight)
+                                .Padding(m.PaddingSmall, 0, 0, 0)
+                                .IsNotInteractable()
+                                .Text($"[{keyObj}]", font).TextColor(theme.Ink.C500)
+                                .FontSize(m.FontSize);
                         }
 
+                        // Value (editable)
                         using (paper.Column($"{id}_val_{localIdx}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
                         {
-                            var capturedKey = entry.Key;
-                            DrawFieldControl(paper, $"{id}_vv_{localIdx}", valueType, entry.Value, config,
+                            var capturedKey = keyObj;
+                            DrawFieldControl(paper, $"{id}_vv_{localIdx}", valueType, dict[keyObj], config,
                                 v => { dict[capturedKey] = v; onChange(dict); }, depth + 1);
                         }
 
-                        var keyToRemove = entry.Key;
+                        // Remove button
+                        var keyToRemove = keyObj;
                         Origami.IconButton(paper, $"{id}_rm_{localIdx}", theme.Icons.Close, () =>
                         {
                             dict.Remove(keyToRemove);
                             onChange(dict);
                         }).Show();
                     }
-                    idx++;
                 }
 
-                Origami.Button(paper, $"{id}_add", "+ Add", () =>
+                // Add entry row with key input
+                using (paper.Row($"{id}_addrow").Height(m.RowHeight).RowBetween(m.Spacing).Enter())
                 {
-                    object? newKey = keyType.IsValueType ? Activator.CreateInstance(keyType)
-                        : keyType == typeof(string) ? $"Key{count}" : null;
-                    object? newVal = valueType.IsValueType ? Activator.CreateInstance(valueType)
-                        : valueType == typeof(string) ? "" : null;
-                    if (newKey != null && !dict.Contains(newKey))
+                    var addRowEl = paper.CurrentParent;
+                    string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
+
+                    Origami.TextField(paper, $"{id}_newkey", pendingKey,
+                            v => paper.SetElementStorage(addRowEl, "pendingKey", v))
+                        .Placeholder("Key...").Width(UnitValue.Stretch()).SubmitOnEnter().Show();
+
+                    Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
                     {
-                        dict.Add(newKey, newVal);
-                        onChange(dict);
-                    }
-                }).Show();
+                        string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
+                        if (string.IsNullOrWhiteSpace(pk)) return;
+                        try
+                        {
+                            object? typedKey = keyType == typeof(string) ? pk
+                                : Convert.ChangeType(pk, keyType, System.Globalization.CultureInfo.InvariantCulture);
+                            if (typedKey == null || dict.Contains(typedKey)) return;
+                            object? newVal = valueType.IsValueType ? Activator.CreateInstance(valueType)
+                                : valueType == typeof(string) ? "" : null;
+                            dict.Add(typedKey, newVal);
+                            onChange(dict);
+                            paper.SetElementStorage(addRowEl, "pendingKey", "");
+                        }
+                        catch { }
+                    }).Show();
+                }
             }
         });
     }
@@ -722,6 +811,44 @@ internal static class PropertyGridRenderer
             sb.Append(name[i]);
         }
         return sb.ToString();
+    }
+
+    // ── Numeric drag helpers ────────────────────────────────
+
+    private static readonly HashSet<Type> s_numericTypes = new()
+    {
+        typeof(float), typeof(double), typeof(decimal),
+        typeof(int), typeof(uint), typeof(long), typeof(ulong),
+        typeof(short), typeof(ushort), typeof(byte), typeof(sbyte),
+    };
+
+    private static bool IsNumericType(Type type) => s_numericTypes.Contains(type);
+
+    private static double ConvertToDouble(object? value)
+    {
+        if (value == null) return 0;
+        try { return Convert.ToDouble(value); }
+        catch { return 0; }
+    }
+
+    private static object? ConvertFromDouble(double value, Type targetType)
+    {
+        try
+        {
+            if (targetType == typeof(float)) return (float)value;
+            if (targetType == typeof(double)) return value;
+            if (targetType == typeof(int)) return (int)Math.Round(value);
+            if (targetType == typeof(uint)) return (uint)Math.Max(0, Math.Round(value));
+            if (targetType == typeof(long)) return (long)Math.Round(value);
+            if (targetType == typeof(ulong)) return (ulong)Math.Max(0, Math.Round(value));
+            if (targetType == typeof(short)) return (short)Math.Round(value);
+            if (targetType == typeof(ushort)) return (ushort)Math.Max(0, Math.Round(value));
+            if (targetType == typeof(byte)) return (byte)Math.Clamp(Math.Round(value), 0, 255);
+            if (targetType == typeof(sbyte)) return (sbyte)Math.Clamp(Math.Round(value), -128, 127);
+            if (targetType == typeof(decimal)) return (decimal)value;
+            return Convert.ChangeType(value, targetType);
+        }
+        catch { return null; }
     }
 
     /// <summary>Get serializable fields for a type (matches Echo's logic).</summary>

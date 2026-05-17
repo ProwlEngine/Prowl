@@ -2,21 +2,23 @@ using System;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
+using Prowl.Editor.Thumbnails;
 
 namespace Prowl.Editor.Panels;
 
 [EditorWindow("General/Preferences")]
 public class PreferencesPanel : DockPanel
 {
-    public override string Title => "Preferences";
+    public override string Title => Loc.Get("panel.preferences");
     public override string Icon => EditorIcons.Sliders;
 
     private enum Tab { General, Theme, Shortcuts }
@@ -35,12 +37,13 @@ public class PreferencesPanel : DockPanel
         {
             float sideW = 160f;
             using (paper.Column("pref_sidebar")
+                .Padding(new UnitValue(EditorTheme.SidePixelPadding))
                 .Width(sideW).Height(height)
                 .BackgroundColor(EditorTheme.Neutral200)
                 .Enter())
             {
                 paper.Box("pref_sidebar_hdr")
-                    .Height(28).ChildLeft(8)
+                    .Height(EditorTheme.RowHeight).ChildLeft(EditorTheme.Padding)
                     .Text("Preferences", font).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
@@ -54,16 +57,18 @@ public class PreferencesPanel : DockPanel
             paper.Box("pref_div").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
 
             float contentW = width - sideW - 1;
-            Origami.ScrollView(paper, "pref_content", contentW, height).Body(() =>
+            Origami.ScrollView(paper, "pref_content", contentW, height)
+                .Padding(EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding)
+                .Body(() =>
             {
-                paper.Box("pref_pad").Height(8);
+                paper.Box("pref_pad").Height(EditorTheme.Padding * 2);
                 switch (_tab)
                 {
                     case Tab.General: DrawGeneral(paper, settings); break;
                     case Tab.Theme: DrawTheme(paper, font, settings, contentW); break;
                     case Tab.Shortcuts: DrawShortcuts(paper, font, contentW); break;
                 }
-                paper.Box("pref_pad2").Height(16);
+                paper.Box("pref_pad2").Height(EditorTheme.Padding * 4);
             });
         }
     }
@@ -72,7 +77,9 @@ public class PreferencesPanel : DockPanel
     {
         bool sel = _tab == tab;
         paper.Box($"pref_tab_{tab}")
-            .Height(26).ChildLeft(8).Rounded(3)
+            .Height(EditorTheme.RowHeight)
+            .Margin(0, 0, 0, EditorTheme.VerticalNavbarSpacing)
+            .ChildLeft(EditorTheme.Padding).Rounded(EditorTheme.Roundness * 0.5f)
             .BackgroundColor(sel ? EditorTheme.Purple400 : Color.Transparent)
             .Hovered.BackgroundColor(sel ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Text($"{icon}  {label}", font)
@@ -89,6 +96,11 @@ public class PreferencesPanel : DockPanel
     private void DrawGeneral(Paper paper, EditorSettings s)
     {
         Origami.Header(paper, "pref_gen_hdr", $"{EditorIcons.Gear}  General").Underline().Show();
+
+        InspectorRow.Draw(paper, "pref_lang", "Language", () =>
+            Origami.Dropdown(paper, "pref_lang_dd",
+                LocaleHelper.GetIndex(Loc.CurrentLocale),
+                LocaleHelper.SetLocale, LocaleHelper.Names).Show());
 
         InspectorRow.Draw(paper, "pref_proj_path", "Default Projects Path", () =>
             Origami.TextField(paper, "pref_proj_path_v", s.DefaultProjectsPath,
@@ -129,10 +141,14 @@ public class PreferencesPanel : DockPanel
             Origami.TextField(paper, "pref_theme_name_v", theme.Name,
                 v => theme.Name = v).Show());
 
-        paper.Box("pref_theme_sp1").Height(4);
+        paper.Box("pref_theme_sp1").Height(EditorTheme.Spacing * 2);
 
         // Actions
-        using (paper.Row("pref_theme_actions").Height(28).RowBetween(6).ChildLeft(4).Enter())
+        using (paper.Row("pref_theme_actions")
+            .Height(EditorTheme.RowHeight)
+            .RowBetween(EditorTheme.Spacing * 3)
+            .ChildLeft(EditorTheme.Padding)
+            .Enter())
         {
             Origami.Button(paper, "pref_apply", $"{EditorIcons.Check}  Apply", () => { s.ApplyTheme(); s.Save(); }).Width(80).Show();
 
@@ -166,7 +182,7 @@ public class PreferencesPanel : DockPanel
             }).Width(90).Show();
         }
 
-        paper.Box("pref_theme_sp2").Height(12);
+        paper.Box("pref_theme_sp2").Height(EditorTheme.Padding * 3);
 
         // ── Color Ramps ──
         string[] neutralNames = ["100 Void", "200 Abyss", "300 Obsidian", "400 Slate ★", "500 Graphite"];
@@ -181,7 +197,7 @@ public class PreferencesPanel : DockPanel
         DrawRamp(paper, s, "Red", theme.Red, redNames);
         DrawRamp(paper, s, "Ink", theme.Ink, inkNames);
 
-        paper.Box("pref_theme_sp3").Height(12);
+        paper.Box("pref_theme_sp3").Height(EditorTheme.Padding * 3);
 
         // ── Font ──
         Origami.Foldout(paper, "pref_ft_general", "Font").Body(() =>
@@ -333,15 +349,15 @@ public class PreferencesPanel : DockPanel
         Origami.SearchField(paper, "pref_sc_search", _shortcutSearch,
             v => _shortcutSearch = v, "Search shortcuts...").Show();
 
-        paper.Box("pref_sc_sp1").Height(4);
+        paper.Box("pref_sc_sp1").Height(EditorTheme.Spacing * 2);
 
         // Reset All button
-        using (paper.Row("pref_sc_actions").Height(28).ChildLeft(4).Enter())
+        using (paper.Row("pref_sc_actions").Height(EditorTheme.RowHeight).ChildLeft(EditorTheme.Padding).Enter())
         {
             Origami.Button(paper, "pref_sc_reset_all", $"{EditorIcons.RotateLeft}  Reset All to Defaults", () => ShortcutManager.ClearAllOverrides()).Width(200).Show();
         }
 
-        paper.Box("pref_sc_sp2").Height(8);
+        paper.Box("pref_sc_sp2").Height(EditorTheme.Padding * 2);
 
         // Group by category
         string? lastCategory = null;
@@ -357,7 +373,7 @@ public class PreferencesPanel : DockPanel
             if (shortcut.Category != lastCategory)
             {
                 lastCategory = shortcut.Category;
-                paper.Box($"pref_sc_sp_{lastCategory}").Height(4);
+                paper.Box($"pref_sc_sp_{lastCategory}").Height(EditorTheme.Spacing * 2);
                 Origami.Header(paper, $"pref_sc_cat_{lastCategory}", lastCategory).Underline().Show();
             }
 
@@ -369,7 +385,7 @@ public class PreferencesPanel : DockPanel
 
             using (paper.Row($"pref_sc_{shortcut.Id}")
                 .Height(EditorTheme.RowHeight)
-                .ChildLeft(8).RowBetween(4)
+                .ChildLeft(EditorTheme.Padding).RowBetween(EditorTheme.Spacing * 2)
                 .Enter())
             {
                 // Display name
@@ -382,7 +398,7 @@ public class PreferencesPanel : DockPanel
 
                 // Binding button
                 paper.Box($"pref_sc_bind_{shortcut.Id}")
-                    .Width(160).Height(EditorTheme.RowHeight - 4).Rounded(3)
+                    .Width(160).Height(EditorTheme.RowHeight - 4).Rounded(EditorTheme.Roundness * 0.5f)
                     .BackgroundColor(isRebinding ? EditorTheme.Purple300 : EditorTheme.Neutral200)
                     .Hovered.BackgroundColor(isRebinding ? EditorTheme.Purple300 : EditorTheme.Ink200).End()
                     .Text(bindDisplay, font)
@@ -399,7 +415,7 @@ public class PreferencesPanel : DockPanel
                 if (isOverridden)
                 {
                     paper.Box($"pref_sc_rst_{shortcut.Id}")
-                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(3)
+                        .Width(50).Height(EditorTheme.RowHeight - 4).Rounded(EditorTheme.Roundness * 0.5f)
                         .BackgroundColor(EditorTheme.Neutral200)
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text("Reset", font)

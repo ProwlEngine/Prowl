@@ -2,10 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
@@ -25,12 +26,54 @@ public static class ProjectLauncher
     private static bool _showNewProject;
     private static float _animTime;
 
+    // Cycled tip strip drawn at the bottom of the launcher background.
+    private static readonly string[] _tipKeys =
+    {
+        "launcher.tip.orbit",
+        "launcher.tip.dolly",
+        "launcher.tip.pan",
+        "launcher.tip.fly",
+        "launcher.tip.fly_speed",
+        "launcher.tip.fly_updown",
+        "launcher.tip.focus",
+        "launcher.tip.gizmos",
+        "launcher.tip.snap",
+        "launcher.tip.duplicate",
+        "launcher.tip.rename",
+        "launcher.tip.math",
+        "launcher.tip.math_ops",
+        "launcher.tip.drag_asset",
+        "launcher.tip.orient_cube",
+        "launcher.tip.undo",
+        "launcher.tip.discord",
+        "launcher.tip.assignref",
+        "launcher.tip.pingref",
+        "launcher.tip.pickref",
+        "launcher.tip.go_to_component",
+        "launcher.tip.create_menu",
+        "launcher.tip.component_menu",
+        "launcher.tip.escape_unlock",
+    };
+
+    private const float _tipDuration = 8f;
+    private const float _tipFadeTime = 0.45f;
+    private static int _tipIndex;
+    private static float _tipTimer;
+
     public static void Initialize()
     {
         _newProjectPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Prowl Projects");
         IsOpen = true;
         _showNewProject = false;
         _animTime = 0;
+        _tipIndex = Random.Shared.Next(_tipKeys.Length);
+        _tipTimer = 0;
+    }
+
+    private static void AdvanceTip()
+    {
+        _tipIndex = (_tipIndex + 1) % _tipKeys.Length;
+        _tipTimer = 0;
     }
 
     public static void Close()
@@ -147,6 +190,16 @@ public static class ProjectLauncher
                     paper.Box("spacer");
 
 
+                    // Language selector
+                    using (paper.Box("pl_lang").Width(100).Height(60).Margin(0, 0, 8, 0)
+                        .ChildTop(UnitValue.StretchOne).ChildBottom(UnitValue.StretchOne).Enter())
+                    {
+                        Origami.Dropdown(paper, "pl_lang_dd",
+                            LocaleHelper.GetIndex(Rosetta.Loc.CurrentLocale),
+                            LocaleHelper.SetLocale, LocaleHelper.Names)
+                            .Subtle().Height(22).Show();
+                    }
+
                     paper.Box("pl_version")
                         .Height(60)
                         .Width(80)
@@ -170,9 +223,9 @@ public static class ProjectLauncher
                         .Enter())
                     {
                         // Spacer (search input is currently visual-only — no filter wired up)
-                        Origami.SearchField(paper, "search", "", _ => { }, "Search Projects").Show();
+                        Origami.SearchField(paper, "search", "", _ => { }, Loc.Get("launcher.search")).Show();
 
-                        Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  Open Project", () =>
+                        Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  {Loc.Get("launcher.open_project")}", () =>
                             {
                                 EditorApplication.OpenFileDialog(FileDialogMode.SelectFolder, path =>
                                 {
@@ -196,7 +249,7 @@ public static class ProjectLauncher
                                 .Height(EditorTheme.RowHeight)
                                 .Margin(EditorTheme.RowHeight / 4, 0)
                                 .Alignment(PaperUI.TextAlignment.MiddleLeft)
-                                .Text($" {EditorIcons.Plus}  New Project", EditorTheme.DefaultFont)
+                                .Text($" {EditorIcons.Plus}  {Loc.Get("launcher.new_project")}", EditorTheme.DefaultFont)
                                 .TextColor(EditorTheme.Ink500)
                                 .FontSize(EditorTheme.FontSize);
                         }
@@ -215,6 +268,75 @@ public static class ProjectLauncher
         }
     }
 
+    /// <summary>
+    /// Draws the cycling tip strip at the bottom of the screen. Called separately from
+    /// <see cref="Draw"/> so it can render on top of the intro animation while the project loads.
+    /// </summary>
+    public static void DrawTipStrip(Paper paper, float dt, float globalAlpha = 1f)
+    {
+        if (globalAlpha <= 0f) return;
+
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        float w = paper.ScreenRect.Size.X;
+        float h = paper.ScreenRect.Size.Y;
+
+        _tipTimer += dt;
+        if (_tipTimer >= _tipDuration)
+            AdvanceTip();
+
+        float fadeIn = Math.Min(_tipTimer / _tipFadeTime, 1f);
+        float fadeOut = Math.Min((_tipDuration - _tipTimer) / _tipFadeTime, 1f);
+        float alpha = Math.Clamp(Math.Min(fadeIn, fadeOut), 0f, 1f) * Math.Clamp(globalAlpha, 0f, 1f);
+
+        var iconBase = EditorTheme.Purple500;
+        var textBase = EditorTheme.Ink400;
+        var labelBase = EditorTheme.Ink300;
+        var iconColor = Color.FromArgb((int)(iconBase.A * alpha), iconBase.R, iconBase.G, iconBase.B);
+        var textColor = Color.FromArgb((int)(textBase.A * alpha), textBase.R, textBase.G, textBase.B);
+        var labelColor = Color.FromArgb((int)(labelBase.A * alpha), labelBase.R, labelBase.G, labelBase.B);
+
+        const float stripHeight = 36f;
+        float y = h - stripHeight - 16f;
+        string tipText = Loc.Get(_tipKeys[_tipIndex]);
+
+        using (paper.Row("pl_tip_strip")
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, y)
+            .Size(w, stripHeight)
+            .ChildLeft(UnitValue.StretchOne)
+            .ChildRight(UnitValue.StretchOne)
+            .RowBetween(6)
+            .OnClick(_ => AdvanceTip())
+            .Enter())
+        {
+            paper.Box("pl_tip_icon")
+                .Width(20)
+                .Height(stripHeight)
+                .Text(EditorIcons.Lightbulb, font)
+                .TextColor(iconColor)
+                .FontSize(EditorTheme.FontSize)
+                .Alignment(TextAlignment.MiddleCenter);
+
+            paper.Box("pl_tip_label")
+                .Width(UnitValue.Auto)
+                .Height(stripHeight)
+                .Text(Loc.Get("launcher.tip_label"), font)
+                .TextColor(labelColor)
+                .FontSize(EditorTheme.FontSize - 1)
+                .Alignment(TextAlignment.MiddleLeft);
+
+            paper.Box("pl_tip_text")
+                .Width(UnitValue.Auto)
+                .Height(stripHeight)
+                .Text(tipText, font)
+                .TextColor(textColor)
+                .FontSize(EditorTheme.FontSize - 1)
+                .Alignment(TextAlignment.MiddleLeft);
+        }
+    }
+
     private static void DrawNewProjectPanel(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Column("pl_newproj")
@@ -229,7 +351,7 @@ public static class ProjectLauncher
                 paper.Box("pl_np_lbl")
                     .Width(50)
                     .Height(EditorTheme.RowHeight)
-                    .Text("Name:", font)
+                    .Text(Loc.Get("launcher.name"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
@@ -243,7 +365,7 @@ public static class ProjectLauncher
                 paper.Box("pl_np_lbl2")
                     .Width(50)
                     .Height(EditorTheme.RowHeight)
-                    .Text("Path:", font)
+                    .Text(Loc.Get("launcher.path"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 2)
                     .Alignment(TextAlignment.MiddleRight);
@@ -271,7 +393,7 @@ public static class ProjectLauncher
                         }, _newProjectPath);
                     }).Width(30).Show();
 
-                Origami.Button(paper, "pl_np_create", "Create", () => { TryCreateProject(); }).Width(70).Show();
+                Origami.Button(paper, "pl_np_create", Loc.Get("launcher.create"), () => { TryCreateProject(); }).Width(70).Show();
             }
         }
     }
@@ -285,13 +407,13 @@ public static class ProjectLauncher
             if (entries.Count == 0)
             {
                 paper.Box("pl_empty").Height(100)
-                    .Text("No recent projects", font)
+                    .Text(Loc.Get("launcher.no_recent"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
                 paper.Box("pl_hint").Height(30)
-                    .Text("Create a new project or open an existing one to get started.", font)
+                    .Text(Loc.Get("launcher.hint"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize - 3)
                     .Alignment(TextAlignment.MiddleCenter);
@@ -361,7 +483,7 @@ public static class ProjectLauncher
                     if (!exists)
                     {
                         paper.Box($"pl_pmissing_{i}").Width(60).Height(52)
-                            .Text("Missing", font)
+                            .Text(Loc.Get("launcher.missing"), font)
                             .TextColor(EditorTheme.Red400)
                             .FontSize(EditorTheme.FontSize - 3)
                             .Alignment(TextAlignment.MiddleCenter);
@@ -383,7 +505,7 @@ public static class ProjectLauncher
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Failed to open project: {ex.Message}");
+            Runtime.Debug.LogError(Loc.Get("launcher.open_failed", new { message = ex.Message }));
         }
     }
 
@@ -391,14 +513,14 @@ public static class ProjectLauncher
     {
         if (string.IsNullOrWhiteSpace(_newProjectName))
         {
-            Toasts.Show("Invalid Name", "Project name cannot be empty.", ToastType.Warning, 3f);
+            Toasts.Show(Loc.Get("launcher.invalid_name"), Loc.Get("launcher.name_empty"), ToastType.Warning, 3f);
             return;
         }
 
         string targetPath = Path.Combine(_newProjectPath, _newProjectName);
         if (Directory.Exists(targetPath) && Directory.GetFileSystemEntries(targetPath).Length > 0)
         {
-            Toasts.Show("Folder Exists", $"'{_newProjectName}' already exists and is not empty. Choose a different name or location.", ToastType.Error, 5f);
+            Toasts.Show(Loc.Get("launcher.folder_exists"), Loc.Get("launcher.folder_exists_msg", new { name = _newProjectName }), ToastType.Error, 5f);
             return;
         }
 
@@ -410,18 +532,18 @@ public static class ProjectLauncher
         }
         catch (Exception ex)
         {
-            Toasts.Show("Create Failed", ex.Message, ToastType.Error, 5f);
+            Toasts.Show(Loc.Get("launcher.create_failed"), ex.Message, ToastType.Error, 5f);
         }
     }
 
     private static string FormatTimeAgo(DateTime utcTime)
     {
         var span = DateTime.UtcNow - utcTime;
-        if (span.TotalMinutes < 1) return "Just now";
-        if (span.TotalHours < 1) return $"{(int)span.TotalMinutes}m ago";
-        if (span.TotalDays < 1) return $"{(int)span.TotalHours}h ago";
-        if (span.TotalDays < 30) return $"{(int)span.TotalDays}d ago";
-        if (span.TotalDays < 365) return $"{(int)(span.TotalDays / 30)}mo ago";
-        return $"{(int)(span.TotalDays / 365)}y ago";
+        if (span.TotalMinutes < 1) return Loc.Get("launcher.just_now");
+        if (span.TotalHours < 1) return Loc.Get("launcher.minutes_ago", new { count = (int)span.TotalMinutes });
+        if (span.TotalDays < 1) return Loc.Get("launcher.hours_ago", new { count = (int)span.TotalHours });
+        if (span.TotalDays < 30) return Loc.Get("launcher.days_ago", new { count = (int)span.TotalDays });
+        if (span.TotalDays < 365) return Loc.Get("launcher.months_ago", new { count = (int)(span.TotalDays / 30) });
+        return Loc.Get("launcher.years_ago", new { count = (int)(span.TotalDays / 365) });
     }
 }

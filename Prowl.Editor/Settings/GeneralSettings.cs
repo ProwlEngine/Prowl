@@ -1,5 +1,5 @@
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 

@@ -161,6 +161,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             .ReadOnly(_readOnly)
             .Placeholder(_placeholder)
             .SelectAllOnFocus(_selectAllOnFocus)
+            .SubmitOnEnter()
             .CharFilter(NumericCharFilter);
 
         if (!string.IsNullOrEmpty(_leadingIconGlyph))
@@ -193,29 +194,22 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
         if (char.IsDigit(c)) return true;
 
-        // Sign: allowed at the start, or right after an exponent for floats.
-        if (s_isSigned && (c == '-' || c == '+'))
-        {
-            if (current.Length == 0) return true;
-            if (s_isFloatingPoint && (current.EndsWith('e') || current.EndsWith('E'))) return true;
-            return false;
-        }
+        // Math expression characters: operators, parentheses, letters (for pi, e, tau)
+        if (c == '*' || c == '/' || c == '^' || c == '(' || c == ')') return true;
+        if (char.IsLetter(c)) return true; // allows pi, e, tau
 
-        // Decimal separator (only floating-point, only once, and only if not already after an exponent).
+        // Sign: + and - allowed anywhere (they're also math operators)
+        if (c == '-' || c == '+') return true;
+
+        // Decimal separator
         if (s_isFloatingPoint)
         {
             string dec = nf.NumberDecimalSeparator;
-            if (dec.Length == 1 && c == dec[0])
-            {
-                if (current.Contains(dec)) return false;
-                if (current.IndexOfAny(new[] { 'e', 'E' }) >= 0) return false;
-                return true;
-            }
-
-            // Exponent: a single 'e'/'E' after at least one digit.
-            if ((c == 'e' || c == 'E') && current.Length > 0 && current.IndexOfAny(new[] { 'e', 'E' }) < 0)
-                return true;
+            if (dec.Length == 1 && c == dec[0]) return true;
         }
+
+        // Space (ignored by math parser)
+        if (c == ' ') return true;
 
         return false;
     }
@@ -228,7 +222,21 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             ? NumberStyles.Float | NumberStyles.AllowThousands
             : NumberStyles.Integer | NumberStyles.AllowThousands;
 
-        return T.TryParse(s, styles, _culture, out result);
+        // Try direct parse first (fast path for plain numbers)
+        if (T.TryParse(s, styles, _culture, out result))
+            return true;
+
+        // If direct parse fails, try evaluating as a math expression
+        // This allows users to type things like "2*3+1", "360/16", "pi*2"
+        if (MathParser.TryEvaluate(s, out double evaluated))
+        {
+            // Convert the double result to T
+            string evalStr = evaluated.ToString("G15", System.Globalization.CultureInfo.InvariantCulture);
+            return T.TryParse(evalStr, NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out result);
+        }
+
+        result = default;
+        return false;
     }
 
     private void HandleChange(string raw)

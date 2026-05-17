@@ -5,12 +5,15 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
+using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Docking;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
+using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -70,6 +73,9 @@ public class EditorApplication : Game
         LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
         LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
 
+        // Load CJK/international fallback fonts from system for localization support
+        LoadSystemFallbackFonts();
+
         // Load editor settings (global, persists across projects)
         _ = EditorSettings.Instance; // triggers load + ApplyTheme
 
@@ -97,6 +103,15 @@ public class EditorApplication : Game
             }
         }
 
+        // Initialize localization
+        Prowl.Rosetta.Loc.Configure(cfg => cfg
+            .SetFallbackLocale("en")
+            .AddProvider(new Prowl.Rosetta.EmbeddedResourceProvider(
+                System.Reflection.Assembly.GetExecutingAssembly(), "Prowl.Editor.Localization"))
+            .SetLocale(EditorSettings.Instance.Locale)
+            .OnMissingKey(Prowl.Rosetta.MissingKeyBehavior.ReturnKey)
+        );
+
         // Initialize editor registries (now sees user types if assemblies loaded above)
         InitializeOnLoadRegistry.Initialize();
         Inspector.PropertyEditorRegistry.Initialize();
@@ -113,14 +128,14 @@ public class EditorApplication : Game
         CreateGameObjectMenuRegistry.Initialize();
         FileIconRegistry.Initialize();
         AssetDoubleClickRegistry.Initialize();
-        Widgets.ScriptTemplateRegistry.Initialize();
+        GUI.ScriptTemplateRegistry.Initialize();
         EditorCallbacks.Initialize();
 
         // Cursor lock toasts
         Input.OnCursorLocked += () =>
-            Toasts.Show("Cursor Locked", "Press Escape to release.", ToastType.Info, 3f);
+            Toasts.Show(Loc.Get("toast.cursor_locked"), Loc.Get("toast.cursor_locked_msg"), ToastType.Info, 3f);
         Input.OnCursorLockFailed += () =>
-            Toasts.Show("Cursor Lock Failed", "No valid game view is available.", ToastType.Warning, 3f);
+            Toasts.Show(Loc.Get("toast.cursor_lock_failed"), Loc.Get("toast.cursor_lock_failed_msg"), ToastType.Warning, 3f);
 
         // Menus depend on registries above, so register after initialization
         ScanAndRegisterPanels();
@@ -174,16 +189,33 @@ public class EditorApplication : Game
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
-                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+                EngineObjectPropertyEditor.SetFieldType(fieldType);
         };
         PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
         {
-            Widgets.PropertyGrid.DrawTypePicker(paper, id, baseType, currentValue, onChange);
+            // Find all concrete types implementing the base type
+            var types = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
+                .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
+                .Take(20).ToArray();
+
+            if (types.Length == 0) return;
+
+            Type? currentType = currentValue?.GetType();
+            int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) + 1 : 0;
+            var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
+
+            OrigamiUI.Origami.Dropdown(paper, $"{id}_dd", selectedIndex,
+                idx =>
+                {
+                    if (idx == 0) onChange(null);
+                    else if (idx >= 1 && idx <= types.Length) onChange(Activator.CreateInstance(types[idx - 1]));
+                }, names).Show();
         };
         PropertyGridConfig.FallbackFieldDrawer = (paper, id, label, fieldType, value, onChange, depth) =>
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
-                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+                EngineObjectPropertyEditor.SetFieldType(fieldType);
             var editor = Inspector.PropertyEditorRegistry.GetEditor(fieldType);
             if (editor != null)
             {
@@ -199,18 +231,18 @@ public class EditorApplication : Game
             if (Prefabs.PrefabEditingMode.IsEditing)
             {
                 return Prefabs.PrefabEditingMode.Save()
-                    ? $"Prefab: {System.IO.Path.GetFileNameWithoutExtension(Prefabs.PrefabEditingMode.EditingPrefabPath)}"
+                    ? Loc.Get("save.prefab", new { name = System.IO.Path.GetFileNameWithoutExtension(Prefabs.PrefabEditingMode.EditingPrefabPath) })
                     : null;
             }
             if (EditorSceneManager.Save())
-                return $"Scene: {Runtime.Resources.Scene.Current?.Name ?? "Untitled"}";
+                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" });
             return null;
         };
         SaveManager.OnSave += () =>
         {
             if (Project.Current == null) return null;
             SaveProjectState();
-            return "Editor Layout";
+            return Loc.Get("save.layout");
         };
 
         // Set Windows title bar to match Darkest theme color
@@ -334,8 +366,8 @@ public class EditorApplication : Game
             if (ShortcutManager.IsPressed("Global/SaveAs"))
             {
                 if (Application.IsPlaying)
-                    Toasts.Warning("Can't save during Play Mode",
-                        "Exit Play Mode to save your scene.");
+                    Toasts.Warning(Loc.Get("save.cant_play_mode"),
+                        Loc.Get("save.cant_play_mode_msg"));
                 else
                     PromptSaveAs();
             }
@@ -707,6 +739,30 @@ public class EditorApplication : Game
             DrawIntro(paper);
         }
 
+        // Cycling tip strip drawn last so it sits on top of both the launcher card
+        // and the intro animation bars, giving the user something to read while the
+        // project loads. The strip fades out as the bars slide away to reveal the
+        // editor so it never lingers over a loaded project.
+        if (ProjectLauncher.IsOpen || _introTime < IntroDuration)
+        {
+            float tipAlpha = 1f;
+            // Only run the fade while the intro is actually playing. Before any project
+            // is opened _introTime sits at double.MaxValue, which would otherwise read
+            // as "past the open phase" and zero the tip out on the launcher.
+            if (_introTime < IntroDuration)
+            {
+                const double openStart = IntroCloseDuration + 0.5;
+                const double fadeOutDuration = 0.8;
+                if (_introTime >= openStart)
+                {
+                    float t = (float)((_introTime - openStart) / fadeOutDuration);
+                    tipAlpha = 1f - Math.Clamp(t, 0f, 1f);
+                }
+            }
+
+            ProjectLauncher.DrawTipStrip(paper, (float)Time.UnscaledDeltaTime, tipAlpha);
+        }
+
         // Pop the editor Origami theme now that all rendering (including overlays) is done.
         _origamiScope?.Dispose();
         _origamiScope = null;
@@ -978,6 +1034,58 @@ public class EditorApplication : Game
         PaperInstance.AddFallbackFont(new Prowl.Scribe.FontFile(stream));
     }
 
+    private void LoadSystemFallbackFonts()
+    {
+        // CJK and international font fallback chain. Tries common system fonts
+        // in priority order. These cover Japanese, Chinese, Korean, Cyrillic,
+        // Arabic, Thai, and other scripts not in the primary Latin font.
+        string[] fallbackFamilies =
+        [
+            // Japanese
+            "Yu Gothic UI",        // Windows 10+
+            "Meiryo",              // Windows Vista+
+            "Hiragino Sans",       // macOS
+
+            // Chinese (Simplified)
+            "Microsoft YaHei",     // Windows
+            "PingFang SC",         // macOS
+
+            // Chinese (Traditional)
+            "Microsoft JhengHei",  // Windows
+            "PingFang TC",         // macOS
+
+            // Korean
+            "Malgun Gothic",       // Windows
+            "Apple SD Gothic Neo", // macOS
+
+            // Universal CJK fallback
+            "Noto Sans CJK SC",    // Linux / installed
+            "Noto Sans CJK",       // Linux / installed
+
+            // Cyrillic/Greek (usually covered by primary font, but just in case)
+            "Noto Sans",           // Linux
+        ];
+
+        var systemFonts = PaperInstance.EnumerateSystemFonts().ToArray();
+        int loaded = 0;
+
+        foreach (var family in fallbackFamilies)
+        {
+            var font = systemFonts.FirstOrDefault(f =>
+                f.FamilyName.Equals(family, StringComparison.OrdinalIgnoreCase)
+                && f.Style == Prowl.Scribe.FontStyle.Regular);
+
+            if (font != null)
+            {
+                PaperInstance.AddFallbackFont(font);
+                loaded++;
+            }
+        }
+
+        if (loaded > 0)
+            Runtime.Debug.Log($"Loaded {loaded} system fallback font(s) for international text.");
+    }
+
     // ================================================================
     //  Panel Registration
     // ================================================================
@@ -1071,9 +1179,12 @@ public class EditorApplication : Game
 
     private void RegisterMenus()
     {
+        string file = Loc.Get("menu.file");
+        string edit = Loc.Get("menu.edit");
+
         // File menu
-        MenuRegistry.Register("File/New Scene", () => EditorSceneManager.NewScene());
-        MenuRegistry.Register("File/Open Scene", () =>
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.new_scene")}", () => EditorSceneManager.NewScene());
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_scene")}", () =>
         {
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
@@ -1084,8 +1195,8 @@ public class EditorApplication : Game
             }, Project.Current?.AssetsPath,
                new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
         });
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Save Scene", () =>
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene")}", () =>
         {
             if (!EditorSceneManager.Save())
             {
@@ -1102,7 +1213,7 @@ public class EditorApplication : Game
                    new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
             }
         });
-        MenuRegistry.Register("File/Save Scene As...", () =>
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () =>
         {
             if (Project.Current == null) return;
             EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
@@ -1115,35 +1226,36 @@ public class EditorApplication : Game
             }, Project.Current.AssetsPath,
                new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
         });
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Open Project...", () => ReturnToLauncher());
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Build Project...", () => OpenPanel(typeof(Panels.BuildSettingsPanel)));
-        MenuRegistry.RegisterSeparator("File");
-        MenuRegistry.Register("File/Exit", () => Game.Quit());
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_project")}", () => ReturnToLauncher());
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel(typeof(Panels.BuildSettingsPanel)));
+        MenuRegistry.RegisterSeparator(file);
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.exit")}", () => Game.Quit());
 
         // Edit menu
-        MenuRegistry.Register("Edit/Undo", () => Undo.PerformUndo(),
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.undo")}", () => Undo.PerformUndo(),
             isEnabled: () => Undo.CanUndo,
             dynamicLabel: () => Undo.UndoDescription);
-        MenuRegistry.Register("Edit/Redo", () => Undo.PerformRedo(),
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.redo")}", () => Undo.PerformRedo(),
             isEnabled: () => Undo.CanRedo,
             dynamicLabel: () => Undo.RedoDescription);
-        MenuRegistry.RegisterSeparator("Edit");
-        MenuRegistry.Register("Edit/Project Settings...", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
-        MenuRegistry.Register("Edit/Save Layout", () => SaveProjectState());
-        MenuRegistry.RegisterSeparator("Edit");
-        MenuRegistry.Register("Edit/Preferences...", () => OpenPanel(typeof(Panels.PreferencesPanel)));
+        MenuRegistry.RegisterSeparator(edit);
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.project_settings")}", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.save_layout")}", () => SaveProjectState());
+        MenuRegistry.RegisterSeparator(edit);
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel(typeof(Panels.PreferencesPanel)));
 
         // Assets menu
+        string assets = Loc.Get("menu.assets");
         AssetCreateMenu.RegisterMenus();
-        MenuRegistry.RegisterSeparator("Assets");
-        MenuRegistry.Register("Assets/Import Package...", () =>
+        MenuRegistry.RegisterSeparator(assets);
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.import_package")}", () =>
         {
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path != null && System.IO.File.Exists(path))
-                    Widgets.Popups.PackageImportDialog.Open(path);
+                    GUI.Popups.PackageImportDialog.Open(path);
             },
             startPath: Project.Current?.PackagesPath,
             filters: new[] { "*.prowlpackage" },
@@ -1180,7 +1292,7 @@ public class EditorApplication : Game
         GraphTools.NodePreviewRegistry.Reinitialize();
         Runtime.GraphTools.GraphValidatorRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
-        Widgets.Popups.AddComponentPopup.Reinitialize();
+        GUI.Popups.AddComponentPopup.Reinitialize();
         Importers.ImporterRegistry.Reinitialize();
         ProjectSettingsRegistry.Reinitialize();
         CreateAssetMenuRegistry.Reinitialize();
@@ -1190,7 +1302,7 @@ public class EditorApplication : Game
         CreateGameObjectMenuRegistry.Reinitialize();
         FileIconRegistry.Reinitialize();
         AssetDoubleClickRegistry.Reinitialize();
-        Widgets.ScriptTemplateRegistry.Reinitialize();
+        GUI.ScriptTemplateRegistry.Reinitialize();
 
         // Re-register Window menu items for any new panels from user assemblies
         foreach (var (type, path) in _registeredPanels)

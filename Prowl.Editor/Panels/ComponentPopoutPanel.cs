@@ -3,14 +3,14 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
-using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Panels;
 
 /// <summary>
@@ -111,7 +111,7 @@ public class ComponentPopoutPanel : DockPanel
             }
             else
             {
-                PropertyGrid.Draw(paper, compId, comp);
+                PropertyGridUtils.Draw(paper, compId, comp);
             }
 
             // Draw [Button] methods

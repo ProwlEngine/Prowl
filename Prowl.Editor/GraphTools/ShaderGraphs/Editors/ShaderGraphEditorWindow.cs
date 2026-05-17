@@ -6,15 +6,16 @@ using System;
 using Prowl.OrigamiUI;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.GraphTools;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
 using Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 /// <summary>
@@ -73,7 +74,7 @@ public class ShaderGraphEditorWindow : DockPanel
     {
         if (_graph == null || !_editor.IsDirty) return null;
         _editor.Save();
-        return $"Graph: {_graph.Name ?? "Untitled"}";
+        return Loc.Get("save.graph", new { name = _graph.Name ?? "Untitled" });
     }
 
     /// <summary>Open a floating shader-graph editor bound to the given graph. Routed
@@ -218,7 +219,7 @@ public class ShaderGraphEditorWindow : DockPanel
             // fills the full row width.
             using (paper.Box("sg_mesh_field").Width(UnitValue.Stretch()).Height(22).Enter())
             {
-                PropertyGrid.DrawField(paper, "sg_mesh", "",
+                PropertyGridUtils.DrawField(paper, "sg_mesh", "",
                     typeof(AssetRef<Runtime.Resources.Mesh>),
                     _previewMesh,
                     newVal =>

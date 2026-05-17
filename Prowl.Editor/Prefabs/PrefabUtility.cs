@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -748,7 +748,7 @@ public static class PrefabUtility
 
     private static void CompareFields(object instance, object source, string pathPrefix, List<PropertyOverride> overrides)
     {
-        var fields = PropertyGrid.GetSerializableFields(instance.GetType());
+        var fields = PropertyGridUtils.GetSerializableFields(instance.GetType());
         foreach (var field in fields)
         {
             if (_skipFields.Contains(field.Name)) continue;

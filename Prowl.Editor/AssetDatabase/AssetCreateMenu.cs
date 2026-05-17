@@ -4,9 +4,10 @@ using System.Linq;
 
 using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
-using Prowl.Editor.Widgets;
-using Prowl.Editor.Widgets.Popups;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Popups;
 using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -61,17 +62,19 @@ public static class AssetCreateMenu
     /// </summary>
     public static void RegisterMenus()
     {
-        MenuRegistry.Register("Assets/Create Folder", () => CreateFolder(GetCurrentFolder()));
-        MenuRegistry.RegisterSeparator("Assets");
+        string assets = Loc.Get("menu.assets");
+
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_folder")}", () => CreateFolder(GetCurrentFolder()));
+        MenuRegistry.RegisterSeparator(assets);
 
         // Registry-discovered asset types
         CreateAssetMenuRegistry.RegisterMenuBarItems();
 
-        MenuRegistry.Register("Assets/Create Shader", () => CreateShader(GetCurrentFolder()));
-        MenuRegistry.RegisterSeparator("Assets");
-        MenuRegistry.Register("Assets/Create C# Script", () => NewScriptDialog.Open(GetCurrentFolder()));
-        MenuRegistry.RegisterSeparator("Assets");
-        MenuRegistry.Register("Assets/Refresh", () =>
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_shader")}", () => CreateShader(GetCurrentFolder()));
+        MenuRegistry.RegisterSeparator(assets);
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_script")}", () => NewScriptDialog.Open(GetCurrentFolder()));
+        MenuRegistry.RegisterSeparator(assets);
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.refresh")}", () =>
         {
             if (Project.Current != null)
             {
@@ -79,7 +82,7 @@ public static class AssetCreateMenu
                 db.Initialize();
             }
         });
-        MenuRegistry.Register("Assets/Reimport All", () =>
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.reimport_all")}", () =>
         {
             var db = EditorAssetDatabase.Instance;
             if (db == null) return;

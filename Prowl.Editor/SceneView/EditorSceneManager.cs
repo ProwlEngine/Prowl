@@ -4,7 +4,7 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Panels;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using System.Linq;
 
 using Prowl.Runtime;

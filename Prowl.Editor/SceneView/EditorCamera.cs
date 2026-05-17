@@ -51,6 +51,13 @@ public class EditorCamera
     private float _yaw = 0f;
     private float _pitch = 15f;
     private float _moveSpeed = 5f;
+    private double _speedChangedTime;
+
+    /// <summary>Current fly speed.</summary>
+    public float MoveSpeed => _moveSpeed;
+
+    /// <summary>Time (UnscaledTotalTime) when move speed last changed via scroll. Used for HUD indicators.</summary>
+    public double SpeedChangedTime => _speedChangedTime;
 
     // Orbit distance (pivot is always _position + forward * _orbitDistance)
     private float _orbitDistance = 10f;
@@ -395,6 +402,7 @@ public class EditorCamera
             {
                 _moveSpeed *= 1f + scroll * 0.15f;
                 _moveSpeed = MathF.Max(0.5f, MathF.Min(100f, _moveSpeed));
+                _speedChangedTime = Runtime.Time.UnscaledTotalTime;
             }
 
             UpdateTransform();

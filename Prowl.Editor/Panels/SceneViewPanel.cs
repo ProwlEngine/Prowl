@@ -2,10 +2,12 @@ using System;
 using System.Linq;
 
 using Prowl.Editor.Docking;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
+using Gizmo = Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -18,7 +20,7 @@ namespace Prowl.Editor.Panels;
 [EditorWindow("General/Scene")]
 public class SceneViewPanel : DockPanel
 {
-    public override string Title => "Scene";
+    public override string Title => Loc.Get("panel.scene");
     public override string Icon => EditorIcons.Video;
 
     private EditorCamera? _editorCamera;
@@ -60,14 +62,14 @@ public class SceneViewPanel : DockPanel
         using (paper.Column("sv_root").Size(width, height).Enter())
         {
             DrawToolbar(paper, font);
-            DrawViewport(paper, font, width, height - EditorTheme.MenuBarHeight);
+            DrawViewport(paper, font, width, height - EditorTheme.RowHeight);
         }
     }
 
     private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font)
     {
         using (paper.Row("sv_toolbar")
-            .Height(EditorTheme.MenuBarHeight)
+            .Height(EditorTheme.RowHeight)
             .Enter())
         {
             // Let active scene view editor draw its toolbar first
@@ -377,6 +379,9 @@ public class SceneViewPanel : DockPanel
                     DragDrop.EndDrag();
                 }
             }
+
+            // Speed indicator (shows briefly when scroll changes fly speed)
+            DrawSpeedIndicator(paper, font, width, height);
 
             // View manipulator (orientation cube) drawn as 2D overlay on top-right
             DrawViewManipulator(paper, font, width, height);
@@ -698,8 +703,11 @@ public class SceneViewPanel : DockPanel
 
         bool blockPicking = Input.GetMouseButton(1) || Input.GetMouseButton(2); // Don't pick while camera moving
 
-        // Snapping: Ctrl key toggles snap mode on the gizmo (draws increment guides for rotation)
+        // Input state for the gizmo (Origami gizmo has no Runtime dependency)
         _transformGizmo.Snapping = Input.GetKey(KeyCode.ControlLeft) || Input.GetKey(KeyCode.ControlRight);
+        _transformGizmo.IsShiftDown = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
+        _transformGizmo.IsMouseDown = Input.GetMouseButtonDown(0);
+        _transformGizmo.IsMouseUp = Input.GetMouseButtonUp(0);
 
         var result = _transformGizmo.Update(ray, mouseAbs, blockPicking);
 
@@ -747,6 +755,33 @@ public class SceneViewPanel : DockPanel
     //  View Manipulator (orientation cube)
     // ================================================================
 
+    private void DrawSpeedIndicator(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    {
+        if (_editorCamera == null) return;
+
+        double elapsed = Time.UnscaledTotalTime - _editorCamera.SpeedChangedTime;
+        if (elapsed > 1.5) return; // Show for 1.5 seconds
+
+        float alpha = elapsed < 1.0 ? 1f : 1f - (float)(elapsed - 1.0) / 0.5f;
+        byte a = (byte)(alpha * 180);
+        byte ta = (byte)(alpha * 255);
+
+        float boxW = 80, boxH = 32;
+        float x = (width - boxW) / 2f;
+        float y = (height - boxH) / 2f;
+
+        paper.Box("sv_speed_hud")
+            .PositionType(PositionType.SelfDirected)
+            .Position(x, y).Size(boxW, boxH)
+            .BackgroundColor(Color.FromArgb(a, 30, 30, 34))
+            .Rounded(6)
+            .IsNotInteractable()
+            .Text($"{_editorCamera.MoveSpeed:F1}", font)
+            .TextColor(Color.FromArgb(ta, 255, 255, 255))
+            .FontSize(18f)
+            .Alignment(TextAlignment.MiddleCenter);
+    }
+
     private void DrawViewManipulator(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
     {
         if (_editorCamera == null) return;
@@ -761,7 +796,7 @@ public class SceneViewPanel : DockPanel
         // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
             .PositionType(PositionType.SelfDirected)
-            .Position(width - cubeSize - 8, 8 + EditorTheme.MenuBarHeight)
+            .Position(width - cubeSize - 8, 8 + EditorTheme.RowHeight)
             .Size(cubeSize, cubeSize)
             .OnPostLayout((handle, rect) => paper.DrawForeground(ref handle, (canvas, r) =>
             {

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -52,8 +53,8 @@ public static class SaveManager
         {
             if (Application.IsPlaying)
             {
-                Toasts.Warning("Can't save during Play Mode",
-                    "Exit Play Mode to save your scene, prefab, or graph.");
+                Toasts.Warning(Loc.Get("save.cant_play_mode"),
+                    Loc.Get("save.cant_play_mode_msg"));
                 return;
             }
 
@@ -102,11 +103,11 @@ public static class SaveManager
         if (labels.Count == 0)
         {
             if (!isAutoSave)
-                Origami.Toast("Nothing to save").Message("All files are up to date.").Info().Show();
+                Origami.Toast(Loc.Get("save.nothing")).Message(Loc.Get("save.nothing_msg")).Info().Show();
             return;
         }
 
-        string title = isAutoSave ? "Auto-saved" : "Saved";
+        string title = isAutoSave ? Loc.Get("save.auto_saved") : Loc.Get("save.saved");
         string message = labels.Count == 1
             ? labels[0]
             : string.Join(", ", labels);

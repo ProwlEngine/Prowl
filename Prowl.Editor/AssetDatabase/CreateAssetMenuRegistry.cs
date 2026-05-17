@@ -7,8 +7,9 @@ using System.IO;
 using System.Reflection;
 
 using Prowl.Echo;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -157,10 +158,11 @@ public static class CreateAssetMenuRegistry
     /// </summary>
     public static void RegisterMenuBarItems()
     {
+        string assets = Loc.Get("menu.assets");
         foreach (var entry in _entries)
         {
             var captured = entry;
-            MenuRegistry.Register($"Assets/Create {captured.Name}", () => CreateAsset(captured, AssetCreateMenu.GetCurrentFolder()));
+            MenuRegistry.Register($"{assets}/Create {captured.Name}", () => CreateAsset(captured, AssetCreateMenu.GetCurrentFolder()));
         }
     }
 

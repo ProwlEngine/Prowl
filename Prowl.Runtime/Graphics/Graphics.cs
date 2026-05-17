@@ -586,6 +586,7 @@ public static unsafe class Graphics
     {
         PrimitiveType mode = TopologyToGL(primitiveType);
         GL.DrawElements(mode, indexCount, index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort, value);
+        Rendering.RenderStats.RecordDraw(primitiveType, indexCount);
     }
 
     public static unsafe void DrawIndexed(Topology primitiveType, uint indexCount, int startIndex, int baseVertex, bool index32bit)
@@ -595,6 +596,7 @@ public static unsafe class Graphics
         DrawElementsType format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
         int formatSize = index32bit ? sizeof(uint) : sizeof(ushort);
         GL.DrawElementsBaseVertex(mode, indexCount, format, (void*)(startIndex * formatSize), baseVertex);
+        Rendering.RenderStats.RecordDraw(primitiveType, indexCount);
     }
 
     public static unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, bool index32bit)
@@ -610,6 +612,7 @@ public static unsafe class Graphics
         DrawElementsType format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
 
         GL.DrawElementsInstanced(mode, indexCount, format, null, instanceCount);
+        Rendering.RenderStats.RecordDraw(primitiveType, indexCount, instanceCount);
     }
 
     /// <summary>Instanced indexed draw starting at <paramref name="startIndex"/> within the bound element buffer. Used for per-submesh instanced draws.</summary>
@@ -624,6 +627,7 @@ public static unsafe class Graphics
         int indexSize = index32bit ? sizeof(uint) : sizeof(ushort);
 
         GL.DrawElementsInstanced(mode, indexCount, format, (void*)(startIndex * indexSize), instanceCount);
+        Rendering.RenderStats.RecordDraw(primitiveType, indexCount, instanceCount);
     }
 
     public static void Dispose()

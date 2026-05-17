@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.OrigamiUI;
 using Prowl.Echo;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
@@ -591,7 +591,7 @@ public class GraphEditor
         const float popupH = 360f;
 
         // Click-outside backdrop catches clicks outside the popup and closes the menu (standard context UX).
-        EditorGUI.Backdrop(paper, "graph_popup_backdrop", CloseCreationMenu);
+        Backdrop(paper, "graph_popup_backdrop", CloseCreationMenu);
 
         using (paper.Column("graph_popup")
             .PositionType(PositionType.SelfDirected)
@@ -762,7 +762,7 @@ public class GraphEditor
         const float menuW = 200f;
 
         // Backdrop click outside dismisses.
-        EditorGUI.Backdrop(paper, "graph_node_ctx_backdrop", () => _contextMenuNode = null, dim: false);
+        Backdrop(paper, "graph_node_ctx_backdrop", () => _contextMenuNode = null, dim: false);
 
         using (paper.Column("graph_node_ctx")
             .PositionType(PositionType.SelfDirected)
@@ -802,6 +802,22 @@ public class GraphEditor
                 .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
                 .Alignment(TextAlignment.MiddleLeft);
         }
+    }
+
+    private void Backdrop(Paper paper, string id, Action? onClose = null, bool dim = true)
+    {
+        var box = paper.Box(id)
+            .PositionType(PositionType.SelfDirected)
+            .Position(-9999, -9999)
+            .Size(99999, 99999)
+            .Layer(dim ? Layer.Overlay : Layer.Topmost);
+
+        box.BackgroundColor(Color32.FromArgb(120, 0, 0, 0));
+
+        box.StopEventPropagation();
+
+        if (onClose != null)
+            box.OnClick(0, (_, _) => onClose());
     }
 
     /// <summary>Remove every wire connected to <paramref name="node"/>, registered as one undo step.</summary>
