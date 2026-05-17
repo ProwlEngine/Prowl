@@ -7,6 +7,7 @@ using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
+using Prowl.Editor.GUI.SceneView;
 
 
 namespace Prowl.Editor;

@@ -16,7 +16,7 @@ using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Game")]
 public class GameViewPanel : DockPanel
@@ -61,7 +61,7 @@ public class GameViewPanel : DockPanel
         }
     }
 
-    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font)
+    private void DrawToolbar(Paper paper, Scribe.FontFile font)
     {
         using (paper.Row("gv_toolbar")
             .Height(EditorTheme.RowHeight)
@@ -87,7 +87,7 @@ public class GameViewPanel : DockPanel
         }
     }
 
-    private void DrawGameView(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private void DrawGameView(Paper paper, Scribe.FontFile font, float width, float height)
     {
         using (paper.Box("gv_game").Enter())
         {
@@ -264,7 +264,7 @@ public class GameViewPanel : DockPanel
         }
     }
 
-    private void DrawStats(Paper paper, Prowl.Scribe.FontFile font, float rightEdge, float top, float displayW)
+    private void DrawStats(Paper paper, Scribe.FontFile font, float rightEdge, float top, float displayW)
     {
         const float panelW = 220f;
         const float graphH = 50f;
@@ -357,7 +357,7 @@ public class GameViewPanel : DockPanel
     private static readonly Color Val = Color.FromArgb(255, 220, 220, 230);
     private static readonly Color Hdr = Color.FromArgb(255, 140, 115, 200);
 
-    private static void DrawFrameTimeGraph(Prowl.Quill.Canvas canvas, Rect r, Prowl.Scribe.FontFile? font)
+    private static void DrawFrameTimeGraph(Quill.Canvas canvas, Rect r, Scribe.FontFile? font)
     {
         float x = (float)r.Min.X, y = (float)r.Min.Y;
         float w = (float)r.Size.X, h = (float)r.Size.Y;
@@ -395,9 +395,9 @@ public class GameViewPanel : DockPanel
         }
     }
 
-    private static void DrawTargetLine(Prowl.Quill.Canvas canvas, Prowl.Scribe.FontFile? font,
+    private static void DrawTargetLine(Quill.Canvas canvas, Scribe.FontFile? font,
         float gx, float gy, float gw, float gh, float maxMs, float targetMs, string label,
-        Prowl.Vector.Color32 color)
+        Color32 color)
     {
         float ly = gy + gh - (targetMs / maxMs) * gh;
         if (ly <= gy || ly >= gy + gh) return;
@@ -407,10 +407,10 @@ public class GameViewPanel : DockPanel
             canvas.DrawText(label, gx + 1, ly - 8, color, 7, font, 0);
     }
 
-    private static void Section(Paper paper, Prowl.Scribe.FontFile font, string id, string label, float fs)
+    private static void Section(Paper paper, Scribe.FontFile font, string id, string label, float fs)
         => Section(paper, font, id, label, null, fs);
 
-    private static void Section(Paper paper, Prowl.Scribe.FontFile font, string id, string label, string? timing, float fs)
+    private static void Section(Paper paper, Scribe.FontFile font, string id, string label, string? timing, float fs)
     {
         paper.Box($"{id}_s").Height(2);
         if (timing != null)
@@ -430,7 +430,7 @@ public class GameViewPanel : DockPanel
         }
     }
 
-    private static void Row(Paper paper, Prowl.Scribe.FontFile font, string id,
+    private static void Row(Paper paper, Scribe.FontFile font, string id,
         string left, string right, float fs, float h, string? tooltip = null)
     {
         using (paper.Row(id).Height(h).Enter())
@@ -460,7 +460,7 @@ public class GameViewPanel : DockPanel
         }
 
         if (_gamePaper == null)
-            _gamePaper = new Paper(_gamePaperRenderer, w, h, new Prowl.Quill.FontAtlasSettings());
+            _gamePaper = new Paper(_gamePaperRenderer, w, h, new Quill.FontAtlasSettings());
         else
             _gamePaper.SetResolution(w, h);
     }

@@ -8,7 +8,7 @@ using System.Reflection;
 
 using Prowl.Runtime;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
 /// Attribute to register an ISceneViewEditor implementation for a specific component type.

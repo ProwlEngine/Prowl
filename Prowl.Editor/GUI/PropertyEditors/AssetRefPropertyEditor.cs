@@ -1,8 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
 using Prowl.OrigamiUI;

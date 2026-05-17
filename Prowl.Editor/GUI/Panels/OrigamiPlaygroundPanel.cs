@@ -13,7 +13,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 // ── PropertyGrid demo types ────────────────────────────────
 
@@ -50,9 +50,9 @@ public class DemoPropertyGridTarget
 
     [Space]
     [Header("Appearance")]
-    public Prowl.Vector.Color TintColor = new(0.2f, 0.6f, 1f, 1f);
-    public Prowl.Vector.Float3 Position = new(1f, 2f, 3f);
-    public Prowl.Vector.Float2 UVOffset = new(0f, 0f);
+    public Vector.Color TintColor = new(0.2f, 0.6f, 1f, 1f);
+    public Vector.Float3 Position = new(1f, 2f, 3f);
+    public Vector.Float2 UVOffset = new(0f, 0f);
 
     [Space]
     [Header("Combat")]
@@ -98,7 +98,7 @@ public class DemoPropertyGridTarget
     public void RandomizeColor()
     {
         var rng = new Random();
-        TintColor = new Prowl.Vector.Color((float)rng.NextDouble(), (float)rng.NextDouble(), (float)rng.NextDouble(), 1f);
+        TintColor = new Vector.Color((float)rng.NextDouble(), (float)rng.NextDouble(), (float)rng.NextDouble(), 1f);
     }
 }
 
@@ -170,17 +170,17 @@ public class OrigamiPlaygroundPanel : DockPanel
     private Country _countryEqualityByCode = new("US", "United States v2", "North America");
 
     // ── VectorField state ─────────────────────────────────────
-    private Prowl.Vector.Float2 _vfFloat2 = new(1.5f, 2.5f);
-    private Prowl.Vector.Float3 _vfFloat3 = new(1f, 2f, 3f);
-    private Prowl.Vector.Float4 _vfFloat4 = new(1f, 2f, 3f, 4f);
-    private Prowl.Vector.Int2 _vfInt2 = new(10, 20);
-    private Prowl.Vector.Double3 _vfDouble3 = new(1.1, 2.2, 3.3);
+    private Vector.Float2 _vfFloat2 = new(1.5f, 2.5f);
+    private Vector.Float3 _vfFloat3 = new(1f, 2f, 3f);
+    private Vector.Float4 _vfFloat4 = new(1f, 2f, 3f, 4f);
+    private Vector.Int2 _vfInt2 = new(10, 20);
+    private Vector.Double3 _vfDouble3 = new(1.1, 2.2, 3.3);
 
     // ── ColorField state ──────────────────────────────────────
-    private Prowl.Vector.Color _cfBasic = new(0.3f, 0.6f, 0.9f, 1f);
-    private Prowl.Vector.Color _cfNoAlpha = new(0.9f, 0.2f, 0.3f, 1f);
-    private Prowl.Vector.Color _cfReadOnly = new(0.2f, 0.8f, 0.4f, 1f);
-    private Prowl.Vector.Color _cfNoPalette = new(0.7f, 0.5f, 0.1f, 1f);
+    private Vector.Color _cfBasic = new(0.3f, 0.6f, 0.9f, 1f);
+    private Vector.Color _cfNoAlpha = new(0.9f, 0.2f, 0.3f, 1f);
+    private Vector.Color _cfReadOnly = new(0.2f, 0.8f, 0.4f, 1f);
+    private Vector.Color _cfNoPalette = new(0.7f, 0.5f, 0.1f, 1f);
 
     // ── TextField state ────────────────────────────────────────
     private string _txtPlain = "";
@@ -367,7 +367,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         Level = 2,
         Health = 30f,
         Weapon = DemoWeaponType.Dagger,
-        TintColor = new Prowl.Vector.Color(0.4f, 0.8f, 0.2f, 1f),
+        TintColor = new Vector.Color(0.4f, 0.8f, 0.2f, 1f),
         HasMagic = true,
         ManaPool = 50f,
     };

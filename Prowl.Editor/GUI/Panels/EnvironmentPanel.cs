@@ -15,7 +15,8 @@ using Prowl.Vector;
 using VColor = Prowl.Vector.Color;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-namespace Prowl.Editor.Panels;
+using Prowl.Editor.GUI.SceneView;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Environment")]
 public class EnvironmentPanel : DockPanel
@@ -47,7 +48,7 @@ public class EnvironmentPanel : DockPanel
         }
     }
 
-    private void DrawSkyboxSection(Paper paper, string id, Prowl.Scribe.FontFile font, Scene scene)
+    private void DrawSkyboxSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
         Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Sun}  Skybox").Body(() =>
         {
@@ -89,7 +90,7 @@ public class EnvironmentPanel : DockPanel
         });
     }
 
-    private void DrawFogSection(Paper paper, string id, Prowl.Scribe.FontFile font, Scene scene)
+    private void DrawFogSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
         Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Cloud}  Fog").Body(() =>
         {
@@ -124,7 +125,7 @@ public class EnvironmentPanel : DockPanel
         });
     }
 
-    private void DrawAmbientSection(Paper paper, string id, Prowl.Scribe.FontFile font, Scene scene)
+    private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
         Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Lightbulb}  Ambient Lighting").Body(() =>
         {

@@ -9,7 +9,7 @@ using Prowl.PaperUI.LayoutEngine;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.Widgets;
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("Debug/Widget Playground")]
 public class WidgetPlaygroundPanel : DockPanel
@@ -32,15 +32,15 @@ public class WidgetPlaygroundPanel : DockPanel
     private int _dropdown2Index = 2;
     private string _searchText = "";
     private int _clickCount;
-    private Prowl.Vector.Float2 _vec2 = new(1.5f, 2.5f);
-    private Prowl.Vector.Float3 _vec3 = new(10f, 20f, 30f);
-    private Prowl.Vector.Color _color = new(0.2f, 0.6f, 1f, 1f);
+    private Vector.Float2 _vec2 = new(1.5f, 2.5f);
+    private Vector.Float3 _vec3 = new(10f, 20f, 30f);
+    private Vector.Color _color = new(0.2f, 0.6f, 1f, 1f);
     private float _progress = 0.45f;
     private TestEnum _testEnum = TestEnum.Option2;
 
     public enum TestEnum { Option1, Option2, Option3, SuperLongOptionName }
 
-    private Prowl.Runtime.AnimationCurve _curve = new();
+    private Runtime.AnimationCurve _curve = new();
     private TestComponent _testObject = new();
 
     // Test class for property grid exercises every type the grid supports
@@ -60,23 +60,23 @@ public class WidgetPlaygroundPanel : DockPanel
         public TestEnum Mode = TestEnum.Option2;
 
         // Math types
-        public Prowl.Vector.Float2 UV = new(0.5f, 0.75f);
-        public Prowl.Vector.Float3 Position = new(1, 2, 3);
-        public Prowl.Vector.Float4 Custom = new(0.1f, 0.2f, 0.3f, 0.4f);
-        public Prowl.Vector.Color Tint = new(0.5f, 0.8f, 1f, 1f);
-        public Prowl.Vector.Quaternion Rotation = Prowl.Vector.Quaternion.Identity;
+        public Vector.Float2 UV = new(0.5f, 0.75f);
+        public Vector.Float3 Position = new(1, 2, 3);
+        public Vector.Float4 Custom = new(0.1f, 0.2f, 0.3f, 0.4f);
+        public Vector.Color Tint = new(0.5f, 0.8f, 1f, 1f);
+        public Vector.Quaternion Rotation = Prowl.Vector.Quaternion.Identity;
 
         // Guid (read-only)
         public System.Guid Id = System.Guid.NewGuid();
 
         // AnimationCurve
-        public Prowl.Runtime.AnimationCurve SpeedCurve = new();
+        public Runtime.AnimationCurve SpeedCurve = new();
 
         // Collections
         public List<float> Scores = new() { 10.5f, 20.3f, 30.1f };
         public List<string> Tags = new() { "Player", "Friendly" };
         public int[] LevelData = new int[] { 1, 5, 10, 25, 50 };
-        public List<Prowl.Vector.Float3> Waypoints = new()
+        public List<Vector.Float3> Waypoints = new()
         {
             new(0, 0, 0), new(10, 0, 5), new(20, 0, 0)
         };
@@ -106,7 +106,7 @@ public class WidgetPlaygroundPanel : DockPanel
         public bool EnablePhysics = true;
         public float Mass = 1.0f;
         public float Drag = 0.1f;
-        public Prowl.Vector.Float3 Velocity = new(0, 0, 0);
+        public Vector.Float3 Velocity = new(0, 0, 0);
     }
 
     public class RenderSettings
@@ -114,7 +114,7 @@ public class WidgetPlaygroundPanel : DockPanel
         public bool CastShadows = true;
         public bool ReceiveShadows = true;
         public float LODBias = 1.0f;
-        public Prowl.Vector.Color EmissionColor = new(0, 0, 0, 1);
+        public Vector.Color EmissionColor = new(0, 0, 0, 1);
     }
 
     public abstract class BaseAbility
@@ -127,7 +127,7 @@ public class WidgetPlaygroundPanel : DockPanel
     {
         public float Damage = 50f;
         public float Range = 10f;
-        public Prowl.Vector.Color FlameColor = new(1f, 0.5f, 0f, 1f);
+        public Vector.Color FlameColor = new(1f, 0.5f, 0f, 1f);
 
         public FireballAbility() { AbilityName = "Fireball"; Cooldown = 2.5f; }
     }

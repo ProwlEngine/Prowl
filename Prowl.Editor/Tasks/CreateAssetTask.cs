@@ -6,12 +6,12 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
-using Prowl.Editor.Panels;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Runtime;
 
 using static System.Net.Mime.MediaTypeNames;
+using Prowl.Editor.GUI.Panels;
 
 namespace Prowl.Editor.Tasks;
 

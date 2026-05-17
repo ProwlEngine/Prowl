@@ -6,7 +6,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.OrigamiUI;
-using Prowl.Editor.Packages;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.OrigamiUI;
@@ -17,8 +16,9 @@ using Prowl.Runtime;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
+using Prowl.Editor.GUI.SceneView;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Project")]
 public class ProjectPanel : DockPanel
@@ -52,7 +52,7 @@ public class ProjectPanel : DockPanel
     private bool _contentBgHovered;
     // Rename state is managed by RenameOverlay
     private static readonly HashSet<Guid> _expandedAssets = new(); // files with sub-assets expanded
-    private static readonly Dictionary<Guid, Prowl.Runtime.Resources.Texture2D?> _thumbnailCache = new();
+    private static readonly Dictionary<Guid, Runtime.Resources.Texture2D?> _thumbnailCache = new();
     private static Guid _pendingPingNavigate; // Navigate to pinged asset's folder on next frame
     private static Guid _lastPingedGuid; // Track when a new ping starts
     private const float MinThumbSize = 20f;  // Below this = list mode
@@ -178,7 +178,7 @@ public class ProjectPanel : DockPanel
     //  Toolbar
     // ================================================================
 
-    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
+    private void DrawToolbar(Paper paper, Scribe.FontFile font, float width)
     {
         using (paper.Row("proj_toolbar")
             .Height(ToolbarHeight)
@@ -402,7 +402,7 @@ public class ProjectPanel : DockPanel
     //  Body: Folder Tree + Content
     // ================================================================
 
-    private void DrawBody(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private void DrawBody(Paper paper, Scribe.FontFile font, float width, float height)
     {
         using (paper.Row("proj_body").Height(height).Enter())
         {
@@ -415,7 +415,7 @@ public class ProjectPanel : DockPanel
     //  Folder Tree (left)
     // ================================================================
 
-    private void DrawFolderTree(Paper paper, Prowl.Scribe.FontFile font, float height)
+    private void DrawFolderTree(Paper paper, Scribe.FontFile font, float height)
     {
         using (paper.Box("proj_tree_bg")
             .Size(FolderTreeWidth, height)
@@ -556,7 +556,7 @@ public class ProjectPanel : DockPanel
     //  Content Area (right)
     // ================================================================
 
-    private void DrawContent(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private void DrawContent(Paper paper, Scribe.FontFile font, float width, float height)
     {
         var db = EditorAssetDatabase.Instance;
         if (db == null) return;
@@ -662,7 +662,7 @@ public class ProjectPanel : DockPanel
         }
     }
 
-    private void DrawBreadcrumb(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private void DrawBreadcrumb(Paper paper, Scribe.FontFile font, float width, float height)
     {
         using (paper.Row("proj_breadcrumb")
             .Height(height)
@@ -721,7 +721,7 @@ public class ProjectPanel : DockPanel
     //  List View
     // ================================================================
 
-    private void DrawListView(Paper paper, Prowl.Scribe.FontFile font, List<ContentItem> entries, float width, float height)
+    private void DrawListView(Paper paper, Scribe.FontFile font, List<ContentItem> entries, float width, float height)
     {
         // Build flat TreeNode list + parallel object list for Selection.HandleListClick
         var treeNodes = new List<OrigamiUI.TreeNode>();
@@ -1085,7 +1085,7 @@ public class ProjectPanel : DockPanel
     //  Grid View
     // ================================================================
 
-    private void DrawGridView(Paper paper, Prowl.Scribe.FontFile font, List<ContentItem> entries, float width)
+    private void DrawGridView(Paper paper, Scribe.FontFile font, List<ContentItem> entries, float width)
     {
         float cellSize = _thumbnailSize + 8f;
         float labelH = 18f;
@@ -1131,7 +1131,7 @@ public class ProjectPanel : DockPanel
         }
     }
 
-    private void DrawGridItem(Paper paper, Prowl.Scribe.FontFile font, string id, ContentItem item,
+    private void DrawGridItem(Paper paper, Scribe.FontFile font, string id, ContentItem item,
         int idx, List<object> itemObjects, float cellSize, float labelH, float totalCellH)
     {
         bool isSelected = Selection.IsSelected(item);
@@ -1377,7 +1377,7 @@ public class ProjectPanel : DockPanel
 
     private static string GetFileIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
 
-    private static Prowl.Runtime.Resources.Texture2D? GetThumbnailTexture(Guid guid)
+    private static Runtime.Resources.Texture2D? GetThumbnailTexture(Guid guid)
     {
         if (guid == Guid.Empty) return null;
 
@@ -1394,7 +1394,7 @@ public class ProjectPanel : DockPanel
         try
         {
             var (w, h, pixels) = thumb.Value;
-            var tex = new Prowl.Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
+            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
             tex.SetData<byte>(pixels);
             tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             _thumbnailCache[guid] = tex;
@@ -1428,10 +1428,10 @@ public class ProjectPanel : DockPanel
     private static string GetSubAssetIcon(Type? type)
     {
         if (type == null) return EditorIcons.File;
-        if (typeof(Prowl.Runtime.Resources.Mesh).IsAssignableFrom(type)) return EditorIcons.VectorSquare;
-        if (typeof(Prowl.Runtime.Resources.Material).IsAssignableFrom(type)) return EditorIcons.Palette;
-        if (typeof(Prowl.Runtime.AnimationClip).IsAssignableFrom(type)) return EditorIcons.Film;
-        if (typeof(Prowl.Runtime.Resources.Texture2D).IsAssignableFrom(type)) return EditorIcons.FileImage;
+        if (typeof(Runtime.Resources.Mesh).IsAssignableFrom(type)) return EditorIcons.VectorSquare;
+        if (typeof(Runtime.Resources.Material).IsAssignableFrom(type)) return EditorIcons.Palette;
+        if (typeof(AnimationClip).IsAssignableFrom(type)) return EditorIcons.Film;
+        if (typeof(Runtime.Resources.Texture2D).IsAssignableFrom(type)) return EditorIcons.FileImage;
         return EditorIcons.File;
     }
 }

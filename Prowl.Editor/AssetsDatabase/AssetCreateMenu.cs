@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 
-using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
@@ -10,6 +9,7 @@ using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Editor.GUI.Panels;
 
 namespace Prowl.Editor;
 

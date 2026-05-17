@@ -9,7 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
-using Prowl.Editor.Panels;
+using Prowl.Editor.GUI.Panels;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
 

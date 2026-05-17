@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;

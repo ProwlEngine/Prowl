@@ -3,15 +3,15 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.Importers;
-using Prowl.Editor.Panels;
 using Prowl.Editor.GUI;
 using System.Linq;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
+using Prowl.Editor.GUI.Panels;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
 /// Manages scene loading, saving, and tracking for the editor.
@@ -151,7 +151,7 @@ public static class EditorSceneManager
     [AssetDoubleClickHandler(".prefab")]
     private static bool OpenPrefabHandler(string relativePath, Guid guid)
     {
-        Prefabs.PrefabEditingMode.Enter(guid);
+        PrefabEditingMode.Enter(guid);
         return true;
     }
 

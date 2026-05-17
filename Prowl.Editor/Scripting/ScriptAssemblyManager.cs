@@ -9,6 +9,7 @@ using System.Runtime.Loader;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -404,8 +405,8 @@ public static class ScriptAssemblyManager
 
     private static void SaveSceneForRestart(Project project)
     {
-        if (Prefabs.PrefabEditingMode.IsEditing)
-            Prefabs.PrefabEditingMode.Exit();
+        if (PrefabEditingMode.IsEditing)
+            PrefabEditingMode.Exit();
 
         var scene = Scene.Current;
         if (scene == null) return;

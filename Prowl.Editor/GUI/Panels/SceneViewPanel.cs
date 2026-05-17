@@ -14,8 +14,9 @@ using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
+using Prowl.Editor.GUI.SceneView;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Scene")]
 public class SceneViewPanel : DockPanel
@@ -65,7 +66,7 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font)
+    private void DrawToolbar(Paper paper, Scribe.FontFile font)
     {
         using (paper.Row("sv_toolbar")
             .Height(EditorTheme.RowHeight)
@@ -107,7 +108,7 @@ public class SceneViewPanel : DockPanel
         }
     }
 
-    private void DrawDefaultToolbar(Paper paper, Prowl.Scribe.FontFile font)
+    private void DrawDefaultToolbar(Paper paper, Scribe.FontFile font)
     {
         bool isTranslate = _gizmoMode == Gizmo.TransformGizmoMode.Translate;
         bool isRotate = _gizmoMode == Gizmo.TransformGizmoMode.Rotate;
@@ -147,7 +148,7 @@ public class SceneViewPanel : DockPanel
             .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
     }
 
-    private void DrawViewport(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private void DrawViewport(Paper paper, Scribe.FontFile font, float width, float height)
     {
         if (_editorCamera == null || width <= 0 || height <= 0) return;
 
@@ -559,7 +560,7 @@ public class SceneViewPanel : DockPanel
         {
             if (obj is not GameObject go) continue;
 
-            var col = new Prowl.Vector.Color(0.3f, 0.6f, 1f, 1f);
+            var col = new Vector.Color(0.3f, 0.6f, 1f, 1f);
 
             // Collect world-space AABB from all renderers in this GO and its children
             Float3 min = new(float.MaxValue), max = new(float.MinValue);
@@ -727,7 +728,7 @@ public class SceneViewPanel : DockPanel
     //  View Manipulator (orientation cube)
     // ================================================================
 
-    private void DrawSpeedIndicator(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private void DrawSpeedIndicator(Paper paper, Scribe.FontFile font, float width, float height)
     {
         if (_editorCamera == null) return;
 
@@ -754,7 +755,7 @@ public class SceneViewPanel : DockPanel
             .Alignment(TextAlignment.MiddleCenter);
     }
 
-    private void DrawViewManipulator(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private void DrawViewManipulator(Paper paper, Scribe.FontFile font, float width, float height)
     {
         if (_editorCamera == null) return;
 

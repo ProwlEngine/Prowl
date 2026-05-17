@@ -6,7 +6,7 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
 /// Editor camera controller with orbit, pan, zoom, and FPS navigation modes.

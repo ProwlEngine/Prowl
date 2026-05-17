@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Utils;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;

@@ -5,13 +5,14 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-using Prowl.Editor.Panels;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
 /// Attribute to register a scene view drop handler for a specific asset type.

@@ -16,6 +16,7 @@ using Prowl.Vector;
 using Color = System.Drawing.Color;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
+using Prowl.Editor.GUI.Panels;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
@@ -365,7 +366,7 @@ public static class GameObjectInspector
 
         builder.Item(Loc.Get("inspector.pop_out"), () =>
         {
-            Panels.ComponentPopoutPanel.PopOut(go, comp);
+            ComponentPopoutPanel.PopOut(go, comp);
         }, icon: EditorIcons.ArrowUpRightFromSquare);
     }
 

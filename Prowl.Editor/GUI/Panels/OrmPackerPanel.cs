@@ -21,7 +21,7 @@ using Color = System.Drawing.Color;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 using Prowl.Editor.GUI.PropertyEditors;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 /// <summary>
 /// Production ORM map packer.

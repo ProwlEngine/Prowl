@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -14,7 +15,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI.SceneView.Editors;
 
 /// <summary>
 /// Scene view editor for terrain provides toolbar with terrain brush tools
@@ -54,7 +55,7 @@ public class TerrainSceneEditor : ISceneViewEditor
         _isPainting = false;
     }
 
-    public bool DrawToolbar(Paper paper, string id, Prowl.Scribe.FontFile font)
+    public bool DrawToolbar(Paper paper, string id, Scribe.FontFile font)
     {
         if (_terrain == null) return false;
 
@@ -96,7 +97,7 @@ public class TerrainSceneEditor : ISceneViewEditor
         return true;
     }
 
-    private void DrawSimpleToolBtn(Paper paper, string id, string icon, Prowl.Scribe.FontFile font)
+    private void DrawSimpleToolBtn(Paper paper, string id, string icon, Scribe.FontFile font)
     {
         bool active = !_useTransformTool;
         paper.Box(id)
@@ -108,7 +109,7 @@ public class TerrainSceneEditor : ISceneViewEditor
             .OnClick(0, (_, _) => _useTransformTool = false);
     }
 
-    private void DrawHeightToolButtons(Paper paper, string id, Prowl.Scribe.FontFile font)
+    private void DrawHeightToolButtons(Paper paper, string id, Scribe.FontFile font)
     {
         DrawHeightToolBtn(paper, $"{id}_raise", EditorIcons.ArrowUp, HeightTool.Raise, font);
         DrawHeightToolBtn(paper, $"{id}_lower", EditorIcons.ArrowDown, HeightTool.Lower, font);
@@ -116,7 +117,7 @@ public class TerrainSceneEditor : ISceneViewEditor
         DrawHeightToolBtn(paper, $"{id}_smooth", EditorIcons.WaveSquare, HeightTool.Smooth, font);
     }
 
-    private void DrawHeightToolBtn(Paper paper, string id, string icon, HeightTool tool, Prowl.Scribe.FontFile font)
+    private void DrawHeightToolBtn(Paper paper, string id, string icon, HeightTool tool, Scribe.FontFile font)
     {
         bool active = !_useTransformTool && TerrainEditor.ActiveHeightTool == tool;
         paper.Box(id)
@@ -459,7 +460,7 @@ public class TerrainSceneEditor : ISceneViewEditor
             Array.Copy(rect, z * w * stride, dst, ((minZ + z) * res + minX) * stride, w * stride);
     }
 
-    public void DrawOverlay(Prowl.Quill.Canvas canvas, Rect viewport)
+    public void DrawOverlay(Quill.Canvas canvas, Rect viewport)
     {
         // Could draw additional 2D brush info here in the future
     }

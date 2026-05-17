@@ -16,8 +16,9 @@ using Prowl.Rosetta;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
+using Prowl.Editor.GUI.SceneView;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Hierarchy")]
 public class HierarchyPanel : DockPanel
@@ -82,7 +83,7 @@ public class HierarchyPanel : DockPanel
             .Enter())
         {
             // Prefab editing breadcrumb
-            if (Prefabs.PrefabEditingMode.IsEditing)
+            if (PrefabEditingMode.IsEditing)
             {
                 using (paper.Row("hier_prefab_breadcrumb")
                     .Height(24)
@@ -97,7 +98,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
-                        .OnClick(0, (_, _) => Prefabs.PrefabEditingMode.Exit());
+                        .OnClick(0, (_, _) => PrefabEditingMode.Exit());
 
                     paper.Box("hier_prefab_sep_arrow")
                         .Width(UnitValue.Auto).Height(24)
@@ -105,7 +106,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string sceneName = Prefabs.PrefabEditingMode.OriginalSceneName ?? "Scene";
+                    string sceneName = PrefabEditingMode.OriginalSceneName ?? "Scene";
                     paper.Box("hier_prefab_scene")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(sceneName, font)
@@ -119,7 +120,7 @@ public class HierarchyPanel : DockPanel
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
                     string prefabName = System.IO.Path.GetFileNameWithoutExtension(
-                        Prefabs.PrefabEditingMode.EditingPrefabPath ?? "Prefab");
+                        PrefabEditingMode.EditingPrefabPath ?? "Prefab");
                     paper.Box("hier_prefab_name")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(prefabName, font)
@@ -128,7 +129,7 @@ public class HierarchyPanel : DockPanel
 
                     paper.Box("hier_prefab_spacer");
 
-                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  {Loc.Get("hierarchy.save_and_exit")}", () => Prefabs.PrefabEditingMode.SaveAndExit()).Width(100).Show();
+                    Origami.Button(paper, "hier_prefab_save_exit", $"{EditorIcons.FloppyDisk}  {Loc.Get("hierarchy.save_and_exit")}", () => PrefabEditingMode.SaveAndExit()).Width(100).Show();
                 }
             }
 
@@ -234,7 +235,7 @@ public class HierarchyPanel : DockPanel
 
                 // Account for toolbar + scene name header + margins + optional prefab breadcrumb
                 float usedHeight = ToolbarHeight + EditorTheme.RowHeight + 12; // toolbar + scene header + margins
-                if (Prefabs.PrefabEditingMode.IsEditing)
+                if (PrefabEditingMode.IsEditing)
                     usedHeight += 28; // prefab breadcrumb row + margins
                 float scrollHeight = height - usedHeight;
                 var roots = GetDisplayRoots(scene);
@@ -430,7 +431,7 @@ public class HierarchyPanel : DockPanel
         }
     }
 
-    private void DrawToolbar(Paper paper, Prowl.Scribe.FontFile font, float width)
+    private void DrawToolbar(Paper paper, Scribe.FontFile font, float width)
     {
         using (paper.Row("hier_toolbar")
             .Height(ToolbarHeight)

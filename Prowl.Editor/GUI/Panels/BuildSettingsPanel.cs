@@ -19,7 +19,7 @@ using Prowl.Runtime;
 using Silk.NET.Vulkan;
 
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 public class BuildSettingsPanel : DockPanel
 {

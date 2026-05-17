@@ -3,7 +3,7 @@
 
 using System;
 
-using Prowl.Editor.Panels;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Runtime;
 using Prowl.Runtime.ParticleSystem;
 using Prowl.Runtime.ParticleSystem.Modules;

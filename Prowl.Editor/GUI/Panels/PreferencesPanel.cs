@@ -13,7 +13,7 @@ using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
 using Prowl.Editor.Thumbnails;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Preferences")]
 public class PreferencesPanel : DockPanel
@@ -73,7 +73,7 @@ public class PreferencesPanel : DockPanel
         }
     }
 
-    private void DrawTabBtn(Paper paper, Prowl.Scribe.FontFile font, string label, string icon, Tab tab)
+    private void DrawTabBtn(Paper paper, Scribe.FontFile font, string label, string icon, Tab tab)
     {
         bool sel = _tab == tab;
         paper.Box($"pref_tab_{tab}")
@@ -131,7 +131,7 @@ public class PreferencesPanel : DockPanel
     //  Theme (Colors + Sizing)
     // ================================================================
 
-    private void DrawTheme(Paper paper, Prowl.Scribe.FontFile font, EditorSettings s, float w)
+    private void DrawTheme(Paper paper, Scribe.FontFile font, EditorSettings s, float w)
     {
         var theme = s.Theme;
 
@@ -307,7 +307,7 @@ public class PreferencesPanel : DockPanel
     //  Shortcuts
     // ================================================================
 
-    private void DrawShortcuts(Paper paper, Prowl.Scribe.FontFile font, float w)
+    private void DrawShortcuts(Paper paper, Scribe.FontFile font, float w)
     {
         // Handle rebinding input each frame
         if (_rebindingId != null)

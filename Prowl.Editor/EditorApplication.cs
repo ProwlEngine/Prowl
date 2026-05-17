@@ -9,13 +9,14 @@ using Prowl.Editor.Thumbnails;
 using Prowl.OrigamiUI;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.PropertyEditors;
-using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
+using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.SceneView;
 
 namespace Prowl.Editor;
 
@@ -228,10 +229,10 @@ public class EditorApplication : Game
         // Register save handlers
         SaveManager.OnSave += () =>
         {
-            if (Prefabs.PrefabEditingMode.IsEditing)
+            if (PrefabEditingMode.IsEditing)
             {
-                return Prefabs.PrefabEditingMode.Save()
-                    ? Loc.Get("save.prefab", new { name = System.IO.Path.GetFileNameWithoutExtension(Prefabs.PrefabEditingMode.EditingPrefabPath) })
+                return PrefabEditingMode.Save()
+                    ? Loc.Get("save.prefab", new { name = System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath) })
                     : null;
             }
             if (EditorSceneManager.Save())
@@ -1229,7 +1230,7 @@ public class EditorApplication : Game
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_project")}", () => ReturnToLauncher());
         MenuRegistry.RegisterSeparator(file);
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel(typeof(Panels.BuildSettingsPanel)));
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel(typeof(BuildSettingsPanel)));
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.exit")}", () => Game.Quit());
 
@@ -1241,10 +1242,10 @@ public class EditorApplication : Game
             isEnabled: () => Undo.CanRedo,
             dynamicLabel: () => Undo.RedoDescription);
         MenuRegistry.RegisterSeparator(edit);
-        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.project_settings")}", () => OpenPanel(typeof(Panels.ProjectSettingsPanel)));
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.project_settings")}", () => OpenPanel(typeof(ProjectSettingsPanel)));
         MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.save_layout")}", () => SaveProjectState());
         MenuRegistry.RegisterSeparator(edit);
-        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel(typeof(Panels.PreferencesPanel)));
+        MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel(typeof(PreferencesPanel)));
 
         // Assets menu
         string assets = Loc.Get("menu.assets");
@@ -1511,7 +1512,7 @@ public class EditorApplication : Game
         try { ProjectSettingsRegistry.Get<PhysicsSettings>().Apply(); } catch { }
 
         // Focus the Game View tab
-        FocusPanel(typeof(Panels.GameViewPanel));
+        FocusPanel(typeof(GameViewPanel));
 
         Runtime.Debug.Log("Entered play mode.");
     }
@@ -1579,12 +1580,12 @@ public class EditorApplication : Game
 
     private void SaveActiveTab()
     {
-        _savedActiveTabNode = FindNodeContainingPanel(_dockSpace.Root, typeof(Panels.GameViewPanel));
+        _savedActiveTabNode = FindNodeContainingPanel(_dockSpace.Root, typeof(GameViewPanel));
         if (_savedActiveTabNode == null)
         {
             foreach (var fw in _dockSpace.FloatingWindows)
             {
-                _savedActiveTabNode = FindNodeContainingPanel(fw.Node, typeof(Panels.GameViewPanel));
+                _savedActiveTabNode = FindNodeContainingPanel(fw.Node, typeof(GameViewPanel));
                 if (_savedActiveTabNode != null) break;
             }
         }

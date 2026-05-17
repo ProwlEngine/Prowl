@@ -11,7 +11,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 /// <summary>
 /// A floating panel that displays a single component editor.

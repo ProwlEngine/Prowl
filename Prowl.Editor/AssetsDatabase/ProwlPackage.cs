@@ -11,7 +11,7 @@ using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.Thumbnails;
 using Prowl.Runtime;
 
-namespace Prowl.Editor.Packages;
+namespace Prowl.Editor;
 
 public class PackageAssetEntry
 {

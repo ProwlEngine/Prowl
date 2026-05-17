@@ -7,6 +7,7 @@ using Prowl.Echo;
 using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
+using Prowl.Editor.GUI.Panels;
 
 namespace Prowl.Editor;
 
@@ -981,12 +982,12 @@ public class EditorAssetDatabase : IAssetDatabase
 
             // Clear old thumbnails and invalidate UI cache
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
-            Panels.ProjectPanel.InvalidateThumbnail(guid);
+            ProjectPanel.InvalidateThumbnail(guid);
             if (entry.SubAssets != null)
                 foreach (var sub in entry.SubAssets)
                 {
                     ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
-                    Panels.ProjectPanel.InvalidateThumbnail(sub.Guid);
+                    ProjectPanel.InvalidateThumbnail(sub.Guid);
                 }
 
             entry.NeedsReimport = true;

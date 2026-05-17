@@ -4,6 +4,7 @@
 using System;
 using System.Reflection;
 
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;

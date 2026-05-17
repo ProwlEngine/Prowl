@@ -34,7 +34,6 @@ public enum DefaultShader
     Grid,
     CinematicEffects,
     VolumetricFog,
-    SDFRaymarch,
     TAA,
     MotionBlur,
     GizmoIcon,

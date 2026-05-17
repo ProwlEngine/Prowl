@@ -14,7 +14,7 @@ using Prowl.Runtime;
 using Color = System.Drawing.Color;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Inspector")]
 public class InspectorPanel : DockPanel
@@ -150,7 +150,7 @@ public class InspectorPanel : DockPanel
         });
     }
 
-    private void DrawEmpty(Paper paper, Prowl.Scribe.FontFile font, float width)
+    private void DrawEmpty(Paper paper, Scribe.FontFile font, float width)
     {
         paper.Box("insp_empty").Height(80)
             .Text(Loc.Get("inspector.nothing_selected"), font)
@@ -165,7 +165,7 @@ public class InspectorPanel : DockPanel
             .Alignment(TextAlignment.MiddleCenter);
     }
 
-    private void DrawSelectionHeader(Paper paper, Prowl.Scribe.FontFile font, object active)
+    private void DrawSelectionHeader(Paper paper, Scribe.FontFile font, object active)
     {
         string icon;
         string name;
@@ -223,7 +223,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawAssetInspector(Paper paper, Prowl.Scribe.FontFile font, ContentItem item)
+    private void DrawAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item)
     {
         if (item.IsFolder)
         {
@@ -388,7 +388,7 @@ public class InspectorPanel : DockPanel
         return sb.ToString();
     }
 
-    private void DrawFolderInfo(Paper paper, Prowl.Scribe.FontFile font, ContentItem item)
+    private void DrawFolderInfo(Paper paper, Scribe.FontFile font, ContentItem item)
     {
         Origami.Header(paper, "insp_h_folder", Loc.Get("inspector.folder")).Show();
         Origami.Label(paper, "insp_folder_path", $"{Loc.Get("inspector.path")}: {item.RelativePath}").Show();
@@ -408,7 +408,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawSubAssetInspector(Paper paper, Prowl.Scribe.FontFile font, ContentItem item, EditorAssetDatabase db)
+    private void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetDatabase db)
     {
         // Find the parent entry
         AssetEntry? parentEntry = null;
@@ -461,7 +461,7 @@ public class InspectorPanel : DockPanel
         if (asset != null)
         {
             // Show type-specific preview
-            if (asset is Prowl.Runtime.Resources.Texture2D tex)
+            if (asset is Runtime.Resources.Texture2D tex)
             {
                 float previewSize = 180f;
                 float aspect = tex.Width / (float)Math.Max(1, tex.Height);
@@ -483,7 +483,7 @@ public class InspectorPanel : DockPanel
                 Origami.Label(paper, "insp_sub_tex_size", $"{Loc.Get("inspector.size")}: {tex.Width} x {tex.Height}").Show();
                 Origami.Label(paper, "insp_sub_tex_fmt", $"{Loc.Get("inspector.format")}: {tex.ImageFormat}").Show();
             }
-            else if (asset is Prowl.Runtime.Resources.Mesh mesh && parentEntry != null && subEntry != null)
+            else if (asset is Runtime.Resources.Mesh mesh && parentEntry != null && subEntry != null)
             {
                 Inspector.MeshAssetEditor.DrawForSubAsset(paper, "insp_sub_mesh", parentEntry, subEntry, mesh);
             }
@@ -553,7 +553,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawEngineObjectInspector(Paper paper, Prowl.Scribe.FontFile font, EngineObject obj)
+    private void DrawEngineObjectInspector(Paper paper, Scribe.FontFile font, EngineObject obj)
     {
         Origami.Header(paper, "insp_h_eo", obj.GetType().Name).Show();
 
@@ -570,7 +570,7 @@ public class InspectorPanel : DockPanel
         PropertyGridUtils.Draw(paper, "insp_pg", obj);
     }
 
-    private void DrawConsoleLogInspector(Paper paper, Prowl.Scribe.FontFile font, ConsoleLogSelection log)
+    private void DrawConsoleLogInspector(Paper paper, Scribe.FontFile font, ConsoleLogSelection log)
     {
         float fs = EditorTheme.FontSize;
 
@@ -637,7 +637,7 @@ public class InspectorPanel : DockPanel
         }
     }
 
-    private void DrawGenericInspector(Paper paper, Prowl.Scribe.FontFile font, object obj)
+    private void DrawGenericInspector(Paper paper, Scribe.FontFile font, object obj)
     {
         Origami.Header(paper, "insp_h_generic", obj.GetType().Name).Show();
         Origami.Label(paper, "insp_generic_str", obj.ToString() ?? "null").Show();
@@ -648,7 +648,7 @@ public class InspectorPanel : DockPanel
 
     private static string GetExtensionIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
 
-    private static void DrawAssetLink(Paper paper, Prowl.Scribe.FontFile font, string id, Guid guid, EditorAssetDatabase db)
+    private static void DrawAssetLink(Paper paper, Scribe.FontFile font, string id, Guid guid, EditorAssetDatabase db)
     {
         string? path = db.GuidToPath(guid);
         bool isBuiltIn = Runtime.BuiltInAssets.IsBuiltIn(guid);

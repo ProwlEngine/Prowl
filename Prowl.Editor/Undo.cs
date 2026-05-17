@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;

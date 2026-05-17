@@ -13,7 +13,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Console")]
 public class ConsolePanel : DockPanel
@@ -67,11 +67,11 @@ public class ConsolePanel : DockPanel
         public DebugStackTrace? StackTrace;
 
         // Cached text layouts (created on first draw)
-        public Prowl.Scribe.TextLayout? IconLayout;
-        public Prowl.Scribe.TextLayout? TimeLayout;
-        public Prowl.Scribe.TextLayout? MessageLayout;
-        public Prowl.Scribe.TextLayout? CountLayout;
-        public Prowl.Scribe.TextLayout? StackTraceLayout;
+        public TextLayout? IconLayout;
+        public TextLayout? TimeLayout;
+        public TextLayout? MessageLayout;
+        public TextLayout? CountLayout;
+        public TextLayout? StackTraceLayout;
     }
 
     public ConsolePanel()
@@ -285,9 +285,9 @@ public class ConsolePanel : DockPanel
                             canvas.RectFilled(startX+2, rowY+1, (float)4, totalRowSize-2, LerpRGB(textColor, Color.Black, 0.5f));
 
                             // Create layouts lazily
-                            msg.IconLayout ??= canvas.CreateLayout(icon, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
-                            msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
-                            msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
+                            msg.IconLayout ??= canvas.CreateLayout(icon, new TextLayoutSettings { Font = font, PixelSize = size });
+                            msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new TextLayoutSettings { Font = font, PixelSize = size });
+                            msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new TextLayoutSettings { Font = font, PixelSize = size });
                             
 
 
@@ -306,7 +306,7 @@ public class ConsolePanel : DockPanel
                             {
                                 float stackSize = size * 0.8f;
                                 float stackY = rowY + totalRowSize * (_multiLine ? 0.75f : 0.5f) - stackSize * 0.5f - 2;
-                                msg.StackTraceLayout ??= canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = stackSize });
+                                msg.StackTraceLayout ??= canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new TextLayoutSettings { Font = font, PixelSize = stackSize });
                                 canvas.DrawLayout(msg.StackTraceLayout, paddedX + padStack+1, stackY, LerpRGB(textColor,Color.Black,0.25f));
                             }
 
@@ -316,7 +316,7 @@ public class ConsolePanel : DockPanel
                             if (_collapse && msg.Count > 1)
                             {
                                 var textSize = size / 1.2f;
-                                msg.CountLayout ??= canvas.CreateLayout(msg.Count.ToString(), new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = textSize });
+                                msg.CountLayout ??= canvas.CreateLayout(msg.Count.ToString(), new TextLayoutSettings { Font = font, PixelSize = textSize });
                                 float badgeW = msg.CountLayout.Size.X + 8; // Size is in scaled pixels
                                 float badgeH = RowHeight - 6;
                                 float badgeX = startX + (float)r.Size.X - badgeW - 4;

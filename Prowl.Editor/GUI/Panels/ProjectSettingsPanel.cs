@@ -11,7 +11,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor.Panels;
+namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Project Settings")]
 public class ProjectSettingsPanel : DockPanel

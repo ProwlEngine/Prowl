@@ -4,11 +4,13 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.Prefabs;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-namespace Prowl.Editor.Prefabs;
+namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
 /// Isolated prefab editing mode. Saves the current scene, loads the prefab
@@ -186,12 +188,12 @@ public static class PrefabEditingMode
             else
             {
                 Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
-                Panels.SceneViewPanel.CreateAndLoadDefaultScene();
+                SceneViewPanel.CreateAndLoadDefaultScene();
             }
         }
         else
         {
-            Panels.SceneViewPanel.CreateAndLoadDefaultScene();
+            SceneViewPanel.CreateAndLoadDefaultScene();
         }
     }
 

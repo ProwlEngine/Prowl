@@ -8,7 +8,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
 /// Interface for custom scene view editors that extend the scene viewport with
@@ -26,7 +26,7 @@ public interface ISceneViewEditor
     /// Draw custom toolbar buttons in the scene view.
     /// Return true to suppress the default transform gizmo toolbar.
     /// </summary>
-    bool DrawToolbar(Paper paper, string id, Prowl.Scribe.FontFile font);
+    bool DrawToolbar(Paper paper, string id, Scribe.FontFile font);
 
     /// <summary>
     /// Handle scene input (mouse, keyboard). Called each frame when this editor is active.
@@ -42,7 +42,7 @@ public interface ISceneViewEditor
     /// <summary>
     /// Draw 2D overlays in the scene viewport foreground (e.g. brush indicators, handles).
     /// </summary>
-    void DrawOverlay(Prowl.Quill.Canvas canvas, Rect viewport) { }
+    void DrawOverlay(Quill.Canvas canvas, Rect viewport) { }
 
     /// <summary>
     /// Called when this editor is activated (component selected).

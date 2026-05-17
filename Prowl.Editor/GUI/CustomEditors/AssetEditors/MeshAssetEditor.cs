@@ -23,13 +23,10 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Mesh))]
 public class MeshAssetEditor : AssetImporterEditor
 {
-    public enum ViewMode { Shaded, SDFRaymarch }
-
     private sealed class State
     {
         public PreviewRenderer? Preview;
         public EngineObject? LastPreviewSubject;
-        public ViewMode Mode;
     }
 
     private readonly State _ownState = new();
@@ -109,51 +106,27 @@ public class MeshAssetEditor : AssetImporterEditor
             Origami.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)").Show();
     }
 
-    private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state)
-    {
-        var sdf = FindSDF(parentEntry, subEntry, mesh);
-
-        using (paper.Row($"{id}_preview_header").Height(28).RowBetween(6).ChildLeft(4).ChildRight(4).Enter())
-        {
-            Origami.Header(paper, $"{id}_h_preview", "Preview").Show();
-
-            // Mutually exclusive view modes — radios so the user can see both options and
-            // the active one is unambiguously highlighted.
-            Origami.Radio(paper, $"{id}_view_shaded", state.Mode == ViewMode.Shaded,
-                _ => { state.Mode = ViewMode.Shaded; state.LastPreviewSubject = null; })
-                .Primary().LabelRight("Shaded").Show();
-
-            // Only offer the SDF view when an SDF actually exists.
-            if (sdf != null)
-                Origami.Radio(paper, $"{id}_view_sdf", state.Mode == ViewMode.SDFRaymarch,
-                    _ => { state.Mode = ViewMode.SDFRaymarch; state.LastPreviewSubject = null; })
-                    .Primary().LabelRight("SDF").Show();
-        }
-
-        if (state.Mode == ViewMode.SDFRaymarch && sdf == null)
-            state.Mode = ViewMode.Shaded;
-
-        state.Preview ??= new PreviewRenderer(256, 256);
-        state.Preview.ShowGrid = state.Mode == ViewMode.Shaded;
-
-        EngineObject? currentSubject = state.Mode == ViewMode.SDFRaymarch ? sdf : (EngineObject)mesh;
-        if (state.LastPreviewSubject != currentSubject)
-        {
-            state.LastPreviewSubject = currentSubject;
-            if (state.Mode == ViewMode.SDFRaymarch && sdf != null)
-                state.Preview.SetupForMeshSDF(sdf);
-            else
-                state.Preview.SetupForMesh(mesh);
-        }
-
-        state.Preview.DrawPreview(paper, $"{id}_preview_rt", 256, 256);
-    }
-
     private static MeshSDF? FindSDF(AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
     {
         string meshName = subEntry?.Name ?? mesh.Name ?? "Mesh";
         var sdfGuid = AssetEntry.DeriveSubAssetGuid(parentEntry.Guid, $"{meshName}_sdf");
         return Runtime.AssetDatabase.Get(sdfGuid) as MeshSDF;
+    }
+
+    private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state)
+    {
+        Origami.Header(paper, $"{id}_h_preview", "Preview").Show();
+
+        state.Preview ??= new PreviewRenderer(256, 256);
+        state.Preview.ShowGrid = true;
+
+        if (state.LastPreviewSubject != mesh)
+        {
+            state.LastPreviewSubject = mesh;
+            state.Preview.SetupForMesh(mesh);
+        }
+
+        state.Preview.DrawPreview(paper, $"{id}_preview_rt", 256, 256);
     }
 
     /// <summary>
