@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Docking;
-using Prowl.Editor.Widgets;
-using Prowl.Editor.Widgets.Popups;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

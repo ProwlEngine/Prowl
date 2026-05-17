@@ -7,7 +7,7 @@ using System.IO;
 using System.Reflection;
 
 using Prowl.Echo;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;

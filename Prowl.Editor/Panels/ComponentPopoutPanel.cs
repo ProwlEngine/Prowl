@@ -3,14 +3,14 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
-using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
+using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
 namespace Prowl.Editor.Panels;
 
 /// <summary>

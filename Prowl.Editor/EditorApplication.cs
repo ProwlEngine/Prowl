@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
+using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Panels;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -126,7 +127,7 @@ public class EditorApplication : Game
         CreateGameObjectMenuRegistry.Initialize();
         FileIconRegistry.Initialize();
         AssetDoubleClickRegistry.Initialize();
-        Widgets.ScriptTemplateRegistry.Initialize();
+        GUI.ScriptTemplateRegistry.Initialize();
         EditorCallbacks.Initialize();
 
         // Cursor lock toasts
@@ -187,16 +188,16 @@ public class EditorApplication : Game
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
-                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+                EngineObjectPropertyEditor.SetFieldType(fieldType);
         };
         PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
         {
-            Widgets.PropertyGrid.DrawTypePicker(paper, id, baseType, currentValue, onChange);
+            GUI.PropertyGrid.DrawTypePicker(paper, id, baseType, currentValue, onChange);
         };
         PropertyGridConfig.FallbackFieldDrawer = (paper, id, label, fieldType, value, onChange, depth) =>
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
-                Inspector.EngineObjectPropertyEditor.SetFieldType(fieldType);
+                EngineObjectPropertyEditor.SetFieldType(fieldType);
             var editor = Inspector.PropertyEditorRegistry.GetEditor(fieldType);
             if (editor != null)
             {
@@ -1236,7 +1237,7 @@ public class EditorApplication : Game
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path != null && System.IO.File.Exists(path))
-                    Widgets.Popups.PackageImportDialog.Open(path);
+                    GUI.Popups.PackageImportDialog.Open(path);
             },
             startPath: Project.Current?.PackagesPath,
             filters: new[] { "*.prowlpackage" },
@@ -1273,7 +1274,7 @@ public class EditorApplication : Game
         GraphTools.NodePreviewRegistry.Reinitialize();
         Runtime.GraphTools.GraphValidatorRegistry.Reinitialize();
         Inspector.AssetImporterEditorRegistry.Reinitialize();
-        Widgets.Popups.AddComponentPopup.Reinitialize();
+        GUI.Popups.AddComponentPopup.Reinitialize();
         Importers.ImporterRegistry.Reinitialize();
         ProjectSettingsRegistry.Reinitialize();
         CreateAssetMenuRegistry.Reinitialize();
@@ -1283,7 +1284,7 @@ public class EditorApplication : Game
         CreateGameObjectMenuRegistry.Reinitialize();
         FileIconRegistry.Reinitialize();
         AssetDoubleClickRegistry.Reinitialize();
-        Widgets.ScriptTemplateRegistry.Reinitialize();
+        GUI.ScriptTemplateRegistry.Reinitialize();
 
         // Re-register Window menu items for any new panels from user assemblies
         foreach (var (type, path) in _registeredPanels)

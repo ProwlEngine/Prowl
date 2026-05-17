@@ -2,12 +2,13 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
-using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
+using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using Prowl.Editor.GUI.Widgets;
 namespace Prowl.Editor.Panels;
 
 [EditorWindow("Debug/Widget Playground")]
@@ -412,7 +413,7 @@ public class WidgetPlaygroundPanel : DockPanel
             Origami.Header(paper, "h_curve", "Animation Curve").Show();
 
             InspectorRow.Draw(paper, "curve_1", "Speed Curve", () =>
-                Widgets.PropertyEditors.CurveField.Create(paper, "curve_1_cf", _curve,
+                CurveField.Create(paper, "curve_1_cf", _curve,
                     v => _curve = v).Show());
 
             Origami.Separator(paper, "sep14").Show();

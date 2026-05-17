@@ -7,7 +7,7 @@ using System.Drawing;
 using System.Linq;
 
 using Prowl.Editor.Docking;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

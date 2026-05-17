@@ -6,7 +6,7 @@ using System;
 using Prowl.OrigamiUI;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
@@ -15,7 +15,7 @@ using Prowl.Runtime.GraphTools;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
 using Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
+using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
 namespace Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 /// <summary>

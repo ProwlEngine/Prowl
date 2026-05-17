@@ -4,7 +4,7 @@ using System.Linq;
 
 using Prowl.Editor.Docking;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -13,7 +13,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
-using PropertyGrid = Prowl.Editor.Widgets.PropertyGrid;
+using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
 namespace Prowl.Editor.Panels;
 
 [EditorWindow("General/Inspector")]
@@ -492,11 +492,11 @@ public class InspectorPanel : DockPanel
                 // Generic read-only property grid
                 Origami.Header(paper, "insp_sub_h_props", Loc.Get("inspector.properties_readonly")).Show();
                 // Show properties as labels
-                var fields = Widgets.PropertyGrid.GetSerializableFields(asset.GetType());
+                var fields = GUI.PropertyGrid.GetSerializableFields(asset.GetType());
                 foreach (var field in fields)
                 {
                     object? val = field.GetValue(asset);
-                    string label = Widgets.PropertyGrid.NicifyName(field.Name);
+                    string label = GUI.PropertyGrid.NicifyName(field.Name);
                     Origami.Label(paper, $"insp_sub_prop_{field.Name}", $"{label}: {val ?? "(null)"}").Show();
                 }
             }

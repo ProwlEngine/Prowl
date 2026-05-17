@@ -9,7 +9,7 @@ using System.Text;
 using Prowl.Editor.Build;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Scripting;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

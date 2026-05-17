@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Docking;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -282,7 +282,7 @@ public class ConsolePanel : DockPanel
                             else if (bgColor != Color.Transparent)
                                 canvas.RectFilled(startX, rowY, (float)r.Size.X, totalRowSize, bgColor);
 
-                            canvas.RectFilled(startX+2, rowY+1, (float)4, totalRowSize-2, EditorGUI.LerpRGB(textColor, Color.Black, 0.5f));
+                            canvas.RectFilled(startX+2, rowY+1, (float)4, totalRowSize-2, LerpRGB(textColor, Color.Black, 0.5f));
 
                             // Create layouts lazily
                             msg.IconLayout ??= canvas.CreateLayout(icon, new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = size });
@@ -307,7 +307,7 @@ public class ConsolePanel : DockPanel
                                 float stackSize = size * 0.8f;
                                 float stackY = rowY + totalRowSize * (_multiLine ? 0.75f : 0.5f) - stackSize * 0.5f - 2;
                                 msg.StackTraceLayout ??= canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new Prowl.Scribe.TextLayoutSettings { Font = font, PixelSize = stackSize });
-                                canvas.DrawLayout(msg.StackTraceLayout, paddedX + padStack+1, stackY, EditorGUI.LerpRGB(textColor,Color.Black,0.25f));
+                                canvas.DrawLayout(msg.StackTraceLayout, paddedX + padStack+1, stackY, LerpRGB(textColor,Color.Black,0.25f));
                             }
 
                             canvas.DrawLayout(msg.MessageLayout, paddedX + padStack, textY, textColor);
@@ -332,6 +332,16 @@ public class ConsolePanel : DockPanel
                     });
                 });
         });
+    }
+
+    private static Color LerpRGB(Color a, Color b, float t)
+    {
+        return Color.FromArgb(
+            (int)(a.A + (b.A - a.A) * t),
+            (int)(a.R + (b.R - a.R) * t),
+            (int)(a.G + (b.G - a.G) * t),
+            (int)(a.B + (b.B - a.B) * t)
+        );
     }
 
     private void RebuildFilteredList()

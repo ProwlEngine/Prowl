@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 
 using Prowl.Editor.Docking;
-using Prowl.Editor.Widgets;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Gizmo = Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
