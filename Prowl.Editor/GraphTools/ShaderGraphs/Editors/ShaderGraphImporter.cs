@@ -4,6 +4,7 @@
 using System.IO;
 
 using Prowl.Echo;
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Runtime.GraphTools;

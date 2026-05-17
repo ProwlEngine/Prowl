@@ -17,6 +17,8 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Utils;
 
 namespace Prowl.Editor.GUI.Panels;
 

@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Scripting;

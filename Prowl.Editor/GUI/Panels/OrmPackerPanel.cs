@@ -20,6 +20,7 @@ using Prowl.Runtime.Resources;
 using Color = System.Drawing.Color;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.AssetsDatabase;
 
 namespace Prowl.Editor.GUI.Panels;
 

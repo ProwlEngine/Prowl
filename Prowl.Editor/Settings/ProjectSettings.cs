@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 
 using Prowl.Echo;
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;

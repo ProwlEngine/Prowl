@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI;
 
 public class RecentProjectEntry
 {

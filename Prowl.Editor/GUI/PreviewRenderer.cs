@@ -8,7 +8,7 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Renders 3D previews of assets (models, materials, meshes) to a RenderTexture.
@@ -208,7 +208,7 @@ public class PreviewRenderer : IDisposable
                 canvas.SetBrushTextureTransform(
                     Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
                     Prowl.Vector.Spatial.Transform2D.CreateScale(rw, -rh));
-                canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4, new Prowl.Vector.Color32(255, 255, 255, 255));
+                canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4, new Color32(255, 255, 255, 255));
                 canvas.ClearBrushTexture();
             }));
     }

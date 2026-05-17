@@ -2,7 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 
-using Prowl.Editor.GUI;
+using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -11,7 +12,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Full-screen project launcher shown at startup before the editor loads.
@@ -337,7 +338,7 @@ public static class ProjectLauncher
         }
     }
 
-    private static void DrawNewProjectPanel(Paper paper, Prowl.Scribe.FontFile font)
+    private static void DrawNewProjectPanel(Paper paper, Scribe.FontFile font)
     {
         using (paper.Column("pl_newproj")
             .BackgroundColor(EditorTheme.Neutral400)
@@ -398,7 +399,7 @@ public static class ProjectLauncher
         }
     }
 
-    private static void DrawRecentProjects(Paper paper, Prowl.Scribe.FontFile font, float width, float height)
+    private static void DrawRecentProjects(Paper paper, Scribe.FontFile font, float width, float height)
     {
         var entries = RecentProjects.Entries;
 

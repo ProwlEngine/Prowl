@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;

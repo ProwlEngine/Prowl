@@ -14,6 +14,7 @@ using Prowl.Runtime;
 using Color = System.Drawing.Color;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
+using Prowl.Editor.AssetsDatabase;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Inspector")]

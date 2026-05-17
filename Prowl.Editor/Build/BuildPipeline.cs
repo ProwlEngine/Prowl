@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;

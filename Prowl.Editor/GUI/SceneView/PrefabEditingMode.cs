@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Prefabs;

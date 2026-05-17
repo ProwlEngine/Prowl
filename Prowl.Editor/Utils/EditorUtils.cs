@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace Prowl.Editor;
+namespace Prowl.Editor.Utils;
 
 public static class EditorUtils
 {

@@ -15,6 +15,8 @@ using Prowl.Editor.GUI.Panels;
 
 namespace Prowl.Editor.Tasks;
 
+// TODO: This uses hardcoded asset types? Maybe we should rewrite Creating assets to be a more embedded feature into the Project panel? Rather then an EditorTask
+
 public class CreateAssetTask : EditorTask
 {
 

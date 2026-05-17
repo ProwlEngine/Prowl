@@ -9,6 +9,7 @@ using System.Runtime.Loader;
 using System.Threading.Tasks;
 
 using Prowl.Echo;
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;

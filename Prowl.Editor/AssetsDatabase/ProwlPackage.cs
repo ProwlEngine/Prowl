@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.Thumbnails;
 using Prowl.Runtime;

@@ -16,6 +16,7 @@ using VColor = Prowl.Vector.Color;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.AssetsDatabase;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Material))]

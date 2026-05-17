@@ -1,3 +1,5 @@
+using Prowl.Editor.AssetsDatabase;
+
 namespace Prowl.Editor;
 
 public static class Program
