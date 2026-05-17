@@ -3,20 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.OrigamiUI;
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
-using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
-using Prowl.Runtime.ParticleSystem;
-using Prowl.Runtime.ParticleSystem.Modules;
 using Prowl.Runtime.Resources;
 using Prowl.Rosetta;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 

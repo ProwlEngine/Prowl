@@ -6,8 +6,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
-using Prowl.OrigamiUI;
-using Prowl.Editor.GUI;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

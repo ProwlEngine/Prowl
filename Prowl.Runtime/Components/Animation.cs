@@ -4,8 +4,6 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Echo;
-using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;

@@ -3,8 +3,8 @@
 
 using System;
 
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

@@ -1,14 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 
 using Prowl.OrigamiUI;
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
-using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
@@ -19,6 +15,9 @@ using Color = System.Drawing.Color;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.AssetsDatabase;
 using Prowl.Editor.Utils;
+using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 

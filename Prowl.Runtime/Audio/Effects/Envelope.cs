@@ -5,8 +5,6 @@
 // EarLevel Engineering: earlevel.com
 // C# Port 2024 W.M.R Jap-A-Joe
 
-using System;
-using Prowl.Runtime.Audio;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Audio.Effects;

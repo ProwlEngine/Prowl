@@ -8,9 +8,6 @@ using System.Linq;
 using ImageMagick;
 
 using Prowl.OrigamiUI;
-using Prowl.Editor.Inspector;
-using Prowl.Editor.GUI;
-using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
@@ -21,6 +18,8 @@ using Color = System.Drawing.Color;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 

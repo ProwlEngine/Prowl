@@ -1,8 +1,9 @@
 using System;
 using System.Text.Json;
 
-using Prowl.OrigamiUI;
-using Prowl.Editor.GUI;
+using Prowl.Editor.Core;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

@@ -3,14 +3,14 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.Importers;
-using Prowl.Editor.GUI;
-using System.Linq;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Core;
 
 namespace Prowl.Editor.GUI.SceneView;
 

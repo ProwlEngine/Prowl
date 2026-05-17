@@ -1,5 +1,6 @@
 using System;
 
+using Prowl.Editor.Theming;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 

@@ -1,5 +1,5 @@
 using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
-using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;

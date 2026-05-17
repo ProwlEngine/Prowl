@@ -3,8 +3,6 @@
 
 using System;
 
-using Prowl.Echo;
-
 namespace Prowl.Runtime;
 
 /// <summary>

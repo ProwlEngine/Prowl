@@ -2,12 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Drawing;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
-using Prowl.Scribe;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;

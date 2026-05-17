@@ -1,21 +1,18 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using VColor = Prowl.Vector.Color;
-
-using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.GUI.SceneView;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Environment")]

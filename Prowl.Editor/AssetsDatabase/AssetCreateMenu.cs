@@ -3,14 +3,16 @@ using System.IO;
 using System.Linq;
 
 using Prowl.OrigamiUI;
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
-using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Core.Tasks;
 
 namespace Prowl.Editor;
 
@@ -27,9 +29,9 @@ public static class AssetCreateMenu
     {
         builder.Item($"{EditorIcons.Folder}  Folder", () => {
 
-            var task = new Tasks.CreateAssetTask();
+            var task = new Core.Tasks.CreateAssetTask();
 
-            task.TaskType = Tasks.CreateAssetTask.AssetType.Folder;
+            task.TaskType = CreateAssetTask.AssetType.Folder;
             task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Folder", Extension = "", Icon = FileIconRegistry.GetIconForExtension("") }, currentFolder);
 
         });
@@ -40,9 +42,9 @@ public static class AssetCreateMenu
 
         builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => {
 
-            var task = new Tasks.CreateAssetTask();
+            var task = new Core.Tasks.CreateAssetTask();
 
-            task.TaskType = Tasks.CreateAssetTask.AssetType.Shader;
+            task.TaskType = CreateAssetTask.AssetType.Shader;
             task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = FileIconRegistry.GetIconForExtension(".shader") }, currentFolder);
 
         });

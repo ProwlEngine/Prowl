@@ -6,8 +6,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-using Prowl.Echo;
-using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 

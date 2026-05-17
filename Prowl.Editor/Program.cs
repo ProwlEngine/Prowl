@@ -1,4 +1,8 @@
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Core;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor;
 
@@ -43,7 +47,7 @@ public static class Program
             project.SetActive();
 
             // Load user script assemblies before registry scanning
-            Scripting.ScriptAssemblyManager.LoadAssemblies(project);
+            ScriptAssemblyManager.LoadAssemblies(project);
 
 
             // Initialize asset database for the already-opened project

@@ -1,11 +1,10 @@
-using System.IO;
-
 using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.Inspector;
 

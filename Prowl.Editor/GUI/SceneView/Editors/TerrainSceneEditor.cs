@@ -4,10 +4,10 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Core;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Theming;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;

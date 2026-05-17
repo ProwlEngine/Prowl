@@ -4,19 +4,19 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Prefabs;
-using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
-using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>

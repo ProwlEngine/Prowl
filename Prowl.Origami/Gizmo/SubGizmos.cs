@@ -2,8 +2,8 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 using static Prowl.OrigamiUI.Gizmo.TransformGizmo;
 

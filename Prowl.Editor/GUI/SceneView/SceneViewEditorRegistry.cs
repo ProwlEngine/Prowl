@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Editor.Core;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI.SceneView;

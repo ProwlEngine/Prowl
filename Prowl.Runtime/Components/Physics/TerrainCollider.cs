@@ -5,7 +5,6 @@ using System;
 
 using Jitter2.LinearMath;
 
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Vector;
 

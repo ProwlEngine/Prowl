@@ -3,7 +3,6 @@
 
 // NOTE: This implementation is based on the raycast wheel from Jitter2's demo.
 
-using System;
 using Jitter2;
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;

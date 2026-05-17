@@ -14,6 +14,7 @@ using Prowl.Vector;
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
 using Gradient = Prowl.Runtime.Gradient;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Widgets;
 

@@ -11,8 +11,6 @@ using Prowl.Echo;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
-using Color = System.Drawing.Color;
-
 namespace Prowl.OrigamiUI;
 
 // ════════════════════════════════════════════════════════════════

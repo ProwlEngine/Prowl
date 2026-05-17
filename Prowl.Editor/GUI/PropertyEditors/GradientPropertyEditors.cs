@@ -1,13 +1,9 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
-using Prowl.Editor.GUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Widgets;
 using Prowl.PaperUI;
-using Prowl.Vector;
 
-using Color = System.Drawing.Color;
 using Gradient = Prowl.Runtime.Gradient;
 namespace Prowl.Editor.Inspector;
 

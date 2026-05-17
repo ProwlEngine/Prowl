@@ -5,18 +5,13 @@ using Prowl.Echo;
 using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
-using Prowl.Vector;
-
-using Color = System.Drawing.Color;
-using VColor = Prowl.Vector.Color;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Theming;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Material))]

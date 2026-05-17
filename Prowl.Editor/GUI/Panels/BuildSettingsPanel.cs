@@ -4,19 +4,16 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Text;
 
 using Prowl.Editor.Build;
-using Prowl.OrigamiUI;
-using Prowl.Editor.Scripting;
-using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
-
-using Silk.NET.Vulkan;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Theming;
 
 
 namespace Prowl.Editor.GUI.Panels;

@@ -9,6 +9,7 @@ using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Projects.Scripting;
 
 namespace Prowl.Editor;
 
@@ -796,7 +797,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         // Script deleted - trigger recompile
         if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-            Scripting.ScriptAssemblyManager.RequestRecompile();
+            ScriptAssemblyManager.RequestRecompile();
     }
 
     /// <summary>
@@ -1122,7 +1123,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
                         // Script deleted trigger recompile
                         if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-                            Scripting.ScriptAssemblyManager.RequestRecompile();
+                            ScriptAssemblyManager.RequestRecompile();
                     }
                     break;
                 }

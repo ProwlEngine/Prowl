@@ -3,7 +3,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.AssetsDatabase;
-using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;

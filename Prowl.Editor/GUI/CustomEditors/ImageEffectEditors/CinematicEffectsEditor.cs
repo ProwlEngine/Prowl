@@ -1,12 +1,11 @@
-using Prowl.Editor.GUI;
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
-using Prowl.Vector;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Inspector;

@@ -1,10 +1,8 @@
 // Based on: https://github.com/urholaukkarinen/transform-gizmo - Dual licensed under MIT and Apache 2.0.
 
-using System;
 using System.Collections.Generic;
 
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 namespace Prowl.OrigamiUI.Gizmo;
 

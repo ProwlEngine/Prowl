@@ -5,11 +5,9 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 using Color = System.Drawing.Color;
 using TextAlignment = Prowl.PaperUI.TextAlignment;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Core;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;

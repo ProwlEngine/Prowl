@@ -2,13 +2,11 @@ using System.Collections.Generic;
 
 using Prowl.OrigamiUI;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.GUI;
-using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-
-using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.Widgets;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("Debug/Widget Playground")]

@@ -29,7 +29,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\**" />
-    <EmbeddedResource Include="Localization\**" />
   </ItemGroup>
 
 </Project>

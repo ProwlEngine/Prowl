@@ -6,7 +6,6 @@ using System.Collections.Generic;
 
 using Prowl.Quill;
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 namespace Prowl.OrigamiUI.Gizmo;
 

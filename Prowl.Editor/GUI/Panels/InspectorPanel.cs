@@ -4,17 +4,16 @@ using System.Linq;
 
 using Prowl.OrigamiUI;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.GUI;
-using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
-
-using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Inspector")]

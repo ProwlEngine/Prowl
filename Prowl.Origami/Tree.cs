@@ -3,12 +3,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
-using Prowl.Quill;
-using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 

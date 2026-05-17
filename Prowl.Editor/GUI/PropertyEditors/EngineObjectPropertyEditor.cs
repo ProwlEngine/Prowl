@@ -1,12 +1,11 @@
 using System;
+
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
 using Prowl.OrigamiUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
-
-using Color = System.Drawing.Color;
-using Prowl.Editor.Inspector;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.PropertyEditors;
 

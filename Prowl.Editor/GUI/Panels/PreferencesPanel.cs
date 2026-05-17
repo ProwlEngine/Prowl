@@ -2,8 +2,6 @@ using System;
 
 using Prowl.OrigamiUI;
 using Prowl.Editor.Inspector;
-using Prowl.Editor.GUI;
-using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
@@ -12,6 +10,9 @@ using Prowl.Runtime;
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
 using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Core;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 

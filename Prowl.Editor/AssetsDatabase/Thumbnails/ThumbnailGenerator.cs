@@ -8,6 +8,7 @@ using Prowl.Runtime.Resources;
 using ImageMagick;
 using Prowl.Editor.GUI;
 using Prowl.Editor.AssetsDatabase;
+using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.Thumbnails;
 
