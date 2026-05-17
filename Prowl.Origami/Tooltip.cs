@@ -21,7 +21,7 @@ public sealed class TooltipContent
     public string? Icon;
     public string? Shortcut;
     public Action<Paper>? CustomDraw;
-    public float MaxWidth = 280f;
+    public float MaxWidth = 200f;
 
     public TooltipContent() { }
     public TooltipContent(string text) => Text = text;
@@ -93,14 +93,16 @@ public static class TooltipSystem
 
         float padX = m.SpacingLarge, padY = m.Padding;
 
-        // Estimate width
+        // Estimate width - cap at MaxWidth so long text wraps instead of stretching
         float textW = 0;
         if (hasTitle) textW = MathF.Max(textW, (float)paper.MeasureText(content.Title!, titleFontSize, font).X);
         if (hasText) textW = MathF.Max(textW, (float)paper.MeasureText(content.Text, fontSize, font).X);
         if (hasShortcut) textW += (float)paper.MeasureText(content.Shortcut!, fontSize, font).X + m.PaddingLarge;
 
-        float tooltipW = MathF.Min(content.MaxWidth, textW + padX * 2 + (hasIcon ? m.HeaderHeight : 0f));
+        float naturalW = textW + padX * 2 + (hasIcon ? m.HeaderHeight : 0f);
+        float tooltipW = MathF.Min(content.MaxWidth, naturalW);
         if (tooltipW < 40) tooltipW = 40;
+        bool needsWrap = naturalW > content.MaxWidth;
 
         // Position below cursor
         var pos = paper.PointerPos;
@@ -151,10 +153,14 @@ public static class TooltipSystem
             }
 
             if (hasText)
-                paper.Box("tt_text").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+            {
+                var textBox = paper.Box("tt_text").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                     .Text(content.Text, font)
                     .TextColor(hasTitle ? ink.C400 : ink.C500)
-                    .FontSize(fontSize).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(fontSize).Alignment(TextAlignment.Left);
+                if (needsWrap)
+                    textBox.Wrap(Scribe.TextWrapMode.Wrap);
+            }
 
             if (hasShortcut && !hasTitle && !hasIcon)
                 paper.Box("tt_sc2").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
