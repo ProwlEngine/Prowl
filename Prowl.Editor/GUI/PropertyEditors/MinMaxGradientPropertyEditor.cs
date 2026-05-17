@@ -7,7 +7,7 @@ using Prowl.Runtime;
 
 using Gradient = Prowl.Runtime.Gradient;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Inspector;
 
 // ================================================================
@@ -35,7 +35,7 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
                     break;
 
                 case MinMaxGradientMode.Gradient:
-                    PropertyGrid.DrawField(paper, $"{id}_grad", "Gradient", typeof(Gradient), gradient.Gradient,
+                    PropertyGridUtils.DrawField(paper, $"{id}_grad", "Gradient", typeof(Gradient), gradient.Gradient,
                         v => { gradient.Gradient = v as Gradient ?? new Gradient(); onChange(gradient); }, depth + 1);
                     break;
 
@@ -47,9 +47,9 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
                     break;
 
                 case MinMaxGradientMode.RandomBetweenTwoGradients:
-                    PropertyGrid.DrawField(paper, $"{id}_ming", "Min Gradient", typeof(Gradient), gradient.MinGradient,
+                    PropertyGridUtils.DrawField(paper, $"{id}_ming", "Min Gradient", typeof(Gradient), gradient.MinGradient,
                         v => { gradient.MinGradient = v as Gradient ?? new Gradient(); onChange(gradient); }, depth + 1);
-                    PropertyGrid.DrawField(paper, $"{id}_maxg", "Max Gradient", typeof(Gradient), gradient.MaxGradient,
+                    PropertyGridUtils.DrawField(paper, $"{id}_maxg", "Max Gradient", typeof(Gradient), gradient.MaxGradient,
                         v => { gradient.MaxGradient = v as Gradient ?? new Gradient(); onChange(gradient); }, depth + 1);
                     break;
             }

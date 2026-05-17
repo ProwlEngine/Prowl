@@ -14,7 +14,7 @@ using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
 using Gradient = Prowl.Runtime.Gradient;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Inspector;
 
 // ================================================================
@@ -50,7 +50,7 @@ public class ParticleSystemComponentEditor : CustomEditor
             .FontSize(EditorTheme.FontSize)
             .Alignment(TextAlignment.MiddleLeft);
 
-        PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), ps.Material,
+        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), ps.Material,
             v => ps.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
 
         IntRow(paper, $"{id}_maxp", "Max Particles", ps.MaxParticles, v => ps.MaxParticles = Math.Max(1, v));
@@ -65,15 +65,15 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Initial Module
         DrawModule(paper, $"{id}_init", "Initial", EditorIcons.Star, ps.Initial, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_init_lt", "Start Lifetime", typeof(MinMaxCurve), ps.Initial.StartLifetime,
+            PropertyGridUtils.DrawField(paper, $"{id}_init_lt", "Start Lifetime", typeof(MinMaxCurve), ps.Initial.StartLifetime,
                 v => ps.Initial.StartLifetime = v as MinMaxCurve ?? new MinMaxCurve(5f), 0);
-            PropertyGrid.DrawField(paper, $"{id}_init_sp", "Start Speed", typeof(MinMaxCurve), ps.Initial.StartSpeed,
+            PropertyGridUtils.DrawField(paper, $"{id}_init_sp", "Start Speed", typeof(MinMaxCurve), ps.Initial.StartSpeed,
                 v => ps.Initial.StartSpeed = v as MinMaxCurve ?? new MinMaxCurve(5f), 0);
-            PropertyGrid.DrawField(paper, $"{id}_init_sz", "Start Size", typeof(MinMaxCurve), ps.Initial.StartSize,
+            PropertyGridUtils.DrawField(paper, $"{id}_init_sz", "Start Size", typeof(MinMaxCurve), ps.Initial.StartSize,
                 v => ps.Initial.StartSize = v as MinMaxCurve ?? new MinMaxCurve(1f), 0);
-            PropertyGrid.DrawField(paper, $"{id}_init_rot", "Start Rotation", typeof(MinMaxCurve), ps.Initial.StartRotation,
+            PropertyGridUtils.DrawField(paper, $"{id}_init_rot", "Start Rotation", typeof(MinMaxCurve), ps.Initial.StartRotation,
                 v => ps.Initial.StartRotation = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
-            PropertyGrid.DrawField(paper, $"{id}_init_col", "Start Color", typeof(MinMaxGradient), ps.Initial.StartColor,
+            PropertyGridUtils.DrawField(paper, $"{id}_init_col", "Start Color", typeof(MinMaxGradient), ps.Initial.StartColor,
                 v => ps.Initial.StartColor = v as MinMaxGradient ?? new MinMaxGradient(VColor.White), 0);
             FloatRow(paper, $"{id}_init_grav", "Gravity", ps.Initial.GravityModifier, v => ps.Initial.GravityModifier = v);
         });
@@ -81,7 +81,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Emission Module
         DrawModule(paper, $"{id}_emit", "Emission", EditorIcons.Burst, ps.Emission, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_emit_rot", "Rate Over Time", typeof(MinMaxCurve), ps.Emission.RateOverTime,
+            PropertyGridUtils.DrawField(paper, $"{id}_emit_rot", "Rate Over Time", typeof(MinMaxCurve), ps.Emission.RateOverTime,
                 v => ps.Emission.RateOverTime = v as MinMaxCurve ?? new MinMaxCurve(10f), 0);
 
             paper.Box($"{id}_emit_sp").Height(4);
@@ -131,32 +131,32 @@ public class ParticleSystemComponentEditor : CustomEditor
         // Size Over Lifetime
         DrawModule(paper, $"{id}_sol", "Size over Lifetime", EditorIcons.ArrowsLeftRight, ps.SizeOverLifetime, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_sol_c", "Size", typeof(AnimationCurve), ps.SizeOverLifetime.SizeCurve,
+            PropertyGridUtils.DrawField(paper, $"{id}_sol_c", "Size", typeof(AnimationCurve), ps.SizeOverLifetime.SizeCurve,
                 v => ps.SizeOverLifetime.SizeCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
         });
 
         // Color Over Lifetime
         DrawModule(paper, $"{id}_col", "Color over Lifetime", EditorIcons.Palette, ps.ColorOverLifetime, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_col_g", "Color", typeof(Gradient), ps.ColorOverLifetime.ColorGradient,
+            PropertyGridUtils.DrawField(paper, $"{id}_col_g", "Color", typeof(Gradient), ps.ColorOverLifetime.ColorGradient,
                 v => ps.ColorOverLifetime.ColorGradient = v as Gradient ?? new Gradient(), 0);
         });
 
         // Rotation Over Lifetime (still MinMaxCurve evaluated at spawn)
         DrawModule(paper, $"{id}_rol", "Rotation over Lifetime", EditorIcons.ArrowsSpin, ps.RotationOverLifetime, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_rol_av", "Angular Velocity", typeof(MinMaxCurve), ps.RotationOverLifetime.AngularVelocity,
+            PropertyGridUtils.DrawField(paper, $"{id}_rol_av", "Angular Velocity", typeof(MinMaxCurve), ps.RotationOverLifetime.AngularVelocity,
                 v => ps.RotationOverLifetime.AngularVelocity = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
         });
 
         // Velocity Over Lifetime
         DrawModule(paper, $"{id}_vol", "Velocity over Lifetime", EditorIcons.Gauge, ps.VelocityOverLifetime, font, () =>
         {
-            PropertyGrid.DrawField(paper, $"{id}_vol_x", "Velocity X", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityX,
+            PropertyGridUtils.DrawField(paper, $"{id}_vol_x", "Velocity X", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityX,
                 v => ps.VelocityOverLifetime.VelocityX = v as AnimationCurve ?? new AnimationCurve(), 0);
-            PropertyGrid.DrawField(paper, $"{id}_vol_y", "Velocity Y", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityY,
+            PropertyGridUtils.DrawField(paper, $"{id}_vol_y", "Velocity Y", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityY,
                 v => ps.VelocityOverLifetime.VelocityY = v as AnimationCurve ?? new AnimationCurve(), 0);
-            PropertyGrid.DrawField(paper, $"{id}_vol_z", "Velocity Z", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityZ,
+            PropertyGridUtils.DrawField(paper, $"{id}_vol_z", "Velocity Z", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityZ,
                 v => ps.VelocityOverLifetime.VelocityZ = v as AnimationCurve ?? new AnimationCurve(), 0);
         });
 
@@ -178,7 +178,7 @@ public class ParticleSystemComponentEditor : CustomEditor
             FloatRow(paper, $"{id}_coll_dist", "Max Distance", ps.Collision.MaxCollisionDistance,
                 v => ps.Collision.MaxCollisionDistance = MathF.Max(0.01f, v));
 
-            PropertyGrid.DrawField(paper, $"{id}_coll_lm", "Collides With", typeof(LayerMask), ps.Collision.CollidesWith,
+            PropertyGridUtils.DrawField(paper, $"{id}_coll_lm", "Collides With", typeof(LayerMask), ps.Collision.CollidesWith,
                 v => ps.Collision.CollidesWith = (LayerMask)v!, 0);
 
             if (ps.Collision.Mode == CollisionMode.World)
@@ -205,9 +205,9 @@ public class ParticleSystemComponentEditor : CustomEditor
             }
             else
             {
-                PropertyGrid.DrawField(paper, $"{id}_uv_uo", "U Offset", typeof(AnimationCurve), ps.UV.UOffsetCurve,
+                PropertyGridUtils.DrawField(paper, $"{id}_uv_uo", "U Offset", typeof(AnimationCurve), ps.UV.UOffsetCurve,
                     v => ps.UV.UOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
-                PropertyGrid.DrawField(paper, $"{id}_uv_vo", "V Offset", typeof(AnimationCurve), ps.UV.VOffsetCurve,
+                PropertyGridUtils.DrawField(paper, $"{id}_uv_vo", "V Offset", typeof(AnimationCurve), ps.UV.VOffsetCurve,
                     v => ps.UV.VOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
                 InspectorRow.Draw(paper, $"{id}_uv_ss", "Scroll Speed", () =>
                     Origami.Float2Field(paper, $"{id}_uv_ss_vf", ps.UV.ScrollSpeed, v => ps.UV.ScrollSpeed = v).Show());
@@ -222,7 +222,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         {
             BoolRow(paper, $"{id}_lt_upc", "Use Particle Color", ps.Light.UseParticleColor,
                 v => ps.Light.UseParticleColor = v);
-            PropertyGrid.DrawField(paper, $"{id}_lt_col", "Tint", typeof(VColor), ps.Light.Color,
+            PropertyGridUtils.DrawField(paper, $"{id}_lt_col", "Tint", typeof(VColor), ps.Light.Color,
                 v => ps.Light.Color = v is VColor c ? c : VColor.White, 0);
             FloatRow(paper, $"{id}_lt_int", "Intensity", ps.Light.Intensity,
                 v => ps.Light.Intensity = MathF.Max(0f, v));

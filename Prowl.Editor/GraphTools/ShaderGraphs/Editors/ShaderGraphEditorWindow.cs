@@ -15,7 +15,7 @@ using Prowl.Runtime.GraphTools;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
 using Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 /// <summary>
@@ -219,7 +219,7 @@ public class ShaderGraphEditorWindow : DockPanel
             // fills the full row width.
             using (paper.Box("sg_mesh_field").Width(UnitValue.Stretch()).Height(22).Enter())
             {
-                PropertyGrid.DrawField(paper, "sg_mesh", "",
+                PropertyGridUtils.DrawField(paper, "sg_mesh", "",
                     typeof(AssetRef<Runtime.Resources.Mesh>),
                     _previewMesh,
                     newVal =>

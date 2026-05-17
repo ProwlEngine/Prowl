@@ -39,7 +39,7 @@ public abstract class CustomEditor
     /// </summary>
     protected void DrawDefaultInspector(Paper paper, string id, object target)
     {
-        GUI.PropertyGrid.Draw(paper, id, target);
+        GUI.PropertyGridUtils.Draw(paper, id, target);
     }
 }
 

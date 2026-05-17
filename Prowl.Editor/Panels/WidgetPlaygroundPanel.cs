@@ -7,7 +7,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.Widgets;
 namespace Prowl.Editor.Panels;
 
@@ -421,7 +421,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Property Grid ===
             Origami.Header(paper, "h_propgrid", "Property Grid (Reflection)").Show();
 
-            PropertyGrid.Draw(paper, "pg_test", _testObject, changed => _testObject = (TestComponent)changed);
+            PropertyGridUtils.Draw(paper, "pg_test", _testObject, changed => _testObject = (TestComponent)changed);
 
             Origami.Separator(paper, "sep15").Show();
 

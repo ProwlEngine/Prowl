@@ -16,7 +16,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Inspector;
 
 public enum TerrainTab { Height, Paint, Holes, Details, Trees, Settings }
@@ -56,7 +56,7 @@ public class TerrainEditor : CustomEditor
         Undo.Snapshot(terrain);
 
         // Terrain Data asset ref (outside tabs - required before any tab content)
-        PropertyGrid.DrawField(paper, $"{id}_data", "Terrain Data", typeof(AssetRef<TerrainData>), terrain.Data,
+        PropertyGridUtils.DrawField(paper, $"{id}_data", "Terrain Data", typeof(AssetRef<TerrainData>), terrain.Data,
             v => terrain.Data = (AssetRef<TerrainData>)v!, 0);
 
         if (terrainData == null)
@@ -211,9 +211,9 @@ public class TerrainEditor : CustomEditor
             .Text($"Layer {PaintLayer} Settings", font).TextColor(EditorTheme.Ink400)
             .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-        PropertyGrid.DrawField(paper, $"{id}_alb", "Albedo", typeof(AssetRef<Texture2D>), sl.Albedo,
+        PropertyGridUtils.DrawField(paper, $"{id}_alb", "Albedo", typeof(AssetRef<Texture2D>), sl.Albedo,
             v => { sl.Albedo = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
-        PropertyGrid.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(AssetRef<Texture2D>), sl.NormalMap,
+        PropertyGridUtils.DrawField(paper, $"{id}_nrm", "Normal Map", typeof(AssetRef<Texture2D>), sl.NormalMap,
             v => { sl.NormalMap = (AssetRef<Texture2D>)v!; _isDirty = true; }, 0);
         InspectorRow.Draw(paper, $"{id}_til", "Tiling", () =>
             Origami.NumericField<float>(paper, $"{id}_til_v", sl.Tiling,
@@ -283,15 +283,15 @@ public class TerrainEditor : CustomEditor
 
             if (dp.RenderMode == DetailRenderMode.Mesh)
             {
-                PropertyGrid.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), dp.Mesh,
+                PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), dp.Mesh,
                     v => { dp.Mesh = (AssetRef<Mesh>)v!; MarkDetailsDirty(); }, 0);
                 DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", dp.Mesh.Res, dp.Materials);
             }
             else
             {
-                PropertyGrid.DrawField(paper, $"{id}_tex", "Texture", typeof(AssetRef<Texture2D>), dp.Texture,
+                PropertyGridUtils.DrawField(paper, $"{id}_tex", "Texture", typeof(AssetRef<Texture2D>), dp.Texture,
                     v => { dp.Texture = (AssetRef<Texture2D>)v!; MarkDetailsDirty(); }, 0);
-                PropertyGrid.DrawField(paper, $"{id}_gmat", "Grass Material", typeof(AssetRef<Material>), dp.GrassMaterial,
+                PropertyGridUtils.DrawField(paper, $"{id}_gmat", "Grass Material", typeof(AssetRef<Material>), dp.GrassMaterial,
                     v => { dp.GrassMaterial = (AssetRef<Material>)v!; MarkDetailsDirty(); }, 0);
             }
 
@@ -317,9 +317,9 @@ public class TerrainEditor : CustomEditor
                     v => { dp.AlignToNormal = v; MarkDetailsDirty(); })
                 .LabelRight("Align To Normal").Show();
 
-            PropertyGrid.DrawField(paper, $"{id}_hc", "Healthy Color", typeof(Prowl.Vector.Color), dp.HealthyColor,
+            PropertyGridUtils.DrawField(paper, $"{id}_hc", "Healthy Color", typeof(Prowl.Vector.Color), dp.HealthyColor,
                 v => { dp.HealthyColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
-            PropertyGrid.DrawField(paper, $"{id}_dc", "Dry Color", typeof(Prowl.Vector.Color), dp.DryColor,
+            PropertyGridUtils.DrawField(paper, $"{id}_dc", "Dry Color", typeof(Prowl.Vector.Color), dp.DryColor,
                 v => { dp.DryColor = (Prowl.Vector.Color)v!; MarkDetailsDirty(); }, 0);
         }
 
@@ -362,7 +362,7 @@ public class TerrainEditor : CustomEditor
         {
             var proto = data.TreePrototypes[ActiveTreePrototype];
 
-            PropertyGrid.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), proto.Mesh,
+            PropertyGridUtils.DrawField(paper, $"{id}_mesh", "Mesh", typeof(AssetRef<Mesh>), proto.Mesh,
                 v => { proto.Mesh = (AssetRef<Mesh>)v!; _isDirty = true; }, 0);
 
             DrawPrototypeMaterials(paper, $"{id}_mats", "Materials", proto.Mesh.Res, proto.Materials);
@@ -439,9 +439,9 @@ public class TerrainEditor : CustomEditor
     private void DrawSettingsTab(Paper paper, string id, Prowl.Scribe.FontFile font, TerrainComponent terrain, TerrainData data)
     {
         // Materials
-        PropertyGrid.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), terrain.Material,
+        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), terrain.Material,
             v => terrain.Material = (AssetRef<Material>)v!, 0);
-        PropertyGrid.DrawField(paper, $"{id}_grassmat", "Grass Material", typeof(AssetRef<Material>), terrain.GrassMaterial,
+        PropertyGridUtils.DrawField(paper, $"{id}_grassmat", "Grass Material", typeof(AssetRef<Material>), terrain.GrassMaterial,
             v => { terrain.GrassMaterial = (AssetRef<Material>)v!; terrain.InvalidateGrassCache(); }, 0);
 
         paper.Box($"{id}_sp_mat").Height(6);
@@ -564,7 +564,7 @@ public class TerrainEditor : CustomEditor
         {
             // No mesh assigned show a single material field (will end up as submesh 0).
             AssetRef<Material> single = materials.Count > 0 ? materials[0] : default;
-            PropertyGrid.DrawField(paper, $"{id}_single", label, typeof(AssetRef<Material>), single,
+            PropertyGridUtils.DrawField(paper, $"{id}_single", label, typeof(AssetRef<Material>), single,
                 v =>
                 {
                     var val = (AssetRef<Material>)v!;
@@ -583,7 +583,7 @@ public class TerrainEditor : CustomEditor
         {
             int capturedIndex = i;
             string slotLabel = subCount > 1 ? $"{label} [{i}]" : label;
-            PropertyGrid.DrawField(paper, $"{id}_{i}", slotLabel, typeof(AssetRef<Material>), materials[i],
+            PropertyGridUtils.DrawField(paper, $"{id}_{i}", slotLabel, typeof(AssetRef<Material>), materials[i],
                 v =>
                 {
                     materials[capturedIndex] = (AssetRef<Material>)v!;

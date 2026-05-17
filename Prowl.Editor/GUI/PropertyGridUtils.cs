@@ -8,12 +8,7 @@ using Prowl.PaperUI;
 
 namespace Prowl.Editor.GUI;
 
-/// <summary>
-/// Thin facade over the Origami PropertyGrid for backward compatibility.
-/// All calls delegate to PropertyGridRenderer using EditorApplication.PropertyGridConfig.
-/// New code should use Origami.PropertyGrid() directly.
-/// </summary>
-public static class PropertyGrid
+public static class PropertyGridUtils
 {
     /// <summary>
     /// Set of overridden field names for the current component being drawn.
@@ -38,29 +33,6 @@ public static class PropertyGrid
     {
         PropertyGridRenderer.DrawField(paper, id, label, type, value,
             EditorApplication.PropertyGridConfig, onChange, depth);
-    }
-
-    /// <summary>Draw a type picker for polymorphic fields. Delegates to the config's DrawTypePicker callback.</summary>
-    public static void DrawTypePicker(Paper paper, string id, Type baseType, object? currentValue, Action<object?> onChange)
-    {
-        // Direct implementation to avoid circular delegation
-        var types = AppDomain.CurrentDomain.GetAssemblies()
-            .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
-            .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
-            .Take(20).ToArray();
-
-        if (types.Length == 0) return;
-
-        Type? currentType = currentValue?.GetType();
-        int selectedIndex = currentType != null ? Array.IndexOf(types, currentType) + 1 : 0;
-        var names = types.Select(t => t.Name).Prepend("(null)").ToArray();
-
-        Origami.Dropdown(paper, $"{id}_dd", selectedIndex,
-            idx =>
-            {
-                if (idx == 0) onChange(null);
-                else if (idx >= 1 && idx <= types.Length) onChange(Activator.CreateInstance(types[idx - 1]));
-            }, names).Show();
     }
 
     /// <summary>Convert "myFieldName" to "My Field Name".</summary>

@@ -13,7 +13,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Panels;
 
 [EditorWindow("General/Inspector")]
@@ -492,11 +492,11 @@ public class InspectorPanel : DockPanel
                 // Generic read-only property grid
                 Origami.Header(paper, "insp_sub_h_props", Loc.Get("inspector.properties_readonly")).Show();
                 // Show properties as labels
-                var fields = GUI.PropertyGrid.GetSerializableFields(asset.GetType());
+                var fields = GUI.PropertyGridUtils.GetSerializableFields(asset.GetType());
                 foreach (var field in fields)
                 {
                     object? val = field.GetValue(asset);
-                    string label = GUI.PropertyGrid.NicifyName(field.Name);
+                    string label = GUI.PropertyGridUtils.NicifyName(field.Name);
                     Origami.Label(paper, $"insp_sub_prop_{field.Name}", $"{label}: {val ?? "(null)"}").Show();
                 }
             }
@@ -567,7 +567,7 @@ public class InspectorPanel : DockPanel
 
         // Use PropertyGrid for reflection-based editing
                 Origami.Header(paper, "insp_h_props", Loc.Get("inspector.properties")).Underline().Show();
-        PropertyGrid.Draw(paper, "insp_pg", obj);
+        PropertyGridUtils.Draw(paper, "insp_pg", obj);
     }
 
     private void DrawConsoleLogInspector(Paper paper, Prowl.Scribe.FontFile font, ConsoleLogSelection log)
@@ -643,7 +643,7 @@ public class InspectorPanel : DockPanel
         Origami.Label(paper, "insp_generic_str", obj.ToString() ?? "null").Show();
 
                 Origami.Header(paper, "insp_h_gprops", Loc.Get("inspector.properties")).Underline().Show();
-        PropertyGrid.Draw(paper, "insp_gpg", obj);
+        PropertyGridUtils.Draw(paper, "insp_gpg", obj);
     }
 
     private static string GetExtensionIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);

@@ -15,7 +15,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
@@ -268,7 +268,7 @@ public static class GameObjectInspector
                     if (ov.Path.StartsWith(pathPrefix))
                         overridden.Add(ov.Path[pathPrefix.Length..].Split('.')[0]);
                 }
-                PropertyGrid.OverriddenFields = overridden.Count > 0 ? overridden : null;
+                PropertyGridUtils.OverriddenFields = overridden.Count > 0 ? overridden : null;
             }
 
             // Component body use custom editor or default PropertyGrid
@@ -279,10 +279,10 @@ public static class GameObjectInspector
             }
             else
             {
-                PropertyGrid.Draw(paper, compId, comp);
+                PropertyGridUtils.Draw(paper, compId, comp);
             }
 
-            PropertyGrid.OverriddenFields = null;
+            PropertyGridUtils.OverriddenFields = null;
 
             // Auto-detect overrides by comparing against prefab source (index-based)
             if (go.IsPrefabInstance)

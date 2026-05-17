@@ -14,7 +14,7 @@ using Prowl.Vector;
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 using Prowl.Editor.GUI.PropertyEditors;
 namespace Prowl.Editor.Inspector;
 
@@ -51,7 +51,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         // Shader reference
         Origami.Separator(paper, $"{id}_sep_shader").Show();
         EngineObjectPropertyEditor.SetFieldType(typeof(Shader));
-        PropertyGrid.DrawField(paper, $"{id}_shader", "Shader", typeof(Shader), material.Shader,
+        PropertyGridUtils.DrawField(paper, $"{id}_shader", "Shader", typeof(Shader), material.Shader,
             newVal =>
             {
                 if (newVal is Shader s)

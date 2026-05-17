@@ -8,7 +8,7 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Inspector;
 
 [CustomEditor(typeof(CinematicEffects))]
@@ -68,7 +68,7 @@ public class CinematicEffectsEditor : CustomEditor
             fx.EnableLUT, v => fx.EnableLUT = v, () =>
         {
             EngineObjectPropertyEditor.SetFieldType(typeof(Texture2D));
-            PropertyGrid.DrawField(paper, $"{id}_lut_tex", "LUT Texture", typeof(Texture2D), fx.LUTTexture.Res,
+            PropertyGridUtils.DrawField(paper, $"{id}_lut_tex", "LUT Texture", typeof(Texture2D), fx.LUTTexture.Res,
                 newVal =>
                 {
                     fx.LUTTexture = new AssetRef<Texture2D>(newVal as Texture2D);

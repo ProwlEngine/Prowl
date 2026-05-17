@@ -10,7 +10,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
-using PropertyGrid = Prowl.Editor.GUI.PropertyGrid;
+using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
 namespace Prowl.Editor.Panels;
 
 /// <summary>
@@ -111,7 +111,7 @@ public class ComponentPopoutPanel : DockPanel
             }
             else
             {
-                PropertyGrid.Draw(paper, compId, comp);
+                PropertyGridUtils.Draw(paper, compId, comp);
             }
 
             // Draw [Button] methods
