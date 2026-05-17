@@ -200,9 +200,6 @@ public class DefaultRenderPipeline : RenderPipeline
         HashSet<int> culledRenderableIndices = CullRenderables(renderables, css.WorldFrustum, css.CullingMask);
 
         RenderStats.AddCamera();
-        int collected = renderables.Count;
-        int culled = culledRenderableIndices.Count;
-        RenderStats.AddRenderables(collected, culled, collected - culled);
 
         int dirCount = 0, pointCount = 0, spotCount = 0, shadowCount = 0;
         foreach (var l in lights)

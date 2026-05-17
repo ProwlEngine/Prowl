@@ -223,6 +223,11 @@ public abstract class RenderPipeline : EngineObject
                 continue;
             }
         }
+
+        int collected = renderables.Count;
+        int culled = culledRenderableIndices.Count;
+        RenderStats.AddRenderables(collected, culled, collected - culled);
+
         return culledRenderableIndices;
     }
 
