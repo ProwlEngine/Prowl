@@ -309,6 +309,12 @@ public static class Origami
     public static HeaderBuilder Separator(Paper paper, string id)
         => new HeaderBuilder(paper, id, "", Current).Separator();
 
+    // ── Date picker factory ────────────────────────────────────
+
+    /// <summary>Begin building a date picker field.</summary>
+    public static DatePickerBuilder DatePicker(Paper paper, string id, DateTime value, Action<DateTime> setter)
+        => new DatePickerBuilder(paper, id, value, setter, Current);
+
     // ── Image diff factory ─────────────────────────────────────
 
     /// <summary>Begin building an image diff slider. Two images overlaid with a draggable split bar.</summary>
