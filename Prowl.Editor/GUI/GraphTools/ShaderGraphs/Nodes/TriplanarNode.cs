@@ -5,7 +5,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // TRIPLANAR SAMPLE
 //
 // Projects a 2D texture onto arbitrary geometry by sampling along the three
@@ -21,7 +21,7 @@ namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 //
 // Fragment-stage only the world position + normal varyings aren't valid in
 // the vertex stage. Falls back to vec4(0) with a node-attached warning.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// World-space triplanar texture projection. Samples a single Texture2D three
@@ -160,7 +160,7 @@ public sealed class TriplanarSampleNode : Node, IShaderNode, IShaderGraphNode
     };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // TRIPLANAR NORMAL
 //
 // Variant of TriplanarSampleNode for normal maps. Plain triplanar sampling of
@@ -169,7 +169,7 @@ public sealed class TriplanarSampleNode : Node, IShaderNode, IShaderGraphNode
 // (Reoriented Normal Mapping / RNM-style swizzle) reads each plane's normal
 // as if it were authored in that plane's local tangent basis, then rotates
 // each into world space before weighted blending.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Triplanar projection of a tangent-space normal map. Equivalent to

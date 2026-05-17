@@ -17,7 +17,7 @@ namespace Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 public static class ShaderGraphEmit
 {
-    // ─── Keyword tables ─────────────────────────────────────────────────────────
+    // --- Keyword tables ---------------------------------------------------------
 
     public static string QueueTag(ShaderRenderQueue q) => q switch
     {
@@ -55,7 +55,7 @@ public static class ShaderGraphEmit
     public static string BlendFactor(ShaderBlendFactor f) => f.ToString();
     public static string BlendOp(ShaderBlendOp op) => op.ToString();
 
-    // ─── Render state block ─────────────────────────────────────────────────────
+    // --- Render state block -----------------------------------------------------
 
     /// <summary>Emit the top portion of a Pass block Tags, Cull, ZWrite, ZTest,
     /// Winding (only when CCW), and the Blend line. Does NOT emit the Pass header
@@ -105,7 +105,7 @@ public static class ShaderGraphEmit
         }
     }
 
-    // ─── Property collection ────────────────────────────────────────────────────
+    // --- Property collection ----------------------------------------------------
 
     /// <summary>Walk every <see cref="IShaderProperty"/> node on the graph and emit
     /// the shader's Properties-block lines + the parallel uniform declarations. Each
@@ -159,7 +159,7 @@ public static class ShaderGraphEmit
     public static string EscapeShaderString(string raw)
         => raw.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
-    // ─── Fallback shader ────────────────────────────────────────────────────────
+    // --- Fallback shader --------------------------------------------------------
 
     /// <summary>Magenta "shader's broken" placeholder keeps materials renderable
     /// when the real compile fails, and doubles as a visible signal in-scene.</summary>

@@ -5,7 +5,7 @@ namespace Prowl.Editor;
 
 /// <summary>
 /// Tracks forward and reverse dependencies between assets.
-/// Forward: asset → what it depends on. Reverse: asset → what depends on it.
+/// Forward: asset -> what it depends on. Reverse: asset -> what depends on it.
 /// </summary>
 public class DependencyGraph
 {

@@ -4,7 +4,7 @@ namespace Prowl.Editor.GUI;
 
 /// <summary>
 /// Register a DockPanel subclass so it appears in the Window menu.
-/// The path determines menu placement, e.g. "General/Scene" → Window > General > Scene.
+/// The path determines menu placement, e.g. "General/Scene" -> Window > General > Scene.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]
 public class EditorWindowAttribute : Attribute

@@ -22,7 +22,7 @@ public class ProjectsEditorSettings : ProjectSettingsBase
     {
     }
 
-    // ── Default game/UI color palette ──
+    // -- Default game/UI color palette --
 
     public static List<string> DefaultColorPalette() =>
     [

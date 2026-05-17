@@ -15,7 +15,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI.Panels;
 
-// ── PropertyGrid demo types ────────────────────────────────
+// -- PropertyGrid demo types --------------------------------
 
 public enum DemoWeaponType { Sword, Bow, Staff, Dagger, Hammer }
 
@@ -104,7 +104,7 @@ public class DemoPropertyGridTarget
 
 /// <summary>
 /// Stress-test surface for every Origami widget. Currently focused on
-/// <see cref="DropdownBuilder{T}"/> and <see cref="MultiDropdownBuilder{T}"/> — every
+/// <see cref="DropdownBuilder{T}"/> and <see cref="MultiDropdownBuilder{T}"/> - every
 /// feature exposed on those builders has at least one concrete demo so visual regressions
 /// are easy to spot.
 /// </summary>
@@ -114,7 +114,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     public override string Title => "Origami Playground";
     public override string Icon => EditorIcons.Flask;
 
-    // ── Demo enums ──────────────────────────────────────────────
+    // -- Demo enums ----------------------------------------------
 
     public enum Color8 { Red, Orange, Yellow, Green, Blue, Indigo, Violet, Black }
 
@@ -127,7 +127,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
     private record Country(string Code, string Name, string Continent);
 
-    // ── State ──────────────────────────────────────────────────
+    // -- State --------------------------------------------------
 
     private string _basicFruit = "Banana";
     private int _intIndex;
@@ -169,27 +169,27 @@ public class OrigamiPlaygroundPanel : DockPanel
     private Country _country = new("US", "United States", "North America");
     private Country _countryEqualityByCode = new("US", "United States v2", "North America");
 
-    // ── VectorField state ─────────────────────────────────────
+    // -- VectorField state -------------------------------------
     private Vector.Float2 _vfFloat2 = new(1.5f, 2.5f);
     private Vector.Float3 _vfFloat3 = new(1f, 2f, 3f);
     private Vector.Float4 _vfFloat4 = new(1f, 2f, 3f, 4f);
     private Vector.Int2 _vfInt2 = new(10, 20);
     private Vector.Double3 _vfDouble3 = new(1.1, 2.2, 3.3);
 
-    // ── ColorField state ──────────────────────────────────────
+    // -- ColorField state --------------------------------------
     private Vector.Color _cfBasic = new(0.3f, 0.6f, 0.9f, 1f);
     private Vector.Color _cfNoAlpha = new(0.9f, 0.2f, 0.3f, 1f);
     private Vector.Color _cfReadOnly = new(0.2f, 0.8f, 0.4f, 1f);
     private Vector.Color _cfNoPalette = new(0.7f, 0.5f, 0.1f, 1f);
 
-    // ── TextField state ────────────────────────────────────────
+    // -- TextField state ----------------------------------------
     private string _txtPlain = "";
     private string _txtSearch = "";
     private string _txtPassword = "hunter2";
     private string _txtMulti = "Type a few lines.\nWraps automatically when DoWrap is on.";
     private string _txtAutoComplete = "";
     private string _txtClearBtn = "Clear me with the X >";
-    private string _txtReadOnly = "Read-only — content can't change.";
+    private string _txtReadOnly = "Read-only - content can't change.";
     private string _txtIntFilter = "";
     private string _txtFloatFilter = "";
     private string _txtAlphaNum = "";
@@ -200,7 +200,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     private string _txtLeading = "";
     private string _txtTrailing = "";
 
-    // ── Toggle state ──────────────────────────────────────────
+    // -- Toggle state ------------------------------------------
     public enum ShipMode { Standard, Express, Overnight }
     public enum Theme { System, Light, Dark }
 
@@ -230,7 +230,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     private ShipMode _rgShipH = ShipMode.Standard;
     private Theme _rgTheme = Theme.System;
 
-    // ── Slider state ──────────────────────────────────────────
+    // -- Slider state ------------------------------------------
     private float _slBasic = 0.5f;
     private int _slIntBasic = 50;
     private float _slStep = 0.5f;
@@ -258,7 +258,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     private int _slDragCount;
     private int _slDragEndCount;
 
-    // ── RangeSlider state ─────────────────────────────────────
+    // -- RangeSlider state -------------------------------------
     private float _rsLow = 0.25f, _rsHigh = 0.75f;
     private int _rsIntLow = 20, _rsIntHigh = 80;
     private float _rsStepLow = 10f, _rsStepHigh = 60f;
@@ -266,7 +266,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     private float _rsNoSwapLow = 30f, _rsNoSwapHigh = 70f;
     private float _rsTickLow = 25f, _rsTickHigh = 75f;
 
-    // ── Button state ──────────────────────────────────────────
+    // -- Button state ------------------------------------------
     private int _btnClickCount;
     private int _btnRightClickCount;
     private int _btnDoubleClickCount;
@@ -279,7 +279,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     private int _bgSize = 1;        // ButtonGroup sizes
     private int _bgVariant = 1;     // ButtonGroup variants demo
 
-    // ── NumericField state ────────────────────────────────────
+    // -- NumericField state ------------------------------------
     private float _numFloat = 1.5f;
     private double _numDouble = 3.14159265;
     private decimal _numDecimal = 9.99m;
@@ -294,7 +294,7 @@ public class OrigamiPlaygroundPanel : DockPanel
     private float _numFormatted = 1234.567f;
     private float _numInvariant = 1.5f;
 
-    // ── Static datasets ────────────────────────────────────────
+    // -- Static datasets ----------------------------------------
 
     private static readonly string[] s_fruits =
     {
@@ -355,11 +355,11 @@ public class OrigamiPlaygroundPanel : DockPanel
         new("EG", "Egypt",          "Africa"),
     };
 
-    // ── Tree state ─────────────────────────────────────────────
+    // -- Tree state ---------------------------------------------
     private string? _treeSelectedId;
     private HashSet<string> _treeChecked = new() { "src", "main_cs" };
 
-    // ── PropertyGrid state ────────────────────────────────────
+    // -- PropertyGrid state ------------------------------------
     private DemoPropertyGridTarget _pgTarget = new();
     private DemoPropertyGridTarget _pgTarget2 = new()
     {
@@ -372,13 +372,13 @@ public class OrigamiPlaygroundPanel : DockPanel
         ManaPool = 50f,
     };
 
-    // ── Label state ────────────────────────────────────────────
+    // -- Label state --------------------------------------------
     private int _labelClickCount;
 
-    // ── Loading state ──────────────────────────────────────────
+    // -- Loading state ------------------------------------------
     private float _loadProgress = 0.42f;
 
-    // ── OnGUI ──────────────────────────────────────────────────
+    // -- OnGUI --------------------------------------------------
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -394,7 +394,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
                 paper.Box("op_intro").Height(20)
                     .Alignment(TextAlignment.MiddleLeft).IsNotInteractable()
-                    .Text("Every demo controls a real value. Open multiple — they're all independent.", font)
+                    .Text("Every demo controls a real value. Open multiple - they're all independent.", font)
                     .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 1);
 
                 Section_Basics(paper);
@@ -443,7 +443,7 @@ public class OrigamiPlaygroundPanel : DockPanel
             });
     }
 
-    // ── Sections ───────────────────────────────────────────────
+    // -- Sections -----------------------------------------------
 
     private void Section_Basics(Paper paper)
     {
@@ -710,11 +710,11 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── TextField sections ─────────────────────────────────────
+    // -- TextField sections -------------------------------------
 
     private void Section_TextFieldBasics(Paper paper)
     {
-        Origami.Foldout(paper, "op_fo_tf_basics", "TextField — basics").Body(() =>
+        Origami.Foldout(paper, "op_fo_tf_basics", "TextField - basics").Body(() =>
         {
             using (paper.Column("op_tf_basics_col").Height(UnitValue.Auto).RowBetween(8).Enter())
             {
@@ -758,7 +758,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
     private void Section_TextFieldFilters(Paper paper)
     {
-        Origami.Foldout(paper, "op_fo_tf_filters", "TextField — filter presets").Body(() =>
+        Origami.Foldout(paper, "op_fo_tf_filters", "TextField - filter presets").Body(() =>
         {
             using (paper.Column("op_tf_filters_col").Height(UnitValue.Auto).RowBetween(8).Enter())
             {
@@ -783,7 +783,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 LabelRow(paper, "tf_nospaces", "NoSpaces", () =>
                     Origami.TextField(paper, "op_tf_nospaces", _txtNoSpaces, v => _txtNoSpaces = v)
                         .NoSpaces()
-                        .Placeholder("try pressing space — it's filtered")
+                        .Placeholder("try pressing space - it's filtered")
                         .Show());
             }
         });
@@ -791,7 +791,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
     private void Section_TextFieldValidation(Paper paper)
     {
-        Origami.Foldout(paper, "op_fo_tf_valid", "TextField — validation / helper").Body(() =>
+        Origami.Foldout(paper, "op_fo_tf_valid", "TextField - validation / helper").Body(() =>
         {
             using (paper.Column("op_tf_valid_col").Height(UnitValue.Auto).RowBetween(10).Enter())
             {
@@ -817,7 +817,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
     private void Section_TextFieldAutoComplete(Paper paper)
     {
-        Origami.Foldout(paper, "op_fo_tf_ac", "TextField — autocomplete").Body(() =>
+        Origami.Foldout(paper, "op_fo_tf_ac", "TextField - autocomplete").Body(() =>
         {
             using (paper.Column("op_tf_ac_col").Height(UnitValue.Auto).RowBetween(8).Enter())
             {
@@ -830,11 +830,11 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── NumericField sections ──────────────────────────────────
+    // -- NumericField sections ----------------------------------
 
     private void Section_NumericTypes(Paper paper)
     {
-        Origami.Foldout(paper, "op_fo_num_types", "NumericField — every numeric type").Body(() =>
+        Origami.Foldout(paper, "op_fo_num_types", "NumericField - every numeric type").Body(() =>
         {
             using (paper.Column("op_num_types_col").Height(UnitValue.Auto).RowBetween(6).Enter())
             {
@@ -862,7 +862,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
     private void Section_NumericClampStep(Paper paper)
     {
-        Origami.Foldout(paper, "op_fo_num_clamp", "NumericField — Min / Max / Step").Body(() =>
+        Origami.Foldout(paper, "op_fo_num_clamp", "NumericField - Min / Max / Step").Body(() =>
         {
             using (paper.Column("op_num_clamp_col").Height(UnitValue.Auto).RowBetween(6).Enter())
             {
@@ -888,7 +888,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
     private void Section_NumericCulture(Paper paper)
     {
-        Origami.Foldout(paper, "op_fo_num_culture", "NumericField — culture").Body(() =>
+        Origami.Foldout(paper, "op_fo_num_culture", "NumericField - culture").Body(() =>
         {
             using (paper.Column("op_num_culture_col").Height(UnitValue.Auto).RowBetween(6).Enter())
             {
@@ -907,7 +907,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Toggle sections ────────────────────────────────────────
+    // -- Toggle sections ----------------------------------------
 
     private void Section_ToggleBasics(Paper paper)
     {
@@ -1200,7 +1200,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Slider sections ────────────────────────────────────────
+    // -- Slider sections ----------------------------------------
 
     private void Section_SliderBasics(Paper paper)
     {
@@ -1469,7 +1469,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Button showcase ────────────────────────────────────────
+    // -- Button showcase ----------------------------------------
 
     private void Section_Buttons(Paper paper)
     {
@@ -1672,7 +1672,7 @@ public class OrigamiPlaygroundPanel : DockPanel
 
                 LabelRow(paper, "st_tooltip", "Tooltip on hover", () =>
                     Origami.Button(paper, "op_btn_st_tip", "Hover me", () => _btnClickCount++)
-                        .Primary().Tooltip("This is a contextual tooltip — fades in 16ms, lives on Layer.Topmost").Show());
+                        .Primary().Tooltip("This is a contextual tooltip - fades in 16ms, lives on Layer.Topmost").Show());
 
                 LabelRow(paper, "st_autofocus", "AutoFocus on first frame", () =>
                     Origami.Button(paper, "op_btn_st_af_dyn_" + (_btnClickCount % 5), "Re-render to focus", () => _btnClickCount++)
@@ -1745,7 +1745,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                             float w = (float)ctx.Rect.Size.X;
                             float h = (float)ctx.Rect.Size.Y;
                             float t = ctx.HoverT;
-                            // Diagonal gradient — paint two halves with a bevel.
+                            // Diagonal gradient - paint two halves with a bevel.
                             var c1 = ctx.Theme.Primary.C500;
                             var c2 = ctx.Theme.Blue.C500;
                             var top = OrigamiRamp.LerpColor(c1, c2, t);
@@ -1992,7 +1992,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Vector Fields ──────────────────────────────────────────
+    // -- Vector Fields ------------------------------------------
 
     private void Section_VectorFields(Paper paper)
     {
@@ -2014,7 +2014,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Color Fields ───────────────────────────────────────────
+    // -- Color Fields -------------------------------------------
 
     private void Section_ColorFields(Paper paper)
     {
@@ -2037,7 +2037,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Headers & Separators ─────────────────────────────────
+    // -- Headers & Separators ---------------------------------
 
     private void Section_Headers(Paper paper)
     {
@@ -2296,7 +2296,7 @@ public class OrigamiPlaygroundPanel : DockPanel
                 LabelRow(paper, "load_pb_drive", "Drive determinate value", () =>
                     Origami.Slider(paper, "op_pb_drive_v", _loadProgress, v => _loadProgress = v, 0f, 1f).Format("F2").Show());
 
-                // Spinners — styles + sizes
+                // Spinners - styles + sizes
                 LabelRow(paper, "load_spinner_styles", "Spinner styles", () =>
                 {
                     using (paper.Row("op_sp_st_row").Height(40).RowBetween(20).Enter())
@@ -2358,7 +2358,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── App Bar ──────────────────────────────────────────────────
+    // -- App Bar --------------------------------------------------
 
     private void Section_AppBar(Paper paper)
     {
@@ -2424,7 +2424,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Context Menus ────────────────────────────────────────────
+    // -- Context Menus --------------------------------------------
 
     private bool _ctxToggleA = true;
     private bool _ctxToggleB;
@@ -2503,7 +2503,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Modals ──────────────────────────────────────────────────
+    // -- Modals --------------------------------------------------
 
     private void Section_Modals(Paper paper)
     {
@@ -2582,7 +2582,7 @@ public class OrigamiPlaygroundPanel : DockPanel
         });
     }
 
-    // ── Tiny layout helpers ────────────────────────────────────
+    // -- Tiny layout helpers ------------------------------------
 
     private static void LabelRow(Paper paper, string id, string label, Action drawControl)
     {

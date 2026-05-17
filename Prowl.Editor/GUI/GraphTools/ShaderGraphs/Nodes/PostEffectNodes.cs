@@ -16,7 +16,7 @@ internal static class PostEffectAccents
         System.Drawing.Color.FromArgb(255, 120, 170, 210);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Surface Depth
 // View-space (linear) depth of the current fragment. Two modes:
 //   EyeSpace  view-space Z in world units. Distance from camera plane to
@@ -25,7 +25,7 @@ internal static class PostEffectAccents
 //   Linear01  same value scaled by 1/far so 0 = camera, 1 = far plane.
 // Both modes work in vertex (via prowl_MatV) and fragment (via the linearised
 // gl_FragCoord.z fast path).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>Selects between the eye-space and 0..1 linear-depth conventions.</summary>
 public enum SurfaceDepthMode
@@ -50,8 +50,8 @@ public sealed class SurfaceDepthNode : Node, IShaderNode, IShaderGraphNode
     public SurfaceDepthMode Mode = SurfaceDepthMode.EyeSpace;
 
     public override string Title    => Mode == SurfaceDepthMode.Linear01
-        ? "Surface Depth · 0-1"
-        : "Surface Depth · Eye";
+        ? "Surface Depth * 0-1"
+        : "Surface Depth * Eye";
     public override string Category => "Scene Data";
     public override System.Drawing.Color AccentColor => PostEffectAccents.PostEffect;
 
@@ -93,11 +93,11 @@ public sealed class SurfaceDepthNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port outputPort, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Camera Depth Fade
-// 0 at the near plane → 1 at (near + Length). Useful for fading objects out as
+// 0 at the near plane -> 1 at (near + Length). Useful for fading objects out as
 // they approach the camera (e.g. FPS weapon held too close, first-person body).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Gradient based on the fragment's distance from the camera near plane:
@@ -170,12 +170,12 @@ public sealed class CameraDepthFadeNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Reconstruct World Position wraps Shadow.glsl's WorldPosFromDepth
 // Given a screen UV and a depth value, returns the world-space position of
 // whatever geometry drew there. Useful for screen-space post effects that
 // need to reason about scene geometry (SSAO, screen-space fog, etc.).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Reconstruct the world-space position of the fragment under a screen UV
@@ -235,12 +235,12 @@ public sealed class ReconstructWorldPositionNode : Node, IShaderNode, IShaderGra
         => outputPort.Name == "XYZ" ? ShaderType.Vec3 : ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Reproject UV wraps Fragment.glsl's Reproject helper
 // Given a screen UV + depth + a previous-frame view-projection, returns the UV
 // where the same world point appeared in the previous frame. Core building
 // block for motion blur and TAA-style effects.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Returns the previous-frame screen UV for the world point currently under
@@ -286,20 +286,20 @@ public sealed class ReprojectUVNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec2;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Dither
 // Stable per-pixel 0..1 value used for stochastic transparency / stippling /
 // colour quantization. Four modes, all in the [0, 1) range so users can
 // compare directly against an alpha threshold.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>Which hash function drives the <see cref="DitherNode"/>'s output.</summary>
 public enum DitherPattern
 {
-    /// <summary>4×4 ordered Bayer matrix 16 distinct levels, classic "staircase" pattern.
+    /// <summary>4x4 ordered Bayer matrix 16 distinct levels, classic "staircase" pattern.
     /// Cheap but has obvious tiling at magnification.</summary>
     Bayer4x4 = 0,
-    /// <summary>8×8 ordered Bayer matrix 64 distinct levels, smoother than 4×4.</summary>
+    /// <summary>8x8 ordered Bayer matrix 64 distinct levels, smoother than 4x4.</summary>
     Bayer8x8 = 1,
     /// <summary>Interleaved Gradient Noise Jorge Jimenez's golden-ratio hash. Cheapest
     /// uniform-distribution option; great for temporal jitter.</summary>
@@ -328,7 +328,7 @@ public sealed class DitherNode : Node, IShaderNode, IShaderGraphNode
     /// pattern (e.g. 0.5 compresses 0..1 down to 0..0.5).</summary>
     public float Scale = 1f;
 
-    public override string Title => $"Dither · {Pattern}";
+    public override string Title => $"Dither * {Pattern}";
     public override string Category => "Arithmetic";
     public override System.Drawing.Color AccentColor => PostEffectAccents.PostEffect;
 
@@ -350,7 +350,7 @@ public sealed class DitherNode : Node, IShaderNode, IShaderGraphNode
         switch (Pattern)
         {
             case DitherPattern.Bayer4x4:
-                // 4×4 ordered dither emit the 16-entry matrix once as a top-level const
+                // 4x4 ordered dither emit the 16-entry matrix once as a top-level const
                 // array so multiple Dither nodes share it.
                 ctx.EmitOnce("bayer4x4", () =>
                 {
@@ -369,7 +369,7 @@ public sealed class DitherNode : Node, IShaderNode, IShaderGraphNode
                 {
                     var sb = new System.Text.StringBuilder();
                     sb.AppendLine("        const float _bayer8x8[64] = float[64](");
-                    // Standard 8×8 Bayer matrix normalised to [0, 1).
+                    // Standard 8x8 Bayer matrix normalised to [0, 1).
                     int[] m = {
                          0, 32,  8, 40,  2, 34, 10, 42,
                         48, 16, 56, 24, 50, 18, 58, 26,

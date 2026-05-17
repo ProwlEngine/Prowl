@@ -101,7 +101,7 @@ public class MeshAssetEditor : AssetImporterEditor
         var sdf = FindSDF(parentEntry, subEntry, mesh);
         if (sdf != null)
             Origami.Label(paper, $"{id}_sdf_info",
-                $"SDF: {sdf.Resolution.X}³  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}").Show();
+                $"SDF: {sdf.Resolution.X}^3  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}").Show();
         else
             Origami.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)").Show();
     }

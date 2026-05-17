@@ -33,7 +33,7 @@ public sealed class ParticleMasterNode : MasterNodeBase
         // RGB color + alpha together default is white opaque so a freshly-seeded
         // graph shows something instead of black+transparent.
         AddInput<Float4>("Color", new Float4(1f, 1f, 1f, 1f),
-            tooltip: "RGB × A output per pixel. Alpha drives the blend (Additive / Alpha / etc. from RenderSettings).");
+            tooltip: "RGB x A output per pixel. Alpha drives the blend (Additive / Alpha / etc. from RenderSettings).");
 
         // Optional explicit alpha override when wired, replaces Color.a.
         AddInput<float>("Alpha", 1f,

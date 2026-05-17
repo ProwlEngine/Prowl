@@ -40,15 +40,15 @@ public class ProjectPanel : DockPanel
     // Drag-hover tracking the mouse's current drop target while a drag is active. Tree
     // nodes and folder items in the grid/list set this via OnHover (same pattern the
     // HierarchyPanel uses). Reset each frame before the body draws.
-    //   null   → mouse not over any folder drop target
-    //   ""     → over the Assets root (represented by an empty relative path)
-    //   "Foo"  → over folder 'Foo' (assets-relative)
+    //   null   -> mouse not over any folder drop target
+    //   ""     -> over the Assets root (represented by an empty relative path)
+    //   "Foo"  -> over folder 'Foo' (assets-relative)
     private string? _dragHoverFolder;      // current frame's resolved hover target (from last frame's callbacks)
     private string? _dragHoverFolderNext;  // written by deferred callbacks, promoted next frame
     private string? _dragDwellFolder;     // folder being dwelled on for auto-open
     private float _dragDwellTimer;        // seconds spent hovering the dwell folder
     private const float DragDwellOpenDelay = 0.75f;
-    // True while the mouse is over the content-area background (not just a folder item) —
+    // True while the mouse is over the content-area background (not just a folder item) -
     // lets "drop on empty space" fall back to the currently-open folder.
     private bool _contentBgHovered;
     // Rename state is managed by RenameOverlay

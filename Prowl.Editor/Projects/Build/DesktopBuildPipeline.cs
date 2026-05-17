@@ -197,7 +197,7 @@ public class DesktopBuildPipeline : BuildPipeline
                 progress?.Log($"Copied game assembly: {Path.GetFileName(project.GameAssemblyPath)}");
             }
 
-            // 4c. Organize assemblies — move dependency DLLs to runtimes/ subfolder
+            // 4c. Organize assemblies - move dependency DLLs to runtimes/ subfolder
             OrganizePublishOutput(outputDirectory, project.Name);
 
             // 5. Package assets AFTER publish (publish may clean the output dir)
@@ -251,7 +251,7 @@ public class DesktopBuildPipeline : BuildPipeline
             progress?.Log("Build complete!", 1.0f);
             sw.Stop();
 
-            Runtime.Debug.Log($"[Build] Desktop build completed in {sw.Elapsed.TotalSeconds:F1}s → {outputDirectory}");
+            Runtime.Debug.Log($"[Build] Desktop build completed in {sw.Elapsed.TotalSeconds:F1}s -> {outputDirectory}");
 
             return new BuildResult
             {
@@ -614,7 +614,7 @@ public class DesktopBuildPipeline : BuildPipeline
     {
         // Read PackageReferences from assembly metadata embedded by the MSBuild
         // EmbedPackageReferences target in Prowl.Runtime.csproj. This works regardless
-        // of whether the source tree is present — the data lives in the compiled DLL.
+        // of whether the source tree is present - the data lives in the compiled DLL.
         var packages = GetRuntimePackageReferences();
 
         sb.AppendLine("  <ItemGroup>");
@@ -691,7 +691,7 @@ public class DesktopBuildPipeline : BuildPipeline
             string fileName = Path.GetFileName(file);
             if (keepInRoot.Contains(fileName)) continue;
 
-            // Skip native (unmanaged) DLLs — only move managed assemblies
+            // Skip native (unmanaged) DLLs - only move managed assemblies
             try { AssemblyName.GetAssemblyName(file); }
             catch (BadImageFormatException) { continue; }
 

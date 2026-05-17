@@ -7,7 +7,7 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─── Lerp ────────────────────────────────────────────────────────────────────────────────
+// --- Lerp --------------------------------------------------------------------------------
 
 /// <summary>
 /// Linear interpolation: mix(A, B, T).
@@ -34,7 +34,7 @@ public sealed class LerpNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "A", "B", "T", ctx);
 }
 
-// ─── Clamp ───────────────────────────────────────────────────────────────────────────────
+// --- Clamp -------------------------------------------------------------------------------
 
 /// <summary>
 /// Clamps In to [Min, Max]: clamp(In, Min, Max).
@@ -61,7 +61,7 @@ public sealed class ClampNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "In", "Min", "Max", ctx);
 }
 
-// ─── InverseLerp ─────────────────────────────────────────────────────────────────────────
+// --- InverseLerp -------------------------------------------------------------------------
 
 /// <summary>
 /// Inverse lerp: (Val - A) / (B - A).
@@ -94,7 +94,7 @@ public sealed class InverseLerpNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "A", "B", "Val", ctx);
 }
 
-// ─── Smoothstep ──────────────────────────────────────────────────────────────────────────
+// --- Smoothstep --------------------------------------------------------------------------
 
 /// <summary>
 /// Smooth Hermite interpolation: smoothstep(Min, Max, Val).
@@ -121,7 +121,7 @@ public sealed class SmoothstepNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "Min", "Max", "Val", ctx);
 }
 
-// ─── RemapNode ──────────────────────────────────────────────────────────────────────────
+// --- RemapNode --------------------------------------------------------------------------
 
 /// <summary>
 /// Remaps Val from [iMin, iMax] to [oMin, oMax]:
@@ -166,7 +166,7 @@ public sealed class RemapNode : Node, IShaderNode, IShaderGraphNode
                 ctx.GetSourceType(GetInput("oMax")!)));
 }
 
-// ─── RemapSimpleNode ────────────────────────────────────────────────────────────────────────
+// --- RemapSimpleNode ------------------------------------------------------------------------
 
 /// <summary>
 /// Remaps the single "In" input from [InMin, InMax] to [OutMin, OutMax] using
@@ -210,7 +210,7 @@ public sealed class RemapSimpleNode : Node, IShaderNode, IShaderGraphNode
         => ctx.GetSourceType(GetInput("In")!);
 }
 
-// ─── PosterizeNode ───────────────────────────────────────────────────────────────────────
+// --- PosterizeNode -----------------------------------------------------------------------
 
 /// <summary>
 /// Posterizes In to a given number of Steps (scalar):
@@ -243,7 +243,7 @@ public sealed class PosterizeNode : Node, IShaderNode, IShaderGraphNode
         => ctx.GetSourceType(GetInput("In")!);
 }
 
-// ─── IfNode ─────────────────────────────────────────────────────────────────────────────
+// --- IfNode -----------------------------------------------------------------------------
 
 /// <summary>
 /// Branchless if-node: compares A and B (as scalars) and blends GT/EQ/LT results using step():
@@ -300,7 +300,7 @@ public sealed class IfNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "GT", "EQ", "LT", ctx);
 }
 
-// ─── MultiplyMatrixNode ─────────────────────────────────────────────────────────────────
+// --- MultiplyMatrixNode -----------------------------------------------------------------
 
 /// <summary>
 /// Matrix / vector multiply: (A * B).

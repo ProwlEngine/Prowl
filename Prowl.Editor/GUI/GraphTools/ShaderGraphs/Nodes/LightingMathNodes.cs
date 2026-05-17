@@ -10,16 +10,16 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Shared accent for every lit-math / BRDF helper node. Same yellow as Lighting
 // access (LightingAccents.Lighting) so the category reads cohesively in the menu.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // PBR Lighting CalculateForwardLighting
 // Full per-fragment PBR sum. Returns a lit vec3 add emission / ambient on top
 // in the graph if you want. This is what the built-in PBR path computes.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Full isotropic PBR forward lighting sum for the current fragment runs
@@ -78,11 +78,11 @@ public sealed class PBRLightingNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Anisotropic PBR Lighting CalculateForwardLightingAniso
 // Full per-fragment anisotropic PBR. Splits roughness along tangent / bitangent
 // by the Anisotropy factor ([-1, 1]).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Anisotropic PBR forward lighting like <see cref="PBRLightingNode"/> but the
@@ -142,14 +142,14 @@ public sealed class AnisotropicLightingNode : Node, IShaderNode, IShaderGraphNod
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Directional Translucency CalculateTranslucency against the sun
 // Two internal modes:
 //   ScatteringPower < 0.001  wrapped diffuse + GGX backscatter (foliage, cloth)
-//   ScatteringPower ≥ 0.001  spherical Gaussian (skin, wax, marble)
+//   ScatteringPower >= 0.001  spherical Gaussian (skin, wax, marble)
 // Computed against the directional light only. For translucency from BVH lights
 // (point / spot), use the PBR Lighting node which folds them all in.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Backscatter / subsurface-scattering lobe for thin or translucent surfaces, evaluated
@@ -221,11 +221,11 @@ public sealed class DirectionalTranslucencyNode : Node, IShaderNode, IShaderGrap
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Ambient wraps CalculateAmbient(worldNormal)
 // Mode-aware ambient: returns either the flat _AmbientColor or the hemisphere
 // blend depending on what the project has configured.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Mode-aware ambient lighting samples either the flat <c>_AmbientColor</c> or
@@ -269,9 +269,9 @@ public sealed class CalculateAmbientNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Apply Fog wraps ApplyFog(color, worldPos)
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Applies Prowl's fog (linear / exponential / exp-squared, whichever is
@@ -304,12 +304,12 @@ public sealed class ApplyFogNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Normal Map wraps ApplyNormalMap from Fragment.glsl
 // Samples a normal-map texture and transforms it into world space using the
 // vertex varyings (vTangent/vBitangent/vNormal). Much cleaner than authoring
 // the TBN dance manually.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Samples a tangent-space normal map and returns the resulting world-space
@@ -356,10 +356,10 @@ public sealed class NormalMapNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // BRDF primitives direct access to the Fresnel/NDF/Geometry terms from PBR.glsl
 // for authors building custom lighting models.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>Schlick's Fresnel approximation mixes F0 toward white as the view
 /// direction approaches grazing. The cheap version used inside direct lighting.</summary>
@@ -419,7 +419,7 @@ public sealed class FresnelSchlickRoughnessNode : Node, IShaderNode, IShaderGrap
 
 /// <summary>Disney diffuse term softer than pure Lambert, matches the PBR
 /// diffuse the built-in lighting uses. Returns a scalar multiplier you apply
-/// to your albedo × light colour.</summary>
+/// to your albedo x light colour.</summary>
 public sealed class DisneyDiffuseNode : Node, IShaderNode, IShaderGraphNode
 {
     public override string Title => "Disney Diffuse";

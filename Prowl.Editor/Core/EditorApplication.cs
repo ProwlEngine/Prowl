@@ -933,10 +933,10 @@ public class EditorApplication : Game
                 float barH = (float)h / BarCount;
                 double time = _introTime;
 
-                // ── CLOSE PHASE (0 → IntroCloseDuration): Bars slide IN, text fades in ──
+                // -- CLOSE PHASE (0 -> IntroCloseDuration): Bars slide IN, text fades in --
                 if (time < IntroCloseDuration)
                 {
-                    float t = (float)(time / IntroCloseDuration); // 0→1
+                    float t = (float)(time / IntroCloseDuration); // 0->1
 
                     // Bars slide in from off-screen
                     for (int i = 0; i < BarCount; i++)
@@ -964,7 +964,7 @@ public class EditorApplication : Game
                             new Float2(0.5f, 0.5f));
                     }
                 }
-                // ── HOLD PHASE: brief pause with text visible ──
+                // -- HOLD PHASE: brief pause with text visible --
                 else if (time < IntroCloseDuration + 0.5)
                 {
                     canvas.RectFilled(0, 0, w, h, black);
@@ -976,7 +976,7 @@ public class EditorApplication : Game
                             new Float2(0.5f, 0.5f));
                     }
                 }
-                // ── OPEN PHASE: Bars slide OUT, text fades out ──
+                // -- OPEN PHASE: Bars slide OUT, text fades out --
                 else
                 {
                     float openStart = (float)(IntroCloseDuration + 0.5);
@@ -1490,7 +1490,7 @@ public class EditorApplication : Game
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
 
-        // Load with full lifecycle (Enable → OnEnable/Start will fire)
+        // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
         Undo.Clear();
 

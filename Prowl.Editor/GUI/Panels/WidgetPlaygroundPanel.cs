@@ -444,7 +444,7 @@ public class WidgetPlaygroundPanel : DockPanel
             Origami.Label(paper, "st_col", $"Color: R={_color.R:F2} G={_color.G:F2} B={_color.B:F2}").Show();
             Origami.Label(paper, "st_prog", $"Progress: {_progress:P0}").Show();
 
-            // ── File Dialog ──
+            // -- File Dialog --
             Origami.Header(paper, "h_filedialog", "File Dialog").Show();
 
             Origami.Button(paper, "btn_open_file", "Open File...", () => EditorApplication.OpenFileDialog(FileDialogMode.Open,

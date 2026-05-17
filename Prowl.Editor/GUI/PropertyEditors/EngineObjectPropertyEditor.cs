@@ -152,8 +152,8 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
     internal static void OpenAssetSelector(Type type, Action<object?> onChange)
     {
-        // Scene types (GameObject, MonoBehaviour subclasses) → Scene tab
-        // Asset types (Mesh, Material, etc.) → Assets tab
+        // Scene types (GameObject, MonoBehaviour subclasses) -> Scene tab
+        // Asset types (Mesh, Material, etc.) -> Assets tab
         bool isSceneType = typeof(GameObject).IsAssignableFrom(type) || typeof(MonoBehaviour).IsAssignableFrom(type);
         var tabs = isSceneType ? SelectorTabs.Scene : SelectorTabs.Assets;
 

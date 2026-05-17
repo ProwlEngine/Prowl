@@ -55,7 +55,7 @@ public sealed class ShaderGenContext
     /// multiple times via Get/Set vars.</summary>
     public readonly HashSet<string> HelperFunctions = new();
 
-    /// <summary>Cross-stage varyings flowing vertex → fragment. The compiler emits
+    /// <summary>Cross-stage varyings flowing vertex -> fragment. The compiler emits
     /// matching `out` (vertex) / `in` (fragment) pairs.</summary>
     public readonly HashSet<(string name, string type)> Varyings = new();
 
@@ -79,7 +79,7 @@ public sealed class ShaderGenContext
     /// </summary>
     public readonly StringBuilder TopLevelHelpers = new();
 
-    // ─── Dedup keys lets nodes opt in to emit-once semantics ──────────────────────
+    // --- Dedup keys lets nodes opt in to emit-once semantics ----------------------
     private readonly HashSet<string> _emittedKeys = new();
 
     /// <summary>
@@ -116,7 +116,7 @@ public sealed class ShaderGenContext
         return true;
     }
 
-    // ─── per-port memoisation ─────────────────────────────────────────────────────────
+    // --- per-port memoisation ---------------------------------------------------------
     private readonly Dictionary<(System.Guid nodeId, string portName), string> _cache = new();
     private readonly HashSet<(System.Guid nodeId, string portName)> _evaluating = new();
     private int _tempCounter;
@@ -133,7 +133,7 @@ public sealed class ShaderGenContext
     public string FreshLocal(string prefix = "_t") => $"{prefix}{_tempCounter++}";
 
     /// <summary>
-    /// Resolve the GLSL type a wire feeding <paramref name="input"/> actually carries —
+    /// Resolve the GLSL type a wire feeding <paramref name="input"/> actually carries -
     /// follows the edge to the source node's output and asks its <c>IShaderNode</c> for
     /// the type. Falls back to the input port's declared type when nothing is wired (so
     /// dynamic nodes still have something to broadcast against).
@@ -160,7 +160,7 @@ public sealed class ShaderGenContext
         return shaderNode.GetOutputType(sourcePort, this);
     }
 
-    /// <summary>True when <paramref name="input"/> has at least one incoming edge —
+    /// <summary>True when <paramref name="input"/> has at least one incoming edge -
     /// lets nodes branch their emission on whether the wire is connected vs. relying
     /// on the default literal (e.g. Add ignores defaulted operands rather than
     /// summing zero into the result).</summary>
@@ -235,7 +235,7 @@ public sealed class ShaderGenContext
 
     /// <summary>Emit the port's default literal, then promote that literal to
     /// <paramref name="targetType"/> needed when a dynamic node asks for a wider
-    /// type than the port declares (e.g. Vec3 target, port default is float 0.5 →
+    /// type than the port declares (e.g. Vec3 target, port default is float 0.5 ->
     /// emits <c>vec3(0.5)</c>).</summary>
     private string PromoteLiteral(Port input, ShaderType targetType)
     {
@@ -244,7 +244,7 @@ public sealed class ShaderGenContext
         return ShaderTypeUtil.Promote(literal, literalType, targetType);
     }
 
-    /// <summary>Find the Node that owns <paramref name="port"/> by scanning the graph —
+    /// <summary>Find the Node that owns <paramref name="port"/> by scanning the graph -
     /// EvaluateInput needs this because Port doesn't back-reference its parent.</summary>
     private Node FindOwner(Port port)
     {

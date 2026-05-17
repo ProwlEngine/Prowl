@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -103,7 +103,7 @@ public class BuildSettingsPanel : DockPanel
 
             using (paper.Row("bp_settings").Size(width, bsHeight).Enter())
             {
-                // Left sidebar — category list
+                // Left sidebar - category list
                 float sidebarW = 220f;
                 using (paper.Column("bp_sidebar")
                     .Padding(new UnitValue(EditorTheme.SidePixelPadding))
@@ -144,7 +144,7 @@ public class BuildSettingsPanel : DockPanel
                 // Separator
                 paper.Box("bp_divider").Width(1).Height(bsHeight).BackgroundColor(EditorTheme.Ink200);
 
-                // Right content — selected settings
+                // Right content - selected settings
                 float contentW = width - sidebarW - 1;
                 Origami.ScrollView(paper, "bp_content", contentW, bsHeight)
                     .Padding(EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding)

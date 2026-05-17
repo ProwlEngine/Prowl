@@ -80,7 +80,7 @@ public static class MaterialPropertyDrawer
             case ShaderPropertyType.Float:
             {
                 float val = ps.HasFloat(prop.Name) ? ps.GetFloat(prop.Name) : (float)prop.Value.X;
-                // Range(min, max) Float → slider, matching the shader author's intent.
+                // Range(min, max) Float -> slider, matching the shader author's intent.
                 // Non-ranged Floats still draw as plain number fields.
                 if (prop.HasRange)
                 {

@@ -92,13 +92,13 @@ public sealed class SurfaceShaderType : IShaderType
     /// </remarks>
     private static void SeedStandard(ShaderGraph graph)
     {
-        // ── Layout ─────────────────────────────────────────────────────────────
+        // -- Layout -------------------------------------------------------------
         const float colProps  = 60f;
         const float colSamp   = 460f;
         const float colMath   = 820f;
         const float colMaster = 1180f;
 
-        // ── Properties (left column) ───────────────────────────────────────────
+        // -- Properties (left column) -------------------------------------------
         var propMainTex = new Texture2DPropertyNode
         {
             Name = "_MainTex", Label = "Albedo", Default = "grid",
@@ -133,7 +133,7 @@ public sealed class SurfaceShaderType : IShaderType
         foreach (var n in new Node[] { propMainTex, propMainColor, propSurfaceTex, propEmissionTex, propEmissionIntensity, propAlphaCutoff })
             graph.AddNode(n);
 
-        // ── Texture samples (middle-left column) ───────────────────────────────
+        // -- Texture samples (middle-left column) -------------------------------
         var sampleAlbedo   = new Tex2DSampleNode { Position = new Float2(colSamp, 80)  };
         var sampleSurface  = new Tex2DSampleNode { Position = new Float2(colSamp, 400) };
         var sampleEmission = new Tex2DSampleNode { Position = new Float2(colSamp, 620) };
@@ -141,8 +141,8 @@ public sealed class SurfaceShaderType : IShaderType
         graph.AddNode(sampleSurface);
         graph.AddNode(sampleEmission);
 
-        // ── Math (middle-right column) ─────────────────────────────────────────
-        // Albedo × Tint both sides vec4, output vec4 wires into master.Albedo.
+        // -- Math (middle-right column) -----------------------------------------
+        // Albedo x Tint both sides vec4, output vec4 wires into master.Albedo.
         var albedoTimesTint = new MultiplyNode { Position = new Float2(colMath, 120) };
         graph.AddNode(albedoTimesTint);
 
@@ -152,11 +152,11 @@ public sealed class SurfaceShaderType : IShaderType
         var occlusionInvert = new OneMinusNode { Position = new Float2(colMath, 360) };
         graph.AddNode(occlusionInvert);
 
-        // Emission × Intensity vec3 × float = vec3 into master.Emission.
+        // Emission x Intensity vec3 x float = vec3 into master.Emission.
         var emissionTimesIntensity = new MultiplyNode { Position = new Float2(colMath, 640) };
         graph.AddNode(emissionTimesIntensity);
 
-        // ── Master (right column) ──────────────────────────────────────────────
+        // -- Master (right column) ----------------------------------------------
         var master = new SurfaceMasterNode
         {
             Position = new Float2(colMaster, 260),
@@ -164,27 +164,27 @@ public sealed class SurfaceShaderType : IShaderType
         };
         graph.AddNode(master);
 
-        // ── Wiring ─────────────────────────────────────────────────────────────
-        // Albedo path: MainTex → sample → × Tint → master.Albedo
+        // -- Wiring -------------------------------------------------------------
+        // Albedo path: MainTex -> sample -> x Tint -> master.Albedo
         Wire(graph, propMainTex,           "Sampler", sampleAlbedo,           "Sampler");
         Wire(graph, sampleAlbedo,          "RGBA",    albedoTimesTint,        "A");
         Wire(graph, propMainColor,         "RGBA",    albedoTimesTint,        "B");
         Wire(graph, albedoTimesTint,       "Out",     master,                 "Albedo");
 
-        // Surface path: SurfaceTex → sample → R→OneMinus→Occlusion, G→Roughness, B→Metallic
+        // Surface path: SurfaceTex -> sample -> R->OneMinus->Occlusion, G->Roughness, B->Metallic
         Wire(graph, propSurfaceTex,        "Sampler", sampleSurface,          "Sampler");
         Wire(graph, sampleSurface,         "R",       occlusionInvert,        "In");
         Wire(graph, occlusionInvert,       "Out",     master,                 "Occlusion");
         Wire(graph, sampleSurface,         "G",       master,                 "Roughness");
         Wire(graph, sampleSurface,         "B",       master,                 "Metallic");
 
-        // Emission path: EmissionTex → sample → × Intensity → master.Emission
+        // Emission path: EmissionTex -> sample -> x Intensity -> master.Emission
         Wire(graph, propEmissionTex,       "Sampler", sampleEmission,         "Sampler");
         Wire(graph, sampleEmission,        "RGB",     emissionTimesIntensity, "A");
         Wire(graph, propEmissionIntensity, "Out",     emissionTimesIntensity, "B");
         Wire(graph, emissionTimesIntensity,"Out",     master,                 "Emission");
 
-        // Alpha cutoff path: AlphaCutoff → master.AlphaCutoff
+        // Alpha cutoff path: AlphaCutoff -> master.AlphaCutoff
         Wire(graph, propAlphaCutoff,       "Out",     master,                 "Alpha Cutoff");
     }
 
@@ -222,9 +222,9 @@ internal sealed class SurfaceDepthHelper
     public const string ScratchKey = "Surface.DepthHelper";
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Shared helpers used across Surface passes.
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 internal static class SurfacePassHelpers
 {
@@ -302,9 +302,9 @@ internal static class SurfacePassHelpers
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Standard pass forward-lit main pass.
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 internal sealed class SurfaceStandardPass : IShaderPass
 {
@@ -316,7 +316,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         var master = (SurfaceMasterNode)masterBase;
         var settings = graph.RenderSettings;
 
-        // ── Fragment context ──────────────────────────────────────────────────────
+        // -- Fragment context ------------------------------------------------------
         var fragCtx = new ShaderGenContext(graph, ShaderStage.Fragment);
         foreach (var u in shared.PropertyUniforms) fragCtx.Uniforms.Add(u);
         fragCtx.Includes.Add("ProwlCG");
@@ -331,7 +331,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         var surfaceBody = BuildSurfaceBody(master, fragCtx, settings);
         shared.Diagnostics.AddRange(fragCtx.Diagnostics);
 
-        // ── Vertex context ────────────────────────────────────────────────────────
+        // -- Vertex context --------------------------------------------------------
         // Mirror fragment-introduced varyings BEFORE building the vertex body the
         // vertex stage needs to know which optional `out` slots to declare + assign.
         var vertCtx = new ShaderGenContext(graph, ShaderStage.Vertex);
@@ -349,12 +349,12 @@ internal sealed class SurfaceStandardPass : IShaderPass
         var vertexBody = BuildVertexBody(master, vertCtx);
         shared.Diagnostics.AddRange(vertCtx.Diagnostics);
 
-        // ── Stash the depth-helper blueprint for Depth + Shadow passes ────────────
+        // -- Stash the depth-helper blueprint for Depth + Shadow passes ------------
         var depthHelper = SurfacePassHelpers.BuildDepthHelper(graph, master, settings, shared.PropertyUniforms, shared);
         if (depthHelper != null)
             shared.Scratch[SurfaceDepthHelper.ScratchKey] = depthHelper;
 
-        // ── Emit the pass block ───────────────────────────────────────────────────
+        // -- Emit the pass block ---------------------------------------------------
         var sb = new StringBuilder();
         sb.AppendLine("Pass \"Standard\"");
         sb.AppendLine("{");
@@ -403,7 +403,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         return sb.ToString();
     }
 
-    // ─── Fragment body builders (dispatched on Lighting enum) ────────────────────
+    // --- Fragment body builders (dispatched on Lighting enum) --------------------
 
     private static string BuildSurfaceBody(SurfaceMasterNode master, ShaderGenContext ctx, ShaderGraphRenderSettings settings)
     {
@@ -430,7 +430,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         if (!settings.ReceivesShadows) ctx.Defines.Add("SG_NO_SHADOWS");
 
         var sb = new StringBuilder();
-        sb.AppendLine("    // ── Graph-driven PBR surface ──");
+        sb.AppendLine("    // -- Graph-driven PBR surface --");
         sb.AppendLine($"    vec4  _sgAlbedo    = {albedo};");
         sb.AppendLine($"    float _sgAlpha     = {alpha};");
         sb.AppendLine($"    vec3  _sgNormalTS  = {normalTS};");
@@ -462,7 +462,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
     private static string BuildUnlitBody(string albedo, string alpha, string emission, string alphaCutoff)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("    // ── Unlit (graph-driven) ──");
+        sb.AppendLine("    // -- Unlit (graph-driven) --");
         sb.AppendLine($"    vec4  _sgAlbedo  = {albedo};");
         sb.AppendLine($"    float _sgAlpha   = {alpha};");
         sb.AppendLine($"    vec3  _sgEmiss   = {emission};");
@@ -481,7 +481,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         ctx.Includes.Add("Lighting");
         if (!settings.ReceivesShadows) ctx.Defines.Add("SG_NO_SHADOWS");
         var sb = new StringBuilder();
-        sb.AppendLine("    // ── Lambert lighting (graph-driven) ──");
+        sb.AppendLine("    // -- Lambert lighting (graph-driven) --");
         sb.AppendLine($"    vec4  _sgAlbedo   = {albedo};");
         sb.AppendLine($"    float _sgAlpha    = {alpha};");
         sb.AppendLine($"    vec3  _sgNormalTS = {normalTS};");
@@ -511,7 +511,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         ctx.Includes.Add("Lighting");
         if (!settings.ReceivesShadows) ctx.Defines.Add("SG_NO_SHADOWS");
         var sb = new StringBuilder();
-        sb.AppendLine("    // ── Blinn-Phong lighting (graph-driven) ──");
+        sb.AppendLine("    // -- Blinn-Phong lighting (graph-driven) --");
         sb.AppendLine($"    vec4  _sgAlbedo    = {albedo};");
         sb.AppendLine($"    float _sgAlpha     = {alpha};");
         sb.AppendLine($"    vec3  _sgNormalTS  = {normalTS};");
@@ -535,7 +535,7 @@ internal sealed class SurfaceStandardPass : IShaderPass
         return sb.ToString();
     }
 
-    // ─── Vertex body ─────────────────────────────────────────────────────────────
+    // --- Vertex body -------------------------------------------------------------
 
     private static string BuildVertexBody(SurfaceMasterNode master, ShaderGenContext ctx)
     {
@@ -590,9 +590,9 @@ internal sealed class SurfaceStandardPass : IShaderPass
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // DepthNormals pass depth-only + view-space normals, skipped for transparent.
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 internal sealed class SurfaceDepthNormalsPass : IShaderPass
 {
@@ -625,9 +625,9 @@ internal sealed class SurfaceDepthNormalsPass : IShaderPass
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Shadow pass ShadowCaster into the shadow atlas.
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 internal sealed class SurfaceShadowPass : IShaderPass
 {
@@ -662,12 +662,12 @@ internal sealed class SurfaceShadowPass : IShaderPass
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 // Shared depth/shadow pass vertex + fragment stage emission. Both passes produce
 // the exact same vertex stage (optional position offset + UV forwarding for alpha
 // cutout) and very similar fragment stages (DepthNormals writes a normal; Shadow
 // is depth-only).
-// ═══════════════════════════════════════════════════════════════════════════════
+// ===============================================================================
 
 internal static class SurfaceDepthPassEmit
 {

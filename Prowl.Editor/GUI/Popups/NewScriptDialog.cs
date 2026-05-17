@@ -232,7 +232,7 @@ public static class NewScriptDialog
         Modal.Pop();
     }
 
-    // ─── Validation ─────────────────────────────────────────────────────────────────
+    // --- Validation -----------------------------------------------------------------
 
     private static readonly Regex s_identifier = new(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
@@ -348,7 +348,7 @@ public static class NewScriptDialog
         return baseName;
     }
 
-    // ─── Templates ──────────────────────────────────────────────────────────────────
+    // --- Templates ------------------------------------------------------------------
     // Built-in templates. Users add their own by tagging a static method
     //   [ScriptTemplate("Name", "Description", EditorIcons.Foo)]
     //   public static string Generate(string className) => $"public class {className} {{}}";

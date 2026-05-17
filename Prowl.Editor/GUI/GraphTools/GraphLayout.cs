@@ -16,7 +16,7 @@ namespace Prowl.Editor.GraphTools;
 /// </summary>
 public static class GraphLayout
 {
-    // ─── Constant node geometry (graph-space units) ──────────────────────────────────
+    // --- Constant node geometry (graph-space units) ----------------------------------
     public const float NodeWidth      = 200f;
     public const float HeaderHeight   = 28f;
     public const float PortRowHeight  = 22f;
@@ -45,7 +45,7 @@ public static class GraphLayout
 
     /// <summary>
     /// Compute the AABB enclosing every node + sticky note in the graph. Used to frame
-    /// the view (View → Frame All) and to draw the minimap viewport rectangle.
+    /// the view (View -> Frame All) and to draw the minimap viewport rectangle.
     /// Returns false if the graph is empty.
     /// </summary>
     public static bool ComputeGraphBounds(Graph graph, out Float2 min, out Float2 max)
@@ -76,7 +76,7 @@ public static class GraphLayout
         return found;
     }
 
-    // ─── Type-based port colour palette ──────────────────────────────────────────────
+    // --- Type-based port colour palette ----------------------------------------------
     private static readonly Dictionary<Type, Color32> _portColors = new()
     {
         [typeof(float)]   = new Color32(220, 200, 80, 255),    // amber scalar
@@ -88,9 +88,9 @@ public static class GraphLayout
         [typeof(string)]  = new Color32(200, 160, 120, 255),   // tan
     };
 
-    // ─── Drag-context hint ────────────────────────────────────────────────────────────
+    // --- Drag-context hint ------------------------------------------------------------
     // GraphEditor writes into this before rendering each frame while the user is
-    // dragging a wire. Renderers read it to dim ports that can't be a drop target —
+    // dragging a wire. Renderers read it to dim ports that can't be a drop target -
     // wrong direction OR type-incompatible giving a clear "this can plug here"
     // affordance without per-renderer plumbing.
     private static Type? _dragSourceType;
@@ -132,7 +132,7 @@ public static class GraphLayout
         // The source port itself never dim.
         if (nodeId == _dragSourceNodeId && port.Name == _dragSourcePortName) return false;
 
-        // Must be opposite direction (output ↔ input).
+        // Must be opposite direction (output <-> input).
         var needDir = _dragSourceDirection.Value == PortDirection.Output
                     ? PortDirection.Input : PortDirection.Output;
         if (port.Direction != needDir) return true;
@@ -152,7 +152,7 @@ public static class GraphLayout
     /// <summary>
     /// Compatibility check for connecting <paramref name="from"/>'s output to
     /// <paramref name="to"/>'s input. Allows exact match, object-typed (dynamic)
-    /// either side, and any numeric-to-numeric pair scalar ↔ vector promotion is
+    /// either side, and any numeric-to-numeric pair scalar <-> vector promotion is
     /// handled by the shader compiler (<c>ShaderTypeUtil.Promote</c>) so users can wire
     /// a Float into a Vec3 input.
     /// </summary>
@@ -165,7 +165,7 @@ public static class GraphLayout
 
     /// <summary>
     /// Hit-test a graph-space point against every port of <paramref name="node"/>.
-    /// <paramref name="hitRadius"/> controls the catch zone; default is 2× the visual
+    /// <paramref name="hitRadius"/> controls the catch zone; default is 2x the visual
     /// dot radius so users don't have to be pixel-perfect. Uses the node's registered
     /// renderer for port positions so custom shapes hit-test correctly.
     /// </summary>
@@ -197,7 +197,7 @@ public static class GraphLayout
 
     /// <summary>
     /// Approximate point-to-bezier distance via 16-sample sweep. Returns the minimum
-    /// distance² found between <paramref name="graphPoint"/> and the cubic bezier
+    /// distance^2 found between <paramref name="graphPoint"/> and the cubic bezier
     /// from <paramref name="from"/> to <paramref name="to"/> with the renderer's
     /// horizontal-tangent control points.
     /// </summary>
@@ -224,7 +224,7 @@ public static class GraphLayout
         for (int i = 0; i <= samples; i++)
         {
             float t = i / (float)samples;
-            // Cubic Bezier: B(t) = (1-t)³P0 + 3(1-t)²t·C1 + 3(1-t)t²·C2 + t³P1
+            // Cubic Bezier: B(t) = (1-t)^3P0 + 3(1-t)^2t*C1 + 3(1-t)t^2*C2 + t^3P1
             float u = 1f - t;
             float b0 = u * u * u, b1 = 3 * u * u * t, b2 = 3 * u * t * t, b3 = t * t * t;
             float bx = b0 * from.X + b1 * c1.X + b2 * c2.X + b3 * to.X;

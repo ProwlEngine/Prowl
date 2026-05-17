@@ -21,11 +21,11 @@ namespace Prowl.Editor.GraphTools;
 /// </remarks>
 public static class GraphRendering
 {
-    // ─── Common colors (grid / background only node colors live in DefaultNodeRenderer) ─
+    // --- Common colors (grid / background only node colors live in DefaultNodeRenderer) -
     private static readonly Color32 BgColor  = new Color32(22, 22, 26, 255);
     private static readonly Color32 GridLine = new Color32(40, 42, 50, 255);
 
-    // ─── Grid ─────────────────────────────────────────────────────────────────────────
+    // --- Grid -------------------------------------------------------------------------
 
     /// <summary>
     /// Draw the background grid: thin vertical + horizontal lines, plus brighter dots
@@ -72,7 +72,7 @@ public static class GraphRendering
         //         canvas.CircleFilled(x, y, dotR, GridIntersection, 6);
     }
 
-    // ─── Background fill (full canvas area, screen-space). Drawn before the transform. ─
+    // --- Background fill (full canvas area, screen-space). Drawn before the transform. -
 
     public static void DrawBackground(Canvas canvas, Rect screenRect)
     {
@@ -80,7 +80,7 @@ public static class GraphRendering
                           (float)screenRect.Size.X, (float)screenRect.Size.Y, BgColor);
     }
 
-    // ─── Wires (cubic bezier) ────────────────────────────────────────────────────────
+    // --- Wires (cubic bezier) --------------------------------------------------------
 
     /// <summary>
     /// Draw a wire between two ports using the given <paramref name="style"/>.
@@ -128,7 +128,7 @@ public static class GraphRendering
         canvas.Stroke();
     }
 
-    // ─── Groups (back-most layer) ────────────────────────────────────────────────────
+    // --- Groups (back-most layer) ----------------------------------------------------
 
     public static void DrawGroup(Canvas canvas, NodeGroup group, float zoom, Prowl.Scribe.FontFile? font, bool isSelected = false)
     {
@@ -180,7 +180,7 @@ public static class GraphRendering
         canvas.Fill();
     }
 
-    // ─── Sticky notes ────────────────────────────────────────────────────────────────
+    // --- Sticky notes ----------------------------------------------------------------
 
     public static void DrawStickyNote(Canvas canvas, StickyNote note, float zoom, Prowl.Scribe.FontFile? font, bool isSelected = false)
     {
@@ -221,7 +221,7 @@ public static class GraphRendering
         }
 
         // Resize handle small triangular grip in the bottom-right corner. Drawn on
-        // top of the body so it's always visible. The hit-test uses the same 16×16
+        // top of the body so it's always visible. The hit-test uses the same 16x16
         // corner region (see GraphEditorWindow.IsOverStickyResizeHandle).
         float hx1 = x + w, hy1 = y + h;
         float hx0 = hx1 - 14f, hy0 = hy1 - 14f;
@@ -239,7 +239,7 @@ public static class GraphRendering
         canvas.Fill();
     }
 
-    // ─── Nodes ───────────────────────────────────────────────────────────────────────
+    // --- Nodes -----------------------------------------------------------------------
 
     /// <summary>
     /// Dispatch into the node's registered <see cref="NodeRenderer"/> (or the default
@@ -256,12 +256,12 @@ public static class GraphRendering
             .Draw(canvas, graph, node, isSelected, isHovered, hoveredPort, zoom, font);
     }
 
-    // ─── In-progress drag wire (overlay) ─────────────────────────────────────────────
+    // --- In-progress drag wire (overlay) ---------------------------------------------
 
     public static void DrawDragWire(Canvas canvas, Float2 from, Float2 to, Color32 color, float zoom, WireRoutingStyle style = WireRoutingStyle.Bezier)
         => DrawWire(canvas, from, to, color, zoom, thickness: 2.0f, style: style);
 
-    // ─── Marquee selection rectangle ─────────────────────────────────────────────────
+    // --- Marquee selection rectangle -------------------------------------------------
 
     public static void DrawMarquee(Canvas canvas, Rect r, float zoom)
     {

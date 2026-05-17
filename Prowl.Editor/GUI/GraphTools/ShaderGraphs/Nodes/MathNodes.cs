@@ -3,9 +3,9 @@
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Color accent management for math node categories
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 internal static class MathAccents
 {
@@ -14,9 +14,9 @@ internal static class MathAccents
     public static readonly System.Drawing.Color Constant = System.Drawing.Color.FromArgb(255, 130, 90, 160);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // UNARY ARITHMETIC NODES
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class AbsNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -197,9 +197,9 @@ public sealed class Clamp01Node : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderEmit.TypeFromInput(this, "In", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // BINARY ARITHMETIC NODES
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class AddNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -293,9 +293,9 @@ public sealed class StepNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderEmit.TypeFromInputs(this, "Edge", "X", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // TRIGONOMETRY NODES
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class SinNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -368,9 +368,9 @@ public sealed class ArcTan2Node : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderEmit.TypeFromInputs(this, "Y", "X", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // MATH CONSTANT NODES
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class PiNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -422,9 +422,9 @@ public sealed class Root2Node : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // CONSTANT-PARAMETER SIMPLE NODES (baked literal min/max values)
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class ClampSimpleNode : Node, IShaderNode, IShaderGraphNode
 {

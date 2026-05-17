@@ -22,7 +22,7 @@ public sealed class ShaderGraph : Graph
     /// </summary>
     public string ShaderTypeId = "Surface";
 
-    /// <summary>Fixed-function render state emitted into the .shader pass block —
+    /// <summary>Fixed-function render state emitted into the .shader pass block -
     /// blend mode, cull, z-write, z-test, render queue. Lives on the graph asset so the
     /// sidebar can edit it without touching individual nodes. Echo-serialised fields
     /// only; initialised to opaque-lit defaults.</summary>
@@ -97,7 +97,7 @@ public enum ShaderWinding { CW, CCW }
 public enum ShaderZTest { Off, Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always }
 
 /// <summary>Render-queue bucket. Maps to the pass's <c>"RenderOrder"</c> tag
-/// (Opaque → "Opaque", Transparent → "Transparent", etc.). Editor sidebar exposes these
+/// (Opaque -> "Opaque", Transparent -> "Transparent", etc.). Editor sidebar exposes these
 /// as a dropdown so users don't have to remember the string constants.</summary>
 public enum ShaderRenderQueue { Background, Opaque, AlphaTest, Transparent, Overlay }
 
@@ -109,20 +109,20 @@ public enum ShaderRenderQueue { Background, Opaque, AlphaTest, Transparent, Over
 /// </summary>
 public struct ShaderGraphRenderSettings
 {
-    // ── Geometry / depth ─────────────────────────────────────────────────────────────
+    // -- Geometry / depth -------------------------------------------------------------
     public ShaderCullMode     Cull;
     public ShaderWinding      Winding;
     public bool               ZWrite;
     public ShaderZTest        ZTest;
 
-    // ── Blending / queue ─────────────────────────────────────────────────────────────
+    // -- Blending / queue -------------------------------------------------------------
     public ShaderBlendMode    Blend;
     public ShaderBlendFactor  BlendSrc; // only read when Blend == Custom
     public ShaderBlendFactor  BlendDst; // only read when Blend == Custom
     public ShaderBlendOp      BlendOp;  // only read when Blend == Custom
     public ShaderRenderQueue  Queue;
 
-    // ── Lighting interaction (only meaningful for lit modes) ─────────────────────────
+    // -- Lighting interaction (only meaningful for lit modes) -------------------------
 
     /// <summary>When true, the fragment adds CalculateAmbient(...) to the lit colour.
     /// Unlit modes ignore this. Disabling gives pure-direct lighting (useful for

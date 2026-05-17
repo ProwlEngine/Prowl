@@ -8,7 +8,7 @@ using Prowl.Runtime.GraphTools.ShaderGraphs;
 namespace Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 
 /// <summary>
-/// Populates the Create menu from every <see cref="IShaderType"/> in the registry —
+/// Populates the Create menu from every <see cref="IShaderType"/> in the registry -
 /// each type contributes its own list of <see cref="ShaderTypeMenuEntry"/> rows.
 /// Called at editor startup and again after user-script recompile so newly-added
 /// types show up without an editor restart.

@@ -5,9 +5,9 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Shared accent for every "Scene Data" node
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 internal static class SceneAccents
 {
@@ -16,11 +16,11 @@ internal static class SceneAccents
         System.Drawing.Color.FromArgb(255, 200, 160, 120);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // EXTERNAL DATA NODES
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
-// ─── Time ────────────────────────────────────────────────────────────────────
+// --- Time --------------------------------------------------------------------
 
 /// <summary>
 /// Exposes Prowl's per-frame <c>_Time</c> vec4 (from the global uniform buffer).
@@ -86,7 +86,7 @@ public sealed class DeltaTimeNode : Node, IShaderNode, IShaderGraphNode
         => p.Name == "XYZW" ? ShaderType.Vec4 : ShaderType.Float;
 }
 
-// ─── Screen Parameters ────────────────────────────────────────────────────────
+// --- Screen Parameters --------------------------------------------------------
 
 /// <summary>
 /// Exposes <c>_ScreenParams</c>: pixel dimensions + reciprocals.
@@ -128,7 +128,7 @@ public sealed class ScreenParametersNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ─── Projection Parameters ────────────────────────────────────────────────────
+// --- Projection Parameters ----------------------------------------------------
 
 /// <summary>
 /// Exposes <c>_ProjectionParams</c>: projection sign, near/far planes, 1/far.
@@ -173,7 +173,7 @@ public sealed class ProjectionParametersNode : Node, IShaderNode, IShaderGraphNo
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ─── Pixel Size ───────────────────────────────────────────────────────────────
+// --- Pixel Size ---------------------------------------------------------------
 
 /// <summary>
 /// Texel size in UV space computes <c>vec2(1/width, 1/height)</c>.
@@ -212,7 +212,7 @@ public sealed class PixelSizeNode : Node, IShaderNode, IShaderGraphNode
         : ShaderType.Float;
 }
 
-// ─── View Position (Camera World Position) ────────────────────────────────────
+// --- View Position (Camera World Position) ------------------------------------
 
 /// <summary>
 /// World-space camera position: <c>_WorldSpaceCameraPos.xyz</c>.
@@ -251,7 +251,7 @@ public sealed class ViewPositionNode : Node, IShaderNode, IShaderGraphNode
         : ShaderType.Float;
 }
 
-// ─── Fog Color ────────────────────────────────────────────────────────────────
+// --- Fog Color ----------------------------------------------------------------
 
 /// <summary>
 /// Exposes Prowl's global fog colour: <c>_FogColor</c> (vec4, declared in Lighting.glsl).
@@ -294,11 +294,11 @@ public sealed class FogColorNode : Node, IShaderNode, IShaderGraphNode
         : ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // SCENE DATA NODES (depth-buffer / grab-pass access)
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
-// ─── Eye Depth ────────────────────────────────────────────────────────────────
+// --- Eye Depth ----------------------------------------------------------------
 
 /// <summary>
 /// World-distance from the camera to the current fragment.
@@ -336,7 +336,7 @@ public sealed class EyeDepthNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ─── Depth Blend ──────────────────────────────────────────────────────────────
+// --- Depth Blend --------------------------------------------------------------
 
 /// <summary>
 /// Soft-particle depth fade returns a gradient based on how far this fragment
@@ -419,7 +419,7 @@ public sealed class DepthBlendNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ─── Scene Color (Grab Pass) ──────────────────────────────────────────────────
+// --- Scene Color (Grab Pass) --------------------------------------------------
 
 /// <summary>
 /// Samples the grab-pass colour texture.
@@ -433,12 +433,12 @@ public sealed class DepthBlendNode : Node, IShaderNode, IShaderGraphNode
 ///
 ///   A shader-graph node cannot currently inject a pass-level <c>GrabTexture</c>
 ///   directive; that mechanism lives outside the GLSL emission layer.  Therefore:
-///     • This node emits a sample of <c>_GrabTexture</c> (the conventional name
+///     - This node emits a sample of <c>_GrabTexture</c> (the conventional name
 ///       used in the built-in Refraction.shader example).
-///     • The generated shader must have <c>GrabTexture "_GrabTexture"</c> in its
+///     - The generated shader must have <c>GrabTexture "_GrabTexture"</c> in its
 ///       pass block either hand-written or emitted by a future shader-graph
 ///       compiler extension.
-///     • If the pass does NOT declare a grab texture, the uniform will be unbound
+///     - If the pass does NOT declare a grab texture, the uniform will be unbound
 ///       and the sample returns black (vec4(0,0,0,1)).
 ///
 ///   FLAG: Needs a compiler-level pass directive, or the shader-graph emitter must
@@ -518,7 +518,7 @@ public sealed class SceneColorNode : Node, IShaderNode, IShaderGraphNode
     };
 }
 
-// ─── Scene Color Blur (One-Step Mip Blur) ────────────────────────────────────
+// --- Scene Color Blur (One-Step Mip Blur) ------------------------------------
 
 /// <summary>
 /// One-step frosted glass / mip blur using the grab-pass texture with auto-generated mipmaps.
@@ -613,7 +613,7 @@ vec4 _MipBlur(sampler2D tex, vec2 uv, float radius, float mipBias, int steps, ve
     };
 }
 
-// ─── Scene Depth ──────────────────────────────────────────────────────────────
+// --- Scene Depth --------------------------------------------------------------
 
 /// <summary>
 /// Samples the camera's pre-pass depth texture and returns a linearised eye depth.

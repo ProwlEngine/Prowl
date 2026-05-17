@@ -52,12 +52,12 @@ public sealed class GraphCanvasView
         _zoom = graph.ViewportZoom <= 0 ? 1f : graph.ViewportZoom;
     }
 
-    // ─── Coordinate conversion ────────────────────────────────────────────────────────
+    // --- Coordinate conversion --------------------------------------------------------
 
-    /// <summary>Graph-space point → canvas-local pixels (top-left of canvas Box = origin).</summary>
+    /// <summary>Graph-space point -> canvas-local pixels (top-left of canvas Box = origin).</summary>
     public Float2 GraphToCanvas(Float2 graphPos) => graphPos * _zoom + _pan;
 
-    /// <summary>Canvas-local pixels → graph-space point.</summary>
+    /// <summary>Canvas-local pixels -> graph-space point.</summary>
     public Float2 CanvasToGraph(Float2 canvasPos) => (canvasPos - _pan) / _zoom;
 
     /// <summary>
@@ -71,7 +71,7 @@ public sealed class GraphCanvasView
         canvas.TransformBy(Prowl.Vector.Spatial.Transform2D.CreateScale(_zoom, _zoom));
     }
 
-    // ─── View manipulation ────────────────────────────────────────────────────────────
+    // --- View manipulation ------------------------------------------------------------
 
     /// <summary>
     /// Translate the view by a delta in canvas-local pixels (right=positive X, down=positive Y).

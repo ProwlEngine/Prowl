@@ -131,7 +131,7 @@ public static class Undo
     private static readonly List<UndoStep> _undoStack = new();
     private static readonly List<UndoStep> _redoStack = new();
 
-    // Per-frame pending snapshots: target → beforeState (captured at start of draw, before any mutations)
+    // Per-frame pending snapshots: target -> beforeState (captured at start of draw, before any mutations)
     private static readonly Dictionary<object, EchoObject> _pendingSnapshots = new();
 
     // Immediate action records accumulated this frame (RegisterAction calls)
@@ -214,7 +214,7 @@ public static class Undo
     /// <summary>
     /// Records a property change on a GameObject, looking the GO back up by Identifier on undo/redo
     /// so the record survives destroy/recreate cycles. Apply receives the live GO and the value to assign.
-    /// Caller is still responsible for the immediate write — this only registers the undo entry.
+    /// Caller is still responsible for the immediate write - this only registers the undo entry.
     /// </summary>
     public static void RecordGameObjectChange<T>(GameObject go, string description, T oldValue, T newValue, Action<GameObject, T> apply, bool coalesce = false)
     {

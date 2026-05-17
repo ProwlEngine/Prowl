@@ -38,7 +38,7 @@ public sealed class MasterOutputValidator : GraphValidator
             return;
         }
 
-        // Exactly one master. Confirm it's the one the graph's shader type expects —
+        // Exactly one master. Confirm it's the one the graph's shader type expects -
         // otherwise the compiler won't find it and produces the stub shader.
         if (graph is ShaderGraph sg && first != null)
         {

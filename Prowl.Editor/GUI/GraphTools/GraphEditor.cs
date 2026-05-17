@@ -66,7 +66,7 @@ public class GraphEditor
     /// <summary>Latest canvas-Box screen rect captured during draw used by input handlers.</summary>
     private Rect _canvasScreenRect;
 
-    // ─── Interaction state ────────────────────────────────────────────────────────────
+    // --- Interaction state ------------------------------------------------------------
     private enum DragMode { None, MoveNodes, ResizeNode, MoveStickyNotes, ResizeStickyNote, MoveGroup, ResizeGroup, MarqueeSelect, ConnectingWire }
     private DragMode _dragMode = DragMode.None;
 
@@ -203,7 +203,7 @@ public class GraphEditor
     private Guid? _activeGroup;
     private Float2 _groupDragStartPos;
     private Float2 _groupDragStartSize;
-    /// <summary>Start positions of every node that was inside the group at drag-start —
+    /// <summary>Start positions of every node that was inside the group at drag-start -
     /// moving the group translates all of them so the group + contents move as a unit.</summary>
     private Dictionary<Guid, Float2>? _groupContainedNodeStartPositions;
     private Dictionary<Guid, Float2>? _groupContainedStickyStartPositions;
@@ -390,7 +390,7 @@ public class GraphEditor
 
         // Shortcuts only active while the canvas is hovered (so they don't steal typing
         // in the Inspector / blackboard). All IDs are registered in BuiltInShortcuts.
-        // Undo/Redo are handled globally (Global/Undo, Global/Redo) → Editor.Undo.
+        // Undo/Redo are handled globally (Global/Undo, Global/Redo) -> Editor.Undo.
         // Mutations below register via Undo.RegisterAction so global Ctrl+Z reaches them.
         if (ShortcutManager.IsPressed("GraphEditor/Delete"))
             DeleteSelected();
@@ -419,7 +419,7 @@ public class GraphEditor
             _dragWireEndGraph = ScreenToGraph(paper.PointerPos);
     }
 
-    // ─── Hit-testing ──────────────────────────────────────────────────────────────────
+    // --- Hit-testing ------------------------------------------------------------------
     /// <summary>
     /// Find the topmost node containing <paramref name="graphPoint"/>, or null. Iterates
     /// in reverse order because later list entries draw on top last hit wins visually,
@@ -541,8 +541,8 @@ public class GraphEditor
         return null;
     }
 
-    // ─── Toolbar ──────────────────────────────────────────────────────────────────────
-    /// <summary>Cycle the graph's wire routing style through Bezier → Linear →
+    // --- Toolbar ----------------------------------------------------------------------
+    /// <summary>Cycle the graph's wire routing style through Bezier -> Linear ->
     /// Rectilinear. Exposed publicly so host panels can bind a toolbar button.</summary>
     public void CycleWireStyle()
     {
@@ -583,7 +583,7 @@ public class GraphEditor
     }
 
 
-    // ─── Node creation popup ─────────────────────────────────────────────────────────
+    // --- Node creation popup ---------------------------------------------------------
     private void DrawNodeCreationPopup(Paper paper)
     {
         if (_graph == null) return;
@@ -834,7 +834,7 @@ public class GraphEditor
             redo: () => { foreach (var e in removed) graph.Edges.Remove(e); });
     }
 
-    /// <summary>Top-level token of a Category path "Math/Trig" → "Math", "" → "Misc".
+    /// <summary>Top-level token of a Category path "Math/Trig" -> "Math", "" -> "Misc".
     /// Used to group node-creation entries under collapsible headers.</summary>
     private static string TopLevelCategory(string category)
     {
@@ -914,12 +914,12 @@ public class GraphEditor
             || reg.Category.Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ─── Canvas ───────────────────────────────────────────────────────────────────────
+    // --- Canvas -----------------------------------------------------------------------
     private void DrawCanvas(Paper paper, Prowl.Scribe.FontFile font)
     {
         // Single canvas Box owns the viewport, its events, and its full draw via
-        // OnPostLayout → paper.Draw → RenderCanvas. Everything (grid, groups, nodes,
-        // wires, drag-overlay, marquee, minimap) is drawn through Quill in one pass —
+        // OnPostLayout -> paper.Draw -> RenderCanvas. Everything (grid, groups, nodes,
+        // wires, drag-overlay, marquee, minimap) is drawn through Quill in one pass -
         // no per-node Paper boxes.
         using (paper.Box("graph_canvas")
             .Width(UnitValue.Stretch())
@@ -1080,12 +1080,12 @@ public class GraphEditor
         MinimapRenderer.Draw(canvas, screenRect, _graph, _view);
     }
 
-    // ─── Input handling ──────────────────────────────────────────────────────────────
+    // --- Input handling --------------------------------------------------------------
 
     private void HandleScroll(ScrollEvent e)
     {
         if (_view == null) return;
-        // Scroll up = zoom in. e.Delta is typically ±1; raised to a smooth factor.
+        // Scroll up = zoom in. e.Delta is typically +/-1; raised to a smooth factor.
         float factor = e.Delta > 0 ? GraphCanvasView.ZoomStep : 1.0f / GraphCanvasView.ZoomStep;
         // ElementEvent.RelativePosition is already mouse-relative-to-element-top-left,
         // i.e. our canvas-local pixel space. Anchor zoom to cursor.
@@ -1290,7 +1290,7 @@ public class GraphEditor
 
     /// <summary>
     /// Alt+click on a wire: insert a <see cref="RelayNode"/> at <paramref name="splitAt"/>
-    /// and reconnect src→relay→dst. Registered as one undo step.
+    /// and reconnect src->relay->dst. Registered as one undo step.
     /// </summary>
     private void SplitWireWithRelay(Edge edge, Float2 splitAt)
     {
@@ -1302,7 +1302,7 @@ public class GraphEditor
         if (srcPort == null) return;
 
         // Build the relay typed to match the wire's data type. Position it so its centre
-        // lands on the split point (the renderer's rect is 28×20).
+        // lands on the split point (the renderer's rect is 28x20).
         var relay = new RelayNode
         {
             CarriedTypeName = srcPort.DataType.AssemblyQualifiedName ?? typeof(object).AssemblyQualifiedName!,
@@ -1384,7 +1384,7 @@ public class GraphEditor
                 return;
             }
 
-            // Left-click on a node → drag-move it (and any other selected nodes).
+            // Left-click on a node -> drag-move it (and any other selected nodes).
             var hit = HitTestNode(graphPoint);
             if (hit != null)
             {
@@ -1490,7 +1490,7 @@ public class GraphEditor
                 return;
             }
 
-            // Left-click on empty space → marquee select.
+            // Left-click on empty space -> marquee select.
             _dragMode = DragMode.MarqueeSelect;
             _marqueeStartGraph = graphPoint;
             _marqueeEndGraph = graphPoint;
@@ -1621,7 +1621,7 @@ public class GraphEditor
                     // Absolute positioning: each node = its drag-start position plus
                     // the cursor's graph-space displacement since drag-start. Computing
                     // from absolutes every frame means snapping can be re-evaluated
-                    // against the *intended* position instead of accumulating shifts —
+                    // against the *intended* position instead of accumulating shifts -
                     // when the user moves the cursor past the snap tolerance, the node
                     // pulls away cleanly instead of re-snapping.
                     if (_dragMoveStartPositions == null) break;
@@ -1650,7 +1650,7 @@ public class GraphEditor
 
     private void HandleDragEnd(DragEvent e)
     {
-        // If a node-move drag is ending, register the start→end positions as a single
+        // If a node-move drag is ending, register the start->end positions as a single
         // undo step (only if anything actually moved).
         if (_dragMode == DragMode.MoveNodes && _dragMoveStartPositions != null && _graph != null)
         {
@@ -1674,7 +1674,7 @@ public class GraphEditor
             _dragMoveStartPositions = null;
         }
 
-        // Resizable-node drag → one undo step.
+        // Resizable-node drag -> one undo step.
         if (_dragMode == DragMode.ResizeNode && _resizingNode.HasValue && _graph != null)
         {
             var graph = _graph;
@@ -1691,7 +1691,7 @@ public class GraphEditor
             _resizingNode = null;
         }
 
-        // Sticky note move/resize → one undo step per drag.
+        // Sticky note move/resize -> one undo step per drag.
         if (_dragMode == DragMode.MoveStickyNotes && _dragStickyStartPositions != null && _graph != null)
         {
             var graph = _graph;
@@ -1833,7 +1833,7 @@ public class GraphEditor
             bool connected = TryFinaliseConnection(graphPoint);
             if (!connected)
             {
-                // Drop on empty space → open creation popup filtered to compatible nodes.
+                // Drop on empty space -> open creation popup filtered to compatible nodes.
                 // Wire state is intentionally NOT cleared here so the in-progress wire keeps
                 // rendering while the popup is open; SpawnNode / popup-close will clear it.
                 _creationMenuOpen = true;
@@ -1873,7 +1873,7 @@ public class GraphEditor
     }
 
     /// <summary>
-    /// Core connect routine: validates direction (output→input auto-flipped),
+    /// Core connect routine: validates direction (output->input auto-flipped),
     /// node mismatch, type compatibility; replaces any existing edge on a
     /// single-connection input. Returns true if a wire was created.
     /// </summary>
@@ -1885,7 +1885,7 @@ public class GraphEditor
         if (targetNode.Id == source.NodeId) return false;
         if (targetPort.Direction == source.Direction) return false;
 
-        // Canonicalise to output → input.
+        // Canonicalise to output -> input.
         Guid outNodeId, inNodeId;
         string outPortName, inPortName;
         Port outPort, inPort;
@@ -1963,7 +1963,7 @@ public class GraphEditor
         return new Rect(minX, minY, maxX, maxY);
     }
 
-    // ─── Alignment snap ──────────────────────────────────────────────────────────────
+    // --- Alignment snap --------------------------------------------------------------
     // When Shift is held during a node drag, the primary (most-recently-picked) node's
     // left/centre/right and top/mid/bottom edges look for matches on every other node's
     // edges within a screen-pixel tolerance. If a match is found, the whole selection
@@ -2117,7 +2117,7 @@ public class GraphEditor
         return false;
     }
 
-    /// <summary>Standard segment-vs-segment intersection test (proper crossing only —
+    /// <summary>Standard segment-vs-segment intersection test (proper crossing only -
     /// touching endpoints don't count as a hit).</summary>
     private static bool SegmentsIntersect(Float2 a1, Float2 a2, Float2 b1, Float2 b2)
     {
@@ -2268,7 +2268,7 @@ public class GraphEditor
         return _view!.CanvasToGraph(canvasLocal);
     }
 
-    // ─── Clipboard & selection ops ───────────────────────────────────────────────────
+    // --- Clipboard & selection ops ---------------------------------------------------
     // Serialize selected nodes (and the edges entirely within the selection) to the OS
     // clipboard as Echo text, same pattern as GameObjectClipboard so graph copies survive
     // across editor sessions and can be inspected as plain text.
@@ -2333,7 +2333,7 @@ public class GraphEditor
         if (nodesEcho == null || nodesEcho.TagType != EchoType.List) return;
 
         var added = new List<Node>();
-        var idMap = new Dictionary<Guid, Guid>(); // old id → new id
+        var idMap = new Dictionary<Guid, Guid>(); // old id -> new id
         Float2 bboxMin = new Float2(float.MaxValue), bboxMax = new Float2(float.MinValue);
 
         foreach (var item in nodesEcho.List)
@@ -2510,7 +2510,7 @@ public class GraphEditor
         _view.FrameBounds(min, max, size);
     }
 
-    // ─── Toolbar actions ─────────────────────────────────────────────────────────────
+    // --- Toolbar actions -------------------------------------------------------------
     /// <summary>Reset pan and zoom so the graph's contents are centered on screen
     /// at 100% zoom. Exposed publicly so host toolbars can bind a "Recenter" button.</summary>
     public void RecenterView()

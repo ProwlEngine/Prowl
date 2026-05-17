@@ -50,7 +50,7 @@ public sealed class GrassShaderType : IShaderType
         graph.ShaderTypeId = TypeId;
         graph.RenderSettings = DefaultRenderSettings;
 
-        // Seed with a master that defaults to Lambert + terrain alignment on —
+        // Seed with a master that defaults to Lambert + terrain alignment on -
         // grass looks convincing straight out of the box, users then wire a texture
         // into Albedo + connect TerrainNormal to Normal for real shading.
         var master = new GrassMasterNode { Position = new Float2(560, 160) };

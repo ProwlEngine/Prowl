@@ -17,7 +17,7 @@ internal static class LightingAccents
         System.Drawing.Color.FromArgb(255, 240, 200, 80); // warm yellow
 }
 
-// ─── Ambient ──────────────────────────────────────────────────────────────────────
+// --- Ambient ----------------------------------------------------------------------
 // Three exposed terms: flat _AmbientColor + hemisphere sky / ground. _AmbientStrength
 // scales the whole lot. Matches the runtime path (Lighting.glsl::CalculateAmbient).
 
@@ -119,7 +119,7 @@ public sealed class AmbientStrengthNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ─── Directional light accessors ──────────────────────────────────────────────────
+// --- Directional light accessors --------------------------------------------------
 // The scene's single directional light has stable per-frame uniforms, so the graph can
 // reference its parameters directly. Every node here is "Directional" in name to make it
 // unambiguous which light the graph is reading.
@@ -152,10 +152,10 @@ public sealed class DirectionalLightIntensityNode : Node, IShaderNode, IShaderGr
 }
 
 /// <summary>RGB colour of the scene's directional light. Toggle <c>IncludeIntensity</c>
-/// to get colour × intensity (physically correct radiance) or the raw colour.</summary>
+/// to get colour x intensity (physically correct radiance) or the raw colour.</summary>
 public sealed class DirectionalLightColorNode : Node, IShaderNode, IShaderGraphNode
 {
-    /// <summary>When true, output = color × intensity (irradiance). When false, the raw
+    /// <summary>When true, output = color x intensity (irradiance). When false, the raw
     /// colour is returned and the user multiplies by intensity themselves.</summary>
     public bool IncludeIntensity = true;
 
@@ -266,7 +266,7 @@ public sealed class DirectionalShadowFactorNode : Node, IShaderNode, IShaderGrap
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ─── Fog ──────────────────────────────────────────────────────────────────────────
+// --- Fog --------------------------------------------------------------------------
 // Scene Data already exposes FogColor; here we add the params so authors doing custom
 // fog math have access to density / linear start-end.
 

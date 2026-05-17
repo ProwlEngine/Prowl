@@ -17,7 +17,7 @@ namespace Prowl.Editor.GraphTools;
 /// </summary>
 public sealed class DefaultNodeRenderer : NodeRenderer
 {
-    // ─── Palette ─────────────────────────────────────────────────────────────────────
+    // --- Palette ---------------------------------------------------------------------
     private static readonly Color32 NodeBody      = new Color32(50, 53, 62, 255);
     private static readonly Color32 NodeBodyHover = new Color32(58, 62, 72, 255);
     private static readonly Color32 NodeBorder    = new Color32(20, 22, 28, 255);

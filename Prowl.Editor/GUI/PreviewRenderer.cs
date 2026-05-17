@@ -262,7 +262,7 @@ public class PreviewRenderer : IDisposable
     {
         _orbitTarget = bounds.Center;
         float maxDim = MathF.Max(MathF.Max(bounds.Size.X, bounds.Size.Y), bounds.Size.Z);
-        // For FOV 35°, distance to fit a unit object ≈ 1.7
+        // For FOV 35 deg, distance to fit a unit object ~ 1.7
         _orbitDistance = MathF.Max(0.5f, maxDim * 1.7f);
         UpdateCameraPosition();
     }

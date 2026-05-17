@@ -6,9 +6,9 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Shared accent colour for all UV-operation nodes
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 internal static class UVAccents
 {
@@ -16,7 +16,7 @@ internal static class UVAccents
     public static readonly System.Drawing.Color UV = System.Drawing.Color.FromArgb(255, 180, 220, 100);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // PANNER
 // Standard panning implementation for UV scrolling.
 //
@@ -27,7 +27,7 @@ internal static class UVAccents
 // Prowl GLSL mapping:
 //   output = uv + dist * vec2(speedU, speedV)
 // _Time.y == elapsed seconds in Prowl's GlobalUniforms (ShaderVariables.glsl).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Scrolls UV coordinates over time (or by a supplied distance scalar).
@@ -40,7 +40,7 @@ internal static class UVAccents
 /// </remarks>
 public sealed class PannerNode : Node, IShaderNode, IShaderGraphNode
 {
-    // ── Per-node settings (serialised by Echo as public fields) ──────────────
+    // -- Per-node settings (serialised by Echo as public fields) --------------
 
     /// <summary>Scroll speed along the U axis (world-time units per second).</summary>
     public float SpeedU = 1f;
@@ -48,13 +48,13 @@ public sealed class PannerNode : Node, IShaderNode, IShaderGraphNode
     /// <summary>Scroll speed along the V axis (world-time units per second).</summary>
     public float SpeedV = 0f;
 
-    // ── Node identity ─────────────────────────────────────────────────────────
+    // -- Node identity ---------------------------------------------------------
 
     public override string Title => "Panner";
     public override string Category => "UV";
     public override System.Drawing.Color AccentColor => UVAccents.UV;
 
-    // ── Port layout ───────────────────────────────────────────────────────────
+    // -- Port layout -----------------------------------------------------------
 
     protected override void DefineNode()
     {
@@ -63,7 +63,7 @@ public sealed class PannerNode : Node, IShaderNode, IShaderGraphNode
         AddOutput<Float2>("Out");
     }
 
-    // ── GLSL emission ─────────────────────────────────────────────────────────
+    // -- GLSL emission ---------------------------------------------------------
 
     string IShaderNode.Evaluate(Port p, ShaderStage stage, ShaderGenContext ctx)
     {
@@ -102,7 +102,7 @@ public sealed class PannerNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec2;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // PARALLAX
 // Cheap offset parallax (per-fragment UV shift). For true silhouette-preserving
 // parallax, use ParallaxOcclusionNode below.
@@ -111,7 +111,7 @@ public sealed class PannerNode : Node, IShaderNode, IShaderGraphNode
 // The tangent-space view direction is computed automatically from the vertex
 // varyings via Lighting.glsl's GetTangentViewDir helper the user doesn't have
 // to build the TBN themselves.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Offsets UV coordinates by a height-driven amount along the tangent-space view
@@ -174,7 +174,7 @@ public sealed class ParallaxNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec2;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ROTATOR
 // Standard UV rotation implementation.
 //
@@ -193,7 +193,7 @@ public sealed class ParallaxNode : Node, IShaderNode, IShaderGraphNode
 // Equivalently we can write:
 //   mat2(cosV, sinV, -sinV, cosV) * (uv - piv) + piv
 // (matrix * column-vector is the GLSL idiom).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Rotates UV coordinates around a pivot point by a given angle (in radians).
@@ -261,7 +261,7 @@ public sealed class RotatorNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec2;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // UV TILE
 // Standard UV tiling for sprite sheets and flipbooks.
 //
@@ -273,7 +273,7 @@ public sealed class RotatorNode : Node, IShaderNode, IShaderGraphNode
 //
 // The Tile index is 0-based, row-major (left-to-right then top-to-bottom)
 // matching a sprite-sheet layout.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Selects a single cell from a sprite-sheet / flipbook texture by remapping
@@ -417,14 +417,14 @@ public sealed class UVTileNode : Node, IShaderNode, IShaderGraphNode
     };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // PARALLAX OCCLUSION MAPPING
 // Real POM using Prowl's ParallaxOcclusionMapping helper (PBR.glsl) ray-march
 // + secant refinement. Samples a height texture along the tangent-space view
 // direction and returns the displaced UV. Much more expensive but far more
 // accurate than the simple ParallaxNode above use this when you need
 // silhouette-preserving depth on close-up surfaces.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Height-texture-driven parallax occlusion mapping. Returns the displaced UV

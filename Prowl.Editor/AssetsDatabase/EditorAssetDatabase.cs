@@ -163,7 +163,7 @@ public class EditorAssetDatabase : IAssetDatabase
             if (importer != null && importer.Version != entry.ImporterVersion)
             {
                 // Cache is stale importer was updated since last import
-                Runtime.Debug.Log($"Cache stale for '{entry.Path}': importer v{entry.ImporterVersion} → v{importer.Version}. Reimporting.");
+                Runtime.Debug.Log($"Cache stale for '{entry.Path}': importer v{entry.ImporterVersion} -> v{importer.Version}. Reimporting.");
                 entry.NeedsReimport = true;
                 RunImport(entry);
                 return _loadedAssets.GetValueOrDefault(assetId);
@@ -425,7 +425,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         // If the entry's ImporterType doesn't resolve (stale entry from before an
         // importer was registered), retry with the extension-based lookup. Common
-        // case: asset created before its importer existed → stuck on DefaultImporter.
+        // case: asset created before its importer existed -> stuck on DefaultImporter.
         var resolved = ImporterRegistry.CreateByTypeName(entry.ImporterType);
         if (resolved == null)
         {
@@ -433,7 +433,7 @@ public class EditorAssetDatabase : IAssetDatabase
             string freshName = ImporterRegistry.GetImporterTypeName(ext);
             if (freshName != entry.ImporterType)
             {
-                Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' → '{freshName}'");
+                Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' -> '{freshName}'");
                 entry.ImporterType = freshName;
                 resolved = ImporterRegistry.CreateByTypeName(freshName);
             }
@@ -841,7 +841,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 try { File.Move(newAbsolute, oldAbsolute); }
                 catch { /* best effort rollback */ }
             }
-            Runtime.Debug.LogError($"Failed to move asset '{oldRelativePath}' → '{newRelativePath}': {ex.Message}");
+            Runtime.Debug.LogError($"Failed to move asset '{oldRelativePath}' -> '{newRelativePath}': {ex.Message}");
             return false;
         }
 
@@ -926,7 +926,7 @@ public class EditorAssetDatabase : IAssetDatabase
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Failed to move folder '{oldRelativeFolder}' → '{newRelativeFolder}': {ex.Message}");
+            Runtime.Debug.LogError($"Failed to move folder '{oldRelativeFolder}' -> '{newRelativeFolder}': {ex.Message}");
             return false;
         }
 

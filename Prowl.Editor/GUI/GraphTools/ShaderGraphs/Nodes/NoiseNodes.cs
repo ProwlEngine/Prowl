@@ -2,7 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 //
 // Noise nodes thin wrappers over FastNoiseLite.glsl (Jordan Peck's library,
-// MIT-licensed, embedded as a default include). Each algorithm × dimension
+// MIT-licensed, embedded as a default include). Each algorithm x dimension
 // combination is its own concrete node so the browser lists real names instead
 // of dropdown-buried variants, and port shapes are fixed per node (no dynamic
 // hiding DefineNode only runs on creation, so toggling an enum wouldn't
@@ -129,9 +129,9 @@ internal static class NoiseEmit
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Base classes 2D and 3D scalar-output noise
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>Shared base for 2D scalar-output noise nodes (Perlin / Simplex / Value /
 /// Value Cubic / Simplex Smooth). Subclasses supply the FNL noise-type macro and
@@ -152,7 +152,7 @@ public abstract class Noise2DNodeBase : Node, IShaderNode, IShaderGraphNode
 
     public override string Title => Fractal == NoiseFractal.None
         ? $"{DisplayName} 2D"
-        : $"{DisplayName} 2D · {Fractal}";
+        : $"{DisplayName} 2D * {Fractal}";
     public override string Category => "Noise";
     public override System.Drawing.Color AccentColor => NoiseAccents.Noise;
 
@@ -213,7 +213,7 @@ public abstract class Noise3DNodeBase : Node, IShaderNode, IShaderGraphNode
 
     public override string Title => Fractal == NoiseFractal.None
         ? $"{DisplayName} 3D"
-        : $"{DisplayName} 3D · {Fractal}";
+        : $"{DisplayName} 3D * {Fractal}";
     public override string Category => "Noise";
     public override System.Drawing.Color AccentColor => NoiseAccents.Noise;
 
@@ -257,9 +257,9 @@ public abstract class Noise3DNodeBase : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Concrete scalar-output noise nodes (5 algorithms × 2 dimensions = 10)
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+// Concrete scalar-output noise nodes (5 algorithms x 2 dimensions = 10)
+// =============================================================================
 
 // Perlin classic grid-aligned gradient noise. Cheap, widely recognised.
 public sealed class PerlinNoise2DNode : Noise2DNodeBase { protected override string NoiseTypeMacro => "FNL_NOISE_PERLIN"; protected override string DisplayName => "Perlin"; }
@@ -281,9 +281,9 @@ public sealed class ValueNoise3DNode : Noise3DNodeBase { protected override stri
 public sealed class ValueCubicNoise2DNode : Noise2DNodeBase { protected override string NoiseTypeMacro => "FNL_NOISE_VALUE_CUBIC"; protected override string DisplayName => "Value Cubic"; }
 public sealed class ValueCubicNoise3DNode : Noise3DNodeBase { protected override string NoiseTypeMacro => "FNL_NOISE_VALUE_CUBIC"; protected override string DisplayName => "Value Cubic"; }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Cellular / Voronoi 2D and 3D variants
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>2D cellular / Voronoi noise. Output is a scalar CellValue is a
 /// per-cell hash, distance-based modes return a distance metric.</summary>
@@ -298,7 +298,7 @@ public sealed class CellularNoise2DNode : Node, IShaderNode, IShaderGraphNode
     public float Lacunarity = 2f;
     public float Gain       = 0.5f;
 
-    public override string Title => $"Cellular 2D · {ReturnType}";
+    public override string Title => $"Cellular 2D * {ReturnType}";
     public override string Category => "Noise";
     public override System.Drawing.Color AccentColor => NoiseAccents.Noise;
 
@@ -359,7 +359,7 @@ public sealed class CellularNoise3DNode : Node, IShaderNode, IShaderGraphNode
     public float Lacunarity = 2f;
     public float Gain       = 0.5f;
 
-    public override string Title => $"Cellular 3D · {ReturnType}";
+    public override string Title => $"Cellular 3D * {ReturnType}";
     public override string Category => "Noise";
     public override System.Drawing.Color AccentColor => NoiseAccents.Noise;
 
@@ -408,9 +408,9 @@ public sealed class CellularNoise3DNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Domain Warp 2D and 3D variants
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>Noise-displaces a 2D coord, producing a "swirled" vec2 suitable for
 /// feeding into another noise sampler.</summary>
@@ -425,8 +425,8 @@ public sealed class DomainWarp2DNode : Node, IShaderNode, IShaderGraphNode
     public float Gain       = 0.5f;
 
     public override string Title => Fractal == DomainWarpFractal.None
-        ? $"Domain Warp 2D · {WarpType}"
-        : $"Domain Warp 2D · {WarpType} · {Fractal}";
+        ? $"Domain Warp 2D * {WarpType}"
+        : $"Domain Warp 2D * {WarpType} * {Fractal}";
     public override string Category => "Noise";
     public override System.Drawing.Color AccentColor => NoiseAccents.Noise;
 
@@ -486,12 +486,12 @@ public sealed class DomainWarp2DNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec2;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // Simplex 4D Ashima / Stefan Gustavson, via SimplexNoise4D.glsl
 // FastNoiseLite doesn't ship a 4D variant, so we link in the Ashima port. Useful
 // when you want seamless animated 3D noise (feed time into the W channel) or
 // cyclic 2D noise (feed sin/cos of an angle into Z/W).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// 4D simplex noise, backed by Ashima Arts' <c>snoise(vec4)</c> from
@@ -555,8 +555,8 @@ public sealed class DomainWarp3DNode : Node, IShaderNode, IShaderGraphNode
     public float Gain       = 0.5f;
 
     public override string Title => Fractal == DomainWarpFractal.None
-        ? $"Domain Warp 3D · {WarpType}"
-        : $"Domain Warp 3D · {WarpType} · {Fractal}";
+        ? $"Domain Warp 3D * {WarpType}"
+        : $"Domain Warp 3D * {WarpType} * {Fractal}";
     public override string Category => "Noise";
     public override System.Drawing.Color AccentColor => NoiseAccents.Noise;
 

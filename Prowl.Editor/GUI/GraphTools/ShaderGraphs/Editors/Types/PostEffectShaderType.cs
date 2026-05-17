@@ -39,7 +39,7 @@ public sealed class PostEffectShaderType : IShaderType
         graph.ShaderTypeId = TypeId;
         graph.RenderSettings = DefaultRenderSettings;
 
-        // Seed a working passthrough: SceneColor → master.Color.
+        // Seed a working passthrough: SceneColor -> master.Color.
         // User replaces the intermediate path with their effect math.
         var master = new PostEffectMasterNode { Position = new Float2(500, 120) };
         graph.AddNode(master);
@@ -98,7 +98,7 @@ internal sealed class PostEffectPass : IShaderPass
         sb.AppendLine("    GLSLPROGRAM");
         sb.AppendLine();
 
-        // ─ Vertex (static, fullscreen quad pass-through) ─
+        // - Vertex (static, fullscreen quad pass-through) -
         sb.AppendLine("    Vertex");
         sb.AppendLine("    {");
         sb.AppendLine("        layout (location = 0) in vec3 vertexPosition;");
@@ -113,7 +113,7 @@ internal sealed class PostEffectPass : IShaderPass
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        // ─ Fragment ─
+        // - Fragment -
         sb.AppendLine("    Fragment");
         sb.AppendLine("    {");
         foreach (var d in fragCtx.Defines)    sb.AppendLine($"        #define {d}");

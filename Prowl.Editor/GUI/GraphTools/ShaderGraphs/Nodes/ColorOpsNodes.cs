@@ -7,16 +7,16 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Shared accent colour for all Color nodes
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 internal static class ColorAccents
 {
     public static readonly System.Drawing.Color Color = System.Drawing.Color.FromArgb(255, 220, 120, 200); /* pink */
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // HUE NODE
 //
 // HLSL formula (Evaluate):
@@ -25,13 +25,13 @@ internal static class ColorAccents
 // GLSL translation:
 //   clamp(3.0*abs(1.0 - 2.0*fract(h + vec3(0.0, -1.0/3.0, 1.0/3.0))) - 1.0, 0.0, 1.0)
 //
-// HLSL→GLSL mapping used throughout this file:
-//   frac(x)      → fract(x)
-//   saturate(x)  → clamp(x, 0.0, 1.0)
-//   lerp(a,b,t)  → mix(a, b, t)
-//   float3(...)  → vec3(...)
-//   float4(...)  → vec4(...)
-// ═════════════════════════════════════════════════════════════════════════════
+// HLSL->GLSL mapping used throughout this file:
+//   frac(x)      -> fract(x)
+//   saturate(x)  -> clamp(x, 0.0, 1.0)
+//   lerp(a,b,t)  -> mix(a, b, t)
+//   float3(...)  -> vec3(...)
+//   float4(...)  -> vec4(...)
+// =============================================================================
 
 /// <summary>
 /// Converts a scalar hue value (0..1) to an RGB colour on the hue wheel.
@@ -61,15 +61,15 @@ public sealed class HueNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// HSV → RGB NODE
+// =============================================================================
+// HSV -> RGB NODE
 //
 // HLSL formula (Evaluate):
 //   (lerp(float3(1,1,1), saturate(3.0*abs(1.0-2.0*frac(h+float3(0.0,-1.0/3.0,1.0/3.0)))-1), s) * v)
 //
 // GLSL translation:
 //   mix(vec3(1.0), clamp(3.0*abs(1.0-2.0*fract(h+vec3(0.0,-1.0/3.0,1.0/3.0)))-1.0,0.0,1.0), s) * v
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Converts Hue/Saturation/Value components to an RGB colour vector.
@@ -104,8 +104,8 @@ public sealed class HsvToRgbNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// RGB → HSV NODE
+// =============================================================================
+// RGB -> HSV NODE
 //
 // Uses a multi-output node (Hue, Sat, Val) with precomputed temp variables.
 // The algorithm (Evan Wallace / IQ) works as:
@@ -118,7 +118,7 @@ public sealed class HsvToRgbNode : Node, IShaderNode, IShaderGraphNode
 //
 // Three output ports ("Hue", "Sat", "Val") use a BodyPrelude temp vec3 so the
 // computation runs once regardless of how many outputs are consumed downstream.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Converts an RGB colour to its Hue, Saturation, and Value (HSV) components.
@@ -189,14 +189,14 @@ public sealed class RgbToHsvNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // PHOTOSHOP BLEND MODE ENUM
 // Values 4 (DarkerColor), 9 (LighterColor), and 11 (SoftLight) are intentionally
 // omitted (reserved for compatibility).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
-/// Photoshop-style layer blend modes (Darken=0 … Divide=20).
+/// Photoshop-style layer blend modes (Darken=0 ... Divide=20).
 /// </summary>
 public enum PhotoshopBlendMode
 {
@@ -223,7 +223,7 @@ public enum PhotoshopBlendMode
     Divide      = 20,
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // BLEND NODE
 //
 // Inputs: Src (base layer), Dst (blend layer), both dynamic vector type.
@@ -232,7 +232,7 @@ public enum PhotoshopBlendMode
 //
 // GLSL formulas use standard Photoshop blend mode definitions.
 // Ternary ?: operator is valid GLSL 1.30+ (used for Overlay/HardLight/etc.).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Blends two colour/vector layers using a Photoshop-style blend mode.
@@ -302,28 +302,28 @@ public sealed class BlendNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx)
         => ShaderEmit.TypeFromInputs(this, "Src", "Dst", ctx);
 
-    // ─── GLSL blend formulas ─────────────────────────────────────────────────
+    // --- GLSL blend formulas -------------------------------------------------
     // Standard Photoshop blend mode definitions in GLSL.
     // a = Src (base), b = Dst (blend layer).
 
     private static string BlendGlsl(string a, string b, PhotoshopBlendMode mode) => mode switch
     {
-        // Darken / Multiply family ──────────────────────────────────────────
+        // Darken / Multiply family ------------------------------------------
         PhotoshopBlendMode.Darken      => $"min({a}, {b})",
         PhotoshopBlendMode.Multiply    => $"({a} * {b})",
         PhotoshopBlendMode.ColorBurn   => $"(1.0 - ((1.0 - {b}) / {a}))",
         PhotoshopBlendMode.LinearBurn  => $"({a} + {b} - 1.0)",
 
-        // Lighten / Dodge family ────────────────────────────────────────────
+        // Lighten / Dodge family --------------------------------------------
         PhotoshopBlendMode.Lighten     => $"max({a}, {b})",
         PhotoshopBlendMode.Screen      => $"(1.0 - (1.0 - {a}) * (1.0 - {b}))",
         PhotoshopBlendMode.ColorDodge  => $"({b} / (1.0 - {a}))",
         PhotoshopBlendMode.LinearDodge => $"({a} + {b})",
 
-        // Overlay / Light family ────────────────────────────────────────────
+        // Overlay / Light family --------------------------------------------
         // mix(F, T, step(0.5, x)) instead of `(x > 0.5) ? T : F` so the
         // formulas evaluate per-component on vectors (vec3/vec4). The bool
-        // form would emit a bvec → ternary, which is not legal GLSL; this
+        // form would emit a bvec -> ternary, which is not legal GLSL; this
         // version compiles for both float and vector inputs and produces the
         // same scalar result as the original.
         PhotoshopBlendMode.Overlay =>
@@ -339,7 +339,7 @@ public sealed class BlendNode : Node, IShaderNode, IShaderGraphNode
         PhotoshopBlendMode.HardMix =>
             $"round(0.5 * ({a} + {b}))",
 
-        // Difference / Exclusion family ─────────────────────────────────────
+        // Difference / Exclusion family -------------------------------------
         PhotoshopBlendMode.Difference  => $"abs({a} - {b})",
         PhotoshopBlendMode.Exclusion   => $"(0.5 - 2.0*({a} - 0.5)*({b} - 0.5))",
         PhotoshopBlendMode.Subtract    => $"({b} - {a})",
@@ -350,7 +350,7 @@ public sealed class BlendNode : Node, IShaderNode, IShaderGraphNode
     };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // BLEND OVER NODE
 //
 // Inputs: Top (foreground, vec4), Bottom (background, vec4).
@@ -367,7 +367,7 @@ public sealed class BlendNode : Node, IShaderNode, IShaderGraphNode
 //   out = vec4(rgb, a)
 //
 // GammaCorrect is a per-node bool toggle for gamma-corrected blending.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Composites a foreground layer (Top) over a background layer (Bottom) using
@@ -436,12 +436,12 @@ public sealed class BlendOverNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec4;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // LUMINANCE
 // Rec. 709 perceptual brightness via Fragment.glsl's luminance(vec3). Returns
 // a single float DesaturateNode inlines the same coefficients but its output
 // is a vec3 mix; this node is the canonical "how bright is this pixel" probe.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Rec. 709 luminance of an RGB colour single float, weights
@@ -470,13 +470,13 @@ public sealed class LuminanceNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // GRAYSCALE
 // Replicates Rec. 709 luminance into all three RGB channels. Equivalent to
 // DesaturateNode at Amount=1, but exposed separately so authoring stays
 // obvious and the graph doesn't look like it's "doing math" when it's really
 // just collapsing colour.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Returns a colour with all three channels set to its Rec. 709 luminance the
@@ -505,13 +505,13 @@ public sealed class GrayscaleNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// GAMMA → LINEAR / LINEAR → GAMMA
+// =============================================================================
+// GAMMA -> LINEAR / LINEAR -> GAMMA
 // Wraps Fragment.glsl's gammaToLinearSpace / linearToGammaSpace exposes them
 // as nodes so authors don't have to drop a CustomCode block to mark a colour
 // as sRGB-encoded. Matches what the Surface master does internally for
 // material colour inputs.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Converts an sRGB-encoded (gamma 2.2) colour to linear light. Standard
@@ -521,7 +521,7 @@ public sealed class GrayscaleNode : Node, IShaderNode, IShaderGraphNode
 /// </summary>
 public sealed class GammaToLinearNode : Node, IShaderNode, IShaderGraphNode
 {
-    public override string Title => "Gamma → Linear";
+    public override string Title => "Gamma -> Linear";
     public override string Category => "Color";
     public override System.Drawing.Color AccentColor => ColorAccents.Color;
 
@@ -549,7 +549,7 @@ public sealed class GammaToLinearNode : Node, IShaderNode, IShaderGraphNode
 /// </summary>
 public sealed class LinearToGammaNode : Node, IShaderNode, IShaderGraphNode
 {
-    public override string Title => "Linear → Gamma";
+    public override string Title => "Linear -> Gamma";
     public override string Category => "Color";
     public override System.Drawing.Color AccentColor => ColorAccents.Color;
 
@@ -570,15 +570,15 @@ public sealed class LinearToGammaNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// FLOAT ↔ RGBA PACKING
+// =============================================================================
+// FLOAT <-> RGBA PACKING
 // Pack a [0, 1) float across all four 8-bit channels of a vec4 so it survives
 // a round-trip through an LDR render target. Standard "encode shadow depth
 // into an RGBA8 buffer" trick: the constants below distribute precision so
 // each successive channel holds the next 8 bits of the source float.
 // Lossy beyond the 32-bit precision an RGBA8 can carry, but distributes the
 // bits across channels rather than crushing into one.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Packs a scalar in [0, 1) across the RGBA channels of a vec4 so it
@@ -587,7 +587,7 @@ public sealed class LinearToGammaNode : Node, IShaderNode, IShaderGraphNode
 /// </summary>
 public sealed class EncodeFloatRGBANode : Node, IShaderNode, IShaderGraphNode
 {
-    public override string Title => "Encode Float → RGBA";
+    public override string Title => "Encode Float -> RGBA";
     public override string Category => "Color";
     public override System.Drawing.Color AccentColor => ColorAccents.Color;
 
@@ -626,7 +626,7 @@ public sealed class EncodeFloatRGBANode : Node, IShaderNode, IShaderGraphNode
 /// </summary>
 public sealed class DecodeFloatRGBANode : Node, IShaderNode, IShaderGraphNode
 {
-    public override string Title => "Decode RGBA → Float";
+    public override string Title => "Decode RGBA -> Float";
     public override string Category => "Color";
     public override System.Drawing.Color AccentColor => ColorAccents.Color;
 
@@ -646,13 +646,13 @@ public sealed class DecodeFloatRGBANode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// NORMAL XYZ ↔ XY
+// =============================================================================
+// NORMAL XYZ <-> XY
 // Standard 2-channel normal map encoding. Stores only X and Y; reconstructs
-// Z = sqrt(1 - X² - Y²) on decode (only valid for normals pointing into the
+// Z = sqrt(1 - X^2 - Y^2) on decode (only valid for normals pointing into the
 // hemisphere, which is what tangent-space normal maps always are). Lets a
 // BC5 / RG normal map skip the wasted blue channel.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Discards Z from a tangent-space normal so the XY pair fits in a two-channel
@@ -661,7 +661,7 @@ public sealed class DecodeFloatRGBANode : Node, IShaderNode, IShaderGraphNode
 /// </summary>
 public sealed class EncodeNormalXYNode : Node, IShaderNode, IShaderGraphNode
 {
-    public override string Title => "Encode Normal → XY";
+    public override string Title => "Encode Normal -> XY";
     public override string Category => "Color";
     public override System.Drawing.Color AccentColor => ColorAccents.Color;
 
@@ -683,13 +683,13 @@ public sealed class EncodeNormalXYNode : Node, IShaderNode, IShaderGraphNode
 
 /// <summary>
 /// Reconstructs a unit-length tangent-space normal from a two-channel (XY)
-/// sample by computing <c>Z = sqrt(1 - X² - Y²)</c>. The classic BC5 / RG
+/// sample by computing <c>Z = sqrt(1 - X^2 - Y^2)</c>. The classic BC5 / RG
 /// normal-map decode. Inputs are already in the [-1, 1] convention if your
 /// sample is in [0, 1] feed it through <c>x*2-1</c> first.
 /// </summary>
 public sealed class DecodeNormalXYNode : Node, IShaderNode, IShaderGraphNode
 {
-    public override string Title => "Decode XY → Normal";
+    public override string Title => "Decode XY -> Normal";
     public override string Category => "Color";
     public override System.Drawing.Color AccentColor => ColorAccents.Color;
 
@@ -702,7 +702,7 @@ public sealed class DecodeNormalXYNode : Node, IShaderNode, IShaderGraphNode
 
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
-        // max(.., 0) guards against floating-point underflow when |XY| ≥ 1
+        // max(.., 0) guards against floating-point underflow when |XY| >= 1
         // (a denormalised XY pair would otherwise produce NaN under sqrt).
         var xy = ctx.EvaluateInputAs(GetInput("XY")!, ShaderType.Vec2);
         return $"vec3({xy}, sqrt(max(1.0 - dot({xy}, {xy}), 0.0)))";

@@ -12,7 +12,7 @@ public static class AssetCollector
     public struct CollectionResult
     {
         public HashSet<Guid> AllAssets;
-        public Dictionary<string, Guid> ResourcesMap; // load path → guid
+        public Dictionary<string, Guid> ResourcesMap; // load path -> guid
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ public static class AssetCollector
 
     /// <summary>
     /// Get the load path for a Resources asset.
-    /// "Art/Resources/Textures/Grass.png" → "Textures/Grass"
+    /// "Art/Resources/Textures/Grass.png" -> "Textures/Grass"
     /// </summary>
     private static string GetResourceLoadPath(string relativePath)
     {

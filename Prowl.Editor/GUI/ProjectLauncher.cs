@@ -223,7 +223,7 @@ public static class ProjectLauncher
                         .RowBetween(8)
                         .Enter())
                     {
-                        // Spacer (search input is currently visual-only — no filter wired up)
+                        // Spacer (search input is currently visual-only - no filter wired up)
                         Origami.SearchField(paper, "search", "", _ => { }, Loc.Get("launcher.search")).Show();
 
                         Origami.Button(paper, "tl_btn_open", $"{EditorIcons.FolderOpen}  {Loc.Get("launcher.open_project")}", () =>

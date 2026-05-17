@@ -38,7 +38,7 @@ public class ShaderGraphEditorWindow : DockPanel
     private ShaderGraph? _graph;
     private float _lastWindowHeight;
 
-    // ─── Sidebar state (panel-local widget doesn't know about any of this) ─────────
+    // --- Sidebar state (panel-local widget doesn't know about any of this) ---------
     private bool _sidebarOpen = true;
     private float _sidebarWidth = 210f;
 
@@ -50,7 +50,7 @@ public class ShaderGraphEditorWindow : DockPanel
     private AssetRef<Runtime.Resources.Mesh> _previewMesh;
     private Runtime.Resources.Material? _previewMaterial;
 
-    // ─── Auto-recompile ────────────────────────────────────────
+    // --- Auto-recompile ----------------------------------------
     /// <summary>Toggleable "save after idle" off means user hits Compile manually.</summary>
     private bool _autoRecompile = true;
     /// <summary>Seconds of edit inactivity before auto-save fires. Mirrors SF's 1s.</summary>
@@ -149,7 +149,7 @@ public class ShaderGraphEditorWindow : DockPanel
         }
     }
 
-    // ─── Sidebar ──────────────────────────────────────────────────────────────────────
+    // --- Sidebar ----------------------------------------------------------------------
 
     private void DrawSidebar(Paper paper, Scribe.FontFile font)
     {
@@ -297,7 +297,7 @@ public class ShaderGraphEditorWindow : DockPanel
         return _previewMaterial;
     }
 
-    // ─── Foldouts ─────────────────────────────────────────────────────────────────────
+    // --- Foldouts ---------------------------------------------------------------------
 
     private void DrawPropertiesFoldout(Paper paper, ShaderGraph sg)
     {
@@ -414,7 +414,7 @@ public class ShaderGraphEditorWindow : DockPanel
             .Alignment(TextAlignment.MiddleCenter);
     }
 
-    // ─── Mutation helpers ─────────────────────────────────────────────────────────────
+    // --- Mutation helpers -------------------------------------------------------------
 
     /// <summary>Apply a full settings struct to the graph with undo/redo. No-op when
     /// nothing changed (dropdowns fire same-value re-selects).</summary>
@@ -454,7 +454,7 @@ public class ShaderGraphEditorWindow : DockPanel
         _editor.MarkDirty();
     }
 
-    // ─── Master-node helpers ──────────────────────────────────────────────────────────
+    // --- Master-node helpers ----------------------------------------------------------
 
     // Returns the Surface master when present. Shader-type-specific UI (like the
     // lighting-mode dropdown) only applies to surface graphs; other types show a

@@ -15,7 +15,7 @@ public class VolumetricFogEffectEditor : CustomEditor
 
         Origami.Header(paper, $"{id}_h_main", $"{EditorIcons.Cloud}  Volumetric Fog").Underline().Show();
 
-        // ── Global ──
+        // -- Global --
         Origami.Header(paper, $"{id}_h_global", "Global").Show();
         SliderRow(paper, $"{id}_dens", "Global Density", fx.GlobalDensity, 0, 0.2f, v => fx.GlobalDensity = v);
         InspectorRow.Draw(paper, $"{id}_tint", "Color Tint", () =>
@@ -24,31 +24,31 @@ public class VolumetricFogEffectEditor : CustomEditor
         SliderRow(paper, $"{id}_ext", "Extinction", fx.Extinction, 0, 5, v => fx.Extinction = v);
         SliderRow(paper, $"{id}_dith", "Dithering", fx.Dithering, 0, 0.2f, v => fx.Dithering = v);
 
-        // ── Ambient ──
+        // -- Ambient --
         Origami.Header(paper, $"{id}_h_amb", "Ambient").Underline().Show();
         InspectorRow.Draw(paper, $"{id}_amb_col", "Ambient Color", () =>
                 Origami.ColorField(paper, $"{id}_amb_col_cf", fx.AmbientColor, v => fx.AmbientColor = v).Show());
         SliderRow(paper, $"{id}_amb_int", "Ambient Intensity", fx.AmbientIntensity, 0, 5, v => fx.AmbientIntensity = v);
 
-        // ── Lights ──
+        // -- Lights --
         Origami.Header(paper, $"{id}_h_lights", "Light Types").Underline().Show();
 
         Origami.Checkbox(paper, $"{id}_dir", fx.EnableDirectional, v => fx.EnableDirectional = v)
             .LabelRight("Directional Light").Show();
         Origami.Checkbox(paper, $"{id}_dir_sh", fx.EnableDirectionalShadows, v => fx.EnableDirectionalShadows = v)
-            .LabelRight("  └ Directional Shadows").Show();
+            .LabelRight("  + Directional Shadows").Show();
 
         Origami.Checkbox(paper, $"{id}_pt", fx.EnablePointLights, v => fx.EnablePointLights = v)
             .LabelRight("Point Lights").Show();
         Origami.Checkbox(paper, $"{id}_pt_sh", fx.EnablePointLightShadows, v => fx.EnablePointLightShadows = v)
-            .LabelRight("  └ Point Shadows").Show();
+            .LabelRight("  + Point Shadows").Show();
 
         Origami.Checkbox(paper, $"{id}_sp", fx.EnableSpotLights, v => fx.EnableSpotLights = v)
             .LabelRight("Spot Lights").Show();
         Origami.Checkbox(paper, $"{id}_sp_sh", fx.EnableSpotLightShadows, v => fx.EnableSpotLightShadows = v)
-            .LabelRight("  └ Spot Shadows").Show();
+            .LabelRight("  + Spot Shadows").Show();
 
-        // ── Performance ──
+        // -- Performance --
         Origami.Header(paper, $"{id}_h_perf", "Performance").Underline().Show();
 
         SliderRow(paper, $"{id}_maxd", "Max Distance", fx.MaxDistance, 1, 500, v => fx.MaxDistance = v);

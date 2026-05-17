@@ -931,7 +931,7 @@ public class HierarchyPanel : DockPanel
     {
         foreach (var go in scene.AllObjects)
         {
-            // Direct GO match (e.g. scene-view click → Ping(go.Identifier))
+            // Direct GO match (e.g. scene-view click -> Ping(go.Identifier))
             if (go.Identifier == guid)
             {
                 results.Add(go);
@@ -972,7 +972,7 @@ public class HierarchyPanel : DockPanel
     }
 
     // ================================================================
-    //  Asset Drop → Spawn in Scene
+    //  Asset Drop -> Spawn in Scene
     // ================================================================
 
     public static void SpawnAssetInScene(AssetDragPayload payload, GameObject? parent, Float3 position)

@@ -74,17 +74,17 @@ public class AssetRefPropertyEditor : PropertyEditor
                 {
                     if (cap.isAsset)
                     {
-                        // Asset → focus in project
+                        // Asset -> focus in project
                         Selection.Ping(cap.instance!.AssetID);
                     }
                     else if (cap.isInstance)
                     {
-                        // Instance → select it in inspector
+                        // Instance -> select it in inspector
                         Selection.Select(cap.instance!);
                     }
                     else
                     {
-                        // None → open selector
+                        // None -> open selector
                         OpenAssetSelector(cap.fieldType, asset => { cap.assetRef.SetInstance(asset); cap.onChange(cap.assetRef); });
                     }
                 });

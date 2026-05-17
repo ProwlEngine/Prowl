@@ -32,7 +32,7 @@ public class SceneViewLockContext : CursorLockContext
         float cs = Window.ContentScale;
         float csFbWin = win.X > 0 ? (float)fb.X / win.X : 1f;
         // Paper coords are in [0, fbSize/cs]; OS cursor expects winSize coords.
-        // scale = cs/csFbWin converts paper → winSize (== 1 on macOS, == cs on DPI-unaware Windows).
+        // scale = cs/csFbWin converts paper -> winSize (== 1 on macOS, == cs on DPI-unaware Windows).
         float scale = csFbWin > 0 ? cs / csFbWin : 1f;
         float centerX = (PanelOrigin.X + PanelSize.X / 2) * scale;
         float centerY = (PanelOrigin.Y + PanelSize.Y / 2) * scale;

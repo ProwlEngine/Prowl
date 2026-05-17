@@ -52,7 +52,7 @@ public class EditorSettings
         var t = Theme;
         t.InitRamps();
 
-        // Ramp stops → EditorTheme ramp fields
+        // Ramp stops -> EditorTheme ramp fields
         EditorTheme.Neutral100 = t.Neutral.GetStop(0);
         EditorTheme.Neutral200 = t.Neutral.GetStop(1);
         EditorTheme.Neutral300 = t.Neutral.GetStop(2);

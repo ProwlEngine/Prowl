@@ -13,13 +13,13 @@ internal static class UtilityAccents
     public static readonly System.Drawing.Color Util = System.Drawing.Color.FromArgb(255, 170, 170, 170);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // CustomCodeNode
 //
 // Emits a real GLSL function at file scope via `ctx.TopLevelHelpers`, then calls
 // it from the expression. The user writes a function body that references four
 // typed parameters (In0..In3) and returns the declared output type.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Inline GLSL code block. The user supplies a function body that references its
@@ -146,14 +146,14 @@ public sealed class CustomCodeNode : Node, IShaderNode, IShaderGraphNode
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // SetVarNode
 //
 // Declares a named local in BodyPrelude so downstream GetVarNodes can read it.
 // The input passes straight through on the Out port. Must be topologically
 // upstream of every matching Get if a Get is reached before its Set, the
 // GLSL identifier is undeclared and the shader fails to compile.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class SetVarNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -161,7 +161,7 @@ public sealed class SetVarNode : Node, IShaderNode, IShaderGraphNode
     /// alphanumeric and underscore characters are preserved.</summary>
     public string VarName = "myVar";
 
-    public override string Title => $"Set \u00b7 {VarName}";
+    public override string Title => $"Set - {VarName}";
     public override string Category => "Utility";
     public override System.Drawing.Color AccentColor => UtilityAccents.Util;
 
@@ -196,9 +196,9 @@ public sealed class SetVarNode : Node, IShaderNode, IShaderGraphNode
         => "_var_" + Regex.Replace(name ?? "unnamed", @"[^A-Za-z0-9_]", "_");
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // GetVarNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class GetVarNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -210,7 +210,7 @@ public sealed class GetVarNode : Node, IShaderNode, IShaderGraphNode
     /// type that flowed into the paired SetVarNode's In port.</summary>
     public ShaderType Type = ShaderType.Float;
 
-    public override string Title => $"Get \u00b7 {VarName}";
+    public override string Title => $"Get - {VarName}";
     public override string Category => "Utility";
     public override System.Drawing.Color AccentColor => UtilityAccents.Util;
 

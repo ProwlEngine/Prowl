@@ -234,7 +234,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         });
     }
 
-    // ── Origami row helpers ────────────────────────────────────────────
+    // -- Origami row helpers --------------------------------------------
 
     private static void FloatRow(Paper paper, string id, string label, float value, Action<float> setter)
         => InspectorRow.Draw(paper, id, label, () =>

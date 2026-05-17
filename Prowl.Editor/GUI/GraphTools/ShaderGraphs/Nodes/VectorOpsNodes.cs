@@ -8,18 +8,18 @@ using System.Text;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Accent colour for vector-ops nodes
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 internal static class VectorAccents
 {
     public static readonly System.Drawing.Color Vector = System.Drawing.Color.FromArgb(255, 110, 200, 130); // green
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // AppendNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Packs up to four scalar inputs (X, Y, Z, W) into a vector. Three output
@@ -74,11 +74,11 @@ public sealed class AppendNode : Node, IShaderNode, IShaderGraphNode
         };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // SplitNode opposite of Append
 // Breaks a vector back out into its component floats, plus Vec2/Vec3 prefixes
 // for convenience when you only need a subset.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Splits a vector into its component floats. Symmetric with <see cref="AppendNode"/>:
@@ -134,9 +134,9 @@ public sealed class SplitNode : Node, IShaderNode, IShaderGraphNode
         };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ChannelBlendNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Blends up to four colour inputs (R/G/B/A slots) using a mask vector's channels.
@@ -147,7 +147,7 @@ public sealed class SplitNode : Node, IShaderNode, IShaderGraphNode
 /// Layered mode: out = mix(mix(mix(mix(Btm, Rcol, mask.r), Gcol, mask.g), Bcol, mask.b), Acol, mask.a)
 /// (sequentially layers each colour on top of the previous using its mask channel as the blend factor)
 /// </para>
-/// The number of active colour slots is determined by the mask input's channel count —
+/// The number of active colour slots is determined by the mask input's channel count -
 /// a vec2 mask activates only R and G slots.
 /// </summary>
 public enum ChannelBlendType { Summed, Layered }
@@ -214,9 +214,9 @@ public sealed class ChannelBlendNode : Node, IShaderNode, IShaderGraphNode
         => ctx.GetSourceType(GetInput("Rcol")!);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ComponentMaskNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Extracts a user-chosen subset of channels from a vector input.
@@ -267,9 +267,9 @@ public sealed class ComponentMaskNode : Node, IShaderNode, IShaderGraphNode
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // CrossNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>cross(A, B) both inputs and output are Vec3.</summary>
 public sealed class CrossNode : Node, IShaderNode, IShaderGraphNode
@@ -295,9 +295,9 @@ public sealed class CrossNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // DotNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// dot(A, B) scalar output.
@@ -341,9 +341,9 @@ public sealed class DotNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // DistanceNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>distance(A, B) scalar output.</summary>
 public sealed class DistanceNode : Node, IShaderNode, IShaderGraphNode
@@ -370,9 +370,9 @@ public sealed class DistanceNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // LengthNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>length(In) scalar output.</summary>
 public sealed class LengthNode : Node, IShaderNode, IShaderGraphNode
@@ -393,9 +393,9 @@ public sealed class LengthNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // NormalizeNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>normalize(In) output type matches the input's source type.</summary>
 public sealed class NormalizeNode : Node, IShaderNode, IShaderGraphNode
@@ -417,9 +417,9 @@ public sealed class NormalizeNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInput(this, "In", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // NormalBlendNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Blends two tangent-space normals using Reoriented Normal Mapping (RNM).
@@ -465,9 +465,9 @@ public sealed class NormalBlendNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ReflectNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>reflect(I, N) reflects incident vector I around surface normal N.
 /// Output type matches the max-channel of the two inputs.</summary>
@@ -496,19 +496,19 @@ public sealed class ReflectNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "I", "N", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // RefractNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// <c>refract(I, N, eta)</c> bends incident vector I through surface normal N by
 /// the ratio of refractive indices <c>eta = n_in / n_out</c>. Returns the zero
-/// vector under total internal reflection (when 1 - eta² · (1 - dot(N,I)²) is
+/// vector under total internal reflection (when 1 - eta^2 * (1 - dot(N,I)^2) is
 /// negative); pair with a Reflect path if you need the standard "TIR fallback".
 /// </summary>
 /// <remarks>
-/// Typical eta values: <c>1/1.33</c> (air → water), <c>1/1.45</c> (air → glass),
-/// <c>1/2.42</c> (air → diamond). I should be normalised; N must be normalised.
+/// Typical eta values: <c>1/1.33</c> (air -> water), <c>1/1.45</c> (air -> glass),
+/// <c>1/2.42</c> (air -> diamond). I should be normalised; N must be normalised.
 /// </remarks>
 public sealed class RefractNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -520,7 +520,7 @@ public sealed class RefractNode : Node, IShaderNode, IShaderGraphNode
     {
         AddInput<Float3>("I",   Float3.Zero,         required: true, tooltip: "Incident vector (normalised).");
         AddInput<Float3>("N",   new Float3(0, 0, 1), required: true, tooltip: "Surface normal (normalised).");
-        // 1/1.45 ≈ 0.6897 air → glass. Most common starting point.
+        // 1/1.45 ~ 0.6897 air -> glass. Most common starting point.
         AddInput<float>("Eta",  0.6897f,             required: true,
             tooltip: "Ratio of refractive indices (n_in / n_out). 1/1.33 water, 1/1.45 glass, 1/2.42 diamond.");
         AddOutput<Float3>("Out");
@@ -542,9 +542,9 @@ public sealed class RefractNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "I", "N", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // TransformNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Transforms a Vec3 between coordinate spaces.
@@ -588,54 +588,54 @@ public sealed class TransformNode : Node, IShaderNode, IShaderGraphNode
         if (From == To)
             return inExpr;
 
-        // ── World → Object ────────────────────────────────────────────────────
+        // -- World -> Object ----------------------------------------------------
         if (From == TransformSpace.World && To == TransformSpace.Object)
             return $"(mat3(prowl_WorldToObject) * ({inExpr}))";
 
-        // ── World → View ──────────────────────────────────────────────────────
+        // -- World -> View ------------------------------------------------------
         if (From == TransformSpace.World && To == TransformSpace.View)
             return $"(mat3(PROWL_MATRIX_V) * ({inExpr}))";
 
         ctx.Includes.Add("ShaderVariables");
 
-        // ── World → Tangent ───────────────────────────────────────────────────
+        // -- World -> Tangent ---------------------------------------------------
         if (From == TransformSpace.World && To == TransformSpace.Tangent)
         {
             var tbnT = ShaderEmit.EmitTBNTranspose(ctx);
             return $"({tbnT} * ({inExpr}))";
         }
 
-        // ── Object → World ────────────────────────────────────────────────────
+        // -- Object -> World ----------------------------------------------------
         if (From == TransformSpace.Object && To == TransformSpace.World)
             return $"(mat3(PROWL_MATRIX_M) * ({inExpr}))";
 
-        // ── Object → View ─────────────────────────────────────────────────────
+        // -- Object -> View -----------------------------------------------------
         if (From == TransformSpace.Object && To == TransformSpace.View)
             return $"(mat3(PROWL_MATRIX_MV) * ({inExpr}))";
 
-        // ── Object → Tangent ──────────────────────────────────────────────────
+        // -- Object -> Tangent --------------------------------------------------
         if (From == TransformSpace.Object && To == TransformSpace.Tangent)
         {
             var tbnT = ShaderEmit.EmitTBNTranspose(ctx);
             return $"({tbnT} * (mat3(PROWL_MATRIX_M) * ({inExpr})))";
         }
 
-        // ── View → World ──────────────────────────────────────────────────────
+        // -- View -> World ------------------------------------------------------
         if (From == TransformSpace.View && To == TransformSpace.World)
             return $"(mat3(PROWL_MATRIX_I_V) * ({inExpr}))";
 
-        // ── View → Object ─────────────────────────────────────────────────────
+        // -- View -> Object -----------------------------------------------------
         if (From == TransformSpace.View && To == TransformSpace.Object)
             return $"(mat3(prowl_WorldToObject) * (mat3(PROWL_MATRIX_I_V) * ({inExpr})))";
 
-        // ── View → Tangent ────────────────────────────────────────────────────
+        // -- View -> Tangent ----------------------------------------------------
         if (From == TransformSpace.View && To == TransformSpace.Tangent)
         {
             var tbnT = ShaderEmit.EmitTBNTranspose(ctx);
             return $"({tbnT} * (mat3(PROWL_MATRIX_I_V) * ({inExpr})))";
         }
 
-        // ── Tangent → World / Object / View ───────────────────────────────────
+        // -- Tangent -> World / Object / View -----------------------------------
         if (From == TransformSpace.Tangent)
         {
             var tbn = ShaderEmit.EmitTBN(ctx);
@@ -651,9 +651,9 @@ public sealed class TransformNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // TransposeNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>transpose(M) output type matches input matrix type (Mat3 or Mat4).</summary>
 public sealed class TransposeNode : Node, IShaderNode, IShaderGraphNode
@@ -683,9 +683,9 @@ public sealed class TransposeNode : Node, IShaderNode, IShaderGraphNode
     }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // VectorProjectionNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Projects vector A onto vector B.
@@ -721,9 +721,9 @@ public sealed class VectorProjectionNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "A", "B", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // VectorRejectionNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Rejects vector A from vector B (the component of A perpendicular to B).
@@ -761,9 +761,9 @@ public sealed class VectorRejectionNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInputs(this, "A", "B", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // DDXNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>dFdx(In) screen-space partial derivative in X. Fragment stage only.
 /// Output type matches the input's source type.</summary>
@@ -786,9 +786,9 @@ public sealed class DDXNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInput(this, "In", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // DDYNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>dFdy(In) screen-space partial derivative in Y. Fragment stage only.
 /// Output type matches the input's source type.</summary>
@@ -811,9 +811,9 @@ public sealed class DDYNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInput(this, "In", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // DDXYNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// abs(dFdx(In)) + abs(dFdy(In)) approximates the total screen-space derivative
@@ -848,9 +848,9 @@ public sealed class DDXYNode : Node, IShaderNode, IShaderGraphNode
         => ShaderEmit.TypeFromInput(this, "In", ctx);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // DesaturateNode
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 /// <summary>
 /// Desaturates a colour by blending it toward its luminance value.
@@ -860,7 +860,7 @@ public sealed class DDXYNode : Node, IShaderNode, IShaderGraphNode
 /// Uses Rec.709 luminance coefficients (matching ProwlCG.glsl's luminance helper).
 /// Requires ctx.Includes.Add("ProwlCG") so the luminance function is available
 /// in the generated shader though the coefficients are inlined here for safety.
-/// Inputs: Color (Vec3), Amount (float 0–1).
+/// Inputs: Color (Vec3), Amount (float 0-1).
 /// Output: Vec3.
 /// </summary>
 public sealed class DesaturateNode : Node, IShaderNode, IShaderGraphNode

@@ -17,7 +17,7 @@ public class CinematicEffectsEditor : CustomEditor
     {
         var fx = (CinematicEffects)target;
 
-        // ── Vignette ──────────────────────────────────────
+        // -- Vignette --------------------------------------
         DrawSection(paper, $"{id}_vignette", EditorIcons.Eye, "Vignette",
             fx.EnableVignette, v => fx.EnableVignette = v, () =>
         {
@@ -26,7 +26,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_vig_rn", "Roundness", fx.VignetteRoundness, 0, 1, v => fx.VignetteRoundness = v);
         });
 
-        // ── Chromatic Aberration ──────────────────────────
+        // -- Chromatic Aberration --------------------------
         DrawSection(paper, $"{id}_chroma", EditorIcons.Droplet, "Chromatic Aberration",
             fx.EnableChromaticAberration, v => fx.EnableChromaticAberration = v, () =>
         {
@@ -34,7 +34,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_chr_dist", "Distortion", fx.ChromaticDistortion, 0, 2, v => fx.ChromaticDistortion = v);
         });
 
-        // ── Film Grain ────────────────────────────────────
+        // -- Film Grain ------------------------------------
         DrawSection(paper, $"{id}_grain", EditorIcons.Film, "Film Grain",
             fx.EnableFilmGrain, v => fx.EnableFilmGrain = v, () =>
         {
@@ -42,7 +42,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_grn_rsp", "Response", fx.GrainResponse, 0, 1, v => fx.GrainResponse = v);
         });
 
-        // ── Color Grading ─────────────────────────────────
+        // -- Color Grading ---------------------------------
         DrawSection(paper, $"{id}_cgrade", EditorIcons.Palette, "Color Grading",
             fx.EnableColorGrading, v => fx.EnableColorGrading = v, () =>
         {
@@ -62,7 +62,7 @@ public class CinematicEffectsEditor : CustomEditor
                 Origami.ColorField(paper, $"{id}_cg_gain_cf", fx.Gain, v => fx.Gain = v).Show());
         });
 
-        // ── LUT ───────────────────────────────────────────
+        // -- LUT -------------------------------------------
         DrawSection(paper, $"{id}_lut", EditorIcons.TableCells, "LUT Color Grading",
             fx.EnableLUT, v => fx.EnableLUT = v, () =>
         {
@@ -75,7 +75,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_lut_cont", "Contribution", fx.LUTContribution, 0, 1, v => fx.LUTContribution = v);
         });
 
-        // ── Sharpen (CAS) ─────────────────────────────────
+        // -- Sharpen (CAS) ---------------------------------
         DrawSection(paper, $"{id}_sharp", EditorIcons.Diamond, "Sharpen (CAS)",
             fx.EnableSharpen, v => fx.EnableSharpen = v, () =>
         {
@@ -83,7 +83,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_shp_rad", "Radius", fx.SharpenRadius, 1, 4, v => fx.SharpenRadius = v);
         });
 
-        // ── Edge Detection ────────────────────────────────
+        // -- Edge Detection --------------------------------
         DrawSection(paper, $"{id}_edge", EditorIcons.BorderAll, "Edge Detection",
             fx.EnableEdgeDetection, v => fx.EnableEdgeDetection = v, () =>
         {
@@ -93,14 +93,14 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_edg_bg", "Background Fade", fx.EdgeBackgroundFade, 0, 1, v => fx.EdgeBackgroundFade = v);
         });
 
-        // ── Pixelation ────────────────────────────────────
+        // -- Pixelation ------------------------------------
         DrawSection(paper, $"{id}_pixel", EditorIcons.TableCellsLarge, "Pixelation",
             fx.EnablePixelation, v => fx.EnablePixelation = v, () =>
         {
             SliderRow(paper, $"{id}_pxl_sz", "Pixel Size", fx.PixelSize, 1, 32, v => fx.PixelSize = v);
         });
 
-        // ── God Rays ──────────────────────────────────────
+        // -- God Rays --------------------------------------
         DrawSection(paper, $"{id}_godrays", EditorIcons.Sun, "God Rays",
             fx.EnableGodRays, v => fx.EnableGodRays = v, () =>
         {
@@ -115,7 +115,7 @@ public class CinematicEffectsEditor : CustomEditor
         });
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────
+    // -- Helpers --------------------------------------------------------
 
     private static void SliderRow(Paper paper, string id, string label, float value, float min, float max, System.Action<float> setter, bool bipolar = false)
         => InspectorRow.Draw(paper, id, label, () =>

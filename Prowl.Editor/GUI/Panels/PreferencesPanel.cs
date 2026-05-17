@@ -186,7 +186,7 @@ public class PreferencesPanel : DockPanel
 
         paper.Box("pref_theme_sp2").Height(EditorTheme.Padding * 3);
 
-        // ── Color Ramps ──
+        // -- Color Ramps --
         string[] neutralNames = ["100 Void", "200 Abyss", "300 Obsidian", "400 Slate ★", "500 Graphite"];
         string[] purpleNames = ["100", "200 Dusk", "300 Twilight", "400 Amethyst ★", "500 Lavender", "600 Wisteria", "700 Lilac"];
         string[] blueNames = ["100", "200 Midnight", "300 Harbor", "400 Glacier ★", "500 Mist", "600 Powder", "700 Frost"];
@@ -201,14 +201,14 @@ public class PreferencesPanel : DockPanel
 
         paper.Box("pref_theme_sp3").Height(EditorTheme.Padding * 3);
 
-        // ── Font ──
+        // -- Font --
         Origami.Foldout(paper, "pref_ft_general", "Font").Body(() =>
         {
             PrefTextField(paper, s, "Font", theme.DefaultFontName, v => theme.DefaultFontName = v);
             PrefTextField(paper, s, "Bold Font", theme.DefaultBoldFontName, v => theme.DefaultBoldFontName = v);
         });
 
-        // ── Sizing ──
+        // -- Sizing --
         Origami.Foldout(paper, "pref_sz_general", "General Sizing").Body(() =>
         {
             SzSlider(paper, s, "User Scale", theme.UserScale, 0.5f, 2, v => theme.UserScale = v, false);

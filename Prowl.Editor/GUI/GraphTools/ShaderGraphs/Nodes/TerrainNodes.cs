@@ -61,7 +61,7 @@ public sealed class HeightmapSampleNode : Node, IShaderNode, IShaderGraphNode
     protected override void DefineNode()
     {
         AddInput<Float2>("UV", Float2.Zero,
-            tooltip: "Terrain-local UV in [0,1]² usually from Terrain UV node.");
+            tooltip: "Terrain-local UV in [0,1]^2 usually from Terrain UV node.");
         AddOutput<float>("Height", tooltip: "Height in world units.");
     }
 

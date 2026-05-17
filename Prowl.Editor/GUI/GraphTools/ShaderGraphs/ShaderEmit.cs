@@ -92,7 +92,7 @@ public static class ShaderEmit
         return $"{func}({a}, {b}, {c})";
     }
 
-    // ─── Type-helpers used by GetOutputType bodies keeps the calling pattern compact ─
+    // --- Type-helpers used by GetOutputType bodies keeps the calling pattern compact -
 
     /// <summary>Output type for unary nodes: matches the input's source type.</summary>
     public static ShaderType TypeFromInput(Node node, string portName, ShaderGenContext ctx)
@@ -112,9 +112,9 @@ public static class ShaderEmit
             ctx.GetSourceType(node.GetInput(c)!));
 
     /// <summary>
-    /// Ensure the fragment stage has a <c>_sgTBN</c> local the tangent→world basis built
+    /// Ensure the fragment stage has a <c>_sgTBN</c> local the tangent->world basis built
     /// from the three vertex varyings. Returns the local name so a caller can use it for
-    /// <c>tangent →world</c> normal rotation, parallax view-dir transform, etc. Safe to call
+    /// <c>tangent ->world</c> normal rotation, parallax view-dir transform, etc. Safe to call
     /// many times per compile emits the definition only once via <see cref="ShaderGenContext.EmitOnce"/>.
     /// </summary>
     public static string EmitTBN(ShaderGenContext ctx)
@@ -133,7 +133,7 @@ public static class ShaderEmit
 
     /// <summary>
     /// Same as <see cref="EmitTBN"/> but returns the transpose used to convert a
-    /// world-space vector INTO tangent space (e.g. world view-dir → tangent-space for
+    /// world-space vector INTO tangent space (e.g. world view-dir -> tangent-space for
     /// parallax occlusion mapping).
     /// </summary>
     public static string EmitTBNTranspose(ShaderGenContext ctx)

@@ -1,7 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // PropertyAndConstantNodes.cs
 //
 // Constant nodes  emit a hard-coded GLSL literal; no material binding.
@@ -9,7 +9,7 @@
 //                   material inspector binds to.
 //
 // See IShaderNode.cs, IShaderProperty.cs, and ShaderGenContext.cs for contracts.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 using System.Globalization;
 
@@ -17,9 +17,9 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // SHARED HELPERS
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 internal static class PropNodeUtil
 {
@@ -40,7 +40,7 @@ internal static class PropNodeUtil
         return sb.ToString();
     }
 
-    /// <summary>Format a float as a GLSL/Prowl-property literal —
+    /// <summary>Format a float as a GLSL/Prowl-property literal -
     /// invariant culture, always contains a decimal point.</summary>
     public static string F(double v)
     {
@@ -59,9 +59,9 @@ internal static class PropNodeUtil
         System.Drawing.Color.FromArgb(255, 130, 90, 160);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ── CONSTANT NODES ───────────────────────────────────────────────────────────
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+// -- CONSTANT NODES -----------------------------------------------------------
+// =============================================================================
 
 /// <summary>
 /// Constant scalar (single float). No material binding emits a GLSL float literal.
@@ -140,7 +140,7 @@ public sealed class Vector4ConstantNode : Node, IShaderNode, IShaderGraphNode
 }
 
 /// <summary>
-/// Constant colour (RGBA) with multi-channel outputs. No material binding —
+/// Constant colour (RGBA) with multi-channel outputs. No material binding -
 /// emits <c>vec4(r, g, b, a)</c> and .rgb/.r/.g/.b/.a swizzle variants.
 /// </summary>
 public sealed class ColorConstantNode : Node, IShaderNode, IShaderGraphNode
@@ -207,7 +207,7 @@ public sealed class Matrix4x4ConstantNode : Node, IShaderNode, IShaderGraphNode
     {
         // GLSL mat4(c0r0, c0r1, c0r2, c0r3,  c1r0 ...) column-major.
         // Our fields are row-major: M[row][col].
-        // Column-major layout: for column c, row r → element index (c*4+r).
+        // Column-major layout: for column c, row r -> element index (c*4+r).
         var F = PropNodeUtil.F;
         return $"mat4(" +
                $"{F(M00)}, {F(M10)}, {F(M20)}, {F(M30)}, " +   // col 0
@@ -219,9 +219,9 @@ public sealed class Matrix4x4ConstantNode : Node, IShaderNode, IShaderGraphNode
     ShaderType IShaderNode.GetOutputType(Port p, ShaderGenContext ctx) => ShaderType.Mat4;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ── PROPERTY NODES ───────────────────────────────────────────────────────────
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+// -- PROPERTY NODES -----------------------------------------------------------
+// =============================================================================
 
 /// <summary>
 /// Material-bindable float (scalar) property. Emits <c>uniform float _Name;</c>.
@@ -233,21 +233,21 @@ public sealed class FloatPropertyNode : Node, IShaderGraphNode, IShaderProperty,
     public float  Value = 0.5f;
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Float \u00b7 {Label}";   // "Float · Label"
+    public override string Title    => $"Float - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
     ShaderType IShaderProperty.PropertyType  => ShaderType.Float;
     string     IShaderProperty.DefaultLiteral => PropNodeUtil.F(Value);
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode() => AddOutput<float>("Out");
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
         => PropNodeUtil.NormaliseName(Name);
 
@@ -265,11 +265,11 @@ public sealed class Vector4PropertyNode : Node, IShaderGraphNode, IShaderPropert
     public Float4 Value = new Float4(0.5f, 0.5f, 0.5f, 1f);
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Vector 4 \u00b7 {Label}";
+    public override string Title    => $"Vector 4 - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
@@ -277,7 +277,7 @@ public sealed class Vector4PropertyNode : Node, IShaderGraphNode, IShaderPropert
     string     IShaderProperty.DefaultLiteral
         => $"({PropNodeUtil.F(Value.X)}, {PropNodeUtil.F(Value.Y)}, {PropNodeUtil.F(Value.Z)}, {PropNodeUtil.F(Value.W)})";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode()
     {
         AddOutput<Float4>("Vec4");
@@ -288,7 +288,7 @@ public sealed class Vector4PropertyNode : Node, IShaderGraphNode, IShaderPropert
         AddOutput<float>("W");
     }
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         var name = PropNodeUtil.NormaliseName(Name);
@@ -326,25 +326,25 @@ public sealed class SliderPropertyNode : Node, IShaderGraphNode, IShaderProperty
     public float  Value = 0f;
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Slider \u00b7 {Label}";
+    public override string Title    => $"Slider - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
     ShaderType IShaderProperty.PropertyType  => ShaderType.Float;
     string     IShaderProperty.DefaultLiteral => PropNodeUtil.F(Value);
 
-    // ── IShaderPropertyRange compiler emits `Range(Min, Max)` as the type keyword ──
+    // -- IShaderPropertyRange compiler emits `Range(Min, Max)` as the type keyword --
     float IShaderPropertyRange.RangeMin => Min;
     float IShaderPropertyRange.RangeMax => Max;
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode() => AddOutput<float>("Out");
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
         => PropNodeUtil.NormaliseName(Name);
 
@@ -363,23 +363,23 @@ public sealed class BoolPropertyNode : Node, IShaderGraphNode, IShaderProperty, 
     public bool   Value = false;
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Bool \u00b7 {Label}";
+    public override string Title    => $"Bool - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
     ShaderType IShaderProperty.PropertyType  => ShaderType.Bool;
     string     IShaderProperty.DefaultLiteral => Value ? "1" : "0";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode() => AddOutput<float>("Out");
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     // Emit float(uniform) so the output wire is a scalar 0/1, compatible with
-    // all arithmetic downstream avoids forcing explicit bool→float casts.
+    // all arithmetic downstream avoids forcing explicit bool->float casts.
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
         => $"float({PropNodeUtil.NormaliseName(Name)})";
 
@@ -399,18 +399,18 @@ public sealed class SwitchPropertyNode : Node, IShaderGraphNode, IShaderProperty
     public bool   DefaultOn = false;
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Switch \u00b7 {Label}";
+    public override string Title    => $"Switch - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
     ShaderType IShaderProperty.PropertyType  => ShaderType.Bool;
     string     IShaderProperty.DefaultLiteral => DefaultOn ? "1" : "0";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode()
     {
         AddInput<float>("A", 0f, required: true, tooltip: "Value when switch is Off");
@@ -418,7 +418,7 @@ public sealed class SwitchPropertyNode : Node, IShaderGraphNode, IShaderProperty
         AddOutput<float>("Out");
     }
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         // Resolve the dominant type across both inputs for type promotion.
@@ -463,11 +463,11 @@ public sealed class Matrix4x4PropertyNode : Node, IShaderGraphNode, IShaderPrope
     public float M20 = 0f; public float M21 = 0f; public float M22 = 1f; public float M23 = 0f;
     public float M30 = 0f; public float M31 = 0f; public float M32 = 0f; public float M33 = 1f;
 
-    public override string Title    => $"Matrix 4x4 \u00b7 {Label}";
+    public override string Title    => $"Matrix 4x4 - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
@@ -478,10 +478,10 @@ public sealed class Matrix4x4PropertyNode : Node, IShaderGraphNode, IShaderPrope
     // default if the user hasn't changed it from C# at runtime.
     string     IShaderProperty.DefaultLiteral => "";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode() => AddOutput<Float4x4>("Out");
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
         => PropNodeUtil.NormaliseName(Name);
 
@@ -500,11 +500,11 @@ public sealed class ColorPropertyNode : Node, IShaderGraphNode, IShaderProperty,
     public Color  Value = new Color(1f, 1f, 1f, 1f);
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Color \u00b7 {Label}";
+    public override string Title    => $"Color - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
@@ -512,7 +512,7 @@ public sealed class ColorPropertyNode : Node, IShaderGraphNode, IShaderProperty,
     string     IShaderProperty.DefaultLiteral
         => $"({PropNodeUtil.F(Value.R)}, {PropNodeUtil.F(Value.G)}, {PropNodeUtil.F(Value.B)}, {PropNodeUtil.F(Value.A)})";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode()
     {
         AddOutput<Color>("RGBA");
@@ -523,7 +523,7 @@ public sealed class ColorPropertyNode : Node, IShaderGraphNode, IShaderProperty,
         AddOutput<float>("A");
     }
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         var name = PropNodeUtil.NormaliseName(Name);
@@ -534,7 +534,7 @@ public sealed class ColorPropertyNode : Node, IShaderGraphNode, IShaderProperty,
             "G"    => $"{name}.g",
             "B"    => $"{name}.b",
             "A"    => $"{name}.a",
-            _      => name,   // "RGBA" or default → full vec4
+            _      => name,   // "RGBA" or default -> full vec4
         };
     }
 
@@ -546,9 +546,9 @@ public sealed class ColorPropertyNode : Node, IShaderGraphNode, IShaderProperty,
     };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ── TEXTURE / SAMPLER NODES ──────────────────────────────────────────────────
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
+// -- TEXTURE / SAMPLER NODES --------------------------------------------------
+// =============================================================================
 
 /// <summary>
 /// Material-bindable Texture2D property (sampler2D uniform). By itself this node
@@ -562,23 +562,23 @@ public sealed class Texture2DPropertyNode : Node, IShaderGraphNode, IShaderPrope
     public string Default = "white";    // "white" | "black" | "gray" | "bump"
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Texture 2D \u00b7 {Label}";
+    public override string Title    => $"Texture 2D - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
     ShaderType IShaderProperty.PropertyType  => ShaderType.Sampler2D;
     string     IShaderProperty.DefaultLiteral => $"\"{Default}\"";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode()
         => AddOutput<Resources.Texture2D>("Sampler",
                tooltip: "Pass to a Tex2DSampleNode to sample pixels.");
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     // The output of a property texture node is just the uniform name the
     // Tex2DSampleNode calls texture(name, uv) around it.
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
@@ -598,23 +598,23 @@ public sealed class Texture2DAssetNode : Node, IShaderGraphNode, IShaderProperty
     public string Label   = "Texture";
     public string Default = "white";
 
-    public override string Title    => $"Texture 2D Asset \u00b7 {Label}";
+    public override string Title    => $"Texture 2D Asset - {Label}";
     public override string Category => "Properties";
     public override System.Drawing.Color AccentColor => PropNodeUtil.PropertyAccent;
 
-    // ── IShaderProperty not exposed to the inspector ─────────────────────
+    // -- IShaderProperty not exposed to the inspector ---------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => false;   // hidden from material inspector
     ShaderType IShaderProperty.PropertyType  => ShaderType.Sampler2D;
     string     IShaderProperty.DefaultLiteral => $"\"{Default}\"";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode()
         => AddOutput<Resources.Texture2D>("Sampler",
                tooltip: "Pass to a Tex2DSampleNode to sample pixels.");
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
         => PropNodeUtil.NormaliseName(Name);
 
@@ -663,7 +663,7 @@ public sealed class Tex2DSampleNode : Node, IShaderNode, IShaderGraphNode
         var uvPort      = GetInput("UV")!;
         var mipPort     = GetInput("MIP")!;
 
-        // ── Stable temp name ─────────────────────────────────────────────
+        // -- Stable temp name ---------------------------------------------
         // Use a node-ID-based name so every output port of this node shares
         // the same vec4 temp and the texture() call is emitted exactly once.
         var tmp = SampleTempName();
@@ -691,7 +691,7 @@ public sealed class Tex2DSampleNode : Node, IShaderNode, IShaderGraphNode
             ctx.BodyPrelude.AppendLine($"    vec4 {tmp} = {sampleExpr};");
         });
 
-        // ── Per-output swizzle ────────────────────────────────────────────
+        // -- Per-output swizzle --------------------------------------------
         return p.Name switch
         {
             "RGB" => $"{tmp}.rgb",
@@ -725,19 +725,19 @@ public sealed class CubemapSampleNode : Node, IShaderGraphNode, IShaderProperty,
     public string Default = "white";
     public bool   ExposedToInspector = true;
 
-    public override string Title    => $"Cubemap \u00b7 {Label}";
+    public override string Title    => $"Cubemap - {Label}";
     public override string Category => "Texture";
     public override System.Drawing.Color AccentColor =>
         System.Drawing.Color.FromArgb(255, 60, 170, 130);
 
-    // ── IShaderProperty ────────────────────────────────────────────────────
+    // -- IShaderProperty ----------------------------------------------------
     string     IShaderProperty.PropertyName  => PropNodeUtil.NormaliseName(Name);
     string     IShaderProperty.DisplayName   => string.IsNullOrEmpty(Label) ? Name : Label;
     bool       IShaderProperty.Exposed       => ExposedToInspector;
     ShaderType IShaderProperty.PropertyType  => ShaderType.SamplerCube;
     string     IShaderProperty.DefaultLiteral => $"\"{Default}\"";
 
-    // ── Node ───────────────────────────────────────────────────────────────
+    // -- Node ---------------------------------------------------------------
     protected override void DefineNode()
     {
         AddInput<Float3>("DIR", Float3.Zero,
@@ -755,7 +755,7 @@ public sealed class CubemapSampleNode : Node, IShaderGraphNode, IShaderProperty,
     private string SampleTempName()
         => "_cube_" + Id.ToString("N").Substring(0, 8);
 
-    // ── IShaderNode ────────────────────────────────────────────────────────
+    // -- IShaderNode --------------------------------------------------------
     string IShaderNode.Evaluate(Port p, ShaderStage s, ShaderGenContext ctx)
     {
         var dirPort = GetInput("DIR")!;

@@ -67,7 +67,7 @@ public class TransformPropertyEditor : PropertyEditor
 
             using (fieldEl.Enter())
             {
-                // Accept GameObject drop → extract Transform
+                // Accept GameObject drop -> extract Transform
                 if (!DragDrop.IsDragging && paper.IsParentHovered && DragDrop.Payload is GameObjectDragPayload goDrop)
                 {
                     var droppedGO = goDrop.GameObjects.Length > 0 ? goDrop.GameObjects[0] : null;

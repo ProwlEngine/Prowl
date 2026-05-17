@@ -737,7 +737,7 @@ public static class PrefabUtility
         CompareField(pathPrefix, "TagIndex", instanceGO.TagIndex, sourceGO.TagIndex, overrides);
         CompareField(pathPrefix, "LayerIndex", instanceGO.LayerIndex, sourceGO.LayerIndex, overrides);
         CompareField(pathPrefix, "Enabled", instanceGO.Enabled, sourceGO.Enabled, overrides);
-        // Name and Transform (Position/Rotation/Scale) are intentionally NOT tracked —
+        // Name and Transform (Position/Rotation/Scale) are intentionally NOT tracked -
         // they are per-instance values that don't constitute overrides.
     }
 

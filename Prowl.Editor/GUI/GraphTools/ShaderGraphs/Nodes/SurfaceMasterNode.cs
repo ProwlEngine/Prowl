@@ -19,7 +19,7 @@ public enum ShaderLightingMode
     /// <summary>Full PBR forward lighting using Prowl's standard pipeline.</summary>
     PBR,
     /// <summary>Lambert diffuse only cheaper than PBR, no specular term. Just
-    /// albedo · N·L plus ambient.</summary>
+    /// albedo * N*L plus ambient.</summary>
     Lambert,
     /// <summary>Blinn-Phong Lambert diffuse plus a half-vector specular lobe. Uses
     /// Roughness input as a gloss exponent (higher = tighter highlight).</summary>
@@ -28,7 +28,7 @@ public enum ShaderLightingMode
 
 /// <summary>
 /// Master output node for the <c>Surface</c> shader type. Covers Lit PBR, Lit Basic
-/// (Lambert / Blinn-Phong), and Unlit via the <see cref="Lighting"/> dropdown —
+/// (Lambert / Blinn-Phong), and Unlit via the <see cref="Lighting"/> dropdown -
 /// selecting a mode hides the mode-specific inputs so the node stays tidy.
 /// </summary>
 public sealed class SurfaceMasterNode : MasterNodeBase
@@ -40,11 +40,11 @@ public sealed class SurfaceMasterNode : MasterNodeBase
 
     protected override void DefineNode()
     {
-        // ─── Vertex stage ─────────────────────────────────────────────────────────────
+        // --- Vertex stage -------------------------------------------------------------
         AddInput<Float3>("Vertex Position",  Float3.Zero, layout: PortLayout.Above);
         AddInput<Float3>("Vertex Normal",    Float3.Zero, layout: PortLayout.Above);
 
-        // ─── Surface (fragment) ───────────────────────────────────────────────────────
+        // --- Surface (fragment) -------------------------------------------------------
         // Defaults match Prowl's StandardSurface.glsl: white albedo (bright bland
         // PBR baseline), tangent-space (0,0,1) normal (passthrough), non-metal,
         // mid-rough, full ambient (AO=1, "white" texture convention), no emission,

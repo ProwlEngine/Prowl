@@ -89,7 +89,7 @@ public class OrmPackerPanel : DockPanel
             });
     }
 
-    // ── Sections ───────────────────────────────────────────────
+    // -- Sections -----------------------------------------------
 
     private void Section_Inputs(Paper paper)
     {
@@ -115,7 +115,7 @@ public class OrmPackerPanel : DockPanel
                     {
                         Origami.TextField(paper, "orm_out_path_tf", _outputPath,
                                 v => _outputPath = v ?? "")
-                            .Placeholder("Pick a file…").Width(UnitValue.Stretch()).Show();
+                            .Placeholder("Pick a file...").Width(UnitValue.Stretch()).Show();
 
                         Origami.Button(paper, "orm_out_browse", "Browse", () => OpenSaveDialog()).Width(80).Show();
                     }
@@ -177,7 +177,7 @@ public class OrmPackerPanel : DockPanel
                             .Width(UnitValue.Stretch()).Height(UnitValue.Stretch())
                             .Alignment(TextAlignment.MiddleCenter)
                             .IsNotInteractable()
-                            .Text("Click 'Generate Preview' to render a 256×256 thumbnail.", EditorTheme.DefaultFont)
+                            .Text("Click 'Generate Preview' to render a 256x256 thumbnail.", EditorTheme.DefaultFont)
                             .TextColor(EditorTheme.Ink300)
                             .FontSize(EditorTheme.FontSize - 1);
                     }
@@ -215,7 +215,7 @@ public class OrmPackerPanel : DockPanel
             .FontSize(EditorTheme.FontSize);
     }
 
-    // ── Slot drawing ───────────────────────────────────────────
+    // -- Slot drawing -------------------------------------------
 
     private void DrawSlot(Paper paper, ChannelSlot slot)
     {
@@ -295,7 +295,7 @@ public class OrmPackerPanel : DockPanel
         }
     }
 
-    // ── File dialog ────────────────────────────────────────────
+    // -- File dialog --------------------------------------------
 
     private void OpenSaveDialog()
     {
@@ -308,7 +308,7 @@ public class OrmPackerPanel : DockPanel
         }, startPath, new[] { "*.png" }, new[] { "PNG (*.png)" });
     }
 
-    // ── Packing ────────────────────────────────────────────────
+    // -- Packing ------------------------------------------------
 
     private void RunPreview()
     {
@@ -322,7 +322,7 @@ public class OrmPackerPanel : DockPanel
             _previewTex?.Dispose();
             _previewTex = Texture2D.FromImage((MagickImage)packed.Clone());
 
-            _lastSuccess = $"Preview generated ({packed.Width}×{packed.Height}).";
+            _lastSuccess = $"Preview generated ({packed.Width}x{packed.Height}).";
         }
         catch (Exception ex)
         {
@@ -350,7 +350,7 @@ public class OrmPackerPanel : DockPanel
             // The asset database's filesystem watcher picks up new files automatically;
             // no explicit refresh needed.
 
-            _lastSuccess = $"Packed to {_outputPath} ({packed.Width}×{packed.Height}).";
+            _lastSuccess = $"Packed to {_outputPath} ({packed.Width}x{packed.Height}).";
         }
         catch (Exception ex)
         {

@@ -11,7 +11,7 @@ public static class EditorTheme
     /// <summary>Default transition (seconds) when applying the editor theme to Origami. 0 = snap.</summary>
     public const float OrigamiTransitionSeconds = 0.25f;
 
-    // ── Editor's Origami theme state ──────────────────────────────────
+    // -- Editor's Origami theme state ----------------------------------
     //
     // The editor owns its own OrigamiTheme and pushes it onto Origami's stack
     // each frame (see PushOrigami). Origami.Root is left untouched so user code
@@ -25,7 +25,7 @@ public static class EditorTheme
 
     /// <summary>
     /// Live theme the editor pushes onto Origami's stack. Frame-fresh when transitioning.
-    /// Re-built on access until <see cref="DefaultFont"/> has loaded — early frames before
+    /// Re-built on access until <see cref="DefaultFont"/> has loaded - early frames before
     /// font initialisation would otherwise cache a Font=null theme and never recover.
     /// <see cref="SyncOrigami"/> replaces it when the user mutates the theme.
     /// </summary>
@@ -56,7 +56,7 @@ public static class EditorTheme
     /// <c>EditorSettings.ApplyTheme</c> so user theme edits propagate live.
     /// </summary>
     /// <remarks>
-    /// This is the only place in the editor that bridges into Origami — Origami itself has no
+    /// This is the only place in the editor that bridges into Origami - Origami itself has no
     /// reference to <see cref="EditorTheme"/> or any editor type, keeping the widget library
     /// extractable as a standalone package. The transition runs against the editor's pushed
     /// theme; <see cref="Origami.Root"/> is never written.
@@ -111,7 +111,7 @@ public static class EditorTheme
     /// <summary>Construct the editor-flavoured Origami theme without applying it (useful for preview/diff).</summary>
     public static OrigamiTheme BuildOrigamiTheme() => new()
     {
-        // Neutral — editor's 5-stop ramp extended to 7 by reusing Ink200/Ink300 for the lighter end,
+        // Neutral - editor's 5-stop ramp extended to 7 by reusing Ink200/Ink300 for the lighter end,
         // matching how the editor itself blends Neutral into Ink at the brighter range.
         Neutral = new OrigamiRamp
         {
@@ -119,12 +119,12 @@ public static class EditorTheme
             C400 = Neutral400, C500 = Neutral500, C600 = Ink200, C700 = Ink300,
         },
 
-        // Editor's branded ramps map 1:1 (Purple → Primary is the only rename).
+        // Editor's branded ramps map 1:1 (Purple -> Primary is the only rename).
         Primary = RampFrom(Purple100, Purple200, Purple300, Purple400, Purple500, Purple600, Purple700),
         Blue    = RampFrom(Blue100,   Blue200,   Blue300,   Blue400,   Blue500,   Blue600,   Blue700),
         Red     = RampFrom(Red100,    Red200,    Red300,    Red400,    Red500,    Red600,    Red700),
 
-        // Editor has no Green or Amber yet — hand-tuned. Replace once the editor adds them.
+        // Editor has no Green or Amber yet - hand-tuned. Replace once the editor adds them.
         Green = RampFromHex("#0F1F15", "#162C20", "#1F4530", "#2D5C42", "#3D7A57", "#5DC07F", "#A6E5B7"),
         Amber = RampFromHex("#1F1808", "#3A2A10", "#5C4017", "#7A5520", "#9B7332", "#E0A954", "#F4D8A8"),
 
@@ -264,17 +264,17 @@ public static class EditorTheme
     //   Pressed = -100  (one step darker  sinks)
     //
     // Ramps:
-    //   Neutral  100–500  Background depth stack (page → surface)
-    //   Purple   100–700  Primary brand / interactive
-    //   Blue     100–700  Secondary / informational
-    //   Red      100–700  Danger / error / destructive
-    //   Ink      100–500  Text and border hierarchy
+    //   Neutral  100-500  Background depth stack (page -> surface)
+    //   Purple   100-700  Primary brand / interactive
+    //   Blue     100-700  Secondary / informational
+    //   Red      100-700  Danger / error / destructive
+    //   Ink      100-500  Text and border hierarchy
 
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
     //  NEUTRAL Background depth stack
     //  Use in ascending order from the deepest layer upward.
     //  100 = page base (behind everything), 400 = elevated surface.
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
 
     /// <summary>
     /// Neutral100 #101116  "Void"
@@ -309,7 +309,7 @@ public static class EditorTheme
     public static Color Neutral500 = ColorTranslator.FromHtml("#2E2D35");
 
 
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
     //  PURPLE Primary brand / interactive ramp
     //  ★ Primary = Purple400 (#563784)
     //
@@ -317,7 +317,7 @@ public static class EditorTheme
     //    Normal  = Purple400
     //    Hovered = Purple500
     //    Pressed = Purple300
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
 
     /// <summary>
     /// Purple100 #1D1010  "Char"
@@ -364,7 +364,7 @@ public static class EditorTheme
     public static Color Purple700 = ColorTranslator.FromHtml("#D4B8F4");
 
 
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
     //  BLUE Secondary / informational ramp
     //  ★ Primary = Blue400 (#82AAC6)
     //
@@ -372,7 +372,7 @@ public static class EditorTheme
     //    Normal  = Blue400
     //    Hovered = Blue500
     //    Pressed = Blue300
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
 
     /// <summary>
     /// Blue100 #0D1A24  "Deep Ocean"
@@ -419,7 +419,7 @@ public static class EditorTheme
     public static Color Blue700 = ColorTranslator.FromHtml("#E8F2F9");
 
 
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
     //  RED Danger / error / destructive ramp
     //  ★ Primary = Red400 (#CB594F)
     //
@@ -427,7 +427,7 @@ public static class EditorTheme
     //    Normal  = Red400
     //    Hovered = Red500
     //    Pressed = Red300
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
 
     /// <summary>
     /// Red100 #1C0E0E  "Char"
@@ -472,11 +472,11 @@ public static class EditorTheme
     public static Color Red700 = ColorTranslator.FromHtml("#FDE0DE");
 
 
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
     //  INK Text and border hierarchy
     //  Use in ascending order: 100 = borders, 500 = primary readable text.
     //  Never use pure black or white these stops keep the purple-dark theme cast.
-    // ─────────────────────────────────────────────────────────────
+    // -------------------------------------------------------------
 
     /// <summary>
     /// Ink100 #2E2D35  "Graphite"

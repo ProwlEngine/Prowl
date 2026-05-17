@@ -47,7 +47,7 @@ public sealed class ParticleShaderType : IShaderType
         graph.RenderSettings = DefaultRenderSettings;
 
         // Seed a minimal but visible graph: VertexColor (which the vertex stage
-        // initialises to instanceColor × vertexColor) wired straight into Color.
+        // initialises to instanceColor x vertexColor) wired straight into Color.
         // Renders particles as solid, instance-coloured quads users add a
         // texture sample between them to get a sprite-based look.
         var master = new ParticleMasterNode { Position = new Float2(520, 120) };
@@ -118,12 +118,12 @@ internal sealed class ParticlePass : IShaderPass
         sb.AppendLine("    GLSLPROGRAM");
         sb.AppendLine();
 
-        // ─ Vertex (hardcoded billboard) ─
+        // - Vertex (hardcoded billboard) -
         EmitVertexStage(sb, fragCtx.Varyings);
 
         sb.AppendLine();
 
-        // ─ Fragment ─
+        // - Fragment -
         EmitFragmentStage(sb, master, fragCtx, colorExpr, alphaExpr, alphaWired);
 
         sb.AppendLine("    ENDGLSL");
@@ -195,7 +195,7 @@ internal sealed class ParticlePass : IShaderPass
     private static void EmitFragmentStage(StringBuilder sb, ParticleMasterNode master, ShaderGenContext fragCtx,
         string colorExpr, string alphaExpr, bool alphaWired)
     {
-        // If ParticleLifetimeNode was used it added vLifetime to fragCtx.Varyings —
+        // If ParticleLifetimeNode was used it added vLifetime to fragCtx.Varyings -
         // propagate that via #define so the vertex stage knows to write it.
         bool wantsLifetime = false;
         foreach (var (n, _) in fragCtx.Varyings) if (n == "vLifetime") { wantsLifetime = true; break; }

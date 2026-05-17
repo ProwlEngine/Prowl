@@ -55,7 +55,7 @@ public sealed class ShaderGraphImporter : AssetImporter
 
         ctx.SetMainAsset(graph);
 
-        // Compile to GLSL → parse to a Shader. Sub-asset name baked off the file name
+        // Compile to GLSL -> parse to a Shader. Sub-asset name baked off the file name
         // for stability (deterministic GUID through the parent).
         var shaderName = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
         var result = ShaderGraphCompiler.Compile(graph, shaderName);
@@ -80,7 +80,7 @@ public sealed class ShaderGraphImporter : AssetImporter
 
         // Parse the generated GLSL into a Shader runtime object via the existing parser
         // pipeline. Reuses the same code path Prowl uses for hand-written .shader files,
-        // INCLUDING the same include-resolution chain (relative → Assets root →
+        // INCLUDING the same include-resolution chain (relative -> Assets root ->
         // embedded defaults). Without the embedded fallback, every #include "Fragment"
         // etc. would fail because users author shader graphs in Assets/, not embedded.
         string dir = System.IO.Path.GetDirectoryName(ctx.AbsolutePath) ?? "";

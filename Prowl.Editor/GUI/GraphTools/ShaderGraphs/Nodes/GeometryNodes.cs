@@ -7,21 +7,21 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime.GraphTools.ShaderGraphs.Nodes;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Color accent for all geometry data nodes
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 internal static class GeometryAccents
 {
     public static readonly System.Drawing.Color Geometry = System.Drawing.Color.FromArgb(255, 140, 110, 60); /* dark amber */
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // TexCoordNode
 // Outputs the mesh UV coordinates. Channel selects UV0 or UV1.
 // Only UV0 is a compiler-built varying (texCoord0); UV1 is passed through as
 // vertexTexCoord1 from VertexAttributes.glsl. Both are vec2.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class TexCoordNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -72,11 +72,11 @@ public sealed class TexCoordNode : Node, IShaderNode, IShaderGraphNode
         => outputPort.Name == "UV" ? ShaderType.Vec2 : ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // VertexColorNode
 // Per-vertex color interpolated across the triangle (vColor, vec4).
 // Outputs RGBA (vec4) and individual float channels.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class VertexColorNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -128,7 +128,7 @@ public sealed class VertexColorNode : Node, IShaderNode, IShaderGraphNode
         };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // NormalDirectionNode
 // Outputs the surface normal in world, object, or tangent space.
 //   World  (default) : vNormal  (normalized world-space varying)
@@ -139,7 +139,7 @@ public sealed class VertexColorNode : Node, IShaderNode, IShaderGraphNode
 //                      prowl_WorldToObject))` is equivalent to the inverse-transpose
 //                      of ObjectToWorld, which is the mathematically-correct
 //                      normal transform.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public enum NormalSpace { World = 0, Tangent = 1, Object = 2 }
 
@@ -199,10 +199,10 @@ public sealed class NormalDirectionNode : Node, IShaderNode, IShaderGraphNode
         => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // TangentDirectionNode
 // World-space tangent interpolated across the triangle (vTangent, vec3).
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class TangentDirectionNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -233,10 +233,10 @@ public sealed class TangentDirectionNode : Node, IShaderNode, IShaderGraphNode
         => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // BitangentDirectionNode
-// World-space bitangent (cross of world normal × tangent) (vBitangent, vec3).
-// ═════════════════════════════════════════════════════════════════════════════
+// World-space bitangent (cross of world normal x tangent) (vBitangent, vec3).
+// =============================================================================
 
 public sealed class BitangentDirectionNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -252,7 +252,7 @@ public sealed class BitangentDirectionNode : Node, IShaderNode, IShaderGraphNode
     string IShaderNode.Evaluate(Port outputPort, ShaderStage stage, ShaderGenContext ctx)
     {
         // In fragment the compiler's vertex body hands us the already-crossed,
-        // already-normalised vBitangent. In vertex we build it from vertexNormal ×
+        // already-normalised vBitangent. In vertex we build it from vertexNormal x
         // vertexTangent, matching the same formula used later in the vertex body.
         if (stage == ShaderStage.Vertex)
         {
@@ -273,11 +273,11 @@ public sealed class BitangentDirectionNode : Node, IShaderNode, IShaderGraphNode
         => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // WorldPositionNode
 // World-space position of the current fragment (worldPos, vec3).
 // Multi-output: XYZ / X / Y / Z.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class WorldPositionNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -330,12 +330,12 @@ public sealed class WorldPositionNode : Node, IShaderNode, IShaderGraphNode
         => outputPort.Name == "XYZ" ? ShaderType.Vec3 : ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ObjectPositionNode
 // World-space position of the object's origin the translation column of the
 // model matrix (prowl_ObjectToWorld[3].xyz). Requires ShaderVariables.
 // Multi-output: XYZ / X / Y / Z.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class ObjectPositionNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -368,12 +368,12 @@ public sealed class ObjectPositionNode : Node, IShaderNode, IShaderGraphNode
         => outputPort.Name == "XYZ" ? ShaderType.Vec3 : ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ObjectScaleNode
 // Per-axis world-space scale derived from the column lengths of the model matrix.
 // Cached into a BodyPrelude temp so the three length() calls are paid once.
 // Multi-output: XYZ / X / Y / Z.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class ObjectScaleNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -415,12 +415,12 @@ public sealed class ObjectScaleNode : Node, IShaderNode, IShaderGraphNode
         => outputPort.Name == "XYZ" ? ShaderType.Vec3 : ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ViewDirectionNode
 // World-space unit vector from the fragment toward the camera.
 // = normalize(_WorldSpaceCameraPos.xyz - worldPos)
 // Cached via BodyPrelude so the normalize() runs once per fragment.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class ViewDirectionNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -449,12 +449,12 @@ public sealed class ViewDirectionNode : Node, IShaderNode, IShaderGraphNode
         => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ViewReflectionDirectionNode
 // Reflection of the view direction about the world-space surface normal.
 // = reflect(-viewDir, worldNormal)
 // Both viewDir and vNormal are resolved via cache so each helper emits once.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class ViewReflectionDirectionNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -497,13 +497,13 @@ public sealed class ViewReflectionDirectionNode : Node, IShaderNode, IShaderGrap
         => ShaderType.Vec3;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // ScreenPositionNode
 // Fragment screen-space position, available in two modes:
-//   Raw        : gl_FragCoord.xy / _ScreenParams.xy  → [0,1] window UV
+//   Raw        : gl_FragCoord.xy / _ScreenParams.xy  -> [0,1] window UV
 //   Normalized : NDC xy remapped to [-1,+1]
 // Output is always vec2.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public enum ScreenPositionMode { Raw = 0, Normalized = 1, Tiled = 2 }
 
@@ -541,7 +541,7 @@ public sealed class ScreenPositionNode : Node, IShaderNode, IShaderGraphNode
             }
             else if (Mode == ScreenPositionMode.Normalized)
             {
-                // Remap [0,1] → [-1,+1].
+                // Remap [0,1] -> [-1,+1].
                 ctx.BodyPrelude.AppendLine(
                     $"    vec2 {local} = (gl_FragCoord.xy / _ScreenParams.xy) * 2.0 - 1.0;");
             }
@@ -563,12 +563,12 @@ public sealed class ScreenPositionNode : Node, IShaderNode, IShaderGraphNode
         => outputPort.Name == "UV" ? ShaderType.Vec2 : ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // FaceSignNode
 // Returns +1.0 for front-facing fragments and -1.0 for back-facing ones, using
 // GLSL's built-in gl_FrontFacing boolean. The PlusMinusOne mode outputs +1/-1;
 // the OneAndZero variant outputs 1.0 / 0.0 instead.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public enum FaceSignOutputMode { PlusMinusOne = 0, OneAndZero = 1 }
 
@@ -598,7 +598,7 @@ public sealed class FaceSignNode : Node, IShaderNode, IShaderGraphNode
         => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // FresnelNode
 // Standard Schlick/power-of-cosine Fresnel:
 //   pow(1.0 - abs(dot(normal, viewDir)), exponent)
@@ -606,7 +606,7 @@ public sealed class FaceSignNode : Node, IShaderNode, IShaderGraphNode
 //   Normal  (Vec3, optional defaults to world-space vNormal)
 //   Bias    (Float, default 0.0 additive offset before pow)
 //   Power   (Float, default 5.0 exponent)
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class FresnelNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -616,7 +616,7 @@ public sealed class FresnelNode : Node, IShaderNode, IShaderGraphNode
 
     protected override void DefineNode()
     {
-        AddInput<Float3>("Normal",  Float3.Zero); // unconnected → world vNormal fallback
+        AddInput<Float3>("Normal",  Float3.Zero); // unconnected -> world vNormal fallback
         AddInput<float>("Bias",    0.0f);
         AddInput<float>("Power",   5.0f);
         AddOutput<float>("Out");
@@ -669,12 +669,12 @@ public sealed class FresnelNode : Node, IShaderNode, IShaderGraphNode
         => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // DepthNode
 // Eye-space (linear) depth: world-space distance from the camera to the fragment.
 // Uses length(_WorldSpaceCameraPos.xyz - worldPos) which is the distance in view
 // space for a perspective camera. Requires ShaderVariables.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class DepthNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -715,7 +715,7 @@ public sealed class DepthNode : Node, IShaderNode, IShaderGraphNode
         => ShaderType.Float;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // InstanceColorNode
 //
 // Exposes the per-instance tint used by GPU-instanced renderers. When
@@ -723,7 +723,7 @@ public sealed class DepthNode : Node, IShaderNode, IShaderGraphNode
 // VertexAttributes.glsl's GetInstanceColor()). When not instancing, it falls
 // back to plain vertexColor, matching the varying the vertex stage already
 // emits as vColor.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class InstanceColorNode : Node, IShaderNode, IShaderGraphNode
 {
@@ -766,13 +766,13 @@ public sealed class InstanceColorNode : Node, IShaderNode, IShaderGraphNode
     };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 // InstanceCustomDataNode
 //
 // Per-instance vec4 payload authors can use for anything (timing offsets, wind
 // strength, sprite frame, etc.). Only meaningful under GPU_INSTANCING; otherwise
 // reads vec4(0) see VertexAttributes.glsl::GetInstanceCustomData.
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 
 public sealed class InstanceCustomDataNode : Node, IShaderNode, IShaderGraphNode
 {

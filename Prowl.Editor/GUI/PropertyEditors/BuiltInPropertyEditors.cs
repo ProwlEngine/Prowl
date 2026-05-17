@@ -157,7 +157,7 @@ public class UIntPropertyEditor : PropertyEditor
 }
 
 // ================================================================
-//  Math Types  (vector / colour / curve composites — outside the
+//  Math Types  (vector / colour / curve composites - outside the
 //  Origami dropdown/textfield migration scope; left on the legacy widgets)
 // ================================================================
 

@@ -104,13 +104,13 @@ public static class ShaderTypeUtil
 
     /// <summary>
     /// Promote <paramref name="expr"/> from <paramref name="from"/> to <paramref name="to"/>.
-    /// Covers every numeric-to-numeric pair: scalar casts (Int/Bool ↔ Float), scalar
-    /// broadcasts (Float → Vec2/3/4), vector truncation (VecN → VecM where M&lt;N),
-    /// vector extension (VecM → VecN where N&gt;M; alpha = 1 when target is vec4),
-    /// and the trivial Color ↔ Vec4 no-op.
+    /// Covers every numeric-to-numeric pair: scalar casts (Int/Bool <-> Float), scalar
+    /// broadcasts (Float -> Vec2/3/4), vector truncation (VecN -> VecM where M&lt;N),
+    /// vector extension (VecM -> VecN where N&gt;M; alpha = 1 when target is vec4),
+    /// and the trivial Color <-> Vec4 no-op.
     /// </summary>
     /// <remarks>
-    /// Non-numeric pairs (Sampler2D → Float, Mat3 → Vec3, etc.) don't have a sensible
+    /// Non-numeric pairs (Sampler2D -> Float, Mat3 -> Vec3, etc.) don't have a sensible
     /// promotion we return the expression unchanged and leave the generated GLSL to
     /// surface a type error. Caller should diagnose these at a higher level if it wants
     /// a nicer error message than "cannot convert sampler2D to float".
@@ -123,7 +123,7 @@ public static class ShaderTypeUtil
         if ((from == ShaderType.Color && to == ShaderType.Vec4) ||
             (from == ShaderType.Vec4 && to == ShaderType.Color)) return expr;
 
-        // Non-numeric → non-numeric (e.g. samplers, matrices): can't promote. Let the
+        // Non-numeric -> non-numeric (e.g. samplers, matrices): can't promote. Let the
         // GLSL compiler reject it no sane textual transformation exists.
         if (!IsNumeric(from) || !IsNumeric(to)) return expr;
 
@@ -134,7 +134,7 @@ public static class ShaderTypeUtil
         if (fc == 1 && from != ShaderType.Float)
             expr = $"float({expr})";
 
-        // Scalar broadcast: 1 → N produces vecN(x).
+        // Scalar broadcast: 1 -> N produces vecN(x).
         if (fc == 1 && tc > 1) return $"{ToGlsl(to)}({expr})";
 
         // Target scalar: take the red channel, cast back if we need Int/Bool.
@@ -149,11 +149,11 @@ public static class ShaderTypeUtil
             };
         }
 
-        // Vector truncation: VecN → VecM, keep leading channels.
+        // Vector truncation: VecN -> VecM, keep leading channels.
         if (fc > tc) return $"({expr})." + "xyzw".Substring(0, tc);
 
         // Vector extension fill with 0, alpha = 1 when target is vec4 / Color so an
-        // RGB → RGBA promotion yields an opaque colour by default.
+        // RGB -> RGBA promotion yields an opaque colour by default.
         if (fc == 2 && tc == 3) return $"vec3({expr}, 0.0)";
         if (fc == 2 && tc == 4) return $"vec4({expr}, 0.0, 1.0)";
         if (fc == 3 && tc == 4) return $"vec4({expr}, 1.0)";
