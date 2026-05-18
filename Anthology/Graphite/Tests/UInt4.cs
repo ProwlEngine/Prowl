@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct UInt4

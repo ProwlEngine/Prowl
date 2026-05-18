@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 internal struct UIntVertexAttribsVertex
 {
@@ -55,7 +55,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         DeviceBuffer infoBuffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Matrix4x4 orthoMatrix = Matrix4x4.CreateOrthographicOffCenter(
+        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
             0,
             framebuffer.Width,
             framebuffer.Height,
@@ -75,8 +75,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, infoBuffer, orthoBuffer));
 
@@ -190,7 +190,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
         DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Matrix4x4 orthoMatrix = Matrix4x4.CreateOrthographicOffCenter(
+        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
             0,
             framebuffer.Width,
             framebuffer.Height,
@@ -210,7 +210,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             TestShaders.LoadVertexFragment(RF, "U16NormVertexAttribs"));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, orthoBuffer));
 
@@ -334,7 +334,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         DeviceBuffer infoBuffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Matrix4x4 orthoMatrix = Matrix4x4.CreateOrthographicOffCenter(
+        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
             0,
             framebuffer.Width,
             framebuffer.Height,
@@ -354,8 +354,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             TestShaders.LoadVertexFragment(RF, "U16VertexAttribs"));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, infoBuffer, orthoBuffer));
 
@@ -458,7 +458,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         DeviceBuffer infoBuffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Matrix4x4 orthoMatrix = Matrix4x4.CreateOrthographicOffCenter(
+        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
             0,
             framebuffer.Width,
             framebuffer.Height,
@@ -478,8 +478,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             TestShaders.LoadVertexFragment(RF, "F16VertexAttribs"));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("OrthoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("OrthoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, infoBuffer, orthoBuffer));
 
@@ -615,7 +615,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
         DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Matrix4x4 orthoMatrix = Matrix4x4.CreateOrthographicOffCenter(
+        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
             0,
             framebuffer.Width,
             framebuffer.Height,
@@ -637,14 +637,15 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             new VertexLayoutDescription[]
             {
                 new VertexLayoutDescription(
+                    0u,
                     new VertexElementDescription("Position", VertexElementFormat.Float2))
             },
             TestShaders.LoadVertexFragment(RF, "TexturedPoints"));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
 
         ResourceSet set;
         if (useTextureView)
@@ -749,7 +750,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             vertexSize));
 
         ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute)));
+            new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0)));
         ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, buffer));
 
         Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
@@ -758,7 +759,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             1, 1, 1));
 
         ResourceLayout graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, 0)));
         ResourceSet graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, buffer));
 
         Pipeline graphicsPipeline = RF.CreateGraphicsPipeline(new GraphicsPipelineDescription(
@@ -815,7 +816,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, finalOutput));
 
         ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute)));
+            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
         ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, computeOutput));
 
         Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
@@ -824,8 +825,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             4, 1, 1));
 
         ResourceLayout graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Input", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-            new ResourceLayoutElementDescription("InputSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("Input", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+            new ResourceLayoutElementDescription("InputSampler", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
         ResourceSet graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, computeOutput, GD.PointSampler));
 
         Pipeline graphicsPipeline = RF.CreateGraphicsPipeline(new GraphicsPipelineDescription(
@@ -880,7 +881,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Texture computeOutput = RF.CreateTexture(texDesc);
 
         ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute)));
+            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
         ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, computeOutput));
 
         Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
@@ -951,8 +952,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateTexture(tex1D, colors, 0, 0, 0, tex1D.Width, 1, 1, 0, 0);
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tex1D, GD.PointSampler));
 
@@ -1042,8 +1043,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateTexture(target2, colors, 0, 0, 0, target2.Width, target2.Height, 1, 0, 0);
 
         ResourceLayout textureLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
 
         ResourceSet textureSet = RF.CreateResourceSet(new ResourceSetDescription(textureLayout, textureView, GD.PointSampler));
 
@@ -1137,8 +1138,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateTexture(tex2D, colors, 0, 0, 0, tex2D.Width, 1, 1, 0, 0);
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tex2D, GD.PointSampler));
 
@@ -1207,8 +1208,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateTexture(tex2D, colors, 0, 0, 0, tex2D.Width, 1, 1, 0, 0);
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tex2D, GD.PointSampler));
 
@@ -1259,7 +1260,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             TestShaders.LoadVertexFragment(RF, setName));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("FramebufferInfo", ResourceKind.UniformBuffer, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("FramebufferInfo", ResourceKind.UniformBuffer, ShaderStages.Fragment, 0)));
 
         DeviceBuffer ub = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
         GD.UpdateBuffer(ub, 0, new Float4(depthTarget.Width, depthTarget.Height, 0, 0));
@@ -1333,7 +1334,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateBuffer(buffer, 0, vertices);
 
         using var graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, 0)));
         using var graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, buffer));
 
         var blendDesc = new BlendStateDescription
@@ -1369,7 +1370,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         {
             cl.Begin();
             cl.SetFramebuffer(framebuffer);
-            cl.ClearColorTarget(0, Color.Clear);
+            cl.ClearColorTarget(0, default(Color));
             cl.SetPipeline(pipeline1);
             cl.SetGraphicsResourceSet(0, graphicsSet);
             cl.Draw((uint)vertices.Length);
@@ -1442,7 +1443,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         GD.UpdateBuffer(buffer, 0, vertices);
 
         using var graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, 0)));
         using var graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, buffer));
 
         var blendDesc = new BlendStateDescription
@@ -1478,7 +1479,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         {
             cl.Begin();
             cl.SetFramebuffer(framebuffer);
-            cl.ClearColorTarget(0, Color.Clear);
+            cl.ClearColorTarget(0, default(Color));
             cl.SetPipeline(pipeline1);
             cl.SetGraphicsResourceSet(0, graphicsSet);
             cl.Draw((uint)vertices.Length);

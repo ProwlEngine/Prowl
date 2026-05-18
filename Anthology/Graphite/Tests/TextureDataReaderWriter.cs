@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 internal unsafe class TextureDataReaderWriter
 {

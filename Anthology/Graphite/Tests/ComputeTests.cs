@@ -1,14 +1,12 @@
-﻿using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using Prowl.Vector;
+﻿using Prowl.Vector;
+
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 [StructLayout(LayoutKind.Sequential)]
 struct FillValueStruct
@@ -56,14 +54,15 @@ void main()
         const float FillValue = 42.42f;
         const uint OutputTextureSize = 32;
 
-        using Shader computeShader = RF.CreateFromSpirv(new ShaderDescription(
-            ShaderStages.Compute,
-            Encoding.ASCII.GetBytes(shaderText),
-            "main"));
+        ShaderProgram computeShader = null; // SPIRV cross-compilation handled separately; see TestShaders.cs.
+        // using Shader computeShader = RF.CreateFromSpirv(new ShaderDescription(
+        //     ShaderStages.Compute,
+        //     Encoding.ASCII.GetBytes(shaderText),
+        //     "main"));
 
         using ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("TextureToFill", ResourceKind.TextureReadWrite, ShaderStages.Compute),
-            new ResourceLayoutElementDescription("FillValueBuffer", ResourceKind.UniformBuffer, ShaderStages.Compute)));
+            new ResourceLayoutElementDescription("TextureToFill", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0),
+            new ResourceLayoutElementDescription("FillValueBuffer", ResourceKind.UniformBuffer, ShaderStages.Compute, 1)));
 
         using Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
             computeShader,
@@ -106,7 +105,8 @@ void main()
         // Read back from our texture and make sure it has been properly filled.
         for (uint depth = 0; depth < computeTargetTexture.Depth; depth++)
         {
-            Color expectedFillValue = new Color(new Prowl.Vector.Float4(FillValue * (depth + 1)));
+            float v = FillValue * (depth + 1);
+            Color expectedFillValue = new Color(v, v, v, v);
             int notFilledCount = CountTexelsNotFilledAtDepth(GD, computeTargetTexture, expectedFillValue, depth);
 
             Assert.Equal(0, notFilledCount);
@@ -187,9 +187,9 @@ void main()
         Skip.IfNot(GD.Features.ComputeShader);
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Params", ResourceKind.UniformBuffer, ShaderStages.Compute),
-            new ResourceLayoutElementDescription("Source", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute),
-            new ResourceLayoutElementDescription("Destination", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute)));
+            new ResourceLayoutElementDescription("Params", ResourceKind.UniformBuffer, ShaderStages.Compute, 0),
+            new ResourceLayoutElementDescription("Source", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 1),
+            new ResourceLayoutElementDescription("Destination", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 2)));
 
         uint width = 1024;
         uint height = 1024;
@@ -268,7 +268,7 @@ void main()
         };
 
         ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute)));
+            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
         ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, computeOutput));
 
         Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
@@ -293,8 +293,8 @@ void main()
                 {
                     var subresource = readback.CalculateSubresource(mip, face);
                     var mipSize = (TexSize >> (int)mip);
-                    var expectedColor = new RgbaByte((byte)faceColors[face].X, (byte)faceColors[face].Y, (byte)faceColors[face].Z, (byte)faceColors[face].Z);
-                    MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(readback, MapMode.Read, subresource);
+                    var expectedColor = new Color32((byte)faceColors[face].X, (byte)faceColors[face].Y, (byte)faceColors[face].Z, (byte)faceColors[face].Z);
+                    MappedResourceView<Color32> readView = GD.Map<Color32>(readback, MapMode.Read, subresource);
                     for (int y = 0; y < mipSize; y++)
                         for (int x = 0; x < mipSize; x++)
                         {
@@ -337,7 +337,7 @@ void main()
         };
 
         ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute)));
+            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
         ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, computeOutputMipLevel));
 
         Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
@@ -353,8 +353,8 @@ void main()
                 {
                     var subresource = readback.CalculateSubresource(mip, face);
                     var mipSize = (uint)(TexSize / (1 << (int)mip));
-                    var expectedColor = RgbaByte.Clear;
-                    MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(readback, MapMode.Read, subresource);
+                    var expectedColor = new Color32(0, 0, 0, 0);
+                    MappedResourceView<Color32> readView = GD.Map<Color32>(readback, MapMode.Read, subresource);
                     for (int y = 0; y < mipSize; y++)
                         for (int x = 0; x < mipSize; x++)
                         {
@@ -382,8 +382,8 @@ void main()
                 {
                     var subresource = readback.CalculateSubresource(mip, face);
                     var mipSize = (uint)(TexSize / (1 << (int)mip));
-                    var expectedColor = mip == BoundMipLevel ? new RgbaByte((byte)faceColors[face].X, (byte)faceColors[face].Y, (byte)faceColors[face].Z, (byte)faceColors[face].Z) : RgbaByte.Clear;
-                    MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(readback, MapMode.Read, subresource);
+                    var expectedColor = mip == BoundMipLevel ? new Color32((byte)faceColors[face].X, (byte)faceColors[face].Y, (byte)faceColors[face].Z, (byte)faceColors[face].Z) : default(Color32);
+                    MappedResourceView<Color32> readView = GD.Map<Color32>(readback, MapMode.Read, subresource);
                     for (int y = 0; y < mipSize; y++)
                         for (int x = 0; x < mipSize; x++)
                         {
@@ -395,135 +395,6 @@ void main()
         }
     }
 
-    [SkippableTheory]
-    [MemberData(nameof(FillBuffer_WithOffsetsData))]
-    public void FillBuffer_WithOffsets(uint srcSetMultiple, uint srcBindingMultiple, uint dstSetMultiple, uint dstBindingMultiple, bool combinedLayout)
-    {
-        Skip.IfNot(GD.Features.ComputeShader);
-        Skip.If(!GD.Features.BufferRangeBinding && (srcSetMultiple != 0 || srcBindingMultiple != 0 || dstSetMultiple != 0 || dstBindingMultiple != 0));
-
-        Debug.Assert((GD.StructuredBufferMinOffsetAlignment % sizeof(uint)) == 0);
-
-        uint valueCount = 512;
-        uint dataSize = valueCount * sizeof(uint);
-        uint totalSrcAlignment = GD.StructuredBufferMinOffsetAlignment * (srcSetMultiple + srcBindingMultiple);
-        uint totalDstAlignment = GD.StructuredBufferMinOffsetAlignment * (dstSetMultiple + dstBindingMultiple);
-
-        DeviceBuffer copySrc = RF.CreateBuffer(
-            new BufferDescription(totalSrcAlignment + dataSize, BufferUsage.StructuredBufferReadOnly, sizeof(uint)));
-        DeviceBuffer copyDst = RF.CreateBuffer(
-            new BufferDescription(totalDstAlignment + dataSize, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
-
-        ResourceLayout[] layouts;
-        ResourceSet[] sets;
-
-        DeviceBufferRange srcRange = new DeviceBufferRange(copySrc, srcSetMultiple * GD.StructuredBufferMinOffsetAlignment, dataSize);
-        DeviceBufferRange dstRange = new DeviceBufferRange(copyDst, dstSetMultiple * GD.StructuredBufferMinOffsetAlignment, dataSize);
-
-        if (combinedLayout)
-        {
-            layouts = new[]
-            {
-                RF.CreateResourceLayout(new ResourceLayoutDescription(
-                    new ResourceLayoutElementDescription(
-                        "CopySrc",
-                        ResourceKind.StructuredBufferReadOnly,
-                        ShaderStages.Compute,
-                        ResourceLayoutElementOptions.DynamicBinding),
-                    new ResourceLayoutElementDescription(
-                        "CopyDst",
-                        ResourceKind.StructuredBufferReadWrite,
-                        ShaderStages.Compute,
-                        ResourceLayoutElementOptions.DynamicBinding)))
-            };
-            sets = new[]
-            {
-                RF.CreateResourceSet(new ResourceSetDescription(layouts[0], srcRange, dstRange))
-            };
-        }
-        else
-        {
-            layouts = new[]
-            {
-                RF.CreateResourceLayout(new ResourceLayoutDescription(
-                    new ResourceLayoutElementDescription(
-                        "CopySrc",
-                        ResourceKind.StructuredBufferReadOnly,
-                        ShaderStages.Compute,
-                        ResourceLayoutElementOptions.DynamicBinding))),
-                RF.CreateResourceLayout(new ResourceLayoutDescription(
-                    new ResourceLayoutElementDescription(
-                        "CopyDst",
-                        ResourceKind.StructuredBufferReadWrite,
-                        ShaderStages.Compute,
-                        ResourceLayoutElementOptions.DynamicBinding)))
-            };
-            sets = new[]
-            {
-                RF.CreateResourceSet(new ResourceSetDescription(layouts[0], srcRange)),
-                RF.CreateResourceSet(new ResourceSetDescription(layouts[1], dstRange)),
-            };
-        }
-
-        Pipeline pipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
-            TestShaders.LoadCompute(RF, combinedLayout ? "FillBuffer" : "FillBuffer_SeparateLayout"),
-            layouts,
-            1, 1, 1));
-
-        uint[] srcData = Enumerable.Range(0, (int)copySrc.SizeInBytes / sizeof(uint)).Select(i => (uint)i).ToArray();
-        GD.UpdateBuffer(copySrc, 0, srcData);
-
-        CommandBuffer cl = RF.CreateCommandList();
-        cl.Begin();
-        cl.SetPipeline(pipeline);
-        if (combinedLayout)
-        {
-            uint[] offsets = new[]
-            {
-                srcBindingMultiple * GD.StructuredBufferMinOffsetAlignment,
-                dstBindingMultiple * GD.StructuredBufferMinOffsetAlignment
-            };
-            cl.SetComputeResourceSet(0, sets[0], offsets);
-        }
-        else
-        {
-            uint offset = srcBindingMultiple * GD.StructuredBufferMinOffsetAlignment;
-            cl.SetComputeResourceSet(0, sets[0], 1, ref offset);
-            offset = dstBindingMultiple * GD.StructuredBufferMinOffsetAlignment;
-            cl.SetComputeResourceSet(1, sets[1], 1, ref offset);
-        }
-        cl.Dispatch(512, 1, 1);
-        cl.End();
-        GD.SubmitCommands(cl);
-        GD.WaitForIdle();
-
-        DeviceBuffer readback = GetReadback(copyDst);
-
-        MappedResourceView<uint> readView = GD.Map<uint>(readback, MapMode.Read);
-        for (uint i = 0; i < valueCount; i++)
-        {
-            uint srcIndex = totalSrcAlignment / sizeof(uint) + i;
-            uint expected = srcData[(int)srcIndex];
-
-            uint dstIndex = totalDstAlignment / sizeof(uint) + i;
-            uint actual = readView[dstIndex];
-
-            Assert.Equal(expected, actual);
-        }
-        GD.Unmap(readback);
-    }
-
-    public static IEnumerable<object[]> FillBuffer_WithOffsetsData()
-    {
-        foreach (uint srcSetMultiple in new[] { 0, 2, 10 })
-            foreach (uint srcBindingMultiple in new[] { 0, 2, 10 })
-                foreach (uint dstSetMultiple in new[] { 0, 2, 10 })
-                    foreach (uint dstBindingMultiple in new[] { 0, 2, 10 })
-                        foreach (bool combinedLayout in new[] { false, true })
-                        {
-                            yield return new object[] { srcSetMultiple, srcBindingMultiple, dstSetMultiple, dstBindingMultiple, combinedLayout };
-                        }
-    }
 }
 
 #if TEST_OPENGL

@@ -1,11 +1,8 @@
-using NeoVeldrid.Sdl2;
-using NeoVeldrid.StartupUtilities;
-
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
-// Regression tests for specific swapchain-related bugs that have been fixed in NeoVeldrid.
+// Regression tests for specific swapchain-related bugs that have been fixed in Prowl.Veldrid.
 // Unlike the generic SwapchainTests / MainSwapchainTests infrastructure in SwapchainTests.cs,
 // each test here creates its own device with bug-specific options rather than inheriting a
 // pre-built device from a shared fixture, because the bugs under test are in the device
@@ -13,9 +10,9 @@ namespace NeoVeldrid.Tests;
 public class SwapchainRegressionTests
 {
     // Regression test for a bug where the 2-argument convenience overload of
-    // NeoVeldridStartup.CreateVulkanGraphicsDevice hardcoded `colorSrgb = false` instead of
+    // Prowl.VeldridStartup.CreateVulkanGraphicsDevice hardcoded `colorSrgb = false` instead of
     // passing `options.SwapchainSrgbFormat` through to the 3-argument overload. Because
-    // NeoVeldridStartup.CreateGraphicsDevice (the default dispatch from
+    // Prowl.VeldridStartup.CreateGraphicsDevice (the default dispatch from
     // CreateWindowAndGraphicsDevice) routes to the 2-argument overload, every application
     // using the default code path to create a Vulkan device got a non-sRGB swapchain even
     // when they explicitly set GraphicsDeviceOptions.SwapchainSrgbFormat = true.
@@ -62,7 +59,6 @@ public class SwapchainRegressionTests
             debug: true,
             swapchainDepthFormat: PixelFormat.R16_UNorm,
             syncToVerticalBlank: false,
-            resourceBindingModel: ResourceBindingModel.Default,
             preferDepthRangeZeroToOne: false,
             preferStandardClipSpaceYDirection: false,
             swapchainSrgbFormat: true);
@@ -71,7 +67,7 @@ public class SwapchainRegressionTests
         GraphicsDevice gd = null;
         try
         {
-            NeoVeldridStartup.CreateWindowAndGraphicsDevice(wci, options, backend, out window, out gd);
+            TestUtils.CreateDeviceWithSwapchain(wci, options, backend, out window, out gd);
 
             PixelFormat colorFormat = gd.MainSwapchain.Framebuffer.ColorTargets[0].Target.Format;
 

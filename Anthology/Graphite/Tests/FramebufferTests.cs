@@ -1,8 +1,10 @@
 ﻿using System;
 
+using Prowl.Vector;
+
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -51,7 +53,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetFramebuffer(fb);
-        Assert.Throws<NeoVeldridException>(() => cl.ClearDepthStencil(1f));
+        Assert.Throws<VeldridException>(() => cl.ClearDepthStencil(1f));
     }
 
     [Fact]
@@ -64,7 +66,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetFramebuffer(fb);
-        Assert.Throws<NeoVeldridException>(() => cl.ClearColorTarget(0, Color.Red));
+        Assert.Throws<VeldridException>(() => cl.ClearColorTarget(0, Color.Red));
     }
 
     [Fact]
@@ -81,8 +83,8 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         cl.SetFramebuffer(fb);
         cl.ClearColorTarget(0, Color.Red);
         cl.ClearColorTarget(1, Color.Red);
-        Assert.Throws<NeoVeldridException>(() => cl.ClearColorTarget(2, Color.Red));
-        Assert.Throws<NeoVeldridException>(() => cl.ClearColorTarget(3, Color.Red));
+        Assert.Throws<VeldridException>(() => cl.ClearColorTarget(2, Color.Red));
+        Assert.Throws<VeldridException>(() => cl.ClearColorTarget(3, Color.Red));
     }
 
     [Fact]

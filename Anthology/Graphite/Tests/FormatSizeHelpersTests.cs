@@ -5,7 +5,7 @@ using System.Linq;
 
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 public class FormatSizeHelpersTests : IDisposable
 {
@@ -77,6 +77,6 @@ public class FormatSizeHelpersTests : IDisposable
     [MemberData(nameof(CompressedPixelFormatMemberData))]
     public void GetSizeInBytes_ThrowsForAllCompressedPixelFormats(PixelFormat format)
     {
-        Assert.ThrowsAny<NeoVeldridException>(() => FormatSizeHelpers.GetSizeInBytes(format));
+        Assert.ThrowsAny<VeldridException>(() => FormatSizeHelpers.GetSizeInBytes(format));
     }
 }

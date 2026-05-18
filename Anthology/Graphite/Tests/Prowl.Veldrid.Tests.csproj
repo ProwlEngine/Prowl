@@ -16,8 +16,8 @@
         <PackageReference Include="xunit.console" Version="2.9.3" />
         <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
         <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
-        <ProjectReference Include="..\NeoVeldrid.RenderDoc\NeoVeldrid.RenderDoc.csproj" />
-        <ProjectReference Include="..\NeoVeldrid\NeoVeldrid.csproj" />
+        <PackageReference Include="Silk.NET.SDL" Version="$(SilkNetVersion)" />
+        <ProjectReference Include="..\Veldrid\Prowl.Veldrid.csproj" />
     </ItemGroup>
 
     <ItemGroup>

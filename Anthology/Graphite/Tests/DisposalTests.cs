@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 public abstract class DisposalTestBase<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -57,7 +57,7 @@ public abstract class DisposalTestBase<T> : GraphicsDeviceTestBase<T> where T : 
     [Fact]
     public void Dispose_Pipeline()
     {
-        Shader[] shaders = TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs");
+        ShaderProgram[] shaders = TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs");
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
@@ -69,8 +69,8 @@ public abstract class DisposalTestBase<T> : GraphicsDeviceTestBase<T> where T : 
             shaders);
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
             BlendStateDescription.SingleOverrideBlend,
@@ -100,8 +100,8 @@ public abstract class DisposalTestBase<T> : GraphicsDeviceTestBase<T> where T : 
     public void Dispose_ResourceSet()
     {
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         DeviceBuffer ub0 = RF.CreateBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));
         DeviceBuffer ub1 = RF.CreateBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));

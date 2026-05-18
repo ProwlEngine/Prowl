@@ -2,7 +2,7 @@ using Prowl.Vector;
 
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -10,11 +10,11 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ResourceSet_BufferInsteadOfTextureView_Fails()
     {
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("TV0", ResourceKind.TextureReadOnly, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("TV0", ResourceKind.TextureReadOnly, ShaderStages.Vertex, 0)));
 
         DeviceBuffer ub = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout,
                 ub));
@@ -25,12 +25,12 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ResourceSet_IncorrectTextureUsage_Fails()
     {
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("TV0", ResourceKind.TextureReadWrite, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("TV0", ResourceKind.TextureReadWrite, ShaderStages.Vertex, 0)));
 
         Texture t = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         TextureView tv = RF.CreateTextureView(t);
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tv));
         });
@@ -40,11 +40,11 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ResourceSet_IncorrectBufferUsage_Fails()
     {
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("RWB0", ResourceKind.StructuredBufferReadWrite, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("RWB0", ResourceKind.StructuredBufferReadWrite, ShaderStages.Vertex, 0)));
 
         DeviceBuffer readOnlyBuffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.UniformBuffer));
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, readOnlyBuffer));
         });
@@ -54,28 +54,28 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ResourceSet_TooFewOrTooManyElements_Fails()
     {
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("UB0", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("UB1", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("UB2", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("UB0", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("UB1", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1),
+            new ResourceLayoutElementDescription("UB2", ResourceKind.UniformBuffer, ShaderStages.Vertex, 2)));
 
         DeviceBuffer ub = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub));
         });
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub, ub));
         });
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub, ub, ub, ub));
         });
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub, ub, ub, ub, ub));
         });
@@ -85,17 +85,17 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ResourceSet_InvalidUniformOffset_Fails()
     {
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("UB0", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("UB0", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0)));
 
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.UniformBuffer));
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout,
                 new DeviceBufferRange(buffer, GD.UniformBufferMinOffsetAlignment - 1, 256)));
         });
 
-        Assert.Throws<NeoVeldridException>(() =>
+        Assert.Throws<VeldridException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout,
                 new DeviceBufferRange(buffer, GD.UniformBufferMinOffsetAlignment + 1, 256)));
@@ -106,7 +106,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
     public void ResourceSet_NoPipelineBound_Fails()
     {
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("UB0", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("UB0", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0)));
         DeviceBuffer ub = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
 
 
@@ -114,7 +114,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
-        Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(0, rs));
+        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(0, rs));
         cl.End();
     }
 
@@ -135,8 +135,8 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
             TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, infoBuffer, orthoBuffer));
 
@@ -154,9 +154,9 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
         CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
         cl.SetPipeline(pipeline);
-        Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(1, set));
-        Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(2, set));
-        Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(3, set));
+        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(1, set));
+        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(2, set));
+        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(3, set));
         cl.End();
     }
 
@@ -177,15 +177,15 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
             TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
 
         ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
 
         ResourceLayout layout2 = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
+            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 1)));
 
         ResourceLayout layout3 = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0)));
 
         Texture tex = RF.CreateTexture(TextureDescription.Texture2D(16, 16, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
         TextureView texView = RF.CreateTextureView(tex);
@@ -209,8 +209,8 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
         cl.Begin();
         cl.SetPipeline(pipeline);
         cl.SetGraphicsResourceSet(0, set);
-        Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(0, set2)); // Wrong type
-        Assert.Throws<NeoVeldridException>(() => cl.SetGraphicsResourceSet(0, set3)); // Wrong count
+        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(0, set2)); // Wrong type
+        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(0, set3)); // Wrong count
         cl.End();
     }
 }

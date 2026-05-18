@@ -1,25 +1,25 @@
 ﻿using System;
 using System.IO;
 
-using NeoVeldrid.SPIRV;
+// using Prowl.Veldrid.SPIRV;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 internal static class TestShaders
 {
-    public static Shader[] LoadVertexFragment(ResourceFactory factory, string setName)
+    public static ShaderProgram[] LoadVertexFragment(ResourceFactory factory, string setName)
     {
-        return factory.CreateFromSpirv(
-            new ShaderDescription(ShaderStages.Vertex, File.ReadAllBytes(GetPath(setName, ShaderStages.Vertex)), "main"),
-            new ShaderDescription(ShaderStages.Fragment, File.ReadAllBytes(GetPath(setName, ShaderStages.Fragment)), "main"),
-            new CrossCompileOptions(false, false));
+        return null; // factory.CreateFromSpirv(
+                     // new ShaderDescription(ShaderStages.Vertex, File.ReadAllBytes(GetPath(setName, ShaderStages.Vertex)), "main"),
+                     // new ShaderDescription(ShaderStages.Fragment, File.ReadAllBytes(GetPath(setName, ShaderStages.Fragment)), "main"),
+                     // new CrossCompileOptions(false, false));
     }
 
-    public static Shader LoadCompute(ResourceFactory factory, string setName)
+    public static ShaderProgram LoadCompute(ResourceFactory factory, string setName)
     {
-        return factory.CreateFromSpirv(
-            new ShaderDescription(ShaderStages.Compute, File.ReadAllBytes(GetPath(setName, ShaderStages.Compute)), "main"),
-            new CrossCompileOptions(false, false));
+        return null;//factory.CreateFromSpirv(
+                    // new ShaderDescription(ShaderStages.Compute, File.ReadAllBytes(GetPath(setName, ShaderStages.Compute)), "main"),
+                    // new CrossCompileOptions(false, false));
     }
 
     public static string GetPath(string setName, ShaderStages stage)

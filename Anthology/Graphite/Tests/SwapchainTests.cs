@@ -1,9 +1,8 @@
-﻿using NeoVeldrid.Sdl2;
-using NeoVeldrid.StartupUtilities;
+﻿using Silk.NET.SDL;
 
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 public abstract class SwapchainTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -23,8 +22,9 @@ public abstract class SwapchainTests<T> : GraphicsDeviceTestBase<T> where T : Gr
             WindowInitialState = WindowState.Hidden,
             WindowTitle = "SwapchainTestWindow",
         };
-        Sdl2Window window = NeoVeldridStartup.CreateWindow(ref wci);
-        SwapchainSource source = NeoVeldridStartup.GetSwapchainSource(window);
+        WindowFlags extra = GD.BackendType == GraphicsBackend.Vulkan ? WindowFlags.Vulkan : WindowFlags.None;
+        Sdl2Window window = Startup.CreateWindow(ref wci, extra);
+        SwapchainSource source = Startup.GetSwapchainSource(window);
         SwapchainDescription swapchainDesc = new SwapchainDescription(source, 100, 100, depthFormat, syncToVerticalBlank);
         Swapchain swapchain = RF.CreateSwapchain(ref swapchainDesc);
 

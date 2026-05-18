@@ -4,7 +4,7 @@ using Prowl.Vector;
 using System.Runtime.CompilerServices;
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -24,7 +24,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     public void UpdateBuffer_NonDynamic_Succeeds()
     {
         DeviceBuffer buffer = CreateBuffer(64, BufferUsage.VertexBuffer);
-        GD.UpdateBuffer(buffer, 0, Matrix4x4.Identity);
+        GD.UpdateBuffer(buffer, 0, Float4x4.Identity);
         GD.WaitForIdle();
     }
 
@@ -105,9 +105,9 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     public void Map_WrongFlags_Throws()
     {
         DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.VertexBuffer);
-        Assert.Throws<NeoVeldridException>(() => GD.Map(buffer, MapMode.Read));
-        Assert.Throws<NeoVeldridException>(() => GD.Map(buffer, MapMode.Write));
-        Assert.Throws<NeoVeldridException>(() => GD.Map(buffer, MapMode.ReadWrite));
+        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.Read));
+        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.Write));
+        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.ReadWrite));
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
         MappedResourceView<int> view = GD.Map<int>(buffer, MapMode.ReadWrite);
         int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
-        Assert.Throws<NeoVeldridException>(() => GD.UpdateBuffer(buffer, 0, data));
+        Assert.Throws<VeldridException>(() => GD.UpdateBuffer(buffer, 0, data));
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         }
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
         MappedResource map = GD.Map(buffer, MapMode.Read);
-        Assert.Throws<NeoVeldridException>(() => GD.Map(buffer, MapMode.Write));
+        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.Write));
     }
 
     [Fact]
@@ -277,8 +277,8 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     {
         DeviceBuffer dynamic = RF.CreateBuffer(
             new BufferDescription(1024, BufferUsage.Dynamic | BufferUsage.UniformBuffer));
-        Assert.Throws<NeoVeldridException>(() => GD.Map(dynamic, MapMode.Read));
-        Assert.Throws<NeoVeldridException>(() => GD.Map(dynamic, MapMode.ReadWrite));
+        Assert.Throws<VeldridException>(() => GD.Map(dynamic, MapMode.Read));
+        Assert.Throws<VeldridException>(() => GD.Map(dynamic, MapMode.ReadWrite));
     }
 
     [Fact]
@@ -386,13 +386,13 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     public void UpdateUniform_Offset_GraphicsDevice(BufferUsage usage)
     {
         DeviceBuffer buffer = CreateBuffer(128, usage);
-        Matrix4x4 mat1 = new Matrix4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+        Float4x4 mat1 = new Float4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
         GD.UpdateBuffer(buffer, 0, ref mat1);
-        Matrix4x4 mat2 = new Matrix4x4(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
+        Float4x4 mat2 = new Float4x4(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
         GD.UpdateBuffer(buffer, 64, ref mat2);
 
         DeviceBuffer readback = GetReadback(buffer);
-        MappedResourceView<Matrix4x4> readView = GD.Map<Matrix4x4>(readback, MapMode.Read);
+        MappedResourceView<Float4x4> readView = GD.Map<Float4x4>(readback, MapMode.Read);
         Assert.Equal(mat1, readView[0]);
         Assert.Equal(mat2, readView[1]);
         GD.Unmap(readback);
@@ -407,16 +407,16 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         DeviceBuffer buffer = CreateBuffer(128, usage);
         CommandBuffer cl = RF.CreateCommandList();
         cl.Begin();
-        Matrix4x4 mat1 = new Matrix4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+        Float4x4 mat1 = new Float4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
         cl.UpdateBuffer(buffer, 0, ref mat1);
-        Matrix4x4 mat2 = new Matrix4x4(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
+        Float4x4 mat2 = new Float4x4(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
         cl.UpdateBuffer(buffer, 64, ref mat2);
         cl.End();
         GD.SubmitCommands(cl);
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(buffer);
-        MappedResourceView<Matrix4x4> readView = GD.Map<Matrix4x4>(readback, MapMode.Read);
+        MappedResourceView<Float4x4> readView = GD.Map<Float4x4>(readback, MapMode.Read);
         Assert.Equal(mat1, readView[0]);
         Assert.Equal(mat2, readView[1]);
         GD.Unmap(readback);

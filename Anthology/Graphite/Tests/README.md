@@ -1,13 +1,5 @@
 # Tests
 
-## SPIRV Tests (no GPU required)
-
-Tests SPIR-V cross-compilation (HLSL, GLSL, ESSL, MSL), GLSL-to-SPIR-V compilation, shader reflection, and JSON serialization.
-
-```bash
-dotnet test tests/NeoVeldrid.SPIRV.Tests/NeoVeldrid.SPIRV.Tests.csproj
-```
-
 ## GPU Tests (requires graphics hardware)
 
 Tests buffers, textures, framebuffers, compute, rendering, pipelines, resource sets, and swapchains against real GPU backends. Backend selection is automatic based on the platform:

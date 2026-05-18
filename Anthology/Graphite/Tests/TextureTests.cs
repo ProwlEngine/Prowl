@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
+using Prowl.Vector;
+
 using Xunit;
 
-namespace NeoVeldrid.Tests;
+namespace Prowl.Veldrid.Tests;
 
 public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -823,29 +825,29 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture tex3D = RF.CreateTexture(TextureDescription.Texture3D(
             10, 10, 10, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
 
-        RgbaByte[] data = new RgbaByte[tex3D.Width * tex3D.Height * tex3D.Depth];
+        Color32[] data = new Color32[tex3D.Width * tex3D.Height * tex3D.Depth];
         for (int z = 0; z < tex3D.Depth; z++)
             for (int y = 0; y < tex3D.Height; y++)
                 for (int x = 0; x < tex3D.Width; x++)
                 {
                     int index = (int)(z * tex3D.Width * tex3D.Height + y * tex3D.Height + x);
-                    data[index] = new RgbaByte((byte)x, (byte)y, (byte)z, 1);
+                    data[index] = new Color32((byte)x, (byte)y, (byte)z, 1);
                 }
 
-        fixed (RgbaByte* dataPtr = data)
+        fixed (Color32* dataPtr = data)
         {
-            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<RgbaByte>()),
+            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<Color32>()),
                 0, 0, 0,
                 tex3D.Width, tex3D.Height, tex3D.Depth,
                 0, 0);
         }
 
-        MappedResourceView<RgbaByte> view = GD.Map<RgbaByte>(tex3D, MapMode.Read, 0);
+        MappedResourceView<Color32> view = GD.Map<Color32>(tex3D, MapMode.Read, 0);
         for (int z = 0; z < tex3D.Depth; z++)
             for (int y = 0; y < tex3D.Height; y++)
                 for (int x = 0; x < tex3D.Width; x++)
                 {
-                    Assert.Equal(new RgbaByte((byte)x, (byte)y, (byte)z, 1), view[x, y, z]);
+                    Assert.Equal(new Color32((byte)x, (byte)y, (byte)z, 1), view[x, y, z]);
                 }
         GD.Unmap(tex3D);
     }
@@ -856,21 +858,21 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture tex3D = RF.CreateTexture(TextureDescription.Texture3D(
             10, 10, 10, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
 
-        MappedResourceView<RgbaByte> writeView = GD.Map<RgbaByte>(tex3D, MapMode.Write);
+        MappedResourceView<Color32> writeView = GD.Map<Color32>(tex3D, MapMode.Write);
         for (int z = 0; z < tex3D.Depth; z++)
             for (int y = 0; y < tex3D.Height; y++)
                 for (int x = 0; x < tex3D.Width; x++)
                 {
-                    writeView[x, y, z] = new RgbaByte((byte)x, (byte)y, (byte)z, 1);
+                    writeView[x, y, z] = new Color32((byte)x, (byte)y, (byte)z, 1);
                 }
         GD.Unmap(tex3D);
 
-        MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(tex3D, MapMode.Read, 0);
+        MappedResourceView<Color32> readView = GD.Map<Color32>(tex3D, MapMode.Read, 0);
         for (int z = 0; z < tex3D.Depth; z++)
             for (int y = 0; y < tex3D.Height; y++)
                 for (int x = 0; x < tex3D.Width; x++)
                 {
-                    Assert.Equal(new RgbaByte((byte)x, (byte)y, (byte)z, 1), readView[x, y, z]);
+                    Assert.Equal(new Color32((byte)x, (byte)y, (byte)z, 1), readView[x, y, z]);
                 }
         GD.Unmap(tex3D);
     }
@@ -965,20 +967,20 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         for (uint level = 0; level < tex1D.MipLevels; level++)
         {
-            MappedResourceView<RgbaByte> writeView = GD.Map<RgbaByte>(tex1D, MapMode.Write, level);
+            MappedResourceView<Color32> writeView = GD.Map<Color32>(tex1D, MapMode.Write, level);
             for (int i = 0; i < writeView.Count; i++)
             {
-                writeView[i] = new RgbaByte((byte)i, (byte)(i * 2), (byte)level, 1);
+                writeView[i] = new Color32((byte)i, (byte)(i * 2), (byte)level, 1);
             }
             GD.Unmap(tex1D, level);
         }
 
         for (uint level = 0; level < tex1D.MipLevels; level++)
         {
-            MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(tex1D, MapMode.Read, level);
+            MappedResourceView<Color32> readView = GD.Map<Color32>(tex1D, MapMode.Read, level);
             for (int i = 0; i < readView.Count; i++)
             {
-                Assert.Equal(new RgbaByte((byte)i, (byte)(i * 2), (byte)level, 1), readView[i]);
+                Assert.Equal(new Color32((byte)i, (byte)(i * 2), (byte)level, 1), readView[i]);
             }
             GD.Unmap(tex1D, level);
         }
@@ -1033,11 +1035,11 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture dst = RF.CreateTexture(TextureDescription.Texture2D(
             100, 100, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, dstUsage));
 
-        RgbaByte[] srcData = new RgbaByte[src.Height * src.Width];
+        Color32[] srcData = new Color32[src.Height * src.Width];
         for (int y = 0; y < src.Height; y++)
             for (int x = 0; x < src.Width; x++)
             {
-                srcData[y * src.Width + x] = new RgbaByte((byte)x, (byte)y, 0, 1);
+                srcData[y * src.Width + x] = new Color32((byte)x, (byte)y, 0, 1);
             }
 
         GD.UpdateTexture(src, srcData, 0, 0, 0, src.Width, src.Height, 1, 0, 0);
@@ -1055,11 +1057,11 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         GD.WaitForIdle();
 
         Texture readback = GetReadback(dst);
-        MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(readback, MapMode.Read);
+        MappedResourceView<Color32> readView = GD.Map<Color32>(readback, MapMode.Read);
         for (int y = 10; y < 60; y++)
             for (int x = 10; x < 60; x++)
             {
-                Assert.Equal(new RgbaByte((byte)(x + 40), (byte)(y + 40), 0, 1), readView[x, y]);
+                Assert.Equal(new Color32((byte)(x + 40), (byte)(y + 40), 0, 1), readView[x, y]);
             }
         GD.Unmap(readback);
     }
@@ -1072,11 +1074,11 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture dst = RF.CreateTexture(TextureDescription.Texture2D(
             10, 10, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
 
-        MappedResourceView<RgbaByte> writeView = GD.Map<RgbaByte>(src, MapMode.Write, 5);
+        MappedResourceView<Color32> writeView = GD.Map<Color32>(src, MapMode.Write, 5);
         for (int y = 0; y < src.Height; y++)
             for (int x = 0; x < src.Width; x++)
             {
-                writeView[x, y] = new RgbaByte((byte)x, (byte)y, 0, 1);
+                writeView[x, y] = new Color32((byte)x, (byte)y, 0, 1);
             }
         GD.Unmap(src, 5);
 
@@ -1090,11 +1092,11 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         GD.SubmitCommands(cl);
         GD.WaitForIdle();
 
-        MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(dst, MapMode.Read);
+        MappedResourceView<Color32> readView = GD.Map<Color32>(dst, MapMode.Read);
         for (int y = 0; y < dst.Height; y++)
             for (int x = 0; x < dst.Width; x++)
             {
-                Assert.Equal(new RgbaByte((byte)x, (byte)y, 0, 1), readView[x, y]);
+                Assert.Equal(new Color32((byte)x, (byte)y, 0, 1), readView[x, y]);
             }
         GD.Unmap(dst);
     }
@@ -1107,22 +1109,22 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         for (uint layer = 0; layer < src.ArrayLayers; layer++)
         {
-            MappedResourceView<RgbaByte> writeView = GD.Map<RgbaByte>(src, MapMode.Write, layer);
+            MappedResourceView<Color32> writeView = GD.Map<Color32>(src, MapMode.Write, layer);
             for (int y = 0; y < src.Height; y++)
                 for (int x = 0; x < src.Width; x++)
                 {
-                    writeView[x, y] = new RgbaByte((byte)x, (byte)y, (byte)layer, 1);
+                    writeView[x, y] = new Color32((byte)x, (byte)y, (byte)layer, 1);
                 }
             GD.Unmap(src, layer);
         }
 
         for (uint layer = 0; layer < src.ArrayLayers; layer++)
         {
-            MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(src, MapMode.Read, layer);
+            MappedResourceView<Color32> readView = GD.Map<Color32>(src, MapMode.Read, layer);
             for (int y = 0; y < src.Height; y++)
                 for (int x = 0; x < src.Width; x++)
                 {
-                    Assert.Equal(new RgbaByte((byte)x, (byte)y, (byte)layer, 1), readView[x, y]);
+                    Assert.Equal(new Color32((byte)x, (byte)y, (byte)layer, 1), readView[x, y]);
                 }
             GD.Unmap(src, layer);
         }
@@ -1134,27 +1136,27 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture tex2D = RF.CreateTexture(TextureDescription.Texture2D(
             100, 100, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
 
-        RgbaByte[] data = new RgbaByte[50 * 30];
+        Color32[] data = new Color32[50 * 30];
         for (uint y = 0; y < 30; y++)
             for (uint x = 0; x < 50; x++)
             {
-                data[y * 50 + x] = new RgbaByte((byte)x, (byte)y, 0, 1);
+                data[y * 50 + x] = new Color32((byte)x, (byte)y, 0, 1);
             }
 
-        fixed (RgbaByte* dataPtr = &data[0])
+        fixed (Color32* dataPtr = &data[0])
         {
             GD.UpdateTexture(
-                tex2D, (IntPtr)dataPtr, (uint)(data.Length * sizeof(RgbaByte)),
+                tex2D, (IntPtr)dataPtr, (uint)(data.Length * sizeof(Color32)),
                 50, 70, 0,
                 50, 30, 1,
                 0, 0);
         }
 
-        MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(tex2D, MapMode.Read);
+        MappedResourceView<Color32> readView = GD.Map<Color32>(tex2D, MapMode.Read);
         for (int y = 0; y < 30; y++)
             for (int x = 0; x < 50; x++)
             {
-                Assert.Equal(new RgbaByte((byte)x, (byte)y, 0, 1), readView[x + 50, y + 70]);
+                Assert.Equal(new Color32((byte)x, (byte)y, 0, 1), readView[x + 50, y + 70]);
             }
     }
 
@@ -1182,21 +1184,21 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture tex3D = RF.CreateTexture(TextureDescription.Texture3D(
             40, 40, 40, 3, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
 
-        MappedResourceView<RgbaByte> writeView = GD.Map<RgbaByte>(tex3D, MapMode.Write, 2);
+        MappedResourceView<Color32> writeView = GD.Map<Color32>(tex3D, MapMode.Write, 2);
         for (int z = 0; z < 10; z++)
             for (int y = 0; y < 10; y++)
                 for (int x = 0; x < 10; x++)
                 {
-                    writeView[x, y, z] = new RgbaByte((byte)x, (byte)y, (byte)z, 1);
+                    writeView[x, y, z] = new Color32((byte)x, (byte)y, (byte)z, 1);
                 }
         GD.Unmap(tex3D, 2);
 
-        MappedResourceView<RgbaByte> readView = GD.Map<RgbaByte>(tex3D, MapMode.Read, 2);
+        MappedResourceView<Color32> readView = GD.Map<Color32>(tex3D, MapMode.Read, 2);
         for (int z = 0; z < 10; z++)
             for (int y = 0; y < 10; y++)
                 for (int x = 0; x < 10; x++)
                 {
-                    Assert.Equal(new RgbaByte((byte)x, (byte)y, (byte)z, 1), readView[x, y, z]);
+                    Assert.Equal(new Color32((byte)x, (byte)y, (byte)z, 1), readView[x, y, z]);
                 }
         GD.Unmap(tex3D, 2);
     }
@@ -1206,18 +1208,18 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     {
         Texture tex3D = RF.CreateTexture(TextureDescription.Texture3D(
             16, 16, 16, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
-        RgbaByte[] data = new RgbaByte[16 * 16 * 16];
+        Color32[] data = new Color32[16 * 16 * 16];
         for (int z = 0; z < 16; z++)
             for (int y = 0; y < 16; y++)
                 for (int x = 0; x < 16; x++)
                 {
                     int index = (int)(z * tex3D.Width * tex3D.Height + y * tex3D.Height + x);
-                    data[index] = new RgbaByte((byte)x, (byte)y, (byte)z, 1);
+                    data[index] = new Color32((byte)x, (byte)y, (byte)z, 1);
                 }
 
-        fixed (RgbaByte* dataPtr = data)
+        fixed (Color32* dataPtr = data)
         {
-            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<RgbaByte>()),
+            GD.UpdateTexture(tex3D, (IntPtr)dataPtr, (uint)(data.Length * Unsafe.SizeOf<Color32>()),
                 0, 0, 0,
                 tex3D.Width, tex3D.Height, tex3D.Depth,
                 0, 0);
@@ -1233,12 +1235,12 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         GD.SubmitCommands(cl);
         GD.WaitForIdle();
 
-        MappedResourceView<RgbaByte> view = GD.Map<RgbaByte>(staging, MapMode.Read);
+        MappedResourceView<Color32> view = GD.Map<Color32>(staging, MapMode.Read);
         for (int z = 0; z < tex3D.Depth; z++)
             for (int y = 0; y < tex3D.Height; y++)
                 for (int x = 0; x < tex3D.Width; x++)
                 {
-                    Assert.Equal(new RgbaByte((byte)x, (byte)y, (byte)z, 1), view[x, y, z]);
+                    Assert.Equal(new Color32((byte)x, (byte)y, (byte)z, 1), view[x, y, z]);
                 }
         GD.Unmap(staging);
     }

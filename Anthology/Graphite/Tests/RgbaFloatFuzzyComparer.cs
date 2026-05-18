@@ -1,8 +1,9 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 
-namespace NeoVeldrid.Tests;
+using Prowl.Vector;
+
+namespace Prowl.Veldrid.Tests;
 
 internal class ColorFuzzyComparer : IEqualityComparer<Color>
 {
