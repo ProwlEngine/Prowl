@@ -1,6 +1,6 @@
 # Prowl.NeoVeldrid
 
-A cut up version of ciberman's new veldrid version - resource binder has been gutted in preference of direct-binding system, where users specify resource indices directly.
+A cut up version of ciberman's NeoVeldrid repository - resource binder has been gutted in preference of direct-binding system, where users specify resource indices directly.
 
 This component is part of the Prowl Game Engine and is licensed under the MIT License. See the LICENSE file in the project root for details.
 
