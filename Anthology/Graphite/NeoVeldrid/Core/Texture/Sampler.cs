@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A bindable device resource which controls how texture values are sampled within a shader.

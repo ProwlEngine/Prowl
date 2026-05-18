@@ -2,7 +2,7 @@
 
 using Prowl.Vector;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A <see cref="Pipeline"/> component describing how values are blended into each individual color target.

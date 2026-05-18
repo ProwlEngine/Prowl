@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,7 +8,7 @@ using System;
 
 using VkBufferHandle = Silk.NET.Vulkan.Buffer;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkDeviceMemoryManager : IDisposable
 {
@@ -115,7 +115,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
         {
             if (!TryFindMemoryType(memProperties, memoryTypeBits, flags, out var memoryTypeIndex))
             {
-                throw new NeoVeldridException("No suitable memory type.");
+                throw new VeldridException("No suitable memory type.");
             }
 
             ulong minDedicatedAllocationSize = persistentMapped
@@ -146,7 +146,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                 Result allocationResult = _vk.AllocateMemory(_device, in allocateInfo, null, out DeviceMemory memory);
                 if (allocationResult != Result.Success)
                 {
-                    throw new NeoVeldridException("Unable to allocate sufficient Vulkan memory.");
+                    throw new VeldridException("Unable to allocate sufficient Vulkan memory.");
                 }
 
                 void* mappedPtr = null;
@@ -155,7 +155,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                     Result mapResult = _vk.MapMemory(_device, memory, 0, size, 0, &mappedPtr);
                     if (mapResult != Result.Success)
                     {
-                        throw new NeoVeldridException("Unable to map newly-allocated Vulkan memory.");
+                        throw new VeldridException("Unable to map newly-allocated Vulkan memory.");
                     }
                 }
 
@@ -167,7 +167,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                 bool result = allocator.Allocate(size, alignment, out VkMemoryBlock ret);
                 if (!result)
                 {
-                    throw new NeoVeldridException("Unable to allocate sufficient Vulkan memory.");
+                    throw new VeldridException("Unable to allocate sufficient Vulkan memory.");
                 }
 
                 return ret;

@@ -4,7 +4,7 @@ using System.Diagnostics;
 
 using Silk.NET.Vulkan;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal class VkDescriptorPoolManager
 {

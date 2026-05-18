@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes a single attachment (color or depth) for a <see cref="Framebuffer"/>.

@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace NeoVeldrid.OpenGL.ManagedEntryList
+namespace Prowl.Veldrid.OpenGL.ManagedEntryList
 {
     internal class OpenGLManagedCommandEntryList : OpenGLCommandEntryList
     {

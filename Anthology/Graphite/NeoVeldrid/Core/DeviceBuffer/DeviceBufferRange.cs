@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A <see cref="BindableResource"/> that represents a section of a <see cref="DeviceBuffer"/>. This can be used in place of

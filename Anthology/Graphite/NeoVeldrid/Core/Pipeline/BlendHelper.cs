@@ -1,4 +1,4 @@
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 internal static class BlendHelper
 {

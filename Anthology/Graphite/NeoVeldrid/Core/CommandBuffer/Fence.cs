@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 // A GPU-CPU sync point
 /// <summary>

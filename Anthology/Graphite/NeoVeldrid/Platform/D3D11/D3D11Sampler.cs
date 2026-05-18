@@ -1,7 +1,7 @@
 using Silk.NET.Direct3D11;
 using Silk.NET.Core.Native;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11Sampler : Sampler
 {

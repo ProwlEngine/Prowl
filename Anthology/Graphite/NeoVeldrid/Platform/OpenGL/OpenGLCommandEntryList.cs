@@ -2,7 +2,7 @@
 
 using Prowl.Vector;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal interface OpenGLCommandEntryList
 {

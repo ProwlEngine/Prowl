@@ -2,9 +2,9 @@ using System;
 
 using Silk.NET.Vulkan;
 
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 /// <summary>
 /// An object which can be used to create a VkSurfaceKHR.

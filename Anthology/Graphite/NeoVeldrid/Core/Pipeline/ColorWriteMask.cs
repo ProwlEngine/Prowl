@@ -1,6 +1,6 @@
 using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A color bitmask representing the components which can be written to.

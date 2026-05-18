@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes a 3-dimensional region.

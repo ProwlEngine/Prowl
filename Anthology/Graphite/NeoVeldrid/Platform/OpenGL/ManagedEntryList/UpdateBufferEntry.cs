@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid.OpenGL.ManagedEntryList;
+namespace Prowl.Veldrid.OpenGL.ManagedEntryList;
 
 internal class UpdateBufferEntry : OpenGLCommandEntry
 {

@@ -5,7 +5,7 @@ using Silk.NET.Direct3D11;
 using Silk.NET.DXGI;
 using Silk.NET.Core.Native;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal static class D3D11Formats
 {
@@ -144,7 +144,7 @@ internal static class D3D11Formats
             case PixelFormat.ETC2_R8_G8_B8_UNorm:
             case PixelFormat.ETC2_R8_G8_B8_A1_UNorm:
             case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
-                throw new NeoVeldridException("ETC2 formats are not supported on Direct3D 11.");
+                throw new VeldridException("ETC2 formats are not supported on Direct3D 11.");
 
             default:
                 throw Illegal.Value<PixelFormat>();
@@ -781,7 +781,7 @@ internal static class D3D11Formats
             case PixelFormat.D32_Float_S8_UInt:
                 return Format.FormatD32FloatS8X24Uint;
             default:
-                throw new NeoVeldridException("Invalid depth texture format: " + format);
+                throw new VeldridException("Invalid depth texture format: " + format);
         }
     }
 }

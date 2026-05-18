@@ -1,6 +1,6 @@
 using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes a single element of a vertex.

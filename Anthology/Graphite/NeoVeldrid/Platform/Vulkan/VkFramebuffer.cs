@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using Silk.NET.Vulkan;
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 using System;
 using System.Diagnostics;
 using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkFramebuffer : VkFramebufferBase
 {

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A bitmask describing the permitted uses of a <see cref="DeviceBuffer"/> object.

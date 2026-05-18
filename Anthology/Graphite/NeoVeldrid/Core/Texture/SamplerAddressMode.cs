@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// An addressing mode for texture coordinates.

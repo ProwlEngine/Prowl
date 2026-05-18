@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// Indicates which face will be culled.

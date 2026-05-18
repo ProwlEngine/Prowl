@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes the layout of <see cref="BindableResource"/> objects for a <see cref="Pipeline"/>.

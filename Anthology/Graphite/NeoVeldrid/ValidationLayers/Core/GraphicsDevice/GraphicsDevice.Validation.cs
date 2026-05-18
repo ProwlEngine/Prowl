@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 public abstract partial class GraphicsDevice
 {
@@ -13,15 +13,15 @@ public abstract partial class GraphicsDevice
             if ((buffer.Usage & BufferUsage.Dynamic) != BufferUsage.Dynamic
                 && (buffer.Usage & BufferUsage.Staging) != BufferUsage.Staging)
             {
-                throw new NeoVeldridException("Buffers must have the Staging or Dynamic usage flag to be mapped.");
+                throw new VeldridException("Buffers must have the Staging or Dynamic usage flag to be mapped.");
             }
             if (subresource != 0)
             {
-                throw new NeoVeldridException("Subresource must be 0 for Buffer resources.");
+                throw new VeldridException("Subresource must be 0 for Buffer resources.");
             }
             if ((mode == MapMode.Read || mode == MapMode.ReadWrite) && (buffer.Usage & BufferUsage.Staging) == 0)
             {
-                throw new NeoVeldridException(
+                throw new VeldridException(
                     $"{nameof(MapMode)}.{nameof(MapMode.Read)} and {nameof(MapMode)}.{nameof(MapMode.ReadWrite)} can only be used on buffers created with {nameof(BufferUsage)}.{nameof(BufferUsage.Staging)}.");
             }
         }
@@ -29,11 +29,11 @@ public abstract partial class GraphicsDevice
         {
             if ((tex.Usage & TextureUsage.Staging) == 0)
             {
-                throw new NeoVeldridException("Texture must have the Staging usage flag to be mapped.");
+                throw new VeldridException("Texture must have the Staging usage flag to be mapped.");
             }
             if (subresource >= tex.ArrayLayers * tex.MipLevels)
             {
-                throw new NeoVeldridException(
+                throw new VeldridException(
                     "Subresource must be less than the number of subresources in the Texture being mapped.");
             }
         }
@@ -56,14 +56,14 @@ public abstract partial class GraphicsDevice
                 Util.GetMipDimensions(texture, mipLevel, out uint mipWidth, out uint mipHeight, out _);
                 if (width != mipWidth && height != mipHeight)
                 {
-                    throw new NeoVeldridException($"Updates to block-compressed textures must use a region that is block-size aligned and sized.");
+                    throw new VeldridException($"Updates to block-compressed textures must use a region that is block-size aligned and sized.");
                 }
             }
         }
         uint expectedSize = FormatHelpers.GetRegionSize(width, height, depth, texture.Format);
         if (sizeInBytes < expectedSize)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"The data size is less than expected for the given update region. At least {expectedSize} bytes must be provided, but only {sizeInBytes} were.");
         }
 
@@ -83,12 +83,12 @@ public abstract partial class GraphicsDevice
 
         if (x + width > roundedTextureWidth || y + height > roundedTextureHeight || z + depth > texture.Depth)
         {
-            throw new NeoVeldridException($"The given region does not fit into the Texture.");
+            throw new VeldridException($"The given region does not fit into the Texture.");
         }
 
         if (mipLevel >= texture.MipLevels)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"{nameof(mipLevel)} ({mipLevel}) must be less than the Texture's mip level count ({texture.MipLevels}).");
         }
 
@@ -99,7 +99,7 @@ public abstract partial class GraphicsDevice
         }
         if (arrayLayer >= effectiveArrayLayers)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"{nameof(arrayLayer)} ({arrayLayer}) must be less than the Texture's effective array layer count ({effectiveArrayLayers}).");
         }
 #endif

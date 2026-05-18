@@ -2,7 +2,7 @@ using System;
 
 using Silk.NET.Core.Contexts;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 /// <summary>
 /// Encapsulates various pieces of OpenGL context, necessary for creating a <see cref="GraphicsDevice"/> using the OpenGL

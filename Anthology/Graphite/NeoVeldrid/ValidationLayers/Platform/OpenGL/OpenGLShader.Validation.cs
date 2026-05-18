@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe partial class OpenGLShader
 {
@@ -12,11 +12,11 @@ internal unsafe partial class OpenGLShader
         {
             if (gd.BackendType == GraphicsBackend.OpenGLES)
             {
-                throw new NeoVeldridException("Compute shaders require OpenGL ES 3.1.");
+                throw new VeldridException("Compute shaders require OpenGL ES 3.1.");
             }
             else
             {
-                throw new NeoVeldridException($"Compute shaders require OpenGL 4.3 or ARB_compute_shader.");
+                throw new VeldridException($"Compute shaders require OpenGL 4.3 or ARB_compute_shader.");
             }
         }
 #endif

@@ -1,11 +1,11 @@
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using Silk.NET.OpenGL;
 
 using System.Text;
 using System;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe partial class OpenGLShader : ShaderProgram, OpenGLDeferredResource
 {
@@ -80,7 +80,7 @@ internal unsafe partial class OpenGLShader : ShaderProgram, OpenGLDeferredResour
                 message = "<null>";
             }
 
-            throw new NeoVeldridException($"Unable to compile shader code for shader [{_name}] of type {_shaderType}: {message}");
+            throw new VeldridException($"Unable to compile shader code for shader [{_name}] of type {_shaderType}: {message}");
         }
 
         _gd.StagingMemoryPool.Free(_stagingBlock);

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A <see cref="Pipeline"/> component describing the properties of the depth stencil state.
@@ -51,7 +51,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     /// </summary>
     /// <param name="depthTestEnabled">Controls whether depth testing is enabled.</param>
     /// <param name="depthWriteEnabled">Controls whether new depth values are written to the depth buffer.</param>
-    /// <param name="comparisonKind">The <see cref="NeoVeldrid.ComparisonKind"/> used when considering new depth values.</param>
+    /// <param name="comparisonKind">The <see cref="Prowl.Veldrid.ComparisonKind"/> used when considering new depth values.</param>
     public DepthStencilStateDescription(bool depthTestEnabled, bool depthWriteEnabled, ComparisonKind comparisonKind)
     {
         DepthTestEnabled = depthTestEnabled;

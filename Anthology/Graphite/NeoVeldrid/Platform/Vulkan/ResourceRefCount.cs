@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal partial class ResourceRefCount
 {

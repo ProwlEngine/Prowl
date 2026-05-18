@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 
-using NeoVeldrid.OpenGL.NoAllocEntryList;
+using Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
 using Prowl.Vector;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal class OpenGLCommandBuffer : CommandBuffer
 {

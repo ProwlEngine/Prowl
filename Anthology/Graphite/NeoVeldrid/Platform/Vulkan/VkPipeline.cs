@@ -2,7 +2,7 @@ using Silk.NET.Vulkan;
 
 using Prowl.Vector;
 
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System;
 using System.Diagnostics;
@@ -10,7 +10,7 @@ using System.Runtime.CompilerServices;
 
 using VkPipelineHandle = Silk.NET.Vulkan.Pipeline;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkPipeline : Pipeline
 {

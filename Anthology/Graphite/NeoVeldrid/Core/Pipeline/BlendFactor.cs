@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// Controls the influence of components in a blend operation.

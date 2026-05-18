@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// A resource owned by a <see cref="GraphicsDevice"/>, which can be given a string identifier for debugging and

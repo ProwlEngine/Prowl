@@ -5,7 +5,7 @@ using Silk.NET.Core.Native;
 using Silk.NET.Direct3D.Compilers;
 using Silk.NET.Direct3D11;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11Shader : ShaderProgram
 {
@@ -152,7 +152,7 @@ internal unsafe class D3D11Shader : ShaderProgram
                     errorMsg = Encoding.ASCII.GetString(errorPtr, (int)errorSize);
                     pError->Release();
                 }
-                throw new NeoVeldridException($"Failed to compile HLSL code: {errorMsg}");
+                throw new VeldridException($"Failed to compile HLSL code: {errorMsg}");
             }
 
             byte* resultPtr = (byte*)pResult->GetBufferPointer();

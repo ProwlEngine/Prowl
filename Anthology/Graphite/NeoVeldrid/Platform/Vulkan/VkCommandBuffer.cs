@@ -1,6 +1,6 @@
 using System;
 using Silk.NET.Vulkan;
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -11,7 +11,7 @@ using VkBufferHandle = Silk.NET.Vulkan.Buffer;
 using VkImageHandle = Silk.NET.Vulkan.Image;
 using Prowl.Vector;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkCommandBuffer : CommandBuffer
 {
@@ -149,7 +149,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         if (_commandBufferBegun)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 "CommandList must be in its initial state, or End() must have been called, for Begin() to be valid to call.");
         }
         if (_commandBufferEnded)
@@ -445,7 +445,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         if (!_commandBufferBegun)
         {
-            throw new NeoVeldridException("CommandBuffer must have been started before End() may be called.");
+            throw new VeldridException("CommandBuffer must have been started before End() may be called.");
         }
 
         _commandBufferBegun = false;

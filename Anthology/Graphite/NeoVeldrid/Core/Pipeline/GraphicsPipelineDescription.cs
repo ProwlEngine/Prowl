@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes a graphics <see cref="Pipeline"/>, for creation using a <see cref="ResourceFactory"/>.

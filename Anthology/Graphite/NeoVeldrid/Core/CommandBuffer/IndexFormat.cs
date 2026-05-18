@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// The format of index data used in a <see cref="DeviceBuffer"/>.

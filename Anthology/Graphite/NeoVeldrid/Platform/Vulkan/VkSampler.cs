@@ -2,7 +2,7 @@ using Silk.NET.Vulkan;
 
 using VkSamplerHandle = Silk.NET.Vulkan.Sampler;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkSampler : Sampler
 {

@@ -12,18 +12,18 @@ using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Core;
 using Silk.NET.Core.Native;
 
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using VkApi = Silk.NET.Vulkan.Vk;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 using VkFenceHandle = Silk.NET.Vulkan.Fence;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkGraphicsDevice : GraphicsDevice
 {
     private const uint VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR = 0x00000001;
-    private static readonly FixedUtf8String s_name = "NeoVeldrid-VkGraphicsDevice";
+    private static readonly FixedUtf8String s_name = "Prowl.Veldrid-VkGraphicsDevice";
     private static readonly Lazy<bool> s_isSupported = new Lazy<bool>(CheckIsSupported, isThreadSafe: true);
 
     private readonly VkApi _vk = VkApi.GetApi();
@@ -249,7 +249,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         VkFenceHandle submissionFence = default;
         if (useExtraFence)
         {
-            vkFence = Util.AssertSubtype<Fence, NeoVeldrid.Vk.VkFence>(fence).DeviceFence;
+            vkFence = Util.AssertSubtype<Fence, Prowl.Veldrid.Vk.VkFence>(fence).DeviceFence;
             submissionFence = GetFreeSubmissionFence();
         }
         else
@@ -436,7 +436,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 case VkTextureView texView:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.ImageViewExt, texView.ImageView.Handle, name);
                     break;
-                case NeoVeldrid.Vk.VkFence fence:
+                case Prowl.Veldrid.Vk.VkFence fence:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.FenceExt, fence.DeviceFence.Handle, name);
                     break;
                 case VkSwapchain sc:
@@ -565,7 +565,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         {
             if (!availableInstanceExtensions.Contains(requiredExt))
             {
-                throw new NeoVeldridException($"The required instance extension was not available: {requiredExt}");
+                throw new VeldridException($"The required instance extension was not available: {requiredExt}");
             }
 
             FixedUtf8String utf8Str = new FixedUtf8String(requiredExt);
@@ -655,7 +655,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (error != null)
         {
             _lastValidationError = null;
-            throw new NeoVeldridException("A Vulkan validation error was encountered: " + error);
+            throw new VeldridException("A Vulkan validation error was encountered: " + error);
         }
     }
 
@@ -818,7 +818,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (requiredInstanceExtensions.Count != 0)
         {
             string missingList = string.Join(", ", requiredInstanceExtensions);
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"The following Vulkan device extensions were not available: {missingList}");
         }
 
@@ -1391,13 +1391,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     public override void ResetFence(Fence fence)
     {
-        VkFenceHandle vkFence = Util.AssertSubtype<Fence, NeoVeldrid.Vk.VkFence>(fence).DeviceFence;
+        VkFenceHandle vkFence = Util.AssertSubtype<Fence, Prowl.Veldrid.Vk.VkFence>(fence).DeviceFence;
         _vk.ResetFences(_device, 1, &vkFence);
     }
 
     public override bool WaitForFence(Fence fence, ulong nanosecondTimeout)
     {
-        VkFenceHandle vkFence = Util.AssertSubtype<Fence, NeoVeldrid.Vk.VkFence>(fence).DeviceFence;
+        VkFenceHandle vkFence = Util.AssertSubtype<Fence, Prowl.Veldrid.Vk.VkFence>(fence).DeviceFence;
         Result result = _vk.WaitForFences(_device, 1, &vkFence, true, nanosecondTimeout);
         return result == Result.Success;
     }

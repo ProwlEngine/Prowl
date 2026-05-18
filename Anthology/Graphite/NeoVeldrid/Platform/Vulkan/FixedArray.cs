@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid.Vk;
+﻿namespace Prowl.Veldrid.Vk;
 
 // Fixed-size "array" types, useful for constructing inputs
 // to some Vulkan functions without allocating and pinning a real array.

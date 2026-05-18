@@ -1,6 +1,6 @@
 using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes the layout of vertex data in a single <see cref="DeviceBuffer"/> used as a vertex buffer.

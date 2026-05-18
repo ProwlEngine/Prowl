@@ -2,11 +2,11 @@ using System.Diagnostics;
 
 using Silk.NET.OpenGL;
 
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
 {
@@ -58,7 +58,7 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
             {
                 if (!_gd.Extensions.ARB_TextureView)
                 {
-                    throw new NeoVeldridException(
+                    throw new VeldridException(
                         "TextureView objects covering a subset of a Texture's dimensions or using a different PixelFormat " +
                         "require OpenGL 4.3, or ARB_texture_view.");
                 }
@@ -67,7 +67,7 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
             {
                 if (!_gd.Extensions.ARB_TextureView)
                 {
-                    throw new NeoVeldridException(
+                    throw new VeldridException(
                         "TextureView objects covering a subset of a Texture's dimensions or using a different PixelFormat are " +
                         "not supported on OpenGL ES.");
                 }
@@ -279,7 +279,7 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
         }
         else
         {
-            throw new NeoVeldridException("The given TextureView parameters are not supported with the OpenGL backend.");
+            throw new VeldridException("The given TextureView parameters are not supported with the OpenGL backend.");
         }
 
         InternalFormat internalFormat = (InternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(

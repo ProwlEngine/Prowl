@@ -1,4 +1,4 @@
-﻿using static NeoVeldrid.OpenGL.OpenGLUtil;
+﻿using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 using System;
 using Silk.NET.Core.Loader;
 using Silk.NET.OpenGL;
@@ -13,7 +13,7 @@ using System.Threading;
 using System.Runtime.CompilerServices;
 using Silk.NET.Core.Contexts;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
 {
@@ -416,7 +416,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         }
         else
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 "This function does not support creating an OpenGLES GraphicsDevice with the given SwapchainSource.");
         }
     }
@@ -445,7 +445,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             case PixelFormat.R32_Float:
                 return 32;
             default:
-                throw new NeoVeldridException($"Unsupported depth format: {value}");
+                throw new VeldridException($"Unsupported depth format: {value}");
         }
     }
 
@@ -521,7 +521,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             _executionThread.WaitForIdle();
         }
-        catch (NeoVeldridException)
+        catch (VeldridException)
         {
             // The GL context may already be destroyed by SDL_DestroyWindow.
             // Silk.NET throws SymbolLoadingException for unresolved GL functions
@@ -573,7 +573,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             {
                 if (info.Mode != mode)
                 {
-                    throw new NeoVeldridException("The given resource was already mapped with a different MapMode.");
+                    throw new VeldridException("The given resource was already mapped with a different MapMode.");
                 }
 
                 info.RefCount += 1;
@@ -596,7 +596,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             if (_mappedResources.ContainsKey(new MappedResourceCacheKey(buffer, 0)))
             {
-                throw new NeoVeldridException("Cannot call UpdateBuffer on a currently-mapped Buffer.");
+                throw new VeldridException("Cannot call UpdateBuffer on a currently-mapped Buffer.");
             }
         }
         StagingBlock sb = _stagingMemoryPool.Stage(source, sizeInBytes);
@@ -778,7 +778,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             FlushAndFinish();
         }
-        catch (NeoVeldridException)
+        catch (VeldridException)
         {
             // The GL context may already be destroyed by SDL_DestroyWindow.
             // Silk.NET throws SymbolLoadingException for unresolved GL functions
@@ -1332,7 +1332,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
                         ? _exceptions[0]
                         : new AggregateException(_exceptions.ToArray());
                     _exceptions.Clear();
-                    throw new NeoVeldridException(
+                    throw new VeldridException(
                         "Error(s) were encountered during the execution of OpenGL commands. See InnerException for more information.",
                         innerException);
 
@@ -1354,7 +1354,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             mre.Wait();
             if (!mrp.Succeeded)
             {
-                throw new NeoVeldridException("Failed to map OpenGL resource.");
+                throw new VeldridException("Failed to map OpenGL resource.");
             }
 
             mre.Dispose();

@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes the properties that are supported for a particular combination of <see cref="PixelFormat"/>,

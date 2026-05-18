@@ -1,10 +1,10 @@
 using Silk.NET.Vulkan;
 
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkShader : ShaderProgram
 {

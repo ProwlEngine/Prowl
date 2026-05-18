@@ -1,4 +1,4 @@
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal struct DescriptorResourceCounts
 {

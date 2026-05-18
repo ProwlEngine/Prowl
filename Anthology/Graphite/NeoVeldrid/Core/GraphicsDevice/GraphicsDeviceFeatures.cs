@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// Enumerates the optional features supported by a given <see cref="GraphicsDevice"/>.

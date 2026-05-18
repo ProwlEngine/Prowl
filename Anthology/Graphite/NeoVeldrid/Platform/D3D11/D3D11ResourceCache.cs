@@ -7,7 +7,7 @@ using Silk.NET.Direct3D11;
 using Silk.NET.DXGI;
 using Silk.NET.Core.Native;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11ResourceCache : IDisposable
 {
@@ -156,11 +156,11 @@ internal unsafe class D3D11ResourceCache : IDisposable
     {
         RasterizerDesc rssDesc = new RasterizerDesc
         {
-            CullMode = D3D11Formats.VdToD3D11CullMode(key.NeoVeldridDescription.CullMode),
+            CullMode = D3D11Formats.VdToD3D11CullMode(key.VeldridDescription.CullMode),
             FillMode = FillMode.Solid,
-            DepthClipEnable = key.NeoVeldridDescription.DepthClipEnabled,
-            ScissorEnable = key.NeoVeldridDescription.ScissorTestEnabled,
-            FrontCounterClockwise = key.NeoVeldridDescription.FrontFace == FrontFace.CounterClockwise,
+            DepthClipEnable = key.VeldridDescription.DepthClipEnabled,
+            ScissorEnable = key.VeldridDescription.ScissorTestEnabled,
+            FrontCounterClockwise = key.VeldridDescription.FrontFace == FrontFace.CounterClockwise,
             MultisampleEnable = key.Multisampled,
         };
 
@@ -298,24 +298,24 @@ internal unsafe class D3D11ResourceCache : IDisposable
 
     private struct D3D11RasterizerStateCacheKey : IEquatable<D3D11RasterizerStateCacheKey>
     {
-        public RasterizerStateDescription NeoVeldridDescription;
+        public RasterizerStateDescription VeldridDescription;
         public bool Multisampled;
 
         public D3D11RasterizerStateCacheKey(RasterizerStateDescription veldridDescription, bool multisampled)
         {
-            NeoVeldridDescription = veldridDescription;
+            VeldridDescription = veldridDescription;
             Multisampled = multisampled;
         }
 
         public bool Equals(D3D11RasterizerStateCacheKey other)
         {
-            return NeoVeldridDescription.Equals(other.NeoVeldridDescription)
+            return VeldridDescription.Equals(other.VeldridDescription)
                 && Multisampled.Equals(other.Multisampled);
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(NeoVeldridDescription.GetHashCode(), Multisampled.GetHashCode());
+            return HashCode.Combine(VeldridDescription.GetHashCode(), Multisampled.GetHashCode());
         }
     }
 }

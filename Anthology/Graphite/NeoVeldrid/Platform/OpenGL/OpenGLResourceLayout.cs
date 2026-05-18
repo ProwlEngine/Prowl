@@ -1,4 +1,4 @@
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal class OpenGLResourceLayout : ResourceLayout
 {

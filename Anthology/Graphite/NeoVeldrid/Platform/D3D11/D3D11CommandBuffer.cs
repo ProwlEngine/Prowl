@@ -13,7 +13,7 @@ using Silk.NET.Maths;
 
 using Prowl.Vector;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11CommandBuffer : CommandBuffer
 {
@@ -219,7 +219,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     {
         if (_commandList.Handle != null)
         {
-            throw new NeoVeldridException("Invalid use of End().");
+            throw new VeldridException("Invalid use of End().");
         }
 
         ID3D11CommandList* pCmdList;
@@ -477,7 +477,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
         else
         {
-            throw new NeoVeldridException($"Unexpected resource type used in a buffer type slot: {resource.GetType().Name}");
+            throw new VeldridException($"Unexpected resource type used in a buffer type slot: {resource.GetType().Name}");
         }
     }
 
@@ -1522,7 +1522,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     /// <summary>
     /// A viewport struct matching D3D11_VIEWPORT layout (6 floats).
-    /// Used instead of NeoVeldrid.Viewport to match Silk.NET's Viewport struct layout exactly.
+    /// Used instead of Prowl.Veldrid.Viewport to match Silk.NET's Viewport struct layout exactly.
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct D3D11Viewport

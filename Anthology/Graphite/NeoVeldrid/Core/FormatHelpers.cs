@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 internal static class FormatHelpers
 {
@@ -240,7 +240,7 @@ internal static class FormatHelpers
             case 8: return TextureSampleCount.Count8;
             case 16: return TextureSampleCount.Count16;
             case 32: return TextureSampleCount.Count32;
-            default: throw new NeoVeldridException("Unsupported multisample count: " + samples);
+            default: throw new VeldridException("Unsupported multisample count: " + samples);
         }
     }
 

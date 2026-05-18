@@ -1,6 +1,6 @@
 using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes an individual resource element in a <see cref="ResourceLayout"/>.

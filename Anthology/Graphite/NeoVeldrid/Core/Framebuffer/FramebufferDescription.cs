@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes a <see cref="Framebuffer"/>, for creation using a <see cref="ResourceFactory"/>.

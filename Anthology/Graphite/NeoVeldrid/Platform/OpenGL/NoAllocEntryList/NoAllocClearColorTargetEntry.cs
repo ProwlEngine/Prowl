@@ -1,6 +1,6 @@
 ﻿using Prowl.Vector;
 
-namespace NeoVeldrid.OpenGL.NoAllocEntryList;
+namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
 internal struct NoAllocClearColorTargetEntry
 {

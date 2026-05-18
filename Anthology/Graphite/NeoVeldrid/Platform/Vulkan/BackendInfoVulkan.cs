@@ -2,13 +2,13 @@
 using System;
 using System.Collections.ObjectModel;
 
-using NeoVeldrid.Vk;
+using Prowl.Veldrid.Vk;
 
 using Silk.NET.Vulkan;
 
 using VkImageLayout = Silk.NET.Vulkan.ImageLayout;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Exposes Vulkan-specific functionality,
@@ -73,7 +73,7 @@ public class BackendInfoVulkan
 
     /// <summary>
     /// Overrides the current VkImageLayout tracked by the given Texture. This should be used when a VkImage is created by
-    /// an external library to inform NeoVeldrid about its initial layout.
+    /// an external library to inform Prowl.Veldrid about its initial layout.
     /// </summary>
     /// <param name="texture">The Texture whose currently-tracked VkImageLayout will be overridden.</param>
     /// <param name="layout">The new VkImageLayout value.</param>
@@ -90,7 +90,7 @@ public class BackendInfoVulkan
     }
 
     /// <summary>
-    /// Gets the underlying VkImage wrapped by the given NeoVeldrid Texture. This method can not be used on Textures with
+    /// Gets the underlying VkImage wrapped by the given Prowl.Veldrid Texture. This method can not be used on Textures with
     /// TextureUsage.Staging.
     /// </summary>
     /// <param name="texture">The Texture whose underlying VkImage will be returned.</param>
@@ -100,7 +100,7 @@ public class BackendInfoVulkan
         VkTexture vkTexture = Util.AssertSubtype<Texture, VkTexture>(texture);
         if ((vkTexture.Usage & TextureUsage.Staging) != 0)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"{nameof(GetVkImage)} cannot be used if the {nameof(Texture)} " +
                 $"has {nameof(TextureUsage)}.{nameof(TextureUsage.Staging)}.");
         }

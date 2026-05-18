@@ -1,6 +1,6 @@
 using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A device object responsible for the creation of graphics resources.

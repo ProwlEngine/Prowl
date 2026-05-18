@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 internal static class Illegal
 {
@@ -9,7 +9,7 @@ internal static class Illegal
         return new IllegalValueException<T>();
     }
 
-    internal class IllegalValueException<T> : NeoVeldridException
+    internal class IllegalValueException<T> : VeldridException
     {
     }
 }

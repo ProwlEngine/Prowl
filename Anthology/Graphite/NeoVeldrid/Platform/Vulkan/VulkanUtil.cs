@@ -5,7 +5,7 @@ using Silk.NET.Vulkan;
 
 using VkApi = Silk.NET.Vulkan.Vk;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe static class VulkanUtil
 {
@@ -17,7 +17,7 @@ internal unsafe static class VulkanUtil
     {
         if (result != Result.Success)
         {
-            throw new NeoVeldridException("Unsuccessful VkResult: " + result);
+            throw new VeldridException("Unsuccessful VkResult: " + result);
         }
     }
 

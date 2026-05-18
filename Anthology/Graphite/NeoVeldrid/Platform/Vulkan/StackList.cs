@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 /// <summary>
 /// A super-dangerous stack-only list which can hold up to 256 bytes of blittable data.

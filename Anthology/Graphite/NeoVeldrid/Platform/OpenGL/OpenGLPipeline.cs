@@ -1,6 +1,6 @@
 using Silk.NET.OpenGL;
 
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
@@ -9,7 +9,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
 {
@@ -129,7 +129,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         {
             string log = _gl.GetProgramInfoLog(_program);
             CheckLastError();
-            throw new NeoVeldridException($"Error linking GL program: {log}");
+            throw new VeldridException($"Error linking GL program: {log}");
         }
 
         ProcessResourceSetLayouts(ResourceLayouts);
@@ -226,7 +226,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
                 uniformBufferIndex++;
             }
 
-            throw new NeoVeldridException($"Unable to bind uniform buffer \"{resourceName}\" by name. Valid names for this pipeline are: {string.Join(", ", names)}");
+            throw new VeldridException($"Unable to bind uniform buffer \"{resourceName}\" by name. Valid names for this pipeline are: {string.Join(", ", names)}");
         }
 #endif
         return blockIndex;
@@ -264,7 +264,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         {
             string log = _gl.GetProgramInfoLog(_program);
             CheckLastError();
-            throw new NeoVeldridException($"Error linking GL program: {log}");
+            throw new VeldridException($"Error linking GL program: {log}");
         }
 
         ProcessResourceSetLayouts(ResourceLayouts);

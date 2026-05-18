@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal class OpenGLSwapchain : Swapchain
 {

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes how stencil tests are performed in a <see cref="Pipeline"/>'s depth-stencil state.

@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 
 using Prowl.Vector;
 
-namespace NeoVeldrid.OpenGL.NoAllocEntryList;
+namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
 internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, IDisposable
 {

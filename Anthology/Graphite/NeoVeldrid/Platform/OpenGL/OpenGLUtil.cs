@@ -4,7 +4,7 @@ using System.Text;
 
 using Silk.NET.OpenGL;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal static class OpenGLUtil
 {
@@ -25,7 +25,7 @@ internal static class OpenGLUtil
                 Debugger.Break();
             }
 
-            throw new NeoVeldridException("glGetError indicated an error: " + (ErrorCode)error);
+            throw new VeldridException("glGetError indicated an error: " + (ErrorCode)error);
         }
     }
 

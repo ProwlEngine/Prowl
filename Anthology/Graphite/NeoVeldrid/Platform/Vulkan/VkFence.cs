@@ -2,7 +2,7 @@ using Silk.NET.Vulkan;
 
 using VkFenceHandle = Silk.NET.Vulkan.Fence;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkFence : Fence
 {

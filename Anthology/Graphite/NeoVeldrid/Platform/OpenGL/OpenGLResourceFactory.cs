@@ -2,7 +2,7 @@ using Silk.NET.OpenGL;
 
 using System;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal class OpenGLResourceFactory : ResourceFactory
 {

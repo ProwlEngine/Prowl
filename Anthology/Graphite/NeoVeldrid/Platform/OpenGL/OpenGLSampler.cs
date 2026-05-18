@@ -1,10 +1,10 @@
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using Silk.NET.OpenGL;
 
 using Prowl.Vector;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe class OpenGLSampler : Sampler, OpenGLDeferredResource
 {

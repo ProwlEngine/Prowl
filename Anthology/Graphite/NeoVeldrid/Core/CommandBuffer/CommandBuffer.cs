@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using Prowl.Vector;
 
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A device resource which allows the recording of graphics commands, which can later be executed by a
@@ -607,7 +607,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         if (bufferOffsetInBytes + sizeInBytes > buffer.SizeInBytes)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"The DeviceBuffer's capacity ({buffer.SizeInBytes}) is not large enough to store the amount of " +
                 $"data specified ({sizeInBytes}) at the given offset ({bufferOffsetInBytes}).");
         }
@@ -791,7 +791,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         if ((texture.Usage & TextureUsage.GenerateMipmaps) == 0)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"{nameof(GenerateMipmaps)} requires a target Texture with {nameof(TextureUsage)}.{nameof(TextureUsage.GenerateMipmaps)}");
         }
 

@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// Represents a single output of a <see cref="Framebuffer"/>. May be a color or depth attachment.

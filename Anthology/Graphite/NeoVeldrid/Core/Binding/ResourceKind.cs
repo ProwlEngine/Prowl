@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// The kind of a <see cref="BindableResource"/> object.
@@ -40,7 +40,7 @@ public enum ResourceKind : byte
     TextureReadWrite,
 
     /// <summary>
-    /// A <see cref="NeoVeldrid.Sampler"/>.
+    /// A <see cref="Prowl.Veldrid.Sampler"/>.
     /// </summary>
     Sampler,
 }

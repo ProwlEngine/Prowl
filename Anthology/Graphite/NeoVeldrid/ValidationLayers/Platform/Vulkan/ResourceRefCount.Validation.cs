@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal partial class ResourceRefCount
 {
@@ -10,7 +10,7 @@ internal partial class ResourceRefCount
 #if VALIDATE_USAGE
         if (ret == 0)
         {
-            throw new NeoVeldridException("An attempt was made to reference a disposed resource.");
+            throw new VeldridException("An attempt was made to reference a disposed resource.");
         }
 #endif
     }

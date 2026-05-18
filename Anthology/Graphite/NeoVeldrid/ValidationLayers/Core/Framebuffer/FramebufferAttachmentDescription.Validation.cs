@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 public partial struct FramebufferAttachmentDescription
 {
@@ -16,12 +16,12 @@ public partial struct FramebufferAttachmentDescription
 
         if (arrayLayer >= effectiveArrayLayers)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"{nameof(arrayLayer)} must be less than {nameof(target)}.{nameof(Texture.ArrayLayers)}.");
         }
         if (mipLevel >= target.MipLevels)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"{nameof(mipLevel)} must be less than {nameof(target)}.{nameof(Texture.MipLevels)}.");
         }
 #endif

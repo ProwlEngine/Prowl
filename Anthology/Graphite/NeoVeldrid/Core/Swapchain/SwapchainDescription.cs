@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes a <see cref="Swapchain"/>, for creation via a <see cref="ResourceFactory"/>.

@@ -1,6 +1,6 @@
 using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A device resource used to bind a particular set of <see cref="BindableResource"/> objects to a <see cref="CommandBuffer"/>.

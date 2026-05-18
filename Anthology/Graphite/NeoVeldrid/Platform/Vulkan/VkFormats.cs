@@ -7,7 +7,7 @@ using VkSamplerAddressMode = Silk.NET.Vulkan.SamplerAddressMode;
 using VkBlendFactor = Silk.NET.Vulkan.BlendFactor;
 using VkPrimitiveTopology = Silk.NET.Vulkan.PrimitiveTopology;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal static partial class VkFormats
 {

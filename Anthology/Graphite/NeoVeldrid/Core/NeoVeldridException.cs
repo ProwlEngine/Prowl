@@ -1,33 +1,33 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
-/// Represents errors that occur in the NeoVeldrid library.
+/// Represents errors that occur in the Prowl.Veldrid library.
 /// </summary>
-public class NeoVeldridException : Exception
+public class VeldridException : Exception
 {
     /// <summary>
-    /// Constructs a new NeoVeldridException.
+    /// Constructs a new VeldridException.
     /// </summary>
-    public NeoVeldridException()
+    public VeldridException()
     {
     }
 
     /// <summary>
-    /// Constructs a new NeoVeldridexception with the given message.
+    /// Constructs a new VeldridException with the given message.
     /// </summary>
     /// <param name="message">The exception message.</param>
-    public NeoVeldridException(string message) : base(message)
+    public VeldridException(string message) : base(message)
     {
     }
 
     /// <summary>
-    /// Constructs a new NeoVeldridexception with the given message and inner exception.
+    /// Constructs a new VeldridException with the given message and inner exception.
     /// </summary>
     /// <param name="message">The exception message.</param>
     /// <param name="innerException">The inner exception.</param>
-    public NeoVeldridException(string message, Exception innerException) : base(message, innerException)
+    public VeldridException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

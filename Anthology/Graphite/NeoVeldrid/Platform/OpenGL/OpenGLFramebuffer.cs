@@ -1,10 +1,10 @@
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using Silk.NET.OpenGL;
 
 using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
 {
@@ -149,7 +149,7 @@ internal unsafe class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
         CheckLastError();
         if (errorCode != FramebufferStatus.Complete)
         {
-            throw new NeoVeldridException("Framebuffer was not successfully created: " + errorCode);
+            throw new VeldridException("Framebuffer was not successfully created: " + errorCode);
         }
 
         Created = true;

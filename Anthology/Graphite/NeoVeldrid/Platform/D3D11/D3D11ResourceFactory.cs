@@ -3,7 +3,7 @@ using Silk.NET.Core.Native;
 
 using System;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
 {

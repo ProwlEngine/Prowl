@@ -1,6 +1,6 @@
 ﻿using Prowl.Vector;
 
-namespace NeoVeldrid.OpenGL.ManagedEntryList;
+namespace Prowl.Veldrid.OpenGL.ManagedEntryList;
 
 internal class ClearColorTargetEntry : OpenGLCommandEntry
 {

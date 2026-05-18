@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid;
+﻿namespace Prowl.Veldrid;
 
 /// <summary>
 /// A constant color that is sampled when <see cref="SamplerAddressMode.Border"/> is used.

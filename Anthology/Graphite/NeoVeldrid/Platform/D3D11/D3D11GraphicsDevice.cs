@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 {
@@ -389,7 +389,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             {
                 if (info.Mode != mode)
                 {
-                    throw new NeoVeldridException("The given resource was already mapped with a different MapMode.");
+                    throw new VeldridException("The given resource was already mapped with a different MapMode.");
                 }
 
                 info.RefCount += 1;
@@ -458,7 +458,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         {
             if (!_mappedResources.TryGetValue(key, out MappedResourceInfo info))
             {
-                throw new NeoVeldridException($"The given resource ({resource}) is not mapped.");
+                throw new VeldridException($"The given resource ({resource}) is not mapped.");
             }
 
             info.RefCount -= 1;

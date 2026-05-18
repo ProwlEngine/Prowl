@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 internal struct MappedResourceCacheKey : IEquatable<MappedResourceCacheKey>
 {

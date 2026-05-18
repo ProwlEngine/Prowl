@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11Swapchain : Swapchain
 {
@@ -97,7 +97,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         }
         else
         {
-            throw new NeoVeldridException($"Unsupported swapchain source type: {description.Source?.GetType().Name}");
+            throw new VeldridException($"Unsupported swapchain source type: {description.Source?.GetType().Name}");
         }
 
         Resize(description.Width, description.Height);

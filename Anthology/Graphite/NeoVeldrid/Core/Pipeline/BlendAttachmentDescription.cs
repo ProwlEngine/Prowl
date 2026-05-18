@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A <see cref="Pipeline"/> component describing the blend behavior for an individual color attachment.
@@ -13,7 +13,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     public bool BlendEnabled;
     /// <summary>
     /// Controls which components of the color will be written to the framebuffer.
-    /// If <c>null</c>, the mask will be set to <see cref="NeoVeldrid.ColorWriteMask.All"/>.
+    /// If <c>null</c>, the mask will be set to <see cref="Prowl.Veldrid.ColorWriteMask.All"/>.
     /// </summary>
     public ColorWriteMask? ColorWriteMask;
     /// <summary>

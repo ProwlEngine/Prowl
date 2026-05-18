@@ -1,4 +1,4 @@
-﻿namespace NeoVeldrid.D3D11;
+﻿namespace Prowl.Veldrid.D3D11;
 
 internal class D3D11ResourceSet : ResourceSet
 {

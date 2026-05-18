@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 public static class FormatSizeHelpers
 {

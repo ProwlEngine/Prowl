@@ -1,12 +1,12 @@
 using Silk.NET.OpenGL;
 
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
 using System;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 /// <summary>
 /// A utility class managing the relationships between textures, samplers, and their binding locations.

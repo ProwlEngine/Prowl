@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal class OpenGLFence : Fence
 {

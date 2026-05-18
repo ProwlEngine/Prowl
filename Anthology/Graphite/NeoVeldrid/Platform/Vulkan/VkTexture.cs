@@ -1,11 +1,11 @@
 using Silk.NET.Vulkan;
 
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System.Diagnostics;
 using System;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkTexture : Texture
 {
@@ -327,7 +327,7 @@ internal unsafe class VkTexture : Texture
             {
                 if (_imageLayouts[CalculateSubresource(baseMipLevel + level, baseArrayLayer + layer)] != oldLayout)
                 {
-                    throw new NeoVeldridException("Unexpected image layout.");
+                    throw new VeldridException("Unexpected image layout.");
                 }
             }
         }

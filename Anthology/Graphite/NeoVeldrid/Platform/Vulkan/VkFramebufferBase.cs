@@ -4,7 +4,7 @@ using Silk.NET.Vulkan;
 
 using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal abstract class VkFramebufferBase : Framebuffer
 {

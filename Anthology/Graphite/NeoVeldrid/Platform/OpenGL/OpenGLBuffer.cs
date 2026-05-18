@@ -1,9 +1,9 @@
 using System;
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 using Silk.NET.OpenGL;
 using System.Diagnostics;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
 {

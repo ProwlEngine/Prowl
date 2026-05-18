@@ -2,11 +2,11 @@ using System;
 
 using Silk.NET.Vulkan;
 
-using static NeoVeldrid.Vk.VulkanUtil;
+using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using VkBufferHandle = Silk.NET.Vulkan.Buffer;
 
-namespace NeoVeldrid.Vk;
+namespace Prowl.Veldrid.Vk;
 
 internal unsafe class VkBuffer : DeviceBuffer
 {

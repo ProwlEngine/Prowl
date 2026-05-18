@@ -5,7 +5,7 @@ using Silk.NET.OpenGL;
 
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal static class OpenGLFormats
 {

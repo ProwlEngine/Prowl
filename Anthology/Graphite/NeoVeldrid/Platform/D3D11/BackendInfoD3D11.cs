@@ -1,9 +1,9 @@
 ﻿#if !EXCLUDE_D3D11_BACKEND
 using System;
 
-using NeoVeldrid.D3D11;
+using Prowl.Veldrid.D3D11;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Exposes Direct3D 11-specific functionality,
@@ -35,10 +35,10 @@ public unsafe class BackendInfoD3D11
     public int DeviceId => _gd.DeviceId;
 
     /// <summary>
-    /// Gets a pointer to the native texture wrapped by the given NeoVeldrid Texture. Depending on the instance's TextureType,
+    /// Gets a pointer to the native texture wrapped by the given Prowl.Veldrid Texture. Depending on the instance's TextureType,
     /// this will be a pointer to an ID3D11Texture1D, an ID3D11Texture2D, or an ID3D11Texture3D.
     /// </summary>
-    /// <returns>A pointer to the NeoVeldrid Texture's underlying ID3D11Texture1D, ID3D11Texture2D, or ID3D11Texture3D. The type
+    /// <returns>A pointer to the Prowl.Veldrid Texture's underlying ID3D11Texture1D, ID3D11Texture2D, or ID3D11Texture3D. The type
     /// of this object depends on the parameter's TextureType.</returns>
     public IntPtr GetTexturePointer(Texture texture)
         => (nint)Util.AssertSubtype<Texture, D3D11Texture>(texture).DeviceTexture;

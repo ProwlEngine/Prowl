@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// Represents an abstract graphics device, capable of creating device resources and executing commands.
@@ -85,7 +85,7 @@ public abstract partial class GraphicsDevice : IDisposable
         {
             if (MainSwapchain == null)
             {
-                throw new NeoVeldridException($"This GraphicsDevice was created without a main Swapchain. This property cannot be set.");
+                throw new VeldridException($"This GraphicsDevice was created without a main Swapchain. This property cannot be set.");
             }
 
             MainSwapchain.SyncToVerticalBlank = value;
@@ -143,7 +143,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (!WaitForFence(fence, ulong.MaxValue))
         {
-            throw new NeoVeldridException("The operation timed out before the Fence was signaled.");
+            throw new VeldridException("The operation timed out before the Fence was signaled.");
         }
     }
 
@@ -180,7 +180,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (MainSwapchain == null)
         {
-            throw new NeoVeldridException("This GraphicsDevice was created without a main Swapchain, so the requested operation cannot be performed.");
+            throw new VeldridException("This GraphicsDevice was created without a main Swapchain, so the requested operation cannot be performed.");
         }
 
         SwapBuffers(MainSwapchain);
@@ -213,7 +213,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (MainSwapchain == null)
         {
-            throw new NeoVeldridException("This GraphicsDevice was created without a main Swapchain, so the requested operation cannot be performed.");
+            throw new VeldridException("This GraphicsDevice was created without a main Swapchain, so the requested operation cannot be performed.");
         }
 
         MainSwapchain.Resize(width, height);
@@ -581,7 +581,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (bufferOffsetInBytes + sizeInBytes > buffer.SizeInBytes)
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"The data size given to UpdateBuffer is too large. The given buffer can only hold {buffer.SizeInBytes} total bytes. The requested update would require {bufferOffsetInBytes + sizeInBytes} bytes.");
         }
         if (sizeInBytes == 0)
@@ -702,7 +702,7 @@ public abstract partial class GraphicsDevice : IDisposable
         {
             if (!Features.SamplerAnisotropy)
             {
-                throw new NeoVeldridException(
+                throw new VeldridException(
                     "GraphicsDevice.Aniso4xSampler cannot be used unless GraphicsDeviceFeatures.SamplerAnisotropy is supported.");
             }
 
@@ -742,7 +742,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (!GetD3D11Info(out BackendInfoD3D11 info))
         {
-            throw new NeoVeldridException($"{nameof(GetD3D11Info)} can only be used on a D3D11 GraphicsDevice.");
+            throw new VeldridException($"{nameof(GetD3D11Info)} can only be used on a D3D11 GraphicsDevice.");
         }
 
         return info;
@@ -767,7 +767,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (!GetVulkanInfo(out BackendInfoVulkan info))
         {
-            throw new NeoVeldridException($"{nameof(GetVulkanInfo)} can only be used on a Vulkan GraphicsDevice.");
+            throw new VeldridException($"{nameof(GetVulkanInfo)} can only be used on a Vulkan GraphicsDevice.");
         }
 
         return info;
@@ -792,7 +792,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (!GetOpenGLInfo(out BackendInfoOpenGL info))
         {
-            throw new NeoVeldridException($"{nameof(GetOpenGLInfo)} can only be used on an OpenGL GraphicsDevice.");
+            throw new VeldridException($"{nameof(GetOpenGLInfo)} can only be used on an OpenGL GraphicsDevice.");
         }
 
         return info;

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 /// <summary>
 /// A bindable device resource which provides a shader with access to a sampled <see cref="Texture"/> object.

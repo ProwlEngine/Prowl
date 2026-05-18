@@ -1,6 +1,6 @@
 using Silk.NET.OpenGL;
 
-using static NeoVeldrid.OpenGL.OpenGLUtil;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
@@ -8,7 +8,7 @@ using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
 using System;
 using System.Diagnostics;
 
-namespace NeoVeldrid.OpenGL;
+namespace Prowl.Veldrid.OpenGL;
 
 internal unsafe class OpenGLTexture : Texture, OpenGLDeferredResource
 {
@@ -594,7 +594,7 @@ internal unsafe class OpenGLTexture : Texture, OpenGLDeferredResource
         }
         else
         {
-            throw new NeoVeldridException("Invalid texture target: " + TextureTarget);
+            throw new VeldridException("Invalid texture target: " + TextureTarget);
         }
 
         Created = true;
@@ -646,7 +646,7 @@ internal unsafe class OpenGLTexture : Texture, OpenGLDeferredResource
             FramebufferStatus errorCode = (FramebufferStatus)_gl.CheckFramebufferStatus(framebufferTarget);
             if (errorCode != FramebufferStatus.Complete)
             {
-                throw new NeoVeldridException("Failed to create texture copy FBO: " + errorCode);
+                throw new VeldridException("Failed to create texture copy FBO: " + errorCode);
             }
         }
 

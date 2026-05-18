@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 internal static class Util
 {
@@ -21,12 +21,12 @@ internal static class Util
 #if DEBUG
         if (value == null)
         {
-            throw new NeoVeldridException($"Expected object of type {typeof(TDerived).FullName} but received null instead.");
+            throw new VeldridException($"Expected object of type {typeof(TDerived).FullName} but received null instead.");
         }
 
         if (value is not TDerived derived)
         {
-            throw new NeoVeldridException($"object {value} must be derived type {typeof(TDerived).FullName} to be used in this context.");
+            throw new VeldridException($"object {value} must be derived type {typeof(TDerived).FullName} to be used in this context.");
         }
 
         return derived;
@@ -308,7 +308,7 @@ internal static class Util
         }
         else
         {
-            throw new NeoVeldridException(
+            throw new VeldridException(
                 $"Unexpected resource type. Expected Texture or TextureView but found {resource.GetType().Name}");
         }
     }

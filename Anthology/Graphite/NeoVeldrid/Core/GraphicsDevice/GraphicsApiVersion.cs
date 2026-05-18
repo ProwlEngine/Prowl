@@ -1,5 +1,5 @@
 ﻿
-namespace NeoVeldrid;
+namespace Prowl.Veldrid;
 
 public readonly struct GraphicsApiVersion
 {

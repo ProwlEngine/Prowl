@@ -4,7 +4,7 @@ using System.Diagnostics;
 using Silk.NET.Core.Native;
 using Silk.NET.Direct3D11;
 
-namespace NeoVeldrid.D3D11;
+namespace Prowl.Veldrid.D3D11;
 
 internal unsafe class D3D11Pipeline : Pipeline
 {
