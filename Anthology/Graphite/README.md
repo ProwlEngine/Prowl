@@ -1,4 +1,4 @@
-# Prowl.NeoVeldrid
+# Prowl.Veldrid
 
 A cut up version of ciberman's NeoVeldrid repository - resource binder has been gutted in preference of direct-binding system, where users specify resource indices directly.
 

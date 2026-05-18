@@ -37,7 +37,7 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
 
-    <!-- SourceLink: enables stepping into NeoVeldrid source from NuGet packages -->
+    <!-- SourceLink: enables stepping into Veldrid source from NuGet packages -->
     <PropertyGroup>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
