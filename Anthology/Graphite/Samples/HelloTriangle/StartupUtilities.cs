@@ -2,7 +2,7 @@ using System;
 
 using Silk.NET.SDL;
 
-namespace NeoVeldrid.Samples.HelloTriangle;
+namespace Prowl.Veldrid.Samples.HelloTriangle;
 
 public enum WindowState
 {
@@ -77,13 +77,13 @@ public static unsafe class Startup
         }
     }
 
-    public static Sdl2Window CreateWindow(WindowCreateInfo wci) => CreateWindow(ref wci);
+    public static Sdl2Window CreateWindow(WindowCreateInfo wci, WindowFlags flags) => CreateWindow(ref wci, flags);
 
-    public static Sdl2Window CreateWindow(ref WindowCreateInfo wci)
+    public static Sdl2Window CreateWindow(ref WindowCreateInfo wci, WindowFlags APIFlags)
     {
         EnsureSdlInitialized();
 
-        WindowFlags flags = WindowFlags.Vulkan | WindowFlags.Opengl | WindowFlags.Resizable
+        WindowFlags flags = APIFlags | WindowFlags.Resizable
             | GetWindowFlags(wci.WindowInitialState);
         if (wci.WindowInitialState != WindowState.Hidden)
         {
@@ -94,7 +94,7 @@ public static unsafe class Startup
         int height = wci.WindowHeight > 0 ? wci.WindowHeight : 540;
 
         Window* handle = s_sdl.CreateWindow(
-            wci.WindowTitle ?? "NeoVeldrid",
+            wci.WindowTitle ?? "Prowl.Veldrid",
             wci.X == 0 ? Sdl.WindowposCentered : wci.X,
             wci.Y == 0 ? Sdl.WindowposCentered : wci.Y,
             width,

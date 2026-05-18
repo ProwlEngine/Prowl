@@ -1,13 +1,13 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-using NeoVeldrid.OpenGL;
+using Prowl.Veldrid.OpenGL;
 
 using Prowl.Vector;
 
 using Silk.NET.SDL;
 
-namespace NeoVeldrid.Samples.HelloTriangle;
+namespace Prowl.Veldrid.Samples.HelloTriangle;
 
 internal static unsafe class Program
 {
@@ -45,7 +45,7 @@ void main()
             WindowInitialState = WindowState.Normal,
         };
 
-        Sdl2Window window = Startup.CreateWindow(ref wci);
+        Sdl2Window window = Startup.CreateWindow(ref wci, WindowFlags.Opengl);
         Sdl sdl = Startup.Sdl;
 
         SdlContext context = new SdlContext(sdl, window.Handle);

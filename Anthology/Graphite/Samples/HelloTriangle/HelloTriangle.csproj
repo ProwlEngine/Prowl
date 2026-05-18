@@ -3,11 +3,11 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <IsPackable>false</IsPackable>
-        <RootNamespace>NeoVeldrid.Samples.HelloTriangle</RootNamespace>
+        <RootNamespace>Veldrid.Samples.HelloTriangle</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\NeoVeldrid\NeoVeldrid.csproj" />
+        <ProjectReference Include="..\..\Veldrid\Prowl.Veldrid.csproj" />
         <PackageReference Include="Silk.NET.SDL" Version="$(SilkNetVersion)" />
     </ItemGroup>
 
