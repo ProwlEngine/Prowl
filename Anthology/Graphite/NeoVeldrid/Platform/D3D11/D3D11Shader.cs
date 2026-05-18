@@ -7,7 +7,7 @@ using Silk.NET.Direct3D11;
 
 namespace NeoVeldrid.D3D11;
 
-internal unsafe class D3D11Shader : Shader
+internal unsafe class D3D11Shader : ShaderProgram
 {
     private string _name;
 

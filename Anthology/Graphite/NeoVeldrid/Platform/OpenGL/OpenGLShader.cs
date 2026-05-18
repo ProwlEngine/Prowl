@@ -7,7 +7,7 @@ using System;
 
 namespace NeoVeldrid.OpenGL;
 
-internal unsafe partial class OpenGLShader : Shader, OpenGLDeferredResource
+internal unsafe partial class OpenGLShader : ShaderProgram, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;

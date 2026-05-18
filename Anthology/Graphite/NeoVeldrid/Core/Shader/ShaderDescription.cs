@@ -3,7 +3,7 @@
 namespace NeoVeldrid;
 
 /// <summary>
-/// Describes a <see cref="Shader"/>, for creation using a <see cref="ResourceFactory"/>.
+/// Describes a <see cref="ShaderProgram"/>, for creation using a <see cref="ResourceFactory"/>.
 /// </summary>
 public struct ShaderDescription : IEquatable<ShaderDescription>
 {

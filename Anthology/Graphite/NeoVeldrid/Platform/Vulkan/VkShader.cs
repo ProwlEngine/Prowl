@@ -6,7 +6,7 @@ using System;
 
 namespace NeoVeldrid.Vk;
 
-internal unsafe class VkShader : Shader
+internal unsafe class VkShader : ShaderProgram
 {
     private readonly VkGraphicsDevice _gd;
     private readonly ShaderModule _shaderModule;

@@ -56,7 +56,7 @@ internal class OpenGLResourceFactory : ResourceFactory
         return new OpenGLSampler(_gd, ref description);
     }
 
-    protected override Shader CreateShaderCore(ref ShaderDescription description)
+    protected override ShaderProgram CreateShaderCore(ref ShaderDescription description)
     {
         StagingBlock stagingBlock = _pool.Stage(description.ShaderBytes);
         OpenGLShader shader = new OpenGLShader(_gd, description.Stage, stagingBlock, description.EntryPoint);

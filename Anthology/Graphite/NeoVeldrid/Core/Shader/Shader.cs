@@ -6,9 +6,9 @@ namespace NeoVeldrid;
 /// A device resource encapsulating a single shader module.
 /// See <see cref="ShaderDescription"/>.
 /// </summary>
-public abstract class Shader : DeviceResource, IDisposable
+public abstract class ShaderProgram : DeviceResource, IDisposable
 {
-    internal Shader(ShaderStages stage, string entryPoint)
+    internal ShaderProgram(ShaderStages stage, string entryPoint)
     {
         Stage = stage;
         EntryPoint = entryPoint;

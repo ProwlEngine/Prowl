@@ -33,7 +33,7 @@ internal unsafe class D3D11Pipeline : Pipeline
         : base(ref description)
     {
         byte[] vsBytecode = null;
-        Shader[] stages = description.ShaderSet.Shaders;
+        ShaderProgram[] stages = description.ShaderSet.Shaders;
         for (int i = 0; i < description.ShaderSet.Shaders.Length; i++)
         {
             if (stages[i].Stage == ShaderStages.Vertex)

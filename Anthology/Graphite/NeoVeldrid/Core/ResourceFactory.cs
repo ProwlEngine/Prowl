@@ -217,17 +217,17 @@ public abstract partial class ResourceFactory
     protected abstract Sampler CreateSamplerCore(ref SamplerDescription description);
 
     /// <summary>
-    /// Creates a new <see cref="Shader"/>.
+    /// Creates a new <see cref="ShaderProgram"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="Shader"/>.</returns>
-    public Shader CreateShader(ShaderDescription description) => CreateShader(ref description);
+    /// <returns>A new <see cref="ShaderProgram"/>.</returns>
+    public ShaderProgram CreateShader(ShaderDescription description) => CreateShader(ref description);
     /// <summary>
-    /// Creates a new <see cref="Shader"/>.
+    /// Creates a new <see cref="ShaderProgram"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="Shader"/>.</returns>
-    public Shader CreateShader(ref ShaderDescription description)
+    /// <returns>A new <see cref="ShaderProgram"/>.</returns>
+    public ShaderProgram CreateShader(ref ShaderDescription description)
     {
         CreateShader_CheckDescription(ref description);
         return CreateShaderCore(ref description);
@@ -236,7 +236,7 @@ public abstract partial class ResourceFactory
     /// <summary></summary>
     /// <param name="description"></param>
     /// <returns></returns>
-    protected abstract Shader CreateShaderCore(ref ShaderDescription description);
+    protected abstract ShaderProgram CreateShaderCore(ref ShaderDescription description);
 
     /// <summary>
     /// Creates a new <see cref="CommandBuffer"/>.

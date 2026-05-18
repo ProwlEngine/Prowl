@@ -52,7 +52,7 @@ internal class VkResourceFactory : ResourceFactory
         return new VkSampler(_gd, ref description);
     }
 
-    protected override Shader CreateShaderCore(ref ShaderDescription description)
+    protected override ShaderProgram CreateShaderCore(ref ShaderDescription description)
     {
         return new VkShader(_gd, ref description);
     }

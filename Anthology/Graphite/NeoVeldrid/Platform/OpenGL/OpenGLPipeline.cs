@@ -18,7 +18,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
     private GL _gl => _gd.GL;
 
     // Graphics Pipeline
-    public Shader[] GraphicsShaders { get; }
+    public ShaderProgram[] GraphicsShaders { get; }
     public VertexLayoutDescription[] VertexLayouts { get; }
     public BlendStateDescription BlendState { get; }
     public DepthStencilStateDescription DepthStencilState { get; }
@@ -27,7 +27,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
 
     // Compute Pipeline
     public override bool IsComputePipeline { get; }
-    public Shader ComputeShader { get; }
+    public ShaderProgram ComputeShader { get; }
 
     private uint _program;
     private bool _disposeRequested;
@@ -102,9 +102,9 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
     {
         _program = _gl.CreateProgram();
         CheckLastError();
-        foreach (Shader stage in GraphicsShaders)
+        foreach (ShaderProgram stage in GraphicsShaders)
         {
-            OpenGLShader glShader = Util.AssertSubtype<Shader, OpenGLShader>(stage);
+            OpenGLShader glShader = Util.AssertSubtype<ShaderProgram, OpenGLShader>(stage);
             glShader.EnsureResourcesCreated();
             _gl.AttachShader(_program, glShader.Shader);
             CheckLastError();
@@ -250,7 +250,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
     {
         _program = _gl.CreateProgram();
         CheckLastError();
-        OpenGLShader glShader = Util.AssertSubtype<Shader, OpenGLShader>(ComputeShader);
+        OpenGLShader glShader = Util.AssertSubtype<ShaderProgram, OpenGLShader>(ComputeShader);
         glShader.EnsureResourcesCreated();
         _gl.AttachShader(_program, glShader.Shader);
         CheckLastError();

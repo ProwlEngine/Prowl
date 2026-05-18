@@ -190,11 +190,11 @@ internal unsafe class VkPipeline : Pipeline
 
         // Shader Stage
 
-        Shader[] shaders = description.ShaderSet.Shaders;
+        ShaderProgram[] shaders = description.ShaderSet.Shaders;
         StackList<PipelineShaderStageCreateInfo> stages = new StackList<PipelineShaderStageCreateInfo>();
-        foreach (Shader shader in shaders)
+        foreach (ShaderProgram shader in shaders)
         {
-            VkShader vkShader = Util.AssertSubtype<Shader, VkShader>(shader);
+            VkShader vkShader = Util.AssertSubtype<ShaderProgram, VkShader>(shader);
             PipelineShaderStageCreateInfo stageCI = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo };
             stageCI.Module = vkShader.ShaderModule;
             stageCI.Stage = VkFormats.VdToVkShaderStages(shader.Stage);
@@ -336,8 +336,8 @@ internal unsafe class VkPipeline : Pipeline
 
         // Shader Stage
 
-        Shader shader = description.ComputeShader;
-        VkShader vkShader = Util.AssertSubtype<Shader, VkShader>(shader);
+        ShaderProgram shader = description.ComputeShader;
+        VkShader vkShader = Util.AssertSubtype<ShaderProgram, VkShader>(shader);
         PipelineShaderStageCreateInfo stageCI = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo };
         stageCI.Module = vkShader.ShaderModule;
         stageCI.Stage = VkFormats.VdToVkShaderStages(shader.Stage);

@@ -8,10 +8,10 @@ namespace NeoVeldrid;
 public struct ComputePipelineDescription : IEquatable<ComputePipelineDescription>
 {
     /// <summary>
-    /// The compute <see cref="Shader"/> to be used in the Pipeline. This must be a Shader with
+    /// The compute <see cref="ShaderProgram"/> to be used in the Pipeline. This must be a Shader with
     /// <see cref="ShaderStages.Compute"/>.
     /// </summary>
-    public Shader ComputeShader;
+    public ShaderProgram ComputeShader;
     /// <summary>
     /// An array of <see cref="ResourceLayout"/>, which controls the layout of shader resoruces in the <see cref="Pipeline"/>.
     /// </summary>
@@ -32,14 +32,14 @@ public struct ComputePipelineDescription : IEquatable<ComputePipelineDescription
     /// <summary>
     /// Constructs a new ComputePipelineDescription.
     /// </summary>
-    /// <param name="computeShader">The compute <see cref="Shader"/> to be used in the Pipeline. This must be a Shader with
+    /// <param name="computeShader">The compute <see cref="ShaderProgram"/> to be used in the Pipeline. This must be a Shader with
     /// <see cref="ShaderStages.Compute"/>.</param>
     /// <param name="resourceLayouts">The set of resource layouts available to the Pipeline.</param>
     /// <param name="threadGroupSizeX">The X dimension of the thread group size.</param>
     /// <param name="threadGroupSizeY">The Y dimension of the thread group size.</param>
     /// <param name="threadGroupSizeZ">The Z dimension of the thread group size.</param>
     public ComputePipelineDescription(
-        Shader computeShader,
+        ShaderProgram computeShader,
         ResourceLayout[] resourceLayouts,
         uint threadGroupSizeX,
         uint threadGroupSizeY,
@@ -55,14 +55,14 @@ public struct ComputePipelineDescription : IEquatable<ComputePipelineDescription
     /// <summary>
     /// Constructs a new ComputePipelineDescription.
     /// </summary>
-    /// <param name="shaderStage">The compute <see cref="Shader"/> to be used in the Pipeline. This must be a Shader with
+    /// <param name="shaderStage">The compute <see cref="ShaderProgram"/> to be used in the Pipeline. This must be a Shader with
     /// <see cref="ShaderStages.Compute"/>.</param>
     /// <param name="resourceLayout">The resource layout available to the Pipeline.</param>
     /// <param name="threadGroupSizeX">The X dimension of the thread group size.</param>
     /// <param name="threadGroupSizeY">The Y dimension of the thread group size.</param>
     /// <param name="threadGroupSizeZ">The Z dimension of the thread group size.</param>
     public ComputePipelineDescription(
-        Shader shaderStage,
+        ShaderProgram shaderStage,
         ResourceLayout resourceLayout,
         uint threadGroupSizeX,
         uint threadGroupSizeY,

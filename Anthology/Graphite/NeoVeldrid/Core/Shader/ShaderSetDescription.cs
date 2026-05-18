@@ -14,11 +14,11 @@ public struct ShaderSetDescription : IEquatable<ShaderSetDescription>
     /// </summary>
     public VertexLayoutDescription[] VertexLayouts;
     /// <summary>
-    /// An array of <see cref="Shader"/> objects, one for each shader stage which is to be active in the
+    /// An array of <see cref="ShaderProgram"/> objects, one for each shader stage which is to be active in the
     /// <see cref="Pipeline"/>. At a minimum, every graphics Pipeline must include a Vertex and Fragment
     /// shader. All other stages are optional, but if either Tessellation stage is present, then the other must also be.
     /// </summary>
-    public Shader[] Shaders;
+    public ShaderProgram[] Shaders;
 
     /// <summary>
     /// Constructs a new ShaderSetDescription.
@@ -26,10 +26,10 @@ public struct ShaderSetDescription : IEquatable<ShaderSetDescription>
     /// <param name="vertexLayouts">An array of <see cref="VertexLayoutDescription"/> describing the set of vertex layouts
     /// understood by the <see cref="Pipeline"/>. Each element in this array describes the input layout of a single
     /// <see cref="DeviceBuffer"/> to be bound when drawing.</param>
-    /// <param name="shaders">An array of <see cref="Shader"/> objects, one for each shader stage which is to be active
+    /// <param name="shaders">An array of <see cref="ShaderProgram"/> objects, one for each shader stage which is to be active
     /// in the <see cref="Pipeline"/>. At a minimum, every graphics Pipeline must include a Vertex and Fragment shader. All
     /// other stages are optional, but if either Tessellation stage is present, then the other must also be.</param>
-    public ShaderSetDescription(VertexLayoutDescription[] vertexLayouts, Shader[] shaders)
+    public ShaderSetDescription(VertexLayoutDescription[] vertexLayouts, ShaderProgram[] shaders)
     {
         VertexLayouts = vertexLayouts;
         Shaders = shaders;

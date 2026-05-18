@@ -1,8 +1,6 @@
-using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-using NeoVeldrid;
 using NeoVeldrid.OpenGL;
 
 using Prowl.Vector;
@@ -39,21 +37,24 @@ void main()
 
     private static int Main()
     {
-        Sdl sdl = Sdl.GetApi();
-        Window* window = sdl.CreateWindow("Hello Triangle",
-            Sdl.WindowposCentered, Sdl.WindowposCentered,
-            960, 540,
-            (uint)(WindowFlags.Opengl | WindowFlags.Resizable | WindowFlags.Shown));
+        WindowCreateInfo wci = new WindowCreateInfo
+        {
+            WindowWidth = 960,
+            WindowHeight = 540,
+            WindowTitle = "Hello Triangle",
+            WindowInitialState = WindowState.Normal,
+        };
 
-        SdlContext context = new SdlContext(sdl, window);
+        Sdl2Window window = Startup.CreateWindow(ref wci);
+        Sdl sdl = Startup.Sdl;
 
-        context.Create([
+        SdlContext context = new SdlContext(sdl, window.Handle);
+        context.Create(
             (GLattr.ContextMajorVersion, 3),
             (GLattr.ContextMinorVersion, 3),
             (GLattr.ContextProfileMask, (int)GLprofile.Core),
             (GLattr.Doublebuffer, 1),
-            (GLattr.DepthSize, 24),
-        ]);
+            (GLattr.DepthSize, 24));
 
         sdl.GLSetSwapInterval(0);
 
@@ -66,10 +67,9 @@ void main()
             swapchainDepthFormat: PixelFormat.R16_UNorm,
             syncToVerticalBlank: true);
 
-        GraphicsDevice gd = GraphicsDevice.CreateOpenGL(options, platformInfo, 960, 540);
+        GraphicsDevice gd = GraphicsDevice.CreateOpenGL(options, platformInfo, (uint)window.Width, (uint)window.Height);
         ResourceFactory factory = gd.ResourceFactory;
 
-        // Vertex buffer: 3 vertices, each (Position xy, UV xy) = 16 bytes
         VertexPositionUV[] vertices =
         [
             new(new(  0.0f,  0.75f), new(1.0f, 1.0f)),
@@ -81,9 +81,9 @@ void main()
         DeviceBuffer vertexBuffer = factory.CreateBuffer(new BufferDescription(vertexBufferSize, BufferUsage.VertexBuffer));
         gd.UpdateBuffer(vertexBuffer, 0, vertices);
 
-        Shader vertexShader = factory.CreateShader(new ShaderDescription(
+        ShaderProgram vertexShader = factory.CreateShader(new ShaderDescription(
             ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShaderSource), "main"));
-        Shader fragmentShader = factory.CreateShader(new ShaderDescription(
+        ShaderProgram fragmentShader = factory.CreateShader(new ShaderDescription(
             ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main"));
 
         VertexLayoutDescription vertexLayout = new(
@@ -129,6 +129,7 @@ void main()
                         else if (evt.Window.Event == (byte)WindowEventID.SizeChanged
                               || evt.Window.Event == (byte)WindowEventID.Resized)
                         {
+                            window.Resized(evt.Window.Data1, evt.Window.Data2);
                             gd.ResizeMainWindow((uint)evt.Window.Data1, (uint)evt.Window.Data2);
                         }
                         break;
@@ -160,7 +161,7 @@ void main()
         vertexBuffer.Dispose();
         gd.Dispose();
 
-        sdl.DestroyWindow(window);
+        window.Close();
         sdl.Quit();
 
         return 0;
