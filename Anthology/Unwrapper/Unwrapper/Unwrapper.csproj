@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Prowl.Unwrapper</RootNamespace>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Unwrapper</PackageId>
+    <Title>Prowl.Unwrapper</Title>
+    <Version>0.1.0</Version>
+    <Authors>Wulferis</Authors>
+    <Description>Mesh UV unwrapper for the Prowl Game Engine. Produces lightmap-style atlases from arbitrary triangle meshes using Lloyd-style chart segmentation, angle-based flattening (LinABF), and least-squares conformal mapping (LSCM), then packs the charts into [0,1]². Parallel, SIMD-vectorised CG solver, ~30s on Sponza (260k tris) on a desktop CPU.</Description>
+    <PackageTags>uv;unwrap;lightmap;atlas;lscm;parametrization;mesh;3d;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
+
+    <!-- Build -->
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+
+    <!-- Links -->
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Unwrapper</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Unwrapper</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE" Pack="True" PackagePath="\" />
+    <None Include="..\README.md" Pack="True" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+  </ItemGroup>
+
+</Project>
