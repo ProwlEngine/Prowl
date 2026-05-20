@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Prowl.Photonic</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Package metadata -->
+    <PackageId>Prowl.Photonic</PackageId>
+    <Title>Prowl.Photonic</Title>
+    <Version>0.1.0</Version>
+    <Authors>Wulferis</Authors>
+    <Company>Prowl Engine</Company>
+    <Description>CPU lightmap baker for the Prowl Game Engine. Imperative builder API: direct + indirect path-traced lighting baked to per-instance UV1 atlas pages. BVH4 + AVX2 SIMD acceleration, progressive accumulation, and a sparse surfel-based GI option for high-density atlases.</Description>
+    <PackageTags>lightmap;baker;global-illumination;raytracing;path-tracing;simd;bvh;avx2;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
+
+    <!-- Build -->
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <!-- Links -->
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Photonic</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Photonic</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE" Pack="True" PackagePath="\" />
+    <None Include="..\README.md" Pack="True" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Photonic.Demo" />
+    <InternalsVisibleTo Include="Tests" />
+  </ItemGroup>
+
+</Project>
