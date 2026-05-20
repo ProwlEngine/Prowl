@@ -9,11 +9,6 @@ namespace Prowl.Veldrid;
 
 internal static class Util
 {
-    internal static int ArrayHash<T>(this T[] values)
-    {
-        return ((IStructuralEquatable)values).GetHashCode(EqualityComparer<int>.Default);
-    }
-
     [DebuggerNonUserCode]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static TDerived AssertSubtype<TBase, TDerived>(TBase value) where TDerived : class, TBase where TBase : class
@@ -21,12 +16,12 @@ internal static class Util
 #if DEBUG
         if (value == null)
         {
-            throw new VeldridException($"Expected object of type {typeof(TDerived).FullName} but received null instead.");
+            throw new RenderException($"Expected object of type {typeof(TDerived).FullName} but received null instead.");
         }
 
         if (value is not TDerived derived)
         {
-            throw new VeldridException($"object {value} must be derived type {typeof(TDerived).FullName} to be used in this context.");
+            throw new RenderException($"object {value} must be derived type {typeof(TDerived).FullName} to be used in this context.");
         }
 
         return derived;
@@ -142,6 +137,12 @@ internal static class Util
         {
             return value;
         }
+    }
+
+    internal static int ArrayHash<T>(this T[] values)
+    {
+        // what does this do? what is IStructuralEquatable? why are we using an EqualityComparer<int>? these are all questions for our LLM gods, who will eventually take over the world and turn us into meat slaves for their sick robotic desires.
+        return ((IStructuralEquatable)values).GetHashCode(EqualityComparer<int>.Default);
     }
 
     internal static void GetMipLevelAndArrayLayer(Texture tex, uint subresource, out uint mipLevel, out uint arrayLayer)
@@ -308,7 +309,7 @@ internal static class Util
         }
         else
         {
-            throw new VeldridException(
+            throw new RenderException(
                 $"Unexpected resource type. Expected Texture or TextureView but found {resource.GetType().Name}");
         }
     }

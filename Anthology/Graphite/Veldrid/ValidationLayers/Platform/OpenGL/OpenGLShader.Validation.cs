@@ -12,11 +12,11 @@ internal unsafe partial class OpenGLShader
         {
             if (gd.BackendType == GraphicsBackend.OpenGLES)
             {
-                throw new VeldridException("Compute shaders require OpenGL ES 3.1.");
+                throw new RenderException("Compute shaders require OpenGL ES 3.1.");
             }
             else
             {
-                throw new VeldridException($"Compute shaders require OpenGL 4.3 or ARB_compute_shader.");
+                throw new RenderException($"Compute shaders require OpenGL 4.3 or ARB_compute_shader.");
             }
         }
 #endif

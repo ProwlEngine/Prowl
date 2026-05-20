@@ -97,7 +97,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         }
         else
         {
-            throw new VeldridException($"Unsupported swapchain source type: {description.Source?.GetType().Name}");
+            throw new RenderException($"Unsupported swapchain source type: {description.Source?.GetType().Name}");
         }
 
         Resize(description.Width, description.Height);

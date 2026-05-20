@@ -70,7 +70,7 @@ internal unsafe class VkSwapchain : Swapchain
 
         if (!GetPresentQueueIndex(out _presentQueueIndex))
         {
-            throw new VeldridException($"The system does not support presenting the given Vulkan surface.");
+            throw new RenderException($"The system does not support presenting the given Vulkan surface.");
         }
         _gd.Vk.GetDeviceQueue(_gd.Device, _presentQueueIndex, 0, out _presentQueue);
 
@@ -125,7 +125,7 @@ internal unsafe class VkSwapchain : Swapchain
         }
         else if (result != Result.Success)
         {
-            throw new VeldridException("Could not acquire next image from the Vulkan swapchain.");
+            throw new RenderException("Could not acquire next image from the Vulkan swapchain.");
         }
 
         return true;
@@ -150,7 +150,7 @@ internal unsafe class VkSwapchain : Swapchain
         Result result = _gd.KhrSurface.GetPhysicalDeviceSurfaceCapabilities(_gd.PhysicalDevice, _surface, out SurfaceCapabilitiesKHR surfaceCapabilities);
         if (result == Result.ErrorSurfaceLostKhr)
         {
-            throw new VeldridException($"The Swapchain's underlying surface has been lost.");
+            throw new RenderException($"The Swapchain's underlying surface has been lost.");
         }
 
         if (surfaceCapabilities.MinImageExtent.Width == 0 && surfaceCapabilities.MinImageExtent.Height == 0
@@ -195,7 +195,7 @@ internal unsafe class VkSwapchain : Swapchain
             {
                 if (_colorSrgb && surfaceFormat.Format != Format.R8G8B8A8Srgb)
                 {
-                    throw new VeldridException($"Unable to create an sRGB Swapchain for this surface.");
+                    throw new RenderException($"Unable to create an sRGB Swapchain for this surface.");
                 }
 
                 surfaceFormat = formats[0];

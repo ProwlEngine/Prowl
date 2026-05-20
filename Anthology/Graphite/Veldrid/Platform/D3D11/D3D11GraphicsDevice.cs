@@ -389,7 +389,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             {
                 if (info.Mode != mode)
                 {
-                    throw new VeldridException("The given resource was already mapped with a different MapMode.");
+                    throw new RenderException("The given resource was already mapped with a different MapMode.");
                 }
 
                 info.RefCount += 1;
@@ -458,7 +458,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         {
             if (!_mappedResources.TryGetValue(key, out MappedResourceInfo info))
             {
-                throw new VeldridException($"The given resource ({resource}) is not mapped.");
+                throw new RenderException($"The given resource ({resource}) is not mapped.");
             }
 
             info.RefCount -= 1;

@@ -149,7 +149,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         if (_commandBufferBegun)
         {
-            throw new VeldridException(
+            throw new RenderException(
                 "CommandList must be in its initial state, or End() must have been called, for Begin() to be valid to call.");
         }
         if (_commandBufferEnded)
@@ -445,7 +445,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         if (!_commandBufferBegun)
         {
-            throw new VeldridException("CommandBuffer must have been started before End() may be called.");
+            throw new RenderException("CommandBuffer must have been started before End() may be called.");
         }
 
         _commandBufferBegun = false;

@@ -444,7 +444,7 @@ internal unsafe class OpenGLCommandExecutor
         }
         else
         {
-            throw new VeldridException("Invalid Framebuffer type: " + fb.GetType().Name);
+            throw new RenderException("Invalid Framebuffer type: " + fb.GetType().Name);
         }
 
         _fb = fb;
@@ -872,7 +872,7 @@ internal unsafe class OpenGLCommandExecutor
                             if (range.SizeInBytes < uniformBindingInfo.BlockSize)
                             {
                                 string name = glResourceSet.Layout.Elements[element].Name;
-                                throw new VeldridException(
+                                throw new RenderException(
                                     $"Not enough data in uniform buffer \"{name}\" (slot {slot}, element {element}). Shader expects at least {uniformBindingInfo.BlockSize} bytes, but buffer only contains {range.SizeInBytes} bytes");
                             }
                             _gl.UniformBlockBinding(pipeline.Program, uniformBindingInfo.BlockLocation, uniformBindingInfo.BindingPoint);
@@ -953,7 +953,7 @@ internal unsafe class OpenGLCommandExecutor
                         if (layered && (texViewRW.BaseArrayLayer > 0
                             || (texViewRW.ArrayLayers > 1 && texViewRW.ArrayLayers < texViewRW.Target.ArrayLayers)))
                         {
-                            throw new VeldridException(
+                            throw new RenderException(
                                 "Cannot bind texture with BaseArrayLayer > 0 and ArrayLayers > 1, or with an incomplete set of array layers (cubemaps have ArrayLayers == 6 implicitly).");
                         }
 
@@ -1384,7 +1384,7 @@ internal unsafe class OpenGLCommandExecutor
         }
         else
         {
-            throw new VeldridException($"Invalid OpenGL TextureTarget encountered: {glTex.TextureTarget}.");
+            throw new RenderException($"Invalid OpenGL TextureTarget encountered: {glTex.TextureTarget}.");
         }
 
         if (unpackAlignment < 4)
@@ -1411,7 +1411,7 @@ internal unsafe class OpenGLCommandExecutor
             case 5:
                 return TextureTarget.TextureCubeMapNegativeZ;
             default:
-                throw new VeldridException("Unexpected array layer in UpdateTexture called on a cubemap texture.");
+                throw new RenderException("Unexpected array layer in UpdateTexture called on a cubemap texture.");
         }
     }
 
@@ -1509,7 +1509,7 @@ internal unsafe class OpenGLCommandExecutor
         bool isCompressed = FormatHelpers.IsCompressedFormat(srcGLTexture.Format);
         if (srcGLTexture.Format != dstGLTexture.Format)
         {
-            throw new VeldridException("Copying to/from Textures with different formats is not supported.");
+            throw new RenderException("Copying to/from Textures with different formats is not supported.");
         }
 
         uint packAlignment = 4;

@@ -5,12 +5,12 @@ namespace Prowl.Veldrid;
 /// <summary>
 /// Represents errors that occur in the Prowl.Veldrid library.
 /// </summary>
-public class VeldridException : Exception
+public class RenderException : Exception
 {
     /// <summary>
     /// Constructs a new VeldridException.
     /// </summary>
-    public VeldridException()
+    public RenderException()
     {
     }
 
@@ -18,7 +18,7 @@ public class VeldridException : Exception
     /// Constructs a new VeldridException with the given message.
     /// </summary>
     /// <param name="message">The exception message.</param>
-    public VeldridException(string message) : base(message)
+    public RenderException(string message) : base(message)
     {
     }
 
@@ -27,7 +27,7 @@ public class VeldridException : Exception
     /// </summary>
     /// <param name="message">The exception message.</param>
     /// <param name="innerException">The inner exception.</param>
-    public VeldridException(string message, Exception innerException) : base(message, innerException)
+    public RenderException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

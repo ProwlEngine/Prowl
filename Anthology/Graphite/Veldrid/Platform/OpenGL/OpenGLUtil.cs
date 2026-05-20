@@ -25,7 +25,7 @@ internal static class OpenGLUtil
                 Debugger.Break();
             }
 
-            throw new VeldridException("glGetError indicated an error: " + (ErrorCode)error);
+            throw new RenderException("glGetError indicated an error: " + (ErrorCode)error);
         }
     }
 

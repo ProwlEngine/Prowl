@@ -416,7 +416,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         }
         else
         {
-            throw new VeldridException(
+            throw new RenderException(
                 "This function does not support creating an OpenGLES GraphicsDevice with the given SwapchainSource.");
         }
     }
@@ -445,7 +445,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             case PixelFormat.R32_Float:
                 return 32;
             default:
-                throw new VeldridException($"Unsupported depth format: {value}");
+                throw new RenderException($"Unsupported depth format: {value}");
         }
     }
 
@@ -521,7 +521,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             _executionThread.WaitForIdle();
         }
-        catch (VeldridException)
+        catch (RenderException)
         {
             // The GL context may already be destroyed by SDL_DestroyWindow.
             // Silk.NET throws SymbolLoadingException for unresolved GL functions
@@ -573,7 +573,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             {
                 if (info.Mode != mode)
                 {
-                    throw new VeldridException("The given resource was already mapped with a different MapMode.");
+                    throw new RenderException("The given resource was already mapped with a different MapMode.");
                 }
 
                 info.RefCount += 1;
@@ -596,7 +596,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             if (_mappedResources.ContainsKey(new MappedResourceCacheKey(buffer, 0)))
             {
-                throw new VeldridException("Cannot call UpdateBuffer on a currently-mapped Buffer.");
+                throw new RenderException("Cannot call UpdateBuffer on a currently-mapped Buffer.");
             }
         }
         StagingBlock sb = _stagingMemoryPool.Stage(source, sizeInBytes);
@@ -778,7 +778,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             FlushAndFinish();
         }
-        catch (VeldridException)
+        catch (RenderException)
         {
             // The GL context may already be destroyed by SDL_DestroyWindow.
             // Silk.NET throws SymbolLoadingException for unresolved GL functions
@@ -1332,7 +1332,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
                         ? _exceptions[0]
                         : new AggregateException(_exceptions.ToArray());
                     _exceptions.Clear();
-                    throw new VeldridException(
+                    throw new RenderException(
                         "Error(s) were encountered during the execution of OpenGL commands. See InnerException for more information.",
                         innerException);
 
@@ -1354,7 +1354,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             mre.Wait();
             if (!mrp.Succeeded)
             {
-                throw new VeldridException("Failed to map OpenGL resource.");
+                throw new RenderException("Failed to map OpenGL resource.");
             }
 
             mre.Dispose();

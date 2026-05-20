@@ -565,7 +565,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         {
             if (!availableInstanceExtensions.Contains(requiredExt))
             {
-                throw new VeldridException($"The required instance extension was not available: {requiredExt}");
+                throw new RenderException($"The required instance extension was not available: {requiredExt}");
             }
 
             FixedUtf8String utf8Str = new FixedUtf8String(requiredExt);
@@ -655,7 +655,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (error != null)
         {
             _lastValidationError = null;
-            throw new VeldridException("A Vulkan validation error was encountered: " + error);
+            throw new RenderException("A Vulkan validation error was encountered: " + error);
         }
     }
 
@@ -818,7 +818,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (requiredInstanceExtensions.Count != 0)
         {
             string missingList = string.Join(", ", requiredInstanceExtensions);
-            throw new VeldridException(
+            throw new RenderException(
                 $"The following Vulkan device extensions were not available: {missingList}");
         }
 

@@ -152,7 +152,7 @@ internal unsafe class D3D11Shader : ShaderProgram
                     errorMsg = Encoding.ASCII.GetString(errorPtr, (int)errorSize);
                     pError->Release();
                 }
-                throw new VeldridException($"Failed to compile HLSL code: {errorMsg}");
+                throw new RenderException($"Failed to compile HLSL code: {errorMsg}");
             }
 
             byte* resultPtr = (byte*)pResult->GetBufferPointer();

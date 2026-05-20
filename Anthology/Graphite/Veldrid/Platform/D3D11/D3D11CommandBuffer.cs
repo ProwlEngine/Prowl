@@ -219,7 +219,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     {
         if (_commandList.Handle != null)
         {
-            throw new VeldridException("Invalid use of End().");
+            throw new RenderException("Invalid use of End().");
         }
 
         ID3D11CommandList* pCmdList;
@@ -477,7 +477,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
         else
         {
-            throw new VeldridException($"Unexpected resource type used in a buffer type slot: {resource.GetType().Name}");
+            throw new RenderException($"Unexpected resource type used in a buffer type slot: {resource.GetType().Name}");
         }
     }
 

@@ -327,7 +327,7 @@ internal unsafe class VkTexture : Texture
             {
                 if (_imageLayouts[CalculateSubresource(baseMipLevel + level, baseArrayLayer + layer)] != oldLayout)
                 {
-                    throw new VeldridException("Unexpected image layout.");
+                    throw new RenderException("Unexpected image layout.");
                 }
             }
         }

@@ -58,7 +58,7 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
             {
                 if (!_gd.Extensions.ARB_TextureView)
                 {
-                    throw new VeldridException(
+                    throw new RenderException(
                         "TextureView objects covering a subset of a Texture's dimensions or using a different PixelFormat " +
                         "require OpenGL 4.3, or ARB_texture_view.");
                 }
@@ -67,7 +67,7 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
             {
                 if (!_gd.Extensions.ARB_TextureView)
                 {
-                    throw new VeldridException(
+                    throw new RenderException(
                         "TextureView objects covering a subset of a Texture's dimensions or using a different PixelFormat are " +
                         "not supported on OpenGL ES.");
                 }
@@ -279,7 +279,7 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
         }
         else
         {
-            throw new VeldridException("The given TextureView parameters are not supported with the OpenGL backend.");
+            throw new RenderException("The given TextureView parameters are not supported with the OpenGL backend.");
         }
 
         InternalFormat internalFormat = (InternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(

@@ -17,7 +17,7 @@ internal unsafe static class VulkanUtil
     {
         if (result != Result.Success)
         {
-            throw new VeldridException("Unsuccessful VkResult: " + result);
+            throw new RenderException("Unsuccessful VkResult: " + result);
         }
     }
 

@@ -80,7 +80,7 @@ internal unsafe partial class OpenGLShader : ShaderProgram, OpenGLDeferredResour
                 message = "<null>";
             }
 
-            throw new VeldridException($"Unable to compile shader code for shader [{_name}] of type {_shaderType}: {message}");
+            throw new RenderException($"Unable to compile shader code for shader [{_name}] of type {_shaderType}: {message}");
         }
 
         _gd.StagingMemoryPool.Free(_stagingBlock);

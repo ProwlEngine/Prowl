@@ -148,7 +148,7 @@ internal static partial class VkFormats
                 return Format.B10G11R11UfloatPack32;
 
             default:
-                throw new VeldridException($"Invalid {nameof(PixelFormat)}: {format}");
+                throw new RenderException($"Invalid {nameof(PixelFormat)}: {format}");
         }
     }
 }

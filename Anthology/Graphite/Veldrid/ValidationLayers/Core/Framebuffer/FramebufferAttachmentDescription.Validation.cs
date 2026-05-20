@@ -16,12 +16,12 @@ public partial struct FramebufferAttachmentDescription
 
         if (arrayLayer >= effectiveArrayLayers)
         {
-            throw new VeldridException(
+            throw new RenderException(
                 $"{nameof(arrayLayer)} must be less than {nameof(target)}.{nameof(Texture.ArrayLayers)}.");
         }
         if (mipLevel >= target.MipLevels)
         {
-            throw new VeldridException(
+            throw new RenderException(
                 $"{nameof(mipLevel)} must be less than {nameof(target)}.{nameof(Texture.MipLevels)}.");
         }
 #endif

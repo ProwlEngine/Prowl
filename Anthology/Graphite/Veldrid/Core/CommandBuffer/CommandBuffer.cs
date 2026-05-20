@@ -607,7 +607,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         if (bufferOffsetInBytes + sizeInBytes > buffer.SizeInBytes)
         {
-            throw new VeldridException(
+            throw new RenderException(
                 $"The DeviceBuffer's capacity ({buffer.SizeInBytes}) is not large enough to store the amount of " +
                 $"data specified ({sizeInBytes}) at the given offset ({bufferOffsetInBytes}).");
         }
@@ -791,7 +791,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         if ((texture.Usage & TextureUsage.GenerateMipmaps) == 0)
         {
-            throw new VeldridException(
+            throw new RenderException(
                 $"{nameof(GenerateMipmaps)} requires a target Texture with {nameof(TextureUsage)}.{nameof(TextureUsage.GenerateMipmaps)}");
         }
 

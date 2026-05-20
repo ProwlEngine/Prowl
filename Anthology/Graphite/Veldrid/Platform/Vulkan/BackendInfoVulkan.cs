@@ -100,7 +100,7 @@ public class BackendInfoVulkan
         VkTexture vkTexture = Util.AssertSubtype<Texture, VkTexture>(texture);
         if ((vkTexture.Usage & TextureUsage.Staging) != 0)
         {
-            throw new VeldridException(
+            throw new RenderException(
                 $"{nameof(GetVkImage)} cannot be used if the {nameof(Texture)} " +
                 $"has {nameof(TextureUsage)}.{nameof(TextureUsage.Staging)}.");
         }

@@ -115,7 +115,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
         {
             if (!TryFindMemoryType(memProperties, memoryTypeBits, flags, out var memoryTypeIndex))
             {
-                throw new VeldridException("No suitable memory type.");
+                throw new RenderException("No suitable memory type.");
             }
 
             ulong minDedicatedAllocationSize = persistentMapped
@@ -146,7 +146,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                 Result allocationResult = _vk.AllocateMemory(_device, in allocateInfo, null, out DeviceMemory memory);
                 if (allocationResult != Result.Success)
                 {
-                    throw new VeldridException("Unable to allocate sufficient Vulkan memory.");
+                    throw new RenderException("Unable to allocate sufficient Vulkan memory.");
                 }
 
                 void* mappedPtr = null;
@@ -155,7 +155,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                     Result mapResult = _vk.MapMemory(_device, memory, 0, size, 0, &mappedPtr);
                     if (mapResult != Result.Success)
                     {
-                        throw new VeldridException("Unable to map newly-allocated Vulkan memory.");
+                        throw new RenderException("Unable to map newly-allocated Vulkan memory.");
                     }
                 }
 
@@ -167,7 +167,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                 bool result = allocator.Allocate(size, alignment, out VkMemoryBlock ret);
                 if (!result)
                 {
-                    throw new VeldridException("Unable to allocate sufficient Vulkan memory.");
+                    throw new RenderException("Unable to allocate sufficient Vulkan memory.");
                 }
 
                 return ret;

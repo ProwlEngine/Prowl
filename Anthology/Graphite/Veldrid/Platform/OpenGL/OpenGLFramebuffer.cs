@@ -149,7 +149,7 @@ internal unsafe class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
         CheckLastError();
         if (errorCode != FramebufferStatus.Complete)
         {
-            throw new VeldridException("Framebuffer was not successfully created: " + errorCode);
+            throw new RenderException("Framebuffer was not successfully created: " + errorCode);
         }
 
         Created = true;

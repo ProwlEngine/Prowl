@@ -129,7 +129,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         {
             string log = _gl.GetProgramInfoLog(_program);
             CheckLastError();
-            throw new VeldridException($"Error linking GL program: {log}");
+            throw new RenderException($"Error linking GL program: {log}");
         }
 
         ProcessResourceSetLayouts(ResourceLayouts);
@@ -264,7 +264,7 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         {
             string log = _gl.GetProgramInfoLog(_program);
             CheckLastError();
-            throw new VeldridException($"Error linking GL program: {log}");
+            throw new RenderException($"Error linking GL program: {log}");
         }
 
         ProcessResourceSetLayouts(ResourceLayouts);
