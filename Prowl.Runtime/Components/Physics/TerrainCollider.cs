@@ -5,7 +5,6 @@ using System;
 
 using Jitter2.LinearMath;
 
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.Terrain;
 using Prowl.Vector;
 
@@ -39,8 +38,8 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         int res = data.HeightmapResolution;
         if (x < 0 || x >= res || z < 0 || z >= res) return false;
 
-        // Height in terrain-local space, scaled by terrain height
-        float normalizedHeight = data.Heights[z * res + x];
+        // Height in terrain-local space, scaled by terrain height (16-bit storage)
+        float normalizedHeight = (float)data.Heights[z * res + x] / TerrainData.kMaxHeight;
         height = normalizedHeight * data.Height + (float)Transform.Position.Y;
         return true;
     }
@@ -49,6 +48,12 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     {
         int res = _terrain?.Data.Res?.HeightmapResolution ?? 0;
         return x >= 0 && x < res - 1 && z >= 0 && z < res - 1;
+    }
+
+    public bool IsCellHole(int x, int z)
+    {
+        var data = _terrain?.Data.Res;
+        return data != null && data.IsCellHole(x, z);
     }
 
     #endregion

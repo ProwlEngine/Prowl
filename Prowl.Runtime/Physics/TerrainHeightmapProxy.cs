@@ -1,8 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-
 using Jitter2.Collision;
 using Jitter2.LinearMath;
 
@@ -192,6 +190,9 @@ public interface ITerrainHeightProvider
     /// <param name="z">Z grid coordinate.</param>
     /// <returns>True if the cell is valid.</returns>
     bool IsValidCell(int x, int z);
+
+    /// <summary>Check if a cell is a hole (should skip collision). Default false.</summary>
+    bool IsCellHole(int x, int z) => false;
 
     /// <summary>
     /// Gets the width of the heightmap in grid cells.

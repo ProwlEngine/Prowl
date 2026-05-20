@@ -1,7 +1,4 @@
-﻿> [!NOTE]
-> Prowl is currently in early development and not yet stable for production use. While the core functionality is in place, expect frequent changes, missing features, and potential bugs. Enthusiasts and contributors are welcome to explore and help shape the engine, but we recommend waiting for a more stable release before using it for serious game projects.
-
-<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
+﻿<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
 
 ![Github top languages](https://img.shields.io/github/languages/top/michaelsakharov/prowl)
 [![GitHub version](https://img.shields.io/github/v/release/michaelsakharov/prowl?include_prereleases&style=flat-square)](https://github.com/michaelsakharov/prowl/releases)
@@ -32,7 +29,7 @@ Prowl is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** game
 
 It aims to provide a seamless transition for developers familiar with _Unity_ by maintaining a similar API while also following KISS and staying as small and customizable as possible. Ideally, _Unity_ projects can port over with as little resistance as possible.
 
-Please keep in mind that Prowl is incredibly new and unstable, and it is not yet Game Ready, however, we are hopeful that Prowl will be stable and ready by the end of this year.
+Please keep in mind that Prowl is incredibly new and under very active development, Untill a full 1.0 release comes out, breaking changes are expected.
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
@@ -49,13 +46,8 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
     - Unity-like Editor & Scripting API
     - C# Scripting with .NET 9
     - GameObject & MonoBehaviour Component Architecture
-    - Custom UI Framework ([Paper](https://github.com/ProwlEngine/Prowl.Paper))
-        - Shared between Editor and In-Game UI
-        - Immediate mode API with retained state
-        - World Space UI via WorldCanvas
+    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Prowl.Paper))
     - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Prowl.Quill)
-        - Slug (GPU-Accelerated Curve-Based) Text Rendering
-        - Bitmap Text Rendering
     - Full-Featured Editor
         - Scene View, Hierarchy, Inspector, Project Browser, Console, Game View
         - Custom Component Editors, Property Editors, and Scene View Editors
@@ -67,12 +59,12 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Asset Thumbnail Generation & 3D Previews
         - Animation Curve & Gradient Editors
         - Rebindable Shortcut/Hotkey System
-        - Editor Theming with Customizable Color Palettes
+        - Editor Theming with Customizable Color Palettes and sizing
         - Playtest directly in the Editor
     - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
         - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Hull, Mesh, Model, Terrain
         - Constraints: Ball Socket, Hinge, Fixed Angle, Cone Limit, Distance Limit, Angular Motor, Linear Motor
-        - Character Controller & Wheel Collider
+        - Character Controller
         - Collision Layers & Filtering
         - Raycasting & Shape Casting
     - Audio via MiniAudio
@@ -80,9 +72,7 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Supports WAV, MP3, OGG, FLAC
         - Effect chain (Delay, Distortion, Biquad Filter, Reverb, Phaser) + custom `IAudioEffect`
     - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo)
-        - Graph → Custom Text Format
-        - Graph → Binary
-    - Tags & Layers System (32 Customizable Layers)
+    - Tags & Layers System
     - Scene System with Fog & Ambient Lighting
     - Prefabs with Nested Prefab Support
         - Apply, Revert, Break Instance & Override Tracking
@@ -95,7 +85,6 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
     - Math via [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector)
         - Matrices (`Float4x4`), Quaternions, Transform2D
         - Shapes: AABB, Bounds, Frustum, Cone, Ray, Plane, LineSegment, Rect
-        - Random distributions (OnUnitCircle, InUnitSphere, Rotation, etc.)
     - Build System - Build to Standalone Application
         - Packed Asset Files (.prowlpak)
         - Only exports used assets
@@ -128,15 +117,15 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - Cubemap Shadows for Point Lights
         - Shadow Atlas with Dynamic Packing
     - Post Processing
-        - HDR Tonemapping (ACES / Reinhard / Uncharted / Filmic / Melon)
+        - HDR Tonemapping (ACES / Reinhard / Uncharted / Filmic / Melon / AgX)
         - Bloom (dual-filter downsample/upsample)
         - FXAA (Fast Approximate Anti-Aliasing)
-        - Screen Space Reflections (SSR)
+		- TAA (Temporal Anti-Aliasing)
         - Ground-Truth Ambient Occlusion (GTAO)
         - Bokeh Depth of Field
         - Volumetric Fog
         - Cinematic Effects (grain, vignette, chromatic aberration)
-    - Forward-Rendered Transparency with Depth-Sorted Blending
+    - Transparency
     - Grab Pass (depth-aware) for refraction / heat-haze / frosted glass
     - Procedural / Cubemap / Gradient Skybox
     - Terrain System
@@ -145,6 +134,7 @@ Please keep in mind that Prowl is incredibly new and unstable, and it is not yet
         - GPU-Instanced Grass Rendering
         - Tree Rendering with LOD Distance
         - Dedicated Terrain Editor (Height, Paint, Grass, Trees, Settings)
+		- Holes
     - Particle System
         - GPU-Instanced Rendering
         - Modules: Emission, Size/Color/Rotation/Velocity Over Lifetime, Collision, UV Animation
@@ -181,8 +171,7 @@ Getting Prowl up and running is super easy!
 
 1. Clone the repo
 2. Open `.sln` with your editor ([Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/), [VSCode](https://code.visualstudio.com/), [Rider]((https://www.jetbrains.com/rider/)), etc.)
-3. Run `UpdateSubmodules.bat` (on Windows) or `UpdateSubmodules.sh` (on Linux)
-4. That's it! 😄 🎉
+3. That's it! 😄 🎉
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <span align="center">🤝 Contributing 🤝</span>
@@ -194,7 +183,6 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 # <span align="center">🙏 Acknowledgments 🙏</span>
 
 - Hat tip to the creators of [Raylib](https://github.com/raysan5/raylib), While we are no longer based upon it, it has shaved off hours of development time getting the engine to a usable state.
-- Some ideas/code have been taken from the amazing 2D Engine [Duality](https://github.com/AdamsLair/duality).
 
 ## Contributors 🌟
 
@@ -221,8 +209,10 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 - [Magick.NET](https://github.com/dlemstra/Magick.NET) - Image Processing
 - [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo) - Serialization
 - [Prowl.Paper](https://github.com/ProwlEngine/Prowl.Paper) - UI Framework
+- [Prowl.Origami](https://github.com/ProwlEngine/Prowl.Origami) - Component Library for Paper
 - [Prowl.Quill](https://github.com/ProwlEngine/Prowl.Quill) - Vector Graphics & Text Rendering
 - [Prowl.Scribe](https://github.com/ProwlEngine/Prowl.Scribe) - TrueType font parsing, glyph rasterization & markdown layout
+- [Prowl.Rosetta](https://github.com/ProwlEngine/Prowl.Rosetta) - For Editor Localisation
 - [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector) - 64-bit Math Library
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

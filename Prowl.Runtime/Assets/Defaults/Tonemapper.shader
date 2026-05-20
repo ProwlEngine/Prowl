@@ -32,7 +32,7 @@ Pass "Tonemapper"
 
 	Fragment
 	{
-        #include "Fragment"
+        #include "ProwlCG"
 
 		uniform float Contrast;
 		uniform float Saturation;

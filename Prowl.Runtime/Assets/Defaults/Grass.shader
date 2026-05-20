@@ -8,6 +8,10 @@ Properties
     _WindSpeed ("Wind Speed", Float) = 1.5
     _Billboard ("Billboard", Float) = 1.0
     _AlignToNormal ("Align To Normal", Float) = 0.0
+    _Translucency ("Translucency", Float) = 15.0
+    _ScatterPower ("Scattering Power", Float) = 0.0
+    _ScatterDistortion ("Scattering Distortion", Float) = 0.5
+    _ScatterScale ("Scattering Scale", Float) = 1.0
     _GrassDistance ("Grass Max Distance", Float) = 150.0
     _GrassFadeStart ("Grass Fade Start (world units)", Float) = 90.0
 }
@@ -24,7 +28,7 @@ Pass "Grass"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -67,10 +71,7 @@ Pass "Grass"
                 scaleX *= fade;
                 scaleY *= fade;
 
-                // Always compute terrain surface normal from heightmap (for lighting).
-                // Remap vertex-UV → texel-center-UV so the GPU samples the same values
-                // the CPU-side TerrainData.GetInterpolatedHeight would return (which is what
-                // placed this grass blade's Y position in the first place).
+                // Compute terrain surface normal from heightmap for blade orientation.
                 vec2 terrainUV = localPosition.xz / _TerrainSize;
                 vec2 hmSize2 = vec2(textureSize(_Heightmap, 0));
                 float hmSize = hmSize2.x;
@@ -91,6 +92,7 @@ Pass "Grass"
                 // Up direction for blade orientation: terrain normal if AlignToNormal, else terrain's Y axis
                 vec3 up = (_AlignToNormal > 0.5) ? terrainNormal : _TerrainUp;
 
+                vec3 quadRight;
                 vec3 localOffset;
                 if (_Billboard > 0.5)
                 {
@@ -98,6 +100,7 @@ Pass "Grass"
                     vec3 cameraRight = vec3(PROWL_MATRIX_V[0][0], PROWL_MATRIX_V[1][0], PROWL_MATRIX_V[2][0]);
                     // Project camera right perpendicular to up
                     cameraRight = normalize(cameraRight - up * dot(cameraRight, up));
+                    quadRight = cameraRight;
                     localOffset = cameraRight * vertexPosition.x * scaleX
                                  + up * vertexPosition.y * scaleY;
                 }
@@ -107,9 +110,13 @@ Pass "Grass"
                     vec3 right = normalize((terrainToWorld * vec4(normalize(instanceModelRow0.xyz), 0.0)).xyz);
                     // Re-orthogonalize right to be perpendicular to up
                     right = normalize(right - up * dot(right, up));
+                    quadRight = right;
                     localOffset = right * vertexPosition.x * scaleX
                                 + up * vertexPosition.y * scaleY;
                 }
+
+                // Quad face normal: perpendicular to the plane defined by right and up
+                vec3 quadNormal = normalize(cross(up, quadRight));
 
                 // Wind sway - only affects top vertices (y > 0)
                 float windPhase = instanceCustomData.x;
@@ -122,7 +129,7 @@ Pass "Grass"
                 vec3 worldPosition = bladePosition + localOffset;
                 worldPosition += up * 0.01 * scaleY; // Minimal offset to reduce ground clipping
                 worldPos = worldPosition;
-                vNormal = terrainNormal; // Always use terrain surface normal for lighting
+                vNormal = quadNormal;
                 vColor = instanceColor;
 
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
@@ -139,7 +146,7 @@ Pass "Grass"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "Lighting"
 
 			layout (location = 0) out vec4 fragColor;
@@ -151,6 +158,10 @@ Pass "Grass"
 
             uniform sampler2D _MainTex;
             uniform float _AlphaCutoff;
+            uniform float _Translucency;
+            uniform float _ScatterPower;
+            uniform float _ScatterDistortion;
+            uniform float _ScatterScale;
 
 			void main()
 			{
@@ -161,13 +172,17 @@ Pass "Grass"
                     discard;
 
                 vec3 baseColor = gammaToLinearSpace(finalColor.rgb);
-                vec3 normal = normalize(vNormal);
+                // Flip normal for back faces since grass is double-sided
+                vec3 normal = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
 
-                // Forward lighting grass is rough, non-metallic
+                // Unified PBR + translucency in a single light loop
                 vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
                 vec3 lighting = CalculateForwardLighting(worldPos, normal, viewDir,
-                                                         baseColor, 0.0, 0.9, 1.0);
+                                                         baseColor, 0.0, 0.9, 1.0,
+                                                         _Translucency, _ScatterPower,
+                                                         _ScatterDistortion, _ScatterScale);
                 vec3 ambient = CalculateAmbient(normal) * baseColor * _AmbientStrength;
+
                 vec3 color = ambient + lighting;
                 color = ApplyFog(color, worldPos);
 
@@ -186,7 +201,7 @@ Pass "GrassDepthNormals"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 vNormal;
@@ -240,14 +255,17 @@ Pass "GrassDepthNormals"
                 vec3 terrainNormal = normalize((terrainToWorld * vec4(localNormal, 0.0)).xyz);
 
                 vec3 up = (_AlignToNormal > 0.5) ? terrainNormal : _TerrainUp;
+                vec3 quadRight;
                 vec3 localOffset;
                 if (_Billboard > 0.5) {
                     vec3 cameraRight = vec3(PROWL_MATRIX_V[0][0], PROWL_MATRIX_V[1][0], PROWL_MATRIX_V[2][0]);
                     cameraRight = normalize(cameraRight - up * dot(cameraRight, up));
+                    quadRight = cameraRight;
                     localOffset = cameraRight * vertexPosition.x * scaleX + up * vertexPosition.y * scaleY;
                 } else {
                     vec3 right = normalize((terrainToWorld * vec4(normalize(instanceModelRow0.xyz), 0.0)).xyz);
                     right = normalize(right - up * dot(right, up));
+                    quadRight = right;
                     localOffset = right * vertexPosition.x * scaleX + up * vertexPosition.y * scaleY;
                 }
 
@@ -260,7 +278,7 @@ Pass "GrassDepthNormals"
 
                 vec3 worldPosition = bladePosition + localOffset;
                 worldPosition += up * 0.01 * scaleY; // Must match main Grass pass offset
-                vNormal = terrainNormal;
+                vNormal = normalize(cross(up, quadRight));
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
                 texCoord0 = vertexTexCoord0;
 #else
@@ -273,7 +291,7 @@ Pass "GrassDepthNormals"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			layout (location = 0) out vec4 normalOut;
             in vec3 vNormal;
@@ -288,7 +306,8 @@ Pass "GrassDepthNormals"
                 if (texColor.a < _AlphaCutoff)
                     discard;
 
-                normalOut = EncodeViewNormal(normalize(vNormal));
+                vec3 n = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
+                normalOut = EncodeViewNormal(n);
 			}
 		}
 	ENDGLSL

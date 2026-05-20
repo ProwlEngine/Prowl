@@ -16,7 +16,7 @@ Pass "Unlit"
 	GLSLPROGRAM
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -37,7 +37,7 @@ Pass "Unlit"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "Lighting"
 
 			layout (location = 0) out vec4 fragColor;
@@ -72,7 +72,7 @@ Pass "UnlitMotionVectors"
     GLSLPROGRAM
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec4 vClipPos;
@@ -91,7 +91,7 @@ Pass "UnlitMotionVectors"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             layout(location = 0) out vec4 OutputColor;
 
@@ -118,7 +118,7 @@ Pass "UnlitDepthNormals"
 	GLSLPROGRAM
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec3 vNormal;
@@ -132,7 +132,7 @@ Pass "UnlitDepthNormals"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			layout (location = 0) out vec4 normalOut;
 			in vec3 vNormal;

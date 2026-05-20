@@ -1,0 +1,1231 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+using Prowl.Echo;
+using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Importers;
+using Prowl.Runtime;
+using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects;
+
+namespace Prowl.Editor;
+
+/// <summary>
+/// Central asset database for the editor. Implements the runtime's IAssetDatabase interface.
+/// Manages the full asset lifecycle: scanning, importing, caching, file watching.
+/// </summary>
+public class EditorAssetDatabase : IAssetDatabase
+{
+    public static EditorAssetDatabase? Instance { get; private set; }
+
+    private readonly Project _project;
+    private readonly Dictionary<Guid, AssetEntry> _guidToEntry = new();
+    private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<Guid, EngineObject> _loadedAssets = new();
+    private readonly Dictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
+    private readonly HashSet<Guid> _currentlyLoading = new(); // re-entrancy guard
+    private readonly DependencyGraph _dependencies = new();
+    private AssetWatcher? _watcher;
+
+    // Events
+    public event Action<string[]>? OnAssetsImported;
+    public event Action<string[]>? OnAssetsDeleted;
+    public event Action<string, string>? OnAssetMoved;
+
+    public EditorAssetDatabase(Project project)
+    {
+        _project = project;
+    }
+
+    // ================================================================
+    //  Initialization
+    // ================================================================
+
+    public void Initialize()
+    {
+        ImporterRegistry.Initialize();
+
+        // Try loading cached index for fast startup
+        var cached = MetadataCache.Load(_project.MetadataDbPath);
+        if (cached.Count > 0)
+        {
+            foreach (var (guid, entry) in cached)
+            {
+                _guidToEntry[guid] = entry;
+                _pathToGuid[entry.Path] = guid;
+            }
+            Runtime.Debug.Log($"Loaded {cached.Count} entries from metadata cache.");
+        }
+
+        // Rebuild sub-asset index
+        RebuildSubAssetIndex();
+
+        // Scan and reconcile with actual files
+        ScanAssets();
+
+        // Import anything that needs it
+        ImportDirty();
+
+        // Save updated cache
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+
+        // Start file watching
+        _watcher = new AssetWatcher();
+        _watcher.Start(_project.AssetsPath);
+
+        // Register as the active database
+        Instance = this;
+        Runtime.AssetDatabase.Current = this;
+
+        Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
+
+        // Initialize GameResources mapping for editor play mode
+        RefreshResourcesMap();
+    }
+
+    /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>
+    public void RefreshResourcesMap()
+    {
+        var map = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in _guidToEntry.Values)
+        {
+            string path = entry.Path.Replace('\\', '/');
+            int idx = path.LastIndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0 && path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
+                idx = -1; // handle root Resources/ folder
+
+            if (idx >= 0 || path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
+            {
+                string afterResources = idx >= 0
+                    ? path[(idx + "/Resources/".Length)..]
+                    : path["Resources/".Length..];
+
+                // Remove extension
+                int dotIdx = afterResources.LastIndexOf('.');
+                if (dotIdx >= 0) afterResources = afterResources[..dotIdx];
+
+                if (!string.IsNullOrEmpty(afterResources))
+                    map[afterResources] = entry.Guid;
+            }
+        }
+        Runtime.GameResources.Initialize(map);
+    }
+
+    // ================================================================
+    //  IAssetDatabase
+    // ================================================================
+
+    public EngineObject? Get(Guid assetId)
+    {
+        if (assetId == Guid.Empty) return null;
+
+        // Check in-memory cache (covers both main assets and sub-assets)
+        if (_loadedAssets.TryGetValue(assetId, out var loaded))
+            return loaded;
+
+        // Re-entrancy guard prevents infinite recursion when deserializing
+        // assets that reference each other or their own sub-assets
+        if (!_currentlyLoading.Add(assetId))
+            return null; // Already loading this asset higher up the call stack
+
+        try
+        {
+            return GetInternal(assetId);
+        }
+        finally
+        {
+            _currentlyLoading.Remove(assetId);
+        }
+    }
+
+    private EngineObject? GetInternal(Guid assetId)
+    {
+        // Check if this is a sub-asset
+        if (_subAssetIndex.TryGetValue(assetId, out var subInfo))
+        {
+            // Load the parent first this will also cache all sub-assets
+            var parent = Get(subInfo.parentGuid);
+            // After loading parent, sub-asset should be cached now
+            return _loadedAssets.GetValueOrDefault(assetId);
+        }
+
+        // Try loading main asset from disk cache
+        string cachePath = GetCachePath(assetId);
+        var entry = GetEntry(assetId);
+
+        // Validate cache check importer version matches current importer
+        if (entry != null && !string.IsNullOrEmpty(entry.ImporterType))
+        {
+            var importer = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType);
+            if (importer != null && importer.Version != entry.ImporterVersion)
+            {
+                // Cache is stale importer was updated since last import
+                Runtime.Debug.Log($"Cache stale for '{entry.Path}': importer v{entry.ImporterVersion} -> v{importer.Version}. Reimporting.");
+                entry.NeedsReimport = true;
+                RunImport(entry);
+                return _loadedAssets.GetValueOrDefault(assetId);
+            }
+        }
+
+        if (File.Exists(cachePath))
+        {
+            try
+            {
+                var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
+
+                var targetType = entry?.MainAssetType ?? typeof(EngineObject);
+
+                var obj = Serializer.Deserialize(echo, targetType) as EngineObject;
+                if (obj != null)
+                {
+                    obj.AssetID = assetId;
+                    if (entry != null) obj.AssetPath = entry.Path;
+                    _loadedAssets[assetId] = obj;
+
+                    // Also load and cache sub-assets
+                    if (entry?.SubAssets != null)
+                        LoadSubAssetsIntoCache(entry);
+
+                    return obj;
+                }
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogWarning($"Failed to load cached asset {assetId}: {ex.Message}");
+            }
+        }
+
+        // Cache miss try importing on demand
+        if (_guidToEntry.TryGetValue(assetId, out var e) && !string.IsNullOrEmpty(e.Path))
+        {
+            RunImport(e);
+            return _loadedAssets.GetValueOrDefault(assetId);
+        }
+
+        return null;
+    }
+
+    private void LoadSubAssetsIntoCache(AssetEntry parentEntry)
+    {
+        foreach (var sub in parentEntry.SubAssets)
+        {
+            if (_loadedAssets.ContainsKey(sub.Guid)) continue;
+
+            string subCachePath = GetCachePath(sub.Guid);
+            if (!File.Exists(subCachePath))
+            {
+                Runtime.Debug.LogWarning($"Sub-asset cache missing for '{sub.Name}' in '{parentEntry.Path}'. Reimport the parent asset.");
+                continue;
+            }
+
+            try
+            {
+                var echo = EchoObject.ReadFromBinary(new FileInfo(subCachePath));
+                var ctx = new SerializationContext();
+                var subType = sub.Type ?? typeof(EngineObject);
+                var obj = Serializer.Deserialize(echo, subType) as EngineObject;
+                if (obj != null)
+                {
+                    obj.AssetID = sub.Guid;
+                    obj.AssetPath = $"{parentEntry.Path}#{sub.Name}";
+                    _loadedAssets[sub.Guid] = obj;
+                }
+                else
+                {
+                    Runtime.Debug.LogWarning($"Failed to deserialize sub-asset '{sub.Name}' from '{parentEntry.Path}' (type: {sub.TypeName}).");
+                }
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogWarning($"Error loading sub-asset '{sub.Name}' from '{parentEntry.Path}': {ex.Message}");
+            }
+        }
+    }
+
+    // ================================================================
+    //  Scanning
+    // ================================================================
+
+    private void ScanAssets()
+    {
+        var assetsPath = _project.AssetsPath;
+        if (!Directory.Exists(assetsPath)) return;
+
+        // Track which paths we find on disk
+        var foundPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var file in Directory.EnumerateFiles(assetsPath, "*", SearchOption.AllDirectories))
+        {
+            // Skip .meta files and hidden files
+            if (file.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
+            string fileName = Path.GetFileName(file);
+            if (fileName.StartsWith('.')) continue;
+
+            string relativePath = NormalizePath(Path.GetRelativePath(assetsPath, file));
+            foundPaths.Add(relativePath);
+
+            // Determine importer
+            string ext = Path.GetExtension(file);
+            string importerName = ImporterRegistry.GetImporterTypeName(ext);
+
+            // Get default settings from the importer (for new meta files)
+            var importer = ImporterRegistry.CreateByTypeName(importerName);
+            var defaultSettings = importer?.DefaultSettings();
+
+            // Ensure .meta exists (with default settings if creating new)
+            var meta = MetaFile.EnsureMeta(file, importerName, importer?.Version ?? 1, defaultSettings);
+
+            if (_pathToGuid.TryGetValue(relativePath, out var existingGuid))
+            {
+                // Already tracked check if needs reimport
+                var entry = _guidToEntry[existingGuid];
+                long currentTicks = File.GetLastWriteTimeUtc(file).Ticks;
+
+                if (entry.LastModifiedTicks != currentTicks || !File.Exists(GetCachePath(existingGuid)))
+                    entry.NeedsReimport = true;
+
+                // Update GUID if meta was regenerated with different GUID
+                if (meta.Guid != existingGuid)
+                {
+                    // Clean up old GUID references
+                    _guidToEntry.Remove(existingGuid);
+                    _pathToGuid.Remove(relativePath);
+                    _loadedAssets.Remove(existingGuid);
+                    _dependencies.RemoveAsset(existingGuid);
+
+                    // Remove old sub-asset index entries
+                    if (entry.SubAssets != null)
+                    {
+                        foreach (var sub in entry.SubAssets)
+                        {
+                            _subAssetIndex.Remove(sub.Guid);
+                            _loadedAssets.Remove(sub.Guid);
+                        }
+                    }
+
+                    // Delete old cache file
+                    string oldCachePath = GetCachePath(existingGuid);
+                    if (File.Exists(oldCachePath))
+                        try { File.Delete(oldCachePath); } catch { }
+
+                    entry.Guid = meta.Guid;
+                    entry.SubAssets = Array.Empty<SubAssetEntry>();
+                    _guidToEntry[meta.Guid] = entry;
+                    _pathToGuid[relativePath] = meta.Guid;
+                    entry.NeedsReimport = true;
+                }
+            }
+            else if (_guidToEntry.ContainsKey(meta.Guid))
+            {
+                // GUID exists but at a different path the file was moved
+                var entry = _guidToEntry[meta.Guid];
+                string oldPath = entry.Path;
+                _pathToGuid.Remove(oldPath);
+                entry.Path = relativePath;
+                _pathToGuid[relativePath] = meta.Guid;
+            }
+            else
+            {
+                // New asset
+                var entry = new AssetEntry
+                {
+                    Guid = meta.Guid,
+                    Path = relativePath,
+                    ImporterType = importerName,
+                    ImporterVersion = meta.ImporterVersion,
+                    NeedsReimport = true
+                };
+                _guidToEntry[meta.Guid] = entry;
+                _pathToGuid[relativePath] = meta.Guid;
+            }
+        }
+
+        // Also scan for directories (they need .meta files too for folder GUIDs)
+        foreach (var dir in Directory.EnumerateDirectories(assetsPath, "*", SearchOption.AllDirectories))
+        {
+            string dirName = Path.GetFileName(dir);
+            if (dirName.StartsWith('.')) continue;
+            // Ensure folder .meta exists (for stable folder GUIDs in version control)
+            MetaFile.EnsureMeta(dir, "DefaultImporter");
+        }
+
+        // Remove entries for files that no longer exist
+        var toRemove = _guidToEntry.Where(kv => !foundPaths.Contains(kv.Value.Path))
+            .Select(kv => kv.Key).ToList();
+
+        foreach (var guid in toRemove)
+        {
+            var entry = _guidToEntry[guid];
+
+            // Dispose main + sub-assets so AssetRefs detect invalidation
+            DisposeAndRemove(guid);
+            if (entry.SubAssets != null)
+            {
+                foreach (var sub in entry.SubAssets)
+                {
+                    DisposeAndRemove(sub.Guid);
+                    _subAssetIndex.Remove(sub.Guid);
+
+                    // Clean sub-asset cache file
+                    string subCachePath = GetCachePath(sub.Guid);
+                    if (File.Exists(subCachePath))
+                        try { File.Delete(subCachePath); } catch { }
+                }
+            }
+
+            _pathToGuid.Remove(entry.Path);
+            _guidToEntry.Remove(guid);
+            _dependencies.RemoveAsset(guid);
+
+            // Clean main cache file
+            string cachePath = GetCachePath(guid);
+            if (File.Exists(cachePath))
+                try { File.Delete(cachePath); } catch { }
+        }
+
+        if (toRemove.Count > 0)
+            Runtime.Debug.Log($"Removed {toRemove.Count} stale entries.");
+    }
+
+    // ================================================================
+    //  Importing
+    // ================================================================
+
+    private void ImportDirty()
+    {
+        var dirty = _guidToEntry.Values.Where(e => e.NeedsReimport).ToList();
+        if (dirty.Count == 0) return;
+
+        Runtime.Debug.Log($"Importing {dirty.Count} assets...");
+        int success = 0;
+
+        foreach (var entry in dirty)
+        {
+            if (RunImport(entry))
+                success++;
+        }
+
+        Runtime.Debug.Log($"Import complete: {success}/{dirty.Count} succeeded.");
+
+        if (success > 0)
+            OnAssetsImported?.Invoke(dirty.Where(e => !e.NeedsReimport).Select(e => e.Path).ToArray());
+    }
+
+    private bool RunImport(AssetEntry entry)
+    {
+        string absolutePath = Path.Combine(_project.AssetsPath, entry.Path);
+        if (!File.Exists(absolutePath))
+        {
+            entry.NeedsReimport = false;
+            return false;
+        }
+
+        // If the entry's ImporterType doesn't resolve (stale entry from before an
+        // importer was registered), retry with the extension-based lookup. Common
+        // case: asset created before its importer existed -> stuck on DefaultImporter.
+        var resolved = ImporterRegistry.CreateByTypeName(entry.ImporterType);
+        if (resolved == null)
+        {
+            string ext = Path.GetExtension(entry.Path);
+            string freshName = ImporterRegistry.GetImporterTypeName(ext);
+            if (freshName != entry.ImporterType)
+            {
+                Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' -> '{freshName}'");
+                entry.ImporterType = freshName;
+                resolved = ImporterRegistry.CreateByTypeName(freshName);
+            }
+        }
+
+        var importer = resolved ?? new DefaultImporter();
+        Runtime.Debug.Log($"[AssetDatabase] Importing '{entry.Path}' via {importer.GetType().Name}");
+
+        // Read settings from .meta, merge with importer defaults for any missing keys
+        EchoObject? settings = null;
+        string metaPath = MetaFile.GetMetaPath(absolutePath);
+        if (File.Exists(metaPath))
+        {
+            try
+            {
+                var meta = MetaFile.Read(metaPath);
+                settings = meta.Settings;
+            }
+            catch { }
+        }
+
+        var defaults = importer.DefaultSettings();
+        if (defaults != null)
+        {
+            if (settings == null)
+            {
+                settings = defaults.Clone();
+            }
+            else
+            {
+                foreach (var kvp in defaults.Tags)
+                    if (!settings.TryGet(kvp.Key, out _))
+                        settings[kvp.Key] = kvp.Value.Clone();
+            }
+        }
+
+        try
+        {
+            // Create context with entry GUID so sub-assets get correct deterministic IDs
+            var ctx = new Importers.ImportContext(entry.Guid, absolutePath, settings);
+            bool success = importer.Import(ctx);
+
+            if (!success || ctx.MainAsset == null)
+            {
+                entry.SubAssets = Array.Empty<SubAssetEntry>();
+                entry.NeedsReimport = false;
+                return false;
+            }
+
+            // Main asset ID already assigned by ctx.SetMainAsset
+            ctx.MainAsset.AssetPath = entry.Path;
+            if (string.IsNullOrEmpty(ctx.MainAsset.Name))
+                ctx.MainAsset.Name = Path.GetFileNameWithoutExtension(entry.Path);
+
+            _loadedAssets[entry.Guid] = ctx.MainAsset;
+            entry.MainAssetType = ctx.MainAsset.GetType();
+            entry.Dependencies = ctx.Dependencies.ToArray();
+
+            // Process sub-assets IDs already assigned by ctx.AddSubAsset
+            if (ctx.SubAssets.Count > 0)
+            {
+                var subEntries = new List<SubAssetEntry>();
+                for (int i = 0; i < ctx.SubAssets.Count; i++)
+                {
+                    var sub = ctx.SubAssets[i];
+                    if (sub == null) continue;
+
+                    sub.AssetPath = $"{entry.Path}#{sub.Name}";
+
+                    SerializeToCache(sub.AssetID, sub);
+                    _loadedAssets[sub.AssetID] = sub;
+
+                    subEntries.Add(new SubAssetEntry
+                    {
+                        Guid = sub.AssetID,
+                        Name = sub.Name,
+                        Type = sub.GetType()
+                    });
+
+                    _subAssetIndex[sub.AssetID] = (entry.Guid, i);
+                }
+                entry.SubAssets = subEntries.ToArray();
+            }
+            else
+            {
+                entry.SubAssets = Array.Empty<SubAssetEntry>();
+            }
+
+            // Serialize main asset
+            SerializeToCache(entry.Guid, ctx.MainAsset);
+
+            // Update timestamps
+            entry.LastModifiedTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
+            entry.ImporterVersion = importer.Version;
+            entry.NeedsReimport = false;
+
+            // Update dependency graph
+            _dependencies.SetDependencies(entry.Guid, ctx.Dependencies);
+
+            // Queue thumbnail generation (lazy, one per frame)
+            {
+                string? sourceFile = ctx.MainAsset is Runtime.Resources.Texture2D ? absolutePath : null;
+                ThumbnailGenerator.Enqueue(entry.Guid, ctx.MainAsset, sourceFile);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Import failed for '{entry.Path}': {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+            // Keep NeedsReimport true so file changes will trigger a retry.
+            // Only clear the timestamp so next scan detects the file as changed.
+            entry.LastModifiedTicks = 0;
+            return false;
+        }
+    }
+
+    private void SerializeToCache(Guid guid, EngineObject obj)
+    {
+        string cachePath = GetCachePath(guid);
+        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+
+        try
+        {
+            // Temporarily clear AssetID so the serializer writes the full object
+            // instead of short-circuiting to a $assetId reference
+            var savedId = obj.AssetID;
+            obj.AssetID = Guid.Empty;
+
+            // Force serialize with Base Type info, Required for Builds since they dont know the Type of the Asset
+            var echo = Serializer.Serialize(typeof(object), obj);
+            obj.AssetID = savedId;
+
+            if (echo != null)
+                echo.WriteToBinary(new FileInfo(cachePath));
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Failed to cache asset {guid}: {ex.Message}");
+        }
+    }
+
+    // ================================================================
+    //  Query API
+    // ================================================================
+
+    public AssetEntry? GetEntry(Guid guid)
+        => _guidToEntry.GetValueOrDefault(guid);
+
+    public AssetEntry? GetEntry(string relativePath)
+        => _pathToGuid.TryGetValue(relativePath, out var guid) ? _guidToEntry.GetValueOrDefault(guid) : null;
+
+    public Guid PathToGuid(string relativePath)
+        => _pathToGuid.GetValueOrDefault(relativePath);
+
+    public string? GuidToPath(Guid guid)
+        => _guidToEntry.TryGetValue(guid, out var entry) ? entry.Path : null;
+
+    /// <summary>
+    /// Resolve a GUID to a file path, including sub-assets (returns the parent asset's path).
+    /// </summary>
+    public string? GuidToPathIncludingSubAssets(Guid guid)
+    {
+        // Try main asset first
+        if (_guidToEntry.TryGetValue(guid, out var entry))
+            return entry.Path;
+        // Try sub-asset -> parent
+        if (_subAssetIndex.TryGetValue(guid, out var subInfo))
+            return _guidToEntry.TryGetValue(subInfo.parentGuid, out var parentEntry) ? parentEntry.Path : null;
+        return null;
+    }
+
+    public IEnumerable<AssetEntry> GetAllEntries() => _guidToEntry.Values;
+
+    public IEnumerable<AssetEntry> FindAssetsOfType<T>() where T : EngineObject
+        => FindAssetsOfType(typeof(T));
+
+    /// <summary>
+    /// Find all assets (main + sub) matching the given type via inheritance.
+    /// Returns (Guid, Name, ParentPath) tuples for display.
+    /// </summary>
+    public IEnumerable<AssetEntry> FindAssetsOfType(Type type)
+        => _guidToEntry.Values.Where(e => e.MainAssetType != null && type.IsAssignableFrom(e.MainAssetType));
+
+    /// <summary>
+    /// Find all assets AND sub-assets matching the given type.
+    /// Includes built-in assets (embedded in runtime).
+    /// Returns tuples of (guid, displayName, parentPath, type).
+    /// </summary>
+    public IEnumerable<(Guid guid, string name, string parentPath, Type assetType)> FindAllOfType(Type type)
+    {
+        // Built-in assets first
+        foreach (var item in Runtime.BuiltInAssets.FindAllOfType(type))
+            yield return item;
+
+        // Main assets
+        foreach (var entry in _guidToEntry.Values)
+        {
+            if (entry.MainAssetType != null && type.IsAssignableFrom(entry.MainAssetType))
+                yield return (entry.Guid, Path.GetFileNameWithoutExtension(entry.Path), entry.Path, entry.MainAssetType);
+        }
+
+        // Sub-assets
+        foreach (var entry in _guidToEntry.Values)
+        {
+            if (entry.SubAssets == null) continue;
+            foreach (var sub in entry.SubAssets)
+            {
+                var subType = sub.Type;
+                if (subType != null && type.IsAssignableFrom(subType))
+                    yield return (sub.Guid, sub.Name, entry.Path, subType);
+            }
+        }
+    }
+
+    /// <summary>Get sub-assets of a parent asset.</summary>
+    public SubAssetEntry[] GetSubAssets(Guid parentGuid)
+        => _guidToEntry.TryGetValue(parentGuid, out var entry) ? entry.SubAssets : Array.Empty<SubAssetEntry>();
+
+    public string[] GetAllAssetPaths()
+        => _pathToGuid.Keys.ToArray();
+
+    public DependencyGraph Dependencies => _dependencies;
+    public string ThumbnailsPath => _project.ThumbnailsPath;
+
+    /// <summary>Get an already-loaded asset from memory without triggering import. Returns null if not loaded.</summary>
+    public EngineObject? GetLoadedAsset(Guid guid) => _loadedAssets.GetValueOrDefault(guid);
+
+    /// <summary>Load a cached thumbnail for an asset. Returns (width, height, pixels) or null.</summary>
+    public (int width, int height, byte[] pixels)? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
+
+    // ================================================================
+    //  Asset CRUD
+    // ================================================================
+
+    /// <summary>
+    /// Create a new asset file on disk from an EngineObject.
+    /// </summary>
+    public void CreateAsset(EngineObject obj, string relativePath)
+    {
+        relativePath = NormalizePath(relativePath);
+        string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+
+        // Serialize to the file (typeof(object) forces $type inclusion)
+        var echo = Serializer.Serialize(typeof(object), obj);
+        if (echo != null)
+            File.WriteAllText(absolutePath, echo.WriteToString());
+
+        // Create meta with correct importer version
+        string ext = Path.GetExtension(relativePath);
+        string importerName = ImporterRegistry.GetImporterTypeName(ext);
+        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        var meta = MetaFile.CreateNew(importerName, importer?.Version ?? 1);
+        MetaFile.Write(MetaFile.GetMetaPath(absolutePath), meta);
+
+        // Assign the GUID and path to the original instance so any existing
+        // AssetRef holding this instance picks up the asset ID immediately,
+        obj.AssetID = meta.Guid;
+        obj.AssetPath = relativePath;
+
+        // Add to index and import
+        var entry = new AssetEntry
+        {
+            Guid = meta.Guid,
+            Path = relativePath,
+            ImporterType = importerName,
+            NeedsReimport = true
+        };
+        _guidToEntry[meta.Guid] = entry;
+        _pathToGuid[relativePath] = meta.Guid;
+
+        RunImport(entry);
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+    }
+
+    /// <summary>
+    /// Re-serialize an in-memory asset back to its source file.
+    /// </summary>
+    public void SaveAsset(EngineObject obj)
+    {
+        if (obj.AssetID == Guid.Empty || string.IsNullOrEmpty(obj.AssetPath)) return;
+
+        // Sub-assets have paths like "Model.fbx#Mesh_0" can't save those directly
+        if (obj.AssetPath.Contains('#'))
+        {
+            Runtime.Debug.LogWarning($"Cannot save sub-asset directly: {obj.AssetPath}");
+            return;
+        }
+
+        string absolutePath = Path.Combine(_project.AssetsPath, obj.AssetPath);
+        var echo = Serializer.Serialize(typeof(object), obj);
+        if (echo != null)
+            File.WriteAllText(absolutePath, echo.WriteToString());
+
+        // Reimport to update cache. Dispose the previous main + sub-asset instances
+        // first so any holding AssetRef sees them as invalid and re-resolves to the
+        // freshly-imported instance. Without this, downstream refs (e.g. a Material
+        // pointing at a shader sub-asset that was just regenerated) keep the stale
+        // instance until the user manually reimports the dependent asset.
+        if (_guidToEntry.TryGetValue(obj.AssetID, out var entry))
+        {
+            DisposeAndRemove(obj.AssetID);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                    DisposeAndRemove(sub.Guid);
+
+            entry.NeedsReimport = true;
+            RunImport(entry);
+            MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        }
+    }
+
+    /// <summary>
+    /// Delete an asset and its .meta file.
+    /// </summary>
+    public void DeleteAsset(string relativePath)
+    {
+        relativePath = NormalizePath(relativePath);
+        string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
+
+        if (_pathToGuid.TryGetValue(relativePath, out var guid))
+        {
+            // Dispose main + sub-asset instances FIRST so any AssetRef holding them
+            // detects IsNotValid on next access and stops returning the deleted
+            // instance. Without this, materials etc. keep using the now-orphaned
+            // shader (cached in _shader.instance) until the editor restarts.
+            var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
+            DisposeAndRemove(guid);
+            if (entry?.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                {
+                    DisposeAndRemove(sub.Guid);
+                    _subAssetIndex.Remove(sub.Guid);
+
+                    // Clean sub-asset cache file
+                    string subCachePath = GetCachePath(sub.Guid);
+                    if (File.Exists(subCachePath))
+                        try { File.Delete(subCachePath); } catch { }
+                }
+
+            _guidToEntry.Remove(guid);
+            _pathToGuid.Remove(relativePath);
+            _dependencies.RemoveAsset(guid);
+
+            // Clean main cache file
+            string cachePath = GetCachePath(guid);
+            if (File.Exists(cachePath))
+                try { File.Delete(cachePath); } catch { }
+        }
+
+        // Delete files
+        if (File.Exists(absolutePath))
+            File.Delete(absolutePath);
+        string metaPath = MetaFile.GetMetaPath(absolutePath);
+        if (File.Exists(metaPath))
+            File.Delete(metaPath);
+
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        OnAssetsDeleted?.Invoke(new[] { relativePath });
+
+        // Script deleted - trigger recompile
+        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            ScriptAssemblyManager.RequestRecompile();
+    }
+
+    /// <summary>
+    /// Move/rename an asset. The GUID stays the same.
+    /// </summary>
+    public bool MoveAsset(string oldRelativePath, string newRelativePath)
+    {
+        oldRelativePath = NormalizePath(oldRelativePath);
+        newRelativePath = NormalizePath(newRelativePath);
+        string oldAbsolute = Path.Combine(_project.AssetsPath, oldRelativePath);
+        string newAbsolute = Path.Combine(_project.AssetsPath, newRelativePath);
+
+        if (!File.Exists(oldAbsolute)) return false;
+
+        if (File.Exists(newAbsolute))
+        {
+            Runtime.Debug.LogWarning($"Cannot rename: a file already exists at '{newRelativePath}'.");
+            return false;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(newAbsolute)!);
+
+        // Move asset file + .meta atomically (with rollback on failure)
+        string oldMeta = MetaFile.GetMetaPath(oldAbsolute);
+        string newMeta = MetaFile.GetMetaPath(newAbsolute);
+        bool assetMoved = false;
+
+        try
+        {
+            File.Move(oldAbsolute, newAbsolute);
+            assetMoved = true;
+
+            if (File.Exists(oldMeta))
+                File.Move(oldMeta, newMeta);
+        }
+        catch (Exception ex)
+        {
+            // Rollback: if asset moved but meta didn't, move asset back
+            if (assetMoved && File.Exists(newAbsolute) && !File.Exists(oldAbsolute))
+            {
+                try { File.Move(newAbsolute, oldAbsolute); }
+                catch { /* best effort rollback */ }
+            }
+            Runtime.Debug.LogError($"Failed to move asset '{oldRelativePath}' -> '{newRelativePath}': {ex.Message}");
+            return false;
+        }
+
+        // Update index
+        if (_pathToGuid.TryGetValue(oldRelativePath, out var guid))
+        {
+            _pathToGuid.Remove(oldRelativePath);
+            _pathToGuid[newRelativePath] = guid;
+            _guidToEntry[guid].Path = newRelativePath;
+
+            if (_loadedAssets.TryGetValue(guid, out var obj))
+                obj.AssetPath = newRelativePath;
+
+            // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
+            var movedEntry = _guidToEntry.GetValueOrDefault(guid);
+            if (movedEntry?.SubAssets != null)
+            {
+                foreach (var sub in movedEntry.SubAssets)
+                {
+                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                        subObj.AssetPath = $"{newRelativePath}#{sub.Name}";
+                }
+            }
+        }
+
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
+        return true;
+    }
+
+    /// <summary>
+    /// Move a folder and everything inside it. GUIDs are preserved the metadata index is
+    /// remapped in-place, and <see cref="OnAssetMoved"/> fires for every relocated file.
+    /// </summary>
+    public bool MoveFolder(string oldRelativeFolder, string newRelativeFolder)
+    {
+        oldRelativeFolder = oldRelativeFolder.Replace('\\', '/').TrimEnd('/');
+        newRelativeFolder = newRelativeFolder.Replace('\\', '/').TrimEnd('/');
+        if (oldRelativeFolder == newRelativeFolder) return true;
+
+        string oldAbs = Path.Combine(_project.AssetsPath, oldRelativeFolder);
+        string newAbs = Path.Combine(_project.AssetsPath, newRelativeFolder);
+
+        if (!Directory.Exists(oldAbs)) return false;
+        if (Directory.Exists(newAbs) || File.Exists(newAbs))
+        {
+            Runtime.Debug.LogWarning($"Cannot move folder: '{newRelativeFolder}' already exists.");
+            return false;
+        }
+
+        // Guard against moving a folder into itself or a descendant that would delete the
+        // parent while its children were still mid-copy on Windows.
+        string oldWithSlash = oldRelativeFolder + "/";
+        if (newRelativeFolder.Equals(oldRelativeFolder, StringComparison.OrdinalIgnoreCase)
+            || newRelativeFolder.StartsWith(oldWithSlash, StringComparison.OrdinalIgnoreCase))
+        {
+            Runtime.Debug.LogWarning($"Cannot move folder '{oldRelativeFolder}' into itself.");
+            return false;
+        }
+
+        // Snapshot the set of tracked paths inside the folder before the move the files on
+        // disk move atomically via Directory.Move, but the in-memory index needs per-entry
+        // path rewrites afterward.
+        var toRemap = new List<(string oldPath, string newPath, Guid guid)>();
+        foreach (var kv in _pathToGuid)
+        {
+            string p = kv.Key;
+            if (p.Equals(oldRelativeFolder, StringComparison.OrdinalIgnoreCase)
+                || p.StartsWith(oldWithSlash, StringComparison.OrdinalIgnoreCase))
+            {
+                string suffix = p.Substring(oldRelativeFolder.Length);
+                string newPath = newRelativeFolder + suffix;
+                toRemap.Add((p, newPath, kv.Value));
+            }
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(newAbs)!);
+
+        try
+        {
+            Directory.Move(oldAbs, newAbs);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to move folder '{oldRelativeFolder}' -> '{newRelativeFolder}': {ex.Message}");
+            return false;
+        }
+
+        foreach (var (oldPath, newPath, guid) in toRemap)
+        {
+            _pathToGuid.Remove(oldPath);
+            _pathToGuid[newPath] = guid;
+            if (_guidToEntry.TryGetValue(guid, out var entry))
+            {
+                entry.Path = newPath;
+
+                // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
+                if (entry.SubAssets != null)
+                {
+                    foreach (var sub in entry.SubAssets)
+                    {
+                        if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                            subObj.AssetPath = $"{newPath}#{sub.Name}";
+                    }
+                }
+            }
+            if (_loadedAssets.TryGetValue(guid, out var obj))
+                obj.AssetPath = newPath;
+
+            OnAssetMoved?.Invoke(oldPath, newPath);
+        }
+
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        return true;
+    }
+
+    /// <summary>
+    /// Force reimport a specific asset.
+    /// </summary>
+    /// <summary>Dispose and remove a cached asset. Triggers AssetRef re-resolve on next access.</summary>
+    private void DisposeAndRemove(Guid guid)
+    {
+        if (_loadedAssets.TryGetValue(guid, out var old))
+        {
+            try { old?.Dispose(); } catch { }
+            _loadedAssets.Remove(guid);
+        }
+    }
+
+    public void Reimport(Guid guid)
+    {
+        if (_guidToEntry.TryGetValue(guid, out var entry))
+        {
+            // Dispose and remove the old cached instance this causes any AssetRef
+            // holding it to detect IsNotValid and re-resolve via AssetDatabase.Get()
+            DisposeAndRemove(guid);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                    DisposeAndRemove(sub.Guid);
+
+            // Clear old thumbnails and invalidate UI cache
+            ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
+            ProjectPanel.InvalidateThumbnail(guid);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                {
+                    ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
+                    ProjectPanel.InvalidateThumbnail(sub.Guid);
+                }
+
+            entry.NeedsReimport = true;
+            RunImport(entry);
+            MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            OnAssetsImported?.Invoke(new[] { entry.Path });
+
+            // Reload the asset and enqueue thumbnail regeneration
+            var reloaded = Get(guid);
+            if (reloaded != null)
+            {
+                string? sourceFile = entry.MainAssetType == typeof(Runtime.Resources.Texture2D)
+                    ? System.IO.Path.Combine(_project.AssetsPath, entry.Path)
+                    : null;
+                ThumbnailGenerator.Enqueue(guid, reloaded, sourceFile);
+            }
+
+            // Also regenerate sub-asset thumbnails
+            if (entry.SubAssets != null)
+            {
+                foreach (var sub in entry.SubAssets)
+                {
+                    var subAsset = Get(sub.Guid);
+                    if (subAsset != null)
+                        ThumbnailGenerator.Enqueue(sub.Guid, subAsset, null);
+                }
+            }
+        }
+    }
+
+    // ================================================================
+    //  File Watching (per-frame update)
+    // ================================================================
+
+    public void ProcessFileChanges()
+    {
+        if (_watcher == null) return;
+
+        var events = _watcher.DrainEvents();
+        if (events.Count == 0) return;
+
+        var imported = new List<string>();
+        var deleted = new List<string>();
+
+        foreach (var evt in events)
+        {
+            // Skip directory events - ScanAssets handles directory .meta creation
+            if (Directory.Exists(evt.Path)) continue;
+
+            string relativePath = ToRelativePath(evt.Path);
+
+            // Skip .meta files we manage them
+            if (relativePath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
+
+            switch (evt.Type)
+            {
+                case FileEventType.Created:
+                case FileEventType.Modified:
+                {
+                    string ext = Path.GetExtension(evt.Path);
+                    string importerName = ImporterRegistry.GetImporterTypeName(ext);
+                    var meta = MetaFile.EnsureMeta(evt.Path, importerName);
+
+                    if (!_guidToEntry.ContainsKey(meta.Guid))
+                    {
+                        var entry = new AssetEntry
+                        {
+                            Guid = meta.Guid,
+                            Path = relativePath,
+                            ImporterType = importerName,
+                            NeedsReimport = true
+                        };
+                        _guidToEntry[meta.Guid] = entry;
+                        _pathToGuid[relativePath] = meta.Guid;
+                    }
+                    else
+                    {
+                        _guidToEntry[meta.Guid].NeedsReimport = true;
+                    }
+
+                    // Dispose previous main + sub-asset instances so any holding
+                    // AssetRef detects them as invalid and re-resolves to the freshly
+                    // imported instance. The Reimport() entry-point already does this;
+                    // the watcher path needs to match or downstream refs (e.g. a
+                    // Material pointing at a regenerated shader sub-asset) keep the
+                    // stale instance until the user manually reimports.
+                    var existingEntry = _guidToEntry[meta.Guid];
+                    DisposeAndRemove(meta.Guid);
+                    if (existingEntry.SubAssets != null)
+                        foreach (var sub in existingEntry.SubAssets)
+                            DisposeAndRemove(sub.Guid);
+
+                    RunImport(existingEntry);
+                    imported.Add(relativePath);
+                    break;
+                }
+
+                case FileEventType.Deleted:
+                {
+                    if (_pathToGuid.TryGetValue(relativePath, out var guid))
+                    {
+                        var deletedEntry = _guidToEntry.GetValueOrDefault(guid);
+
+                        // Dispose main + sub-assets so AssetRefs detect invalidation
+                        DisposeAndRemove(guid);
+                        if (deletedEntry?.SubAssets != null)
+                        {
+                            foreach (var sub in deletedEntry.SubAssets)
+                            {
+                                DisposeAndRemove(sub.Guid);
+                                _subAssetIndex.Remove(sub.Guid);
+
+                                // Clean sub-asset cache file
+                                string subCachePath = GetCachePath(sub.Guid);
+                                if (File.Exists(subCachePath))
+                                    try { File.Delete(subCachePath); } catch { }
+                            }
+                        }
+
+                        _guidToEntry.Remove(guid);
+                        _pathToGuid.Remove(relativePath);
+                        _dependencies.RemoveAsset(guid);
+
+                        // Clean main cache file
+                        string cachePath = GetCachePath(guid);
+                        if (File.Exists(cachePath))
+                            try { File.Delete(cachePath); } catch { }
+
+                        deleted.Add(relativePath);
+
+                        // Script deleted trigger recompile
+                        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                            ScriptAssemblyManager.RequestRecompile();
+                    }
+                    break;
+                }
+
+                case FileEventType.Renamed:
+                {
+                    if (evt.OldPath != null)
+                    {
+                        string oldRelative = ToRelativePath(evt.OldPath);
+                        if (_pathToGuid.TryGetValue(oldRelative, out var guid))
+                        {
+                            _pathToGuid.Remove(oldRelative);
+                            _pathToGuid[relativePath] = guid;
+                            var renamedEntry = _guidToEntry[guid];
+                            renamedEntry.Path = relativePath;
+
+                            // Move .meta
+                            string oldMeta = MetaFile.GetMetaPath(evt.OldPath);
+                            string newMeta = MetaFile.GetMetaPath(evt.Path);
+                            if (File.Exists(oldMeta) && !File.Exists(newMeta))
+                                try { File.Move(oldMeta, newMeta); } catch { }
+
+                            if (_loadedAssets.TryGetValue(guid, out var obj))
+                                obj.AssetPath = relativePath;
+
+                            // Update sub-asset AssetPaths
+                            if (renamedEntry.SubAssets != null)
+                            {
+                                foreach (var sub in renamedEntry.SubAssets)
+                                {
+                                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                                        subObj.AssetPath = $"{relativePath}#{sub.Name}";
+                                }
+                            }
+
+                            // If extension changed, update importer and trigger reimport
+                            string oldExt = Path.GetExtension(evt.OldPath);
+                            string newExt = Path.GetExtension(evt.Path);
+                            if (!string.Equals(oldExt, newExt, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string newImporterName = ImporterRegistry.GetImporterTypeName(newExt);
+                                renamedEntry.ImporterType = newImporterName;
+                                renamedEntry.NeedsReimport = true;
+
+                                DisposeAndRemove(guid);
+                                if (renamedEntry.SubAssets != null)
+                                    foreach (var sub in renamedEntry.SubAssets)
+                                        DisposeAndRemove(sub.Guid);
+
+                                RunImport(renamedEntry);
+                                imported.Add(relativePath);
+                            }
+
+                            OnAssetMoved?.Invoke(oldRelative, relativePath);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (imported.Count > 0 || deleted.Count > 0)
+        {
+            MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            if (imported.Count > 0) OnAssetsImported?.Invoke(imported.ToArray());
+            if (deleted.Count > 0) OnAssetsDeleted?.Invoke(deleted.ToArray());
+
+            // Refresh resources map if any changes involved Resources/ folders
+            if (imported.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/"))
+                || deleted.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/")))
+                RefreshResourcesMap();
+        }
+    }
+
+    // ================================================================
+    //  Helpers
+    // ================================================================
+
+    private string GetCachePath(Guid guid)
+        => Path.Combine(_project.CachePath, $"{guid}.asset");
+
+    private void RebuildSubAssetIndex()
+    {
+        _subAssetIndex.Clear();
+        foreach (var entry in _guidToEntry.Values)
+        {
+            if (entry.SubAssets == null) continue;
+            for (int i = 0; i < entry.SubAssets.Length; i++)
+                _subAssetIndex[entry.SubAssets[i].Guid] = (entry.Guid, i);
+        }
+    }
+
+    /// <summary>Normalize a path to use forward slashes, relative to Assets/.</summary>
+    public static string NormalizePath(string path)
+        => path.Replace('\\', '/');
+
+    /// <summary>Get a relative path from an absolute path, normalized.</summary>
+    public string ToRelativePath(string absolutePath)
+        => NormalizePath(Path.GetRelativePath(_project.AssetsPath, absolutePath));
+
+    public void Dispose()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+    }
+}

@@ -53,6 +53,8 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_skybox;
     private static Material s_gradientSkybox;
     private static Material s_gizmo;
+    private static Material? s_iconMaterial;
+    private static Mesh? s_iconQuad;
     private static Mesh s_gridMesh;
     private static Material s_gridMaterial;
 
@@ -138,6 +140,7 @@ public class DefaultRenderPipeline : RenderPipeline
         foreach (var effect in effects)
         {
             effect.OnRenderEffect(context);
+            RenderStats.AddImageEffect();
         }
     }
 
@@ -196,6 +199,21 @@ public class DefaultRenderPipeline : RenderPipeline
 
         HashSet<int> culledRenderableIndices = CullRenderables(renderables, css.WorldFrustum, css.CullingMask);
 
+        RenderStats.AddCamera();
+
+        int dirCount = 0, pointCount = 0, spotCount = 0, shadowCount = 0;
+        foreach (var l in lights)
+        {
+            switch (l.GetLightType())
+            {
+                case LightType.Directional: dirCount++; break;
+                case LightType.Point: pointCount++; break;
+                case LightType.Spot: spotCount++; break;
+            }
+            if (l.DoCastShadows()) shadowCount++;
+        }
+        RenderStats.AddLightCounts(lights.Count, dirCount, pointCount, spotCount, shadowCount);
+
         // =======================================================
         // 4. Pre Render
         foreach (ImageEffect effect in allEffects)
@@ -211,7 +229,9 @@ public class DefaultRenderPipeline : RenderPipeline
 
         Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
         Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
+        RenderStats.BeginShadowPass();
         lightSystem.RenderShadows(this, css.CameraPosition, renderables);
+        RenderStats.EndShadowPass();
 
         AssignCameraMatrices(css.View, css.Projection);
         lightSystem.UploadGlobalUniforms();
@@ -303,6 +323,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // =======================================================
         // 10. Forward Opaque Rendering shaders do PBR lighting inline
         //     Depth test is LEqual against pre-pass depth (same geometry = equal depth = passes)
+        RenderStats.BeginColorPass();
         DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
 
         // =======================================================
@@ -350,6 +371,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // =======================================================
         // 11. AfterOpaques effects (GTAO, SSR, etc.)
+        RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
             var afterContext = new RenderContext
@@ -365,14 +387,19 @@ public class DefaultRenderPipeline : RenderPipeline
             ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
         }
 
+        RenderStats.EndPostFx();
+
         // =======================================================
         // 13. Transparent geometry (forward, sorted back-to-front)
         Graphics.BindFramebuffer(colorRT.frameBuffer);
         List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
         DrawRenderables(sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false);
 
+        RenderStats.EndColorPass();
+
         // =======================================================
         // 14. PostProcess effects
+        RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.PostProcess].Count > 0)
         {
             var postContext = new RenderContext
@@ -396,6 +423,8 @@ public class DefaultRenderPipeline : RenderPipeline
                     RenderTexture.ReleaseTemporaryRT(oldRT);
             }
         }
+
+        RenderStats.EndPostFx();
 
         // =======================================================
         // 15. Gizmos
@@ -546,24 +575,23 @@ public class DefaultRenderPipeline : RenderPipeline
             if (solid.IsValid()) DrawMeshNow(solid, s_gizmo);
         }
 
-        // TODO: Implement Gizmo Icons rendering
+        // Gizmo Icons - billboarded textured quads
+        var icons = Debug.GetGizmoIcons();
+        if (icons.Count > 0)
+        {
+            s_iconMaterial ??= new Material(Shader.LoadDefault(DefaultShader.GizmoIcon));
+            s_iconQuad ??= Mesh.GetFullscreenQuad();
 
-        //List<GizmoBuilder.IconDrawCall> icons = Debug.GetGizmoIcons();
-        //if (icons != null)
-        //{
-        //    buffer.SetMaterial(s_gizmo);
-        //
-        //    foreach (GizmoBuilder.IconDrawCall icon in icons)
-        //    {
-        //        Vector3 center = icon.center;
-        //        Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, css.cameraUp, css.cameraForward);
-        //
-        //        buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
-        //        buffer.SetTexture("_MainTex", icon.texture);
-        //
-        //        buffer.DrawSingle(s_quadMesh);
-        //    }
-        //}
+            foreach (var icon in icons)
+            {
+                if (icon.Texture == null || icon.Texture.IsDisposed) continue;
+                s_iconMaterial.SetTexture("_MainTex", icon.Texture);
+                s_iconMaterial.SetVector("_IconCenter", icon.Center);
+                s_iconMaterial.SetFloat("_IconScale", icon.Scale);
+                s_iconMaterial.SetVector("_IconColor", new Float4(icon.Color.R, icon.Color.G, icon.Color.B, icon.Color.A));
+                DrawMeshNow(s_iconQuad, s_iconMaterial);
+            }
+        }
     }
 
     #endregion

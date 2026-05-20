@@ -14,7 +14,7 @@ namespace Prowl.Editor.Utils;
 /// Helpers for generating names that don't collide with an existing set.
 /// All entry points share one core: a separator pair plus a "does this name already exist?"
 /// predicate, so callers can plug in whatever scope they need (string set, GO siblings,
-/// filesystem, an InputActionMap, …) without writing the loop themselves.
+/// filesystem, an InputActionMap, ...) without writing the loop themselves.
 /// </summary>
 public static class UniqueNames
 {
@@ -24,8 +24,8 @@ public static class UniqueNames
     /// </summary>
     /// <param name="desired">The name we'd like to use.</param>
     /// <param name="exists">Returns true if the candidate name is already taken.</param>
-    /// <param name="openSeparator">String inserted between the base name and the number — e.g. <c>" ("</c> for <c>"Cube (1)"</c>, <c>"_"</c> for <c>"name_1"</c>, or <c>""</c> for <c>"Action1"</c>.</param>
-    /// <param name="closeSeparator">String appended after the number — e.g. <c>")"</c> for the parens style, empty for the others.</param>
+    /// <param name="openSeparator">String inserted between the base name and the number - e.g. <c>" ("</c> for <c>"Cube (1)"</c>, <c>"_"</c> for <c>"name_1"</c>, or <c>""</c> for <c>"Action1"</c>.</param>
+    /// <param name="closeSeparator">String appended after the number - e.g. <c>")"</c> for the parens style, empty for the others.</param>
     /// <param name="stripExistingSuffix">When true, an existing trailing suffix matching this format is parsed off and its number used as the starting point. <c>"Cube (3)"</c> tries <c>"Cube (4)"</c> first instead of <c>"Cube (3) (1)"</c>.</param>
     /// <param name="startNumber">First number to try when no suffix is found / parsed. Defaults to 1.</param>
     public static string MakeUnique(
@@ -71,7 +71,7 @@ public static class UniqueNames
     }
 
     /// <summary>
-    /// Make a name unique against <paramref name="parent"/>'s children — or, when parent is null,
+    /// Make a name unique against <paramref name="parent"/>'s children - or, when parent is null,
     /// against <paramref name="scene"/>'s root objects. Uses the <c>" (N)"</c> convention with
     /// strip-and-increment, so duplicating <c>"Cube (3)"</c> yields <c>"Cube (4)"</c>.
     /// </summary>

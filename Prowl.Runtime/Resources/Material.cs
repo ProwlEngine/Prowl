@@ -90,7 +90,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// <summary>Names of properties the user has explicitly set (vs auto-filled
     /// shader defaults). When the shader's defaults change, only NON-overridden
     /// entries get refreshed user customizations are preserved. Without this,
-    /// stale defaults stick around forever (the Unity-style override pattern).</summary>
+    /// stale defaults stick around forever.</summary>
     [SerializeField]
     public HashSet<string> _overrides = new();
 

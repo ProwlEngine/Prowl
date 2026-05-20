@@ -16,7 +16,7 @@ Pass "Gizmos"
 	GLSLPROGRAM
 	Vertex
 	{
-        #include "Fragment"
+        #include "ProwlCG"
         #include "VertexAttributes"
 		out vec4 vColor;
 		out vec4 screenPos;
@@ -31,7 +31,7 @@ Pass "Gizmos"
 	}
 	Fragment
 	{
-        #include "Fragment"
+        #include "ProwlCG"
 		in vec4 vColor;
 		in vec4 screenPos;
 		layout (location = 0) out vec4 finalColor;

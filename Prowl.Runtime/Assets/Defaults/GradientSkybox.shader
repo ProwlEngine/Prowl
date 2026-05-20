@@ -18,7 +18,7 @@ Pass "GradientSkybox"
 
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 vDirection;
@@ -40,7 +40,7 @@ Pass "GradientSkybox"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             layout (location = 0) out vec4 fragColor;
 

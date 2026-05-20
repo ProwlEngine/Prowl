@@ -13,7 +13,7 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Renders a skinned mesh deformed by bone Transforms.
-/// Bones are referenced by path (relative to this GO's root), matching Unity's convention.
+/// Bones are referenced by path (relative to this GO's root)
 /// Paths like "Armature/Hips/Spine" are resolved via Transform.Find().
 /// Supports multiple materials via submeshes.
 /// Bone matrices are uploaded via a float texture (no uniform array size limit).

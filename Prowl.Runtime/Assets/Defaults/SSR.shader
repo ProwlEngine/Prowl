@@ -26,7 +26,7 @@ Pass "RayMarch"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _CameraDepthTexture;
@@ -190,7 +190,7 @@ Pass "Resolve"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _ReflectionData;
@@ -249,7 +249,7 @@ Pass "Blur"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform vec2 _BlurDirection;
@@ -308,7 +308,7 @@ Pass "Composite"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         uniform sampler2D _MainTex;
         uniform sampler2D _ReflectionTex;

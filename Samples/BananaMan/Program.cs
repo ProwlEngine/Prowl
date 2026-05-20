@@ -12,7 +12,6 @@
 //
 
 using Prowl.Runtime;
-using Prowl.Runtime.AssetImporting;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;

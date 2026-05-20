@@ -5,7 +5,6 @@ using System;
 using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Resources;
-using Prowl.Vector;
 
 namespace Prowl.Runtime.Rendering;
 

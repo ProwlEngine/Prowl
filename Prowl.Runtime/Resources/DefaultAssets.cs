@@ -34,9 +34,10 @@ public enum DefaultShader
     Grid,
     CinematicEffects,
     VolumetricFog,
-    SDFRaymarch,
     TAA,
-    MotionBlur
+    MotionBlur,
+    GizmoIcon,
+    AutoExposure
 }
 
 /// <summary>
@@ -73,7 +74,11 @@ public enum DefaultTexture
     Surface,
     Emission,
     Grid,
-    Noise
+    Noise,
+
+    // Gizmo icons
+    IconCamera,
+    IconLight,
 }
 
 /// <summary>
@@ -81,7 +86,7 @@ public enum DefaultTexture
 /// </summary>
 public enum DefaultShaderInclude
 {
-    Fragment,
+    ProwlCG,
     PBR,
     Random,
     ShaderVariables,

@@ -1,8 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-
 using Jitter2;
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
@@ -99,8 +97,10 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
         {
             for (int z = minZ; z < maxZ; z++)
             {
-                // Skip invalid cells
+                // Skip invalid cells and holes
                 if (!_heightProvider.IsValidCell(x, z))
+                    continue;
+                if (_heightProvider.IsCellHole(x, z))
                     continue;
 
                 // Get heights for this quad

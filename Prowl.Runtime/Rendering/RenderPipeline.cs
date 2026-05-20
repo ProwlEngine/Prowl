@@ -223,6 +223,11 @@ public abstract class RenderPipeline : EngineObject
                 continue;
             }
         }
+
+        int collected = renderables.Count;
+        int culled = culledRenderableIndices.Count;
+        RenderStats.AddRenderables(collected, culled, collected - culled);
+
         return culledRenderableIndices;
     }
 
@@ -560,6 +565,9 @@ public abstract class RenderPipeline : EngineObject
         {
             batches.Sort((a, b) => a.SortKey.CompareTo(b.SortKey));
         }
+
+        for (int i = 0; i < batches.Count; i++)
+            RenderStats.AddBatch();
 
         // ========== PHASE 2: Draw Batches ==========
         // For each batch, bind state once then draw all objects in that batch

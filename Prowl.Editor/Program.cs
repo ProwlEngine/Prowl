@@ -1,3 +1,9 @@
+using Prowl.Editor.Core;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
+
 using System;
 using System.Collections.Generic;
 
@@ -88,18 +94,13 @@ public static class Program
 
         if (BuildMode)
         {
-            // Set invariant culture for consistent number parsing/formatting in the editor (e.g. asset import settings)
-            System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
-            System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
-
             ProjectSettingsRegistry.Initialize();
 
             var project = Project.Open(StartupProjectPath);
             project.SetActive();
 
             // Load user script assemblies before registry scanning
-            Scripting.ScriptAssemblyManager.LoadAssemblies(project);
-
+            ScriptAssemblyManager.LoadAssemblies(project);
 
             // Initialize asset database for the already-opened project
             var db = new EditorAssetDatabase(Project.Current!);
@@ -108,16 +109,11 @@ public static class Program
             // Load project settings
             ProjectSettingsRegistry.OnProjectOpened();
 
-
             Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath + "/../Builds");
             return;
         }
 
-        var instance = EditorSettings.Instance;
-
         var editor = new EditorApplication();
-        //editor.Run("Prowl Editor", instance.WindowWidth, instance.WindowHeight);
-
         editor.Run("Prowl Editor", 1200, 800);
 
         Runtime.Window.InternalWindow.WindowState = EditorSettings.Instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal;

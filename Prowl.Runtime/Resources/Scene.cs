@@ -348,7 +348,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             foreach (MonoBehaviour component in components)
             {
                 if (component.IsDisposed) continue;
-                component.OnAddedToScene();
+                try { component.OnAddedToScene(); }
+                catch (Exception ex) { Debug.LogError($"[{obj.Name}/{component.GetType().Name}] OnAddedToScene() threw: {ex.Message}\n{ex.StackTrace}"); }
             }
 
             // Call OnEnable for enabled components, but only if the scene is active
@@ -397,7 +398,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             foreach (MonoBehaviour component in components)
             {
                 if (component.IsDisposed) continue;
-                component.OnRemovedFromScene();
+                try { component.OnRemovedFromScene(); }
+                catch (Exception ex) { Debug.LogError($"[{component.Name}/{component.GetType().Name}] OnRemovedFromScene() threw: {ex.Message}\n{ex.StackTrace}"); }
             }
 
             obj.Scene = null;
@@ -666,8 +668,17 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
             foreach (MonoBehaviour? comp in components)
-                if (comp.EnabledInHierarchy)
+            {
+                if (!comp.EnabledInHierarchy) continue;
+                try
+                {
                     action.Invoke(comp);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[{go.Name}/{comp.GetType().Name}] threw: {ex.Message}\n{ex.StackTrace}");
+                }
+            }
         }
     }
 }

@@ -1,0 +1,21 @@
+using Prowl.Runtime;
+
+public class {[className]} : MonoBehaviour
+{
+    public static {[className]}? Instance { get; private set; }
+
+    public override void OnEnable()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogWarning($"Multiple {nameof({[className]})} instances keeping the first.");
+            return;
+        }
+        Instance = this;
+    }
+
+    public override void OnDisable()
+    {
+        if (Instance == this) Instance = null;
+    }
+}

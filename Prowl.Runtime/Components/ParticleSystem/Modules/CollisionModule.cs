@@ -3,8 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+
 using Prowl.Vector;
-using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.ParticleSystem.Modules;
 

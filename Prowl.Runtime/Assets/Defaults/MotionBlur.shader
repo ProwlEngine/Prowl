@@ -31,7 +31,7 @@ Pass "MotionBlur"
 
     Fragment
     {
-        #include "Fragment"
+        #include "ProwlCG"
 
         layout(location = 0) out vec4 OutputColor;
 

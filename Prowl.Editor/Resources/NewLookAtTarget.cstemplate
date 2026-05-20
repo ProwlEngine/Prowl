@@ -1,0 +1,19 @@
+using Prowl.Runtime;
+using Prowl.Vector;
+
+public class {[className]} : MonoBehaviour
+{
+    public GameObject? Target;
+    public bool LockYAxis = false;
+
+    public override void LateUpdate()
+    {
+        if (Target == null) return;
+
+        Float3 dir = Target.Transform.Position - Transform.Position;
+        if (LockYAxis) dir.Y = 0f;
+        if (Float3.LengthSquared(dir) < 0.0001f) return;
+
+        Transform.Rotation = Quaternion.LookRotation(Float3.Normalize(dir), Float3.UnitY);
+    }
+}

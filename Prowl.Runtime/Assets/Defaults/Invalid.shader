@@ -12,7 +12,7 @@ Pass "Invalid"
 	GLSLPROGRAM
 	Vertex
 	{
-		#include "Fragment"
+		#include "ProwlCG"
 		#include "VertexAttributes"
 
 		void main()

@@ -21,7 +21,7 @@ Pass "Grid"
     GLSLPROGRAM
         Vertex
         {
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
             out vec3 worldPos;
@@ -42,7 +42,7 @@ Pass "Grid"
 
         Fragment
         {
-            #include "Fragment"
+            #include "ProwlCG"
 
             layout (location = 0) out vec4 FragColor;
 

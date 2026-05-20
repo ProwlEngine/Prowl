@@ -57,7 +57,7 @@ Pass "Refraction"
 
 		Vertex
 		{
-            #include "Fragment"
+            #include "ProwlCG"
             #include "VertexAttributes"
 
 			out vec2 texCoord0;
@@ -77,7 +77,7 @@ Pass "Refraction"
 
 		Fragment
 		{
-            #include "Fragment"
+            #include "ProwlCG"
 
 			layout (location = 0) out vec4 fragColor;
 
