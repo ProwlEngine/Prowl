@@ -236,7 +236,7 @@ public static class Client
         _maps.Clear();
     }
 
-    // ── Message handling ──
+    // -- Message handling --
 
     private static void HandleTransportDataReceived(ArraySegment<byte> data)
     {
@@ -449,7 +449,7 @@ public static class Client
         _maps.Remove(mapId);
     }
 
-    // ── RPC message handling ──
+    // -- RPC message handling --
 
     private static void HandleClientRpcCall(NetworkReader reader)
     {
@@ -538,7 +538,7 @@ public static class Client
         entry.promise.Reject(new Exception(message ?? "Unknown RPC error"));
     }
 
-    // ── RPC helpers (called by weaver-generated code) ──
+    // -- RPC helpers (called by weaver-generated code) --
 
     public static void __SendToServer(ArraySegment<byte> data)
     {
@@ -569,7 +569,7 @@ public static class Client
     }
 
     /// <summary>
-    /// Resets all static state. Essential for test isolation — clears event subscriptions,
+    /// Resets all static state. Essential for test isolation - clears event subscriptions,
     /// connection state, timing, entities, and transport. Call between tests.
     /// </summary>
     public static void Reset()
@@ -734,7 +734,7 @@ public static class Client
                 sv.ClientUpdate(DeltaTime);
         }
 
-        // Tick all client-side entities (snapshot — ClientTick may trigger despawns)
+        // Tick all client-side entities (snapshot - ClientTick may trigger despawns)
         foreach (var entity in _entities.Values.ToArray())
             entity.ClientTick();
     }

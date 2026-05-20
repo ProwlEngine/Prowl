@@ -18,7 +18,7 @@ public class InMemoryServerTransport : IServerTransport
 
     public void Stop()
     {
-        // Directly notify clients instead of queuing — there are no more Tick() calls
+        // Directly notify clients instead of queuing - there are no more Tick() calls
         // after Stop(), so queued work would never be processed.
         foreach (var (id, client) in _clients)
         {
@@ -35,7 +35,7 @@ public class InMemoryServerTransport : IServerTransport
     {
         if (_clients.TryGetValue(connectionId, out var client))
         {
-            // Copy data — the original buffer may be reused
+            // Copy data - the original buffer may be reused
             var copy = new byte[data.Count];
             Array.Copy(data.Array!, data.Offset, copy, 0, data.Count);
             client.EnqueueIncoming(new ArraySegment<byte>(copy));
@@ -49,7 +49,7 @@ public class InMemoryServerTransport : IServerTransport
 
     public void Tick()
     {
-        // Order: connect → data → disconnect
+        // Order: connect -> data -> disconnect
         // This matches real TCP where buffered data arrives before the connection-close signal.
 
         // Process pending connections
@@ -94,7 +94,7 @@ public class InMemoryServerTransport : IServerTransport
     /// </summary>
     internal void EnqueueFromClient(uint connectionId, ArraySegment<byte> data)
     {
-        // Copy data — the original buffer may be reused
+        // Copy data - the original buffer may be reused
         var copy = new byte[data.Count];
         Array.Copy(data.Array!, data.Offset, copy, 0, data.Count);
         _incomingData.Enqueue((connectionId, new ArraySegment<byte>(copy)));
@@ -148,7 +148,7 @@ public class InMemoryClientTransport : IClientTransport
         if (_connected)
         {
             _connected = false;
-            // Don't set _disconnectedPending here — let the server round-trip handle it
+            // Don't set _disconnectedPending here - let the server round-trip handle it
             // via EnqueueDisconnected, consistent with real TCP behavior where the
             // disconnect acknowledgment comes back from the server.
             _server.ClientDisconnected(_connectionId);
@@ -172,7 +172,7 @@ public class InMemoryClientTransport : IClientTransport
 
     public void Tick()
     {
-        // Order: connect → data → disconnect
+        // Order: connect -> data -> disconnect
         // This matches real TCP where buffered data arrives before the connection-close signal.
 
         // Process pending connection

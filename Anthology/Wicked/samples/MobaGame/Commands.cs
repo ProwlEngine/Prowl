@@ -3,12 +3,12 @@ using Prowl.Wicked;
 namespace MobaGame;
 
 /// <summary>
-/// Static commands (client → server) and static RPCs (server → client)
+/// Static commands (client -> server) and static RPCs (server -> client)
 /// for lobby, matchmaking, and game flow.
 /// </summary>
 public static class LobbyCommands
 {
-    // ── Auth ──
+    // -- Auth --
 
     [StaticCommand]
     public static void CmdLogin(string username, string password)
@@ -32,7 +32,7 @@ public static class LobbyCommands
         MobaClient.OnLoginResult(success, message);
     }
 
-    // ── Queue / Matchmaking ──
+    // -- Queue / Matchmaking --
 
     [StaticCommand]
     public static void CmdJoinQueue()
@@ -56,7 +56,7 @@ public static class LobbyCommands
         MobaClient.OnQueueStatus(inQueue);
     }
 
-    // ── Character Select ──
+    // -- Character Select --
 
     [StaticRpc]
     public static void RpcMatchFound(RemoteClient target)
@@ -87,7 +87,7 @@ public static class LobbyCommands
         MobaClient.OnCharSelectUpdate(names, teams, chars, locked, timeLeft);
     }
 
-    // ── Game Flow ──
+    // -- Game Flow --
 
     [StaticRpc]
     public static void RpcGameStart(RemoteClient target)
@@ -119,7 +119,7 @@ public static class LobbyCommands
         MobaClient.OnScoreUpdate(blueKills, redKills);
     }
 
-    // ── Lobby chat ──
+    // -- Lobby chat --
 
     [StaticCommand]
     public static void CmdLobbyChat(string message)

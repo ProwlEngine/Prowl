@@ -47,7 +47,7 @@ public abstract class NetworkEntity : NetworkObject
     /// The RemoteClient that owns this entity. On the server, always set to the owning
     /// RemoteClient instance (or null for unowned). On the client, only non-null when
     /// the local client is the owner (set to Client.LocalClient). For other players'
-    /// entities on the client, Owner is null — use OwnerClientId to check ownership.
+    /// entities on the client, Owner is null - use OwnerClientId to check ownership.
     /// </summary>
     public RemoteClient? Owner { get; internal set; }
 
@@ -61,7 +61,7 @@ public abstract class NetworkEntity : NetworkObject
 
     /// <summary>
     /// True on the client side if the local client is this entity's owner.
-    /// Computed — always in sync even after ownership transfer.
+    /// Computed - always in sync even after ownership transfer.
     /// Always false on the server.
     /// </summary>
     public bool IsOwner => IsClient && Owner != null && Owner == Client.LocalClient;

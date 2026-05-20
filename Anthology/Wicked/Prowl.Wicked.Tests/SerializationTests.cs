@@ -11,7 +11,7 @@ public class SerializationTests
         return new NetworkReader(writer.ToArraySegment());
     }
 
-    // ── Primitive round-trips ──
+    // -- Primitive round-trips --
 
     [Fact]
     public void Byte_RoundTrips()
@@ -109,7 +109,7 @@ public class SerializationTests
         Assert.False(reader.ReadBool());
     }
 
-    // ── String ──
+    // -- String --
 
     [Fact]
     public void String_RoundTrips()
@@ -139,7 +139,7 @@ public class SerializationTests
         Assert.Equal("\u00e9\u00e0\u00fc \ud83d\ude80", reader.ReadString());
     }
 
-    // ── Vector2 ──
+    // -- Vector2 --
 
     [Fact]
     public void Vector2_RoundTrips()
@@ -148,7 +148,7 @@ public class SerializationTests
         Assert.Equal(new Vector2(3.5f, -7.25f), reader.ReadVector2());
     }
 
-    // ── INetworkSerializable ──
+    // -- INetworkSerializable --
 
     [Fact]
     public void Serializable_RoundTrips()
@@ -193,7 +193,7 @@ public class SerializationTests
         Assert.Null(reader.ReadArray<TestSerializable>());
     }
 
-    // ── Primitive arrays ──
+    // -- Primitive arrays --
 
     [Fact]
     public void IntArray_RoundTrips()
@@ -363,7 +363,7 @@ public class SerializationTests
         Assert.Null(reader.ReadBoolArray());
     }
 
-    // ── Enums ──
+    // -- Enums --
 
     [Fact]
     public void Enum_Int_RoundTrips()
@@ -393,7 +393,7 @@ public class SerializationTests
         Assert.Equal(LongEnum.Big, reader.ReadEnum<LongEnum>());
     }
 
-    // ── Raw bytes ──
+    // -- Raw bytes --
 
     [Fact]
     public void RawBytes_RoundTrips()
@@ -411,7 +411,7 @@ public class SerializationTests
         Assert.Equal(0, reader.Remaining);
     }
 
-    // ── Writer reset/reuse ──
+    // -- Writer reset/reuse --
 
     [Fact]
     public void Writer_Reset_ClearsData()
@@ -426,7 +426,7 @@ public class SerializationTests
         Assert.Equal(0, reader.Remaining);
     }
 
-    // ── Read past end ──
+    // -- Read past end --
 
     [Fact]
     public void ReadPastEnd_Throws()
@@ -443,7 +443,7 @@ public class SerializationTests
         Assert.Throws<InvalidOperationException>(() => reader.ReadInt());
     }
 
-    // ── Remaining ──
+    // -- Remaining --
 
     [Fact]
     public void Remaining_TracksUnreadBytes()
@@ -456,7 +456,7 @@ public class SerializationTests
         Assert.Equal(0, reader.Remaining);
     }
 
-    // ── Mixed types in sequence ──
+    // -- Mixed types in sequence --
 
     [Fact]
     public void MixedTypes_RoundTripInOrder()
@@ -484,7 +484,7 @@ public class SerializationTests
         Assert.Equal(0, reader.Remaining);
     }
 
-    // ── Buffer growth ──
+    // -- Buffer growth --
 
     [Fact]
     public void Writer_GrowsBeyondInitialBuffer()
@@ -501,7 +501,7 @@ public class SerializationTests
     }
 }
 
-// ── Test helper types ──
+// -- Test helper types --
 
 public class TestSerializable : INetworkSerializable
 {

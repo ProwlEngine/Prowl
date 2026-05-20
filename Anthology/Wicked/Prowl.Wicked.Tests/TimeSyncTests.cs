@@ -107,7 +107,7 @@ public class TimeSyncTests : IDisposable
         double firstRtt = Client.RoundTripTime;
         Assert.True(firstRtt > 0);
 
-        // Run many more exchanges — EMA should stay stable and small
+        // Run many more exchanges - EMA should stay stable and small
         for (int i = 0; i < 20; i++)
             Tick();
 
@@ -154,7 +154,7 @@ public class TimeSyncTests : IDisposable
         Client.PingInterval = 1000f;
         Client.Connect("localhost", 0);
 
-        // Only process the connection — no ping/pong exchange yet
+        // Only process the connection - no ping/pong exchange yet
         Server.Tick();
 
         Assert.Equal(0.0, Client.ServerTime);
@@ -172,13 +172,13 @@ public class TimeSyncTests : IDisposable
         // Process connection + drain the initial ping (_pingTimer starts at PingInterval)
         Server.Tick(); // processes client connection
         Client.Tick(); // gets AssignClientId, sends initial ping
-        Server.Tick(); // processes the ping → LastReceivedTime updated
+        Server.Tick(); // processes the ping -> LastReceivedTime updated
 
         Assert.Single(Server.Clients);
 
-        // Wait past timeout — no more client ticks so no more data
+        // Wait past timeout - no more client ticks so no more data
         Thread.Sleep(150);
-        Server.Tick(); // timeout check fires → Transport.Disconnect() queued
+        Server.Tick(); // timeout check fires -> Transport.Disconnect() queued
         Server.Tick(); // processes the queued disconnect
 
         Assert.Empty(Server.Clients);

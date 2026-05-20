@@ -42,7 +42,7 @@ public static class Server
     public static IServerTransport? Transport { get; set; }
 
     /// <summary>
-    /// Target ticks per second. Advisory — used by game code for fixed-step timing.
+    /// Target ticks per second. Advisory - used by game code for fixed-step timing.
     /// DeltaTime is computed from elapsed wall-clock time, not derived from TickRate.
     /// </summary>
     public static float TickRate { get; set; } = 60f;
@@ -163,7 +163,7 @@ public static class Server
         }
         catch (Exception)
         {
-            // Malformed message — disconnect the offending client
+            // Malformed message - disconnect the offending client
             Transport?.Disconnect(connectionId, "malformed message");
         }
     }
@@ -249,7 +249,7 @@ public static class Server
     }
 
     /// <summary>
-    /// Stops the server. Order: disconnect all clients → despawn all entities → destroy all maps.
+    /// Stops the server. Order: disconnect all clients -> despawn all entities -> destroy all maps.
     /// OnClientDisconnected fires for each client while PlayerEntity is still accessible, so handlers
     /// can safely access client.PlayerEntity and perform cleanup. Then all entities are despawned (lifecycle
     /// callbacks fire), then maps are destroyed.
@@ -257,7 +257,7 @@ public static class Server
     public static void Stop()
     {
         // 1. Disconnect all clients using shared disconnect logic
-        // (fires OnClientDisconnected for each — PlayerEntity still accessible)
+        // (fires OnClientDisconnected for each - PlayerEntity still accessible)
         // Skip per-client Transport.Disconnect since Transport.Stop() handles that below.
         for (int i = _clients.Count - 1; i >= 0; i--)
         {
@@ -297,7 +297,7 @@ public static class Server
     }
 
     /// <summary>
-    /// Resets all static state. Essential for test isolation — clears event subscriptions,
+    /// Resets all static state. Essential for test isolation - clears event subscriptions,
     /// clients, maps, entities, and transport. Call between tests.
     /// </summary>
     public static void Reset()
@@ -372,11 +372,11 @@ public static class Server
         if (!_maps.TryGetValue(mapId, out var map))
             return;
 
-        // OnDestroyed fires first — lets the map do cleanup while entities still exist
+        // OnDestroyed fires first - lets the map do cleanup while entities still exist
         // The map is still in _maps here so Server.GetMap(mapId) works during OnDestroyed()
         map.OnDestroyed();
 
-        // Send despawn + MapDestroy to all observers (once — not per-entity Despawn)
+        // Send despawn + MapDestroy to all observers (once - not per-entity Despawn)
         if (map.Observers.Count > 0)
         {
             var writer = new NetworkWriter();
@@ -391,7 +391,7 @@ public static class Server
                 SendToClient(observer, writer);
         }
 
-        // Local cleanup for each entity — skip replication (already sent above)
+        // Local cleanup for each entity - skip replication (already sent above)
         foreach (var entity in map.Entities.ToArray())
         {
             if (!entity.IsSpawned) continue;
@@ -424,7 +424,7 @@ public static class Server
     /// <summary>
     /// Spawns an unowned entity in the specified map.
     /// Assigns NetworkId, sets IsSpawned, adds to map, and fires lifecycle callbacks:
-    /// OnSpawn() → OnStartServer().
+    /// OnSpawn() -> OnStartServer().
     /// </summary>
     public static T Spawn<T>(Map map)
         where T : NetworkEntity, new()
@@ -443,7 +443,7 @@ public static class Server
         var entity = new T();
         entity.Side = NetworkSide.Server;
         entity.Owner = null;
-        // Map is NOT set before the initializer — if the initializer sets Position,
+        // Map is NOT set before the initializer - if the initializer sets Position,
         // This prevents OnEntityMoved firing before OnEntityAdded in FinalizeSpawn.
         initializer(entity);
         entity.Map = map;
@@ -471,7 +471,7 @@ public static class Server
         var entity = new T();
         entity.Side = NetworkSide.Server;
         entity.Owner = owner;
-        // Map is NOT set before the initializer — if the initializer sets Position,
+        // Map is NOT set before the initializer - if the initializer sets Position,
         // This prevents OnEntityMoved firing before OnEntityAdded in FinalizeSpawn.
         initializer(entity);
         entity.Map = map;
@@ -512,7 +512,7 @@ public static class Server
 
     /// <summary>
     /// Removes an entity from the network.
-    /// Fires lifecycle callbacks: OnStopServer() → removes from map → OnDespawn().
+    /// Fires lifecycle callbacks: OnStopServer() -> removes from map -> OnDespawn().
     /// If the entity is a client's player entity, unassigns it first.
     /// </summary>
     public static void Despawn(NetworkEntity entity)
@@ -576,7 +576,7 @@ public static class Server
 
     /// <summary>
     /// Shared disconnect logic: fires callbacks while PlayerEntity is still accessible,
-    /// then unassigns. Does NOT remove from _clients or call Transport.Disconnect — callers handle those.
+    /// then unassigns. Does NOT remove from _clients or call Transport.Disconnect - callers handle those.
     /// </summary>
     private static void DisconnectClientInternal(RemoteClient client)
     {
@@ -590,7 +590,7 @@ public static class Server
     /// <summary>
     /// Disconnects a client: fires callbacks (PlayerEntity still accessible), unassigns player entity,
     /// removes from client list. Called internally by RemoteClient.Disconnect().
-    /// Does NOT call Transport.Disconnect — the caller handles that.
+    /// Does NOT call Transport.Disconnect - the caller handles that.
     /// </summary>
     internal static void RemoveClient(RemoteClient client)
     {
@@ -693,7 +693,7 @@ public static class Server
             }
         }
 
-        // Tick all entities (snapshot — ServerTick may spawn or despawn entities)
+        // Tick all entities (snapshot - ServerTick may spawn or despawn entities)
         foreach (var entity in _entities.Values.ToArray())
             entity.ServerTick();
 
@@ -788,7 +788,7 @@ public static class Server
         }
     }
 
-    // ── Replication helpers ──
+    // -- Replication helpers --
 
     private static void SendToClient(RemoteClient client, NetworkWriter writer)
     {
@@ -1047,7 +1047,7 @@ public static class Server
         Transport.Disconnect(client.ConnectionId, reason);
     }
 
-    // ── RPC response helpers (called by weaver-generated dispatch code) ──
+    // -- RPC response helpers (called by weaver-generated dispatch code) --
 
     public static void __SendRpcResponseVoid(uint connectionId, ushort promiseId)
     {
@@ -1291,7 +1291,7 @@ public static class Server
         Transport!.Send(connectionId, writer.ToArraySegment());
     }
 
-    // ── ClientRpc sending helpers (called by weaver-generated method bodies) ──
+    // -- ClientRpc sending helpers (called by weaver-generated method bodies) --
 
     public static void __SendToEntityObservers(NetworkEntity entity, ArraySegment<byte> data, bool excludeOwner)
     {

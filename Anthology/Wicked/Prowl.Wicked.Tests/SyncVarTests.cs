@@ -3,7 +3,7 @@ using Prowl.Wicked;
 
 namespace Prowl.Wicked.Tests;
 
-// ── Test entity types ──
+// -- Test entity types --
 
 public class SyncVarTestEntity : NetworkEntity
 {
@@ -118,7 +118,7 @@ public class SyncVarMultiOwnerEntity : NetworkEntity
     public override void UnpackSpawnData(NetworkReader reader) { }
 }
 
-// ── Tests ──
+// -- Tests --
 
 public class SyncVarTests : IDisposable
 {
@@ -168,7 +168,7 @@ public class SyncVarTests : IDisposable
         return (client, map);
     }
 
-    // ── SyncVar<T> unit tests (no network) ──
+    // -- SyncVar<T> unit tests (no network) --
 
     [Fact]
     public void SyncVar_DefaultValue()
@@ -288,7 +288,7 @@ public class SyncVarTests : IDisposable
         Assert.Throws<NotSupportedException>(() => new SyncVar<List<int>>());
     }
 
-    // ── Serialization round-trip ──
+    // -- Serialization round-trip --
 
     [Fact]
     public void SyncVar_Serialize_Deserialize_Float()
@@ -445,7 +445,7 @@ public class SyncVarTests : IDisposable
         Assert.Equal(0, callCount);
     }
 
-    // ── Entity discovery ──
+    // -- Entity discovery --
 
     [Fact]
     public void DiscoverSyncVars_FindsAllFields()
@@ -507,7 +507,7 @@ public class SyncVarTests : IDisposable
         Assert.Single(entity._syncVars!);
     }
 
-    // ── Network replication: initial spawn ──
+    // -- Network replication: initial spawn --
 
     [Fact]
     public void SyncVar_InitialValues_ReplicatedOnSpawn()
@@ -582,7 +582,7 @@ public class SyncVarTests : IDisposable
         Assert.Equal(123, clientEntity!.PlainField);
     }
 
-    // ── Network replication: dirty updates ──
+    // -- Network replication: dirty updates --
 
     [Fact]
     public void SyncVar_DirtyUpdate_ReplicatesToClient()
@@ -699,7 +699,7 @@ public class SyncVarTests : IDisposable
         Assert.Equal(vec, ce.Vec2Val.Value);
     }
 
-    // ── SyncTarget.Owner ──
+    // -- SyncTarget.Owner --
 
     [Fact]
     public void SyncVar_OwnerTarget_InitialValuesReplicateToAllOnSpawn()
@@ -761,7 +761,7 @@ public class SyncVarTests : IDisposable
         Assert.Equal(50f, clientEntity!.Health.Value);
     }
 
-    // ── Callbacks on client ──
+    // -- Callbacks on client --
 
     [Fact]
     public void SyncVar_ClientCallback_FiresOnDirtyUpdate()
@@ -803,7 +803,7 @@ public class SyncVarTests : IDisposable
         Assert.Equal((20, 30), clientEntity.Changes[2]);
     }
 
-    // ── Sync intervals ──
+    // -- Sync intervals --
 
     [Fact]
     public void SyncVar_SyncInterval_Zero_SendsEveryTick()
@@ -835,7 +835,7 @@ public class SyncVarTests : IDisposable
         // Set the slow var dirty
         serverEntity.SlowVar.Value = 99f;
 
-        // Tick a few times rapidly — with default DeltaTime (~0) the interval hasn't elapsed
+        // Tick a few times rapidly - with default DeltaTime (~0) the interval hasn't elapsed
         // The sync interval is 0.5s, and DeltaTime is very small
         Tick();
 
@@ -845,7 +845,7 @@ public class SyncVarTests : IDisposable
         Assert.True(serverEntity.SlowVar.IsDirty || clientEntity!.SlowVar.Value == 99f);
     }
 
-    // ── Interpolated SyncVars ──
+    // -- Interpolated SyncVars --
 
     [Fact]
     public void SyncVarInterpolated_InitialDisplay()
@@ -944,7 +944,7 @@ public class SyncVarTests : IDisposable
         Assert.Equal(42f, val);
     }
 
-    // ── Interpolated Vector2 ──
+    // -- Interpolated Vector2 --
 
     [Fact]
     public void SyncVarInterpolatedVector2_InitialDisplay()
@@ -1024,7 +1024,7 @@ public class SyncVarTests : IDisposable
         Assert.Equal(new Vector2(999, 888), clientEntity.Position.Display);
     }
 
-    // ── Edge cases ──
+    // -- Edge cases --
 
     [Fact]
     public void SyncVar_SettingDuringInitializer_ReplicatesCorrectly()
@@ -1066,7 +1066,7 @@ public class SyncVarTests : IDisposable
         var (client, map) = SetupWithMap();
 
         var serverEntity = Server.Spawn<SyncVarTestEntity>(map, e => e.Health.Value = 100f);
-        // Change value before the next tick — should be sent as part of initial spawn data
+        // Change value before the next tick - should be sent as part of initial spawn data
         serverEntity.Health.Value = 75f;
         Tick();
 
@@ -1076,7 +1076,7 @@ public class SyncVarTests : IDisposable
         // but then a dirty update would also be sent... or maybe not since the spawn already sent it.
         // Actually the spawn was called with initializer setting 100, then we set 75.
         // The spawn message writes the current value (which is 75 since we changed it before Tick).
-        // Wait — FinalizeSpawn happens during Server.Spawn, which is before we set 75.
+        // Wait - FinalizeSpawn happens during Server.Spawn, which is before we set 75.
         // So spawn message has 100, then dirty update has 75.
         Assert.Equal(75f, clientEntity!.Health.Value);
     }
@@ -1116,7 +1116,7 @@ public class SyncVarTests : IDisposable
         var serverEntity = Server.Spawn<SyncVarTestEntity>(map);
         Tick();
 
-        // Multiple changes between ticks — client should see the latest
+        // Multiple changes between ticks - client should see the latest
         serverEntity.Score.Value = 1;
         serverEntity.Score.Value = 2;
         serverEntity.Score.Value = 3;

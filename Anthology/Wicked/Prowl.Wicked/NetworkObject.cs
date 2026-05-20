@@ -7,7 +7,7 @@ public abstract class NetworkObject
 {
     /// <summary>
     /// Which side of the network this instance lives on.
-    /// Defaults to Unspecified — IsServer and IsClient both return false until set.
+    /// Defaults to Unspecified - IsServer and IsClient both return false until set.
     /// </summary>
     public NetworkSide Side { get; internal set; } = NetworkSide.Unspecified;
 
@@ -23,7 +23,7 @@ public abstract class NetworkObject
 
     /// <summary>
     /// Identifies which client invoked the currently executing ServerRpc.
-    /// Backed by [ThreadStatic] — safe for multi-threaded RPC dispatch.
+    /// Backed by [ThreadStatic] - safe for multi-threaded RPC dispatch.
     /// Set before RPC execution, cleared after.
     /// WARNING: If you use async/await inside an RPC handler, execution may resume
     /// on a different thread and Sender will be null. Capture it in a local variable

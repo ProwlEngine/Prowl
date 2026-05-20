@@ -45,7 +45,7 @@ public class ReplicationTests : IDisposable
         return Server.Clients.First();
     }
 
-    // ── Entity spawn replication ──
+    // -- Entity spawn replication --
 
     [Fact]
     public void ClientReceivesEntitySpawnAfterBecomingObserver()
@@ -156,7 +156,7 @@ public class ReplicationTests : IDisposable
         Assert.Equal(serverClient.ClientId, clientEntity.OwnerClientId);
     }
 
-    // ── Entity despawn replication ──
+    // -- Entity despawn replication --
 
     [Fact]
     public void ClientReceivesEntityDespawn()
@@ -224,7 +224,7 @@ public class ReplicationTests : IDisposable
         Assert.Contains("OnStopOwner", clientEntity.CallbackLog);
         Assert.Contains("OnStopClient", clientEntity.CallbackLog);
         Assert.Contains("OnDespawn", clientEntity.CallbackLog);
-        // Verify ordering: OnStopOwner → OnStopClient → OnDespawn
+        // Verify ordering: OnStopOwner -> OnStopClient -> OnDespawn
         var ownerIdx = clientEntity.CallbackLog.IndexOf("OnStopOwner");
         var clientIdx = clientEntity.CallbackLog.IndexOf("OnStopClient");
         var despawnIdx = clientEntity.CallbackLog.IndexOf("OnDespawn");
@@ -232,7 +232,7 @@ public class ReplicationTests : IDisposable
         Assert.True(clientIdx < despawnIdx);
     }
 
-    // ── Owner change replication ──
+    // -- Owner change replication --
 
     [Fact]
     public void ClientReceivesOwnerChange()
@@ -283,7 +283,7 @@ public class ReplicationTests : IDisposable
         Assert.Contains("OnOwnerChanged", clientEntity.CallbackLog);
     }
 
-    // ── Map create/destroy replication ──
+    // -- Map create/destroy replication --
 
     [Fact]
     public void ClientCreatesMapFromMapCreateMessage()
@@ -322,7 +322,7 @@ public class ReplicationTests : IDisposable
         Assert.Null(Client.GetMap(map.MapId));
     }
 
-    // ── PackSpawnData / UnpackSpawnData round-trip ──
+    // -- PackSpawnData / UnpackSpawnData round-trip --
 
     [Fact]
     public void PackSpawnDataUnpackSpawnDataRoundTrips()
@@ -347,7 +347,7 @@ public class ReplicationTests : IDisposable
         Assert.Equal(42, clientEntity.Health);
     }
 
-    // ── Map transfer replication ──
+    // -- Map transfer replication --
 
     [Fact]
     public void TransferEntitySendsCorrectMessages()
@@ -409,7 +409,7 @@ public class ReplicationTests : IDisposable
         Assert.Equal(dungeon.MapId, clientPlayer.Map!.MapId);
     }
 
-    // ── Disconnect teardown ──
+    // -- Disconnect teardown --
 
     [Fact]
     public void DisconnectTearsDownClientEntities()
@@ -429,7 +429,7 @@ public class ReplicationTests : IDisposable
 
         Client.Disconnect();
 
-        // Teardown callbacks should have fired in order: OnStopOwner → OnStopClient → OnDespawn
+        // Teardown callbacks should have fired in order: OnStopOwner -> OnStopClient -> OnDespawn
         Assert.Contains("OnStopOwner", clientEntity.CallbackLog);
         Assert.Contains("OnStopClient", clientEntity.CallbackLog);
         Assert.Contains("OnDespawn", clientEntity.CallbackLog);
@@ -440,7 +440,7 @@ public class ReplicationTests : IDisposable
         Assert.True(clientIdx < despawnIdx);
     }
 
-    // ── Multiple entities in same map ──
+    // -- Multiple entities in same map --
 
     [Fact]
     public void MultipleEntitiesInSameMapAllReplicate()
@@ -463,7 +463,7 @@ public class ReplicationTests : IDisposable
         Assert.Equal(4, Client.Entities.Count);
     }
 
-    // ── Entity spawned after observer already watching ──
+    // -- Entity spawned after observer already watching --
 
     [Fact]
     public void EntitySpawnedAfterObserverJoinsIsReplicated()
@@ -484,7 +484,7 @@ public class ReplicationTests : IDisposable
         Assert.NotNull(Client.FindEntity(npc.NetworkId));
     }
 
-    // ── Player entity assignment replication ──
+    // -- Player entity assignment replication --
 
     [Fact]
     public void ClientCurrentMapReturnsMapAfterPlayerEntityAssigned()
@@ -524,7 +524,7 @@ public class ReplicationTests : IDisposable
         Assert.Null(Client.CurrentMap);
     }
 
-    // ── ClientTick ──
+    // -- ClientTick --
 
     [Fact]
     public void ClientTick_CallsEntityClientTick()
@@ -549,7 +549,7 @@ public class ReplicationTests : IDisposable
     }
 }
 
-// ── Test helper types for replication ──
+// -- Test helper types for replication --
 
 public class SpawnDataEntity : NetworkEntity
 {

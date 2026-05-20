@@ -1,4 +1,4 @@
-﻿namespace Prowl.Wicked;
+namespace Prowl.Wicked;
 
 /// <summary>
 /// Specifies which clients receive a ClientRpc.
@@ -24,7 +24,7 @@ public enum RpcTarget
 
 /// <summary>
 /// Identifies whether a NetworkObject instance lives on the server or client.
-/// Defaults to Unspecified — IsServer and IsClient both return false until
+/// Defaults to Unspecified - IsServer and IsClient both return false until
 /// the networking system explicitly assigns a side, preventing stale reads
 /// during construction.
 /// </summary>
@@ -117,7 +117,7 @@ public interface INetworkSerializable
 /// <summary>
 /// Marks a static method as a static RPC (server-to-client).
 /// The first parameter must be RemoteClient or RemoteClient[] to specify the target(s).
-/// That parameter is not serialized — it is null on the client side.
+/// That parameter is not serialized - it is null on the client side.
 /// The IL weaver intercepts calls on the server and routes them to targeted clients.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]

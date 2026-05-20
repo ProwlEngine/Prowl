@@ -99,7 +99,7 @@ public static class InGameScreen
             DrawCastingHint(myChamp);
     }
 
-    // ── Casting ──
+    // -- Casting --
 
     private static void ToggleCasting(ChampionEntity champ, CharacterKit? kit, int slot,
         System.Numerics.Vector2 mouseWorld)
@@ -125,7 +125,7 @@ public static class InGameScreen
                 return;
 
             default:
-                // AreaTarget, DashTarget, AllyTarget — enter casting mode
+                // AreaTarget, DashTarget, AllyTarget - enter casting mode
                 _castingSlot = slot;
                 _showShop = false;
                 break;
@@ -167,7 +167,7 @@ public static class InGameScreen
                 }
                 else
                 {
-                    // Skillshot line (e.g., Javelin Toss — no radius, shows direction)
+                    // Skillshot line (e.g., Javelin Toss - no radius, shows direction)
                     MobaGame.Draw.Line(myChamp.X.Display, myChamp.Y.Display, targetX, targetY,
                         new Color((byte)100, (byte)255, (byte)100, (byte)150));
                     MobaGame.Draw.Circle(targetX, targetY, 0.3f,
@@ -209,7 +209,7 @@ public static class InGameScreen
         UI.Label(Raylib.GetScreenWidth() / 2 - tw / 2, 40, hint, 16, Color.Orange);
     }
 
-    // ── Helpers ──
+    // -- Helpers --
 
     private static uint FindHoverTarget(float wx, float wy, ChampionEntity myChamp)
     {

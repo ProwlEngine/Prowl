@@ -35,7 +35,7 @@ public class RpcPromise
     /// <summary>
     /// Registers a callback for successful resolution.
     /// If the promise is already resolved successfully, the callback fires immediately.
-    /// Multiple Then() calls are supported — all callbacks fire in registration order.
+    /// Multiple Then() calls are supported - all callbacks fire in registration order.
     /// </summary>
     public RpcPromise Then(Action callback)
     {
@@ -51,7 +51,7 @@ public class RpcPromise
     /// <summary>
     /// Registers a callback for rejection (error or timeout).
     /// If the promise is already rejected, the callback fires immediately.
-    /// Multiple Catch() calls are supported — all callbacks fire in registration order.
+    /// Multiple Catch() calls are supported - all callbacks fire in registration order.
     /// </summary>
     public RpcPromise Catch(Action<Exception> callback)
     {
@@ -67,7 +67,7 @@ public class RpcPromise
     /// <summary>
     /// Registers a callback that fires on both success and failure.
     /// If the promise is already completed, the callback fires immediately.
-    /// Multiple Finally() calls are supported — all callbacks fire in registration order.
+    /// Multiple Finally() calls are supported - all callbacks fire in registration order.
     /// </summary>
     public RpcPromise Finally(Action callback)
     {
@@ -159,7 +159,7 @@ public class RpcPromise<T> : RpcPromise
     /// <summary>
     /// Registers a callback for successful resolution with the result value.
     /// If the promise is already resolved successfully, the callback fires immediately.
-    /// Multiple Then() calls are supported — all callbacks fire in registration order.
+    /// Multiple Then() calls are supported - all callbacks fire in registration order.
     /// </summary>
     public RpcPromise<T> Then(Action<T> callback)
     {
@@ -201,7 +201,7 @@ public class RpcPromise<T> : RpcPromise
 
     /// <summary>
     /// Resolves the promise with a value.
-    /// Callback order: typed Then(Action&lt;T&gt;) → base Then(Action) → base Finally(Action).
+    /// Callback order: typed Then(Action&lt;T&gt;) -> base Then(Action) -> base Finally(Action).
     /// </summary>
     internal void Resolve(T value)
     {

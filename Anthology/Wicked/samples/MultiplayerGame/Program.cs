@@ -32,7 +32,7 @@ public static class Program
             RunClient(host);
     }
 
-    // ── Server ──
+    // -- Server --
 
     private static GameMap? _serverMap;
 
@@ -64,7 +64,7 @@ public static class Program
             Server.Despawn(client.PlayerEntity);
     }
 
-    // ── Client ──
+    // -- Client --
 
     private static void RunClient(string host)
     {

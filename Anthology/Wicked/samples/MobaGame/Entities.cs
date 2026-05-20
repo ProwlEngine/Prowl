@@ -2,7 +2,7 @@ using Prowl.Wicked;
 
 namespace MobaGame;
 
-// ── Maps ──
+// -- Maps --
 
 public class LobbyMap : Map
 {
@@ -12,14 +12,14 @@ public class LobbyMap : Map
 
 public class ArenaMap : Map { }
 
-// ── Lobby Entity ──
+// -- Lobby Entity --
 
 public class LobbyEntity : NetworkEntity
 {
     public SyncVar<string> PlayerName = new("");
 }
 
-// ── Champion Entity ──
+// -- Champion Entity --
 
 public class ChampionEntity : NetworkEntity
 {
@@ -46,7 +46,7 @@ public class ChampionEntity : NetworkEntity
     public SyncVar<float> RespawnTimer = new(0f, SyncTarget.Owner);
     public SyncVar<byte> FormId = new(0);
 
-    // Item slots (item IDs, -1 = empty) — synced via RPC
+    // Item slots (item IDs, -1 = empty) - synced via RPC
     public int[] Items = { -1, -1, -1, -1, -1, -1 };
 
     // Server-side state (not synced)
@@ -66,7 +66,7 @@ public class ChampionEntity : NetworkEntity
     internal bool TakedownEmpowered;
     internal object? KitData;
 
-    // ── Commands (client → server) ──
+    // -- Commands (client -> server) --
 
     [EntityCommand]
     public void CmdMove(float targetX, float targetY)
@@ -106,7 +106,7 @@ public class ChampionEntity : NetworkEntity
         AutoAttackTargetId = targetNetId;
     }
 
-    // ── RPCs (server → client) ──
+    // -- RPCs (server -> client) --
 
     [EntityRpc(Target = RpcTarget.Owner)]
     public void RpcItemUpdate(int slot, int itemId)
@@ -150,7 +150,7 @@ public class ChampionEntity : NetworkEntity
         ? GameConfig.Kits[CharId] : null;
 }
 
-// ── Minion Entity ──
+// -- Minion Entity --
 
 public class MinionEntity : NetworkEntity
 {
@@ -168,7 +168,7 @@ public class MinionEntity : NetworkEntity
     internal uint AttackTargetId;
 }
 
-// ── Turret Entity ──
+// -- Turret Entity --
 
 public class TurretEntity : NetworkEntity
 {
@@ -197,7 +197,7 @@ public class TurretEntity : NetworkEntity
     public float AttackEffectTimer;
 }
 
-// ── Nexus Entity ──
+// -- Nexus Entity --
 
 public class NexusEntity : NetworkEntity
 {
@@ -208,7 +208,7 @@ public class NexusEntity : NetworkEntity
     public SyncVar<byte> TeamId = new(0);
 }
 
-// ── Projectile Entity ──
+// -- Projectile Entity --
 
 public class ProjectileEntity : NetworkEntity
 {
@@ -223,7 +223,7 @@ public class ProjectileEntity : NetworkEntity
     internal NetworkEntity? Source;
 }
 
-// ── Javelin Entity (Nidaloo Q — straight-line skillshot) ──
+// -- Javelin Entity (Nidaloo Q - straight-line skillshot) --
 
 public class JavelinEntity : NetworkEntity
 {
@@ -242,7 +242,7 @@ public class JavelinEntity : NetworkEntity
     internal ChampionEntity? Source;
 }
 
-// ── Trap Entity (Nidaloo W — ground trap) ──
+// -- Trap Entity (Nidaloo W - ground trap) --
 
 public class TrapEntity : NetworkEntity
 {

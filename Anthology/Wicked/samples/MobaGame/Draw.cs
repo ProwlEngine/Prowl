@@ -17,7 +17,7 @@ public static class Draw
         _zoom = cameraZoom;
     }
 
-    // ── Filled Circle ──
+    // -- Filled Circle --
 
     public static void Circle(float cx, float cy, float radius, Color color, int segments = 24)
     {
@@ -36,7 +36,7 @@ public static class Draw
         Rlgl.End();
     }
 
-    // ── Circle Outline ──
+    // -- Circle Outline --
 
     public static void CircleOutline(float cx, float cy, float radius, Color color, int segments = 24)
     {
@@ -53,7 +53,7 @@ public static class Draw
         Rlgl.End();
     }
 
-    // ── Filled Rect (x,y = center) ──
+    // -- Filled Rect (x,y = center) --
 
     public static void Rect(float cx, float cy, float hw, float hh, Color color)
     {
@@ -69,7 +69,7 @@ public static class Draw
         Rlgl.End();
     }
 
-    // ── Filled Rect (corner-based) ──
+    // -- Filled Rect (corner-based) --
 
     public static void RectCorner(float x, float y, float w, float h, Color color)
     {
@@ -85,7 +85,7 @@ public static class Draw
         Rlgl.End();
     }
 
-    // ── Rect Outline ──
+    // -- Rect Outline --
 
     public static void RectOutline(float cx, float cy, float hw, float hh, Color color)
     {
@@ -101,7 +101,7 @@ public static class Draw
         Rlgl.End();
     }
 
-    // ── Line ──
+    // -- Line --
 
     public static void Line(float x1, float y1, float x2, float y2, Color color)
     {
@@ -113,7 +113,7 @@ public static class Draw
         Rlgl.End();
     }
 
-    // ── World-space text (renders at consistent screen-pixel size) ──
+    // -- World-space text (renders at consistent screen-pixel size) --
 
     public static void Text(string text, float worldX, float worldY, float screenPxSize, Color color)
     {
@@ -136,7 +136,7 @@ public static class Draw
         Rlgl.PopMatrix();
     }
 
-    // ── Health Bar (world-space) ──
+    // -- Health Bar (world-space) --
 
     public static void HealthBar(float cx, float cy, float halfW, float halfH, float current, float max, Color fill)
     {

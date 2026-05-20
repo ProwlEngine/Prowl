@@ -6,7 +6,7 @@ namespace Prowl.Wicked.Tests;
 
 /// <summary>
 /// Integration tests for the RPC dispatch pipeline.
-/// These test the full flow: call on one side → serialize → transport → deserialize → execute on other side.
+/// These test the full flow: call on one side -> serialize -> transport -> deserialize -> execute on other side.
 /// </summary>
 public class ServerRpcTests : IDisposable
 {
@@ -72,7 +72,7 @@ public class ServerRpcTests : IDisposable
         return (serverClient, serverNpc, clientNpc!);
     }
 
-    // ── EntityCommand: basic dispatch ──
+    // -- EntityCommand: basic dispatch --
 
     [Fact]
     public void EntityCommand_Void_ExecutesOnServer()
@@ -98,7 +98,7 @@ public class ServerRpcTests : IDisposable
         Assert.DoesNotContain("FireWithArgs:42:hello", clientEntity.Log);
     }
 
-    // ── EntityCommand: overloaded methods ──
+    // -- EntityCommand: overloaded methods --
 
     [Fact]
     public void EntityCommand_OverloadedVoid_SingleParam_DispatchesCorrectly()
@@ -147,7 +147,7 @@ public class ServerRpcTests : IDisposable
         Assert.Equal(10, promise.Result);
     }
 
-    // ── EntityCommand: return values ──
+    // -- EntityCommand: return values --
 
     [Fact]
     public void EntityCommand_ReturnsInt_ViaPromise()
@@ -219,7 +219,7 @@ public class ServerRpcTests : IDisposable
         Assert.Equal(14, received);
     }
 
-    // ── EntityCommand: error propagation ──
+    // -- EntityCommand: error propagation --
 
     [Fact]
     public void EntityCommand_Throws_PromiseRejectsWithMessage()
@@ -260,7 +260,7 @@ public class ServerRpcTests : IDisposable
         Assert.IsType<Exception>(promise.Error);
     }
 
-    // ── EntityCommand: Sender ──
+    // -- EntityCommand: Sender --
 
     [Fact]
     public void EntityCommand_SetsSenderToCallingClient()
@@ -285,7 +285,7 @@ public class ServerRpcTests : IDisposable
         Assert.Null(NetworkObject.Sender);
     }
 
-    // ── EntityCommand: RequireOwner ──
+    // -- EntityCommand: RequireOwner --
 
     [Fact]
     public void EntityCommand_RequireOwnerTrue_OwnerCanCall()
@@ -320,7 +320,7 @@ public class ServerRpcTests : IDisposable
         Assert.Contains("AnyoneCanCall", serverNpc.Log);
     }
 
-    // ── EntityCommand: parameter types ──
+    // -- EntityCommand: parameter types --
 
     [Fact]
     public void EntityCommand_IntParam()
@@ -536,7 +536,7 @@ public class ServerRpcTests : IDisposable
         Assert.Contains("TakeSerializableArray:2:10/fire;25/ice", serverEntity.Log);
     }
 
-    // ── EntityCommand: entity reference parameters ──
+    // -- EntityCommand: entity reference parameters --
 
     [Fact]
     public void EntityCommand_EntityRefParam_SendsNetworkId()
@@ -633,7 +633,7 @@ public class ClientRpcTests : IDisposable
         return (serverClient, serverEntity, clientEntity!);
     }
 
-    // ── EntityRpc: Observers (default) ──
+    // -- EntityRpc: Observers (default) --
 
     [Fact]
     public void EntityRpc_Observers_ExecutesOnClient()
@@ -658,7 +658,7 @@ public class ClientRpcTests : IDisposable
         Assert.Contains("NotifyComplex:42:test:1:2", clientEntity.Log);
     }
 
-    // ── EntityRpc: overloaded methods ──
+    // -- EntityRpc: overloaded methods --
 
     [Fact]
     public void EntityRpc_OverloadedVoid_SingleParam_DispatchesCorrectly()
@@ -683,7 +683,7 @@ public class ClientRpcTests : IDisposable
         Assert.Contains("Notify:alert:5", clientEntity.Log);
     }
 
-    // ── EntityRpc: Owner ──
+    // -- EntityRpc: Owner --
 
     [Fact]
     public void EntityRpc_Owner_ExecutesOnOwnerClient()
@@ -718,7 +718,7 @@ public class ClientRpcTests : IDisposable
         Assert.DoesNotContain("NotifyOwner:999", clientUnowned!.Log);
     }
 
-    // ── EntityRpc: Player ──
+    // -- EntityRpc: Player --
 
     [Fact]
     public void EntityRpc_Player_ExecutesOnTargetedClient()
@@ -742,7 +742,7 @@ public class ClientRpcTests : IDisposable
         Assert.Contains("WhisperCheckTarget:target=null:msg", clientEntity.Log);
     }
 
-    // ── EntityRpc: Player with RemoteClient[] ──
+    // -- EntityRpc: Player with RemoteClient[] --
 
     [Fact]
     public void EntityRpc_PlayerArray_ExecutesOnTargetedClients()
@@ -755,7 +755,7 @@ public class ClientRpcTests : IDisposable
         Assert.Contains("BroadcastToPlayers:hello", clientEntity.Log);
     }
 
-    // ── EntityRpc: ExcludeOwner ──
+    // -- EntityRpc: ExcludeOwner --
 
     [Fact]
     public void EntityRpc_ExcludeOwner_DoesNotExecuteOnOwner()
@@ -768,7 +768,7 @@ public class ClientRpcTests : IDisposable
         Assert.DoesNotContain("NotifyNonOwners:effect", clientEntity.Log);
     }
 
-    // ── EntityRpc: parameter types ──
+    // -- EntityRpc: parameter types --
 
     [Fact]
     public void EntityRpc_IntParam()
@@ -939,7 +939,7 @@ public class ClientRpcTests : IDisposable
         Assert.Contains("ClientTakeSerializableArray:1:5/slash", clientEntity.Log);
     }
 
-    // ── EntityRpc: entity reference parameters ──
+    // -- EntityRpc: entity reference parameters --
 
     [Fact]
     public void EntityRpc_EntityRefParam_SendsNetworkId()
@@ -1029,7 +1029,7 @@ public class MapRpcTests : IDisposable
         return (serverClient, serverMap, clientMap);
     }
 
-    // ── MapRpc: Observers ──
+    // -- MapRpc: Observers --
 
     [Fact]
     public void Map_MapRpc_Observers_ExecutesOnClient()
@@ -1043,7 +1043,7 @@ public class MapRpcTests : IDisposable
         Assert.DoesNotContain("ShowAnnouncement:Boss spawned!", serverMap.Log);
     }
 
-    // ── MapRpc: Player ──
+    // -- MapRpc: Player --
 
     [Fact]
     public void Map_MapRpc_Player_ExecutesOnTargetedClient()
@@ -1584,7 +1584,7 @@ public class WrongSideRpcTests : IDisposable
     public void StaticCommand_CalledWithoutClient_Throws()
     {
         Server.Start(0);
-        // No client connected — calling a static command should throw
+        // No client connected - calling a static command should throw
         Assert.Throws<InvalidOperationException>(() => TestRpcs.Login("admin", "pass"));
     }
 }
@@ -1642,15 +1642,15 @@ public class LocalVarRpcTests : IDisposable
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════
+// ===================================================================
 //  Test types with RPC methods
-// ═══════════════════════════════════════════════════════════════════
+// ===================================================================
 
 public class RpcEntity : NetworkEntity
 {
     public List<string> Log { get; } = new();
 
-    // ── EntityCommand: void ──
+    // -- EntityCommand: void --
 
     [EntityCommand]
     public void FireVoid()
@@ -1664,7 +1664,7 @@ public class RpcEntity : NetworkEntity
         Log.Add($"FireWithArgs:{a}:{b}");
     }
 
-    // ── EntityCommand: return values ──
+    // -- EntityCommand: return values --
 
     [EntityCommand]
     public RpcPromise<int> DoubleIt(int value)
@@ -1692,7 +1692,7 @@ public class RpcEntity : NetworkEntity
         return RpcPromise.Completed;
     }
 
-    // ── EntityCommand: error ──
+    // -- EntityCommand: error --
 
     [EntityCommand]
     public RpcPromise<int> ThrowsError()
@@ -1700,7 +1700,7 @@ public class RpcEntity : NetworkEntity
         throw new InvalidOperationException("Server error");
     }
 
-    // ── EntityCommand: Sender ──
+    // -- EntityCommand: Sender --
 
     [EntityCommand(RequireOwner = false)]
     public RpcPromise<uint> WhoAmI()
@@ -1708,7 +1708,7 @@ public class RpcEntity : NetworkEntity
         return Sender!.ClientId;
     }
 
-    // ── EntityCommand: RequireOwner ──
+    // -- EntityCommand: RequireOwner --
 
     [EntityCommand]
     public void OwnerOnly()
@@ -1722,7 +1722,7 @@ public class RpcEntity : NetworkEntity
         Log.Add("AnyoneCanCall");
     }
 
-    // ── EntityCommand: parameter types ──
+    // -- EntityCommand: parameter types --
 
     [EntityCommand]
     public void TakeInt(int v) => Log.Add($"TakeInt:{v}");
@@ -1797,7 +1797,7 @@ public class RpcEntity : NetworkEntity
         return 75.5f;
     }
 
-    // ── EntityCommand: overloaded methods ──
+    // -- EntityCommand: overloaded methods --
 
     [EntityCommand]
     public void Attack(int targetId)
@@ -1823,7 +1823,7 @@ public class RpcEntity : NetworkEntity
         return a + b;
     }
 
-    // ── EntityRpc: Observers ──
+    // -- EntityRpc: Observers --
 
     [EntityRpc]
     public void NotifyAll(string msg)
@@ -1837,7 +1837,7 @@ public class RpcEntity : NetworkEntity
         Log.Add($"NotifyComplex:{a}:{b}:{c.X}:{c.Y}");
     }
 
-    // ── EntityRpc: Owner ──
+    // -- EntityRpc: Owner --
 
     [EntityRpc(Target = RpcTarget.Owner)]
     public void NotifyOwner(int value)
@@ -1845,7 +1845,7 @@ public class RpcEntity : NetworkEntity
         Log.Add($"NotifyOwner:{value}");
     }
 
-    // ── EntityRpc: Player ──
+    // -- EntityRpc: Player --
 
     [EntityRpc(Target = RpcTarget.Player)]
     public void Whisper(RemoteClient target, string text)
@@ -1859,7 +1859,7 @@ public class RpcEntity : NetworkEntity
         Log.Add($"WhisperCheckTarget:target={(target == null ? "null" : "set")}:{text}");
     }
 
-    // ── EntityRpc: Player with RemoteClient[] ──
+    // -- EntityRpc: Player with RemoteClient[] --
 
     [EntityRpc(Target = RpcTarget.Player)]
     public void BroadcastToPlayers(RemoteClient[] targets, string text)
@@ -1867,7 +1867,7 @@ public class RpcEntity : NetworkEntity
         Log.Add($"BroadcastToPlayers:{text}");
     }
 
-    // ── EntityRpc: overloaded methods ──
+    // -- EntityRpc: overloaded methods --
 
     [EntityRpc]
     public void Notify(string msg)
@@ -1881,7 +1881,7 @@ public class RpcEntity : NetworkEntity
         Log.Add($"Notify:{msg}:{priority}");
     }
 
-    // ── EntityRpc: ExcludeOwner ──
+    // -- EntityRpc: ExcludeOwner --
 
     [EntityRpc(ExcludeOwner = true)]
     public void NotifyNonOwners(string msg)
@@ -1889,7 +1889,7 @@ public class RpcEntity : NetworkEntity
         Log.Add($"NotifyNonOwners:{msg}");
     }
 
-    // ── EntityRpc: parameter types ──
+    // -- EntityRpc: parameter types --
 
     [EntityRpc]
     public void ClientTakeInt(int v) => Log.Add($"ClientTakeInt:{v}");
@@ -1939,7 +1939,7 @@ public class RpcEntity : NetworkEntity
     [EntityRpc]
     public void ClientTakeEntityRefTyped(RpcEntity? entity) => Log.Add($"ClientTakeEntityRefTyped:{(entity == null ? "null" : entity.NetworkId.ToString())}");
 
-    // ── EntityCommand: local variables + try/catch ──
+    // -- EntityCommand: local variables + try/catch --
 
     [EntityCommand]
     public RpcPromise<int> ComputeWithLocals(int a, int b)
@@ -1960,7 +1960,7 @@ public class RpcEntity : NetworkEntity
 }
 
 /// <summary>
-/// Static RPC methods — replaces the old RpcClient RemoteClient subclass.
+/// Static RPC methods - replaces the old RpcClient RemoteClient subclass.
 /// </summary>
 public static class TestRpcs
 {

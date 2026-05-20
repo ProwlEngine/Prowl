@@ -7,7 +7,7 @@ namespace MobaGame;
 /// </summary>
 public static class CombatUtils
 {
-    // ── Target Finding ──
+    // -- Target Finding --
 
     public static NetworkEntity? FindClosestEnemy(GameRoom room, float x, float y, float range, byte myTeam)
     {
@@ -77,7 +77,7 @@ public static class CombatUtils
         return true;
     }
 
-    // ── Damage ──
+    // -- Damage --
 
     public static void ApplyDamage(GameRoom room, NetworkEntity attacker, NetworkEntity target, float damage)
     {
@@ -165,7 +165,7 @@ public static class CombatUtils
         }
     }
 
-    // ── Abilities ──
+    // -- Abilities --
 
     public static void HandleAbility(GameRoom room, ChampionEntity champ, int slot, float targetX, float targetY)
     {
@@ -226,7 +226,7 @@ public static class CombatUtils
         return hits;
     }
 
-    // ── Shop ──
+    // -- Shop --
 
     public static void HandleBuyItem(ChampionEntity champ, int itemId)
     {
@@ -279,7 +279,7 @@ public static class CombatUtils
         champ.HP.Value = Math.Min(champ.HP, champ.MaxHP);
     }
 
-    // ── Projectile Spawning ──
+    // -- Projectile Spawning --
 
     public static void SpawnProjectile(GameRoom room, NetworkEntity source, NetworkEntity target, float damage)
     {
@@ -304,7 +304,7 @@ public static class CombatUtils
         room.Projectiles.Add(proj);
     }
 
-    // ── Broadcast helpers ──
+    // -- Broadcast helpers --
 
     public static void BroadcastKillFeed(GameRoom room, string message)
     {
@@ -318,7 +318,7 @@ public static class CombatUtils
             LobbyCommands.RpcScoreUpdate(p, room.BlueKills, room.RedKills);
     }
 
-    // ── Utility ──
+    // -- Utility --
 
     public static float Dist(float x1, float y1, float x2, float y2)
     {

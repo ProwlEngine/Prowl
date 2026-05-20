@@ -80,7 +80,7 @@ public sealed class RemoteClient
 
     /// <summary>
     /// Assigns a spawned entity as this client's player entity.
-    /// Triggers map observation — the client begins seeing entities in the entity's map.
+    /// Triggers map observation - the client begins seeing entities in the entity's map.
     /// Must be called on the server.
     /// </summary>
     /// <exception cref="InvalidOperationException">
@@ -135,7 +135,7 @@ public sealed class RemoteClient
     }
 
     /// <summary>
-    /// Forcefully disconnects this client. Server-only — sends a disconnect message
+    /// Forcefully disconnects this client. Server-only - sends a disconnect message
     /// and closes the connection. Use Client.Disconnect() on the client side.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown if called when server is not active.</exception>

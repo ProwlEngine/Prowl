@@ -71,7 +71,7 @@ public interface ISyncVar
 /// </code>
 /// </para>
 /// Reading: use <c>.Value</c> or the implicit conversion (<c>float hp = entity.HP;</c>).
-/// Writing: set <c>.Value</c> on the server — the change is automatically replicated.
+/// Writing: set <c>.Value</c> on the server - the change is automatically replicated.
 /// Subclass to add custom behavior (e.g., client-side interpolation).
 /// </summary>
 public class SyncVar<T> : ISyncVar

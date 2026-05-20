@@ -56,7 +56,7 @@ public static class MobaClient
         Client.Tick();
     }
 
-    // ── RPC Handlers ──
+    // -- RPC Handlers --
 
     public static void OnLoginResult(bool success, string message)
     {
@@ -146,7 +146,7 @@ public static class MobaClient
         if (SystemMessages.Count > 20) SystemMessages.RemoveAt(0);
     }
 
-    // ── Helpers ──
+    // -- Helpers --
 
     public static ChampionEntity? GetMyChampion()
     {

@@ -53,7 +53,7 @@ public static class GameSimulation
         CheckWinCondition(room);
     }
 
-    // ── Champion ──
+    // -- Champion --
 
     private static void TickChampion(GameRoom room, ChampionEntity champ, float dt)
     {
@@ -182,7 +182,7 @@ public static class GameSimulation
         champ.Mana.Value = champ.MaxMana;
     }
 
-    // ── Minion ──
+    // -- Minion --
 
     private static void TickMinion(GameRoom room, MinionEntity minion, float dt)
     {
@@ -227,14 +227,14 @@ public static class GameSimulation
         }
     }
 
-    // ── Turret ──
+    // -- Turret --
 
     private static void TickTurret(GameRoom room, TurretEntity turret, float dt)
     {
         turret.AttackCooldown -= dt;
         if (turret.AttackCooldown > 0) return;
 
-        // All turrets can shoot enemies in range — CanTurretBeAttacked only gates incoming damage
+        // All turrets can shoot enemies in range - CanTurretBeAttacked only gates incoming damage
         var target = CombatUtils.FindClosestEnemy(room, turret.X, turret.Y, GameConfig.TurretRange, turret.TeamId);
         if (target != null)
         {
@@ -246,7 +246,7 @@ public static class GameSimulation
         }
     }
 
-    // ── Projectiles ──
+    // -- Projectiles --
 
     private static void TickProjectiles(GameRoom room, float dt)
     {
@@ -298,7 +298,7 @@ public static class GameSimulation
         return null;
     }
 
-    // ── Javelins ──
+    // -- Javelins --
 
     private static void TickJavelins(GameRoom room, float dt)
     {
@@ -379,7 +379,7 @@ public static class GameSimulation
         }
     }
 
-    // ── Trap Cleanup ──
+    // -- Trap Cleanup --
 
     private static void CleanupTraps(GameRoom room)
     {
@@ -390,7 +390,7 @@ public static class GameSimulation
         }
     }
 
-    // ── Minion Spawning ──
+    // -- Minion Spawning --
 
     private static void SpawnMinionWave(GameRoom room, Team team)
     {
@@ -424,7 +424,7 @@ public static class GameSimulation
         }
     }
 
-    // ── Minion Collision ──
+    // -- Minion Collision --
 
     private const float MinionRadius = 0.5f;
     private const float MinionSeparationStrength = 2f;
@@ -460,7 +460,7 @@ public static class GameSimulation
         }
     }
 
-    // ── Cooldown Sync (still via RPC since it's an array) ──
+    // -- Cooldown Sync (still via RPC since it's an array) --
 
     private static void SyncCooldowns(GameRoom room)
     {
@@ -472,7 +472,7 @@ public static class GameSimulation
         }
     }
 
-    // ── Win Condition ──
+    // -- Win Condition --
 
     private static void CheckWinCondition(GameRoom room)
     {

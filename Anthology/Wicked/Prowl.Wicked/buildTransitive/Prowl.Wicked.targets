@@ -3,7 +3,7 @@
   <!--
     Prowl.Wicked post-build IL weaver (transitive).
     Imported automatically for projects that transitively reference Prowl.Wicked.
-    e.g. Game.Core → Game.Common → Prowl.Wicked: both Game.Common AND Game.Core get weaved.
+    e.g. Game.Core -> Game.Common -> Prowl.Wicked: both Game.Common AND Game.Core get weaved.
   -->
 
   <PropertyGroup>

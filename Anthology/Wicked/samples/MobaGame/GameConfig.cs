@@ -1,6 +1,6 @@
 namespace MobaGame;
 
-// ── Enums ──
+// -- Enums --
 
 public enum Team : byte { Blue = 0, Red = 1 }
 public enum GamePhase : byte { CharSelect, Playing, Finished }
@@ -8,7 +8,7 @@ public enum AbilityType : byte { AreaDamage, Buff, Dash, Projectile }
 public enum EntityKind : byte { Champion, Minion, Turret, Nexus, Projectile }
 public enum MinionType : byte { Melee, Caster }
 
-// ── Character Definitions ──
+// -- Character Definitions --
 
 public static class GameConfig
 {

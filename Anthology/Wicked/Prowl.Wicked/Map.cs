@@ -1,7 +1,7 @@
 namespace Prowl.Wicked;
 
 /// <summary>
-/// Abstract container for entities. Maps define observation scope —
+/// Abstract container for entities. Maps define observation scope -
 /// all clients whose PlayerEntity is in a given map observe all entities in that map.
 /// Subclass to add map-specific RPCs (weather, zone events, etc.).
 /// </summary>

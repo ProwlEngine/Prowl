@@ -11,7 +11,7 @@ public class NidalooState
 }
 
 /// <summary>
-/// Nidaloo — The Beastly Huntress.
+/// Nidaloo - The Beastly Huntress.
 /// Two forms: Human (ranged, id=0) and Big Cat (melee, id=1).
 ///
 /// Passive (Sneaky Feet): Hitting enemies with Pointy Stick Toss or Shrub Smack marks them as
@@ -80,7 +80,7 @@ public class NidalooKit : CharacterKit
         return state;
     }
 
-    // ── Ability Info ──
+    // -- Ability Info --
 
     public override AbilityInfo GetAbility(ChampionEntity champ, int slot)
     {
@@ -106,7 +106,7 @@ public class NidalooKit : CharacterKit
         }
     }
 
-    // ── Tick ──
+    // -- Tick --
 
     public override void OnTick(GameRoom room, ChampionEntity champ, float dt)
     {
@@ -218,7 +218,7 @@ public class NidalooKit : CharacterKit
         }
     }
 
-    // ── Ability Execution ──
+    // -- Ability Execution --
 
     public override void OnAbility(GameRoom room, ChampionEntity champ, int slot, float tx, float ty)
     {
@@ -253,7 +253,7 @@ public class NidalooKit : CharacterKit
         }
     }
 
-    // ── Human Q: Pointy Stick Toss ──
+    // -- Human Q: Pointy Stick Toss --
     // Straight-line skillshot projectile. Damage scales 1x-2x based on distance traveled.
     // Marks first enemy hit as Hunted.
 
@@ -288,7 +288,7 @@ public class NidalooKit : CharacterKit
         room.Javelins.Add(jav);
     }
 
-    // ── Human W: Shrub Smack ──
+    // -- Human W: Shrub Smack --
     // Places a ground trap. Max 3 traps. When triggered: damage, slow, mark Hunted.
 
     private void ShrubSmack(GameRoom room, ChampionEntity champ, float tx, float ty)
@@ -331,7 +331,7 @@ public class NidalooKit : CharacterKit
         champ.RpcAbilityEffect(tx, ty, TrapTriggerRadius);
     }
 
-    // ── Human E: Primal Purr ──
+    // -- Human E: Primal Purr --
     // Heals target champion (self or ally). tx, ty used to find nearest ally.
 
     private void PrimalPurr(GameRoom room, ChampionEntity champ, float tx, float ty)
@@ -355,7 +355,7 @@ public class NidalooKit : CharacterKit
         champ.RpcAbilityEffect(target.X, target.Y, 0);
     }
 
-    // ── Big Cat Q: Smackdown ──
+    // -- Big Cat Q: Smackdown --
     // Empowers next basic attack to deal bonus damage.
     // More damage vs low HP targets and Hunted.
 
@@ -367,7 +367,7 @@ public class NidalooKit : CharacterKit
         champ.RpcAbilityEffect(champ.X, champ.Y, 0);
     }
 
-    // ── Big Cat W: Bouncy Leap ──
+    // -- Big Cat W: Bouncy Leap --
     // Instant leap in mouse direction. AoE damage on landing.
     // Extended range (15m) toward Hunted targets.
 
@@ -408,7 +408,7 @@ public class NidalooKit : CharacterKit
         champ.RpcAbilityEffect(champ.X, champ.Y, 3f);
     }
 
-    // ── Big Cat E: Claw Swat ──
+    // -- Big Cat E: Claw Swat --
     // Instant AoE claw in mouse direction. Damage centered 3m in front of Nidaloo.
 
     private void ClawSwat(GameRoom room, ChampionEntity champ, float tx, float ty)
@@ -428,13 +428,13 @@ public class NidalooKit : CharacterKit
         champ.RpcAbilityEffect(cx, cy, 4f);
     }
 
-    // ── R: Transform ──
+    // -- R: Transform --
 
     private void Transform(GameRoom room, ChampionEntity champ, byte newForm)
     {
         var state = GetState(champ);
 
-        // Swap cooldowns between forms (Q, W, E only — R is shared)
+        // Swap cooldowns between forms (Q, W, E only - R is shared)
         float[] temp = new float[4];
         Array.Copy(champ.AbilityCooldowns, temp, 4);
         Array.Copy(state.OtherFormCooldowns, champ.AbilityCooldowns, 3);
@@ -447,7 +447,7 @@ public class NidalooKit : CharacterKit
         champ.TransformLockout = TransformLockoutTime;
     }
 
-    // ── Auto Attack Override ──
+    // -- Auto Attack Override --
     // Smackdown empowers next melee auto attack
 
     public override void OnAutoAttack(GameRoom room, ChampionEntity champ, NetworkEntity target, float baseDamage)
@@ -487,7 +487,7 @@ public class NidalooKit : CharacterKit
         }
     }
 
-    // ── Helpers ──
+    // -- Helpers --
 
     private void MarkHunted(ChampionEntity champ, uint targetId)
     {
@@ -512,7 +512,7 @@ public class NidalooKit : CharacterKit
         float armor = CombatUtils.GetEntityArmor(target);
         float dmg = GameConfig.CalculateDamage(scaledDmg, armor);
         // We need room to apply damage, but we get called from GameSimulation which has it
-        // Just mark hunted here — damage is applied by caller
+        // Just mark hunted here - damage is applied by caller
         MarkHunted(champ, target.NetworkId);
     }
 }

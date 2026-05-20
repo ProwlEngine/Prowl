@@ -2,7 +2,7 @@ using Prowl.Wicked;
 
 namespace MobaGame;
 
-// ── Per-client server data ──
+// -- Per-client server data --
 
 public class ServerPlayerData
 {
@@ -14,7 +14,7 @@ public class ServerPlayerData
     public bool LockedIn;
 }
 
-// ── Main Server Logic ──
+// -- Main Server Logic --
 
 public static class MobaServer
 {
@@ -53,7 +53,7 @@ public static class MobaServer
         TryMatchmake();
     }
 
-    // ── Connection ──
+    // -- Connection --
 
     private static void OnClientConnected(RemoteClient client)
     {
@@ -88,7 +88,7 @@ public static class MobaServer
     private static ServerPlayerData? GetData(RemoteClient client)
         => _playerData.GetValueOrDefault(client);
 
-    // ── Auth ──
+    // -- Auth --
 
     public static void HandleLogin(RemoteClient client, string username, string password)
     {
@@ -129,7 +129,7 @@ public static class MobaServer
         Console.WriteLine($"[Server] {username} logged in");
     }
 
-    // ── Queue / Matchmaking ──
+    // -- Queue / Matchmaking --
 
     public static void HandleJoinQueue(RemoteClient client)
     {
@@ -185,7 +185,7 @@ public static class MobaServer
         Console.WriteLine($"[Server] Match created with {players.Count} players");
     }
 
-    // ── Character Select ──
+    // -- Character Select --
 
     public static void HandleSelectCharacter(RemoteClient client, int charId)
     {
@@ -233,7 +233,7 @@ public static class MobaServer
             LobbyCommands.RpcCharSelectUpdate(p, names, teams, chars, locked, room.CharSelectTimer);
     }
 
-    // ── Game Lifecycle ──
+    // -- Game Lifecycle --
 
     private static void TickRoom(GameRoom room, float dt)
     {
@@ -393,7 +393,7 @@ public static class MobaServer
         data.CurrentRoom = null;
     }
 
-    // ── Lobby Chat ──
+    // -- Lobby Chat --
 
     public static void HandleLobbyChat(RemoteClient client, string message)
     {
@@ -407,7 +407,7 @@ public static class MobaServer
         }
     }
 
-    // ── Ability/Shop forwarding (called from entity commands) ──
+    // -- Ability/Shop forwarding (called from entity commands) --
 
     public static void HandleAbility(ChampionEntity champ, int slot, float targetX, float targetY)
     {

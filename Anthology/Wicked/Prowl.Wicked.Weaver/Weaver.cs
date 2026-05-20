@@ -193,7 +193,7 @@ public class Weaver
         ResolveCritsparkTypes();
         ImportReferences();
 
-        // ── RPC weaving ──
+        // -- RPC weaving --
         bool success = WeaveRpcs();
 
         if (!success)
@@ -212,7 +212,7 @@ public class Weaver
         return true;
     }
 
-    // ── Type/method resolution ──
+    // -- Type/method resolution --
 
     private void ResolveCritsparkTypes()
     {
@@ -372,13 +372,13 @@ public class Weaver
         _clientRegisterStaticRpc = _targetModule.ImportReference(_clientType.Methods.First(m => m.Name == "RegisterStaticRpc"));
     }
 
-    // ── RPC weaving (into target assembly) ──
+    // -- RPC weaving (into target assembly) --
 
     private bool WeaveRpcs()
     {
         bool success = true;
 
-        // ── Pass 1: Instance RPCs (Entity and Map subtypes, excluding RemoteClient) ──
+        // -- Pass 1: Instance RPCs (Entity and Map subtypes, excluding RemoteClient) --
         var allTypes = GetAllTypes(_targetModule)
             .Where(t => InheritsFrom(t, "Prowl.Wicked.NetworkObject") && !InheritsFrom(t, "Prowl.Wicked.RemoteClient"))
             .OrderBy(GetInheritanceDepth)
@@ -392,8 +392,8 @@ public class Weaver
             bool isEntity = InheritsFrom(type, "Prowl.Wicked.NetworkEntity");
             bool isMap = InheritsFrom(type, "Prowl.Wicked.Map");
 
-            var commands = new List<MethodDefinition>(); // client→server
-            var rpcs = new List<MethodDefinition>();     // server→client
+            var commands = new List<MethodDefinition>(); // client->server
+            var rpcs = new List<MethodDefinition>();     // server->client
 
             foreach (var method in type.Methods.ToList())
             {
@@ -426,7 +426,7 @@ public class Weaver
                 if ((hasEntityCommand || hasEntityRpc || hasMapRpc) && method.IsStatic)
                 {
                     var attrName = hasEntityCommand ? "EntityCommand" : hasEntityRpc ? "EntityRpc" : "MapRpc";
-                    Console.Error.WriteLine($"Error: [{attrName}] on static method {type.FullName}.{method.Name} — use [StaticCommand]/[StaticRpc] for static methods");
+                    Console.Error.WriteLine($"Error: [{attrName}] on static method {type.FullName}.{method.Name} - use [StaticCommand]/[StaticRpc] for static methods");
                     success = false; continue;
                 }
 
@@ -464,7 +464,7 @@ public class Weaver
                     }
                 }
 
-                // EntityRpc/MapRpc must return void — non-void produces invalid IL
+                // EntityRpc/MapRpc must return void - non-void produces invalid IL
                 if (hasEntityRpc && method.ReturnType.FullName != "System.Void")
                 {
                     Console.Error.WriteLine($"Error: [EntityRpc] method {type.FullName}.{method.Name} must return void");
@@ -476,7 +476,7 @@ public class Weaver
                     success = false; continue;
                 }
 
-                // MapRpc with Owner target — compile-time error
+                // MapRpc with Owner target - compile-time error
                 if (hasMapRpc)
                 {
                     var attr = method.CustomAttributes.First(a => a.AttributeType.FullName == _mapRpcAttrType.FullName);
@@ -484,14 +484,14 @@ public class Weaver
                     {
                         if (prop.Name == "Target" && (int)prop.Argument.Value == (int)RpcTargetValue.Owner)
                         {
-                            Console.Error.WriteLine($"Error: [MapRpc(Target = RpcTarget.Owner)] on {type.FullName}.{method.Name} — maps have no owner");
+                            Console.Error.WriteLine($"Error: [MapRpc(Target = RpcTarget.Owner)] on {type.FullName}.{method.Name} - maps have no owner");
                             success = false;
                         }
                     }
                     if (!success) continue;
                 }
 
-                // Player-target EntityRpc/MapRpc — first param must be RemoteClient or RemoteClient[]
+                // Player-target EntityRpc/MapRpc - first param must be RemoteClient or RemoteClient[]
                 if (hasEntityRpc || hasMapRpc)
                 {
                     var attr = method.CustomAttributes.First(a =>
@@ -529,7 +529,7 @@ public class Weaver
                     }
                     if (excludeOwner && target != RpcTargetValue.Observers)
                     {
-                        Console.Error.WriteLine($"Error: [EntityRpc] on {type.FullName}.{method.Name} — ExcludeOwner is only valid with Target = Observers");
+                        Console.Error.WriteLine($"Error: [EntityRpc] on {type.FullName}.{method.Name} - ExcludeOwner is only valid with Target = Observers");
                         success = false; continue;
                     }
                 }
@@ -590,7 +590,7 @@ public class Weaver
                 GenerateClientRpcDispatch(type, rpcs, inheritedRpcCount);
         }
 
-        // ── Pass 2: Static RPCs ──
+        // -- Pass 2: Static RPCs --
         var staticRpcClasses = new List<(TypeDefinition type, List<MethodDefinition> commands, List<MethodDefinition> rpcs)>();
 
         foreach (var type in GetAllTypes(_targetModule))
@@ -638,7 +638,7 @@ public class Weaver
                         Console.Error.WriteLine($"Error: [StaticRpc] method {type.FullName}.{method.Name} first parameter must be RemoteClient or RemoteClient[]");
                         success = false; continue;
                     }
-                    // Validate no return value (static RPCs are server→client)
+                    // Validate no return value (static RPCs are server->client)
                     if (method.ReturnType.FullName != "System.Void")
                     {
                         Console.Error.WriteLine($"Error: [StaticRpc] method {type.FullName}.{method.Name} must return void");
@@ -697,7 +697,7 @@ public class Weaver
         return success;
     }
 
-    // ── Move original body to __UserCode_X (instance methods) ──
+    // -- Move original body to __UserCode_X (instance methods) --
 
     private static string GetUserCodeName(MethodDefinition method)
     {
@@ -740,7 +740,7 @@ public class Weaver
         return userCode;
     }
 
-    // ── Move original body for static methods ──
+    // -- Move original body for static methods --
 
     private MethodDefinition MoveBodyToStaticUserCode(TypeDefinition type, MethodDefinition method)
     {
@@ -775,7 +775,7 @@ public class Weaver
         return userCode;
     }
 
-    // ── ServerRpc body weaving (EntityCommand) ──
+    // -- ServerRpc body weaving (EntityCommand) --
 
     private void WeaveServerRpcBody(TypeDefinition type, MethodDefinition method,
         MethodDefinition userCode, ushort methodIndex, byte objectKind)
@@ -852,7 +852,7 @@ public class Weaver
         method.Body.InitLocals = true;
     }
 
-    // ── ClientRpc body weaving (EntityRpc / MapRpc) ──
+    // -- ClientRpc body weaving (EntityRpc / MapRpc) --
 
     private void WeaveClientRpcBody(TypeDefinition type, MethodDefinition method,
         MethodDefinition userCode, ushort methodIndex, byte objectKind)
@@ -897,7 +897,7 @@ public class Weaver
         // Server path: serialize and send
         il.Append(serverPath);
 
-        // Validate: Map with Owner or ExcludeOwner → throw
+        // Validate: Map with Owner or ExcludeOwner -> throw
         if (objectKind == 1 && (target == RpcTargetValue.Owner || excludeOwner))
         {
             var invalidOpRef = _targetModule.ImportReference(
@@ -992,7 +992,7 @@ public class Weaver
         method.Body.InitLocals = true;
     }
 
-    // ── Static command body weaving ──
+    // -- Static command body weaving --
 
     private void WeaveStaticCommandBody(TypeDefinition type, MethodDefinition method,
         MethodDefinition userCode, ushort methodIndex, ushort rpcTypeId)
@@ -1123,7 +1123,7 @@ public class Weaver
         method.Body.InitLocals = true;
     }
 
-    // ── Static RPC body weaving ──
+    // -- Static RPC body weaving --
 
     private void WeaveStaticRpcBody(TypeDefinition type, MethodDefinition method,
         MethodDefinition userCode, ushort methodIndex, ushort rpcTypeId)
@@ -1169,7 +1169,7 @@ public class Weaver
         il.Append(il.Create(OpCodes.Ldc_I4, (int)methodIndex));
         il.Append(il.Create(OpCodes.Call, _writerWriteUShort));
 
-        // Serialize parameters (skip first — it's the target)
+        // Serialize parameters (skip first - it's the target)
         for (int i = 1; i < method.Parameters.Count; i++)
         {
             il.Append(il.Create(OpCodes.Ldloc, writerVar));
@@ -1195,7 +1195,7 @@ public class Weaver
         method.Body.InitLocals = true;
     }
 
-    // ── Dispatch override generation (instance RPCs) ──
+    // -- Dispatch override generation (instance RPCs) --
 
     private void GenerateServerRpcDispatch(TypeDefinition type, List<MethodDefinition> commands, byte objectKind, int inheritedCount)
     {
@@ -1384,7 +1384,7 @@ public class Weaver
         type.Methods.Add(dispatchMethod);
     }
 
-    // ── Static dispatch generation ──
+    // -- Static dispatch generation --
 
     private void GenerateStaticCommandDispatch(TypeDefinition type, List<MethodDefinition> commands)
     {
@@ -1421,7 +1421,7 @@ public class Weaver
 
             if (isVoid)
             {
-                // Read params (static — no this), call __UserCode, return
+                // Read params (static - no this), call __UserCode, return
                 EmitReadStaticParams(il, dispatchMethod, method.Parameters);
                 il.Append(il.Create(OpCodes.Call, userCode));
                 il.Append(il.Create(OpCodes.Br, retInstr));
@@ -1484,7 +1484,7 @@ public class Weaver
         type.Methods.Add(dispatchMethod);
     }
 
-    // ── Static RPC registration ──
+    // -- Static RPC registration --
 
     private void GenerateStaticRpcRegistration(List<(ushort rpcTypeId, TypeDefinition type, bool hasCommands, bool hasRpcs)> registrations)
     {
@@ -1554,7 +1554,7 @@ public class Weaver
         _targetModule.Types.Add(regType);
     }
 
-    // ── Promise emit helpers (shared between instance and static) ──
+    // -- Promise emit helpers (shared between instance and static) --
 
     private void EmitPromiseClientPath(ILProcessor il, MethodDefinition method,
         VariableDefinition writerVar, byte objectKind)
@@ -1740,7 +1740,7 @@ public class Weaver
         dispatchMethod.Body.ExceptionHandlers.Add(handler);
     }
 
-    // ── IL emit helpers ──
+    // -- IL emit helpers --
 
     private void EmitWriteObjectId(ILProcessor il, VariableDefinition writerVar, byte objectKind, TypeDefinition type)
     {
@@ -1931,7 +1931,7 @@ public class Weaver
         }
     }
 
-    // ── Attribute helpers ──
+    // -- Attribute helpers --
 
     private enum RpcTargetValue { Observers = 0, Owner = 1, Player = 2 }
 
@@ -2059,7 +2059,7 @@ public class Weaver
             || InheritsFrom(resolved, "Prowl.Wicked.NetworkEntity");
     }
 
-    // ── Object kind helpers ──
+    // -- Object kind helpers --
 
     private byte GetObjectKind(TypeDefinition type)
     {
@@ -2068,7 +2068,7 @@ public class Weaver
         throw new InvalidOperationException($"Type {type.FullName} is not a NetworkEntity or Map subtype.");
     }
 
-    // ── General helpers ──
+    // -- General helpers --
 
     private static bool HasAttribute(MethodDefinition method, string attributeFullName)
     {

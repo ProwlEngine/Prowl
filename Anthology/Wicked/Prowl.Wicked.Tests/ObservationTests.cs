@@ -65,7 +65,7 @@ public class ObservationTests : IDisposable
         return entity;
     }
 
-    // ── Basic observation ──
+    // -- Basic observation --
 
     [Fact]
     public void ClientBecomesObserverWhenPlayerEntityAssigned()
@@ -101,7 +101,7 @@ public class ObservationTests : IDisposable
         var npc2 = Server.Spawn<TestEntity>(map, e => e.Position = new Vector2(-5, 12));
         var player = SpawnAndAssignPlayer(client, map);
 
-        // Client is an observer of the map → should see all 3 entities
+        // Client is an observer of the map -> should see all 3 entities
         Assert.Contains(client, map.Observers);
         Assert.Equal(3, map.Entities.Count);
         Assert.Contains(npc1, map.Entities);
@@ -124,7 +124,7 @@ public class ObservationTests : IDisposable
         Assert.DoesNotContain(dungeonBoss, town.Entities);
     }
 
-    // ── Multiple clients in the same map ──
+    // -- Multiple clients in the same map --
 
     [Fact]
     public void MultipleClientsObserveSameMap()
@@ -159,7 +159,7 @@ public class ObservationTests : IDisposable
         Assert.Contains(player2, map.Entities);
     }
 
-    // ── Multiple clients in different maps ──
+    // -- Multiple clients in different maps --
 
     [Fact]
     public void ClientsInDifferentMapsSeeOnlyTheirOwnMapEntities()
@@ -187,7 +187,7 @@ public class ObservationTests : IDisposable
         Assert.DoesNotContain(townNpc, dungeon.Entities);
     }
 
-    // ── Entity spawned/despawned in observed map ──
+    // -- Entity spawned/despawned in observed map --
 
     [Fact]
     public void EntitySpawnedInObservedMapIsVisible()
@@ -231,7 +231,7 @@ public class ObservationTests : IDisposable
         Assert.DoesNotContain(boss, town.Entities);
     }
 
-    // ── Map transfer changes visibility ──
+    // -- Map transfer changes visibility --
 
     [Fact]
     public void TransferToNewMap_ClientSeesNewMapEntities()
@@ -293,7 +293,7 @@ public class ObservationTests : IDisposable
 
         town.TransferEntity(player1, dungeon);
 
-        // player1 left town — client2 still observes town, but player1's entity is gone
+        // player1 left town - client2 still observes town, but player1's entity is gone
         Assert.Single(town.Observers);
         Assert.Contains(client2, town.Observers);
         Assert.DoesNotContain(player1, town.Entities);
@@ -316,12 +316,12 @@ public class ObservationTests : IDisposable
 
         town.TransferEntity(player1, dungeon);
 
-        // player1 arrives in dungeon — client2 can see them
+        // player1 arrives in dungeon - client2 can see them
         Assert.Contains(player1, dungeon.Entities);
         Assert.Equal(2, dungeon.Observers.Count);
     }
 
-    // ── Disconnect removes observer ──
+    // -- Disconnect removes observer --
 
     [Fact]
     public void DisconnectedClientRemovedFromObservers()
@@ -357,7 +357,7 @@ public class ObservationTests : IDisposable
         Assert.Contains(client2, map.Observers);
     }
 
-    // ── Unowned entities visible to all map observers ──
+    // -- Unowned entities visible to all map observers --
 
     [Fact]
     public void UnownedEntitiesVisibleToAllObservers()
@@ -378,7 +378,7 @@ public class ObservationTests : IDisposable
         Assert.Equal(4, map.Entities.Count); // 2 players + npc + item
     }
 
-    // ── Map destruction visibility ──
+    // -- Map destruction visibility --
 
     [Fact]
     public void DestroyMap_RemovesAllObservers()

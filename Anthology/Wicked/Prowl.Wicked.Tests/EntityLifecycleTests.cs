@@ -42,7 +42,7 @@ public class EntityLifecycleTests : IDisposable
         return Server.Clients.First();
     }
 
-    // ── Spawning ──
+    // -- Spawning --
 
     [Fact]
     public void SpawnUnowned_AssignsNetworkIdAndMap()
@@ -85,7 +85,7 @@ public class EntityLifecycleTests : IDisposable
         var entity = Server.Spawn<LifecycleTrackingEntity>(map, e =>
         {
             initializerRan = true;
-            logAtInitTime = new List<string>(e.CallbackLog); // snapshot — should be empty
+            logAtInitTime = new List<string>(e.CallbackLog); // snapshot - should be empty
         });
 
         Assert.True(initializerRan);
@@ -152,7 +152,7 @@ public class EntityLifecycleTests : IDisposable
         Assert.Contains(entity, map.Entities);
     }
 
-    // ── Lifecycle callback ordering ──
+    // -- Lifecycle callback ordering --
 
     [Fact]
     public void Spawn_FiresOnSpawnThenOnStartServer()
@@ -250,7 +250,7 @@ public class EntityLifecycleTests : IDisposable
         Assert.Equal(new[] { "OnStopServer", "OnDespawn" }, entity.CallbackLog);
     }
 
-    // ── Ownership ──
+    // -- Ownership --
 
     [Fact]
     public void ChangeOwner_UpdatesOwnerAndOwnerClientId()
@@ -324,7 +324,7 @@ public class EntityLifecycleTests : IDisposable
             Server.ChangeOwner(entity, client));
     }
 
-    // ── Player entity assignment ──
+    // -- Player entity assignment --
 
     [Fact]
     public void AssignPlayerEntity_SetsPlayerEntityAndAddsObserver()
@@ -403,7 +403,7 @@ public class EntityLifecycleTests : IDisposable
         Assert.False(client.HasPlayerEntity);
     }
 
-    // ── Disconnect cleans up player entity ──
+    // -- Disconnect cleans up player entity --
 
     [Fact]
     public void ClientDisconnect_UnassignsPlayerEntity()
@@ -441,7 +441,7 @@ public class EntityLifecycleTests : IDisposable
         Client.Disconnect();
         Tick();
 
-        // Entity remains spawned — game code must despawn explicitly
+        // Entity remains spawned - game code must despawn explicitly
         Assert.True(entity.IsSpawned);
         Assert.Contains(entity, map.Entities);
     }
@@ -467,7 +467,7 @@ public class EntityLifecycleTests : IDisposable
         Assert.DoesNotContain(entity, map.Entities);
     }
 
-    // ── FindEntity ──
+    // -- FindEntity --
 
     [Fact]
     public void ServerFindEntity_ReturnsSpawnedEntity()
@@ -524,7 +524,7 @@ public class EntityLifecycleTests : IDisposable
         Assert.Equal(e2, trackingEntities[0]);
     }
 
-    // ── ServerTick ──
+    // -- ServerTick --
 
     [Fact]
     public void ServerTick_CallsEntityServerTick()
@@ -552,7 +552,7 @@ public class EntityLifecycleTests : IDisposable
         Assert.True(Server.DeltaTime > 0);
     }
 
-    // ── Map lifecycle ──
+    // -- Map lifecycle --
 
     [Fact]
     public void CreateMap_SetsMapIdAndIsServer()
@@ -619,7 +619,7 @@ public class EntityLifecycleTests : IDisposable
         Assert.True(map.MapFoundDuringOnDestroyed);
     }
 
-    // ── Map transfers ──
+    // -- Map transfers --
 
     [Fact]
     public void TransferEntity_MovesEntityBetweenMaps()
@@ -687,7 +687,7 @@ public class EntityLifecycleTests : IDisposable
             map1.TransferEntity(entity, map2));
     }
 
-    // ── Map callbacks ──
+    // -- Map callbacks --
 
     [Fact]
     public void Map_FiresOnEntityEnterAndLeave()
@@ -727,7 +727,7 @@ public class EntityLifecycleTests : IDisposable
     }
 }
 
-// ── Test helper types ──
+// -- Test helper types --
 
 public class LifecycleTrackingEntity : NetworkEntity
 {

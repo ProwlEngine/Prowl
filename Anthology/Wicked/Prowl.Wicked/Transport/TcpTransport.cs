@@ -63,7 +63,7 @@ public class TcpServerTransport : IServerTransport
         }
         catch
         {
-            // Write failed — connection is broken. Close immediately;
+            // Write failed - connection is broken. Close immediately;
             // Tick() will skip the closed socket and fire OnClientDisconnected.
             conn.TcpClient.Close();
         }
@@ -80,7 +80,7 @@ public class TcpServerTransport : IServerTransport
 
     public void Tick()
     {
-        // Order: connect → data → disconnect (matches real TCP behavior)
+        // Order: connect -> data -> disconnect (matches real TCP behavior)
 
         // 1. Accept new connections
         if (_listener != null)
@@ -95,7 +95,7 @@ public class TcpServerTransport : IServerTransport
             }
         }
 
-        // 2. Read data from each connection (snapshot — callbacks may disconnect clients)
+        // 2. Read data from each connection (snapshot - callbacks may disconnect clients)
         foreach (var (id, conn) in _connections.ToArray())
         {
             if (!_connections.ContainsKey(id)) continue;
@@ -155,7 +155,7 @@ public class TcpServerTransport : IServerTransport
 
             if (payloadLength < 0 || payloadLength > _maxMessageSize)
             {
-                // Invalid or oversized — disconnect
+                // Invalid or oversized - disconnect
                 if (_connections.Remove(id))
                 {
                     conn.TcpClient.Close();
@@ -167,7 +167,7 @@ public class TcpServerTransport : IServerTransport
             }
 
             if (payloadLength > conn.BufferCount - offset - 4)
-                break; // Incomplete message — wait for more data
+                break; // Incomplete message - wait for more data
 
             OnDataReceived?.Invoke(id,
                 new ArraySegment<byte>(conn.Buffer, offset + 4, payloadLength));
@@ -221,7 +221,7 @@ public class TcpServerTransport : IServerTransport
 
 /// <summary>
 /// TCP client transport. Maintains a single connection to a server with length-prefixed framing.
-/// Non-blocking I/O driven by Tick(). Connect is asynchronous — the connection is established
+/// Non-blocking I/O driven by Tick(). Connect is asynchronous - the connection is established
 /// in the background, and OnConnected fires during the first Tick() after success.
 /// Disables Nagle's algorithm for low-latency messaging.
 /// </summary>
@@ -291,7 +291,7 @@ public class TcpClientTransport : IClientTransport
         }
         catch
         {
-            // Write failed — connection is broken. Tick() will fire OnDisconnected.
+            // Write failed - connection is broken. Tick() will fire OnDisconnected.
             _connected = false;
             _stream = null;
             _client?.Close();
@@ -302,7 +302,7 @@ public class TcpClientTransport : IClientTransport
 
     public void Tick()
     {
-        // Order: connect → data → disconnect (matches real TCP behavior)
+        // Order: connect -> data -> disconnect (matches real TCP behavior)
 
         // 1. Check async connect completion
         if (_connectTask != null)
@@ -412,7 +412,7 @@ public class TcpClientTransport : IClientTransport
             }
 
             if (payloadLength > _bufferCount - offset - 4)
-                break; // Incomplete message — wait for more data
+                break; // Incomplete message - wait for more data
 
             OnDataReceived?.Invoke(
                 new ArraySegment<byte>(_buffer, offset + 4, payloadLength));

@@ -113,7 +113,7 @@ public class NetworkWriter
 
     /// <summary>
     /// Writes a string (1-byte null flag + 4-byte length prefix + UTF-8 bytes).
-    /// Null strings are supported — a null flag byte is written and ReadString() returns null.
+    /// Null strings are supported - a null flag byte is written and ReadString() returns null.
     /// </summary>
     public void WriteString(string? value)
     {
@@ -147,7 +147,7 @@ public class NetworkWriter
 
     /// <summary>
     /// Writes a NetworkEntity reference (1-byte null flag + 4-byte NetworkId).
-    /// Null entities are supported — a false flag is written and ReadEntityRef() returns null.
+    /// Null entities are supported - a false flag is written and ReadEntityRef() returns null.
     /// </summary>
     public void WriteEntityRef(NetworkEntity? entity)
     {
@@ -168,7 +168,7 @@ public class NetworkWriter
 
     /// <summary>
     /// Writes an array of serializable values (4-byte length + each element).
-    /// Null arrays are supported — writes -1 as length.
+    /// Null arrays are supported - writes -1 as length.
     /// </summary>
     public void WriteArray<T>(T[]? array) where T : INetworkSerializable
     {
@@ -279,7 +279,7 @@ public class NetworkWriter
     /// <summary>
     /// Writes an enum value as its underlying integer type.
     /// Handles byte, sbyte, short, ushort, int, uint, long, and ulong underlying types.
-    /// Safer than manual casting — correctly handles non-int backed enums.
+    /// Safer than manual casting - correctly handles non-int backed enums.
     /// </summary>
     public void WriteEnum<TEnum>(TEnum value) where TEnum : struct, Enum
     {
