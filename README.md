@@ -117,7 +117,7 @@ Please keep in mind that Prowl is incredibly new and under very active developme
         - Cubemap Shadows for Point Lights
         - Shadow Atlas with Dynamic Packing
     - Post Processing
-        - HDR Tonemapping (ACES / Reinhard / Uncharted / Filmic / Melon)
+        - HDR Tonemapping (ACES / Reinhard / Uncharted / Filmic / Melon / AgX)
         - Bloom (dual-filter downsample/upsample)
         - FXAA (Fast Approximate Anti-Aliasing)
 		- TAA (Temporal Anti-Aliasing)
