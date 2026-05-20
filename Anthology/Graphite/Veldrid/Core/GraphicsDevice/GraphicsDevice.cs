@@ -991,21 +991,6 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         return new OpenGL.OpenGLGraphicsDevice(options, platformInfo, width, height);
     }
-
-    /// <summary>
-    /// Creates a new <see cref="GraphicsDevice"/> using OpenGL ES, with a main Swapchain.
-    /// This overload can only be used on iOS or Android to create a GraphicsDevice for an Android Surface or an iOS UIView.
-    /// </summary>
-    /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-    /// <param name="swapchainDescription">A description of the main Swapchain to create.
-    /// The SwapchainSource must have been created from an Android Surface or an iOS UIView.</param>
-    /// <returns>A new <see cref="GraphicsDevice"/> using the OpenGL or OpenGL ES API.</returns>
-    public static GraphicsDevice CreateOpenGLES(
-        GraphicsDeviceOptions options,
-        SwapchainDescription swapchainDescription)
-    {
-        return new OpenGL.OpenGLGraphicsDevice(options, swapchainDescription);
-    }
 #endif
 
 }

@@ -399,43 +399,6 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         return data[0] > 0.6f;
     }
 
-    public OpenGLGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription swapchainDescription)
-    {
-        options.SwapchainDepthFormat = swapchainDescription.DepthFormat;
-        options.SwapchainSrgbFormat = swapchainDescription.ColorSrgb;
-        options.SyncToVerticalBlank = swapchainDescription.SyncToVerticalBlank;
-
-        SwapchainSource source = swapchainDescription.Source;
-        if (source is UIViewSwapchainSource uiViewSource)
-        {
-            InitializeUIView(options, uiViewSource.UIView);
-        }
-        else if (source is AndroidSurfaceSwapchainSource androidSource)
-        {
-            InitializeANativeWindow(options, IntPtr.Zero, swapchainDescription);
-        }
-        else
-        {
-            throw new RenderException(
-                "This function does not support creating an OpenGLES GraphicsDevice with the given SwapchainSource.");
-        }
-    }
-
-    private void InitializeUIView(GraphicsDeviceOptions options, IntPtr uIViewPtr)
-    {
-        throw new PlatformNotSupportedException(
-            "iOS (EAGL/UIView) OpenGL ES is not supported. Use Vulkan via MoltenVK on Apple platforms.");
-    }
-
-    private void InitializeANativeWindow(
-        GraphicsDeviceOptions options,
-        IntPtr aNativeWindow,
-        SwapchainDescription swapchainDescription)
-    {
-        throw new PlatformNotSupportedException(
-            "Android OpenGL ES is not supported in veldrid-silk.");
-    }
-
     private static int GetDepthBits(PixelFormat value)
     {
         switch (value)
