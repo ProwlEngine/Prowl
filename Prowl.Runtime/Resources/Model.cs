@@ -64,7 +64,7 @@ public class Model : EngineObject, ISerializable
         // resulting GO just has a MeshRenderer with an empty Materials list callers that
         // use these meshes (e.g. BuiltInAssets, primitive creators) assign their own material.
         
-        var importResult = new AssetImporting.Obj.ObjImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true });
+        var importResult = new AssetImporting.ModelImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true });
         if (importResult.RootGO != null)
             result.GameObjectData = Serializer.Serialize(typeof(object), importResult.RootGO);
 

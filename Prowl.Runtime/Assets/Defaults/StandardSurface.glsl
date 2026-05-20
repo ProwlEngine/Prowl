@@ -85,9 +85,23 @@ vec4 StandardSurface(
                                              scatteringDistortion, scatteringScale);
 
     // --- Ambient + Fog ---
-    // Energy conservation: metals have no diffuse ambient, only specular
+    vec3 ambientLight = CalculateAmbient(worldNormal) * ao * _AmbientStrength;
+
+    // Diffuse ambient (non-metals only, metals have no diffuse)
     vec3 diffuseColor = baseColor * (1.0 - metallic);
-    vec3 ambient = CalculateAmbient(worldNormal) * diffuseColor * ao * _AmbientStrength;
+    vec3 ambientDiffuse = ambientLight * diffuseColor;
+
+    // Specular ambient approximation (critical for metals which have no diffuse)
+    // Without IBL/environment maps we approximate indirect specular using the ambient
+    // light, Fresnel at the view angle, and a roughness-dependent falloff.
+    vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+    float NdotV = max(dot(worldNormal, viewDir), 0.0);
+    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    // Rough surfaces scatter indirect specular broadly, reducing intensity
+    float specOcclusion = 1.0 - roughness * roughness;
+    vec3 ambientSpecular = ambientLight * F * mix(specOcclusion, 1.0, 0.25);
+
+    vec3 ambient = ambientDiffuse + ambientSpecular;
     vec3 color = ApplyFog(ambient + lighting + emission, worldPos);
 
     return vec4(color, albedo.a);
@@ -128,8 +142,18 @@ vec4 StandardSurfaceSimple(
     vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
     vec3 lighting = CalculateForwardLighting(worldPos, worldNormal, viewDir,
                                              baseColor, metallic, roughness, ao);
+    vec3 ambientLight = CalculateAmbient(worldNormal) * ao * _AmbientStrength;
+
     vec3 diffuseColor = baseColor * (1.0 - metallic);
-    vec3 ambient = CalculateAmbient(worldNormal) * diffuseColor * ao * _AmbientStrength;
+    vec3 ambientDiffuse = ambientLight * diffuseColor;
+
+    vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+    float NdotV = max(dot(worldNormal, viewDir), 0.0);
+    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    float specOcclusion = 1.0 - roughness * roughness;
+    vec3 ambientSpecular = ambientLight * F * mix(specOcclusion, 1.0, 0.25);
+
+    vec3 ambient = ambientDiffuse + ambientSpecular;
     vec3 color = ApplyFog(ambient + lighting + emission, worldPos);
 
     return vec4(color, albedo.a);

@@ -86,7 +86,8 @@ public class DefaultRenderPipeline : RenderPipeline
         if (s_skyDome.IsNotValid())
         {
             using var stream = EmbeddedResources.GetStream("Assets/Defaults/SkyDome.obj");
-            s_skyDome = AssetImporting.Obj.ObjImporter.ParseMeshOnly(stream, "SkyDome");
+            var skyImport = new AssetImporting.ModelImporter().Import(stream, "SkyDome.obj");
+            s_skyDome = skyImport.Meshes.Count > 0 ? skyImport.Meshes[0] : new Resources.Mesh { Name = "SkyDome" };
         }
 
         // Pre-compute and upload BRDF integration LUT for PBR

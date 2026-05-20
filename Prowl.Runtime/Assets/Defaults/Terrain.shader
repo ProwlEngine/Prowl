@@ -390,10 +390,18 @@ Pass "Terrain"
                 vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
                 vec3 lighting = CalculateForwardLighting(worldPos, finalWorldNormal, viewDir,
                                                          baseColor, metallic, roughness, 1.0);
-                // Energy-conserved ambient (metals have no diffuse ambient)
+                // Ambient with specular approximation for metallic surfaces
+                vec3 ambientLight = CalculateAmbient(finalWorldNormal) * _AmbientStrength;
                 vec3 diffuseColor = baseColor * (1.0 - metallic);
-                vec3 ambient = CalculateAmbient(finalWorldNormal) * diffuseColor * _AmbientStrength;
-                vec3 color = ambient + lighting;
+                vec3 ambientDiffuse = ambientLight * diffuseColor;
+
+                vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+                float NdotV = max(dot(finalWorldNormal, viewDir), 0.0);
+                vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+                float specOcclusion = 1.0 - roughness * roughness;
+                vec3 ambientSpecular = ambientLight * F * mix(specOcclusion, 1.0, 0.25);
+
+                vec3 color = ambientDiffuse + ambientSpecular + lighting;
                 color = ApplyFog(color, worldPos);
 
                 fragColor = vec4(color, 1.0);

@@ -4,8 +4,6 @@
 using System.Collections.Generic;
 using System.IO;
 
-using Prowl.Runtime.AssetImporting.Gltf;
-using Prowl.Runtime.AssetImporting.Obj;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime.AssetImporting;
@@ -42,32 +40,27 @@ public class ModelImportResult
     public List<Mesh> Meshes = [];
     public List<Material> Materials = [];
     public List<AnimationClip> Animations = [];
+    /// <summary>
+    /// Every Texture2D loaded during import. Textures with a populated <c>AssetPath</c> were
+    /// loaded from disk files referenced by the model (and the editor's <c>ResolveTextures</c>
+    /// will swap them for AssetRefs into the asset database). Textures with an empty
+    /// <c>AssetPath</c> are embedded (GLB inline image, FBX Video::Clip content, data: URI)
+    /// and should be registered as sub-assets so they're discoverable in the asset browser
+    /// and reusable across materials.
+    /// </summary>
+    public List<Texture2D> Textures = [];
 }
 
+/// <summary>
+/// Loads .gltf / .glb / .obj into a fully-baked <see cref="ModelImportResult"/>. Backed by the
+/// Prowl.Clay library (the previous in-tree GltfImporter / ObjImporter were retired in favor of
+/// this single unified path).
+/// </summary>
 public class ModelImporter
 {
-    private readonly GltfImporter _gltfImporter = new();
-    private readonly ObjImporter _objImporter = new();
-
     public ModelImportResult Import(FileInfo assetPath, ModelImporterSettings? settings = null)
-    {
-        string ext = assetPath.Extension.ToLowerInvariant();
-        if (ext == ".gltf" || ext == ".glb")
-            return _gltfImporter.Import(assetPath, settings);
-        if (ext == ".obj")
-            return _objImporter.Import(assetPath, settings);
-
-        throw new System.NotSupportedException($"Unsupported model format: {ext}");
-    }
+        => ClayBackedImporter.Import(assetPath, settings ?? new ModelImporterSettings());
 
     public ModelImportResult Import(Stream stream, string virtualPath, ModelImporterSettings? settings = null)
-    {
-        string ext = Path.GetExtension(virtualPath).ToLowerInvariant();
-        if (ext == ".gltf" || ext == ".glb")
-            return _gltfImporter.Import(stream, virtualPath, settings);
-        if (ext == ".obj")
-            return _objImporter.Import(stream, virtualPath, settings);
-
-        throw new System.NotSupportedException($"Unsupported model format: {ext}");
-    }
+        => ClayBackedImporter.Import(stream, virtualPath, settings ?? new ModelImporterSettings());
 }

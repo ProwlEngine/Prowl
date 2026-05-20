@@ -29,6 +29,7 @@
     <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
     <PackageReference Include="Jitter2" Version="2.8.5" />
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
+    <PackageReference Include="Prowl.Clay" Version="0.5.0" />
     <PackageReference Include="Prowl.Echo" Version="2.2.1" />
     <PackageReference Include="Prowl.Paper" Version="1.8.6" />
     <PackageReference Include="Silk.NET" Version="2.23.0" />

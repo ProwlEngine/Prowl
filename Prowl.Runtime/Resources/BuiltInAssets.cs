@@ -79,7 +79,8 @@ public static class BuiltInAssets
                 () =>
                 {
                     using var stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-                    var mesh = AssetImporting.Obj.ObjImporter.ParseMeshOnly(stream, model.ToString(), new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true });
+                    var importResult = new AssetImporting.ModelImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true });
+                    var mesh = importResult.Meshes.Count > 0 ? importResult.Meshes[0] : new Mesh { Name = model.ToString() };
                     mesh.AssetID = GuidForMesh(model);
                     mesh.AssetPath = $"$Default:Mesh/{model}";
                     return mesh;

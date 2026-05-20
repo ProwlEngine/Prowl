@@ -10,7 +10,7 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Importers;
 
-[ImporterFor(".gltf", ".glb", ".obj")]
+[ImporterFor(".gltf", ".glb", ".obj", ".fbx")]
 public class EditorModelImporter : AssetImporter
 {
     private const int BaseVersion = 5;
@@ -48,6 +48,17 @@ public class EditorModelImporter : AssetImporter
 
             for (int i = 0; i < data.Animations.Count; i++)
                 ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i]);
+
+            // Embedded textures (GLB inline images, FBX Video::Clip content, data: URIs) live
+            // entirely inside the model file. Register them as sub-assets so the asset browser
+            // can show / drag / reuse them. Textures with an AssetPath came from sibling files
+            // on disk and ResolveTextures below will swap them to AssetRefs.
+            for (int i = 0; i < data.Textures.Count; i++)
+            {
+                var tex = data.Textures[i];
+                if (tex == null || !string.IsNullOrEmpty(tex.AssetPath)) continue;
+                ctx.AddSubAsset(tex.Name ?? $"Texture_{i}", tex);
+            }
 
             // 2b. Generate mesh features (SDF, BVH, Prism, ...) per mesh, registered as sub-assets.
             for (int i = 0; i < data.Meshes.Count; i++)
