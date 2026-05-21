@@ -52,14 +52,52 @@ public abstract partial class CommandBuffer
             throw new RenderException($"A graphics Pipeline must be active before {nameof(SetGraphicsResourceSet)} can be called.");
         }
 
-        int layoutsCount = _graphicsPipeline.ResourceLayouts.Length;
-        if (layoutsCount <= slot)
+        ResourceLayout layout = FindLayoutForSet(_graphicsPipeline.ResourceLayouts, slot);
+        if (layout == null)
         {
             throw new RenderException(
-                $"Failed to bind ResourceSet to slot {slot}. The active graphics Pipeline only contains {layoutsCount} ResourceLayouts.");
+                $"Failed to bind ResourceSet to slot {slot}. The active graphics Pipeline declares no ResourceLayout with Set = {slot}.");
         }
 
-        ResourceLayout layout = _graphicsPipeline.ResourceLayouts[slot];
+        CheckResourceSetMatchesLayout(slot, layout, rs);
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private void SetComputeResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs)
+    {
+#if VALIDATE_USAGE
+        if (_computePipeline == null)
+        {
+            throw new RenderException($"A compute Pipeline must be active before {nameof(SetComputeResourceSet)} can be called.");
+        }
+
+        ResourceLayout layout = FindLayoutForSet(_computePipeline.ResourceLayouts, slot);
+        if (layout == null)
+        {
+            throw new RenderException(
+                $"Failed to bind ResourceSet to slot {slot}. The active compute Pipeline declares no ResourceLayout with Set = {slot}.");
+        }
+
+        CheckResourceSetMatchesLayout(slot, layout, rs);
+#endif
+    }
+
+#if VALIDATE_USAGE
+    private static ResourceLayout FindLayoutForSet(ResourceLayout[] layouts, uint set)
+    {
+        for (int i = 0; i < layouts.Length; i++)
+        {
+            if (layouts[i].Description.Set == set)
+            {
+                return layouts[i];
+            }
+        }
+        return null;
+    }
+
+    private static void CheckResourceSetMatchesLayout(uint slot, ResourceLayout layout, ResourceSet rs)
+    {
         int pipelineLength = layout.Description.Elements.Length;
         ResourceLayoutDescription layoutDesc = rs.Layout.Description;
         int setLength = layoutDesc.Elements.Length;
@@ -78,45 +116,8 @@ public abstract partial class CommandBuffer
                     $"Failed to bind ResourceSet to slot {slot}. Resource element {i} was of the incorrect type. The bound Pipeline expects {pipelineKind}, but the ResourceSet contained {setKind}.");
             }
         }
-#endif
     }
-
-    [Conditional("VALIDATE_USAGE")]
-    private void SetComputeResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs)
-    {
-#if VALIDATE_USAGE
-        if (_computePipeline == null)
-        {
-            throw new RenderException($"A compute Pipeline must be active before {nameof(SetComputeResourceSet)} can be called.");
-        }
-
-        int layoutsCount = _computePipeline.ResourceLayouts.Length;
-        if (layoutsCount <= slot)
-        {
-            throw new RenderException(
-                $"Failed to bind ResourceSet to slot {slot}. The active compute Pipeline only contains {layoutsCount} ResourceLayouts.");
-        }
-
-        ResourceLayout layout = _computePipeline.ResourceLayouts[slot];
-        int pipelineLength = layout.Description.Elements.Length;
-        int setLength = rs.Layout.Description.Elements.Length;
-        if (pipelineLength != setLength)
-        {
-            throw new RenderException($"Failed to bind ResourceSet to slot {slot}. The number of resources in the ResourceSet ({setLength}) does not match the number expected by the active Pipeline ({pipelineLength}).");
-        }
-
-        for (int i = 0; i < pipelineLength; i++)
-        {
-            ResourceKind pipelineKind = layout.Description.Elements[i].Kind;
-            ResourceKind setKind = rs.Layout.Description.Elements[i].Kind;
-            if (pipelineKind != setKind)
-            {
-                throw new RenderException(
-                    $"Failed to bind ResourceSet to slot {slot}. Resource element {i} was of the incorrect type. The bound Pipeline expects {pipelineKind}, but the ResourceSet contained {setKind}.");
-            }
-        }
 #endif
-    }
 
     [Conditional("VALIDATE_USAGE")]
     private void ClearColorTarget_CheckFramebuffer(uint index)

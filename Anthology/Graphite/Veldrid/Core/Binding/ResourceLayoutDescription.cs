@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Prowl.Veldrid;
 
@@ -8,18 +8,37 @@ namespace Prowl.Veldrid;
 public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
 {
     /// <summary>
+    /// The descriptor set index for this layout. Maps to the Vulkan descriptor set number
+    /// (or the equivalent DX12 register space). Ignored on backends that do not use sets.
+    /// </summary>
+    public uint Set;
+
+    /// <summary>
     /// An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties of each resource
     /// element in the <see cref="ResourceLayout"/>.
     /// </summary>
     public ResourceLayoutElementDescription[] Elements;
 
     /// <summary>
-    /// Constructs a new ResourceLayoutDescription.
+    /// Constructs a new ResourceLayoutDescription with a default set index of 0.
     /// </summary>
     /// <param name="elements">An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties
     /// of each resource element in the <see cref="ResourceLayout"/>.</param>
     public ResourceLayoutDescription(params ResourceLayoutElementDescription[] elements)
     {
+        Set = 0;
+        Elements = elements;
+    }
+
+    /// <summary>
+    /// Constructs a new ResourceLayoutDescription with an explicit set index.
+    /// </summary>
+    /// <param name="set">The descriptor set index (Vulkan set / DX12 register space).</param>
+    /// <param name="elements">An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties
+    /// of each resource element in the <see cref="ResourceLayout"/>.</param>
+    public ResourceLayoutDescription(uint set, params ResourceLayoutElementDescription[] elements)
+    {
+        Set = set;
         Elements = elements;
     }
 
@@ -30,7 +49,7 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     /// <returns>True if all array elements are equal; false otherswise.</returns>
     public bool Equals(ResourceLayoutDescription other)
     {
-        return Util.ArrayEqualsEquatable(Elements, other.Elements);
+        return Set == other.Set && Util.ArrayEqualsEquatable(Elements, other.Elements);
     }
 
     /// <summary>
@@ -39,6 +58,6 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
     public override int GetHashCode()
     {
-        return Elements.ArrayHash();
+        return HashCode.Combine(Set, Elements.ArrayHash());
     }
 }

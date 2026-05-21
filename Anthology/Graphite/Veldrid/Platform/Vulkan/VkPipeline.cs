@@ -18,6 +18,7 @@ internal unsafe class VkPipeline : Pipeline
     private readonly VkPipelineHandle _devicePipeline;
     private readonly PipelineLayout _pipelineLayout;
     private readonly RenderPass _renderPass;
+    private DescriptorSetLayout _emptyDescriptorSetLayout;
     private bool _destroyed;
     private string _name;
 
@@ -25,6 +26,10 @@ internal unsafe class VkPipeline : Pipeline
 
     public PipelineLayout PipelineLayout => _pipelineLayout;
 
+    /// <summary>
+    /// Number of descriptor set slots in this pipeline, equal to max(layout.Set) + 1.
+    /// Slots with no provided <see cref="ResourceLayout"/> are filled with an empty descriptor set layout.
+    /// </summary>
     public uint ResourceSetCount { get; }
     public bool ScissorTestEnabled { get; }
 
@@ -214,17 +219,7 @@ internal unsafe class VkPipeline : Pipeline
         pipelineCI.PViewportState = &viewportStateCI;
 
         // Pipeline Layout
-        ResourceLayout[] resourceLayouts = description.ResourceLayouts;
-        PipelineLayoutCreateInfo pipelineLayoutCI = new PipelineLayoutCreateInfo { SType = StructureType.PipelineLayoutCreateInfo };
-        pipelineLayoutCI.SetLayoutCount = (uint)resourceLayouts.Length;
-        DescriptorSetLayout* dsls = stackalloc DescriptorSetLayout[resourceLayouts.Length];
-        for (int i = 0; i < resourceLayouts.Length; i++)
-        {
-            dsls[i] = Util.AssertSubtype<ResourceLayout, VkResourceLayout>(resourceLayouts[i]).DescriptorSetLayout;
-        }
-        pipelineLayoutCI.PSetLayouts = dsls;
-
-        _gd.Vk.CreatePipelineLayout(_gd.Device, in pipelineLayoutCI, null, out _pipelineLayout);
+        _pipelineLayout = CreatePipelineLayout(description.ResourceLayouts, out uint setCount);
         pipelineCI.Layout = _pipelineLayout;
 
         // Create fake RenderPass for compatibility.
@@ -308,7 +303,7 @@ internal unsafe class VkPipeline : Pipeline
         Result result = _gd.Vk.CreateGraphicsPipelines(_gd.Device, default, 1, in pipelineCI, null, out _devicePipeline);
         CheckResult(result);
 
-        ResourceSetCount = (uint)description.ResourceLayouts.Length;
+        ResourceSetCount = setCount;
     }
 
     public VkPipeline(VkGraphicsDevice gd, ref ComputePipelineDescription description)
@@ -321,17 +316,7 @@ internal unsafe class VkPipeline : Pipeline
         ComputePipelineCreateInfo pipelineCI = new ComputePipelineCreateInfo { SType = StructureType.ComputePipelineCreateInfo };
 
         // Pipeline Layout
-        ResourceLayout[] resourceLayouts = description.ResourceLayouts;
-        PipelineLayoutCreateInfo pipelineLayoutCI = new PipelineLayoutCreateInfo { SType = StructureType.PipelineLayoutCreateInfo };
-        pipelineLayoutCI.SetLayoutCount = (uint)resourceLayouts.Length;
-        DescriptorSetLayout* dsls = stackalloc DescriptorSetLayout[resourceLayouts.Length];
-        for (int i = 0; i < resourceLayouts.Length; i++)
-        {
-            dsls[i] = Util.AssertSubtype<ResourceLayout, VkResourceLayout>(resourceLayouts[i]).DescriptorSetLayout;
-        }
-        pipelineLayoutCI.PSetLayouts = dsls;
-
-        _gd.Vk.CreatePipelineLayout(_gd.Device, in pipelineLayoutCI, null, out _pipelineLayout);
+        _pipelineLayout = CreatePipelineLayout(description.ResourceLayouts, out uint setCount);
         pipelineCI.Layout = _pipelineLayout;
 
         // Shader Stage
@@ -353,7 +338,7 @@ internal unsafe class VkPipeline : Pipeline
             out _devicePipeline);
         CheckResult(result);
 
-        ResourceSetCount = (uint)description.ResourceLayouts.Length;
+        ResourceSetCount = setCount;
     }
 
     public override string Name
@@ -378,10 +363,88 @@ internal unsafe class VkPipeline : Pipeline
             _destroyed = true;
             _gd.Vk.DestroyPipelineLayout(_gd.Device, _pipelineLayout, null);
             _gd.Vk.DestroyPipeline(_gd.Device, _devicePipeline, null);
+            if (_emptyDescriptorSetLayout.Handle != 0)
+            {
+                _gd.Vk.DestroyDescriptorSetLayout(_gd.Device, _emptyDescriptorSetLayout, null);
+            }
             if (!IsComputePipeline)
             {
                 _gd.Vk.DestroyRenderPass(_gd.Device, _renderPass, null);
             }
         }
+    }
+
+    private PipelineLayout CreatePipelineLayout(ResourceLayout[] resourceLayouts, out uint setCount)
+    {
+        // Determine the highest Vulkan set index requested across the supplied layouts.
+        // pSetLayouts must be contiguous from set 0, so any gaps are filled with an empty
+        // descriptor set layout (lazily created on demand and destroyed in DisposeCore).
+        uint maxSet = 0;
+        bool any = false;
+        for (int i = 0; i < resourceLayouts.Length; i++)
+        {
+            uint set = resourceLayouts[i].Description.Set;
+            if (!any || set > maxSet)
+            {
+                maxSet = set;
+            }
+            any = true;
+        }
+
+        setCount = any ? maxSet + 1 : 0;
+
+        DescriptorSetLayout* dsls = stackalloc DescriptorSetLayout[(int)setCount];
+        for (int i = 0; i < setCount; i++)
+        {
+            dsls[i] = default;
+        }
+
+        for (int i = 0; i < resourceLayouts.Length; i++)
+        {
+            uint set = resourceLayouts[i].Description.Set;
+            DescriptorSetLayout dsl = Util.AssertSubtype<ResourceLayout, VkResourceLayout>(resourceLayouts[i]).DescriptorSetLayout;
+            if (dsls[set].Handle != 0)
+            {
+                throw new RenderException($"Multiple ResourceLayouts share Set index {set}.");
+            }
+            dsls[set] = dsl;
+        }
+
+        for (int i = 0; i < setCount; i++)
+        {
+            if (dsls[i].Handle == 0)
+            {
+                dsls[i] = GetOrCreateEmptyDescriptorSetLayout();
+            }
+        }
+
+        PipelineLayoutCreateInfo pipelineLayoutCI = new PipelineLayoutCreateInfo
+        {
+            SType = StructureType.PipelineLayoutCreateInfo,
+            SetLayoutCount = setCount,
+            PSetLayouts = dsls
+        };
+
+        Result result = _gd.Vk.CreatePipelineLayout(_gd.Device, in pipelineLayoutCI, null, out PipelineLayout layout);
+        CheckResult(result);
+        return layout;
+    }
+
+    private DescriptorSetLayout GetOrCreateEmptyDescriptorSetLayout()
+    {
+        if (_emptyDescriptorSetLayout.Handle != 0)
+        {
+            return _emptyDescriptorSetLayout;
+        }
+
+        DescriptorSetLayoutCreateInfo dslCI = new DescriptorSetLayoutCreateInfo
+        {
+            SType = StructureType.DescriptorSetLayoutCreateInfo,
+            BindingCount = 0,
+            PBindings = null,
+        };
+        Result result = _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out _emptyDescriptorSetLayout);
+        CheckResult(result);
+        return _emptyDescriptorSetLayout;
     }
 }
