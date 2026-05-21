@@ -55,7 +55,10 @@ internal unsafe class VkResourceSet : ResourceSet
             descriptorWrites[i].DstBinding = (uint)elements[i].BindingIndex;
             descriptorWrites[i].DstSet = _descriptorAllocationToken.Set;
 
-            if (type == DescriptorType.UniformBuffer || type == DescriptorType.StorageBuffer)
+            if (type == DescriptorType.UniformBuffer
+                || type == DescriptorType.UniformBufferDynamic
+                || type == DescriptorType.StorageBuffer
+                || type == DescriptorType.StorageBufferDynamic)
             {
                 DeviceBufferRange range = Util.GetBufferRange(boundResources[i], 0);
                 VkBuffer rangedVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);

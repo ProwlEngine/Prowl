@@ -290,14 +290,25 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
                     break;
                 case SetResourceSetEntryID:
                     NoAllocSetResourceSetEntry srse = Unsafe.ReadUnaligned<NoAllocSetResourceSetEntry>(entryBasePtr);
-                    ResourceSet rs = srse.ResourceSet.Get(_resourceList);
+
+                    uint* dynamicOffsetsPtr = srse.DynamicOffsetCount > NoAllocSetResourceSetEntry.MaxInlineDynamicOffsets
+                        ? (uint*)srse.DynamicOffsets_Block.Data
+                        : srse.DynamicOffsets_Inline;
                     if (srse.IsGraphics)
                     {
-                        executor.SetGraphicsResourceSet(srse.Slot, rs);
+                        executor.SetGraphicsResourceSet(
+                            srse.Slot,
+                            srse.ResourceSet.Get(_resourceList),
+                            srse.DynamicOffsetCount,
+                            ref Unsafe.AsRef<uint>(dynamicOffsetsPtr));
                     }
                     else
                     {
-                        executor.SetComputeResourceSet(srse.Slot, rs);
+                        executor.SetComputeResourceSet(
+                            srse.Slot,
+                            srse.ResourceSet.Get(_resourceList),
+                            srse.DynamicOffsetCount,
+                            ref Unsafe.AsRef<uint>(dynamicOffsetsPtr));
                     }
                     currentOffset += SetResourceSetEntrySize;
                     break;
@@ -458,19 +469,36 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
         AddEntry(SetPipelineEntryID, ref entry);
     }
 
-    public void SetGraphicsResourceSet(uint slot, ResourceSet rs)
+    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
     {
-        SetResourceSet(slot, rs, isGraphics: true);
+        SetResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets, isGraphics: true);
     }
 
-    public void SetComputeResourceSet(uint slot, ResourceSet rs)
+    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
     {
-        SetResourceSet(slot, rs, isGraphics: false);
+        SetResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets, isGraphics: false);
     }
 
-    private void SetResourceSet(uint slot, ResourceSet rs, bool isGraphics)
+    private void SetResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets, bool isGraphics)
     {
-        NoAllocSetResourceSetEntry entry = new NoAllocSetResourceSetEntry(slot, Track(rs), isGraphics);
+        NoAllocSetResourceSetEntry entry;
+
+        if (dynamicOffsetCount > NoAllocSetResourceSetEntry.MaxInlineDynamicOffsets)
+        {
+            StagingBlock block = _memoryPool.GetStagingBlock(dynamicOffsetCount * sizeof(uint));
+            _stagingBlocks.Add(block);
+            for (uint i = 0; i < dynamicOffsetCount; i++)
+            {
+                *((uint*)block.Data + i) = Unsafe.Add(ref dynamicOffsets, (int)i);
+            }
+
+            entry = new NoAllocSetResourceSetEntry(slot, Track(rs), isGraphics, block);
+        }
+        else
+        {
+            entry = new NoAllocSetResourceSetEntry(slot, Track(rs), isGraphics, dynamicOffsetCount, ref dynamicOffsets);
+        }
+
         AddEntry(SetResourceSetEntryID, ref entry);
     }
 

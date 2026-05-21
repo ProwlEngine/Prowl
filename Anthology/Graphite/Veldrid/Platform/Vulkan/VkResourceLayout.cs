@@ -1,3 +1,5 @@
+using System;
+
 using Silk.NET.Vulkan;
 
 using static Prowl.Veldrid.Vk.VulkanUtil;
@@ -15,6 +17,16 @@ internal unsafe class VkResourceLayout : ResourceLayout
     public DescriptorSetLayout DescriptorSetLayout => _dsl;
     public DescriptorType[] DescriptorTypes => _descriptorTypes;
     public DescriptorResourceCounts DescriptorResourceCounts { get; }
+    public new int DynamicBufferCount => (int)base.DynamicBufferCount;
+
+    /// <summary>
+    /// Element-array indices of dynamic-binding elements, sorted ascending by
+    /// <see cref="ResourceLayoutElementDescription.BindingIndex"/>. Vulkan expects the
+    /// <c>pDynamicOffsets</c> array passed to <c>vkCmdBindDescriptorSets</c> to be ordered
+    /// by binding number within each set; the user-facing API passes offsets in
+    /// element-array order, so the Vulkan backend uses this remap to reorder them.
+    /// </summary>
+    public int[] DynamicElementsByBindingOrder { get; }
 
     public override bool IsDisposed => _disposed;
 
@@ -31,18 +43,28 @@ internal unsafe class VkResourceLayout : ResourceLayout
         DescriptorSetLayoutBinding* bindings = stackalloc DescriptorSetLayoutBinding[elements.Length];
 
         uint uniformBufferCount = 0;
+        uint uniformBufferDynamicCount = 0;
         uint sampledImageCount = 0;
         uint samplerCount = 0;
         uint storageBufferCount = 0;
+        uint storageBufferDynamicCount = 0;
         uint storageImageCount = 0;
+
+        int[] dynamicOrder = DynamicBufferCount > 0 ? new int[DynamicBufferCount] : Array.Empty<int>();
+        int dynamicOrderIdx = 0;
 
         for (int i = 0; i < elements.Length; i++)
         {
             bindings[i].Binding = (uint)elements[i].BindingIndex;
             bindings[i].DescriptorCount = 1;
-            DescriptorType descriptorType = VkFormats.VdToVkDescriptorType(elements[i].Kind);
+            DescriptorType descriptorType = VkFormats.VdToVkDescriptorType(elements[i].Kind, elements[i].Options);
             bindings[i].DescriptorType = descriptorType;
             bindings[i].StageFlags = VkFormats.VdToVkShaderStages(elements[i].Stages);
+
+            if ((elements[i].Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
+            {
+                dynamicOrder[dynamicOrderIdx++] = i;
+            }
 
             _descriptorTypes[i] = descriptorType;
 
@@ -60,17 +82,35 @@ internal unsafe class VkResourceLayout : ResourceLayout
                 case DescriptorType.UniformBuffer:
                     uniformBufferCount += 1;
                     break;
+                case DescriptorType.UniformBufferDynamic:
+                    uniformBufferDynamicCount += 1;
+                    break;
                 case DescriptorType.StorageBuffer:
                     storageBufferCount += 1;
+                    break;
+                case DescriptorType.StorageBufferDynamic:
+                    storageBufferDynamicCount += 1;
                     break;
             }
         }
 
+        // Stable sort by BindingIndex so the dynamic-offset array order we receive from the
+        // caller (element-array order) can be remapped to Vulkan's required order (ascending
+        // by binding number).
+        if (dynamicOrder.Length > 1)
+        {
+            Array.Sort(dynamicOrder, (a, b) => elements[a].BindingIndex.CompareTo(elements[b].BindingIndex));
+        }
+
+        DynamicElementsByBindingOrder = dynamicOrder;
+
         DescriptorResourceCounts = new DescriptorResourceCounts(
             uniformBufferCount,
+            uniformBufferDynamicCount,
             sampledImageCount,
             samplerCount,
             storageBufferCount,
+            storageBufferDynamicCount,
             storageImageCount);
 
         dslCI.BindingCount = (uint)elements.Length;

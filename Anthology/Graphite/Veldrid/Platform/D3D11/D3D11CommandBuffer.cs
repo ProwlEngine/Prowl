@@ -52,12 +52,12 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private ID3D11PixelShader* _pixelShader;
 
     private new D3D11Pipeline _graphicsPipeline;
-    private ResourceSet[] _graphicsResourceSets = new ResourceSet[1];
+    private BoundResourceSetInfo[] _graphicsResourceSets = new BoundResourceSetInfo[1];
     // Resource sets are invalidated when a new resource set is bound with an incompatible SRV or UAV.
     private bool[] _invalidatedGraphicsResourceSets = new bool[1];
 
     private new D3D11Pipeline _computePipeline;
-    private ResourceSet[] _computeResourceSets = new ResourceSet[1];
+    private BoundResourceSetInfo[] _computeResourceSets = new BoundResourceSetInfo[1];
     // Resource sets are invalidated when a new resource set is bound with an incompatible SRV or UAV.
     private bool[] _invalidatedComputeResourceSets = new bool[1];
     private string _name;
@@ -210,9 +210,13 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         _boundUAVs.Clear();
     }
 
-    private void ClearSets(ResourceSet[] boundSets)
+    private void ClearSets(BoundResourceSetInfo[] boundSets)
     {
-        Util.ClearArray(boundSets);
+        for (int i = 0; i < boundSets.Length; i++)
+        {
+            boundSets[i].Offsets.Dispose();
+            boundSets[i] = default;
+        }
     }
 
     public override void End()
@@ -386,57 +390,66 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3];
     }
 
-    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs)
+    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
-        if (ReferenceEquals(_graphicsResourceSets[slot], rs))
+        if (_graphicsResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
         {
             return;
         }
 
-        _graphicsResourceSets[slot] = rs;
-        ActivateResourceSet(slot, rs, true);
+        _graphicsResourceSets[slot].Offsets.Dispose();
+        _graphicsResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetsCount, ref dynamicOffsets);
+        ActivateResourceSet(slot, _graphicsResourceSets[slot], true);
     }
 
-    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet set)
+    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
-        if (ReferenceEquals(_computeResourceSets[slot], set))
+        if (_computeResourceSets[slot].Equals(set, dynamicOffsetsCount, ref dynamicOffsets))
         {
             return;
         }
 
-        _computeResourceSets[slot] = set;
-        ActivateResourceSet(slot, set, false);
+        _computeResourceSets[slot].Offsets.Dispose();
+        _computeResourceSets[slot] = new BoundResourceSetInfo(set, dynamicOffsetsCount, ref dynamicOffsets);
+        ActivateResourceSet(slot, _computeResourceSets[slot], false);
     }
 
-    private void ActivateResourceSet(uint slot, ResourceSet rs, bool graphics)
+    private void ActivateResourceSet(uint slot, BoundResourceSetInfo brsi, bool graphics)
     {
-        D3D11ResourceSet d3d11RS = Util.AssertSubtype<ResourceSet, D3D11ResourceSet>(rs);
+        D3D11ResourceSet d3d11RS = Util.AssertSubtype<ResourceSet, D3D11ResourceSet>(brsi.Set);
 
         D3D11ResourceLayout layout = d3d11RS.Layout;
         ResourceLayoutElementDescription[] elements = layout.Elements;
         BindableResource[] resources = d3d11RS.Resources;
+        uint dynamicOffsetIndex = 0;
         for (int i = 0; i < resources.Length; i++)
         {
             BindableResource resource = resources[i];
             ResourceLayoutElementDescription element = elements[i];
             int bindingIndex = element.BindingIndex;
+            uint bufferOffset = 0;
+            if ((element.Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
+            {
+                bufferOffset = brsi.Offsets.Get(dynamicOffsetIndex);
+                dynamicOffsetIndex += 1;
+            }
             switch (element.Kind)
             {
                 case ResourceKind.UniformBuffer:
                     {
-                        D3D11BufferRange range = GetBufferRange(resource, 0);
+                        D3D11BufferRange range = GetBufferRange(resource, bufferOffset);
                         BindUniformBuffer(range, bindingIndex, element.Stages);
                         break;
                     }
                 case ResourceKind.StructuredBufferReadOnly:
                     {
-                        D3D11BufferRange range = GetBufferRange(resource, 0);
+                        D3D11BufferRange range = GetBufferRange(resource, bufferOffset);
                         BindStorageBufferView(range, bindingIndex, element.Stages);
                         break;
                     }
                 case ResourceKind.StructuredBufferReadWrite:
                     {
-                        D3D11BufferRange range = GetBufferRange(resource, 0);
+                        D3D11BufferRange range = GetBufferRange(resource, bufferOffset);
                         ID3D11UnorderedAccessView* uav = range.Buffer.GetUnorderedAccessView(range.Offset, range.Size);
                         BindUnorderedAccessView(null, range.Buffer, uav, bindingIndex, element.Stages, slot);
                         break;

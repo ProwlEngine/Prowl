@@ -127,15 +127,16 @@ internal static partial class VkFormats
         }
     }
 
-    internal static DescriptorType VdToVkDescriptorType(ResourceKind kind)
+    internal static DescriptorType VdToVkDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options)
     {
+        bool dynamicBinding = (options & ResourceLayoutElementOptions.DynamicBinding) != 0;
         switch (kind)
         {
             case ResourceKind.UniformBuffer:
-                return DescriptorType.UniformBuffer;
+                return dynamicBinding ? DescriptorType.UniformBufferDynamic : DescriptorType.UniformBuffer;
             case ResourceKind.StructuredBufferReadWrite:
             case ResourceKind.StructuredBufferReadOnly:
-                return DescriptorType.StorageBuffer;
+                return dynamicBinding ? DescriptorType.StorageBufferDynamic : DescriptorType.StorageBuffer;
             case ResourceKind.TextureReadOnly:
                 return DescriptorType.SampledImage;
             case ResourceKind.TextureReadWrite:

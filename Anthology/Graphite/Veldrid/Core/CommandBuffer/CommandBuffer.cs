@@ -155,13 +155,44 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    public void SetGraphicsResourceSet(uint slot, ResourceSet rs)
+    public unsafe void SetGraphicsResourceSet(uint slot, ResourceSet rs)
+        => SetGraphicsResourceSet(slot, rs, 0, ref Unsafe.AsRef<uint>(null));
+
+    /// <summary>
+    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
+    /// Pipeline.
+    /// </summary>
+    /// <param name="slot">The resource slot.</param>
+    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
+    /// <param name="dynamicOffsets">An array containing the offsets to apply to the dynamic
+    /// buffers contained in the <see cref="ResourceSet"/>. The number of elements in this array must be equal to the number
+    /// of dynamic buffers (<see cref="ResourceLayoutElementOptions.DynamicBinding"/>) contained in the
+    /// <see cref="ResourceSet"/>. These offsets are applied in the order that dynamic buffer
+    /// elements appear in the <see cref="ResourceSet"/>'s layout. Each of these offsets must be a multiple of either
+    /// <see cref="GraphicsDevice.UniformBufferMinOffsetAlignment"/> or
+    /// <see cref="GraphicsDevice.StructuredBufferMinOffsetAlignment"/>, depending on the kind of resource.</param>
+    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint[] dynamicOffsets)
+        => SetGraphicsResourceSet(slot, rs, (uint)dynamicOffsets.Length, ref dynamicOffsets[0]);
+
+    /// <summary>
+    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
+    /// Pipeline.
+    /// </summary>
+    /// <param name="slot">The resource slot.</param>
+    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
+    /// <param name="dynamicOffsetsCount">The number of dynamic offsets being used. This must be equal to the number of
+    /// dynamic buffers (<see cref="ResourceLayoutElementOptions.DynamicBinding"/>) contained in the
+    /// <see cref="ResourceSet"/>.</param>
+    /// <param name="dynamicOffsets">A reference to the first of a series of offsets which will be applied to the dynamic
+    /// buffers contained in the <see cref="ResourceSet"/>. These offsets are applied in the order that dynamic buffer
+    /// elements appear in the <see cref="ResourceSet"/>'s layout.</param>
+    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
-        SetGraphicsResourceSet_CheckLayoutCompatibility(slot, rs);
-        SetGraphicsResourceSetCore(slot, rs);
+        SetGraphicsResourceSet_CheckLayoutCompatibility(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
+        SetGraphicsResourceSetCore(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
     }
 
-    private protected abstract void SetGraphicsResourceSetCore(uint slot, ResourceSet rs);
+    private protected abstract void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets);
 
     /// <summary>
     /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
@@ -169,13 +200,35 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    public void SetComputeResourceSet(uint slot, ResourceSet rs)
+    public unsafe void SetComputeResourceSet(uint slot, ResourceSet rs)
+        => SetComputeResourceSet(slot, rs, 0, ref Unsafe.AsRef<uint>(null));
+
+    /// <summary>
+    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
+    /// <see cref="Pipeline"/>.
+    /// </summary>
+    /// <param name="slot">The resource slot.</param>
+    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
+    /// <param name="dynamicOffsets">An array containing the offsets to apply to the dynamic buffers contained in the
+    /// <see cref="ResourceSet"/>.</param>
+    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint[] dynamicOffsets)
+        => SetComputeResourceSet(slot, rs, (uint)dynamicOffsets.Length, ref dynamicOffsets[0]);
+
+    /// <summary>
+    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
+    /// <see cref="Pipeline"/>.
+    /// </summary>
+    /// <param name="slot">The resource slot.</param>
+    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
+    /// <param name="dynamicOffsetsCount">The number of dynamic offsets being used.</param>
+    /// <param name="dynamicOffsets">A reference to the first of a series of offsets.</param>
+    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
-        SetComputeResourceSet_CheckLayoutCompatibility(slot, rs);
-        SetComputeResourceSetCore(slot, rs);
+        SetComputeResourceSet_CheckLayoutCompatibility(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
+        SetComputeResourceSetCore(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
     }
 
-    private protected abstract void SetComputeResourceSetCore(uint slot, ResourceSet set);
+    private protected abstract void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets);
 
     /// <summary>
     /// Sets the active <see cref="Framebuffer"/> which will be rendered to.

@@ -44,7 +44,7 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private void SetGraphicsResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs)
+    private void SetGraphicsResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
 #if VALIDATE_USAGE
         if (_graphicsPipeline == null)
@@ -60,11 +60,12 @@ public abstract partial class CommandBuffer
         }
 
         CheckResourceSetMatchesLayout(slot, layout, rs);
+        CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
 #endif
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private void SetComputeResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs)
+    private void SetComputeResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
 #if VALIDATE_USAGE
         if (_computePipeline == null)
@@ -80,6 +81,7 @@ public abstract partial class CommandBuffer
         }
 
         CheckResourceSetMatchesLayout(slot, layout, rs);
+        CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
 #endif
     }
 
@@ -114,6 +116,41 @@ public abstract partial class CommandBuffer
             {
                 throw new RenderException(
                     $"Failed to bind ResourceSet to slot {slot}. Resource element {i} was of the incorrect type. The bound Pipeline expects {pipelineKind}, but the ResourceSet contained {setKind}.");
+            }
+        }
+    }
+
+    private void CheckDynamicOffsets(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+    {
+        ResourceLayoutDescription layoutDesc = rs.Layout.Description;
+
+        if (rs.Layout.DynamicBufferCount != dynamicOffsetsCount)
+        {
+            throw new RenderException(
+                $"A dynamic offset must be provided for each resource that specifies " +
+                $"{nameof(ResourceLayoutElementOptions)}.{nameof(ResourceLayoutElementOptions.DynamicBinding)}. " +
+                $"{rs.Layout.DynamicBufferCount} offsets were expected, but {dynamicOffsetsCount} were provided.");
+        }
+
+        uint dynamicOffsetIndex = 0;
+        for (uint i = 0; i < layoutDesc.Elements.Length; i++)
+        {
+            if ((layoutDesc.Elements[i].Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
+            {
+                uint requiredAlignment = layoutDesc.Elements[i].Kind == ResourceKind.UniformBuffer
+                    ? _uniformBufferAlignment
+                    : _structuredBufferAlignment;
+                uint desiredOffset = System.Runtime.CompilerServices.Unsafe.Add(ref dynamicOffsets, (int)dynamicOffsetIndex);
+                dynamicOffsetIndex += 1;
+                DeviceBufferRange range = Util.GetBufferRange(rs.Resources[i], desiredOffset);
+
+                if ((range.Offset % requiredAlignment) != 0)
+                {
+                    throw new RenderException(
+                        $"The effective offset of the buffer in slot {i} does not meet the alignment " +
+                        $"requirements of this device. The offset must be a multiple of {requiredAlignment}, but it is " +
+                        $"{range.Offset}");
+                }
             }
         }
     }

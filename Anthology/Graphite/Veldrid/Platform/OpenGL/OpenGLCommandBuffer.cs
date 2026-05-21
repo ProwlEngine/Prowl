@@ -125,14 +125,14 @@ internal class OpenGLCommandBuffer : CommandBuffer
         _currentCommands.SetPipeline(pipeline);
     }
 
-    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs)
+    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
     {
-        _currentCommands.SetGraphicsResourceSet(slot, rs);
+        _currentCommands.SetGraphicsResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets);
     }
 
-    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs)
+    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
     {
-        _currentCommands.SetComputeResourceSet(slot, rs);
+        _currentCommands.SetComputeResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets);
     }
 
     public override void SetScissorRect(uint index, uint x, uint y, uint width, uint height)

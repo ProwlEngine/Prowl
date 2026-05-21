@@ -34,14 +34,14 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private bool _currentFramebufferEverActive;
     private RenderPass _activeRenderPass;
     private VkPipeline _currentGraphicsPipeline;
-    private ResourceSet[] _currentGraphicsResourceSets = Array.Empty<ResourceSet>();
+    private BoundResourceSetInfo[] _currentGraphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _graphicsResourceSetsChanged;
 
     private bool _newFramebuffer; // Render pass cycle state
 
     // Compute State
     private VkPipeline _currentComputePipeline;
-    private ResourceSet[] _currentComputeResourceSets = Array.Empty<ResourceSet>();
+    private BoundResourceSetInfo[] _currentComputeResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _computeResourceSetsChanged;
     private string _name;
 
@@ -299,15 +299,24 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     }
 
     private void FlushNewResourceSets(
-        ResourceSet[] resourceSets,
+        BoundResourceSetInfo[] resourceSets,
         bool[] resourceSetsChanged,
         uint resourceSetCount,
         PipelineBindPoint bindPoint,
         Silk.NET.Vulkan.PipelineLayout pipelineLayout)
     {
+        VkPipeline pipeline = bindPoint == PipelineBindPoint.Graphics ? _currentGraphicsPipeline : _currentComputePipeline;
+
         DescriptorSet* descriptorSets = stackalloc DescriptorSet[(int)resourceSetCount];
+        uint* dynamicOffsets = null;
+        if (pipeline.DynamicOffsetsCount > 0)
+        {
+            uint* alloc = stackalloc uint[pipeline.DynamicOffsetsCount];
+            dynamicOffsets = alloc;
+        }
         uint currentBatchCount = 0;
         uint currentBatchFirstSet = 0;
+        uint currentBatchDynamicOffsetCount = 0;
 
         for (uint currentSlot = 0; currentSlot < resourceSetCount; currentSlot++)
         {
@@ -316,9 +325,26 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             if (resourceSetsChanged[currentSlot])
             {
                 resourceSetsChanged[currentSlot] = false;
-                VkResourceSet vkSet = Util.AssertSubtype<ResourceSet, VkResourceSet>(resourceSets[currentSlot]);
+                VkResourceSet vkSet = Util.AssertSubtype<ResourceSet, VkResourceSet>(resourceSets[currentSlot].Set);
                 descriptorSets[currentBatchCount] = vkSet.DescriptorSet;
                 currentBatchCount += 1;
+
+                // Vulkan expects offsets ordered by binding number within the descriptor set.
+                // The user supplied them in element-array order; remap via the layout's
+                // precomputed sorted dynamic-element index.
+                VkResourceLayout vkLayout = Util.AssertSubtype<ResourceLayout, VkResourceLayout>(vkSet.Layout);
+                int[] order = vkLayout.DynamicElementsByBindingOrder;
+                ref BoundResourceSetInfo info = ref resourceSets[currentSlot];
+                ResourceLayoutElementDescription[] elems = vkLayout.Description.Elements;
+                for (int j = 0; j < order.Length; j++)
+                {
+                    // The j-th dynamic descriptor in binding-number order corresponds to the
+                    // dynamic-offsets[] entry whose position in the user's array matches the
+                    // ordinal of order[j] among dynamic-flagged elements in element-array order.
+                    uint userIndex = (uint)CountDynamicBefore(elems, order[j]);
+                    dynamicOffsets[currentBatchDynamicOffsetCount] = info.Offsets.Get(userIndex);
+                    currentBatchDynamicOffsetCount += 1;
+                }
 
                 _currentStagingInfo.Resources.Add(vkSet.RefCount);
                 for (int i = 0; i < vkSet.RefCounts.Count; i++)
@@ -338,14 +364,26 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                         currentBatchFirstSet,
                         currentBatchCount,
                         descriptorSets,
-                        0,
-                        null);
+                        currentBatchDynamicOffsetCount,
+                        dynamicOffsets);
                 }
 
                 currentBatchCount = 0;
                 currentBatchFirstSet = currentSlot + 1;
+                currentBatchDynamicOffsetCount = 0;
             }
         }
+    }
+
+    private static int CountDynamicBefore(ResourceLayoutElementDescription[] elems, int elementIndex)
+    {
+        int count = 0;
+        for (int i = 0; i < elementIndex; i++)
+        {
+            if ((elems[i].Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
+                count++;
+        }
+        return count;
     }
 
     private void TransitionImages(List<VkTexture> sampledTextures, ImageLayout layout)
@@ -371,7 +409,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         for (uint currentSlot = 0; currentSlot < _currentComputePipeline.ResourceSetCount; currentSlot++)
         {
             VkResourceSet vkSet = Util.AssertSubtype<ResourceSet, VkResourceSet>(
-                _currentComputeResourceSets[currentSlot]);
+                _currentComputeResourceSets[currentSlot].Set);
 
             TransitionImages(vkSet.SampledTextures, ImageLayout.ShaderReadOnlyOptimal);
             TransitionImages(vkSet.StorageTextures, ImageLayout.General);
@@ -660,25 +698,31 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _currentStagingInfo.Resources.Add(vkPipeline.RefCount);
     }
 
-    private void ClearSets(ResourceSet[] boundSets)
+    private void ClearSets(BoundResourceSetInfo[] boundSets)
     {
-        Util.ClearArray(boundSets);
+        for (int i = 0; i < boundSets.Length; i++)
+        {
+            boundSets[i].Offsets.Dispose();
+            boundSets[i] = default;
+        }
     }
 
-    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs)
+    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
-        if (!ReferenceEquals(_currentGraphicsResourceSets[slot], rs))
+        if (!_currentGraphicsResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
         {
-            _currentGraphicsResourceSets[slot] = rs;
+            _currentGraphicsResourceSets[slot].Offsets.Dispose();
+            _currentGraphicsResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetsCount, ref dynamicOffsets);
             _graphicsResourceSetsChanged[slot] = true;
         }
     }
 
-    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs)
+    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
-        if (!ReferenceEquals(_currentComputeResourceSets[slot], rs))
+        if (!_currentComputeResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
         {
-            _currentComputeResourceSets[slot] = rs;
+            _currentComputeResourceSets[slot].Offsets.Dispose();
+            _currentComputeResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetsCount, ref dynamicOffsets);
             _computeResourceSetsChanged[slot] = true;
         }
     }

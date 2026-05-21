@@ -22,7 +22,7 @@ internal unsafe class OpenGLCommandExecutor
     private Framebuffer _fb;
     private bool _isSwapchainFB;
     private OpenGLPipeline _graphicsPipeline;
-    private ResourceSet[] _graphicsResourceSets = Array.Empty<ResourceSet>();
+    private BoundResourceSetInfo[] _graphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _newGraphicsResourceSets = Array.Empty<bool>();
     private OpenGLBuffer[] _vertexBuffers = Array.Empty<OpenGLBuffer>();
     private uint[] _vbOffsets = Array.Empty<uint>();
@@ -34,7 +34,7 @@ internal unsafe class OpenGLCommandExecutor
     private PrimitiveType _primitiveType;
 
     private OpenGLPipeline _computePipeline;
-    private ResourceSet[] _computeResourceSets = Array.Empty<ResourceSet>();
+    private BoundResourceSetInfo[] _computeResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _newComputeResourceSets = Array.Empty<bool>();
 
     private bool _graphicsPipelineActive;
@@ -273,12 +273,12 @@ internal unsafe class OpenGLCommandExecutor
             : (uint)_computePipeline.ResourceLayouts.Length;
         for (uint slot = 0; slot < sets; slot++)
         {
-            ResourceSet rs = graphics ? _graphicsResourceSets[slot] : _computeResourceSets[slot];
-            OpenGLResourceSet glSet = Util.AssertSubtype<ResourceSet, OpenGLResourceSet>(rs);
+            BoundResourceSetInfo brsi = graphics ? _graphicsResourceSets[slot] : _computeResourceSets[slot];
+            OpenGLResourceSet glSet = Util.AssertSubtype<ResourceSet, OpenGLResourceSet>(brsi.Set);
             ResourceLayoutElementDescription[] layoutElements = glSet.Layout.Elements;
             bool isNew = graphics ? _newGraphicsResourceSets[slot] : _newComputeResourceSets[slot];
 
-            ActivateResourceSet(slot, graphics, glSet, layoutElements, isNew);
+            ActivateResourceSet(slot, graphics, brsi, layoutElements, isNew);
         }
 
         Util.ClearArray(graphics ? _newGraphicsResourceSets : _newComputeResourceSets);
@@ -824,20 +824,22 @@ internal unsafe class OpenGLCommandExecutor
         CheckLastError();
     }
 
-    public void SetGraphicsResourceSet(uint slot, ResourceSet rs)
+    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
     {
-        if (!ReferenceEquals(_graphicsResourceSets[slot], rs))
+        if (!_graphicsResourceSets[slot].Equals(rs, dynamicOffsetCount, ref dynamicOffsets))
         {
-            _graphicsResourceSets[slot] = rs;
+            _graphicsResourceSets[slot].Offsets.Dispose();
+            _graphicsResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetCount, ref dynamicOffsets);
             _newGraphicsResourceSets[slot] = true;
         }
     }
 
-    public void SetComputeResourceSet(uint slot, ResourceSet rs)
+    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
     {
-        if (!ReferenceEquals(_computeResourceSets[slot], rs))
+        if (!_computeResourceSets[slot].Equals(rs, dynamicOffsetCount, ref dynamicOffsets))
         {
-            _computeResourceSets[slot] = rs;
+            _computeResourceSets[slot].Offsets.Dispose();
+            _computeResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetCount, ref dynamicOffsets);
             _newComputeResourceSets[slot] = true;
         }
     }
@@ -845,17 +847,26 @@ internal unsafe class OpenGLCommandExecutor
     private void ActivateResourceSet(
         uint slot,
         bool graphics,
-        OpenGLResourceSet glResourceSet,
+        BoundResourceSetInfo brsi,
         ResourceLayoutElementDescription[] layoutElements,
         bool isNew)
     {
+        OpenGLResourceSet glResourceSet = Util.AssertSubtype<ResourceSet, OpenGLResourceSet>(brsi.Set);
         OpenGLPipeline pipeline = graphics ? _graphicsPipeline : _computePipeline;
 
+        uint dynamicOffsetIndex = 0;
         for (uint element = 0; element < glResourceSet.Resources.Length; element++)
         {
             ResourceLayoutElementDescription layoutElement = layoutElements[element];
             ResourceKind kind = layoutElement.Kind;
             BindableResource resource = glResourceSet.Resources[(int)element];
+
+            uint bufferOffset = 0;
+            if ((layoutElement.Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
+            {
+                bufferOffset = brsi.Offsets.Get(dynamicOffsetIndex);
+                dynamicOffsetIndex += 1;
+            }
 
             switch (kind)
             {
@@ -863,7 +874,7 @@ internal unsafe class OpenGLCommandExecutor
                     {
                         if (!isNew) { continue; }
 
-                        DeviceBufferRange range = Util.GetBufferRange(resource, 0);
+                        DeviceBufferRange range = Util.GetBufferRange(resource, bufferOffset);
                         OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
 
                         glUB.EnsureResourcesCreated();
@@ -893,7 +904,7 @@ internal unsafe class OpenGLCommandExecutor
                     {
                         if (!isNew) { continue; }
 
-                        DeviceBufferRange range = Util.GetBufferRange(resource, 0);
+                        DeviceBufferRange range = Util.GetBufferRange(resource, bufferOffset);
                         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
 
                         glBuffer.EnsureResourcesCreated();

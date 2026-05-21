@@ -75,7 +75,7 @@ internal class VkDescriptorPoolManager
     {
         uint totalSets = 1000;
         uint descriptorCount = 100;
-        uint poolSizeCount = 5;
+        uint poolSizeCount = 7;
         DescriptorPoolSize* sizes = stackalloc DescriptorPoolSize[(int)poolSizeCount];
         sizes[0].Type = DescriptorType.UniformBuffer;
         sizes[0].DescriptorCount = descriptorCount;
@@ -87,6 +87,10 @@ internal class VkDescriptorPoolManager
         sizes[3].DescriptorCount = descriptorCount;
         sizes[4].Type = DescriptorType.StorageImage;
         sizes[4].DescriptorCount = descriptorCount;
+        sizes[5].Type = DescriptorType.UniformBufferDynamic;
+        sizes[5].DescriptorCount = descriptorCount;
+        sizes[6].Type = DescriptorType.StorageBufferDynamic;
+        sizes[6].DescriptorCount = descriptorCount;
 
         DescriptorPoolCreateInfo poolCI = new DescriptorPoolCreateInfo
         {
@@ -118,9 +122,11 @@ internal class VkDescriptorPoolManager
         public uint RemainingSets;
 
         public uint UniformBufferCount;
+        public uint UniformBufferDynamicCount;
         public uint SampledImageCount;
         public uint SamplerCount;
         public uint StorageBufferCount;
+        public uint StorageBufferDynamicCount;
         public uint StorageImageCount;
 
         public PoolInfo(DescriptorPool pool, uint totalSets, uint descriptorCount)
@@ -128,9 +134,11 @@ internal class VkDescriptorPoolManager
             Pool = pool;
             RemainingSets = totalSets;
             UniformBufferCount = descriptorCount;
+            UniformBufferDynamicCount = descriptorCount;
             SampledImageCount = descriptorCount;
             SamplerCount = descriptorCount;
             StorageBufferCount = descriptorCount;
+            StorageBufferDynamicCount = descriptorCount;
             StorageImageCount = descriptorCount;
         }
 
@@ -138,16 +146,20 @@ internal class VkDescriptorPoolManager
         {
             if (RemainingSets > 0
                 && UniformBufferCount >= counts.UniformBufferCount
+                && UniformBufferDynamicCount >= counts.UniformBufferDynamicCount
                 && SampledImageCount >= counts.SampledImageCount
                 && SamplerCount >= counts.SamplerCount
                 && StorageBufferCount >= counts.StorageBufferCount
+                && StorageBufferDynamicCount >= counts.StorageBufferDynamicCount
                 && StorageImageCount >= counts.StorageImageCount)
             {
                 RemainingSets -= 1;
                 UniformBufferCount -= counts.UniformBufferCount;
+                UniformBufferDynamicCount -= counts.UniformBufferDynamicCount;
                 SampledImageCount -= counts.SampledImageCount;
                 SamplerCount -= counts.SamplerCount;
                 StorageBufferCount -= counts.StorageBufferCount;
+                StorageBufferDynamicCount -= counts.StorageBufferDynamicCount;
                 StorageImageCount -= counts.StorageImageCount;
                 return true;
             }
@@ -164,9 +176,11 @@ internal class VkDescriptorPoolManager
 
             RemainingSets += 1;
             UniformBufferCount += counts.UniformBufferCount;
+            UniformBufferDynamicCount += counts.UniformBufferDynamicCount;
             SampledImageCount += counts.SampledImageCount;
             SamplerCount += counts.SamplerCount;
             StorageBufferCount += counts.StorageBufferCount;
+            StorageBufferDynamicCount += counts.StorageBufferDynamicCount;
             StorageImageCount += counts.StorageImageCount;
         }
     }

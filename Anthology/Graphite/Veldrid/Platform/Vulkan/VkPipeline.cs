@@ -31,6 +31,7 @@ internal unsafe class VkPipeline : Pipeline
     /// Slots with no provided <see cref="ResourceLayout"/> are filled with an empty descriptor set layout.
     /// </summary>
     public uint ResourceSetCount { get; }
+    public int DynamicOffsetsCount { get; private set; }
     public bool ScissorTestEnabled { get; }
 
     public override bool IsComputePipeline { get; }
@@ -304,6 +305,7 @@ internal unsafe class VkPipeline : Pipeline
         CheckResult(result);
 
         ResourceSetCount = setCount;
+        DynamicOffsetsCount = SumDynamicOffsets(description.ResourceLayouts);
     }
 
     public VkPipeline(VkGraphicsDevice gd, ref ComputePipelineDescription description)
@@ -339,6 +341,17 @@ internal unsafe class VkPipeline : Pipeline
         CheckResult(result);
 
         ResourceSetCount = setCount;
+        DynamicOffsetsCount = SumDynamicOffsets(description.ResourceLayouts);
+    }
+
+    private static int SumDynamicOffsets(ResourceLayout[] layouts)
+    {
+        int total = 0;
+        for (int i = 0; i < layouts.Length; i++)
+        {
+            total += Util.AssertSubtype<ResourceLayout, VkResourceLayout>(layouts[i]).DynamicBufferCount;
+        }
+        return total;
     }
 
     public override string Name
