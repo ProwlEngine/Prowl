@@ -214,7 +214,11 @@ internal unsafe class D3D11ResourceCache : IDisposable
                     SemanticIndex = 0,
                     Format = D3D11Formats.ToDxgiFormat(desc.Format),
                     AlignedByteOffset = desc.Offset != 0 ? desc.Offset : (uint)currentOffset,
-                    InputSlot = vertexLayouts[slot].Location,
+                    // InputSlot matches the IASetVertexBuffers slot, which is the layout
+                    // index (what SetVertexBuffer takes). D3D11 binds attributes by
+                    // SemanticName, so VertexLayoutDescription.Location has no shader
+                    // effect here.
+                    InputSlot = (uint)slot,
                     InputSlotClass = stepRate == 0 ? InputClassification.PerVertexData : InputClassification.PerInstanceData,
                     InstanceDataStepRate = stepRate,
                 };

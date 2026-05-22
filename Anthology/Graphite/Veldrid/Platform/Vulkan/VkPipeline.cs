@@ -155,14 +155,16 @@ internal unsafe class VkPipeline : Pipeline
         VertexInputBindingDescription* bindingDescs = stackalloc VertexInputBindingDescription[(int)bindingCount];
         VertexInputAttributeDescription* attributeDescs = stackalloc VertexInputAttributeDescription[(int)attributeCount];
 
+        // VkBinding is the vertex buffer slot (matches CmdBindVertexBuffers' firstBinding,
+        // which receives the layout index from SetVertexBuffer). VkLocation is the shader
+        // attribute index, taken from VertexLayoutDescription.Location + element offset.
         int targetIndex = 0;
-        int targetLocation = 0;
         for (int binding = 0; binding < inputDescriptions.Length; binding++)
         {
             VertexLayoutDescription inputDesc = inputDescriptions[binding];
             bindingDescs[binding] = new VertexInputBindingDescription()
             {
-                Binding = inputDesc.Location,
+                Binding = (uint)binding,
                 InputRate = (inputDesc.InstanceStepRate != 0) ? VertexInputRate.Instance : VertexInputRate.Vertex,
                 Stride = inputDesc.Stride
             };
@@ -175,16 +177,14 @@ internal unsafe class VkPipeline : Pipeline
                 attributeDescs[targetIndex] = new VertexInputAttributeDescription()
                 {
                     Format = VkFormats.VdToVkVertexElementFormat(inputElement.Format),
-                    Binding = inputDesc.Location,
-                    Location = (uint)(targetLocation + location),
+                    Binding = (uint)binding,
+                    Location = inputDesc.Location + (uint)location,
                     Offset = inputElement.Offset != 0 ? inputElement.Offset : currentOffset
                 };
 
                 targetIndex += 1;
                 currentOffset += FormatSizeHelpers.GetSizeInBytes(inputElement.Format);
             }
-
-            targetLocation += inputDesc.Elements.Length;
         }
 
         vertexInputCI.VertexBindingDescriptionCount = bindingCount;

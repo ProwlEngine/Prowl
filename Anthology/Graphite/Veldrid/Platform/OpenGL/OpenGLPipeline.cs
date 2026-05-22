@@ -110,13 +110,14 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
             CheckLastError();
         }
 
-        uint slot = 0;
+        // Each layout's elements occupy a contiguous range of attribute slots starting
+        // at layoutDesc.Location. Shaders that declare layout(location=...) explicitly
+        // win over BindAttribLocation; this is a fallback for the ones that don't.
         foreach (VertexLayoutDescription layoutDesc in VertexLayouts)
         {
             for (int i = 0; i < layoutDesc.Elements.Length; i++)
             {
-                BindAttribLocation(slot, layoutDesc.Elements[i].Name);
-                slot += 1;
+                BindAttribLocation(layoutDesc.Location + (uint)i, layoutDesc.Elements[i].Name);
             }
         }
 

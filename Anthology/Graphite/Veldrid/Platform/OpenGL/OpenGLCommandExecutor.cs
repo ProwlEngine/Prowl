@@ -286,19 +286,23 @@ internal unsafe class OpenGLCommandExecutor
 
     private void FlushVertexLayouts()
     {
-        uint totalSlotsBound = 0;
+        // Attributes are addressed by their shader location: a layout with Location = L
+        // and N elements occupies attribute indices L..L+N-1. The VBO slot it reads from
+        // is the layout's index in the pipeline's VertexLayouts array, which is what
+        // SetVertexBuffer takes.
+        uint highestAttribBound = 0;
         VertexLayoutDescription[] layouts = _graphicsPipeline.VertexLayouts;
         for (int i = 0; i < layouts.Length; i++)
         {
             VertexLayoutDescription input = layouts[i];
-            OpenGLBuffer vb = _vertexBuffers[input.Location];
+            OpenGLBuffer vb = _vertexBuffers[i];
             _gl.BindBuffer(BufferTargetARB.ArrayBuffer, vb.Buffer);
             uint offset = 0;
-            uint vbOffset = _vbOffsets[input.Location];
+            uint vbOffset = _vbOffsets[i];
             for (uint slot = 0; slot < input.Elements.Length; slot++)
             {
                 ref VertexElementDescription element = ref input.Elements[slot]; // Large structure -- use by reference.
-                uint actualSlot = totalSlotsBound + slot;
+                uint actualSlot = input.Location + slot;
                 if (actualSlot >= _vertexAttributesBound)
                 {
                     _gl.EnableVertexAttribArray(actualSlot);
@@ -341,17 +345,18 @@ internal unsafe class OpenGLCommandExecutor
                 }
 
                 offset += FormatSizeHelpers.GetSizeInBytes(element.Format);
-            }
 
-            totalSlotsBound += (uint)input.Elements.Length;
+                if (actualSlot + 1 > highestAttribBound)
+                    highestAttribBound = actualSlot + 1;
+            }
         }
 
-        for (uint extraSlot = totalSlotsBound; extraSlot < _vertexAttributesBound; extraSlot++)
+        for (uint extraSlot = highestAttribBound; extraSlot < _vertexAttributesBound; extraSlot++)
         {
             _gl.DisableVertexAttribArray(extraSlot);
         }
 
-        _vertexAttributesBound = totalSlotsBound;
+        _vertexAttributesBound = highestAttribBound;
     }
 
     internal void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
@@ -710,12 +715,18 @@ internal unsafe class OpenGLCommandExecutor
         Util.EnsureArrayMinimumSize(ref _vertexBuffers, (uint)vertexStridesCount);
         Util.EnsureArrayMinimumSize(ref _vbOffsets, (uint)vertexStridesCount);
 
-        uint totalVertexElements = 0;
+        // Size the divisor cache to cover the highest attribute index this pipeline uses.
+        // Attributes are addressed by Location..Location+Elements.Length-1 per layout, so
+        // the array must reach the max(Location + Elements.Length).
+        uint maxAttribIndex = 0;
         for (int i = 0; i < _graphicsPipeline.VertexLayouts.Length; i++)
         {
-            totalVertexElements += (uint)_graphicsPipeline.VertexLayouts[i].Elements.Length;
+            VertexLayoutDescription layout = _graphicsPipeline.VertexLayouts[i];
+            uint end = layout.Location + (uint)layout.Elements.Length;
+            if (end > maxAttribIndex)
+                maxAttribIndex = end;
         }
-        Util.EnsureArrayMinimumSize(ref _vertexAttribDivisors, totalVertexElements);
+        Util.EnsureArrayMinimumSize(ref _vertexAttribDivisors, maxAttribIndex);
     }
 
     public void GenerateMipmaps(Texture texture)

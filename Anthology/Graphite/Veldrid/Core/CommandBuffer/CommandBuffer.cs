@@ -97,7 +97,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// The given buffer must be non-null. It is not necessary to un-bind vertex buffers for Pipelines which will not
     /// use them. All extra vertex buffers are simply ignored.
     /// </summary>
-    /// <param name="index">The buffer slot.</param>
+    /// <param name="index">The vertex buffer slot, i.e. the index of the corresponding
+    /// <see cref="VertexLayoutDescription"/> in <see cref="ShaderSetDescription.VertexLayouts"/>.
+    /// Not related to <see cref="VertexLayoutDescription.Location"/>, which is the shader
+    /// attribute index.</param>
     /// <param name="buffer">The new <see cref="DeviceBuffer"/>.</param>
     public void SetVertexBuffer(uint index, DeviceBuffer buffer)
     {
@@ -110,7 +113,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// The given buffer must be non-null. It is not necessary to un-bind vertex buffers for Pipelines which will not
     /// use them. All extra vertex buffers are simply ignored.
     /// </summary>
-    /// <param name="index">The buffer slot.</param>
+    /// <param name="index">The vertex buffer slot, i.e. the index of the corresponding
+    /// <see cref="VertexLayoutDescription"/> in <see cref="ShaderSetDescription.VertexLayouts"/>.
+    /// Not related to <see cref="VertexLayoutDescription.Location"/>, which is the shader
+    /// attribute index.</param>
     /// <param name="buffer">The new <see cref="DeviceBuffer"/>.</param>
     /// <param name="offset">The offset from the start of the buffer, in bytes, from which data will start to be read.
     /// </param>
