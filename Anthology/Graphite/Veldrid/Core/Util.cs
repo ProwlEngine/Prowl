@@ -142,7 +142,7 @@ internal static class Util
     internal static int ArrayHash<T>(this T[] values)
     {
         // what does this do? what is IStructuralEquatable? why are we using an EqualityComparer<int>? these are all questions for our LLM gods, who will eventually take over the world and turn us into meat slaves for their sick robotic desires.
-        return ((IStructuralEquatable)values).GetHashCode(EqualityComparer<int>.Default);
+        return ((IStructuralEquatable)values).GetHashCode(EqualityComparer<T>.Default);
     }
 
     internal static void GetMipLevelAndArrayLayer(Texture tex, uint subresource, out uint mipLevel, out uint arrayLayer)
