@@ -320,7 +320,7 @@ public class GameViewPanel : DockPanel
             long colorTris = s.Triangles - s.ShadowTriangles;
             long colorVerts = s.Vertices - s.ShadowVertices;
 
-            Section(paper, font, "gv_ht", "TARGET", FormatCpuGpu(s.ColorPassMs, s.ColorPassGpuMs), fs);
+            Section(paper, font, "gv_ht", "TARGET", FormatMainThread(s.ColorPassMs), fs);
             Row(paper, font, "gv_tdc", "Draws", $"{s.DrawCalls} ({s.InstancedDrawCalls} inst)", fs, rowH,
                 "Individual GPU draw commands issued this frame. Each draw sends geometry to the GPU. Instanced draws render multiple copies in a single call.");
             Row(paper, font, "gv_tba", "Batches", s.Batches.ToString(), fs, rowH,
@@ -342,7 +342,7 @@ public class GameViewPanel : DockPanel
                 int shCullPct = s.ShadowRenderablesCollected > 0
                     ? (int)(s.ShadowRenderablesCulled * 100f / s.ShadowRenderablesCollected) : 0;
 
-                Section(paper, font, "gv_hs", "SHADOWS", FormatCpuGpu(s.ShadowPassMs, s.ShadowPassGpuMs), fs);
+                Section(paper, font, "gv_hs", "SHADOWS", FormatMainThread(s.ShadowPassMs), fs);
                 Row(paper, font, "gv_sdc", "Draws", $"{s.ShadowDrawCalls} ({s.ShadowInstancedDrawCalls} inst)", fs, rowH,
                     "Draw calls for shadow map rendering. Each shadow-casting light renders the scene from its perspective to build depth maps.");
                 Row(paper, font, "gv_spa", "Passes", s.ShadowPasses.ToString(), fs, rowH,
@@ -358,7 +358,7 @@ public class GameViewPanel : DockPanel
             // Post FX (only when active)
             if (s.ImageEffects > 0)
             {
-                Section(paper, font, "gv_hf", "POST FX", FormatCpuGpu(s.PostFxMs, s.PostFxGpuMs), fs);
+                Section(paper, font, "gv_hf", "POST FX", FormatMainThread(s.PostFxMs), fs);
                 Row(paper, font, "gv_fx", $"{s.ImageEffects} effects", $"{s.ImageEffectPasses} passes", fs, rowH,
                     "Post-processing effects applied after rendering (bloom, tone mapping, SSAO, etc). Each effect may use multiple full-screen passes.");
             }
@@ -453,13 +453,9 @@ public class GameViewPanel : DockPanel
         }
     }
 
-    // Right-aligned fixed-width "XX.XXms" so changing values don't reflow the row.
+    // Fixed-width "XX.XXms" so changing values don't reflow the row.
     private static string FormatMs(float ms) => $"{ms,5:0.00}ms";
-    // "Main" = encoding thread wall-clock (building CBs), "Render" = render-thread
-    // wall-clock executing those CBs. Both are CPU since GL TIME_ELAPSED queries
-    // were unreliable Render proxies GPU cost because the driver stalls when its
-    // queue fills.
-    private static string FormatCpuGpu(float cpuMs, float gpuMs) => $"Main {cpuMs,5:0.00}ms  Render {gpuMs,5:0.00}ms";
+    private static string FormatMainThread(float ms) => $"Main Thread {ms,5:0.00}ms";
 
     private static Color FpsColor(float fps) =>
         fps >= 55 ? Color.FromArgb(255, 90, 210, 120) :

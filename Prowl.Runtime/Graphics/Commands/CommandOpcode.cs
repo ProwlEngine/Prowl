@@ -100,8 +100,4 @@ internal enum CommandOpcode : ushort
     // Debug markers
     BeginSample,
     EndSample,
-
-    // Render-thread stopwatch timers
-    BeginTimer,
-    EndTimer,
 }

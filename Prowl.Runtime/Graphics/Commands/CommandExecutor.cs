@@ -29,23 +29,22 @@ internal sealed class CommandExecutor
 {
     // ─────────────────────── Mirror state ───────────────────────
     //
-    // No mirrors for Program / VAO / Framebuffer. Resource constructors and
-    // sticky-state setters (Graphics.SetTextureFilters, texture.Bind, the
-    // GraphicsBuffer/Framebuffer/VertexArray constructors) all mutate GL state
-    // outside the executor. Every cache we kept here had a corresponding
-    // "invalidate from outside" hook we'd need to remember about and they
-    // were a steady source of subtle "stale binding" bugs. glBindVertexArray /
-    // glUseProgram / glBindFramebuffer are cheap GL calls just rebind every time.
+    // GL state mirrors used to skip redundant binds. The executor is the sole GL
+    // writer (all mutations route through CB opcodes), so these stay in sync as
+    // long as we invalidate them when resources are disposed and when external
+    // helpers that bypass the cache mutate the corresponding state (currently
+    // only GraphicsBuffer.Bind for the ELEMENT_ARRAY_BUFFER / VAO 0 workaround).
 
-    // The currently bound shader IS still tracked, because PropertyApply needs to
-    // know which program to talk to for uniform sets. But it's not used to skip
-    // GL binds.
     private GraphicsProgram? _boundProgram;
 
-    /// <summary>Compatibility shim still called from GraphicsBuffer.Bind() and
-    /// GraphicsVertexArray's constructor. No-op now that we don't cache the bound
-    /// VAO removed in favour of always-bind. Kept so those call sites compile.</summary>
-    internal void InvalidateBoundVAO() { /* no cache to invalidate */ }
+    // Cached GL handles 0 means "default" (backbuffer / no VAO).
+    private uint _lastDrawFb;
+    private uint _lastReadFb;
+    private uint _lastBoundVAO;
+
+    /// <summary>Invalidate the VAO bind cache. Called by GraphicsBuffer.Bind when
+    /// it forces VAO 0 to safely manipulate ELEMENT_ARRAY_BUFFER state.</summary>
+    internal void InvalidateBoundVAO() => _lastBoundVAO = 0;
 
     private RasterizerState _raster;
     private bool _rasterInitialized;
@@ -568,6 +567,8 @@ internal sealed class CommandExecutor
                     var vao = (GraphicsVertexArray)objects[ReadU16(stream, ref pos)]!;
                     if (vao.Handle != 0)
                     {
+                        // GL implicitly unbinds a deleted VAO mirror that here.
+                        if (_lastBoundVAO == vao.Handle) _lastBoundVAO = 0;
                         Graphics.GL.DeleteVertexArray(vao.Handle);
                         vao.Handle = 0;
                     }
@@ -584,6 +585,8 @@ internal sealed class CommandExecutor
                     var fb = (GraphicsFrameBuffer)objects[ReadU16(stream, ref pos)]!;
                     if (fb.Handle != 0)
                     {
+                        if (_lastDrawFb == fb.Handle) _lastDrawFb = 0;
+                        if (_lastReadFb == fb.Handle) _lastReadFb = 0;
                         Graphics.GL.DeleteFramebuffer(fb.Handle);
                         fb.Handle = 0;
                     }
@@ -618,19 +621,6 @@ internal sealed class CommandExecutor
                     DoEndSample();
                     break;
                 }
-                case CommandOpcode.BeginTimer:
-                {
-                    var t = (Rendering.GpuTimer)objects[ReadU16(stream, ref pos)]!;
-                    t._startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-                    break;
-                }
-                case CommandOpcode.EndTimer:
-                {
-                    var t = (Rendering.GpuTimer)objects[ReadU16(stream, ref pos)]!;
-                    long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - t._startTicks;
-                    t.LastMs += (float)(elapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
-                    break;
-                }
                 default:
                     throw new InvalidOperationException($"Unknown command opcode: {op}");
             }
@@ -641,14 +631,29 @@ internal sealed class CommandExecutor
 
     private void ApplyRenderTarget(GraphicsFrameBuffer? draw, GraphicsFrameBuffer? read)
     {
+        uint dh = draw?.Handle ?? 0;
+        uint rh = read?.Handle ?? 0;
         if (ReferenceEquals(draw, read))
         {
-            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, draw?.Handle ?? 0);
+            if (dh != _lastDrawFb || dh != _lastReadFb)
+            {
+                Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, dh);
+                _lastDrawFb = dh;
+                _lastReadFb = dh;
+            }
         }
         else
         {
-            Graphics.GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, draw?.Handle ?? 0);
-            Graphics.GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, read?.Handle ?? 0);
+            if (dh != _lastDrawFb)
+            {
+                Graphics.GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, dh);
+                _lastDrawFb = dh;
+            }
+            if (rh != _lastReadFb)
+            {
+                Graphics.GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, rh);
+                _lastReadFb = rh;
+            }
         }
 
         // Setting a new render target implicitly resizes the viewport to the FB's
@@ -667,7 +672,10 @@ internal sealed class CommandExecutor
 
     private void BindVAO(GraphicsVertexArray? vao)
     {
-        Graphics.GL.BindVertexArray(vao?.Handle ?? 0);
+        uint h = vao?.Handle ?? 0;
+        if (h == _lastBoundVAO) return;
+        Graphics.GL.BindVertexArray(h);
+        _lastBoundVAO = h;
     }
 
     private void DoClear(ClearFlags flags, float r, float g, float b, float a, float depth, int stencil)

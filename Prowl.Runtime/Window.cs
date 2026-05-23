@@ -160,7 +160,8 @@ public static class Window
         options.WindowState = startState;
         options.VSync = VSync;
         options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
-        // Update / Render / SwapBuffers are driven manually from MainLoop.
+        // Update / Render are driven manually from MainLoop SwapBuffers happens
+        // on the render thread.
         options.ShouldSwapAutomatically = false;
         InternalWindow = Silk.NET.Windowing.Window.Create(options);
 
@@ -219,13 +220,9 @@ public static class Window
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
 
+            // SwapBuffers runs on the render thread as part of the frame-end
+            // sentinel no context handoff per frame.
             Graphics.EndFrameAndWait();
-
-            // Render thread has released the context the next BeginFrame hands
-            // it back, so we briefly take it for the present.
-            InternalWindow.GLContext!.MakeCurrent();
-            InternalWindow.GLContext!.SwapBuffers();
-            InternalWindow.GLContext!.Clear();
         }
     }
 

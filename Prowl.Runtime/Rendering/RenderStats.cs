@@ -52,26 +52,13 @@ public static class RenderStats
         public int Cameras;
 
         // ── Timing (ms) ──────────────────────────────────────
-        // *Ms = CPU wall-clock on the encoding thread (how long the pipeline spent
-        // building the pass's CommandBuffers). *GpuMs = render-thread wall-clock
-        // measured by a Stopwatch wrapped around the pass's ops via GpuTimer
-        // proxies actual GPU work since the GL driver stalls the render thread
-        // when the GPU command queue fills or hits a sync.
+        // CPU wall-clock on the encoding thread how long the pipeline spent
+        // building the pass's CommandBuffers, not actual GPU execution time.
         public float FrameTimeMs;
         public float ColorPassMs;
-        public float ColorPassGpuMs;
         public float ShadowPassMs;
-        public float ShadowPassGpuMs;
         public float PostFxMs;
-        public float PostFxGpuMs;
     }
-
-    // Long-lived timer handles. Render thread accumulates elapsed time into LastMs
-    // across each frame's Begin/End cycles main thread resets them at frame start
-    // and snapshots them at frame end.
-    public static readonly GpuTimer ColorPassTimer = new();
-    public static readonly GpuTimer ShadowPassTimer = new();
-    public static readonly GpuTimer PostFxTimer = new();
 
     private static Frame s_current;
     private static Frame s_last;
@@ -96,30 +83,20 @@ public static class RenderStats
     {
         s_current = default;
         s_inShadowPass = false;
-        ColorPassTimer.ResetFrame();
-        ShadowPassTimer.ResetFrame();
-        PostFxTimer.ResetFrame();
     }
 
     /// <summary>Promote the in-progress counters to <see cref="Last"/>. Called by the pipeline at the end of a frame.</summary>
     public static void EndFrame()
     {
         s_current.FrameTimeMs = (float)Time.UnscaledDeltaTime * 1000f;
-        // Snapshot render-thread elapsed times. By this point the pipeline has
-        // pushed its EndFrame work the render thread may still be running our
-        // ops in parallel, so the value can lag slightly; that's expected.
-        s_current.ColorPassGpuMs = ColorPassTimer.LastMs;
-        s_current.ShadowPassGpuMs = ShadowPassTimer.LastMs;
-        s_current.PostFxGpuMs = PostFxTimer.LastMs;
         s_last = s_current;
 
         s_frameTimeHistory[s_frameTimeIndex] = s_last.FrameTimeMs;
         s_frameTimeIndex = (s_frameTimeIndex + 1) % s_frameTimeHistory.Length;
     }
 
-    // Per-section CPU stopwatch (s_sectionStart) plus a render-thread Stopwatch
-    // wrapped via tiny GpuTimer Begin/End CBs. Post-fx and shadow accumulate
-    // across multiple Begin/End cycles in the same frame via += on the timer.
+    // Per-section CPU stopwatch on the encoding thread. Post-fx accumulates
+    // across both BeginPostFx / EndPostFx cycles (AfterOpaques + PostProcess).
 
     /// <summary>Mark the start of a shadow pass so following draw calls count toward shadows.</summary>
     public static void BeginShadowPass()
@@ -127,58 +104,19 @@ public static class RenderStats
         s_inShadowPass = true;
         s_current.ShadowPasses++;
         s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        EmitTimerBegin(ShadowPassTimer);
     }
 
-    /// <summary>End the shadow pass; draw calls go back to the main bucket.</summary>
     public static void EndShadowPass()
     {
         s_current.ShadowPassMs += ElapsedMs();
         s_inShadowPass = false;
-        EmitTimerEnd(ShadowPassTimer);
     }
 
-    /// <summary>Mark the start of the color/geometry pass for timing.</summary>
-    public static void BeginColorPass()
-    {
-        s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        EmitTimerBegin(ColorPassTimer);
-    }
+    public static void BeginColorPass() => s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
+    public static void EndColorPass() => s_current.ColorPassMs += ElapsedMs();
 
-    /// <summary>End the color pass timing.</summary>
-    public static void EndColorPass()
-    {
-        s_current.ColorPassMs += ElapsedMs();
-        EmitTimerEnd(ColorPassTimer);
-    }
-
-    /// <summary>Mark the start of post-processing for timing. Fires twice per
-    /// frame (AfterOpaques + PostProcess); both cycles accumulate.</summary>
-    public static void BeginPostFx()
-    {
-        s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        EmitTimerBegin(PostFxTimer);
-    }
-
-    /// <summary>End post-processing timing.</summary>
-    public static void EndPostFx()
-    {
-        s_current.PostFxMs += ElapsedMs();
-        EmitTimerEnd(PostFxTimer);
-    }
-
-    private static void EmitTimerBegin(GpuTimer t)
-    {
-        using var cmd = Graphics.GetCommandBuffer("Timer.Begin");
-        cmd.BeginTimer(t);
-        Graphics.Submit(cmd);
-    }
-    private static void EmitTimerEnd(GpuTimer t)
-    {
-        using var cmd = Graphics.GetCommandBuffer("Timer.End");
-        cmd.EndTimer(t);
-        Graphics.Submit(cmd);
-    }
+    public static void BeginPostFx() => s_sectionStart = System.Diagnostics.Stopwatch.GetTimestamp();
+    public static void EndPostFx() => s_current.PostFxMs += ElapsedMs();
 
     private static float ElapsedMs()
     {

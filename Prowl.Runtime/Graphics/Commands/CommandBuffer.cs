@@ -768,20 +768,6 @@ public sealed class CommandBuffer : IDisposable
         WriteHeader(CommandOpcode.EndSample);
     }
 
-    /// <summary>Start a render-thread stopwatch. Elapsed time between this and
-    /// EndTimer accumulates into <see cref="Rendering.GpuTimer.LastMs"/>.</summary>
-    public void BeginTimer(Rendering.GpuTimer timer)
-    {
-        WriteHeader(CommandOpcode.BeginTimer);
-        Write(PushObject(timer));
-    }
-
-    public void EndTimer(Rendering.GpuTimer timer)
-    {
-        WriteHeader(CommandOpcode.EndTimer);
-        Write(PushObject(timer));
-    }
-
     // ─────────────────────── Internal: stream writers ───────────────────────
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -152,52 +152,65 @@ public static unsafe class Graphics
 
     private static void RenderThreadLoop()
     {
-        while (!s_renderThreadStop)
+        // Take the GL context once and hold it for the entire run. The frame-end
+        // sentinel does SwapBuffers; the context never bounces back to main.
+        try { Window.InternalWindow.GLContext!.MakeCurrent(); }
+        catch (Exception ex)
         {
-            s_renderWake.Wait();
-            if (s_renderThreadStop) break;
+            Debug.LogError($"Render thread MakeCurrent failed: {ex}");
+            s_renderFrameDone.Set();
+            return;
+        }
 
-            try { Window.InternalWindow.GLContext!.MakeCurrent(); }
-            catch (Exception ex)
+        try
+        {
+            while (!s_renderThreadStop)
             {
-                Debug.LogError($"Render thread MakeCurrent failed: {ex}");
-                s_renderFrameDone.Set();
-                continue;
-            }
+                s_renderWake.Wait();
+                if (s_renderThreadStop) break;
 
-            try
-            {
-                while (true)
+                try
                 {
-                    CBJob job;
-                    try { job = s_renderQueue.Take(); }
-                    catch (System.InvalidOperationException) { return; } // CompleteAdding called
-
-                    if (job.IsFrameEnd) break;
-                    if (job.Cmd == null) { job.Done?.Set(); continue; }
-
-                    var cmd = job.Cmd;
-                    bool pushed = PushCBDebugGroup(cmd.Name);
-                    try { Executor.Execute(cmd); }
-                    catch (Exception ex)
+                    while (true)
                     {
-                        job.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
-                        if (job.Done == null)
-                            Debug.LogError($"Render thread CB '{cmd.Name ?? "<?>"}' execute failed: {ex}");
-                    }
-                    finally
-                    {
-                        if (pushed) PopCBDebugGroup();
-                        CommandBufferPool.Return(cmd);
-                        job.Done?.Set();
+                        CBJob job;
+                        try { job = s_renderQueue.Take(); }
+                        catch (System.InvalidOperationException) { return; } // CompleteAdding called
+
+                        if (job.IsFrameEnd)
+                        {
+                            try { Window.InternalWindow.GLContext!.SwapBuffers(); }
+                            catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
+                            break;
+                        }
+                        if (job.Cmd == null) { job.Done?.Set(); continue; }
+
+                        var cmd = job.Cmd;
+                        bool pushed = PushCBDebugGroup(cmd.Name);
+                        try { Executor.Execute(cmd); }
+                        catch (Exception ex)
+                        {
+                            job.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                            if (job.Done == null)
+                                Debug.LogError($"Render thread CB '{cmd.Name ?? "<?>"}' execute failed: {ex}");
+                        }
+                        finally
+                        {
+                            if (pushed) PopCBDebugGroup();
+                            CommandBufferPool.Return(cmd);
+                            job.Done?.Set();
+                        }
                     }
                 }
+                finally
+                {
+                    s_renderFrameDone.Set();
+                }
             }
-            finally
-            {
-                try { Window.InternalWindow.GLContext!.Clear(); } catch { }
-                s_renderFrameDone.Set();
-            }
+        }
+        finally
+        {
+            try { Window.InternalWindow.GLContext!.Clear(); } catch { }
         }
     }
 
