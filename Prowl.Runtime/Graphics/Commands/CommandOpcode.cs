@@ -76,12 +76,9 @@ internal enum CommandOpcode : ushort
     // (DrawMesh / DrawMeshInstanced / Blit are encoder sugar on CommandBuffer that
     //  expand inline to lower-level opcodes there's no executor case for them.)
 
-    // Resource lifecycle. Resource constructors encode these into a tiny CB and
-    // submit so all GL state mutation routes through the executor. The CPU wrapper
-    // is allocated synchronously the GL Handle field is filled in when the opcode
-    // executes (immediate under Step 1's sync Submit; deferred under Step 2's render
-    // thread). Order is preserved by Submit ordering so subsequent uses of the
-    // resource always see a valid handle.
+    // Resource lifecycle. Constructors encode these into a one-op CB. The CPU
+    // wrapper is allocated synchronously; the GL Handle is filled in when the
+    // executor runs the opcode. Submit order guarantees later ops see a valid handle.
     CreateBuffer,
     DisposeBuffer,
     CreateTexture,

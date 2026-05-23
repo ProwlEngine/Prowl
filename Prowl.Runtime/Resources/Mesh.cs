@@ -70,16 +70,6 @@ public class Mesh : EngineObject, ISerializable
         }
     }
 
-    /// <summary> Public access to VAO for the new Graphics API </summary>
-    public int VAO => vertexArrayObject != null ? GetVAOHandle() : 0;
-
-    private int GetVAOHandle()
-    {
-        // VAO handle extraction - implementation depends on GraphicsVertexArray
-        // For now return a marker value, will be properly implemented based on GL backend
-        return vertexArrayObject?.GetHashCode() ?? 0;
-    }
-
     private T[] CopyArray<T>(T[] source)
     {
         if (source == null)

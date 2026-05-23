@@ -60,15 +60,12 @@ internal sealed class CommandExecutor
     // full Material) since the snapshotted properties already capture the overrides.
     private Resources.Shader? _boundShader;
 
-    // Per-program "globals applied" version vector. PropertyState.s_global* might
-    // change between draws; we re-apply per draw and let GraphicsProgram.uniformCache
-    // dedupe the actual uploads.
-    // (Future optimisation: a global dirty counter to skip the walk entirely.)
+    // Globals walk runs per draw GraphicsProgram.uniformCache dedupes the actual
+    // uniform uploads, so the cost is just dictionary enumeration.
 
-    // No cross-draw texture-unit cache: external code (Graphics.SetTextureFilters,
-    // tex.GenerateMipmap, texture constructors) calls texture.Bind() which mutates
-    // GL state without going through this executor. A cache here would desync from
-    // reality. Always-bind is what the old immediate-mode code did anyway.
+    // No cross-draw texture-unit cache. Slot assignment in PrepareDraw is dynamic
+    // (depends on how many globals + material props are bound this draw), so a
+    // cached "unit X = texture Y" mapping would desync within a single frame.
 
     // Per-uniform SetTexture opcodes can be encoded BEFORE the draw, but their
     // texture-slot allocation must wait until AFTER PrepareDraw has bound globals
@@ -654,12 +651,9 @@ internal sealed class CommandExecutor
             Graphics.GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, read?.Handle ?? 0);
         }
 
-        // Match the old Graphics.BindFramebuffer behavior: setting a new render
-        // target implicitly resizes the viewport to the FB's full size. Without
-        // this, a CB that previously set a small viewport (e.g. a shadow atlas
-        // tile) leaves the GL viewport at that tile, and the next CB's draws into
-        // a different (often larger) RT get rasterised into the same tiny region.
-        // Subsequent explicit cmd.SetViewport opcodes still override.
+        // Setting a new render target implicitly resizes the viewport to the FB's
+        // full size, otherwise a leftover viewport (e.g. a shadow atlas tile) would
+        // clip draws into the new RT. cmd.SetViewport still overrides afterwards.
         if (draw != null)
             Graphics.GL.Viewport(0, 0, draw.Width, draw.Height);
     }

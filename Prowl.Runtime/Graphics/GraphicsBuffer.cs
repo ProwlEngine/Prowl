@@ -11,20 +11,13 @@ public class GraphicsBuffer : IDisposable
 {
     public bool IsDisposed { get; protected set; }
 
-    // Handle / SizeInBytes are mutable because resource lifecycle now flows through
-    // CommandBuffer opcodes the constructor allocates a 0-handle CPU stub and the
-    // executor fills these in when the CreateBuffer opcode runs. Same story for
-    // Set: it reallocates GL storage and the new size lives here.
+    // Handle and SizeInBytes are filled by the executor's CreateBuffer opcode on
+    // the render thread. Set reallocates GL storage and updates SizeInBytes.
     public uint Handle { get; internal set; }
     public readonly BufferType OriginalType;
     public readonly BufferTargetARB Target;
     public uint SizeInBytes { get; internal set; }
 
-    /// <summary>Constructs the CPU wrapper and queues the GL buffer create + initial
-    /// upload through a CommandBuffer. Under Step 1 sync submit, the GL work runs
-    /// inline before this constructor returns. Under Step 2 (render thread), the
-    /// work is queued in order so any subsequent encoded use of this buffer is
-    /// guaranteed to execute against a valid GL handle.</summary>
     public GraphicsBuffer(BufferType type, ReadOnlySpan<byte> initialData, bool dynamic)
     {
         if (type == BufferType.Count)

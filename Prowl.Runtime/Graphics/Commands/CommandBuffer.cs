@@ -541,7 +541,7 @@ public sealed class CommandBuffer : IDisposable
                      Material? material = null, int pass = 0,
                      bool clearDepth = false, bool clearColor = false, Color color = default)
     {
-        material ??= BlitDefaults.GetBlitMaterial();
+        material ??= Rendering.RenderPipeline.GetBlitMaterial();
         if (source != null)
             material.SetTexture("_MainTex", source.MainTexture);
 
@@ -573,7 +573,7 @@ public sealed class CommandBuffer : IDisposable
     public void Blit(Texture2D source, RenderTexture destination,
                      Material? material = null, int pass = 0)
     {
-        material ??= BlitDefaults.GetBlitMaterial();
+        material ??= Rendering.RenderPipeline.GetBlitMaterial();
         material.SetTexture("_MainTex", source);
         SetRenderTarget(destination.frameBuffer);
         SetViewport(0, 0, (uint)destination.Width, (uint)destination.Height);
@@ -606,11 +606,8 @@ public sealed class CommandBuffer : IDisposable
     }
 
     // ─────────────────────── Internal resource-lifecycle encoders ───────────────────────
-    //
-    // These are called from resource constructors / Dispose paths. They allow the
-    // resource classes to never touch GL directly all GL state mutation routes
-    // through the executor, which makes moving execution to a render thread (Step 2)
-    // a focused change to Graphics.Submit rather than rewriting every constructor.
+    // Called from resource constructors and Dispose paths. The wrappers never touch
+    // GL directly all mutation routes through the executor on the render thread.
 
     internal void EncodeCreateBuffer(GraphicsBuffer buf, bool dynamic, ReadOnlySpan<byte> data)
     {
@@ -844,19 +841,3 @@ public sealed class CommandBuffer : IDisposable
     }
 }
 
-/// <summary>Lazy holder for the default blit material so CommandBuffer doesn't depend
-/// on RenderPipeline's static state at class-load time.</summary>
-internal static class BlitDefaults
-{
-    private static Shader? s_blitShader;
-    private static Material? s_blitMaterial;
-
-    public static Material GetBlitMaterial()
-    {
-        if (s_blitShader.IsNotValid())
-            s_blitShader = Shader.LoadDefault(DefaultShader.Blit);
-        if (s_blitMaterial.IsNotValid())
-            s_blitMaterial = new Material(s_blitShader);
-        return s_blitMaterial!;
-    }
-}

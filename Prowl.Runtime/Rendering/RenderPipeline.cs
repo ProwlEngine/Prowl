@@ -114,6 +114,20 @@ public interface IRenderableLight
 
 public abstract class RenderPipeline : EngineObject
 {
+    private static Shader? s_blitShader;
+    private static Material? s_blitMaterial;
+
+    /// <summary>Default material used by <c>cmd.Blit</c> when no material is supplied.
+    /// Lazy-loaded on first call.</summary>
+    public static Material GetBlitMaterial()
+    {
+        if (s_blitShader.IsNotValid())
+            s_blitShader = Shader.LoadDefault(DefaultShader.Blit);
+        if (s_blitMaterial.IsNotValid())
+            s_blitMaterial = new Material(s_blitShader);
+        return s_blitMaterial!;
+    }
+
     public struct CameraSnapshot(Camera camera, DepthTextureMode depthTextureMode)
     {
         public Scene Scene = camera.Scene;

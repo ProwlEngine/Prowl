@@ -28,9 +28,7 @@ public static unsafe class Graphics
 
     public static GraphicsProgram CurrentProgram => GraphicsProgram.currentProgram;
 
-    /// <summary>Long-lived executor so its raster-state cache survives across CBs.
-    /// FB / VAO / texture-unit bind caches would also be sound (executor is the
-    /// sole GL writer) but aren't implemented yet.</summary>
+    /// <summary>Long-lived executor so its raster-state cache survives across CBs.</summary>
     internal static readonly CommandExecutor Executor = new();
 
     public static CommandBuffer GetCommandBuffer(string? name = null) => CommandBufferPool.Rent(name);

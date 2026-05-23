@@ -142,9 +142,8 @@ internal static class PropertyApply
     }
 
     /// <summary>For every property the shader declares but <paramref name="overrides"/>
-    /// doesn't override, push the shader's current default value through the cached
-    /// uniform setters. Mirrors the old <c>ApplyMaterialUniformsWithDefaults</c> tail.
-    /// Pass <c>null</c> overrides to apply all defaults unconditionally.</summary>
+    /// doesn't override, push the shader's default value through the cached uniform
+    /// setters. Pass <c>null</c> overrides to apply all defaults unconditionally.</summary>
     public static void FillShaderDefaults(Resources.Shader shader, PropertyState? overrides, GraphicsProgram p, CommandExecutor exec)
     {
         foreach (var prop in shader.Properties)
@@ -328,9 +327,7 @@ internal static class PropertyApply
     }
 
     // ─────────────────────── Uniform location / block index ───────────────────────
-    //
-    // Caches live on the program itself (one dict per program) to avoid the global
-    // (programId, name) -> int dictionaries the old Graphics.cs kept.
+    // Caches live on the program itself so they're freed when the program is.
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LocationOf(GraphicsProgram p, string name)

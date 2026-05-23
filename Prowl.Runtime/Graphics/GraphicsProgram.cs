@@ -41,8 +41,7 @@ public class GraphicsProgram : IDisposable
 
     internal UniformCache uniformCache = new();
 
-    // Per-program caches used by the command executor (PropertyApply). Replaces the
-    // global (programId, name) dictionaries on the old Graphics facade.
+    // Per-program lookup caches walked by PropertyApply.
     internal readonly Dictionary<string, int> uniformLocations = [];
     internal readonly Dictionary<string, uint> blockIndices = [];
 
