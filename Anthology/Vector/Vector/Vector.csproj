@@ -1,24 +1,47 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;netstandard2.1</TargetFrameworks>
-    <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <NeutralLanguage>en-AU</NeutralLanguage>
-    <PackageId>Prowl.$(AssemblyName)</PackageId>
-    <Title>Prowl.Vector</Title>
-    <Authors>Wulferis</Authors>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Vector</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Vector</PackageProjectUrl>
-    <Description>A 3D 64-bit Mathematics Library, the API is heavily inspired by Unity.
-Built for the Prowl Game Engine.</Description>
-    <PackageTags>mathematics;3d;3d-math;linear-algebra;vector;matrix;quaternion;geometry;transformation;double-precision;numerical;math-library;spatial;rotation;interpolation</PackageTags>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <Version>2.1.0</Version>
-    <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0;netstandard2.1</TargetFrameworks>
+        <OutputType>Library</OutputType>
+        <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+        <NeutralLanguage>en-AU</NeutralLanguage>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.$(AssemblyName)</PackageId>
+        <Version>2.1.1</Version>
+
+        <Authors>Wulferis</Authors>
+        <Owners>Wulferis</Owners>
+        <Copyright>Copyright (c) Wulferis 2026.</Copyright>
+
+        <Description>A 32-bit and 64-bit Vector Mathematics Library. Built for the Prowl game engine.</Description>
+        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Vector</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Vector</PackageProjectUrl>
+        <RepositoryType>git</RepositoryType>
+
+        <PackageTags>mathematics;3d;3d-math;linear-algebra;vector;matrix;quaternion;geometry;transformation;double-precision;numerical;math-library;spatial;rotation;interpolation</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+
+        <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <EmbedAllSources>true</EmbedAllSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <DebugType>portable</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+    </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\LICENSE">
