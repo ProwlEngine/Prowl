@@ -165,15 +165,23 @@ public class GameViewPanel : DockPanel
                 EnsureGamePaper(rtW, rtH);
                 _gamePaperRenderer!.UpdateProjection(rtW, rtH);
 
-                Graphics.BindFramebuffer(_rt.frameBuffer);
-                Graphics.Viewport(0, 0, (uint)rtW, (uint)rtH);
+                {
+                    using var bind = Graphics.GetCommandBuffer("GameViewPanel.GUI Bind");
+                    bind.SetRenderTarget(_rt.frameBuffer);
+                    bind.SetViewport(0, 0, (uint)rtW, (uint)rtH);
+                    Graphics.Submit(bind);
+                }
 
                 _gamePaper!.BeginFrame(Time.DeltaTime, -1f);
                 scene.OnGui(_gamePaper);
                 _gamePaper.EndFrame();
 
-                Graphics.UnbindFramebuffer();
-                Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+                {
+                    using var unbind = Graphics.GetCommandBuffer("GameViewPanel.GUI Unbind");
+                    unbind.SetRenderTarget(null);
+                    unbind.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+                    Graphics.Submit(unbind);
+                }
             }
 
             // Display with letterboxing
@@ -292,7 +300,7 @@ public class GameViewPanel : DockPanel
                     .Text($"{fps:F0} FPS", font).TextColor(FpsColor(fps))
                     .FontSize(fs + 3).Alignment(TextAlignment.MiddleLeft);
                 paper.Box("gv_st_fps_ms")
-                    .Text($"{s.FrameTimeMs:F1}ms", font).TextColor(Dim)
+                    .Text(FormatMs(s.FrameTimeMs), font).TextColor(Dim)
                     .FontSize(fs).Alignment(TextAlignment.MiddleRight);
             }
 
@@ -312,7 +320,7 @@ public class GameViewPanel : DockPanel
             long colorTris = s.Triangles - s.ShadowTriangles;
             long colorVerts = s.Vertices - s.ShadowVertices;
 
-            Section(paper, font, "gv_ht", "TARGET", $"{s.ColorPassMs:F2}ms", fs);
+            Section(paper, font, "gv_ht", "TARGET", FormatCpuGpu(s.ColorPassMs, s.ColorPassGpuMs), fs);
             Row(paper, font, "gv_tdc", "Draws", $"{s.DrawCalls} ({s.InstancedDrawCalls} inst)", fs, rowH,
                 "Individual GPU draw commands issued this frame. Each draw sends geometry to the GPU. Instanced draws render multiple copies in a single call.");
             Row(paper, font, "gv_tba", "Batches", s.Batches.ToString(), fs, rowH,
@@ -323,6 +331,10 @@ public class GameViewPanel : DockPanel
                 "Objects removed by frustum culling before rendering. Higher percentage means more objects are outside the camera view and skipped.");
             Row(paper, font, "gv_tlt", "Lights", $"D:{s.DirectionalLights} P:{s.PointLights} S:{s.SpotLights}", fs, rowH,
                 "Active lights this frame. D = Directional (sun), P = Point (omni), S = Spot. Each light adds a lighting pass over affected geometry.");
+            Row(paper, font, "gv_twa", "Waited", FormatMs(Graphics.LastFrameWaitMs), fs, rowH,
+                "Time the main thread spent blocked at end of frame waiting for the render thread to finish executing this frame's command buffers. " +
+                "High values mean the render thread is the bottleneck (GPU work or CB execution dominates the frame). " +
+                "Near-zero values mean the main thread (update + encoding) takes longer than rendering, so the render thread was already idle when we asked.");
 
             // Shadows
             if (s.ShadowPasses > 0 || s.ShadowCasters > 0)
@@ -330,7 +342,7 @@ public class GameViewPanel : DockPanel
                 int shCullPct = s.ShadowRenderablesCollected > 0
                     ? (int)(s.ShadowRenderablesCulled * 100f / s.ShadowRenderablesCollected) : 0;
 
-                Section(paper, font, "gv_hs", "SHADOWS", $"{s.ShadowPassMs:F2}ms", fs);
+                Section(paper, font, "gv_hs", "SHADOWS", FormatCpuGpu(s.ShadowPassMs, s.ShadowPassGpuMs), fs);
                 Row(paper, font, "gv_sdc", "Draws", $"{s.ShadowDrawCalls} ({s.ShadowInstancedDrawCalls} inst)", fs, rowH,
                     "Draw calls for shadow map rendering. Each shadow-casting light renders the scene from its perspective to build depth maps.");
                 Row(paper, font, "gv_spa", "Passes", s.ShadowPasses.ToString(), fs, rowH,
@@ -346,7 +358,7 @@ public class GameViewPanel : DockPanel
             // Post FX (only when active)
             if (s.ImageEffects > 0)
             {
-                Section(paper, font, "gv_hf", "POST FX", $"{s.PostFxMs:F2}ms", fs);
+                Section(paper, font, "gv_hf", "POST FX", FormatCpuGpu(s.PostFxMs, s.PostFxGpuMs), fs);
                 Row(paper, font, "gv_fx", $"{s.ImageEffects} effects", $"{s.ImageEffectPasses} passes", fs, rowH,
                     "Post-processing effects applied after rendering (bloom, tone mapping, SSAO, etc). Each effect may use multiple full-screen passes.");
             }
@@ -440,6 +452,14 @@ public class GameViewPanel : DockPanel
             paper.Box($"{id}_r").Text(right, font).TextColor(Val).FontSize(fs).Alignment(TextAlignment.MiddleRight);
         }
     }
+
+    // Right-aligned fixed-width "XX.XXms" so changing values don't reflow the row.
+    private static string FormatMs(float ms) => $"{ms,5:0.00}ms";
+    // "Main" = encoding thread wall-clock (building CBs), "Render" = render-thread
+    // wall-clock executing those CBs. Both are CPU since GL TIME_ELAPSED queries
+    // were unreliable Render proxies GPU cost because the driver stalls when its
+    // queue fills.
+    private static string FormatCpuGpu(float cpuMs, float gpuMs) => $"Main {cpuMs,5:0.00}ms  Render {gpuMs,5:0.00}ms";
 
     private static Color FpsColor(float fps) =>
         fps >= 55 ? Color.FromArgb(255, 90, 210, 120) :

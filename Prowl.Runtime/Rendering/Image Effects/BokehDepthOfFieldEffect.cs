@@ -57,23 +57,26 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         // Set resolution for blur passes
         _mat.SetVector("_Resolution", new Float2(blurWidth, blurHeight));
 
+        using var cmd = Graphics.GetCommandBuffer("BokehDoF");
+
         // Pass 0: Horizontal MRT - outputs to 3 render targets (R, G, B channels)
         _mat.SetTexture("_MainTex", context.SceneColor.MainTexture);
-        RenderPipeline.Blit(horizontalMRT, _mat, 0);
+        cmd.Blit(horizontalMRT, _mat, 0);
 
         // Pass 1: Vertical Composite - reads from 3 horizontal textures and combines
         _mat.SetTexture("_HorizR", horizontalMRT.InternalTextures[0]);
         _mat.SetTexture("_HorizG", horizontalMRT.InternalTextures[1]);
         _mat.SetTexture("_HorizB", horizontalMRT.InternalTextures[2]);
-        RenderPipeline.Blit(verticalResult, _mat, 1);
+        cmd.Blit(verticalResult, _mat, 1);
 
         // Pass 2: Final Combine - blend with original image based on CoC (at full resolution)
         _mat.SetTexture("_MainTex", context.SceneColor.MainTexture);
         _mat.SetTexture("_BlurredTex", verticalResult.MainTexture);
         _mat.SetVector("_Resolution", new Float2(fullWidth, fullHeight));
         var temp = RenderTexture.GetTemporaryRT(fullWidth, fullHeight, false, [context.SceneColor.MainTexture.ImageFormat]);
-        RenderPipeline.Blit(context.SceneColor, temp, _mat, 2);
-        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        cmd.Blit(context.SceneColor, temp, _mat, 2);
+        cmd.Blit(temp, context.SceneColor, null, 0);
+        Graphics.Submit(cmd);
         RenderTexture.ReleaseTemporaryRT(temp);
 
         // Clean up MRT

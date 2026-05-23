@@ -14,18 +14,21 @@ namespace Prowl.Runtime.Rendering;
 
 public partial class PropertyState
 {
-    [SerializeField] private Dictionary<string, Color> _colors = [];
-    [SerializeField] private Dictionary<string, Float2> _vectors2 = [];
-    [SerializeField] private Dictionary<string, Float3> _vectors3 = [];
-    [SerializeField] private Dictionary<string, Float4> _vectors4 = [];
-    [SerializeField] private Dictionary<string, float> _floats = [];
-    [SerializeField] private Dictionary<string, int> _ints = [];
-    [SerializeField] private Dictionary<string, Float4x4> _matrices = [];
-    [SerializeField] private Dictionary<string, Float4x4[]> _matrixArr = [];
-    [SerializeField] private Dictionary<string, AssetRef<Texture2D>> _textures = [];
-    [SerializeField] private Dictionary<string, AssetRef<Texture3D>> _textures3D = [];
-    [SerializeField] private Dictionary<string, GraphicsBuffer> _buffers = [];
-    [SerializeField] private Dictionary<string, uint> _bufferBindings = [];
+    // Internal so the command executor (PropertyApply) can walk these directly without
+    // forcing every access through allocating accessor methods. Keep [SerializeField]
+    // so the editor and Echo serializer still see them.
+    [SerializeField] internal Dictionary<string, Color> _colors = [];
+    [SerializeField] internal Dictionary<string, Float2> _vectors2 = [];
+    [SerializeField] internal Dictionary<string, Float3> _vectors3 = [];
+    [SerializeField] internal Dictionary<string, Float4> _vectors4 = [];
+    [SerializeField] internal Dictionary<string, float> _floats = [];
+    [SerializeField] internal Dictionary<string, int> _ints = [];
+    [SerializeField] internal Dictionary<string, Float4x4> _matrices = [];
+    [SerializeField] internal Dictionary<string, Float4x4[]> _matrixArr = [];
+    [SerializeField] internal Dictionary<string, AssetRef<Texture2D>> _textures = [];
+    [SerializeField] internal Dictionary<string, AssetRef<Texture3D>> _textures3D = [];
+    [SerializeField] internal Dictionary<string, GraphicsBuffer> _buffers = [];
+    [SerializeField] internal Dictionary<string, uint> _bufferBindings = [];
 
     public PropertyState() { }
 
@@ -211,635 +214,102 @@ public partial class PropertyState
             _bufferBindings[item.Key] = item.Value;
     }
 
-    /// <summary>
-    /// Applies material-level uniforms to the shader (called ONCE per material batch).
-    /// Material uniforms are properties shared by all objects using the same material
-    /// (e.g., albedo color, roughness, normal maps). This method uses the uniform cache
-    /// to avoid redundant GPU calls when values haven't changed.
-    ///
-    /// Batching flow: Global uniforms → Material uniforms → Per-object (instance) uniforms
-    /// </summary>
-    /// <summary>
-    /// Same as <see cref="ApplyMaterialUniforms(PropertyState, GraphicsProgram, ref int)"/>
-    /// but with a shader-default fallback: every property the shader declares but the
-    /// material doesn't override gets bound to the shader's CURRENT default value
-    /// (read live from <paramref name="shader"/>'s <see cref="Shaders.ShaderProperty"/>
-    /// list). Lets materials store only overrides defaults always come from the
-    /// shader, so editing a default in the shader graph propagates immediately to
-    /// every material using it without any cached snapshot.
-    /// </summary>
-    public static unsafe void ApplyMaterialUniformsWithDefaults(
-        PropertyState materialProperties,
-        Resources.Shader shader, GraphicsProgram program, ref int texSlot)
-    {
-        // First do all the overrides via the cached path.
-        ApplyMaterialUniforms(materialProperties, program, ref texSlot);
-
-        // Then fill in any shader-declared property that wasn't in the material.
-        // CRITICAL: the cache updates below are not optional. Earlier this code
-        // called Graphics.SetUniform* directly without touching `program.uniformCache`,
-        // which meant one material's default-fill could silently overwrite a GPU
-        // uniform that another material had just override-set + cached. On the
-        // next frame the override material's cache said "already set" → skipped
-        // upload → ghost value from the default-fill leaked into it. Every branch
-        // here MUST mirror its write into the cache so the redundancy check stays
-        // correct across draw calls.
-        var cache = program.uniformCache;
-        foreach (var prop in shader.Properties)
-        {
-            string name = prop.Name;
-            switch (prop.PropertyType)
-            {
-                case Shaders.ShaderPropertyType.Float:
-                    if (!materialProperties._floats.ContainsKey(name))
-                    {
-                        float v = (float)prop.Value.X;
-                        if (!cache.floats.TryGetValue(name, out var cv) || cv != v)
-                        {
-                            Graphics.SetUniformF(program, name, v);
-                            cache.floats[name] = v;
-                        }
-                    }
-                    break;
-                case Shaders.ShaderPropertyType.Int:
-                    if (!materialProperties._ints.ContainsKey(name))
-                    {
-                        int v = (int)prop.Value.X;
-                        if (!cache.ints.TryGetValue(name, out var cv) || cv != v)
-                        {
-                            Graphics.SetUniformI(program, name, v);
-                            cache.ints[name] = v;
-                        }
-                    }
-                    break;
-                case Shaders.ShaderPropertyType.Vector2:
-                    if (!materialProperties._vectors2.ContainsKey(name))
-                    {
-                        var v = new Float2((float)prop.Value.X, (float)prop.Value.Y);
-                        if (!cache.vectors2.TryGetValue(name, out var cv) || !cv.Equals(v))
-                        {
-                            Graphics.SetUniformV2(program, name, v);
-                            cache.vectors2[name] = v;
-                        }
-                    }
-                    break;
-                case Shaders.ShaderPropertyType.Vector3:
-                    if (!materialProperties._vectors3.ContainsKey(name))
-                    {
-                        var v = new Float3((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z);
-                        if (!cache.vectors3.TryGetValue(name, out var cv) || !cv.Equals(v))
-                        {
-                            Graphics.SetUniformV3(program, name, v);
-                            cache.vectors3[name] = v;
-                        }
-                    }
-                    break;
-                case Shaders.ShaderPropertyType.Vector4:
-                case Shaders.ShaderPropertyType.Color:
-                    if (!materialProperties._vectors4.ContainsKey(name) && !materialProperties._colors.ContainsKey(name))
-                    {
-                        var v = prop.Value;
-                        if (!cache.vectors4.TryGetValue(name, out var cv) || !cv.Equals(v))
-                        {
-                            Graphics.SetUniformV4(program, name, v);
-                            cache.vectors4[name] = v;
-                        }
-                    }
-                    break;
-                case Shaders.ShaderPropertyType.Matrix:
-                    if (!materialProperties._matrices.ContainsKey(name))
-                    {
-                        // Matrices aren't value-compared in the cache (the struct is
-                        // big compare cost > redundant-upload cost). Always set.
-                        Graphics.SetUniformMatrix(program, name, false, prop.MatrixValue);
-                    }
-                    break;
-                case Shaders.ShaderPropertyType.Texture2D:
-                    if (!materialProperties._textures.ContainsKey(name) && prop.Texture2DValue.IsValid())
-                    {
-                        Graphics.SetUniformTexture(program, name, texSlot, prop.Texture2DValue.Handle);
-                        texSlot++;
-                    }
-                    break;
-                case Shaders.ShaderPropertyType.Texture3D:
-                    if (!materialProperties._textures3D.ContainsKey(name) && prop.Texture3DValue.IsValid())
-                    {
-                        Graphics.SetUniformTexture(program, name, texSlot, prop.Texture3DValue.Handle);
-                        texSlot++;
-                    }
-                    break;
-            }
-        }
-    }
-
-    /// <param name="materialProperties">The material's property state</param>
-    /// <param name="shader">The compiled shader program to bind uniforms to</param>
-    /// <param name="texSlot">Texture slot counter, incremented as textures are bound</param>
-    public static unsafe void ApplyMaterialUniforms(PropertyState materialProperties, GraphicsProgram shader, ref int texSlot)
-    {
-        GraphicsProgram.UniformCache cache = shader.uniformCache;
-
-        // Bind all material properties (floats, vectors, textures, etc.)
-        foreach (KeyValuePair<string, float> item in materialProperties._floats)
-        {
-            if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformF(shader, item.Key, item.Value);
-                cache.floats[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, int> item in materialProperties._ints)
-        {
-            if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformI(shader, item.Key, item.Value);
-                cache.ints[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float2> item in materialProperties._vectors2)
-        {
-            if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV2(shader, item.Key, item.Value);
-                cache.vectors2[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float3> item in materialProperties._vectors3)
-        {
-            if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV3(shader, item.Key, item.Value);
-                cache.vectors3[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4> item in materialProperties._vectors4)
-        {
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV4(shader, item.Key, item.Value);
-                cache.vectors4[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Color> item in materialProperties._colors)
-        {
-            Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(colorVec))
-            {
-                Graphics.SetUniformV4(shader, item.Key, colorVec);
-                cache.vectors4[item.Key] = colorVec;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4x4> item in materialProperties._matrices)
-        {
-            if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformMatrix(shader, item.Key, false, item.Value);
-                cache.matrices[item.Key] = item.Value;
-            }
-        }
-
-        // Matrix arrays - always set (comparison would be expensive)
-        foreach (KeyValuePair<string, Float4x4[]> item in materialProperties._matrixArr)
-            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
-
-        // Bind uniform buffers - check if buffer changed
-        foreach (KeyValuePair<string, GraphicsBuffer> item in materialProperties._buffers)
-        {
-            if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
-            {
-                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
-                cache.buffers[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in materialProperties._textures)
-        {
-            Texture2D? tex = item.Value.Res;
-            if (tex.IsValid())
-            {
-                // Always set textures - slot assignment must be consistent
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-        }
-
-        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in materialProperties._textures3D)
-        {
-            Texture3D? tex = item.Value.Res;
-            if (tex.IsValid())
-            {
-                // Always set textures - slot assignment must be consistent
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Applies per-object (instance) uniforms to the shader (called ONCE per draw call).
-    /// Instance uniforms are properties unique to each object (e.g., tint color, instance ID,
-    /// bone matrices for skinning). These can override material properties if they share the same name.
-    /// Uses the uniform cache to skip redundant GPU calls.
-    ///
-    /// Batching flow: Global uniforms → Material uniforms → Per-object (instance) uniforms
-    /// </summary>
-    /// <param name="instanceProperties">The instance's property state (per-object overrides)</param>
-    /// <param name="shader">The compiled shader program to bind uniforms to</param>
-    /// <param name="texSlot">Texture slot counter, continues from where material textures left off</param>
-    public static unsafe void ApplyInstanceUniforms(PropertyState instanceProperties, GraphicsProgram shader, ref int texSlot)
-    {
-        GraphicsProgram.UniformCache cache = shader.uniformCache;
-
-        // Bind all instance properties (can override material properties of the same name)
-        foreach (KeyValuePair<string, float> item in instanceProperties._floats)
-        {
-            if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformF(shader, item.Key, item.Value);
-                cache.floats[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, int> item in instanceProperties._ints)
-        {
-            if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformI(shader, item.Key, item.Value);
-                cache.ints[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float2> item in instanceProperties._vectors2)
-        {
-            if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV2(shader, item.Key, item.Value);
-                cache.vectors2[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float3> item in instanceProperties._vectors3)
-        {
-            if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV3(shader, item.Key, item.Value);
-                cache.vectors3[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4> item in instanceProperties._vectors4)
-        {
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV4(shader, item.Key, item.Value);
-                cache.vectors4[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Color> item in instanceProperties._colors)
-        {
-            Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(colorVec))
-            {
-                Graphics.SetUniformV4(shader, item.Key, colorVec);
-                cache.vectors4[item.Key] = colorVec;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4x4> item in instanceProperties._matrices)
-        {
-            if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformMatrix(shader, item.Key, false, item.Value);
-                cache.matrices[item.Key] = item.Value;
-            }
-        }
-
-        // Matrix arrays - always set (comparison would be expensive)
-        foreach (KeyValuePair<string, Float4x4[]> item in instanceProperties._matrixArr)
-            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
-
-        // Bind uniform buffers - check if buffer changed
-        foreach (KeyValuePair<string, GraphicsBuffer> item in instanceProperties._buffers)
-        {
-            if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
-            {
-                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
-                cache.buffers[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in instanceProperties._textures)
-        {
-            Texture2D? tex = item.Value.Res;
-            if (tex.IsValid())
-            {
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-        }
-
-        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in instanceProperties._textures3D)
-        {
-            Texture3D? tex = item.Value.Res;
-            if (tex.IsValid())
-            {
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-        }
-    }
-
-    public static unsafe void Apply(PropertyState mpb, GraphicsProgram shader)
-    {
-        GraphicsProgram.UniformCache cache = shader.uniformCache;
-        int texSlot = 0;
-
-        // Bind the global uniform buffer first
-        GraphicsBuffer globalBuffer = GlobalUniforms.GetBuffer();
-        if (globalBuffer != null)
-        {
-            Graphics.BindUniformBuffer(shader, "GlobalUniforms", globalBuffer, 0);
-        }
-
-        // Apply global properties first (so instance properties can override them)
-        ApplyGlobals(shader, cache, ref texSlot);
-
-        // Then apply instance properties
-        foreach (KeyValuePair<string, float> item in mpb._floats)
-        {
-            if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformF(shader, item.Key, item.Value);
-                cache.floats[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, int> item in mpb._ints)
-        {
-            if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformI(shader, item.Key, item.Value);
-                cache.ints[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float2> item in mpb._vectors2)
-        {
-            if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV2(shader, item.Key, item.Value);
-                cache.vectors2[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float3> item in mpb._vectors3)
-        {
-            if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV3(shader, item.Key, item.Value);
-                cache.vectors3[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4> item in mpb._vectors4)
-        {
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV4(shader, item.Key, item.Value);
-                cache.vectors4[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Color> item in mpb._colors)
-        {
-            Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformV4(shader, item.Key, colorVec);
-                cache.vectors4[item.Key] = colorVec;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4x4> item in mpb._matrices)
-        {
-            if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(item.Value))
-            {
-                Graphics.SetUniformMatrix(shader, item.Key, false, item.Value);
-                cache.matrices[item.Key] = item.Value;
-            }
-        }
-
-        // Matrix arrays - always set (comparison would be expensive)
-        foreach (KeyValuePair<string, Float4x4[]> item in mpb._matrixArr)
-            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].c0.X);
-
-        // Bind uniform buffers - check if buffer changed
-        foreach (KeyValuePair<string, GraphicsBuffer> item in mpb._buffers)
-        {
-            if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
-            {
-                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
-                cache.buffers[item.Key] = item.Value;
-            }
-        }
-
-        List<string> toRemove = [];
-        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in mpb._textures)
-        {
-            Texture2D? tex = item.Value.Res;
-            if (tex.IsValid())
-            {
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-            else
-            {
-                toRemove.Add(item.Key);
-            }
-        }
-
-        foreach (string key in toRemove)
-            mpb._textures.Remove(key);
-
-        List<string> toRemove3D = [];
-        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in mpb._textures3D)
-        {
-            Texture3D? tex = item.Value.Res;
-            if (tex.IsValid())
-            {
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-            else
-            {
-                toRemove3D.Add(item.Key);
-            }
-        }
-
-        foreach (string key in toRemove3D)
-            mpb._textures3D.Remove(key);
-    }
-
-    internal static void ApplyGlobals(GraphicsProgram shader, GraphicsProgram.UniformCache cache, ref int texSlot)
-    {
-        foreach (KeyValuePair<string, float> item in s_globalFloats)
-        {
-            if (!cache.floats.TryGetValue(item.Key, out float cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformF(shader, item.Key, item.Value);
-                cache.floats[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, int> item in s_globalInts)
-        {
-            if (!cache.ints.TryGetValue(item.Key, out int cachedValue) || cachedValue != item.Value)
-            {
-                Graphics.SetUniformI(shader, item.Key, item.Value);
-                cache.ints[item.Key] = item.Value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float2> item in s_globalVectors2)
-        {
-            Float2 value = (Float2)item.Value;
-            if (!cache.vectors2.TryGetValue(item.Key, out Float2 cachedValue) || !cachedValue.Equals(value))
-            {
-                Graphics.SetUniformV2(shader, item.Key, value);
-                cache.vectors2[item.Key] = value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float3> item in s_globalVectors3)
-        {
-            Float3 value = (Float3)item.Value;
-            if (!cache.vectors3.TryGetValue(item.Key, out Float3 cachedValue) || !cachedValue.Equals(value))
-            {
-                Graphics.SetUniformV3(shader, item.Key, value);
-                cache.vectors3[item.Key] = value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4> item in s_globalVectors4)
-        {
-            Float4 value = (Float4)item.Value;
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(value))
-            {
-                Graphics.SetUniformV4(shader, item.Key, value);
-                cache.vectors4[item.Key] = value;
-            }
-        }
-
-        foreach (KeyValuePair<string, Color> item in s_globalColors)
-        {
-            Float4 colorVec = new((float)item.Value.R, (float)item.Value.G, (float)item.Value.B, (float)item.Value.A);
-            if (!cache.vectors4.TryGetValue(item.Key, out Float4 cachedValue) || !cachedValue.Equals(colorVec))
-            {
-                Graphics.SetUniformV4(shader, item.Key, colorVec);
-                cache.vectors4[item.Key] = colorVec;
-            }
-        }
-
-        foreach (KeyValuePair<string, Float4x4> item in s_globalMatrices)
-        {
-            Float4x4 value = (Float4x4)item.Value;
-            if (!cache.matrices.TryGetValue(item.Key, out Float4x4 cachedValue) || !cachedValue.Equals(value))
-            {
-                Graphics.SetUniformMatrix(shader, item.Key, false, value);
-                cache.matrices[item.Key] = value;
-            }
-        }
-
-        // Matrix arrays - always set (comparison would be expensive)
-        foreach (KeyValuePair<string, System.Numerics.Matrix4x4[]> item in s_globalMatrixArr)
-            Graphics.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in item.Value[0].M11);
-
-        // Bind global uniform buffers - check if buffer changed
-        foreach (KeyValuePair<string, GraphicsBuffer> item in s_globalBuffers)
-        {
-            if (!cache.buffers.TryGetValue(item.Key, out GraphicsBuffer? cachedBuffer) || cachedBuffer != item.Value)
-            {
-                Graphics.BindUniformBuffer(shader, item.Key, item.Value);
-                cache.buffers[item.Key] = item.Value;
-            }
-        }
-
-        List<string> toRemove = [];
-        foreach (KeyValuePair<string, Texture2D> item in s_globalTextures)
-        {
-            Texture2D tex = item.Value;
-            if (tex.IsValid())
-            {
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-            else
-            {
-                toRemove.Add(item.Key);
-            }
-        }
-
-        foreach (string key in toRemove)
-            s_globalTextures.Remove(key);
-
-        List<string> toRemove3D = [];
-        foreach (KeyValuePair<string, Texture3D> item in s_globalTextures3D)
-        {
-            Texture3D tex = item.Value;
-            if (tex.IsValid())
-            {
-                Graphics.SetUniformTexture(shader, item.Key, texSlot, tex.Handle);
-                texSlot++;
-            }
-            else
-            {
-                toRemove3D.Add(item.Key);
-            }
-        }
-
-        foreach (string key in toRemove3D)
-            s_globalTextures3D.Remove(key);
-    }
 }
 
 public partial class PropertyState
 {
-    // Global static dictionaries
-    private static Dictionary<string, Color> s_globalColors = [];
-    private static Dictionary<string, Float2> s_globalVectors2 = [];
-    private static Dictionary<string, Float3> s_globalVectors3 = [];
-    private static Dictionary<string, Float4> s_globalVectors4 = [];
-    private static Dictionary<string, float> s_globalFloats = [];
-    private static Dictionary<string, int> s_globalInts = [];
-    private static Dictionary<string, Float4x4> s_globalMatrices = [];
-    private static Dictionary<string, System.Numerics.Matrix4x4[]> s_globalMatrixArr = [];
-    private static Dictionary<string, Texture2D> s_globalTextures = [];
-    private static Dictionary<string, Texture3D> s_globalTextures3D = [];
-    private static Dictionary<string, GraphicsBuffer> s_globalBuffers = [];
-    private static Dictionary<string, uint> s_globalBufferBindings = [];
+    // Global static dictionaries. Internal so PropertyApply (executor) can walk them.
+    internal static Dictionary<string, Color> s_globalColors = [];
+    internal static Dictionary<string, Float2> s_globalVectors2 = [];
+    internal static Dictionary<string, Float3> s_globalVectors3 = [];
+    internal static Dictionary<string, Float4> s_globalVectors4 = [];
+    internal static Dictionary<string, float> s_globalFloats = [];
+    internal static Dictionary<string, int> s_globalInts = [];
+    internal static Dictionary<string, Float4x4> s_globalMatrices = [];
+    internal static Dictionary<string, System.Numerics.Matrix4x4[]> s_globalMatrixArr = [];
+    internal static Dictionary<string, Texture2D> s_globalTextures = [];
+    internal static Dictionary<string, Texture3D> s_globalTextures3D = [];
+    internal static Dictionary<string, GraphicsBuffer> s_globalBuffers = [];
+    internal static Dictionary<string, uint> s_globalBufferBindings = [];
 
-    // Global setters
-    public static void SetGlobalColor(string name, Color value) => s_globalColors[name] = value;
-    public static void SetGlobalVector(string name, Float2 value) => s_globalVectors2[name] = value;
-    public static void SetGlobalVector(string name, Float3 value) => s_globalVectors3[name] = value;
-    public static void SetGlobalVector(string name, Float4 value) => s_globalVectors4[name] = value;
-    public static void SetGlobalFloat(string name, float value) => s_globalFloats[name] = (float)value;
-    public static void SetGlobalInt(string name, int value) => s_globalInts[name] = value;
-    public static void SetGlobalMatrix(string name, Float4x4 value) => s_globalMatrices[name] = value;
-    public static void SetGlobalMatrices(string name, Float4x4[] value) => s_globalMatrixArr[name] = [.. value.Select(x => (System.Numerics.Matrix4x4)(Float4x4)x)];
-    public static void SetGlobalTexture(string name, Texture2D value) => s_globalTextures[name] = value;
-    public static void SetGlobalTexture3D(string name, Texture3D value) => s_globalTextures3D[name] = value;
+    // Global setters route through a one-op CommandBuffer so the dict mutation
+    // runs on the render thread, ordered against draws and free of races with
+    // PropertyApply's enumeration.
+    public static void SetGlobalColor(string name, Color value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalColor");
+        cmd.SetGlobalColor(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalVector(string name, Float2 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalVec2");
+        cmd.SetGlobalVector(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalVector(string name, Float3 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalVec3");
+        cmd.SetGlobalVector(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalVector(string name, Float4 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalVec4");
+        cmd.SetGlobalVector(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalFloat(string name, float value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalFloat");
+        cmd.SetGlobalFloat(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalInt(string name, int value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalInt");
+        cmd.SetGlobalInt(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalMatrix(string name, Float4x4 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalMatrix");
+        cmd.SetGlobalMatrix(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalMatrices(string name, Float4x4[] value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalMatrices");
+        cmd.SetGlobalMatrices(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalTexture(string name, Texture2D value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalTexture");
+        cmd.SetGlobalTexture(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalTexture3D(string name, Texture3D value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalTexture3D");
+        cmd.SetGlobalTexture3D(name, value); Graphics.Submit(cmd);
+    }
     public static void SetGlobalBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
-        s_globalBuffers[name] = value;
-        s_globalBufferBindings[name] = bindingPoint;
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalBuffer");
+        cmd.SetGlobalBuffer(name, value, bindingPoint); Graphics.Submit(cmd);
+    }
+
+    // Render-thread-only direct mutations, invoked by executor handlers. Bypass the
+    // CB plumbing so they don't recurse into another submit.
+    internal static void SetGlobalMatricesInternal(string name, Float4x4[] value)
+        => s_globalMatrixArr[name] = [.. value.Select(x => (System.Numerics.Matrix4x4)(Float4x4)x)];
+
+    internal static void ClearGlobalsInternal()
+    {
+        s_globalTextures.Clear();
+        s_globalTextures3D.Clear();
+        s_globalMatrices.Clear();
+        s_globalInts.Clear();
+        s_globalFloats.Clear();
+        s_globalVectors2.Clear();
+        s_globalVectors3.Clear();
+        s_globalVectors4.Clear();
+        s_globalColors.Clear();
+        s_globalMatrixArr.Clear();
+        s_globalBuffers.Clear();
+        s_globalBufferBindings.Clear();
     }
 
     // Global getters
@@ -857,17 +327,8 @@ public partial class PropertyState
 
     public static void ClearGlobals()
     {
-        s_globalTextures.Clear();
-        s_globalTextures3D.Clear();
-        s_globalMatrices.Clear();
-        s_globalInts.Clear();
-        s_globalFloats.Clear();
-        s_globalVectors2.Clear();
-        s_globalVectors3.Clear();
-        s_globalVectors4.Clear();
-        s_globalColors.Clear();
-        s_globalMatrixArr.Clear();
-        s_globalBuffers.Clear();
-        s_globalBufferBindings.Clear();
+        using var cmd = Graphics.GetCommandBuffer("ClearAllGlobals");
+        cmd.ClearAllGlobals();
+        Graphics.Submit(cmd);
     }
 }

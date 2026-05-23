@@ -56,22 +56,21 @@ public sealed class TonemapperEffect : ImageEffect
             [TextureImageFormat.Color4b] // LDR format
         );
 
-        // Copy depth from current buffer if it has one
+        using var cmd = Graphics.GetCommandBuffer("Tonemapper");
+
+        // Preserve depth so transparents drawn into the LDR buffer still occlude correctly.
         if (context.SceneColor.InternalDepth != null)
         {
-            Graphics.BindFramebuffer(context.SceneColor.frameBuffer, FBOTarget.Read);
-            Graphics.BindFramebuffer(ldrBuffer.frameBuffer, FBOTarget.Draw);
-            Graphics.BlitFramebuffer(
+            cmd.SetRenderTargets(ldrBuffer.frameBuffer, context.SceneColor.frameBuffer);
+            cmd.BlitFramebuffer(
                 0, 0, context.Width, context.Height,
                 0, 0, context.Width, context.Height,
-                ClearFlags.Depth, BlitFilter.Nearest
-            );
+                ClearFlags.Depth, BlitFilter.Nearest);
         }
 
-        // Tonemap HDR to LDR
-        RenderPipeline.Blit(context.SceneColor, ldrBuffer, _mat, 0);
+        cmd.Blit(context.SceneColor, ldrBuffer, _mat, 0);
+        Graphics.Submit(cmd);
 
-        // Replace the scene color buffer with LDR version
         context.ReplaceSceneColor(ldrBuffer);
     }
 

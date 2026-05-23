@@ -47,9 +47,11 @@ public sealed class AutoExposureEffect : ImageEffect
         int w = context.Width / 2;
         int h = context.Height / 2;
 
+        using var cmd = Graphics.GetCommandBuffer("AutoExposure");
+
         // ---- Step 1: Extract log-luminance at half resolution ----
         var lumRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
-        RenderPipeline.Blit(context.SceneColor, lumRT, _mat, 0);
+        cmd.Blit(context.SceneColor, lumRT, _mat, 0);
 
         // ---- Step 2: Downsample chain until we reach a small enough size ----
         var mipChain = new List<RenderTexture>();
@@ -62,13 +64,12 @@ public sealed class AutoExposureEffect : ImageEffect
             h = Math.Max(1, h / 2);
 
             var downRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
-            RenderPipeline.Blit(current, downRT, _mat, 1);
+            cmd.Blit(current, downRT, _mat, 1);
             mipChain.Add(downRT);
             current = downRT;
         }
 
         // ---- Step 3: Temporal adaptation ----
-        // Ensure the persistent 1x1 adaptation RT exists
         if (_adaptedLuminance != null && _adaptedLuminance.IsDisposed)
         {
             _adaptedLuminance = null;
@@ -77,17 +78,14 @@ public sealed class AutoExposureEffect : ImageEffect
 
         _adaptedLuminance ??= new RenderTexture(1, 1, false, [TextureImageFormat.Short]);
 
-        // Adapt: blend measured luminance with previous adapted value
         var newAdapted = RenderTexture.GetTemporaryRT(1, 1, false, [TextureImageFormat.Short]);
         _mat.SetTexture("_AdaptedTex", _adaptedLuminance.MainTexture);
         _mat.SetFloat("_AdaptSpeedUp", Math.Max(0.01f, AdaptSpeedUp));
         _mat.SetFloat("_AdaptSpeedDown", Math.Max(0.01f, AdaptSpeedDown));
         _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
-        RenderPipeline.Blit(current, newAdapted, _mat, 2);
+        cmd.Blit(current, newAdapted, _mat, 2);
 
-        // Store adapted luminance for next frame
-        RenderPipeline.Blit(newAdapted, _adaptedLuminance, null, 0);
-        RenderTexture.ReleaseTemporaryRT(newAdapted);
+        cmd.Blit(newAdapted, _adaptedLuminance, null, 0);
         _historyValid = true;
 
         // ---- Step 4: Apply exposure to scene color ----
@@ -97,11 +95,12 @@ public sealed class AutoExposureEffect : ImageEffect
         _mat.SetFloat("_MaxExposure", MaxExposure);
 
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
-        RenderPipeline.Blit(context.SceneColor, temp, _mat, 3);
-        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
-        RenderTexture.ReleaseTemporaryRT(temp);
+        cmd.Blit(context.SceneColor, temp, _mat, 3);
+        cmd.Blit(temp, context.SceneColor, null, 0);
+        Graphics.Submit(cmd);
 
-        // ---- Cleanup ----
+        RenderTexture.ReleaseTemporaryRT(temp);
+        RenderTexture.ReleaseTemporaryRT(newAdapted);
         foreach (var rt in mipChain)
             RenderTexture.ReleaseTemporaryRT(rt);
     }

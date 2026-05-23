@@ -97,23 +97,26 @@ public class PointLight : Light
             int viewportX = atlasX + (gridX * res);
             int viewportY = atlasY + (gridY * res);
 
-            // Set viewport for this face
-            Graphics.Viewport(viewportX, viewportY, (uint)res, (uint)res);
-
-            // Create view matrix for this face
             (Float3 forward, Float3 up) = faceOrientations[faceIndex];
             Float4x4 view = Float4x4.CreateLookTo(lightPos, forward, up);
 
             Frustum frustum = Frustum.FromMatrix(projection * view);
 
-            // Calculate viewer data for this face
             Float3 right = Float3.Normalize(Float3.Cross(up, forward));
             ViewerData viewerData = new ViewerData(lightPos, forward, right, up);
 
-            // Cull and render shadow casters for this face
             System.Collections.Generic.HashSet<int> culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
+
+            // Push this face's view/proj into the global UBO BEFORE the face CB
+            // encodes draws otherwise all six faces would batch into one CB and
+            // execute against whatever matrices the last face uploaded.
             pipeline.AssignCameraMatrices(view, projection);
-            pipeline.DrawRenderables(renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices, false);
+
+            using var cmd = Graphics.GetCommandBuffer($"PointLightFace{faceIndex}");
+            cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
+            cmd.SetViewport(viewportX, viewportY, (uint)res, (uint)res);
+            pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices, false);
+            Graphics.Submit(cmd);
 
             // Store face data for shader
             _shadowMatrices[faceIndex] = projection * view;

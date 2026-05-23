@@ -151,18 +151,22 @@ public class DirectionalLight : Light
                 int atlasX = slot.Value.X;
                 int atlasY = slot.Value.Y;
 
-                // Set viewport to this cascade's atlas region
-                Graphics.Viewport(atlasX, atlasY, (uint)res, (uint)res);
-
-                // Calculate shadow matrix for this cascade distance
                 GetShadowMatrix(cameraPosition, res, cascadeDistance, out Float4x4 view, out Float4x4 proj);
 
                 Frustum frustum = Frustum.FromMatrix(proj * view);
 
-                // Cull and render shadow casters for this cascade
                 System.Collections.Generic.HashSet<int> culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
+
+                // Upload this cascade's matrices BEFORE its CB encodes draws. Each
+                // cascade is its own submitted CB so all four don't get batched and
+                // executed against just the last cascade's matrices.
                 pipeline.AssignCameraMatrices(view, proj);
-                pipeline.DrawRenderables(renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
+
+                using var cmd = Graphics.GetCommandBuffer($"DirectionalLightCascade{cascadeIndex}");
+                cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
+                cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
+                pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
+                Graphics.Submit(cmd);
 
                 // Store cascade data for shader
                 _cascadeShadowMatrices[cascadeIndex] = proj * view;

@@ -66,36 +66,38 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
             _mat.SetTexture("_CameraNormalsTexture", context.DepthNormals.InternalTextures[0]);
         }
 
+        using var cmd = Graphics.GetCommandBuffer("SSR");
+
         // Pass 0: Ray March - Trace rays and output hit UVs + confidence
         _mat.SetFloat("_MaxSteps", MaxSteps);
         _mat.SetFloat("_BinarySearchIterations", BinarySearchIterations);
         _mat.SetFloat("_ScreenEdgeFade", ScreenEdgeFade);
-        RenderPipeline.Blit(context.SceneColor, reflectionDataRT, _mat, 0);
+        cmd.Blit(context.SceneColor, reflectionDataRT, _mat, 0);
 
         // Pass 1: Resolve - Sample scene color at hit points
         _mat.SetTexture("_ReflectionData", reflectionDataRT.MainTexture);
         _mat.SetFloat("_MipBias", MipBias);
-        RenderPipeline.Blit(context.SceneColor, resolvedRT, _mat, 1);
+        cmd.Blit(context.SceneColor, resolvedRT, _mat, 1);
 
         // Pass 2: Blur Horizontal
         _mat.SetVector("_BlurDirection", new Float2(1.0f, 0.0f));
         _mat.SetFloat("_BlurRadius", BlurRadius);
-        RenderPipeline.Blit(resolvedRT, blurTempRT, _mat, 2);
+        cmd.Blit(resolvedRT, blurTempRT, _mat, 2);
 
         // Pass 3: Blur Vertical
         _mat.SetVector("_BlurDirection", new Float2(0.0f, 1.0f));
         _mat.SetFloat("_BlurRadius", BlurRadius);
-        RenderPipeline.Blit(blurTempRT, resolvedRT, _mat, 2);
+        cmd.Blit(blurTempRT, resolvedRT, _mat, 2);
 
         // Pass 4: Composite - Blend reflections with scene
         _mat.SetTexture("_ReflectionTex", resolvedRT.MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
-        RenderPipeline.Blit(context.SceneColor, temp, _mat, 3);
-        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
-        RenderTexture.ReleaseTemporaryRT(temp);
+        cmd.Blit(context.SceneColor, temp, _mat, 3);
+        cmd.Blit(temp, context.SceneColor, null, 0);
+        Graphics.Submit(cmd);
 
-        // Release temporary render textures
+        RenderTexture.ReleaseTemporaryRT(temp);
         RenderTexture.ReleaseTemporaryRT(reflectionDataRT);
         RenderTexture.ReleaseTemporaryRT(resolvedRT);
         RenderTexture.ReleaseTemporaryRT(blurTempRT);

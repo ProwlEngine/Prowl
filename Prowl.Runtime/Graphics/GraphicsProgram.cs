@@ -41,130 +41,131 @@ public class GraphicsProgram : IDisposable
 
     internal UniformCache uniformCache = new();
 
+    // Per-program caches used by the command executor (PropertyApply). Replaces the
+    // global (programId, name) dictionaries on the old Graphics facade.
+    internal readonly Dictionary<string, int> uniformLocations = [];
+    internal readonly Dictionary<string, uint> blockIndices = [];
+
     public bool IsDisposed { get; protected set; }
 
-    public uint Handle { get; private set; }
+    public uint Handle { get; internal set; }
+
+    // Held only until CreateGLObject runs on the render thread, then nulled.
+    private string? _fragmentSource;
+    private string? _vertexSource;
+    private string? _geometrySource;
 
     public GraphicsProgram(string fragmentSource, string vertexSource, string geometrySource) : base()
     {
         ID = System.Threading.Interlocked.Increment(ref _nextId);
+        _fragmentSource = fragmentSource;
+        _vertexSource = vertexSource;
+        _geometrySource = geometrySource;
+        Handle = 0;
 
-        // Initialize compilation log info variables
+        // SubmitAndWait so compile / link errors surface synchronously to
+        // ShaderPass.TryGetVariantProgram (it catches and falls back).
+        using var cmd = Graphics.GetCommandBuffer("GraphicsProgram.Compile");
+        cmd.EncodeCompileShader(this);
+        Graphics.SubmitAndWait(cmd);
+    }
+
+    /// <summary>Invoked by the CompileShader executor handler on the render thread.
+    /// Releases the source strings on success.</summary>
+    internal void CreateGLObject()
+    {
         int statusCode = -1;
         string info = string.Empty;
 
         Handle = Graphics.GL.CreateProgram();
 
-        // Create fragment shader if requested
-        if (!string.IsNullOrEmpty(fragmentSource))
+        if (!string.IsNullOrEmpty(_fragmentSource))
         {
-            // Create and compile the shader
             uint fragmentShader = Graphics.GL.CreateShader(ShaderType.FragmentShader);
-            Graphics.GL.ShaderSource(fragmentShader, fragmentSource);
+            Graphics.GL.ShaderSource(fragmentShader, _fragmentSource);
             Graphics.GL.CompileShader(fragmentShader);
 
-            // Check the compile log
             Graphics.GL.GetShaderInfoLog(fragmentShader, out info);
             Graphics.GL.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
 
-            // Check the compile log
             if (statusCode != 1)
             {
-                // Delete every handles when compilation failed
                 IsDisposed = true;
                 Graphics.GL.DeleteShader(fragmentShader);
                 Graphics.GL.DeleteProgram(Handle);
-
+                Handle = 0;
                 throw new InvalidOperationException("Failed to Compile Fragment Shader Source.\n" +
-                    info + "\n\n" +
-                    "Status Code: " + statusCode.ToString());
+                    info + "\n\nStatus Code: " + statusCode.ToString());
             }
 
-            // Attach the shader to the program, and delete it (not needed anymore)
             Graphics.GL.AttachShader(Handle, fragmentShader);
             Graphics.GL.DeleteShader(fragmentShader);
         }
 
-        // Create vertex shader if requested
-        if (!string.IsNullOrEmpty(vertexSource))
+        if (!string.IsNullOrEmpty(_vertexSource))
         {
-            // Create and compile the shader
             uint vertexShader = Graphics.GL.CreateShader(ShaderType.VertexShader);
-            Graphics.GL.ShaderSource(vertexShader, vertexSource);
+            Graphics.GL.ShaderSource(vertexShader, _vertexSource);
             Graphics.GL.CompileShader(vertexShader);
 
-            // Check the compile log
             Graphics.GL.GetShaderInfoLog(vertexShader, out info);
             Graphics.GL.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
 
-            // Check the compile log
             if (statusCode != 1)
             {
-                // Delete every handles when compilation failed
                 IsDisposed = true;
                 Graphics.GL.DeleteShader(vertexShader);
                 Graphics.GL.DeleteProgram(Handle);
-
+                Handle = 0;
                 throw new InvalidOperationException("Failed to Compile Vertex Shader Source.\n" +
-                    info + "\n\n" +
-                    "Status Code: " + statusCode.ToString());
+                    info + "\n\nStatus Code: " + statusCode.ToString());
             }
 
-            // Attach the shader to the program, and delete it (not needed anymore)
             Graphics.GL.AttachShader(Handle, vertexShader);
             Graphics.GL.DeleteShader(vertexShader);
         }
 
-        // Create geometry shader if requested
-        if (!string.IsNullOrEmpty(geometrySource))
+        if (!string.IsNullOrEmpty(_geometrySource))
         {
-            // Create and compile the shader
             uint geometryShader = Graphics.GL.CreateShader(ShaderType.GeometryShader);
-            Graphics.GL.ShaderSource(geometryShader, geometrySource);
+            Graphics.GL.ShaderSource(geometryShader, _geometrySource);
             Graphics.GL.CompileShader(geometryShader);
 
-            // Check the compile log
             Graphics.GL.GetShaderInfoLog(geometryShader, out info);
             Graphics.GL.GetShader(geometryShader, ShaderParameterName.CompileStatus, out statusCode);
 
-            // Check the compile log
             if (statusCode != 1)
             {
-                // Delete every handles when compilation failed
                 IsDisposed = true;
                 Graphics.GL.DeleteShader(geometryShader);
                 Graphics.GL.DeleteProgram(Handle);
-
+                Handle = 0;
                 throw new InvalidOperationException("Failed to Compile Geometry Shader Source.\n" +
-                    info + "\n\n" +
-                    "Status Code: " + statusCode.ToString());
+                    info + "\n\nStatus Code: " + statusCode.ToString());
             }
 
-            // Attach the shader to the program, and delete it (not needed anymore)
             Graphics.GL.AttachShader(Handle, geometryShader);
             Graphics.GL.DeleteShader(geometryShader);
         }
 
-        // Link the compiled program
         Graphics.GL.LinkProgram(Handle);
-
-        // Check for link status
         Graphics.GL.GetProgramInfoLog(Handle, out info);
         Graphics.GL.GetProgram(Handle, ProgramPropertyARB.LinkStatus, out statusCode);
         if (statusCode != 1)
         {
-            // Delete the handles when failed to link the program
             IsDisposed = true;
             Graphics.GL.DeleteProgram(Handle);
-
+            Handle = 0;
             throw new InvalidOperationException("Failed to Link Shader Program.\n" +
-                    info + "\n\n" +
-                    "Status Code: " + statusCode.ToString());
+                    info + "\n\nStatus Code: " + statusCode.ToString());
         }
 
-        // Force an OpenGL flush, so that the shader will appear updated
-        // in all contexts immediately (solves problems in multi-threaded apps)
         Graphics.GL.Flush();
+
+        // Release sources we won't recompile.
+        _fragmentSource = null;
+        _vertexSource = null;
+        _geometrySource = null;
     }
 
     public static GraphicsProgram? currentProgram = null;
@@ -181,12 +182,11 @@ public class GraphicsProgram : IDisposable
     {
         if (IsDisposed)
             return;
-
-        if (currentProgram != null && currentProgram.Handle == Handle)
-            currentProgram = null;
-
-        Graphics.GL.DeleteProgram(Handle);
         IsDisposed = true;
+
+        using var cmd = Graphics.GetCommandBuffer("GraphicsProgram.Dispose");
+        cmd.EncodeDisposeShader(this);
+        Graphics.Submit(cmd);
     }
 
     public override string ToString()

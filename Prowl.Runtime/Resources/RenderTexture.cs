@@ -62,16 +62,6 @@ public sealed class RenderTexture : EngineObject, ISerializable
         frameBuffer = Graphics.CreateFramebuffer(attachments, (uint)Width, (uint)Height);
     }
 
-    public void Begin()
-    {
-        Graphics.BindFramebuffer(frameBuffer);
-    }
-
-    public void End()
-    {
-        Graphics.UnbindFramebuffer();
-    }
-
     public override void OnDispose()
     {
         if (frameBuffer == null) return;

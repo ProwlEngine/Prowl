@@ -159,27 +159,76 @@ public static class Window
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
         options.VSync = VSync;
-        var api = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
-        options.API = api;
+        options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
+        // Update / Render / SwapBuffers are driven manually from MainLoop.
+        options.ShouldSwapAutomatically = false;
         InternalWindow = Silk.NET.Windowing.Window.Create(options);
 
         InternalWindow.Load += OnLoad;
-        InternalWindow.Update += OnUpdate;
-        InternalWindow.Render += OnRender;
-        InternalWindow.FocusChanged += OnFocusChanged;
         InternalWindow.Resize += OnResize;
         InternalWindow.FramebufferResize += OnFramebufferResize;
         InternalWindow.Move += OnMove;
-        InternalWindow.Closing += OnClose;
-
-        InternalWindow.StateChanged += (state) => { StateChanged?.Invoke(state); };
-        InternalWindow.FileDrop += (files) => { FileDrop?.Invoke(files); };
-
-        InternalWindow.FocusChanged += (focused) => { isFocused = focused; };
+        InternalWindow.StateChanged += (state) => StateChanged?.Invoke(state);
+        InternalWindow.FileDrop += (files) => FileDrop?.Invoke(files);
+        InternalWindow.FocusChanged += (focused) =>
+        {
+            isFocused = focused;
+            FocusChanged?.Invoke(focused);
+        };
     }
 
     private static void OnMove(Vector2D<int> d) => Move?.Invoke(d);
-    public static void Start() => InternalWindow.Run();
+
+    public static void Start()
+    {
+        InternalWindow.Initialize();
+        // Silk.NET's automatic Render path (which would apply options.VSync) doesn't
+        // run under our manual loop, so apply the swap interval directly.
+        InternalWindow.GLContext!.SwapInterval(InternalWindow.VSync ? 1 : 0);
+        Graphics.StartRenderThread();
+
+        // Load runs as a warmup frame so SubmitAndWait (shader compiles, FBO checks)
+        // has a live render thread to drain its CBs; otherwise it would deadlock.
+        Graphics.BeginFrame();
+        Load?.Invoke();
+        Graphics.EndFrameAndWait();
+
+        try { MainLoop(); }
+        finally
+        {
+            OnClose();
+            InternalWindow.Reset();
+        }
+    }
+
+    private static void MainLoop()
+    {
+        long lastTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        long freq = System.Diagnostics.Stopwatch.Frequency;
+        while (!InternalWindow.IsClosing)
+        {
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            float delta = (float)((now - lastTicks) / (double)freq);
+            lastTicks = now;
+
+            Graphics.BeginFrame();
+
+            InternalWindow.DoEvents();
+            Update?.Invoke(delta);
+            WindowInputHandler?.LateUpdate();
+            Render?.Invoke(delta);
+            PostRender?.Invoke(delta);
+
+            Graphics.EndFrameAndWait();
+
+            // Render thread has released the context the next BeginFrame hands
+            // it back, so we briefly take it for the present.
+            InternalWindow.GLContext!.MakeCurrent();
+            InternalWindow.GLContext!.SwapBuffers();
+            InternalWindow.GLContext!.Clear();
+        }
+    }
+
     public static void Stop() => InternalWindow.Close();
 
     public static void OnLoad()
@@ -187,45 +236,16 @@ public static class Window
         InternalInput = InternalWindow.CreateInput();
         WindowInputHandler = new DefaultInputHandler(InternalInput);
         Graphics.Initialize(false);
-
-        // Push Default Handler
         Input.PushHandler(WindowInputHandler);
-        Load?.Invoke();
     }
 
-    public static void OnRender(double delta)
-    {
-        Render?.Invoke((float)delta);
-        PostRender?.Invoke((float)delta);
-    }
-
-    public static void OnFocusChanged(bool focused)
-    {
-        FocusChanged?.Invoke(focused);
-    }
-
-    public static void OnResize(Vector2D<int> size)
-    {
-        Resize?.Invoke(size);
-    }
-
-    public static void OnFramebufferResize(Vector2D<int> size)
-    {
-        FramebufferResize?.Invoke(size);
-    }
-
-    public static void OnUpdate(double delta)
-    {
-        Update?.Invoke((float)delta);
-        WindowInputHandler.LateUpdate();
-    }
+    public static void OnResize(Vector2D<int> size) => Resize?.Invoke(size);
+    public static void OnFramebufferResize(Vector2D<int> size) => FramebufferResize?.Invoke(size);
 
     public static void OnClose()
     {
         Closing?.Invoke();
         WindowInputHandler.Dispose();
-        //Input.PopHandler();
         Graphics.Dispose();
     }
-
 }

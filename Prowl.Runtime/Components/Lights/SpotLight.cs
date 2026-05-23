@@ -85,14 +85,11 @@ public class SpotLight : Light
     {
         if (!DoCastShadows())
         {
-            // No shadows
             _shadowAtlasParams = new Float4(-1, -1, 0, 0);
             return;
         }
 
         int res = (int)ShadowResolution;
-
-        // Reserve space in shadow atlas
         Int2? slot = ShadowAtlas.ReserveTiles(res, res, GetLightID());
 
         if (slot != null)
@@ -100,10 +97,6 @@ public class SpotLight : Light
             int atlasX = slot.Value.X;
             int atlasY = slot.Value.Y;
 
-            // Set viewport to atlas region
-            Graphics.Viewport(atlasX, atlasY, (uint)res, (uint)res);
-
-            // Calculate shadow matrices
             GetShadowMatrix(out Float4x4 view, out Float4x4 proj);
 
             Frustum frustum = Frustum.FromMatrix(proj * view);
@@ -112,10 +105,14 @@ public class SpotLight : Light
             Float3 right = Transform.Right;
             Float3 up = Transform.Up;
 
-            // Cull and render shadow casters
             System.Collections.Generic.HashSet<int> culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
             pipeline.AssignCameraMatrices(view, proj);
-            pipeline.DrawRenderables(renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
+
+            using var cmd = Graphics.GetCommandBuffer("SpotLightShadow");
+            cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
+            cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
+            pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
+            Graphics.Submit(cmd);
 
             // Store shadow data for shader
             _shadowMatrix = proj * view;

@@ -102,11 +102,10 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         ValidateDefaults();
 
-        // Reset GL rasterizer state to known defaults so this render pass
-        // doesn't inherit stale state from a previous pipeline render.
-        Graphics.ResetState();
-
-        // Main rendering with correct order of operations
+        // Main rendering with correct order of operations. The CommandExecutor
+        // keeps its own GL state mirror and skips redundant binds, so we no
+        // longer need a per-render "reset to defaults" call here the first state
+        // change in the pipeline's CBs picks up wherever GL is.
         Internal_Render(camera, data);
 
         PropertyState.ClearGlobals();
@@ -228,8 +227,18 @@ public class DefaultRenderPipeline : RenderPipeline
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
         lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
 
-        Graphics.BindFramebuffer(ShadowAtlas.GetAtlas().frameBuffer);
-        Graphics.Clear(0.0f, 0.0f, 0.0f, 1.0f, ClearFlags.Depth | ClearFlags.Stencil);
+        // ─── Shadow atlas setup (clear) ───
+        // Done in its own CB and submitted before the lights start so the depth/stencil
+        // clear is in place before any face/cascade draws into the atlas. Each face
+        // then submits its own CB (necessary because each face uploads different
+        // view/proj matrices and they can't share a CB see Light.RenderShadows).
+        {
+            using var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
+            shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
+            shadowSetup.ClearRenderTarget(ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
+            Graphics.Submit(shadowSetup);
+        }
+
         RenderStats.BeginShadowPass();
         lightSystem.RenderShadows(this, css.CameraPosition, renderables);
         RenderStats.EndShadowPass();
@@ -237,141 +246,148 @@ public class DefaultRenderPipeline : RenderPipeline
         AssignCameraMatrices(css.View, css.Projection);
         lightSystem.UploadGlobalUniforms();
 
-        // Upload fog parameters as globals for forward shaders
         UploadFogUniforms(css.Scene);
         UploadAmbientUniforms(css.Scene);
 
-        // =======================================================
-        // 7. Create main color render target
+        // Main color render target
         RenderTexture colorRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
             isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b,
         ]);
 
-        // =======================================================
-        // 8. Depth + Normals pre-pass
+        // Depth + normals prepass RT
         RenderTexture depthPrepass = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-            TextureImageFormat.Color4b, // View-space normals
+            TextureImageFormat.Color4b,
         ]);
 
-        Graphics.BindFramebuffer(depthPrepass.frameBuffer);
-        Graphics.Clear(0.5f, 0.5f, 1.0f, 1.0f, ClearFlags.Color | ClearFlags.Depth);
-        DrawRenderables(renderables, "LightMode", "DepthNormals", new ViewerData(css), culledRenderableIndices, false);
+        // ─── Pre-pass + opaque CB ───
+        var mainCmd = Graphics.GetCommandBuffer("ColorPass");
 
-        // Set depth + normals as global textures for post-processing effects
-        PropertyState.SetGlobalTexture("_CameraDepthTexture", depthPrepass.InternalDepth);
-        PropertyState.SetGlobalTexture("_CameraNormalsTexture", depthPrepass.InternalTextures[0]);
+        // Depth+normals
+        mainCmd.SetRenderTarget(depthPrepass.frameBuffer);
+        mainCmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0.5f, 0.5f, 1.0f, 1.0f));
+        DrawRenderables(mainCmd, renderables, "LightMode", "DepthNormals", new ViewerData(css), culledRenderableIndices, false);
 
-        // Copy pre-pass depth to colorRT
-        Graphics.BindFramebuffer(depthPrepass.frameBuffer, FBOTarget.Read);
-        Graphics.BindFramebuffer(colorRT.frameBuffer, FBOTarget.Draw);
-        Graphics.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
+        // Expose depth + normals as globals AFTER the depth-normals draws have been
+        // encoded into mainCmd. Using cmd.SetGlobalTexture (not the static directly)
+        // means the executor mutates the global at the right point in submit order
+        // setting the static here would expose depthPrepass.InternalDepth as a sampler
+        // input while the same texture is still the bound FBO depth attachment for
+        // the depth-normals draws above (GL undefined behavior).
+        mainCmd.SetGlobalTexture("_CameraDepthTexture", depthPrepass.InternalDepth);
+        mainCmd.SetGlobalTexture("_CameraNormalsTexture", depthPrepass.InternalTextures[0]);
+
+        // Copy depth from prepass into colorRT so the opaque pass can ZTest LEqual against it.
+        mainCmd.SetRenderTargets(colorRT.frameBuffer, depthPrepass.frameBuffer);
+        mainCmd.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
                                  0, 0, colorRT.Width, colorRT.Height,
                                  ClearFlags.Depth, BlitFilter.Nearest);
 
-        // =======================================================
-        // 9. Apply camera clear flags to colorRT
-        Graphics.BindFramebuffer(colorRT.frameBuffer);
+        // Switch back to colorRT for the opaque draws.
+        mainCmd.SetRenderTarget(colorRT.frameBuffer);
+        mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
 
+        // Camera clear flags
         switch (camera.ClearFlags)
         {
             case CameraClearFlags.Skybox:
             {
                 var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
                     ? css.Scene.Skybox.SolidColor : camera.ClearColor;
-                Graphics.Clear(
-                    (float)skyColor.R, (float)skyColor.G,
-                    (float)skyColor.B, (float)skyColor.A,
-                    ClearFlags.Color);
-                RenderSkybox(css, lights);
+                mainCmd.ClearRenderTarget(ClearFlags.Color, skyColor);
+                RenderSkybox(mainCmd, css, lights);
                 break;
             }
-
             case CameraClearFlags.SolidColor:
-                Graphics.Clear(
-                    (float)camera.ClearColor.R, (float)camera.ClearColor.G,
-                    (float)camera.ClearColor.B, (float)camera.ClearColor.A,
-                    ClearFlags.Color);
+                mainCmd.ClearRenderTarget(ClearFlags.Color, camera.ClearColor);
                 break;
-
             case CameraClearFlags.Depth:
-                // Keep previous camera's color, depth already from pre-pass.
-                // Copy color from target into colorRT to preserve it.
                 if (target.IsValid())
                 {
-                    Graphics.BindFramebuffer(target.frameBuffer, FBOTarget.Read);
-                    Graphics.BindFramebuffer(colorRT.frameBuffer, FBOTarget.Draw);
-                    Graphics.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                             0, 0, colorRT.Width, colorRT.Height,
-                                             ClearFlags.Color, BlitFilter.Nearest);
-                    Graphics.BindFramebuffer(colorRT.frameBuffer);
+                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
+                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
+                                            0, 0, colorRT.Width, colorRT.Height,
+                                            ClearFlags.Color, BlitFilter.Nearest);
+                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
                 }
                 break;
-
             case CameraClearFlags.Nothing:
-                // Keep everything from the previous camera copy color from target.
                 if (target.IsValid())
                 {
-                    Graphics.BindFramebuffer(target.frameBuffer, FBOTarget.Read);
-                    Graphics.BindFramebuffer(colorRT.frameBuffer, FBOTarget.Draw);
-                    Graphics.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                             0, 0, colorRT.Width, colorRT.Height,
-                                             ClearFlags.Color, BlitFilter.Nearest);
-                    Graphics.BindFramebuffer(colorRT.frameBuffer);
+                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
+                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
+                                            0, 0, colorRT.Width, colorRT.Height,
+                                            ClearFlags.Color, BlitFilter.Nearest);
+                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
                 }
                 break;
         }
 
-        // =======================================================
-        // 10. Forward Opaque Rendering shaders do PBR lighting inline
-        //     Depth test is LEqual against pre-pass depth (same geometry = equal depth = passes)
+        // Forward opaques (with PBR lighting inline).
         RenderStats.BeginColorPass();
-        DrawRenderables(renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false);
+        DrawRenderables(mainCmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
 
-        // =======================================================
-        // 10b. Motion Vectors pass (when requested by DepthTextureMode)
-        // Motion vectors must use UNJITTERED current and previous VP so they
-        // represent real scene motion only, not sub-pixel jitter offsets.
+        // Motion vectors pass
+        //
+        // GlobalUniforms is a single GPU UBO. Every "AssignCameraMatrices + Upload"
+        // pair changes that one buffer's contents synchronously. If we encoded the
+        // motion-vectors draws into mainCmd along with the prior opaques, ALL of
+        // them would execute against whatever the GPU buffer holds at mainCmd's
+        // single Submit point i.e. the LAST matrices we wrote, which is the
+        // restored jittered set. Motion vectors would silently read jittered VP.
+        //
+        // Fix: flush mainCmd to GL BEFORE we change matrices, do the matrix swap
+        // (which uploads the new values to the now-static GPU buffer), then start
+        // a fresh CB for the motion vectors draws. Same dance on the way back.
         RenderTexture motionVectorsRT = null;
         if (css.DepthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
         {
             motionVectorsRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-                TextureImageFormat.Short2, // RG16F for per-pixel motion vectors
+                TextureImageFormat.Short2,
             ]);
 
-            // Copy depth prepass into MV RT so ZTest LEqual rejects occluded fragments
-            Graphics.BindFramebuffer(depthPrepass.frameBuffer, FBOTarget.Read);
-            Graphics.BindFramebuffer(motionVectorsRT.frameBuffer, FBOTarget.Draw);
-            Graphics.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
-                                     0, 0, motionVectorsRT.Width, motionVectorsRT.Height,
-                                     ClearFlags.Depth, BlitFilter.Nearest);
+            mainCmd.SetRenderTargets(motionVectorsRT.frameBuffer, depthPrepass.frameBuffer);
+            mainCmd.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
+                                    0, 0, motionVectorsRT.Width, motionVectorsRT.Height,
+                                    ClearFlags.Depth, BlitFilter.Nearest);
 
-            // Use the camera's NonJitteredProjectionMatrix for motion vectors
+            // Flush the opaque pass with the current (jittered) matrices in the UBO
+            // before we overwrite them with unjittered values.
+            Graphics.Submit(mainCmd);
+
             Float4x4 prevVP = css.HasPreviousViewProj
                 ? css.PreviousViewProj
-                : css.NonJitteredProjection * css.View; // First frame fallback: no motion
+                : css.NonJitteredProjection * css.View;
 
-            // Upload unjittered current VP and previous VP
             AssignCameraMatrices(css.View, css.NonJitteredProjection);
             GlobalUniforms.SetPrevViewProj(prevVP);
             GlobalUniforms.Upload();
 
-            Graphics.BindFramebuffer(motionVectorsRT.frameBuffer);
-            Graphics.Clear(0.0f, 0.0f, 0.0f, 0.0f, ClearFlags.Color);
+            // New CB for the motion vectors draws, which will run against unjittered.
+            mainCmd = Graphics.GetCommandBuffer("MotionVectors");
+            mainCmd.SetRenderTarget(motionVectorsRT.frameBuffer);
+            mainCmd.SetViewport(0, 0, (uint)motionVectorsRT.Width, (uint)motionVectorsRT.Height);
+            mainCmd.ClearRenderTarget(ClearFlags.Color, new Color(0, 0, 0, 0));
 
-            // Draw per-object motion vectors (uses previous model matrices)
-            DrawRenderables(renderables, "LightMode", "MotionVectors", new ViewerData(css), culledRenderableIndices, true);
+            DrawRenderables(mainCmd, renderables, "LightMode", "MotionVectors", new ViewerData(css), culledRenderableIndices, true);
+
+            // Flush motion vectors before restoring jittered matrices for subsequent
+            // passes (transparents, image effects).
+            Graphics.Submit(mainCmd);
 
             PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", motionVectorsRT.MainTexture);
 
-            // Restore jittered matrices for subsequent passes
             AssignCameraMatrices(css.View, css.Projection);
 
-            // Restore color RT for subsequent rendering
-            Graphics.BindFramebuffer(colorRT.frameBuffer);
+            mainCmd = Graphics.GetCommandBuffer("PostMotionVectors");
+            mainCmd.SetRenderTarget(colorRT.frameBuffer);
+            mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
         }
 
-        // =======================================================
-        // 11. AfterOpaques effects (GTAO, SSR, etc.)
+        // Submit so image effects see all the rendering above.
+        Graphics.Submit(mainCmd);
+
+        // ─── AfterOpaques image effects ───
+        // Image effects rent + submit their own CommandBuffers internally.
         RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
@@ -387,19 +403,19 @@ public class DefaultRenderPipeline : RenderPipeline
             };
             ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
         }
-
         RenderStats.EndPostFx();
 
-        // =======================================================
-        // 13. Transparent geometry (forward, sorted back-to-front)
-        Graphics.BindFramebuffer(colorRT.frameBuffer);
+        // ─── Transparents CB ───
+        var transparentCmd = Graphics.GetCommandBuffer("Transparents");
+        transparentCmd.SetRenderTarget(colorRT.frameBuffer);
+        transparentCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
         List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
-        DrawRenderables(sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false);
+        DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT);
+        Graphics.Submit(transparentCmd);
 
         RenderStats.EndColorPass();
 
-        // =======================================================
-        // 14. PostProcess effects
+        // ─── PostProcess image effects ───
         RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.PostProcess].Count > 0)
         {
@@ -424,39 +440,35 @@ public class DefaultRenderPipeline : RenderPipeline
                     RenderTexture.ReleaseTemporaryRT(oldRT);
             }
         }
-
         RenderStats.EndPostFx();
 
-        // =======================================================
-        // 15. Gizmos
+        // ─── Gizmos + final blit CB ───
+        var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
         if (data.DisplayGizmos)
         {
-            Graphics.BindFramebuffer(colorRT.frameBuffer);
-            RenderGizmos(css);
+            finalCmd.SetRenderTarget(colorRT.frameBuffer);
+            finalCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
+            RenderGizmos(finalCmd, css);
         }
 
-        // =======================================================
-        // 16. Final blit to target (null = screen)
-        Blit(colorRT, target, null, 0, false, false);
+        finalCmd.Blit(colorRT, target, null, 0, false, false);
 
-        // =======================================================
-        // 17. Save previous VP for next frame's motion vectors (before OnPostRender resets jitter)
+        // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.).
+        finalCmd.SetRenderTarget(null);
+        finalCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+        Graphics.Submit(finalCmd);
+
+        // Save previous VP for next frame's motion vectors.
         camera.SavePreviousViewProjectionMatrix();
 
-        // =======================================================
-        // 18. Post Render
         foreach (ImageEffect effect in allEffects)
             effect.OnPostRender(camera);
 
-        // =======================================================
-        // 18. Cleanup
+        // Cleanup
         RenderTexture.ReleaseTemporaryRT(depthPrepass);
         RenderTexture.ReleaseTemporaryRT(colorRT);
         if (motionVectorsRT != null)
             RenderTexture.ReleaseTemporaryRT(motionVectorsRT);
-
-        Graphics.UnbindFramebuffer();
-        Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
     }
 
     private static void UploadFogUniforms(Scene scene)
@@ -492,7 +504,7 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalFloat("_AmbientStrength", (float)ambient.Strength);
     }
 
-    private void RenderSkybox(CameraSnapshot css, List<IRenderableLight> lights)
+    private void RenderSkybox(CommandBuffer cmd, CameraSnapshot css, List<IRenderableLight> lights)
     {
         var skyParams = css.Scene.Skybox;
 
@@ -501,16 +513,14 @@ public class DefaultRenderPipeline : RenderPipeline
             case Scene.SkyboxMode.Procedural:
             {
                 var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
-                // Default to a pleasant angled sun direction when no directional light exists
                 var sunDir = sun != null ? sun.GetLightDirection() : Float3.Normalize(new Float3(0.5f, -0.7f, 0.5f));
                 s_skybox.SetVector("_SunDir", sunDir);
-                DrawMeshNow(s_skyDome, s_skybox);
+                cmd.DrawMesh(s_skyDome, s_skybox);
                 break;
             }
 
             case Scene.SkyboxMode.SolidColor:
-                // Camera clear already fills with color just need to write unlit to GBuffer
-                // The camera clear handles the solid color via ClearColor override
+                // Camera clear already filled with color nothing more to do.
                 break;
 
             case Scene.SkyboxMode.Gradient:
@@ -519,7 +529,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 s_gradientSkybox.SetColor("_TopColor", skyParams.GradientTop);
                 s_gradientSkybox.SetColor("_BottomColor", skyParams.GradientBottom);
                 s_gradientSkybox.SetFloat("_Exponent", skyParams.GradientExponent);
-                DrawMeshNow(s_skyDome, s_gradientSkybox);
+                cmd.DrawMesh(s_skyDome, s_gradientSkybox);
                 break;
             }
 
@@ -527,9 +537,9 @@ public class DefaultRenderPipeline : RenderPipeline
             {
                 var customMat = skyParams.CustomMaterial.Res;
                 if (customMat != null)
-                    DrawMeshNow(s_skyDome, customMat);
+                    cmd.DrawMesh(s_skyDome, customMat);
                 else
-                    DrawMeshNow(s_skyDome, s_skybox); // Fallback to procedural
+                    cmd.DrawMesh(s_skyDome, s_skybox);
                 break;
             }
         }
@@ -565,18 +575,17 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private void RenderGizmos(CameraSnapshot css)
+    private void RenderGizmos(CommandBuffer cmd, CameraSnapshot css)
     {
         Float4x4 vp = css.Projection * css.View;
         (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData();
 
         if (wire.IsValid() || solid.IsValid())
         {
-            if (wire.IsValid()) DrawMeshNow(wire, s_gizmo);
-            if (solid.IsValid()) DrawMeshNow(solid, s_gizmo);
+            if (wire.IsValid()) cmd.DrawMesh(wire, s_gizmo);
+            if (solid.IsValid()) cmd.DrawMesh(solid, s_gizmo);
         }
 
-        // Gizmo Icons - billboarded textured quads
         var icons = Debug.GetGizmoIcons();
         if (icons.Count > 0)
         {
@@ -590,7 +599,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 s_iconMaterial.SetVector("_IconCenter", icon.Center);
                 s_iconMaterial.SetFloat("_IconScale", icon.Scale);
                 s_iconMaterial.SetVector("_IconColor", new Float4(icon.Color.R, icon.Color.G, icon.Color.B, icon.Color.A));
-                DrawMeshNow(s_iconQuad, s_iconMaterial);
+                cmd.DrawMesh(s_iconQuad, s_iconMaterial);
             }
         }
     }

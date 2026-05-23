@@ -126,32 +126,29 @@ public sealed class VolumetricFogEffect : ImageEffect
             _historyValid = false;
         }
 
+        using var cmd = Graphics.GetCommandBuffer("VolumetricFog");
+
         // Pass 0 Ray march into low-res.
         var currentLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
-        RenderPipeline.Blit(context.SceneColor, currentLow, _mat, 0);
+        cmd.Blit(context.SceneColor, currentLow, _mat, 0);
 
         RenderTexture blendedLow;
         if (EnableTemporalReprojection)
         {
             _history ??= new RenderTexture(lowW, lowH, false, [format]);
 
-            // Pass 1 Temporal blend of current against reprojected history.
             blendedLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
             _mat.SetTexture("_FogCurrentTex", currentLow.MainTexture);
             _mat.SetTexture("_FogHistoryTex", _history.MainTexture);
             _mat.SetFloat("_FogHistoryValid", _historyValid ? 1f : 0f);
             _mat.SetFloat("_FogTemporalBlend", Math.Clamp(TemporalBlendWeight, 0f, 0.99f));
-            RenderPipeline.Blit(currentLow, blendedLow, _mat, 1);
+            cmd.Blit(currentLow, blendedLow, _mat, 1);
 
-            // Stash the blended result for next frame.
-            RenderPipeline.Blit(blendedLow, _history, null, 0);
+            cmd.Blit(blendedLow, _history, null, 0);
             _historyValid = true;
         }
         else
         {
-            // Temporal disabled just composite the raw march, and invalidate
-            // any stale history so re-enabling doesn't reproject against a
-            // frame from however long ago the user last turned it off.
             blendedLow = currentLow;
             _historyValid = false;
         }
@@ -159,8 +156,9 @@ public sealed class VolumetricFogEffect : ImageEffect
         // Pass 2 Bilateral upsample + composite onto scene color.
         _mat.SetTexture("_FogTex", blendedLow.MainTexture);
         var fullRes = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [format]);
-        RenderPipeline.Blit(context.SceneColor, fullRes, _mat, 2);
-        RenderPipeline.Blit(fullRes, context.SceneColor, null, 0);
+        cmd.Blit(context.SceneColor, fullRes, _mat, 2);
+        cmd.Blit(fullRes, context.SceneColor, null, 0);
+        Graphics.Submit(cmd);
 
         if (!ReferenceEquals(blendedLow, currentLow))
             RenderTexture.ReleaseTemporaryRT(blendedLow);

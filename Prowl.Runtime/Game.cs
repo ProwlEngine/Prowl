@@ -146,12 +146,14 @@ public abstract class Game
 
                 // === Start Graphics ===
 
-                Graphics.UnbindFramebuffer();
-                Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                Graphics.SetState(new(), true);
-
-                Graphics.BindVertexArray(null);
-                Graphics.Clear(0, 0, 0, 1, ClearFlags.Color | ClearFlags.Depth | ClearFlags.Stencil);
+                {
+                    using var frameStart = Graphics.GetCommandBuffer("Frame Start");
+                    frameStart.SetRenderTarget(null);
+                    frameStart.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+                    frameStart.SetRasterState(new RasterizerState());
+                    frameStart.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
+                    Graphics.Submit(frameStart);
+                }
 
                 Rendering.ShadowAtlas.TryInitialize();
                 Rendering.ShadowAtlas.Clear();
@@ -164,8 +166,12 @@ public abstract class Game
 
                 EndRender();
 
-                Graphics.UnbindFramebuffer();
-                Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+                {
+                    using var preGui = Graphics.GetCommandBuffer("Pre-GUI");
+                    preGui.SetRenderTarget(null);
+                    preGui.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+                    Graphics.Submit(preGui);
+                }
 
                 // Sync Paper's logical resolution + DPI to the window each frame.
                 PreparePaperFrame();
@@ -182,6 +188,11 @@ public abstract class Game
                 // === End Graphics ===
 
                 RenderTexture.UpdatePool();
+                // Dispose any GPU resources that were replaced mid-frame (e.g.
+                // grown instance buffers). All CommandBuffers for the frame have
+                // already executed by this point, so it's safe to delete the old
+                // GL objects now.
+                Graphics.FlushDeferredDisposes();
 
                 // === End of End Graphics ===
 

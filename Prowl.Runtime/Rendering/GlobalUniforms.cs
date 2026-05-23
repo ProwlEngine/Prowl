@@ -72,7 +72,9 @@ public static class GlobalUniforms
     }
 
     /// <summary>
-    /// Updates the GPU buffer if data has changed
+    /// Updates the GPU buffer if data has changed. Encodes through a CommandBuffer
+    /// so any subsequent rendering CB sees the new uniforms (submit order is
+    /// preserved by the executor).
     /// </summary>
     public static void Upload()
     {
@@ -80,7 +82,9 @@ public static class GlobalUniforms
 
         if (s_isDirty && s_uniformBuffer != null)
         {
-            Graphics.UpdateBuffer(s_uniformBuffer, 0, [s_data]);
+            using var cmd = Graphics.GetCommandBuffer("GlobalUniforms.Upload");
+            cmd.UpdateBuffer<GlobalUniformsData>(s_uniformBuffer, new[] { s_data });
+            Graphics.Submit(cmd);
             s_isDirty = false;
         }
     }

@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -11,42 +11,42 @@ public class GraphicsBuffer : IDisposable
 {
     public bool IsDisposed { get; protected set; }
 
-    public readonly uint Handle;
+    // Handle / SizeInBytes are mutable because resource lifecycle now flows through
+    // CommandBuffer opcodes the constructor allocates a 0-handle CPU stub and the
+    // executor fills these in when the CreateBuffer opcode runs. Same story for
+    // Set: it reallocates GL storage and the new size lives here.
+    public uint Handle { get; internal set; }
     public readonly BufferType OriginalType;
     public readonly BufferTargetARB Target;
-    public readonly uint SizeInBytes;
+    public uint SizeInBytes { get; internal set; }
 
-    public unsafe GraphicsBuffer(BufferType type, uint sizeInBytes, void* data, bool dynamic)
+    /// <summary>Constructs the CPU wrapper and queues the GL buffer create + initial
+    /// upload through a CommandBuffer. Under Step 1 sync submit, the GL work runs
+    /// inline before this constructor returns. Under Step 2 (render thread), the
+    /// work is queued in order so any subsequent encoded use of this buffer is
+    /// guaranteed to execute against a valid GL handle.</summary>
+    public GraphicsBuffer(BufferType type, ReadOnlySpan<byte> initialData, bool dynamic)
     {
         if (type == BufferType.Count)
             throw new ArgumentOutOfRangeException(nameof(type), type, null);
 
-        SizeInBytes = sizeInBytes;
-
         OriginalType = type;
-        switch (type)
+        Target = type switch
         {
-            case BufferType.VertexBuffer:
-                Target = BufferTargetARB.ArrayBuffer;
-                break;
-            case BufferType.ElementsBuffer:
-                Target = BufferTargetARB.ElementArrayBuffer;
-                break;
-            case BufferType.UniformBuffer:
-                Target = BufferTargetARB.UniformBuffer;
-                break;
-            case BufferType.StructuredBuffer:
-                Target = BufferTargetARB.ShaderStorageBuffer;
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(type), type, null);
-        }
+            BufferType.VertexBuffer => BufferTargetARB.ArrayBuffer,
+            BufferType.ElementsBuffer => BufferTargetARB.ElementArrayBuffer,
+            BufferType.UniformBuffer => BufferTargetARB.UniformBuffer,
+            BufferType.StructuredBuffer => BufferTargetARB.ShaderStorageBuffer,
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
+        };
+        // SizeInBytes is the CPU mirror of the GL storage size. The executor's
+        // Set call inside CreateBuffer overwrites it with the actual uploaded size.
+        SizeInBytes = (uint)initialData.Length;
+        Handle = 0;
 
-
-        Handle = Graphics.GL.GenBuffer();
-        Bind();
-        if (sizeInBytes != 0)
-            Set(sizeInBytes, data, dynamic);
+        using var cmd = Graphics.GetCommandBuffer("GraphicsBuffer.Create");
+        cmd.EncodeCreateBuffer(this, dynamic, initialData);
+        Graphics.Submit(cmd);
     }
 
     public unsafe void Set(uint sizeInBytes, void* data, bool dynamic)
@@ -54,6 +54,7 @@ public class GraphicsBuffer : IDisposable
         Bind();
         BufferUsageARB usage = dynamic ? BufferUsageARB.DynamicDraw : BufferUsageARB.StaticDraw;
         Graphics.GL.BufferData(Target, sizeInBytes, data, usage);
+        SizeInBytes = sizeInBytes;
     }
 
     public unsafe void Update(uint offsetInBytes, uint sizeInBytes, void* data)
@@ -66,12 +67,13 @@ public class GraphicsBuffer : IDisposable
     {
         if (IsDisposed)
             return;
-
-        if (boundBuffers[(int)OriginalType] == Handle)
-            boundBuffers[(int)OriginalType] = 0;
-
         IsDisposed = true;
-        Graphics.GL.DeleteBuffer(Handle);
+        // Queue the GL delete so it runs after any encoded use of this buffer that
+        // hasn't executed yet. Sync submit makes it immediate; render-thread mode
+        // makes it deferred but still ordered.
+        using var cmd = Graphics.GetCommandBuffer("GraphicsBuffer.Dispose");
+        cmd.EncodeDisposeBuffer(this);
+        Graphics.Submit(cmd);
     }
 
     public override string ToString()
@@ -79,13 +81,25 @@ public class GraphicsBuffer : IDisposable
         return Handle.ToString();
     }
 
-    private readonly static uint[] boundBuffers = new uint[(int)BufferType.Count];
-
+    // No "currently bound buffer" cache. The previous version kept one indexed by
+    // BufferType, but ELEMENT_ARRAY_BUFFER's binding is part of VAO state (per-VAO),
+    // not global the cache would correctly skip a redundant ARRAY_BUFFER bind but
+    // silently lie for ELEMENT_ARRAY_BUFFER across VAO switches. glBindBuffer is
+    // cheap; always-bind is correct and simple.
     private void Bind()
     {
-        if (boundBuffers[(int)OriginalType] == Handle)
-            return;
+        if (OriginalType == BufferType.ElementsBuffer)
+        {
+            // ELEMENT_ARRAY_BUFFER binding lives on the currently-bound VAO. If we
+            // call glBindBuffer(ELEMENT_ARRAY_BUFFER, x) while a user VAO is bound,
+            // x silently becomes that VAO's new index buffer, corrupting it for
+            // every subsequent draw. Switch to VAO 0 first so any binding change
+            // here lands in the default VAO. The owning user VAO retains its
+            // original element binding (set at VAO-creation time) which points to
+            // the same buffer we're about to upload to anyway.
+            Graphics.GL.BindVertexArray(0);
+            Graphics.Executor.InvalidateBoundVAO();
+        }
         Graphics.GL.BindBuffer(Target, Handle);
-        boundBuffers[(int)OriginalType] = Handle;
     }
 }

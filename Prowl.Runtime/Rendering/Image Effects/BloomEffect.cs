@@ -35,10 +35,12 @@ public sealed class BloomEffect : ImageEffect
         int h = context.Height / 2;
         var format = context.SceneColor.MainTexture.ImageFormat;
 
+        using var cmd = Graphics.GetCommandBuffer("Bloom");
+
         // Pass 0: Threshold extract bright pixels into half-res
         RenderTexture thresholdRT = RenderTexture.GetTemporaryRT(w, h, false, [format]);
         _mat.SetFloat("_Threshold", Threshold);
-        RenderPipeline.Blit(context.SceneColor, thresholdRT, _mat, 0);
+        cmd.Blit(context.SceneColor, thresholdRT, _mat, 0);
 
         // Downsample chain each iteration halves resolution
         var mipChain = new List<RenderTexture>();
@@ -51,7 +53,7 @@ public sealed class BloomEffect : ImageEffect
             h = System.Math.Max(1, h / 2);
 
             RenderTexture downRT = RenderTexture.GetTemporaryRT(w, h, false, [format]);
-            RenderPipeline.Blit(current, downRT, _mat, 1); // Pass 1: Downsample
+            cmd.Blit(current, downRT, _mat, 1); // Pass 1: Downsample
             mipChain.Add(downRT);
             current = downRT;
         }
@@ -62,15 +64,16 @@ public sealed class BloomEffect : ImageEffect
             RenderTexture src = mipChain[i];
             RenderTexture dst = mipChain[i - 1];
 
-            RenderPipeline.Blit(src, dst, _mat, 2); // Pass 2: Upsample (overwrites dst)
+            cmd.Blit(src, dst, _mat, 2); // Pass 2: Upsample (overwrites dst)
         }
 
         // Pass 3: Composite add bloom to original scene
         _mat.SetTexture("_BloomTex", mipChain[0].MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
-        RenderPipeline.Blit(context.SceneColor, temp, _mat, 3);
-        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
+        cmd.Blit(context.SceneColor, temp, _mat, 3);
+        cmd.Blit(temp, context.SceneColor, null, 0);
+        Graphics.Submit(cmd);
         RenderTexture.ReleaseTemporaryRT(temp);
 
         // Release all mip chain RTs

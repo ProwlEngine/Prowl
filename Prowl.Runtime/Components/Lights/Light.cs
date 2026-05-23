@@ -55,6 +55,22 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     /// <param name="pipeline">The current render pipeline</param>
     /// <param name="cameraPosition">Position of the camera in world space</param>
     /// <param name="renderables">List of all renderables that could cast shadows</param>
+    /// <summary>Render this light's shadow map(s) into the shared shadow atlas.
+    ///
+    /// <para>
+    /// Implementations rent and submit their own <see cref="CommandBuffer"/> per face
+    /// (point lights), cascade (directional), or single tile (spot). They CANNOT share
+    /// a CB across multiple faces because each face calls <see cref="RenderPipeline.AssignCameraMatrices"/>
+    /// which uploads view/proj into the single GlobalUniforms UBO sharing a CB would
+    /// queue all the face draws to execute against whatever matrices the LAST face
+    /// uploaded.
+    /// </para>
+    ///
+    /// <para>
+    /// The shadow atlas itself has already been bound + cleared by the caller in a
+    /// separate setup CB before this method runs.
+    /// </para>
+    /// </summary>
     public abstract void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
 
     public abstract ForwardLightData GetForwardLightData();

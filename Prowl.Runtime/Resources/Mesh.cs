@@ -327,22 +327,24 @@ public class Mesh : EngineObject, ISerializable
         bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && VertexLayoutMatches(lastVertexLayout, layout);
         bool canReuseIndexBuffer = indexBuffer != null && lastIndexCount == indices.Length;
 
-        // Update or create vertex buffer
+        // Resource creation stays synchronous (Graphics.CreateBuffer creates the GL
+        // object and uploads initial data inline). Reuses go through a CommandBuffer
+        // so any rendering CB submitted after this Upload is guaranteed to see the
+        // new data the executor preserves submit order.
+        using var cmd = Graphics.GetCommandBuffer("Mesh.Upload");
+
         if (canReuseVertexBuffer)
         {
-            // Reuse existing buffer - just update the data
-            Graphics.SetBuffer(vertexBuffer, vertexBlob, true);
+            cmd.UpdateBuffer<byte>(vertexBuffer, vertexBlob);
         }
         else
         {
-            // Need to recreate buffer - size or layout changed
             vertexBuffer?.Dispose();
             vertexBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, vertexBlob, true);
             lastVertexCount = vertices.Length;
             lastVertexLayout = layout;
         }
 
-        // Update or create index buffer
         if (indexFormat == IndexFormat.UInt16)
         {
             ushort[] data = new ushort[indices.Length];
@@ -355,7 +357,7 @@ public class Mesh : EngineObject, ISerializable
 
             if (canReuseIndexBuffer)
             {
-                Graphics.SetBuffer(indexBuffer, data, true);
+                cmd.UpdateBuffer<ushort>(indexBuffer, data);
             }
             else
             {
@@ -368,7 +370,7 @@ public class Mesh : EngineObject, ISerializable
         {
             if (canReuseIndexBuffer)
             {
-                Graphics.SetBuffer(indexBuffer, indices, true);
+                cmd.UpdateBuffer<uint>(indexBuffer, indices);
             }
             else
             {
@@ -378,31 +380,42 @@ public class Mesh : EngineObject, ISerializable
             }
         }
 
-        // Only recreate VAO if buffers or layout changed
+        Graphics.Submit(cmd);
+
+        // VAO recreation must come AFTER the upload submit so the new VAO captures
+        // whatever buffer state actually lives on the GPU. Graphics.CreateVertexArray
+        // is synchronous and binds the buffers itself.
         if (!canReuseVertexBuffer || !canReuseIndexBuffer || vertexArrayObject == null)
         {
             vertexArrayObject?.Dispose();
             vertexArrayObject = Graphics.CreateVertexArray(layout, vertexBuffer, indexBuffer);
             Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
         }
-
-        Graphics.BindVertexArray(null);
     }
 
     /// <summary>
-    /// Gets or creates the instanced rendering VAO and buffer for this mesh.
-    /// The instance format is fixed: mat4 (4x vec4) + color (vec4) + customData (vec4).
-    /// The VAO is created lazily on first instanced draw and reused thereafter.
+    /// Ensures the instanced rendering VAO and buffer exist for this mesh with
+    /// enough capacity for <paramref name="instanceCount"/> instances. Does NOT
+    /// upload data caller must encode a <c>cmd.UpdateBuffer(instanceBuffer, ...)</c>
+    /// in the same CommandBuffer as their <c>cmd.DrawIndexedInstanced</c> so the
+    /// upload is sequenced against the draw.
+    ///
+    /// <para>
+    /// The instanceBuffer is shared per-mesh across all InstancedMeshRenderables
+    /// using this mesh. Multiple batches can encode different uploads + draws into
+    /// one CommandBuffer; the executor processes them in order so each draw sees
+    /// its own data. If <paramref name="instanceCount"/> exceeds current capacity,
+    /// the old buffer is queued for DEFERRED dispose (after frame end) so previously
+    /// encoded commands holding the old handle still execute against valid GL state.
+    /// </para>
     /// </summary>
-    /// <param name="instanceData">The instance data to upload</param>
-    /// <param name="instanceCount">Number of instances</param>
-    /// <returns>The instanced VAO</returns>
-    public GraphicsVertexArray GetOrCreateInstanceVAO(Rendering.InstanceData[] instanceData, int instanceCount)
+    /// <param name="instanceCount">Maximum number of instances this call needs to draw.</param>
+    /// <param name="instanceBuf">Output: the instance buffer to upload data into via cmd.UpdateBuffer.</param>
+    /// <returns>The instanced VAO to bind for drawing.</returns>
+    public GraphicsVertexArray EnsureInstanceVAO(int instanceCount, out GraphicsBuffer instanceBuf)
     {
-        // Ensure base mesh is uploaded first
         Upload();
 
-        // Define fixed instance format (same for all instanced draws)
         var instanceFormat = new VertexFormat(new[]
         {
             new Element((VertexSemantic)8, VertexType.Float, 4, divisor: 1),  // ModelRow0
@@ -413,31 +426,25 @@ public class Mesh : EngineObject, ISerializable
             new Element((VertexSemantic)13, VertexType.Float, 4, divisor: 1), // CustomData
         });
 
-        // Create or resize instance buffer if needed
         if (instanceBuffer == null || instanceCount > instanceBufferCapacity)
         {
-            // Allocate with 50% extra capacity to reduce reallocations
+            // Grow with 50% headroom to amortise resizes.
             instanceBufferCapacity = (int)(instanceCount * 1.5f);
 
-            // Dispose old buffer
-            instanceBuffer?.Dispose();
+            // Defer-dispose the old buffer: earlier batches in the SAME outer
+            // CommandBuffer hold the old handle in their encoded opcodes, and
+            // would crash if we deleted the GL object before those commands
+            // executed. Graphics.FlushDeferredDisposes() runs at end of frame.
+            if (instanceBuffer != null) Graphics.DeferDispose(instanceBuffer);
+            if (instancedVAO != null) Graphics.DeferDispose(instancedVAO);
 
-            // Create new buffer with capacity
-            var bufferData = new Rendering.InstanceData[instanceBufferCapacity];
-            Array.Copy(instanceData, 0, bufferData, 0, instanceCount);
-            instanceBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, bufferData, dynamic: true);
-
-            // Dispose old VAO since we need to recreate it with new buffer
-            instancedVAO?.Dispose();
+            // Create the buffer with placeholder data sized to capacity. Real
+            // per-batch data is uploaded by the caller via cmd.UpdateBuffer.
+            var placeholder = new Rendering.InstanceData[instanceBufferCapacity];
+            instanceBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, placeholder, dynamic: true);
             instancedVAO = null;
         }
-        else
-        {
-            // Reuse buffer, just update data
-            Graphics.SetBuffer(instanceBuffer, instanceData, dynamic: true);
-        }
 
-        // Create VAO if needed (first time or after buffer resize)
         if (instancedVAO == null)
         {
             var meshFormat = GetVertexLayout(this);
@@ -450,6 +457,7 @@ public class Mesh : EngineObject, ISerializable
             );
         }
 
+        instanceBuf = instanceBuffer;
         return instancedVAO;
     }
 

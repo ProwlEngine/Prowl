@@ -208,6 +208,10 @@ public sealed class SceneLightSystem : IDisposable
     /// </summary>
     public void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, IReadOnlyList<IRenderable> renderables)
     {
+        // Each light manages its own CommandBuffer(s) internally point lights submit
+        // one per face, directional submits one per cascade, spot submits a single CB
+        // so per-face matrix uploads via AssignCameraMatrices are ordered correctly
+        // against that face's draws.
         if (_directional is Light dl)
             dl.RenderShadows(pipeline, cameraPosition, renderables);
 

@@ -68,34 +68,35 @@ public sealed class GTAOEffect : ImageEffect
             _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
             _mat.SetTexture("_CameraNormalsTexture", context.DepthNormals.InternalTextures[0]);
         }
-        RenderPipeline.Blit(context.SceneColor, aoRT, _mat, 0);
+        using var cmd = Graphics.GetCommandBuffer("GTAO");
+        cmd.Blit(context.SceneColor, aoRT, _mat, 0);
 
         // Pass 1: Blur Horizontal (if blur is enabled)
+        RenderTexture blurTempRT = null;
         if (BlurRadius > 0.01f)
         {
-            RenderTexture blurTempRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
+            blurTempRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
 
             _mat.SetVector("_BlurDirection", new Float2(1.0f, 0.0f));
             _mat.SetFloat("_BlurRadius", BlurRadius);
-            RenderPipeline.Blit(aoRT, blurTempRT, _mat, 1);
+            cmd.Blit(aoRT, blurTempRT, _mat, 1);
 
             // Pass 1: Blur Vertical
             _mat.SetVector("_BlurDirection", new Float2(0.0f, 1.0f));
             _mat.SetFloat("_BlurRadius", BlurRadius);
-            RenderPipeline.Blit(blurTempRT, aoRT, _mat, 1);
-
-            RenderTexture.ReleaseTemporaryRT(blurTempRT);
+            cmd.Blit(blurTempRT, aoRT, _mat, 1);
         }
 
         // Pass 2: Composite - Apply AO to scene
         _mat.SetTexture("_AOTex", aoRT.MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
         var temp = RenderTexture.GetTemporaryRT(width, height, false, [context.SceneColor.MainTexture.ImageFormat]);
-        RenderPipeline.Blit(context.SceneColor, temp, _mat, 2);
-        RenderPipeline.Blit(temp, context.SceneColor, null, 0);
-        RenderTexture.ReleaseTemporaryRT(temp);
+        cmd.Blit(context.SceneColor, temp, _mat, 2);
+        cmd.Blit(temp, context.SceneColor, null, 0);
+        Graphics.Submit(cmd);
 
-        // Release temporary render textures
+        if (blurTempRT != null) RenderTexture.ReleaseTemporaryRT(blurTempRT);
+        RenderTexture.ReleaseTemporaryRT(temp);
         RenderTexture.ReleaseTemporaryRT(aoRT);
     }
 

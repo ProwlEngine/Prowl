@@ -1,8 +1,7 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 
 using Prowl.Vector;
 
@@ -11,6 +10,13 @@ using Silk.NET.OpenGL;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Facade over the GL context and the <see cref="CommandBuffer"/> system. Owns the
+/// <c>GL</c> wrapper and capability constants, hosts the render thread, and exposes
+/// resource constructors plus a few convenience encoders that wrap a one-op CB.
+/// Every GL mutation flows through a CommandBuffer to the executor on the render
+/// thread there are no direct GL calls outside this assembly.
+/// </summary>
 public static unsafe class Graphics
 {
     public static int MaxTextureSize { get; internal set; }
@@ -18,41 +24,84 @@ public static unsafe class Graphics
     public static int MaxArrayTextureLayers { get; internal set; }
     public static int MaxFramebufferColorAttachments { get; internal set; }
 
-    // Queued rendering API removed components return renderables directly from OnRenderCollect().
-    // For instanced rendering, use InstancedMeshRenderable.CreateBatched().
-
-    #region Graphics Backend
-
     public static GL GL;
 
     public static GraphicsProgram CurrentProgram => GraphicsProgram.currentProgram;
 
-    // Current OpenGL State
-    private static bool depthTest = true;
-    private static bool depthWrite = true;
-    private static RasterizerState.DepthMode depthMode = RasterizerState.DepthMode.Lequal;
+    /// <summary>Long-lived executor so its raster-state cache survives across CBs.
+    /// FB / VAO / texture-unit bind caches would also be sound (executor is the
+    /// sole GL writer) but aren't implemented yet.</summary>
+    internal static readonly CommandExecutor Executor = new();
 
-    private static bool doBlend = true;
-    private static RasterizerState.Blending blendSrc = RasterizerState.Blending.SrcAlpha;
-    private static RasterizerState.Blending blendDst = RasterizerState.Blending.OneMinusSrcAlpha;
-    private static RasterizerState.BlendMode blendEquation = RasterizerState.BlendMode.Add;
+    public static CommandBuffer GetCommandBuffer(string? name = null) => CommandBufferPool.Rent(name);
 
-    private static RasterizerState.PolyFace cullFace = RasterizerState.PolyFace.Back;
+    // Per-frame render thread protocol:
+    //   main: BeginFrame      -> wakes render thread (MakeCurrent + drain queue)
+    //   main: encode CBs        (main has no context; render is draining)
+    //   main: EndFrameAndWait -> pushes frame-end sentinel, blocks
+    //   render: hits sentinel, Clear context, signal frameDone
+    //   main: MakeCurrent + SwapBuffers + Clear
 
-    private static RasterizerState.WindingOrder winding = RasterizerState.WindingOrder.CW;
+    private sealed class CBJob
+    {
+        public CommandBuffer? Cmd;
+        public System.Threading.ManualResetEventSlim? Done;
+        public System.Runtime.ExceptionServices.ExceptionDispatchInfo? Error;
+        public bool IsFrameEnd;
+    }
 
-    private static bool stencilEnabled = false;
-    private static RasterizerState.StencilFunction stencilFunc = RasterizerState.StencilFunction.Always;
-    private static int stencilRef = 0;
-    private static int stencilReadMask = 255;
-    private static int stencilWriteMask = 255;
-    private static RasterizerState.StencilOp stencilPassOp = RasterizerState.StencilOp.Keep;
-    private static RasterizerState.StencilOp stencilFailOp = RasterizerState.StencilOp.Keep;
-    private static RasterizerState.StencilOp stencilZFailOp = RasterizerState.StencilOp.Keep;
+    private static readonly System.Collections.Concurrent.BlockingCollection<CBJob> s_renderQueue = new();
+    private static System.Threading.Thread? s_renderThread;
+    private static volatile bool s_renderThreadStop;
+    private static readonly System.Threading.SemaphoreSlim s_renderWake = new(0, 1);
+    private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
 
-    private static GraphicsFrameBuffer? currentFramebuffer = null;
-    private static GraphicsFrameBuffer? currentReadFramebuffer = null;
-    private static GraphicsFrameBuffer? currentDrawFramebuffer = null;
+    /// <summary>Enqueue a CB for the render thread to execute. Fire-and-forget.</summary>
+    public static void Submit(CommandBuffer cmd)
+    {
+        if (cmd == null) return;
+        if (cmd._inPool)
+            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
+        cmd._submitted = true;
+        cmd._ownerReleased = true;
+        s_renderQueue.Add(new CBJob { Cmd = cmd });
+    }
+
+    /// <summary>Enqueue and block until the render thread has finished the CB.
+    /// Use for read-backs, shader compile error propagation, and FBO completeness
+    /// checks. Render-thread exceptions rethrow on the caller's thread.</summary>
+    public static void SubmitAndWait(CommandBuffer cmd)
+    {
+        if (cmd == null) return;
+        if (cmd._inPool)
+            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
+        cmd._submitted = true;
+        cmd._ownerReleased = true;
+        var job = new CBJob { Cmd = cmd, Done = new System.Threading.ManualResetEventSlim(false) };
+        s_renderQueue.Add(job);
+        job.Done.Wait();
+        job.Done.Dispose();
+        job.Error?.Throw();
+    }
+
+    internal static void BeginFrame()
+    {
+        s_renderFrameDone.Reset();
+        s_renderWake.Release();
+    }
+
+    /// <summary>Time the main thread spent blocked in <see cref="EndFrameAndWait"/>
+    /// last frame. High = render thread is bottleneck. Near-zero = main is.</summary>
+    public static float LastFrameWaitMs { get; private set; }
+
+    internal static void EndFrameAndWait()
+    {
+        s_renderQueue.Add(new CBJob { IsFrameEnd = true });
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        s_renderFrameDone.Wait();
+        long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
+        LastFrameWaitMs = (float)(elapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+    }
 
     public static void Initialize(bool debug)
     {
@@ -60,25 +109,98 @@ public static unsafe class Graphics
 
         if (debug)
         {
-            unsafe
+            if (OperatingSystem.IsWindows())
             {
-                if (OperatingSystem.IsWindows())
-                {
-                    GL.DebugMessageCallback(DebugCallback, null);
-                    GL.Enable(EnableCap.DebugOutput);
-                    GL.Enable(EnableCap.DebugOutputSynchronous);
-                }
+                GL.DebugMessageCallback(DebugCallback, null);
+                GL.Enable(EnableCap.DebugOutput);
+                GL.Enable(EnableCap.DebugOutputSynchronous);
             }
         }
 
-        // Smooth lines
         GL.Enable(EnableCap.LineSmooth);
 
-        // Textures
-        Graphics.MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
-        Graphics.MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
-        Graphics.MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
-        Graphics.MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
+        MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
+        MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
+        MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
+        MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
+    }
+
+    public static void StartRenderThread()
+    {
+        Window.InternalWindow.GLContext!.Clear();
+        s_renderThreadStop = false;
+        s_renderThread = new System.Threading.Thread(RenderThreadLoop)
+        {
+            IsBackground = true,
+            Name = "Prowl GL Render Thread",
+        };
+        s_renderThread.Start();
+    }
+
+    // Per-CB debug groups for RenderDoc / apitrace. Compiled out in release
+    // because the per-call overhead adds up across hundreds of CBs per frame.
+#if DEBUG
+    private static bool PushCBDebugGroup(string? label)
+    {
+        if (string.IsNullOrEmpty(label)) return false;
+        try { GL.PushDebugGroup(Silk.NET.OpenGL.DebugSource.DebugSourceApplication, 0, (uint)label.Length, label); return true; }
+        catch { return false; }
+    }
+    private static void PopCBDebugGroup() { try { GL.PopDebugGroup(); } catch { } }
+#else
+    private static bool PushCBDebugGroup(string? label) => false;
+    private static void PopCBDebugGroup() { }
+#endif
+
+    private static void RenderThreadLoop()
+    {
+        while (!s_renderThreadStop)
+        {
+            s_renderWake.Wait();
+            if (s_renderThreadStop) break;
+
+            try { Window.InternalWindow.GLContext!.MakeCurrent(); }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Render thread MakeCurrent failed: {ex}");
+                s_renderFrameDone.Set();
+                continue;
+            }
+
+            try
+            {
+                while (true)
+                {
+                    CBJob job;
+                    try { job = s_renderQueue.Take(); }
+                    catch (System.InvalidOperationException) { return; } // CompleteAdding called
+
+                    if (job.IsFrameEnd) break;
+                    if (job.Cmd == null) { job.Done?.Set(); continue; }
+
+                    var cmd = job.Cmd;
+                    bool pushed = PushCBDebugGroup(cmd.Name);
+                    try { Executor.Execute(cmd); }
+                    catch (Exception ex)
+                    {
+                        job.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                        if (job.Done == null)
+                            Debug.LogError($"Render thread CB '{cmd.Name ?? "<?>"}' execute failed: {ex}");
+                    }
+                    finally
+                    {
+                        if (pushed) PopCBDebugGroup();
+                        CommandBufferPool.Return(cmd);
+                        job.Done?.Set();
+                    }
+                }
+            }
+            finally
+            {
+                try { Window.InternalWindow.GLContext!.Clear(); } catch { }
+                s_renderFrameDone.Set();
+            }
+        }
     }
 
     private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
@@ -88,253 +210,29 @@ public static unsafe class Graphics
             Debug.LogError($"OpenGL Error: {msg}");
         else if (type == GLEnum.DebugTypePerformance || type == GLEnum.DebugTypeMarker || type == GLEnum.DebugTypePortability)
             Debug.LogWarning($"OpenGL Warning: {msg}");
-        //else
-        //    Debug.Log($"OpenGL Message: {msg}");
     }
 
-    public static void Viewport(int x, int y, uint width, uint height) => GL.Viewport(x, y, width, height);
-
-    public static void Clear(float r, float g, float b, float a, ClearFlags v)
+    public static void Dispose()
     {
-        GL.ClearColor(r, g, b, a);
-
-        ClearBufferMask clearBufferMask = 0;
-        if (v.HasFlag(ClearFlags.Color))
-            clearBufferMask |= ClearBufferMask.ColorBufferBit;
-        if (v.HasFlag(ClearFlags.Depth))
-            clearBufferMask |= ClearBufferMask.DepthBufferBit;
-        if (v.HasFlag(ClearFlags.Stencil))
-            clearBufferMask |= ClearBufferMask.StencilBufferBit;
-        GL.Clear(clearBufferMask);
+        // Render thread may be parked on s_renderWake or blocked on a Take.
+        // Releasing both wakes it; it then sees the stop flag and exits.
+        s_renderThreadStop = true;
+        try { s_renderQueue.CompleteAdding(); } catch { }
+        try { s_renderWake.Release(); } catch { }
+        s_renderThread?.Join();
+        try { Window.InternalWindow.GLContext?.MakeCurrent(); } catch { }
+        GL.Dispose();
     }
 
-    public static void SetState(RasterizerState state, bool force = false)
-    {
-        if (depthTest != state.DepthTest || force)
-        {
-            if (state.DepthTest)
-                GL.Enable(EnableCap.DepthTest);
-            else
-                GL.Disable(EnableCap.DepthTest);
-            depthTest = state.DepthTest;
-        }
-
-        if (depthWrite != state.DepthWrite || force)
-        {
-            GL.DepthMask(state.DepthWrite);
-            depthWrite = state.DepthWrite;
-        }
-
-        if (depthMode != state.Depth || force)
-        {
-            GL.DepthFunc(DepthModeToGL(state.Depth));
-            depthMode = state.Depth;
-        }
-
-        if (doBlend != state.DoBlend || force)
-        {
-            if (state.DoBlend)
-                GL.Enable(EnableCap.Blend);
-            else
-                GL.Disable(EnableCap.Blend);
-            doBlend = state.DoBlend;
-        }
-
-        if (blendSrc != state.BlendSrc || blendDst != state.BlendDst || force)
-        {
-            GL.BlendFunc(BlendingToGL(state.BlendSrc), BlendingToGL(state.BlendDst));
-            blendSrc = state.BlendSrc;
-            blendDst = state.BlendDst;
-        }
-
-        if (blendEquation != state.Blend || force)
-        {
-            GL.BlendEquation(BlendModeToGL(state.Blend));
-            blendEquation = state.Blend;
-        }
-
-        if (cullFace != state.CullFace || force)
-        {
-            if (state.CullFace != RasterizerState.PolyFace.None)
-            {
-                GL.Enable(EnableCap.CullFace);
-                GL.CullFace(CullFaceToGL(state.CullFace));
-            }
-            else
-                GL.Disable(EnableCap.CullFace);
-            cullFace = state.CullFace;
-        }
-
-        if (winding != state.Winding || force)
-        {
-            GL.FrontFace(WindingToGL(state.Winding));
-            winding = state.Winding;
-        }
-
-        if (stencilEnabled != state.StencilEnabled || force)
-        {
-            if (state.StencilEnabled)
-                GL.Enable(EnableCap.StencilTest);
-            else
-                GL.Disable(EnableCap.StencilTest);
-            stencilEnabled = state.StencilEnabled;
-        }
-
-        if (state.StencilEnabled &&
-            (stencilFunc != state.StencilFunc || stencilRef != state.StencilRef || stencilReadMask != state.StencilReadMask || force))
-        {
-            GL.StencilFunc(StencilFuncToGL(state.StencilFunc), state.StencilRef, (uint)state.StencilReadMask);
-            stencilFunc = state.StencilFunc;
-            stencilRef = state.StencilRef;
-            stencilReadMask = state.StencilReadMask;
-        }
-
-        if (state.StencilEnabled &&
-            (stencilFailOp != state.StencilFailOp || stencilZFailOp != state.StencilZFailOp || stencilPassOp != state.StencilPassOp || force))
-        {
-            GL.StencilOp(StencilOpToGL(state.StencilFailOp), StencilOpToGL(state.StencilZFailOp), StencilOpToGL(state.StencilPassOp));
-            stencilFailOp = state.StencilFailOp;
-            stencilZFailOp = state.StencilZFailOp;
-            stencilPassOp = state.StencilPassOp;
-        }
-
-        if (state.StencilEnabled && (stencilWriteMask != state.StencilWriteMask || force))
-        {
-            GL.StencilMask((uint)state.StencilWriteMask);
-            stencilWriteMask = state.StencilWriteMask;
-        }
-    }
-
-    public static RasterizerState GetState()
-    {
-        return new RasterizerState
-        {
-            DepthTest = depthTest,
-            DepthWrite = depthWrite,
-            Depth = depthMode,
-            DoBlend = doBlend,
-            BlendSrc = blendSrc,
-            BlendDst = blendDst,
-            Blend = blendEquation,
-            CullFace = cullFace,
-            StencilEnabled = stencilEnabled,
-            StencilFunc = stencilFunc,
-            StencilRef = stencilRef,
-            StencilReadMask = stencilReadMask,
-            StencilWriteMask = stencilWriteMask,
-            StencilPassOp = stencilPassOp,
-            StencilFailOp = stencilFailOp,
-            StencilZFailOp = stencilZFailOp,
-        };
-    }
-
-    /// <summary>
-    /// Resets GL rasterizer state to known defaults and syncs the cache.
-    /// Call at the start of each pipeline Render to prevent stale state
-    /// from a previous render pass leaking in.
-    /// </summary>
-    public static void ResetState()
-    {
-        GL.Enable(EnableCap.DepthTest);
-        depthTest = true;
-
-        GL.DepthMask(true);
-        depthWrite = true;
-
-        GL.DepthFunc(DepthFunction.Lequal);
-        depthMode = RasterizerState.DepthMode.Lequal;
-
-        GL.Disable(EnableCap.Blend);
-        doBlend = false;
-
-        blendSrc = RasterizerState.Blending.One;
-        blendDst = RasterizerState.Blending.Zero;
-        blendEquation = RasterizerState.BlendMode.Add;
-
-        GL.Enable(EnableCap.CullFace);
-        GL.CullFace(TriangleFace.Back);
-        cullFace = RasterizerState.PolyFace.Back;
-
-        GL.FrontFace(FrontFaceDirection.CW);
-        winding = RasterizerState.WindingOrder.CW;
-
-        GL.Disable(EnableCap.StencilTest);
-        stencilEnabled = false;
-        stencilFunc = RasterizerState.StencilFunction.Always;
-        stencilRef = 0;
-        stencilReadMask = 255;
-        stencilWriteMask = 255;
-        stencilPassOp = RasterizerState.StencilOp.Keep;
-        stencilFailOp = RasterizerState.StencilOp.Keep;
-        stencilZFailOp = RasterizerState.StencilOp.Keep;
-    }
-
-    // Helper method to combine program ID and string hash into a unique ulong key
-    private static ulong CombineKey(int programId, string name)
-    {
-        // Combine program ID (upper 32 bits) and string hash (lower 32 bits)
-        uint nameHash = unchecked((uint)name.GetHashCode());
-        return ((ulong)programId << 32) | nameHash;
-    }
-
-    #region Buffers
-
-    public static Dictionary<ulong, uint> cachedBlockLocations = [];
+    // ─────────────────────── Resource creation ───────────────────────
 
     public static GraphicsBuffer CreateBuffer<T>(BufferType bufferType, T[] data, bool dynamic = false) where T : unmanaged
     {
-        fixed (void* dat = data)
-            return new GraphicsBuffer(bufferType, (uint)(data.Length * sizeof(T)), dat, dynamic);
+        // Convert the typed array to a byte span. The GraphicsBuffer constructor
+        // copies the bytes into a CommandBuffer's transient store so the caller's
+        // T[] can be freed/reused immediately after this returns.
+        return new GraphicsBuffer(bufferType, System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan()), dynamic);
     }
-
-    public static void SetBuffer<T>(GraphicsBuffer buffer, T[] data, bool dynamic = false) where T : unmanaged
-    {
-        fixed (void* dat = data)
-            buffer!.Set((uint)(data.Length * sizeof(T)), dat, dynamic);
-    }
-
-    public static void UpdateBuffer<T>(GraphicsBuffer buffer, uint offsetInBytes, T[] data) where T : unmanaged
-    {
-        fixed (void* dat = data)
-            buffer!.Update(offsetInBytes, (uint)(data.Length * sizeof(T)), dat);
-    }
-
-    public static void BindBuffer(GraphicsBuffer buffer)
-    {
-        if (buffer is GraphicsBuffer GraphicsBuffer)
-            GL.BindBuffer(GraphicsBuffer.Target, GraphicsBuffer.Handle);
-    }
-
-    public static uint GetBlockIndex(GraphicsProgram program, string blockName)
-    {
-        ulong key = CombineKey(program.ID, blockName);
-        if (cachedBlockLocations.TryGetValue(key, out uint loc))
-            return loc;
-
-        BindProgram(program);
-        uint newLoc = GL.GetUniformBlockIndex(program.Handle, blockName);
-        cachedBlockLocations[key] = newLoc;
-        return newLoc;
-    }
-
-    public static void BindUniformBuffer(GraphicsProgram program, string blockName, GraphicsBuffer buffer, uint bindingPoint = 0)
-    {
-        uint blockIndex = GetBlockIndex(program, blockName);
-        // 0xFFFFFFFF (GL_INVALID_INDEX) means the block was not found in the shader
-        if (blockIndex == 0xFFFFFFFF) return;
-
-        BindProgram(program);
-
-        // Connect the shader's uniform block index to the specified binding point
-        GL.UniformBlockBinding(program.Handle, blockIndex, bindingPoint);
-
-        // Now bind the buffer to that binding point
-        GL.BindBufferBase(BufferTargetARB.UniformBuffer, bindingPoint, buffer!.Handle);
-    }
-
-    #endregion
-
-    #region Vertex Arrays
 
     public static GraphicsVertexArray CreateVertexArray(
         VertexFormat format,
@@ -346,417 +244,120 @@ public static unsafe class Graphics
         return new GraphicsVertexArray(format, vertices, indices, instanceFormat, instanceBuffer);
     }
 
-    public static void BindVertexArray(GraphicsVertexArray? vertexArrayObject)
+    public static GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments, uint width, uint height)
+        => new GraphicsFrameBuffer(attachments, width, height);
+
+    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format)
+        => new GraphicsTexture(type, format);
+
+    public static GraphicsProgram CompileProgram(string fragment, string vertex, string geometry)
+        => new GraphicsProgram(fragment, vertex, geometry);
+
+    // Resources replaced mid-frame (e.g. an instance buffer that grows) can't be
+    // disposed immediately because earlier encoded CBs still reference the old
+    // handle. DeferDispose queues them FlushDeferredDisposes runs once per frame
+    // after all CBs have executed.
+    private static readonly System.Collections.Generic.List<System.IDisposable> s_deferredDisposes = new();
+
+    public static void DeferDispose(System.IDisposable resource)
     {
-        uint handle = 0;
-
-        if (vertexArrayObject is GraphicsVertexArray vao)
-            handle = vao.Handle;
-
-        GL.BindVertexArray(handle);
+        if (resource == null) return;
+        lock (s_deferredDisposes)
+            s_deferredDisposes.Add(resource);
     }
 
-
-    #endregion
-
-
-    #region Frame Buffers
-
-    public static GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments, uint width, uint height) => new GraphicsFrameBuffer(attachments, width, height);
-    public static void UnbindFramebuffer()
+    public static void FlushDeferredDisposes()
     {
-        GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        currentFramebuffer = null;
-        currentReadFramebuffer = null;
-        currentDrawFramebuffer = null;
-    }
-
-    public static void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FBOTarget readFramebuffer = FBOTarget.Framebuffer)
-    {
-        FramebufferTarget target = readFramebuffer switch
+        lock (s_deferredDisposes)
         {
-            FBOTarget.Read => FramebufferTarget.ReadFramebuffer,
-            FBOTarget.Draw => FramebufferTarget.DrawFramebuffer,
-            FBOTarget.Framebuffer => FramebufferTarget.Framebuffer,
-            _ => throw new ArgumentOutOfRangeException(nameof(readFramebuffer), readFramebuffer, null),
-        };
-        GL.BindFramebuffer(target, frameBuffer!.Handle);
-        //GL.DrawBuffers((uint)frameBuffer.NumOfAttachments, GraphicsFrameBuffer.buffers);
-
-        // Track current framebuffer
-        switch (readFramebuffer)
-        {
-            case FBOTarget.Read:
-                currentReadFramebuffer = frameBuffer;
-                break;
-            case FBOTarget.Draw:
-                currentDrawFramebuffer = frameBuffer;
-                break;
-            case FBOTarget.Framebuffer:
-                currentFramebuffer = frameBuffer;
-                currentReadFramebuffer = frameBuffer;
-                currentDrawFramebuffer = frameBuffer;
-                break;
+            for (int i = 0; i < s_deferredDisposes.Count; i++)
+                s_deferredDisposes[i].Dispose();
+            s_deferredDisposes.Clear();
         }
-
-        Viewport(0, 0, frameBuffer.Width, frameBuffer.Height);
     }
 
-    public static GraphicsFrameBuffer? GetCurrentFramebuffer(FBOTarget target = FBOTarget.Framebuffer)
+    // Convenience encoders for sticky texture state. Each rents a one-op CB and
+    // submits it so the mutation runs on the render thread in submit order.
+
+    public static void SetWrapS(GraphicsTexture texture, TextureWrap wrap) => EncodeOneOp(c => c.EncodeSetTextureWrap(texture, 0, wrap), "Texture.SetWrapS");
+    public static void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => EncodeOneOp(c => c.EncodeSetTextureWrap(texture, 1, wrap), "Texture.SetWrapT");
+    public static void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => EncodeOneOp(c => c.EncodeSetTextureWrap(texture, 2, wrap), "Texture.SetWrapR");
+    public static void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => EncodeOneOp(c => c.EncodeSetTextureFilters(texture, min, mag), "Texture.SetFilters");
+    public static void GenerateMipmap(GraphicsTexture texture) => EncodeOneOp(c => c.GenerateMipmap(texture), "Texture.GenerateMipmap");
+
+    /// <summary>Synchronous texture read-back. Blocks until the destination is filled.</summary>
+    public static unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data)
     {
-        return target switch
-        {
-            FBOTarget.Read => currentReadFramebuffer,
-            FBOTarget.Draw => currentDrawFramebuffer,
-            FBOTarget.Framebuffer => currentFramebuffer,
-            _ => currentFramebuffer,
-        };
+        using var cmd = GetCommandBuffer("Texture.GetTexImage");
+        cmd.EncodeGetTextureDataPtr(texture, mip, (nint)data);
+        SubmitAndWait(cmd);
     }
 
-    public static void BlitFramebuffer(int srcX, int srcY, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, ClearFlags mask, BlitFilter filter)
+    public static unsafe void TexImage2D(GraphicsTexture texture, int mip, uint width, uint height, int border, void* data)
     {
-        ClearBufferMask clearBufferMask = 0;
-        if (mask.HasFlag(ClearFlags.Color))
-            clearBufferMask |= ClearBufferMask.ColorBufferBit;
-        if (mask.HasFlag(ClearFlags.Depth))
-            clearBufferMask |= ClearBufferMask.DepthBufferBit;
-        if (mask.HasFlag(ClearFlags.Stencil))
-            clearBufferMask |= ClearBufferMask.StencilBufferBit;
-
-        BlitFramebufferFilter nearest = filter switch
-        {
-            BlitFilter.Nearest => BlitFramebufferFilter.Nearest,
-            BlitFilter.Linear => BlitFramebufferFilter.Linear,
-            _ => throw new ArgumentOutOfRangeException(nameof(filter), filter, null),
-        };
-
-        GL.BlitFramebuffer(srcX, srcY, srcWidth, srcHeight, destX, destY, destWidth, destHeight, clearBufferMask, nearest);
+        int size = data != null ? (int)(width * height * BytesPerPixel(texture)) : 0;
+        ReadOnlySpan<byte> span = data != null ? new ReadOnlySpan<byte>(data, size) : ReadOnlySpan<byte>.Empty;
+        using var cmd = GetCommandBuffer("Texture.TexImage2D");
+        cmd.EncodeAllocateTexture2D(texture, mip, width, height, border, span);
+        Submit(cmd);
     }
 
-    public static T ReadPixel<T>(int attachment, int x, int y, TextureImageFormat format) where T : unmanaged
-    {
-        GL.ReadBuffer((ReadBufferMode)((int)ReadBufferMode.ColorAttachment0 + attachment));
-        GraphicsTexture.GetTextureFormatEnums(format, out InternalFormat internalFormat, out PixelType pixelType, out PixelFormat pixelFormat);
-        return GL.ReadPixels<T>(x, y, 1, 1, pixelFormat, pixelType);
-    }
-
-    #endregion
-
-    #region Shaders
-
-    public static Dictionary<ulong, int> cachedUniformLocations = [];
-    public static Dictionary<ulong, int> cachedAttribLocations = [];
-
-    public static GraphicsProgram CompileProgram(string fragment, string vertex, string geometry) => new GraphicsProgram(fragment, vertex, geometry);
-    public static void BindProgram(GraphicsProgram program) => program!.Use();
-
-    public static int GetUniformLocation(GraphicsProgram program, string name)
-    {
-        ulong key = CombineKey(program.ID, name);
-        if (cachedUniformLocations.TryGetValue(key, out int loc))
-            return loc;
-
-        BindProgram(program);
-        int newLoc = GL.GetUniformLocation(program.Handle, name);
-        cachedUniformLocations[key] = newLoc;
-        return newLoc;
-    }
-
-    public static int GetAttribLocation(GraphicsProgram program, string name)
-    {
-        ulong key = CombineKey(program.ID, name);
-        if (cachedAttribLocations.TryGetValue(key, out int loc))
-            return loc;
-
-        BindProgram(program);
-        int newLoc = GL.GetAttribLocation(program.Handle, name);
-        cachedAttribLocations[key] = newLoc;
-        return newLoc;
-    }
-
-    public static void SetUniformF(GraphicsProgram program, string name, float value)
-    {
-        int loc = GetUniformLocation(program, name);
-        if (loc == -1) return;
-
-        BindProgram(program);
-        GL.Uniform1(loc, value);
-    }
-
-    public static void SetUniformI(GraphicsProgram program, string name, int value)
-    {
-        int loc = GetUniformLocation(program, name);
-        if (loc == -1) return;
-
-        BindProgram(program);
-        GL.Uniform1(loc, value);
-    }
-
-    public static void SetUniformV2(GraphicsProgram program, string name, Float2 value)
-    {
-        int loc = GetUniformLocation(program, name);
-        if (loc == -1) return;
-
-        BindProgram(program);
-        GL.Uniform2(loc, value); // Casts to System.Numerics.Vector2
-    }
-
-    public static void SetUniformV3(GraphicsProgram program, string name, Float3 value)
-    {
-        int loc = GetUniformLocation(program, name);
-        if (loc == -1) return;
-
-        BindProgram(program);
-        GL.Uniform3(loc, value); // Casts to System.Numerics.Vector3
-    }
-
-    public static void SetUniformV4(GraphicsProgram program, string name, Float4 value)
-    {
-        int loc = GetUniformLocation(program, name);
-        if (loc == -1) return;
-
-        BindProgram(program);
-        GL.Uniform4(loc, value); // Casts to System.Numerics.Vector4
-    }
-
-    public static void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, Float4x4 matrix)
-    {
-        Float4x4 fMat = matrix;
-        SetUniformMatrix(program, name, 1, transpose, in fMat.c0.X);
-    }
-    public static void SetUniformMatrix(GraphicsProgram program, string name, bool transpose, in float matrix) => SetUniformMatrix(program, name, 1, transpose, in matrix);
-
-    public static void SetUniformMatrix(GraphicsProgram program, string name, uint count, bool transpose, in float matrix)
-    {
-        int loc = GetUniformLocation(program, name);
-        if (loc == -1) return;
-
-        BindProgram(program);
-        GL.UniformMatrix4(loc, count, transpose, in matrix);
-    }
-
-    public static void SetUniformTexture(GraphicsProgram program, string name, int slot, GraphicsTexture texture)
-    {
-        int loc = GetUniformLocation(program, name);
-        if (loc == -1) return;
-
-        BindProgram(program);
-        GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + slot));
-        texture.Bind();
-        GL.Uniform1(loc, slot);
-    }
-
-    #endregion
-
-    #region Textures
-
-    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format) => new GraphicsTexture(type, format);
-    public static void SetWrapS(GraphicsTexture texture, TextureWrap wrap) => texture!.SetWrapS(wrap);
-
-    public static void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => texture!.SetWrapT(wrap);
-    public static void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => texture!.SetWrapR(wrap);
-    public static void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => texture!.SetTextureFilters(min, mag);
-    public static void GenerateMipmap(GraphicsTexture texture) => texture!.GenerateMipmap();
-
-    public static unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data) => texture!.GetTexImage(mip, data);
-
-    public static unsafe void TexImage2D(GraphicsTexture texture, int mip, uint width, uint height, int v2, void* data)
-        => texture!.TexImage2D(texture.Target, mip, width, height, v2, data);
     public static unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, void* data)
-        => texture!.TexSubImage2D(texture.Target, mip, x, y, width, height, data);
+    {
+        if (data == null) return;
+        int size = (int)(width * height * BytesPerPixel(texture));
+        var span = new ReadOnlySpan<byte>(data, size);
+        using var cmd = GetCommandBuffer("Texture.TexSubImage2D");
+        cmd.EncodeUpdateTexture2D(texture, mip, x, y, width, height, span);
+        Submit(cmd);
+    }
 
     public static unsafe void TexImage3D(GraphicsTexture texture, int level, uint width, uint height, uint depth, void* data)
-        => texture!.TexImage3D(texture.Target, level, width, height, depth, data);
+    {
+        int size = data != null ? (int)(width * height * depth * BytesPerPixel(texture)) : 0;
+        ReadOnlySpan<byte> span = data != null ? new ReadOnlySpan<byte>(data, size) : ReadOnlySpan<byte>.Empty;
+        using var cmd = GetCommandBuffer("Texture.TexImage3D");
+        cmd.EncodeAllocateTexture3D(texture, level, width, height, depth, span);
+        Submit(cmd);
+    }
+
     public static unsafe void TexSubImage3D(GraphicsTexture texture, int level, int x, int y, int z, uint width, uint height, uint depth, void* data)
-        => texture!.TexSubImage3D(texture.Target, level, x, y, z, width, height, depth, data);
-
-    #endregion
-
-    public static void Draw(Topology primitiveType, uint count) => Draw(primitiveType, 0, count);
-
-
-    public static void Draw(Topology primitiveType, int v, uint count)
     {
-        PrimitiveType mode = TopologyToGL(primitiveType);
-        GL.DrawArrays(mode, v, count);
-    }
-    public static unsafe void DrawIndexed(Topology primitiveType, uint indexCount, bool index32bit, void* value)
-    {
-        PrimitiveType mode = TopologyToGL(primitiveType);
-        GL.DrawElements(mode, indexCount, index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort, value);
-        Rendering.RenderStats.RecordDraw(primitiveType, indexCount);
+        if (data == null) return;
+        int size = (int)(width * height * depth * BytesPerPixel(texture));
+        var span = new ReadOnlySpan<byte>(data, size);
+        using var cmd = GetCommandBuffer("Texture.TexSubImage3D");
+        cmd.EncodeUpdateTexture3D(texture, level, x, y, z, width, height, depth, span);
+        Submit(cmd);
     }
 
-    public static unsafe void DrawIndexed(Topology primitiveType, uint indexCount, int startIndex, int baseVertex, bool index32bit)
+    /// <summary>Bytes per pixel under tight packing, used to size copies into the
+    /// transient store. Mirrors the GL spec's pixel cost (no row alignment).</summary>
+    private static int BytesPerPixel(GraphicsTexture tex) => tex.PixelInternalFormat switch
     {
-        PrimitiveType mode = TopologyToGL(primitiveType);
+        InternalFormat.R8 or InternalFormat.R8i or InternalFormat.R8ui => 1,
+        InternalFormat.RG8 or InternalFormat.RG8i or InternalFormat.RG8ui => 2,
+        InternalFormat.Rgb8 or InternalFormat.Rgb8i or InternalFormat.Rgb8ui => 3,
+        InternalFormat.Rgba8 or InternalFormat.Rgba8i or InternalFormat.Rgba8ui => 4,
+        InternalFormat.R16 or InternalFormat.R16f or InternalFormat.R16i or InternalFormat.R16ui => 2,
+        InternalFormat.RG16 or InternalFormat.RG16f or InternalFormat.RG16i or InternalFormat.RG16ui => 4,
+        InternalFormat.Rgb16 or InternalFormat.Rgb16f or InternalFormat.Rgb16i or InternalFormat.Rgb16ui => 6,
+        InternalFormat.Rgba16 or InternalFormat.Rgba16f or InternalFormat.Rgba16i or InternalFormat.Rgba16ui => 8,
+        InternalFormat.R32f or InternalFormat.R32i or InternalFormat.R32ui => 4,
+        InternalFormat.RG32f or InternalFormat.RG32i or InternalFormat.RG32ui => 8,
+        InternalFormat.Rgb32f or InternalFormat.Rgb32i or InternalFormat.Rgb32ui => 12,
+        InternalFormat.Rgba32f or InternalFormat.Rgba32i or InternalFormat.Rgba32ui => 16,
+        InternalFormat.DepthComponent16 => 2,
+        InternalFormat.DepthComponent24 => 4,
+        InternalFormat.DepthComponent32f => 4,
+        InternalFormat.Depth24Stencil8 => 4,
+        _ => 4,
+    };
 
-        DrawElementsType format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
-        int formatSize = index32bit ? sizeof(uint) : sizeof(ushort);
-        GL.DrawElementsBaseVertex(mode, indexCount, format, (void*)(startIndex * formatSize), baseVertex);
-        Rendering.RenderStats.RecordDraw(primitiveType, indexCount);
-    }
-
-    public static unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, bool index32bit)
+    private static void EncodeOneOp(Action<CommandBuffer> encode, string name)
     {
-        // Verify a VAO is bound
-        GL.GetInteger(GetPName.VertexArrayBinding, out int currentVAO);
-        if (currentVAO == 0)
-        {
-            throw new System.InvalidOperationException("DrawIndexedInstanced called with no VAO bound! Bind a vertex array first.");
-        }
-
-        PrimitiveType mode = TopologyToGL(primitiveType);
-        DrawElementsType format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
-
-        GL.DrawElementsInstanced(mode, indexCount, format, null, instanceCount);
-        Rendering.RenderStats.RecordDraw(primitiveType, indexCount, instanceCount);
+        using var cmd = GetCommandBuffer(name);
+        encode(cmd);
+        Submit(cmd);
     }
-
-    /// <summary>Instanced indexed draw starting at <paramref name="startIndex"/> within the bound element buffer. Used for per-submesh instanced draws.</summary>
-    public static unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, int startIndex, bool index32bit)
-    {
-        GL.GetInteger(GetPName.VertexArrayBinding, out int currentVAO);
-        if (currentVAO == 0)
-            throw new System.InvalidOperationException("DrawIndexedInstanced called with no VAO bound! Bind a vertex array first.");
-
-        PrimitiveType mode = TopologyToGL(primitiveType);
-        DrawElementsType format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
-        int indexSize = index32bit ? sizeof(uint) : sizeof(ushort);
-
-        GL.DrawElementsInstanced(mode, indexCount, format, (void*)(startIndex * indexSize), instanceCount);
-        Rendering.RenderStats.RecordDraw(primitiveType, indexCount, instanceCount);
-    }
-
-    public static void Dispose()
-    {
-        GL.Dispose();
-    }
-
-    #region Private
-
-
-    private static PrimitiveType TopologyToGL(Topology triangles)
-    {
-        return triangles switch
-        {
-            Topology.Points => PrimitiveType.Points,
-            Topology.Lines => PrimitiveType.Lines,
-            Topology.LineLoop => PrimitiveType.LineLoop,
-            Topology.LineStrip => PrimitiveType.LineStrip,
-            Topology.Triangles => PrimitiveType.Triangles,
-            Topology.TriangleStrip => PrimitiveType.TriangleStrip,
-            Topology.TriangleFan => PrimitiveType.TriangleFan,
-            _ => throw new ArgumentOutOfRangeException(nameof(triangles), triangles, null),
-        };
-    }
-
-    private static DepthFunction DepthModeToGL(RasterizerState.DepthMode depthMode)
-    {
-        return depthMode switch
-        {
-            RasterizerState.DepthMode.Never => DepthFunction.Never,
-            RasterizerState.DepthMode.Less => DepthFunction.Less,
-            RasterizerState.DepthMode.Equal => DepthFunction.Equal,
-            RasterizerState.DepthMode.Lequal => DepthFunction.Lequal,
-            RasterizerState.DepthMode.Greater => DepthFunction.Greater,
-            RasterizerState.DepthMode.Notequal => DepthFunction.Notequal,
-            RasterizerState.DepthMode.Gequal => DepthFunction.Gequal,
-            RasterizerState.DepthMode.Always => DepthFunction.Always,
-            _ => throw new ArgumentOutOfRangeException(nameof(depthMode), depthMode, null),
-        };
-    }
-
-    private static BlendingFactor BlendingToGL(RasterizerState.Blending blending)
-    {
-        return blending switch
-        {
-            RasterizerState.Blending.Zero => BlendingFactor.Zero,
-            RasterizerState.Blending.One => BlendingFactor.One,
-            RasterizerState.Blending.SrcColor => BlendingFactor.SrcColor,
-            RasterizerState.Blending.OneMinusSrcColor => BlendingFactor.OneMinusSrcColor,
-            RasterizerState.Blending.DstColor => BlendingFactor.DstColor,
-            RasterizerState.Blending.OneMinusDstColor => BlendingFactor.OneMinusDstColor,
-            RasterizerState.Blending.SrcAlpha => BlendingFactor.SrcAlpha,
-            RasterizerState.Blending.OneMinusSrcAlpha => BlendingFactor.OneMinusSrcAlpha,
-            RasterizerState.Blending.DstAlpha => BlendingFactor.DstAlpha,
-            RasterizerState.Blending.OneMinusDstAlpha => BlendingFactor.OneMinusDstAlpha,
-            RasterizerState.Blending.ConstantColor => BlendingFactor.ConstantColor,
-            RasterizerState.Blending.OneMinusConstantColor => BlendingFactor.OneMinusConstantColor,
-            RasterizerState.Blending.ConstantAlpha => BlendingFactor.ConstantAlpha,
-            RasterizerState.Blending.OneMinusConstantAlpha => BlendingFactor.OneMinusConstantAlpha,
-            RasterizerState.Blending.SrcAlphaSaturate => BlendingFactor.SrcAlphaSaturate,
-            _ => throw new ArgumentOutOfRangeException(nameof(blending), blending, null),
-        };
-    }
-
-    private static BlendEquationModeEXT BlendModeToGL(RasterizerState.BlendMode blendMode)
-    {
-        return blendMode switch
-        {
-            RasterizerState.BlendMode.Add => BlendEquationModeEXT.FuncAdd,
-            RasterizerState.BlendMode.Subtract => BlendEquationModeEXT.FuncSubtract,
-            RasterizerState.BlendMode.ReverseSubtract => BlendEquationModeEXT.FuncReverseSubtract,
-            RasterizerState.BlendMode.Min => BlendEquationModeEXT.Min,
-            RasterizerState.BlendMode.Max => BlendEquationModeEXT.Max,
-            _ => throw new ArgumentOutOfRangeException(nameof(blendMode), blendMode, null),
-        };
-    }
-
-    private static TriangleFace CullFaceToGL(RasterizerState.PolyFace cullFace)
-    {
-        return cullFace switch
-        {
-            RasterizerState.PolyFace.Front => TriangleFace.Front,
-            RasterizerState.PolyFace.Back => TriangleFace.Back,
-            RasterizerState.PolyFace.FrontAndBack => TriangleFace.FrontAndBack,
-            _ => throw new ArgumentOutOfRangeException(nameof(cullFace), cullFace, null),
-        };
-    }
-
-    private static FrontFaceDirection WindingToGL(RasterizerState.WindingOrder winding)
-    {
-        return winding switch
-        {
-            RasterizerState.WindingOrder.CW => FrontFaceDirection.CW,
-            RasterizerState.WindingOrder.CCW => FrontFaceDirection.Ccw,
-            _ => throw new ArgumentOutOfRangeException(nameof(winding), winding, null),
-        };
-    }
-
-    private static StencilFunction StencilFuncToGL(RasterizerState.StencilFunction func)
-    {
-        return func switch
-        {
-            RasterizerState.StencilFunction.Never => StencilFunction.Never,
-            RasterizerState.StencilFunction.Less => StencilFunction.Less,
-            RasterizerState.StencilFunction.Equal => StencilFunction.Equal,
-            RasterizerState.StencilFunction.Lequal => StencilFunction.Lequal,
-            RasterizerState.StencilFunction.Greater => StencilFunction.Greater,
-            RasterizerState.StencilFunction.Notequal => StencilFunction.Notequal,
-            RasterizerState.StencilFunction.Gequal => StencilFunction.Gequal,
-            RasterizerState.StencilFunction.Always => StencilFunction.Always,
-            _ => throw new ArgumentOutOfRangeException(nameof(func), func, null),
-        };
-    }
-
-    private static StencilOp StencilOpToGL(RasterizerState.StencilOp op)
-    {
-        return op switch
-        {
-            RasterizerState.StencilOp.Keep => StencilOp.Keep,
-            RasterizerState.StencilOp.Zero => StencilOp.Zero,
-            RasterizerState.StencilOp.Replace => StencilOp.Replace,
-            RasterizerState.StencilOp.Incr => StencilOp.Incr,
-            RasterizerState.StencilOp.IncrWrap => StencilOp.IncrWrap,
-            RasterizerState.StencilOp.Decr => StencilOp.Decr,
-            RasterizerState.StencilOp.DecrWrap => StencilOp.DecrWrap,
-            RasterizerState.StencilOp.Invert => StencilOp.Invert,
-            _ => throw new ArgumentOutOfRangeException(nameof(op), op, null),
-        };
-    }
-
-    #endregion
-
-    #endregion
 }

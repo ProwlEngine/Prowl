@@ -152,12 +152,12 @@ public class PaperRenderer : ICanvasRenderer
             CullFace = RasterizerState.PolyFace.None,
         };
 
-        Graphics.SetState(state);
-        Graphics.BindProgram(_shaderProgram);
-        Graphics.SetUniformMatrix(_shaderProgram, "projection", false, _projection);
-        Graphics.SetUniformF(_shaderProgram, "dpiScale", dpiScale);
+        using var cmd = Graphics.GetCommandBuffer("Paper UI");
 
-        Graphics.BindVertexArray(_vertexArrayObject);
+        cmd.SetRasterState(state);
+        cmd.SetShader(_shaderProgram);
+        cmd.SetMatrix("projection", in _projection);
+        cmd.SetFloat("dpiScale", dpiScale);
 
         // Upload raw Vertex data (44 bytes per vertex)
         if (canvas.Vertices.Count > 0)
@@ -167,55 +167,57 @@ public class PaperRenderer : ICanvasRenderer
             var handle = GCHandle.Alloc(vertices, GCHandleType.Pinned);
             try { Marshal.Copy(handle.AddrOfPinnedObject(), rawData, 0, rawData.Length); }
             finally { handle.Free(); }
-            Graphics.SetBuffer(_vertexBuffer, rawData, true);
+            cmd.UpdateBuffer<byte>(_vertexBuffer, rawData);
         }
 
         if (canvas.Indices.Count > 0)
-            Graphics.SetBuffer(_elementBuffer, canvas.Indices.ToArray(), true);
+            cmd.UpdateBuffer<uint>(_elementBuffer, canvas.Indices.ToArray());
 
         int indexOffset = 0;
         foreach (DrawCall drawCall in drawCalls)
         {
             // Texture
             Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
-            Graphics.SetUniformTexture(_shaderProgram, "texture0", 0, texture.Handle);
+            cmd.SetTexture("texture0", texture);
 
             // Scissor
             drawCall.GetScissor(out Float4x4 scissor, out Float2 extent);
-            Graphics.SetUniformMatrix(_shaderProgram, "scissorMat", false, scissor);
-            Graphics.SetUniformV2(_shaderProgram, "scissorExt", extent);
+            cmd.SetMatrix("scissorMat", in scissor);
+            cmd.SetVector("scissorExt", extent);
 
             // Brush
-            Graphics.SetUniformMatrix(_shaderProgram, "brushMat", false, drawCall.Brush.BrushMatrix);
-            Graphics.SetUniformI(_shaderProgram, "brushType", (int)drawCall.Brush.Type);
-            Graphics.SetUniformV4(_shaderProgram, "brushColor1", ToFloat4(drawCall.Brush.Color1));
-            Graphics.SetUniformV4(_shaderProgram, "brushColor2", ToFloat4(drawCall.Brush.Color2));
-            Graphics.SetUniformV4(_shaderProgram, "brushParams", new Float4(
+            Float4x4 brushMat = drawCall.Brush.BrushMatrix;
+            cmd.SetMatrix("brushMat", in brushMat);
+            cmd.SetInt("brushType", (int)drawCall.Brush.Type);
+            cmd.SetVector("brushColor1", ToFloat4(drawCall.Brush.Color1));
+            cmd.SetVector("brushColor2", ToFloat4(drawCall.Brush.Color2));
+            cmd.SetVector("brushParams", new Float4(
                 drawCall.Brush.Point1.X, drawCall.Brush.Point1.Y,
                 drawCall.Brush.Point2.X, drawCall.Brush.Point2.Y));
-            Graphics.SetUniformV2(_shaderProgram, "brushParams2", new Float2(
+            cmd.SetVector("brushParams2", new Float2(
                 drawCall.Brush.CornerRadii, drawCall.Brush.Feather));
-            Graphics.SetUniformMatrix(_shaderProgram, "brushTextureMat", false, drawCall.Brush.TextureMatrix);
+            Float4x4 brushTexMat = drawCall.Brush.TextureMatrix;
+            cmd.SetMatrix("brushTextureMat", in brushTexMat);
 
             // Slug textures (GPU text rendering)
             if (drawCall.IsSlug)
             {
                 if (drawCall.SlugCurveTexture is Texture2D curveTex)
-                    Graphics.SetUniformTexture(_shaderProgram, "slugCurveTexture", 1, curveTex.Handle);
+                    cmd.SetTexture("slugCurveTexture", curveTex);
                 if (drawCall.SlugBandTexture is Texture2D bandTex)
-                    Graphics.SetUniformTexture(_shaderProgram, "slugBandTexture", 2, bandTex.Handle);
+                    cmd.SetTexture("slugBandTexture", bandTex);
 
-                Graphics.SetUniformV2(_shaderProgram, "slugCurveTexSize",
+                cmd.SetVector("slugCurveTexSize",
                     new Float2(drawCall.SlugCurveTexWidth, drawCall.SlugCurveTexHeight));
-                Graphics.SetUniformV2(_shaderProgram, "slugBandTexSize",
+                cmd.SetVector("slugBandTexSize",
                     new Float2(drawCall.SlugBandTexWidth, drawCall.SlugBandTexHeight));
             }
 
-            Graphics.DrawIndexed(Topology.Triangles, (uint)drawCall.ElementCount, indexOffset, 0, true);
+            cmd.DrawIndexed(_vertexArrayObject, Topology.Triangles, (uint)drawCall.ElementCount, (uint)indexOffset, 0, true);
             indexOffset += drawCall.ElementCount;
         }
 
-        Graphics.BindVertexArray(null);
+        Graphics.Submit(cmd);
     }
 
     public void Dispose() => Cleanup();

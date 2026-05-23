@@ -319,111 +319,8 @@ public abstract class RenderPipeline : EngineObject
         GlobalUniforms.Upload();
     }
 
-    #region Immediate Rendering (DrawMeshNow & Blit)
-
-    /// <summary>
-    /// Immediately draws a mesh without queuing. Used internally by the render pipeline.
-    /// For queued rendering, use Graphics.DrawMesh() instead.
-    /// </summary>
-    public static void DrawMeshNow(Mesh mesh, Material mat, int passIndex = 0)
-    {
-        if (mesh.VertexCount <= 0) return;
-
-        // Mesh data can vary between meshes, so we need to let the shader know which attributes are in use
-        mat.SetKeyword("HAS_NORMALS", mesh.HasNormals);
-        mat.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
-        mat.SetKeyword("HAS_UV", mesh.HasUV);
-        mat.SetKeyword("HAS_UV2", mesh.HasUV2);
-        mat.SetKeyword("HAS_COLORS", mesh.HasColors || mesh.HasColors32);
-        mat.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
-        mat.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
-        mat.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
-
-        Shaders.ShaderPass pass = mat.Shader.GetPass(passIndex);
-
-        if (!pass.TryGetVariantProgram(mat._localKeywords, out GraphicsProgram? variant))
-            throw new System.Exception($"Failed to set shader pass {pass.Name}. No variant found for the current keyword state.");
-
-        Graphics.SetState(pass.State);
-
-        PropertyState.Apply(mat._properties, variant);
-
-        mesh.Upload();
-
-        unsafe
-        {
-            Graphics.BindVertexArray(mesh.VertexArrayObject);
-            Graphics.DrawIndexed(mesh.MeshTopology, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
-            Graphics.BindVertexArray(null);
-        }
-    }
-
-    private static Shader? s_blitShader;
-    private static Material? s_blitMaterial;
-    public static Material BlitMaterial
-    {
-        get
-        {
-            if (s_blitShader.IsNotValid())
-                s_blitShader = Shader.LoadDefault(DefaultShader.Blit);
-
-            if (s_blitMaterial.IsNotValid())
-                s_blitMaterial = new Material(s_blitShader);
-
-            return s_blitMaterial;
-        }
-    }
-
-    public static void Blit(Texture2D source, Material? mat = null, int pass = 0)
-    {
-        mat ??= BlitMaterial;
-        mat.SetTexture("_MainTex", source);
-        Blit(mat, pass);
-    }
-
-    public static void Blit(RenderTexture source, RenderTexture target, Material? mat = null, int pass = 0, bool clearDepth = false, bool clearColor = false, Color color = default)
-    {
-        mat ??= BlitMaterial;
-        mat.SetTexture("_MainTex", source.MainTexture);
-        Blit(target, mat, pass, clearDepth, clearColor, color);
-    }
-
-    public static void Blit(Texture2D source, RenderTexture target, Material? mat = null, int pass = 0, bool clearDepth = false, bool clearColor = false, Color color = default)
-    {
-        mat ??= BlitMaterial;
-        mat.SetTexture("_MainTex", source);
-        Blit(target, mat, pass, clearDepth, clearColor, color);
-    }
-
-    public static void Blit(RenderTexture target, Material? mat = null, int pass = 0, bool clearDepth = false, bool clearColor = false, Color color = default)
-    {
-        mat ??= BlitMaterial;
-        if (target.IsValid())
-        {
-            Graphics.BindFramebuffer(target.frameBuffer);
-        }
-        else
-        {
-            Graphics.UnbindFramebuffer();
-            Graphics.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-        }
-        if (clearDepth || clearColor)
-        {
-            ClearFlags clear = 0;
-            if (clearDepth) clear |= ClearFlags.Depth;
-            if (clearColor) clear |= ClearFlags.Color;
-            Graphics.Clear((float)color.R, (float)color.G, (float)color.B, (float)color.A, clear | ClearFlags.Stencil);
-        }
-        Blit(mat, pass);
-    }
-
-    public static void Blit(Material? mat = null, int pass = 0)
-    {
-        mat ??= BlitMaterial;
-        DrawMeshNow(Mesh.GetFullscreenQuad(), mat, pass);
-    }
-
-    #endregion
+    // DrawMeshNow and the static Blit overloads were removed in the CommandBuffer
+    // migration. Use cmd.DrawMesh / cmd.Blit on a rented CommandBuffer instead.
 
     /// <summary>
     /// Represents a render batch: a group of objects sharing the same material, mesh, and shader pass.
@@ -451,7 +348,13 @@ public abstract class RenderPipeline : EngineObject
     ///
     /// Performance: 100 objects with same material = 1 material bind (vs 100 without batching)
     /// </summary>
-    public void DrawRenderables(IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices)
+    /// <param name="cmd">CommandBuffer the batches encode into. The caller is responsible
+    /// for binding the target framebuffer + viewport before calling this method, and
+    /// for submitting the buffer after.</param>
+    /// <param name="currentRT">Currently bound color render target, used for the
+    /// GrabTexture handshake (read FB for the blit-into-grab-RT). Pass null if no
+    /// pass in this batch will request a grab texture.</param>
+    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
     {
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(shaderTag);
         bool hasSortOffsets = false;
@@ -577,7 +480,7 @@ public abstract class RenderPipeline : EngineObject
             if (batch.IsInstanced)
             {
                 IRenderable instancedRenderable = renderables[batch.InstancedRenderableIndex];
-                DrawInstancedRenderablePass(instancedRenderable, batch.Material, batch.Mesh, batch.PassIndex, viewer);
+                DrawInstancedRenderablePass(cmd, instancedRenderable, batch.Material, batch.Mesh, batch.PassIndex, viewer);
                 continue;
             }
 
@@ -586,8 +489,8 @@ public abstract class RenderPipeline : EngineObject
             int passIndex = batch.PassIndex;
             RenderTexture grabRT = null;
 
-            // Configure shader keywords based on mesh attributes (normals, UVs, skinning, etc.)
-            // Since all objects in the batch share the same mesh, this is done once per batch
+            // Configure shader keywords based on mesh attributes. Once per batch since
+            // all objects in this batch share the same mesh.
             material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
             material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
             material.SetKeyword("HAS_UV", mesh.HasUV);
@@ -597,138 +500,101 @@ public abstract class RenderPipeline : EngineObject
             material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
             material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
 
-            // Get shader pass and compiled variant for current keyword state
             ShaderPass pass = material.Shader.GetPass(passIndex);
             if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variantNullable) || variantNullable == null)
                 continue;
 
             GraphicsProgram variant = variantNullable;
 
-            // Handle GrabTexture if this pass requests it
-            // NOTE: GrabTexture captures whatever is currently bound, so this works for any render target
-            if (pass.HasGrabTexture)
+            // GrabTexture: blit current framebuffer into a temporary RT and expose it
+            // as a global texture for the shader to sample. Uses the CB's read/draw
+            // FB split so the blit happens in the correct order relative to the draws.
+            if (pass.HasGrabTexture && currentRT != null && currentRT.IsValid())
             {
-                // Get the currently bound framebuffer so we can restore it
-                GraphicsFrameBuffer? currentFB = Graphics.GetCurrentFramebuffer(FBOTarget.Draw);
+                int fbWidth = currentRT.Width;
+                int fbHeight = currentRT.Height;
+                bool wantDepth = pass.HasGrabDepth;
+                grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, wantDepth, [TextureImageFormat.Color4b]);
 
-                if (currentFB != null)
-                {
-                    // Get framebuffer dimensions from the current render target
-                    int fbWidth = (int)currentFB.Width;
-                    int fbHeight = (int)currentFB.Height;
+                cmd.SetRenderTargets(grabRT.frameBuffer, currentRT.frameBuffer);
+                cmd.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Color, BlitFilter.Nearest);
+                if (wantDepth)
+                    cmd.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Depth, BlitFilter.Nearest);
 
-                    // Create temporary RT for grabbed texture. Allocate a depth attachment
-                    // when this pass also wants the depth buffer (refraction/water shaders
-                    // use it for depth-fade and proximity effects).
-                    bool wantDepth = pass.HasGrabDepth;
-                    grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, wantDepth, [TextureImageFormat.Color4b]);
+                // Restore both targets back to the original RT.
+                cmd.SetRenderTarget(currentRT.frameBuffer);
 
-                    // Setup blit: currentFB (read) -> grabRT (draw). Blit color always,
-                    // depth additionally when requested.
-                    Graphics.BindFramebuffer(currentFB, FBOTarget.Read);
-                    Graphics.BindFramebuffer(grabRT.frameBuffer, FBOTarget.Draw);
-                    Graphics.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Color, BlitFilter.Nearest);
-                    if (wantDepth)
-                        Graphics.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Depth, BlitFilter.Nearest);
+                cmd.GenerateMipmap(grabRT.MainTexture);
+                // Filter is a sticky texture property; setting it directly is fine and
+                // doesn't need to go through the CB (no ordering constraint vs draws).
+                grabRT.MainTexture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
 
-                    // Restore the original framebuffer (for both read and draw)
-                    Graphics.BindFramebuffer(currentFB, FBOTarget.Framebuffer);
-
-                    // Generate mipmaps so shaders can sample with textureLod for blur effects
-                    Graphics.GenerateMipmap(grabRT.MainTexture.Handle);
-                    Graphics.SetTextureFilters(grabRT.MainTexture.Handle, TextureMin.LinearMipmapLinear, TextureMag.Linear);
-
-                    // Set as global texture for this and subsequent passes
-                    PropertyState.SetGlobalTexture(pass.GrabTextureName, grabRT.MainTexture);
-                    if (wantDepth && grabRT.InternalDepth != null)
-                        PropertyState.SetGlobalTexture(pass.GrabDepthTextureName, grabRT.InternalDepth);
-                }
+                // Encode the global set as a CB opcode so it's ordered against the
+                // draws below at EXECUTE time. Writing PropertyState.SetGlobalTexture
+                // directly here would set the static at encode time, but by the time
+                // mainCmd actually runs we've already encoded the matching clear
+                // below and the executor would see an empty global slot.
+                cmd.SetGlobalTexture(pass.GrabTextureName, grabRT.MainTexture);
+                if (wantDepth && grabRT.InternalDepth != null)
+                    cmd.SetGlobalTexture(pass.GrabDepthTextureName, grabRT.InternalDepth);
             }
 
-            // Bind GlobalUniforms buffer (contains camera matrices, time, lighting data, etc.)
-            // This is done per-batch because each shader variant is a separate GPU program object,
-            // and uniform buffer bindings are per-program in OpenGL.
-            //
-            // TODO: Could be optimized with glBindBufferBase() for global binding points (OpenGL >=4.2)
-            // Researched: We're limited to OpenGL <=4.1 for macOS support, which doesn't support
-            // persistent uniform buffer bindings across programs. Current approach is correct for <=4.1.
-            GraphicsBuffer? globalBuffer = GlobalUniforms.GetBuffer();
-            if (globalBuffer != null)
-            {
-                Graphics.BindUniformBuffer(variant, "GlobalUniforms", globalBuffer, 0);
-            }
+            // Bind state for the batch. Globals UBO + material uniforms (with shader
+            // defaults filled in) apply once; per-object only sets instance uniforms
+            // and transforms.
+            cmd.SetShader(variant);
+            cmd.SetRasterState(pass.State);
 
-            // Apply global properties (lighting, fog, shadow maps, etc.)
-            // Must be done per-batch because different shader variants may need different globals
-            GraphicsProgram.UniformCache cache = variant.uniformCache;
-            int texSlot = 0;
-            PropertyState.ApplyGlobals(variant, cache, ref texSlot);
+            // GlobalUniforms UBO is bound automatically by the executor's PrepareDraw
+            // for every draw no explicit cmd.SetBuffer needed here.
 
-            // *** BATCHING OPTIMIZATION: Bind material uniforms ONCE for entire batch ***
-            // All objects in this batch share the same material state
-            PropertyState.ApplyMaterialUniformsWithDefaults(material._properties, material.Shader!, variant, ref texSlot);
+            cmd.SetMaterialProperties(material);
 
-            // Set render state (depth test, blend mode, cull mode, etc.) once per batch
-            Graphics.SetState(pass.State);
-
-            // Upload mesh data to GPU once per batch (shared by all objects)
             mesh.Upload();
 
             // ========== PHASE 3: Draw Objects in Batch ==========
-            // Material/mesh state is already bound - only per-object uniforms change
             foreach (int renderIndex in batch.RenderableIndices)
             {
                 IRenderable renderable = renderables[renderIndex];
 
-                // Get per-object data (transform, instance properties)
-                // Note: mesh and instanceData are discarded (we already have them from the batch)
                 renderable.GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
 
-                // Track model matrix for motion vectors (used in temporal effects like TAA)
                 int instanceId = properties.GetInt("_ObjectID");
                 Float4x4 prevModel = model;
                 if (updatePreviousMatrices && instanceId != 0)
                     prevModel = TrackModelMatrix(instanceId, model);
 
-                // Apply instance-specific uniforms (tint colors, bone matrices, etc.)
-                // Texture slot counter continues from where material textures left off
-                int instanceTexSlot = texSlot;
-                PropertyState.ApplyInstanceUniforms(properties, variant, ref instanceTexSlot);
+                cmd.SetInstanceProperties(properties);
 
-                // Directly bind per-object transform uniforms after all other uniforms to gaurantee they are set correctly
-                var fModel = (Float4x4)model;
-                Graphics.SetUniformMatrix(variant, "prowl_ObjectToWorld", false, fModel);
-                Graphics.SetUniformMatrix(variant, "prowl_WorldToObject", false, fModel.Invert());
+                // Per-object transform uniforms. Encoded after SetInstanceProperties so
+                // they apply last and can't be clobbered by an instance property of the
+                // same name (matches today's order).
+                cmd.SetMatrix("prowl_ObjectToWorld", in model);
+                Float4x4 inv = model.Invert();
+                cmd.SetMatrix("prowl_WorldToObject", in inv);
                 if (updatePreviousMatrices)
-                    Graphics.SetUniformMatrix(variant, "prowl_PrevObjectToWorld", false, (Float4x4)prevModel);
+                    cmd.SetMatrix("prowl_PrevObjectToWorld", in prevModel);
 
-                // Execute draw call (mesh VAO already uploaded, just bind and draw)
-                unsafe
+                int subIdx = renderable.GetSubMeshIndex();
+                bool i32 = mesh.IndexFormat == IndexFormat.UInt32;
+                if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
                 {
-                    Graphics.BindVertexArray(mesh.VertexArrayObject);
-
-                    int subIdx = renderable.GetSubMeshIndex();
-                    if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
-                    {
-                        var sub = mesh.GetSubMesh(subIdx);
-                        int indexSize = mesh.IndexFormat == IndexFormat.UInt32 ? 4 : 2;
-                        Graphics.DrawIndexed(sub.Topology, (uint)sub.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, (void*)(sub.IndexStart * indexSize));
-                    }
-                    else
-                    {
-                        Graphics.DrawIndexed(mesh.MeshTopology, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
-                    }
-
-                    Graphics.BindVertexArray(null);
+                    var sub = mesh.GetSubMesh(subIdx);
+                    cmd.DrawIndexed(mesh.VertexArrayObject, sub.Topology, (uint)sub.IndexCount, (uint)sub.IndexStart, 0, i32);
+                }
+                else
+                {
+                    cmd.DrawIndexed(mesh.VertexArrayObject, mesh.MeshTopology, (uint)mesh.IndexCount, 0, 0, i32);
                 }
             }
 
-            // Release grab texture RT if used
             if (grabRT != null)
             {
-                PropertyState.SetGlobalTexture(pass.GrabTextureName, null);
+                // Mirror the encode-time set above with an encode-time clear so the
+                // grab texture is exposed ONLY for this batch's draws inside the CB.
+                cmd.ClearGlobalTexture(pass.GrabTextureName);
                 if (pass.HasGrabDepth)
-                    PropertyState.SetGlobalTexture(pass.GrabDepthTextureName, null);
+                    cmd.ClearGlobalTexture(pass.GrabDepthTextureName);
                 RenderTexture.ReleaseTemporaryRT(grabRT);
                 grabRT = null;
             }
@@ -740,26 +606,26 @@ public abstract class RenderPipeline : EngineObject
     /// Uses DrawIndexedInstanced to draw multiple instances in a single draw call.
     /// The mesh's cached VAO system is used for optimal performance.
     /// </summary>
-    private void DrawInstancedRenderablePass(IRenderable renderable, Material material, Mesh mesh, int passIndex, ViewerData viewer)
+    private void DrawInstancedRenderablePass(CommandBuffer cmd, IRenderable renderable, Material material, Mesh mesh, int passIndex, ViewerData viewer)
     {
-        // Get rendering data (mesh, properties, instance data)
         renderable.GetRenderingData(viewer, out PropertyState sharedProperties, out Mesh _, out Float4x4 __, out InstanceData[]? instanceData);
 
         if (instanceData == null || instanceData.Length == 0)
             return;
 
-        // Get instanced VAO from mesh (creates and caches on first use)
-        GraphicsVertexArray vao = mesh.GetOrCreateInstanceVAO(instanceData, instanceData.Length);
+        // Ensure the shared instance VAO + buffer exist. The actual data upload is
+        // encoded into the SAME CommandBuffer as the draw below this matters when
+        // multiple instanced batches share the same mesh (e.g. all grass patches of
+        // one prototype). Each batch's UpdateBuffer + DrawIndexedInstanced is a pair
+        // in the stream, so the executor uploads each batch's data immediately before
+        // its draw and they don't clobber each other.
+        GraphicsVertexArray vao = mesh.EnsureInstanceVAO(instanceData.Length, out GraphicsBuffer instanceBuf);
+        if (vao == null) return;
 
-        if (vao == null)
-            return;
-
-        // Get rendering info from mesh
         int instanceCount = instanceData.Length;
         int indexCount = mesh.IndexCount;
         bool useIndex32 = mesh.IndexFormat == IndexFormat.UInt32;
 
-        // Set mesh attribute keywords
         material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
         material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
         material.SetKeyword("HAS_UV", mesh.HasUV);
@@ -768,14 +634,9 @@ public abstract class RenderPipeline : EngineObject
         material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
         material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
         material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
-
-        // Enable GPU instancing keyword
         material.SetKeyword("GPU_INSTANCING", true);
 
-        // Get the specific shader pass
         Shaders.ShaderPass pass = material.Shader.GetPass(passIndex);
-
-        // Get shader variant
         if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variantNullable) || variantNullable == null)
         {
             material.SetKeyword("GPU_INSTANCING", false);
@@ -784,57 +645,29 @@ public abstract class RenderPipeline : EngineObject
 
         GraphicsProgram variant = variantNullable;
 
-        // Bind GlobalUniforms buffer
-        GraphicsBuffer? globalBuffer = GlobalUniforms.GetBuffer();
-        if (globalBuffer != null)
+        cmd.SetShader(variant);
+        cmd.SetRasterState(pass.State);
+
+        // GlobalUniforms UBO bound by PrepareDraw automatically.
+
+        cmd.SetMaterialProperties(material);
+
+        if (sharedProperties != null)
+            cmd.SetInstanceProperties(sharedProperties);
+
+        // Upload THIS batch's instance data immediately before the draw so the
+        // shared instance buffer holds the right contents when the draw executes.
+        cmd.UpdateBuffer<InstanceData>(instanceBuf, new System.ReadOnlySpan<InstanceData>(instanceData, 0, instanceCount));
+
+        int subIdx = renderable.GetSubMeshIndex();
+        if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
         {
-            Graphics.BindUniformBuffer(variant, "GlobalUniforms", globalBuffer, 0);
+            var sub = mesh.GetSubMesh(subIdx);
+            cmd.DrawIndexedInstanced(vao, sub.Topology, (uint)sub.IndexCount, (uint)instanceCount, (uint)sub.IndexStart, 0, useIndex32);
         }
-
-        // Apply global properties
-        GraphicsProgram.UniformCache cache = variant.uniformCache;
-        int texSlot = 0;
-        PropertyState.ApplyGlobals(variant, cache, ref texSlot);
-
-        // Apply material uniforms
-        PropertyState.ApplyMaterialUniformsWithDefaults(material._properties, material.Shader!, variant, ref texSlot);
-
-        // Apply shared instance properties
-        int instanceTexSlot = texSlot;
-        PropertyState.ApplyInstanceUniforms(sharedProperties, variant, ref instanceTexSlot);
-
-        // Set render state
-        Graphics.SetState(pass.State);
-
-        // Draw with TRUE GPU instancing honoring the submesh range when the renderable
-        // specifies one, so multi-material meshes can be drawn in separate instanced calls.
-        unsafe
+        else
         {
-            Graphics.BindVertexArray(vao);
-
-            int subIdx = renderable.GetSubMeshIndex();
-            if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
-            {
-                var sub = mesh.GetSubMesh(subIdx);
-                Graphics.DrawIndexedInstanced(
-                    sub.Topology,
-                    (uint)sub.IndexCount,
-                    (uint)instanceCount,
-                    sub.IndexStart,
-                    useIndex32
-                );
-            }
-            else
-            {
-                Graphics.DrawIndexedInstanced(
-                    Topology.Triangles,
-                    (uint)indexCount,
-                    (uint)instanceCount,
-                    useIndex32
-                );
-            }
-
-            Graphics.BindVertexArray(null);
+            cmd.DrawIndexedInstanced(vao, Topology.Triangles, (uint)indexCount, (uint)instanceCount, 0, 0, useIndex32);
         }
 
         material.SetKeyword("GPU_INSTANCING", false);

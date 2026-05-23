@@ -226,23 +226,28 @@ public class WorldCanvas : MonoBehaviour, IRenderable
     {
         if (_renderTexture.IsNotValid() || _paper == null) return;
 
-        // Begin rendering to the render texture
-        _renderTexture.Begin();
+        // Bind the render texture and clear it through a CommandBuffer so Paper's
+        // submits stay in order with the bind.
+        {
+            using var cmd = Graphics.GetCommandBuffer("WorldCanvas.Begin");
+            cmd.SetRenderTarget(_renderTexture.frameBuffer);
+            cmd.SetViewport(0, 0, (uint)_renderTexture.Width, (uint)_renderTexture.Height);
+            cmd.ClearRenderTarget(ClearFlags.Color, new Color(0, 0, 0, 0));
+            Graphics.Submit(cmd);
+        }
 
-        // Clear the render texture
-        Graphics.Clear(0f, 0f, 0f, 0f, ClearFlags.Color);
-
-        // Begin Paper frame
         _paper.BeginFrame(Time.DeltaTime);
 
-        // Invoke the user's GUI callback
         OnRenderUI?.Invoke(_paper);
 
-        // End Paper frame (this will render to the texture)
         _paper.EndFrame();
 
-        // End rendering to the render texture
-        _renderTexture.End();
+        // Unbind so the next renderer doesn't inherit the WorldCanvas target.
+        {
+            using var cmd = Graphics.GetCommandBuffer("WorldCanvas.End");
+            cmd.SetRenderTarget(null);
+            Graphics.Submit(cmd);
+        }
     }
 
     // IRenderable implementation

@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -11,7 +11,16 @@ namespace Prowl.Runtime;
 
 public unsafe class GraphicsVertexArray : IDisposable
 {
-    public uint Handle { get; private set; }
+    public uint Handle { get; internal set; }
+    public bool IsDisposed { get; protected set; }
+
+    // Construction params kept for CreateGLObject, which the executor runs later
+    // on the render thread.
+    private readonly VertexFormat _format;
+    private readonly GraphicsBuffer _vertices;
+    private readonly GraphicsBuffer? _indices;
+    private readonly VertexFormat? _instanceFormat;
+    private readonly GraphicsBuffer? _instanceBuffer;
 
     public GraphicsVertexArray(
         VertexFormat format,
@@ -20,29 +29,40 @@ public unsafe class GraphicsVertexArray : IDisposable
         VertexFormat? instanceFormat = null,
         GraphicsBuffer? instanceBuffer = null)
     {
-        Handle = Graphics.GL.GenVertexArray();
+        _format = format;
+        _vertices = vertices;
+        _indices = indices;
+        _instanceFormat = instanceFormat;
+        _instanceBuffer = instanceBuffer;
+        Handle = 0;
 
+        using var cmd = Graphics.GetCommandBuffer("GraphicsVertexArray.Create");
+        cmd.EncodeCreateVertexArray(this);
+        Graphics.Submit(cmd);
+    }
+
+    /// <summary>Invoked by the CreateVertexArrayOp executor handler on the render
+    /// thread. Buffer handles are valid by submit-order guarantee.</summary>
+    internal void CreateGLObject()
+    {
+        Handle = Graphics.GL.GenVertexArray();
         if (Handle == 0)
-        {
-            throw new System.Exception("Failed to create VAO - glGenVertexArray returned 0");
-        }
+            throw new Exception("Failed to create VAO - glGenVertexArray returned 0");
 
         Graphics.GL.BindVertexArray(Handle);
 
-        // Bind vertex buffer and set up per-vertex attributes
-        Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vertices.Handle);
-        BindFormat(format);
+        Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, _vertices.Handle);
+        BindFormat(_format);
 
-        // Bind instance buffer and set up per-instance attributes (if provided)
-        if (instanceFormat != null && instanceBuffer != null)
+        if (_instanceFormat != null && _instanceBuffer != null)
         {
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, instanceBuffer.Handle);
-            BindFormat(instanceFormat);
+            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, _instanceBuffer.Handle);
+            BindFormat(_instanceFormat);
         }
 
-        // Bind index buffer if present
-        if (indices != null)
-            Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, indices.Handle);
+        // Element binding lands on THIS VAO (which is currently bound).
+        if (_indices != null)
+            Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, _indices.Handle);
 
         Graphics.GL.BindVertexArray(0);
     }
@@ -62,24 +82,21 @@ public unsafe class GraphicsVertexArray : IDisposable
                 else
                     Graphics.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)format.Size, (void*)offset);
 
-                // Set divisor for instancing (0 = per-vertex, 1+ = per-instance)
                 if (element.Divisor > 0)
-                {
                     Graphics.GL.VertexAttribDivisor(index, (uint)element.Divisor);
-                }
             }
         }
     }
-
-    public bool IsDisposed { get; protected set; }
 
     public void Dispose()
     {
         if (IsDisposed)
             return;
-
-        Graphics.GL.DeleteVertexArray(Handle);
         IsDisposed = true;
+
+        using var cmd = Graphics.GetCommandBuffer("GraphicsVertexArray.Dispose");
+        cmd.EncodeDisposeVertexArray(this);
+        Graphics.Submit(cmd);
     }
 
     public override string ToString()

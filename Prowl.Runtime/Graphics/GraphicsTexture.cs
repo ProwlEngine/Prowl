@@ -9,7 +9,9 @@ namespace Prowl.Runtime;
 
 public unsafe class GraphicsTexture : IDisposable
 {
-    public uint Handle { get; private set; }
+    // Handle is 0 until the executor's CreateTexture opcode runs on the render
+    // thread and writes the real GL name back.
+    public uint Handle { get; internal set; }
     public TextureType Type { get; protected set; }
 
     public readonly TextureTarget Target;
@@ -25,7 +27,6 @@ public unsafe class GraphicsTexture : IDisposable
 
     public GraphicsTexture(TextureType type, TextureImageFormat format)
     {
-        Handle = Graphics.GL.GenTexture();
         Type = type;
         Target = type switch
         {
@@ -34,17 +35,17 @@ public unsafe class GraphicsTexture : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
         GetTextureFormatEnums(format, out PixelInternalFormat, out PixelType, out PixelFormat);
+        Handle = 0;
+
+        using var cmd = Graphics.GetCommandBuffer("GraphicsTexture.Create");
+        cmd.EncodeCreateTexture(this);
+        Graphics.Submit(cmd);
     }
 
-    private static uint? currentlyBound = null;
-    public void Bind(bool force = true)
-    {
-        if (!force && currentlyBound == Handle)
-            return;
-
-        Graphics.GL.BindTexture(Target, Handle);
-        currentlyBound = Handle;
-    }
+    /// <summary>Binds the texture to the currently-active texture unit. Always
+    /// emits the GL call no per-instance cache, because a single "last bound"
+    /// flag can't represent per-unit state and would silently skip valid binds.</summary>
+    public void Bind(bool force = true) => Graphics.GL.BindTexture(Target, Handle);
 
     public void GenerateMipmap()
     {
@@ -129,12 +130,11 @@ public unsafe class GraphicsTexture : IDisposable
     {
         if (IsDisposed)
             return;
-
-        if (currentlyBound == Handle)
-            currentlyBound = null;
-
-        Graphics.GL.DeleteTexture(Handle);
         IsDisposed = true;
+
+        using var cmd = Graphics.GetCommandBuffer("GraphicsTexture.Dispose");
+        cmd.EncodeDisposeTexture(this);
+        Graphics.Submit(cmd);
     }
 
     public override string ToString()
