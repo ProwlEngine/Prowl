@@ -33,12 +33,12 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
 
     protected override Pipeline CreateGraphicsPipelineCore(ref GraphicsPipelineDescription description)
     {
-        return new D3D11Pipeline(_cache, ref description);
+        return new D3D11Pipeline(this, _cache, ref description);
     }
 
     public override Pipeline CreateComputePipeline(ref ComputePipelineDescription description)
     {
-        return new D3D11Pipeline(_cache, ref description);
+        return new D3D11Pipeline(this, _cache, ref description);
     }
 
     public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
@@ -57,9 +57,14 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
         return new D3D11Sampler(_device, ref description);
     }
 
-    protected override ShaderProgram CreateShaderCore(ref ShaderDescription description)
+    protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
     {
-        return new D3D11Shader(_device, description);
+        return new D3D11ShaderProgram(_device, _cache, ref description);
+    }
+
+    protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
+    {
+        return new D3D11ComputeProgram(_device, ref description);
     }
 
     protected override Texture CreateTextureCore(ref TextureDescription description)

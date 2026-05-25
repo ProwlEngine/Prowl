@@ -52,6 +52,8 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private ID3D11PixelShader* _pixelShader;
 
     private new D3D11Pipeline _graphicsPipeline;
+    private D3D11ShaderProgram _currentShaderProgram;
+    private D3D11ComputeProgram _currentComputeProgram;
     private BoundResourceSetInfo[] _graphicsResourceSets = new BoundResourceSetInfo[1];
     // Resource sets are invalidated when a new resource set is bound with an incompatible SRV or UAV.
     private bool[] _invalidatedGraphicsResourceSets = new bool[1];
@@ -168,6 +170,8 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         _ib = null;
         _graphicsPipeline = null;
+        _currentShaderProgram = null;
+        _currentComputeProgram = null;
         _blendState = null;
         _blendFactor[0] = 0; _blendFactor[1] = 0; _blendFactor[2] = 0; _blendFactor[3] = 0;
         _depthStencilState = null;
@@ -273,6 +277,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         {
             D3D11Pipeline d3dPipeline = Util.AssertSubtype<Pipeline, D3D11Pipeline>(pipeline);
             _graphicsPipeline = d3dPipeline;
+            _currentShaderProgram = d3dPipeline.Program;
             ClearSets(_graphicsResourceSets); // Invalidate resource set bindings -- they may be invalid.
             Util.ClearArray(_invalidatedGraphicsResourceSets);
 
@@ -375,6 +380,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         {
             D3D11Pipeline d3dPipeline = Util.AssertSubtype<Pipeline, D3D11Pipeline>(pipeline);
             _computePipeline = d3dPipeline;
+            _currentComputeProgram = d3dPipeline.ComputeProgramRef;
             ClearSets(_computeResourceSets); // Invalidate resource set bindings -- they may be invalid.
             Util.ClearArray(_invalidatedComputeResourceSets);
 
@@ -383,6 +389,101 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             Util.EnsureArrayMinimumSize(ref _computeResourceSets, (uint)d3dPipeline.ResourceLayouts.Length);
             Util.EnsureArrayMinimumSize(ref _invalidatedComputeResourceSets, (uint)d3dPipeline.ResourceLayouts.Length);
         }
+    }
+
+    private protected override void SetShaderCore(ShaderProgram program)
+    {
+        D3D11ShaderProgram sp = Util.AssertSubtype<ShaderProgram, D3D11ShaderProgram>(program);
+        if (_currentShaderProgram == sp && _graphicsPipeline == null) return;
+
+        bool msaa = _framebuffer != null
+            && _framebuffer.OutputDescription.SampleCount != TextureSampleCount.Count1;
+        sp.EnsureCacheResolved(msaa);
+
+        _currentShaderProgram = sp;
+        _graphicsPipeline = null;
+        ClearSets(_graphicsResourceSets);
+        Util.ClearArray(_invalidatedGraphicsResourceSets);
+
+        ID3D11BlendState* blendState = sp.BlendStateHandle;
+        BlendStateDescription bsDesc = sp.BlendState;
+        float[] blendFactor = new float[] { bsDesc.BlendFactor.R, bsDesc.BlendFactor.G, bsDesc.BlendFactor.B, bsDesc.BlendFactor.A };
+        if (_blendState != blendState || !BlendFactorEquals(_blendFactor, blendFactor))
+        {
+            _blendState = blendState;
+            Array.Copy(blendFactor, _blendFactor, 4);
+            fixed (float* pBf = _blendFactor)
+            {
+                Ctx->OMSetBlendState(blendState, pBf, 0xFFFFFFFF);
+            }
+        }
+
+        ID3D11DepthStencilState* depthStencilState = sp.DepthStencilStateHandle;
+        uint stencilReference = sp.DepthStencilState.StencilReference;
+        if (_depthStencilState != depthStencilState || _stencilReference != stencilReference)
+        {
+            _depthStencilState = depthStencilState;
+            _stencilReference = stencilReference;
+            Ctx->OMSetDepthStencilState(depthStencilState, stencilReference);
+        }
+
+        ID3D11RasterizerState* rasterizerState = sp.RasterizerStateHandle;
+        if (_rasterizerState != rasterizerState)
+        {
+            _rasterizerState = rasterizerState;
+            Ctx->RSSetState(rasterizerState);
+        }
+
+        // STAGE 1 TEMP: topology default removed in Stage 4
+        D3DPrimitiveTopology primitiveTopology = D3DPrimitiveTopology.D3DPrimitiveTopologyTrianglelist;
+        if (_primitiveTopology != primitiveTopology)
+        {
+            _primitiveTopology = primitiveTopology;
+            Ctx->IASetPrimitiveTopology(primitiveTopology);
+        }
+
+        ID3D11InputLayout* inputLayout = sp.InputLayout;
+        if (_inputLayout != inputLayout)
+        {
+            _inputLayout = inputLayout;
+            Ctx->IASetInputLayout(inputLayout);
+        }
+
+        if (_vertexShader != sp.VertexShader) { _vertexShader = sp.VertexShader; Ctx->VSSetShader(sp.VertexShader, null, 0); }
+        if (_geometryShader != sp.GeometryShader) { _geometryShader = sp.GeometryShader; Ctx->GSSetShader(sp.GeometryShader, null, 0); }
+        if (_hullShader != sp.HullShader) { _hullShader = sp.HullShader; Ctx->HSSetShader(sp.HullShader, null, 0); }
+        if (_domainShader != sp.DomainShader) { _domainShader = sp.DomainShader; Ctx->DSSetShader(sp.DomainShader, null, 0); }
+        if (_pixelShader != sp.PixelShader) { _pixelShader = sp.PixelShader; Ctx->PSSetShader(sp.PixelShader, null, 0); }
+
+        int[] strides = sp.VertexStridesInts;
+        if (!Util.ArrayEqualsEquatable(_vertexStrides, strides))
+        {
+            _vertexBindingsChanged = true;
+            if (strides != null)
+            {
+                Util.EnsureArrayMinimumSize(ref _vertexStrides, (uint)strides.Length);
+                strides.CopyTo(_vertexStrides, 0);
+            }
+        }
+        Util.EnsureArrayMinimumSize(ref _vertexStrides, 1);
+        Util.EnsureArrayMinimumSize(ref _vertexBindings, (uint)_vertexStrides.Length);
+        Util.EnsureArrayMinimumSize(ref _vertexOffsets, (uint)_vertexStrides.Length);
+
+        Util.EnsureArrayMinimumSize(ref _graphicsResourceSets, (uint)sp.D3D11ResourceLayouts.Length);
+        Util.EnsureArrayMinimumSize(ref _invalidatedGraphicsResourceSets, (uint)sp.D3D11ResourceLayouts.Length);
+    }
+
+    private protected override void SetComputeShaderCore(ComputeProgram program)
+    {
+        D3D11ComputeProgram cp = Util.AssertSubtype<ComputeProgram, D3D11ComputeProgram>(program);
+        if (_currentComputeProgram == cp && _computePipeline == null) return;
+        _currentComputeProgram = cp;
+        _computePipeline = null;
+        ClearSets(_computeResourceSets);
+        Util.ClearArray(_invalidatedComputeResourceSets);
+        Ctx->CSSetShader(cp.ComputeShader, null, 0);
+        Util.EnsureArrayMinimumSize(ref _computeResourceSets, (uint)cp.D3D11ResourceLayouts.Length);
+        Util.EnsureArrayMinimumSize(ref _invalidatedComputeResourceSets, (uint)cp.D3D11ResourceLayouts.Length);
     }
 
     private static bool BlendFactorEquals(float[] a, float[] b)
@@ -624,7 +725,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         FlushScissorRects();
         FlushVertexBindings();
 
-        int graphicsResourceCount = _graphicsPipeline.ResourceLayouts.Length;
+        int graphicsResourceCount = _currentShaderProgram.D3D11ResourceLayouts.Length;
         for (uint i = 0; i < graphicsResourceCount; i++)
         {
             if (_invalidatedGraphicsResourceSets[i])
@@ -651,7 +752,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     private void PreDispatchCommand()
     {
-        int computeResourceCount = _computePipeline.ResourceLayouts.Length;
+        int computeResourceCount = _currentComputeProgram.D3D11ResourceLayouts.Length;
         for (uint i = 0; i < computeResourceCount; i++)
         {
             if (_invalidatedComputeResourceSets[i])

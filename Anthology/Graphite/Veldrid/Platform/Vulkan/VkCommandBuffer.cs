@@ -175,10 +175,12 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         ClearCachedState();
         _currentFramebuffer = null;
         _currentGraphicsPipeline = null;
+        _currentShaderProgram = null;
         ClearSets(_currentGraphicsResourceSets);
         Util.ClearArray(_scissorRects);
 
         _currentComputePipeline = null;
+        _currentComputeProgram = null;
         ClearSets(_currentComputeResourceSets);
     }
 
@@ -257,18 +259,21 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private protected override void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
+        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         _gd.Vk.CmdDraw(_cb, vertexCount, instanceCount, vertexStart, instanceStart);
     }
 
     private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
+        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         _gd.Vk.CmdDrawIndexed(_cb, indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
     private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
+        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
@@ -277,6 +282,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
+        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
@@ -696,6 +702,44 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         }
 
         _currentStagingInfo.Resources.Add(vkPipeline.RefCount);
+    }
+
+    private VkShaderProgram _currentShaderProgram;
+    private VkComputeProgram _currentComputeProgram;
+
+    private protected override void SetShaderCore(ShaderProgram program)
+    {
+        VkShaderProgram sp = Util.AssertSubtype<ShaderProgram, VkShaderProgram>(program);
+        _currentShaderProgram = sp;
+        _currentGraphicsPipeline = null;
+        Util.EnsureArrayMinimumSize(ref _currentGraphicsResourceSets, sp.ResourceSetCount);
+        ClearSets(_currentGraphicsResourceSets);
+        Util.EnsureArrayMinimumSize(ref _graphicsResourceSetsChanged, sp.ResourceSetCount);
+        // No pipeline bind here: Vulkan graphics via SetShader is gated until Stage 2 builds
+        // the implicit pipeline cache. EnsureVulkanDrawHasLegacyPipeline throws at draw time.
+    }
+
+    private protected override void SetComputeShaderCore(ComputeProgram program)
+    {
+        VkComputeProgram cp = Util.AssertSubtype<ComputeProgram, VkComputeProgram>(program);
+        _currentComputeProgram = cp;
+        _currentComputePipeline = null;
+        Util.EnsureArrayMinimumSize(ref _currentComputeResourceSets, cp.ResourceSetCount);
+        ClearSets(_currentComputeResourceSets);
+        Util.EnsureArrayMinimumSize(ref _computeResourceSetsChanged, cp.ResourceSetCount);
+        _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, cp.DevicePipeline);
+        _currentStagingInfo.Resources.Add(cp.RefCount);
+    }
+
+    private void EnsureVulkanDrawHasLegacyPipeline()
+    {
+        if (_currentGraphicsPipeline == null && _currentShaderProgram != null)
+        {
+            throw new RenderException(
+                "Vulkan: drawing via SetShader requires the Stage 2 implicit pipeline cache, " +
+                "which has not landed yet. Bind a legacy Pipeline via SetPipeline for now, " +
+                "or use OpenGL/D3D11 for the SetShader path.");
+        }
     }
 
     private void ClearSets(BoundResourceSetInfo[] boundSets)

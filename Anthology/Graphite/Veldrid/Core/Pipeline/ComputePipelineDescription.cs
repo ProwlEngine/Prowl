@@ -1,105 +1,40 @@
-﻿using System;
+using System;
 
 namespace Prowl.Veldrid;
 
 /// <summary>
 /// Describes a compute <see cref="Pipeline"/>, for creation using a <see cref="ResourceFactory"/>.
+/// All compute state lives on the wrapped <see cref="ComputeProgram"/>.
 /// </summary>
 public struct ComputePipelineDescription : IEquatable<ComputePipelineDescription>
 {
     /// <summary>
-    /// The compute <see cref="ShaderProgram"/> to be used in the Pipeline. This must be a Shader with
-    /// <see cref="ShaderStages.Compute"/>.
+    /// The <see cref="ComputeProgram"/> wrapped by this pipeline.
     /// </summary>
-    public ShaderProgram ComputeShader;
-    /// <summary>
-    /// An array of <see cref="ResourceLayout"/>, which controls the layout of shader resoruces in the <see cref="Pipeline"/>.
-    /// </summary>
-    public ResourceLayout[] ResourceLayouts;
-    /// <summary>
-    /// The X dimension of the thread group size.
-    /// </summary>
-    public uint ThreadGroupSizeX;
-    /// <summary>
-    /// The Y dimension of the thread group size.
-    /// </summary>
-    public uint ThreadGroupSizeY;
-    /// <summary>
-    /// The Z dimension of the thread group size.
-    /// </summary>
-    public uint ThreadGroupSizeZ;
+    public ComputeProgram Program;
 
     /// <summary>
-    /// Constructs a new ComputePipelineDescription.
+    /// Constructs a new <see cref="ComputePipelineDescription"/>.
     /// </summary>
-    /// <param name="computeShader">The compute <see cref="ShaderProgram"/> to be used in the Pipeline. This must be a Shader with
-    /// <see cref="ShaderStages.Compute"/>.</param>
-    /// <param name="resourceLayouts">The set of resource layouts available to the Pipeline.</param>
-    /// <param name="threadGroupSizeX">The X dimension of the thread group size.</param>
-    /// <param name="threadGroupSizeY">The Y dimension of the thread group size.</param>
-    /// <param name="threadGroupSizeZ">The Z dimension of the thread group size.</param>
-    public ComputePipelineDescription(
-        ShaderProgram computeShader,
-        ResourceLayout[] resourceLayouts,
-        uint threadGroupSizeX,
-        uint threadGroupSizeY,
-        uint threadGroupSizeZ)
+    /// <param name="program">The compute program to wrap.</param>
+    public ComputePipelineDescription(ComputeProgram program)
     {
-        ComputeShader = computeShader;
-        ResourceLayouts = resourceLayouts;
-        ThreadGroupSizeX = threadGroupSizeX;
-        ThreadGroupSizeY = threadGroupSizeY;
-        ThreadGroupSizeZ = threadGroupSizeZ;
-    }
-
-    /// <summary>
-    /// Constructs a new ComputePipelineDescription.
-    /// </summary>
-    /// <param name="shaderStage">The compute <see cref="ShaderProgram"/> to be used in the Pipeline. This must be a Shader with
-    /// <see cref="ShaderStages.Compute"/>.</param>
-    /// <param name="resourceLayout">The resource layout available to the Pipeline.</param>
-    /// <param name="threadGroupSizeX">The X dimension of the thread group size.</param>
-    /// <param name="threadGroupSizeY">The Y dimension of the thread group size.</param>
-    /// <param name="threadGroupSizeZ">The Z dimension of the thread group size.</param>
-    public ComputePipelineDescription(
-        ShaderProgram shaderStage,
-        ResourceLayout resourceLayout,
-        uint threadGroupSizeX,
-        uint threadGroupSizeY,
-        uint threadGroupSizeZ)
-    {
-        ComputeShader = shaderStage;
-        ResourceLayouts = new[] { resourceLayout };
-        ThreadGroupSizeX = threadGroupSizeX;
-        ThreadGroupSizeY = threadGroupSizeY;
-        ThreadGroupSizeZ = threadGroupSizeZ;
+        Program = program;
     }
 
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements and all array elements are equal; false otherswise.</returns>
     public bool Equals(ComputePipelineDescription other)
     {
-        return ComputeShader.Equals(other.ComputeShader)
-            && Util.ArrayEquals(ResourceLayouts, other.ResourceLayouts)
-            && ThreadGroupSizeX.Equals(other.ThreadGroupSizeX)
-            && ThreadGroupSizeY.Equals(other.ThreadGroupSizeY)
-            && ThreadGroupSizeZ.Equals(other.ThreadGroupSizeZ);
+        return ReferenceEquals(Program, other.Program);
     }
 
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
     public override int GetHashCode()
     {
-        return HashCode.Combine(
-            ComputeShader.GetHashCode(),
-            ResourceLayouts.ArrayHash(),
-            ThreadGroupSizeX.GetHashCode(),
-            ThreadGroupSizeY.GetHashCode(),
-            ThreadGroupSizeZ.GetHashCode());
+        return Program?.GetHashCode() ?? 0;
     }
 }

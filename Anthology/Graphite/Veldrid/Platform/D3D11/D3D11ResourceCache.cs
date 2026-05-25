@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Threading;
 
 using Silk.NET.Direct3D11;
-using Silk.NET.DXGI;
 using Silk.NET.Core.Native;
 
 namespace Prowl.Veldrid.D3D11;
@@ -14,17 +13,22 @@ internal unsafe class D3D11ResourceCache : IDisposable
     private readonly ID3D11Device* _device;
     private readonly object _lock = new object();
 
-    private readonly Dictionary<BlendStateDescription, ComPtr<ID3D11BlendState>> _blendStates
-        = new Dictionary<BlendStateDescription, ComPtr<ID3D11BlendState>>();
+    private struct BlendEntry { public ComPtr<ID3D11BlendState> Handle; public int RefCount; }
+    private struct DepthStencilEntry { public ComPtr<ID3D11DepthStencilState> Handle; public int RefCount; }
+    private struct RasterizerEntry { public ComPtr<ID3D11RasterizerState> Handle; public int RefCount; }
+    private struct InputLayoutEntry { public ComPtr<ID3D11InputLayout> Handle; public int RefCount; }
 
-    private readonly Dictionary<DepthStencilStateDescription, ComPtr<ID3D11DepthStencilState>> _depthStencilStates
-        = new Dictionary<DepthStencilStateDescription, ComPtr<ID3D11DepthStencilState>>();
+    private readonly Dictionary<BlendStateDescription, BlendEntry> _blendStates
+        = new Dictionary<BlendStateDescription, BlendEntry>();
 
-    private readonly Dictionary<D3D11RasterizerStateCacheKey, ComPtr<ID3D11RasterizerState>> _rasterizerStates
-        = new Dictionary<D3D11RasterizerStateCacheKey, ComPtr<ID3D11RasterizerState>>();
+    private readonly Dictionary<DepthStencilStateDescription, DepthStencilEntry> _depthStencilStates
+        = new Dictionary<DepthStencilStateDescription, DepthStencilEntry>();
 
-    private readonly Dictionary<InputLayoutCacheKey, ComPtr<ID3D11InputLayout>> _inputLayouts
-        = new Dictionary<InputLayoutCacheKey, ComPtr<ID3D11InputLayout>>();
+    private readonly Dictionary<D3D11RasterizerStateCacheKey, RasterizerEntry> _rasterizerStates
+        = new Dictionary<D3D11RasterizerStateCacheKey, RasterizerEntry>();
+
+    private readonly Dictionary<InputLayoutCacheKey, InputLayoutEntry> _inputLayouts
+        = new Dictionary<InputLayoutCacheKey, InputLayoutEntry>();
 
     public D3D11ResourceCache(ID3D11Device* device)
     {
@@ -45,25 +49,65 @@ internal unsafe class D3D11ResourceCache : IDisposable
     {
         lock (_lock)
         {
-            blendState = GetBlendState(ref blendDesc);
-            depthState = GetDepthStencilState(ref dssDesc);
-            rasterState = GetRasterizerState(ref rasterDesc, multisample);
-            inputLayout = GetInputLayout(vertexLayouts, vsBytecode);
+            blendState = AcquireBlendState(ref blendDesc);
+            depthState = AcquireDepthStencilState(ref dssDesc);
+            rasterState = AcquireRasterizerState(ref rasterDesc, multisample);
+            inputLayout = AcquireInputLayout(vertexLayouts, vsBytecode);
         }
     }
 
-    private ID3D11BlendState* GetBlendState(ref BlendStateDescription description)
+    public void ReleasePipelineResources(
+        ref BlendStateDescription blendDesc,
+        ref DepthStencilStateDescription dssDesc,
+        ref RasterizerStateDescription rasterDesc,
+        bool multisampled,
+        VertexLayoutDescription[] vertexLayouts)
+    {
+        lock (_lock)
+        {
+            ReleaseBlendState(ref blendDesc);
+            ReleaseDepthStencilState(ref dssDesc);
+            ReleaseRasterizerState(ref rasterDesc, multisampled);
+            ReleaseInputLayout(vertexLayouts);
+        }
+    }
+
+    private ID3D11BlendState* AcquireBlendState(ref BlendStateDescription description)
     {
         Debug.Assert(Monitor.IsEntered(_lock));
-        if (!_blendStates.TryGetValue(description, out ComPtr<ID3D11BlendState> blendState))
+        if (!_blendStates.TryGetValue(description, out BlendEntry entry))
         {
-            blendState = CreateNewBlendState(ref description);
+            entry.Handle = CreateNewBlendState(ref description);
+            entry.RefCount = 1;
             BlendStateDescription key = description;
             key.AttachmentStates = (BlendAttachmentDescription[])key.AttachmentStates.Clone();
-            _blendStates.Add(key, blendState);
+            _blendStates.Add(key, entry);
         }
+        else
+        {
+            entry.RefCount += 1;
+            _blendStates[description] = entry;
+        }
+        return entry.Handle;
+    }
 
-        return blendState;
+    private void ReleaseBlendState(ref BlendStateDescription description)
+    {
+        Debug.Assert(Monitor.IsEntered(_lock));
+        if (!_blendStates.TryGetValue(description, out BlendEntry entry))
+        {
+            throw new RenderException("ReleasePipelineResources: no matching cached BlendState entry.");
+        }
+        entry.RefCount -= 1;
+        if (entry.RefCount <= 0)
+        {
+            entry.Handle.Dispose();
+            _blendStates.Remove(description);
+        }
+        else
+        {
+            _blendStates[description] = entry;
+        }
     }
 
     private ComPtr<ID3D11BlendState> CreateNewBlendState(ref BlendStateDescription description)
@@ -94,17 +138,40 @@ internal unsafe class D3D11ResourceCache : IDisposable
         return result;
     }
 
-    private ID3D11DepthStencilState* GetDepthStencilState(ref DepthStencilStateDescription description)
+    private ID3D11DepthStencilState* AcquireDepthStencilState(ref DepthStencilStateDescription description)
     {
         Debug.Assert(Monitor.IsEntered(_lock));
-        if (!_depthStencilStates.TryGetValue(description, out ComPtr<ID3D11DepthStencilState> dss))
+        if (!_depthStencilStates.TryGetValue(description, out DepthStencilEntry entry))
         {
-            dss = CreateNewDepthStencilState(ref description);
-            DepthStencilStateDescription key = description;
-            _depthStencilStates.Add(key, dss);
+            entry.Handle = CreateNewDepthStencilState(ref description);
+            entry.RefCount = 1;
+            _depthStencilStates.Add(description, entry);
         }
+        else
+        {
+            entry.RefCount += 1;
+            _depthStencilStates[description] = entry;
+        }
+        return entry.Handle;
+    }
 
-        return dss;
+    private void ReleaseDepthStencilState(ref DepthStencilStateDescription description)
+    {
+        Debug.Assert(Monitor.IsEntered(_lock));
+        if (!_depthStencilStates.TryGetValue(description, out DepthStencilEntry entry))
+        {
+            throw new RenderException("ReleasePipelineResources: no matching cached DepthStencilState entry.");
+        }
+        entry.RefCount -= 1;
+        if (entry.RefCount <= 0)
+        {
+            entry.Handle.Dispose();
+            _depthStencilStates.Remove(description);
+        }
+        else
+        {
+            _depthStencilStates[description] = entry;
+        }
     }
 
     private ComPtr<ID3D11DepthStencilState> CreateNewDepthStencilState(ref DepthStencilStateDescription description)
@@ -139,17 +206,42 @@ internal unsafe class D3D11ResourceCache : IDisposable
         };
     }
 
-    private ID3D11RasterizerState* GetRasterizerState(ref RasterizerStateDescription description, bool multisample)
+    private ID3D11RasterizerState* AcquireRasterizerState(ref RasterizerStateDescription description, bool multisample)
     {
         Debug.Assert(Monitor.IsEntered(_lock));
         D3D11RasterizerStateCacheKey key = new D3D11RasterizerStateCacheKey(description, multisample);
-        if (!_rasterizerStates.TryGetValue(key, out ComPtr<ID3D11RasterizerState> rasterizerState))
+        if (!_rasterizerStates.TryGetValue(key, out RasterizerEntry entry))
         {
-            rasterizerState = CreateNewRasterizerState(ref key);
-            _rasterizerStates.Add(key, rasterizerState);
+            entry.Handle = CreateNewRasterizerState(ref key);
+            entry.RefCount = 1;
+            _rasterizerStates.Add(key, entry);
         }
+        else
+        {
+            entry.RefCount += 1;
+            _rasterizerStates[key] = entry;
+        }
+        return entry.Handle;
+    }
 
-        return rasterizerState;
+    private void ReleaseRasterizerState(ref RasterizerStateDescription description, bool multisample)
+    {
+        Debug.Assert(Monitor.IsEntered(_lock));
+        D3D11RasterizerStateCacheKey key = new D3D11RasterizerStateCacheKey(description, multisample);
+        if (!_rasterizerStates.TryGetValue(key, out RasterizerEntry entry))
+        {
+            throw new RenderException("ReleasePipelineResources: no matching cached RasterizerState entry.");
+        }
+        entry.RefCount -= 1;
+        if (entry.RefCount <= 0)
+        {
+            entry.Handle.Dispose();
+            _rasterizerStates.Remove(key);
+        }
+        else
+        {
+            _rasterizerStates[key] = entry;
+        }
     }
 
     private ComPtr<ID3D11RasterizerState> CreateNewRasterizerState(ref D3D11RasterizerStateCacheKey key)
@@ -171,21 +263,47 @@ internal unsafe class D3D11ResourceCache : IDisposable
         return result;
     }
 
-    private ID3D11InputLayout* GetInputLayout(VertexLayoutDescription[] vertexLayouts, byte[] vsBytecode)
+    private ID3D11InputLayout* AcquireInputLayout(VertexLayoutDescription[] vertexLayouts, byte[] vsBytecode)
     {
         Debug.Assert(Monitor.IsEntered(_lock));
 
         if (vsBytecode == null || vertexLayouts == null || vertexLayouts.Length == 0) { return null; }
 
         InputLayoutCacheKey tempKey = InputLayoutCacheKey.CreateTempKey(vertexLayouts);
-        if (!_inputLayouts.TryGetValue(tempKey, out ComPtr<ID3D11InputLayout> inputLayout))
+        if (!_inputLayouts.TryGetValue(tempKey, out InputLayoutEntry entry))
         {
-            inputLayout = CreateNewInputLayout(vertexLayouts, vsBytecode);
+            entry.Handle = CreateNewInputLayout(vertexLayouts, vsBytecode);
+            entry.RefCount = 1;
             InputLayoutCacheKey permanentKey = InputLayoutCacheKey.CreatePermanentKey(vertexLayouts);
-            _inputLayouts.Add(permanentKey, inputLayout);
+            _inputLayouts.Add(permanentKey, entry);
         }
+        else
+        {
+            entry.RefCount += 1;
+            _inputLayouts[tempKey] = entry;
+        }
+        return entry.Handle;
+    }
 
-        return inputLayout;
+    private void ReleaseInputLayout(VertexLayoutDescription[] vertexLayouts)
+    {
+        Debug.Assert(Monitor.IsEntered(_lock));
+        if (vertexLayouts == null || vertexLayouts.Length == 0) { return; }
+        InputLayoutCacheKey tempKey = InputLayoutCacheKey.CreateTempKey(vertexLayouts);
+        if (!_inputLayouts.TryGetValue(tempKey, out InputLayoutEntry entry))
+        {
+            throw new RenderException("ReleasePipelineResources: no matching cached InputLayout entry.");
+        }
+        entry.RefCount -= 1;
+        if (entry.RefCount <= 0)
+        {
+            entry.Handle.Dispose();
+            _inputLayouts.Remove(tempKey);
+        }
+        else
+        {
+            _inputLayouts[tempKey] = entry;
+        }
     }
 
     private ComPtr<ID3D11InputLayout> CreateNewInputLayout(VertexLayoutDescription[] vertexLayouts, byte[] vsBytecode)
@@ -207,7 +325,9 @@ internal unsafe class D3D11ResourceCache : IDisposable
             for (int i = 0; i < elementDescs.Length; i++)
             {
                 VertexElementDescription desc = elementDescs[i];
-                semanticPtrs[element] = SilkMarshal.StringToPtr(desc.Name);
+                string semanticName = VertexAttributeID.ToString(desc.Name)
+                    ?? throw new RenderException("Vertex attribute name was not interned.");
+                semanticPtrs[element] = SilkMarshal.StringToPtr(semanticName);
                 elements[element] = new InputElementDesc
                 {
                     SemanticName = (byte*)semanticPtrs[element],
@@ -251,21 +371,25 @@ internal unsafe class D3D11ResourceCache : IDisposable
 
     public void Dispose()
     {
-        foreach (KeyValuePair<BlendStateDescription, ComPtr<ID3D11BlendState>> kvp in _blendStates)
+        foreach (KeyValuePair<BlendStateDescription, BlendEntry> kvp in _blendStates)
         {
-            kvp.Value.Dispose();
+            Debug.Assert(kvp.Value.RefCount == 0, $"D3D11ResourceCache: blend entry leaked with RefCount={kvp.Value.RefCount}.");
+            kvp.Value.Handle.Dispose();
         }
-        foreach (KeyValuePair<DepthStencilStateDescription, ComPtr<ID3D11DepthStencilState>> kvp in _depthStencilStates)
+        foreach (KeyValuePair<DepthStencilStateDescription, DepthStencilEntry> kvp in _depthStencilStates)
         {
-            kvp.Value.Dispose();
+            Debug.Assert(kvp.Value.RefCount == 0, $"D3D11ResourceCache: DSS entry leaked with RefCount={kvp.Value.RefCount}.");
+            kvp.Value.Handle.Dispose();
         }
-        foreach (KeyValuePair<D3D11RasterizerStateCacheKey, ComPtr<ID3D11RasterizerState>> kvp in _rasterizerStates)
+        foreach (KeyValuePair<D3D11RasterizerStateCacheKey, RasterizerEntry> kvp in _rasterizerStates)
         {
-            kvp.Value.Dispose();
+            Debug.Assert(kvp.Value.RefCount == 0, $"D3D11ResourceCache: raster entry leaked with RefCount={kvp.Value.RefCount}.");
+            kvp.Value.Handle.Dispose();
         }
-        foreach (KeyValuePair<InputLayoutCacheKey, ComPtr<ID3D11InputLayout>> kvp in _inputLayouts)
+        foreach (KeyValuePair<InputLayoutCacheKey, InputLayoutEntry> kvp in _inputLayouts)
         {
-            kvp.Value.Dispose();
+            Debug.Assert(kvp.Value.RefCount == 0, $"D3D11ResourceCache: input layout entry leaked with RefCount={kvp.Value.RefCount}.");
+            kvp.Value.Handle.Dispose();
         }
     }
 

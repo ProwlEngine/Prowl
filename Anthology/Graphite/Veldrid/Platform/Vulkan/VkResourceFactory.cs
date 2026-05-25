@@ -28,12 +28,12 @@ internal class VkResourceFactory : ResourceFactory
 
     protected override Pipeline CreateGraphicsPipelineCore(ref GraphicsPipelineDescription description)
     {
-        return new VkPipeline(_gd, ref description);
+        return new VkPipeline(_gd, this, ref description);
     }
 
     public override Pipeline CreateComputePipeline(ref ComputePipelineDescription description)
     {
-        return new VkPipeline(_gd, ref description);
+        return new VkPipeline(_gd, this, ref description);
     }
 
     public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
@@ -52,9 +52,14 @@ internal class VkResourceFactory : ResourceFactory
         return new VkSampler(_gd, ref description);
     }
 
-    protected override ShaderProgram CreateShaderCore(ref ShaderDescription description)
+    protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
     {
-        return new VkShader(_gd, ref description);
+        return new VkShaderProgram(_gd, ref description);
+    }
+
+    protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
+    {
+        return new VkComputeProgram(_gd, ref description);
     }
 
     protected override Texture CreateTextureCore(ref TextureDescription description)

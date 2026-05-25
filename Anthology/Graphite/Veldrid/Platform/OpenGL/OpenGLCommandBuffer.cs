@@ -125,6 +125,16 @@ internal class OpenGLCommandBuffer : CommandBuffer
         _currentCommands.SetPipeline(pipeline);
     }
 
+    private protected override void SetShaderCore(ShaderProgram program)
+    {
+        _currentCommands.SetShader(program);
+    }
+
+    private protected override void SetComputeShaderCore(ComputeProgram program)
+    {
+        _currentCommands.SetComputeShader(program);
+    }
+
     private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
     {
         _currentCommands.SetGraphicsResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets);

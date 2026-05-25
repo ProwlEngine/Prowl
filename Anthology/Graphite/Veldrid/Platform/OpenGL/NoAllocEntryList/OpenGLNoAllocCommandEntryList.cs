@@ -93,6 +93,12 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
     private const byte InsertDebugMarkerEntryID = 26;
     private static readonly uint InsertDebugMarkerEntrySize = Util.USizeOf<NoAllocInsertDebugMarkerEntry>();
 
+    private const byte SetShaderEntryID = 27;
+    private static readonly uint SetShaderEntrySize = Util.USizeOf<NoAllocSetShaderEntry>();
+
+    private const byte SetComputeShaderEntryID = 28;
+    private static readonly uint SetComputeShaderEntrySize = Util.USizeOf<NoAllocSetComputeShaderEntry>();
+
     public OpenGLCommandBuffer Parent { get; }
 
     public OpenGLNoAllocCommandEntryList(OpenGLCommandBuffer cl)
@@ -385,6 +391,16 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
                     executor.InsertDebugMarker(idme.Name.Get(_resourceList));
                     currentOffset += InsertDebugMarkerEntrySize;
                     break;
+                case SetShaderEntryID:
+                    NoAllocSetShaderEntry sse = Unsafe.ReadUnaligned<NoAllocSetShaderEntry>(entryBasePtr);
+                    executor.SetShader(sse.Program.Get(_resourceList));
+                    currentOffset += SetShaderEntrySize;
+                    break;
+                case SetComputeShaderEntryID:
+                    NoAllocSetComputeShaderEntry scse = Unsafe.ReadUnaligned<NoAllocSetComputeShaderEntry>(entryBasePtr);
+                    executor.SetComputeShader(scse.Program.Get(_resourceList));
+                    currentOffset += SetComputeShaderEntrySize;
+                    break;
                 default:
                     throw new InvalidOperationException("Invalid entry ID: " + id);
             }
@@ -467,6 +483,18 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
     {
         NoAllocSetPipelineEntry entry = new NoAllocSetPipelineEntry(Track(pipeline));
         AddEntry(SetPipelineEntryID, ref entry);
+    }
+
+    public void SetShader(ShaderProgram program)
+    {
+        NoAllocSetShaderEntry entry = new NoAllocSetShaderEntry(Track(program));
+        AddEntry(SetShaderEntryID, ref entry);
+    }
+
+    public void SetComputeShader(ComputeProgram program)
+    {
+        NoAllocSetComputeShaderEntry entry = new NoAllocSetComputeShaderEntry(Track(program));
+        AddEntry(SetComputeShaderEntryID, ref entry);
     }
 
     public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)

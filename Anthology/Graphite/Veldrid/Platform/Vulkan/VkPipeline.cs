@@ -5,6 +5,7 @@ using Prowl.Vector;
 using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -18,7 +19,6 @@ internal unsafe class VkPipeline : Pipeline
     private readonly VkPipelineHandle _devicePipeline;
     private readonly PipelineLayout _pipelineLayout;
     private readonly RenderPass _renderPass;
-    private DescriptorSetLayout _emptyDescriptorSetLayout;
     private bool _destroyed;
     private string _name;
 
@@ -40,23 +40,31 @@ internal unsafe class VkPipeline : Pipeline
 
     public override bool IsDisposed => _destroyed;
 
-    public VkPipeline(VkGraphicsDevice gd, ref GraphicsPipelineDescription description)
-        : base(ref description)
+    private readonly VkShaderProgram _referencedShaderProgram;
+    private readonly VkComputeProgram _referencedComputeProgram;
+
+    public VkShaderProgram ShaderProgramRef => _referencedShaderProgram;
+    public VkComputeProgram ComputeProgramRef => _referencedComputeProgram;
+
+    public VkPipeline(VkGraphicsDevice gd, ResourceFactory factory, ref GraphicsPipelineDescription description)
+        : base(factory, ref description)
     {
         _gd = gd;
         IsComputePipeline = false;
         RefCount = new ResourceRefCount(DisposeCore);
+        _referencedShaderProgram = Util.AssertSubtype<ShaderProgram, VkShaderProgram>(description.Program);
 
         GraphicsPipelineCreateInfo pipelineCI = new GraphicsPipelineCreateInfo { SType = StructureType.GraphicsPipelineCreateInfo };
 
         // Blend State
         PipelineColorBlendStateCreateInfo blendStateCI = new PipelineColorBlendStateCreateInfo { SType = StructureType.PipelineColorBlendStateCreateInfo };
-        int attachmentsCount = description.BlendState.AttachmentStates.Length;
+        BlendStateDescription programBlendState = _referencedShaderProgram.BlendState;
+        int attachmentsCount = programBlendState.AttachmentStates.Length;
         PipelineColorBlendAttachmentState* attachmentsPtr
             = stackalloc PipelineColorBlendAttachmentState[attachmentsCount];
         for (int i = 0; i < attachmentsCount; i++)
         {
-            BlendAttachmentDescription vdDesc = description.BlendState.AttachmentStates[i];
+            BlendAttachmentDescription vdDesc = programBlendState.AttachmentStates[i];
             PipelineColorBlendAttachmentState attachmentState = new PipelineColorBlendAttachmentState();
             attachmentState.SrcColorBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.SourceColorFactor);
             attachmentState.DstColorBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.DestinationColorFactor);
@@ -71,7 +79,7 @@ internal unsafe class VkPipeline : Pipeline
 
         blendStateCI.AttachmentCount = (uint)attachmentsCount;
         blendStateCI.PAttachments = attachmentsPtr;
-        Color blendFactor = description.BlendState.BlendFactor;
+        Color blendFactor = programBlendState.BlendFactor;
         blendStateCI.BlendConstants[0] = blendFactor.R;
         blendStateCI.BlendConstants[1] = blendFactor.G;
         blendStateCI.BlendConstants[2] = blendFactor.B;
@@ -80,7 +88,7 @@ internal unsafe class VkPipeline : Pipeline
         pipelineCI.PColorBlendState = &blendStateCI;
 
         // Rasterizer State
-        RasterizerStateDescription rsDesc = description.RasterizerState;
+        RasterizerStateDescription rsDesc = _referencedShaderProgram.RasterizerState;
         PipelineRasterizationStateCreateInfo rsCI = new PipelineRasterizationStateCreateInfo { SType = StructureType.PipelineRasterizationStateCreateInfo };
         rsCI.CullMode = VkFormats.VdToVkCullMode(rsDesc.CullMode);
         rsCI.PolygonMode = PolygonMode.Fill;
@@ -103,7 +111,7 @@ internal unsafe class VkPipeline : Pipeline
         pipelineCI.PDynamicState = &dynamicStateCI;
 
         // Depth Stencil State
-        DepthStencilStateDescription vdDssDesc = description.DepthStencilState;
+        DepthStencilStateDescription vdDssDesc = _referencedShaderProgram.DepthStencilState;
         PipelineDepthStencilStateCreateInfo dssCI = new PipelineDepthStencilStateCreateInfo { SType = StructureType.PipelineDepthStencilStateCreateInfo };
         dssCI.DepthWriteEnable = vdDssDesc.DepthWriteEnabled;
         dssCI.DepthTestEnable = vdDssDesc.DepthTestEnabled;
@@ -132,7 +140,7 @@ internal unsafe class VkPipeline : Pipeline
         PipelineMultisampleStateCreateInfo multisampleCI = new PipelineMultisampleStateCreateInfo { SType = StructureType.PipelineMultisampleStateCreateInfo };
         SampleCountFlags vkSampleCount = VkFormats.VdToVkSampleCount(description.Outputs.SampleCount);
         multisampleCI.RasterizationSamples = vkSampleCount;
-        multisampleCI.AlphaToCoverageEnable = description.BlendState.AlphaToCoverageEnabled;
+        multisampleCI.AlphaToCoverageEnable = programBlendState.AlphaToCoverageEnabled;
 
         pipelineCI.PMultisampleState = &multisampleCI;
 
@@ -145,7 +153,7 @@ internal unsafe class VkPipeline : Pipeline
         // Vertex Input State
         PipelineVertexInputStateCreateInfo vertexInputCI = new PipelineVertexInputStateCreateInfo { SType = StructureType.PipelineVertexInputStateCreateInfo };
 
-        VertexLayoutDescription[] inputDescriptions = description.ShaderSet.VertexLayouts;
+        VertexLayoutDescription[] inputDescriptions = _referencedShaderProgram.VertexLayoutsArray;
         uint bindingCount = (uint)inputDescriptions.Length;
         uint attributeCount = 0;
         for (int i = 0; i < inputDescriptions.Length; i++)
@@ -196,16 +204,13 @@ internal unsafe class VkPipeline : Pipeline
 
         // Shader Stage
 
-        ShaderProgram[] shaders = description.ShaderSet.Shaders;
         StackList<PipelineShaderStageCreateInfo> stages = new StackList<PipelineShaderStageCreateInfo>();
-        foreach (ShaderProgram shader in shaders)
+        foreach (KeyValuePair<ShaderStages, ShaderModule> kvp in _referencedShaderProgram.Modules)
         {
-            VkShader vkShader = Util.AssertSubtype<ShaderProgram, VkShader>(shader);
             PipelineShaderStageCreateInfo stageCI = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo };
-            stageCI.Module = vkShader.ShaderModule;
-            stageCI.Stage = VkFormats.VdToVkShaderStages(shader.Stage);
-            // stageCI.PName = CommonStrings.main; // Meh
-            stageCI.PName = new FixedUtf8String(shader.EntryPoint); // TODO: DONT ALLOCATE HERE
+            stageCI.Module = kvp.Value;
+            stageCI.Stage = VkFormats.VdToVkShaderStages(kvp.Key);
+            stageCI.PName = new FixedUtf8String(_referencedShaderProgram.GetEntryPoint(kvp.Key));
             stages.Add(stageCI);
         }
 
@@ -219,8 +224,9 @@ internal unsafe class VkPipeline : Pipeline
 
         pipelineCI.PViewportState = &viewportStateCI;
 
-        // Pipeline Layout
-        _pipelineLayout = CreatePipelineLayout(description.ResourceLayouts, out uint setCount);
+        // Pipeline Layout: reuse program's pre-built pipeline layout.
+        _pipelineLayout = _referencedShaderProgram.PipelineLayout;
+        uint setCount = _referencedShaderProgram.ResourceSetCount;
         pipelineCI.Layout = _pipelineLayout;
 
         // Create fake RenderPass for compatibility.
@@ -305,54 +311,24 @@ internal unsafe class VkPipeline : Pipeline
         CheckResult(result);
 
         ResourceSetCount = setCount;
-        DynamicOffsetsCount = SumDynamicOffsets(description.ResourceLayouts);
+        DynamicOffsetsCount = _referencedShaderProgram.DynamicOffsetsCount;
     }
 
-    public VkPipeline(VkGraphicsDevice gd, ref ComputePipelineDescription description)
-        : base(ref description)
+    public VkPipeline(VkGraphicsDevice gd, ResourceFactory factory, ref ComputePipelineDescription description)
+        : base(factory, ref description)
     {
         _gd = gd;
         IsComputePipeline = true;
         RefCount = new ResourceRefCount(DisposeCore);
+        _referencedComputeProgram = Util.AssertSubtype<ComputeProgram, VkComputeProgram>(description.Program);
+        _referencedComputeProgram.RefCount.Increment();
 
-        ComputePipelineCreateInfo pipelineCI = new ComputePipelineCreateInfo { SType = StructureType.ComputePipelineCreateInfo };
-
-        // Pipeline Layout
-        _pipelineLayout = CreatePipelineLayout(description.ResourceLayouts, out uint setCount);
-        pipelineCI.Layout = _pipelineLayout;
-
-        // Shader Stage
-
-        ShaderProgram shader = description.ComputeShader;
-        VkShader vkShader = Util.AssertSubtype<ShaderProgram, VkShader>(shader);
-        PipelineShaderStageCreateInfo stageCI = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo };
-        stageCI.Module = vkShader.ShaderModule;
-        stageCI.Stage = VkFormats.VdToVkShaderStages(shader.Stage);
-        stageCI.PName = CommonStrings.main; // Meh
-        pipelineCI.Stage = stageCI;
-
-        Result result = _gd.Vk.CreateComputePipelines(
-            _gd.Device,
-            default,
-            1,
-            in pipelineCI,
-            null,
-            out _devicePipeline);
-        CheckResult(result);
-
-        ResourceSetCount = setCount;
-        DynamicOffsetsCount = SumDynamicOffsets(description.ResourceLayouts);
+        _devicePipeline = _referencedComputeProgram.DevicePipeline;
+        _pipelineLayout = _referencedComputeProgram.PipelineLayout;
+        ResourceSetCount = _referencedComputeProgram.ResourceSetCount;
+        DynamicOffsetsCount = _referencedComputeProgram.DynamicOffsetsCount;
     }
 
-    private static int SumDynamicOffsets(ResourceLayout[] layouts)
-    {
-        int total = 0;
-        for (int i = 0; i < layouts.Length; i++)
-        {
-            total += Util.AssertSubtype<ResourceLayout, VkResourceLayout>(layouts[i]).DynamicBufferCount;
-        }
-        return total;
-    }
 
     public override string Name
     {
@@ -374,90 +350,19 @@ internal unsafe class VkPipeline : Pipeline
         if (!_destroyed)
         {
             _destroyed = true;
-            _gd.Vk.DestroyPipelineLayout(_gd.Device, _pipelineLayout, null);
-            _gd.Vk.DestroyPipeline(_gd.Device, _devicePipeline, null);
-            if (_emptyDescriptorSetLayout.Handle != 0)
-            {
-                _gd.Vk.DestroyDescriptorSetLayout(_gd.Device, _emptyDescriptorSetLayout, null);
-            }
+            DisposeAdapterResourceLayouts();
             if (!IsComputePipeline)
             {
+                // Graphics pipeline is owned by this VkPipeline; pipeline layout is owned by the program.
+                _gd.Vk.DestroyPipeline(_gd.Device, _devicePipeline, null);
                 _gd.Vk.DestroyRenderPass(_gd.Device, _renderPass, null);
             }
+            else
+            {
+                // Compute pipeline is owned by VkComputeProgram (we incremented refcount); release.
+                _referencedComputeProgram?.RefCount.Decrement();
+            }
         }
     }
 
-    private PipelineLayout CreatePipelineLayout(ResourceLayout[] resourceLayouts, out uint setCount)
-    {
-        // Determine the highest Vulkan set index requested across the supplied layouts.
-        // pSetLayouts must be contiguous from set 0, so any gaps are filled with an empty
-        // descriptor set layout (lazily created on demand and destroyed in DisposeCore).
-        uint maxSet = 0;
-        bool any = false;
-        for (int i = 0; i < resourceLayouts.Length; i++)
-        {
-            uint set = resourceLayouts[i].Description.Set;
-            if (!any || set > maxSet)
-            {
-                maxSet = set;
-            }
-            any = true;
-        }
-
-        setCount = any ? maxSet + 1 : 0;
-
-        DescriptorSetLayout* dsls = stackalloc DescriptorSetLayout[(int)setCount];
-        for (int i = 0; i < setCount; i++)
-        {
-            dsls[i] = default;
-        }
-
-        for (int i = 0; i < resourceLayouts.Length; i++)
-        {
-            uint set = resourceLayouts[i].Description.Set;
-            DescriptorSetLayout dsl = Util.AssertSubtype<ResourceLayout, VkResourceLayout>(resourceLayouts[i]).DescriptorSetLayout;
-            if (dsls[set].Handle != 0)
-            {
-                throw new RenderException($"Multiple ResourceLayouts share Set index {set}.");
-            }
-            dsls[set] = dsl;
-        }
-
-        for (int i = 0; i < setCount; i++)
-        {
-            if (dsls[i].Handle == 0)
-            {
-                dsls[i] = GetOrCreateEmptyDescriptorSetLayout();
-            }
-        }
-
-        PipelineLayoutCreateInfo pipelineLayoutCI = new PipelineLayoutCreateInfo
-        {
-            SType = StructureType.PipelineLayoutCreateInfo,
-            SetLayoutCount = setCount,
-            PSetLayouts = dsls
-        };
-
-        Result result = _gd.Vk.CreatePipelineLayout(_gd.Device, in pipelineLayoutCI, null, out PipelineLayout layout);
-        CheckResult(result);
-        return layout;
-    }
-
-    private DescriptorSetLayout GetOrCreateEmptyDescriptorSetLayout()
-    {
-        if (_emptyDescriptorSetLayout.Handle != 0)
-        {
-            return _emptyDescriptorSetLayout;
-        }
-
-        DescriptorSetLayoutCreateInfo dslCI = new DescriptorSetLayoutCreateInfo
-        {
-            SType = StructureType.DescriptorSetLayoutCreateInfo,
-            BindingCount = 0,
-            PBindings = null,
-        };
-        Result result = _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out _emptyDescriptorSetLayout);
-        CheckResult(result);
-        return _emptyDescriptorSetLayout;
-    }
 }

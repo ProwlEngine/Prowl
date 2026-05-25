@@ -20,7 +20,7 @@ internal class OpenGLResourceLayout : ResourceLayout
     /// Finds the index of a Sampler element in this layout whose BindingIndex and Name
     /// match the supplied texture element. Returns -1 if no match exists.
     /// </summary>
-    public int FindCombinedSamplerIndex(int textureBindingIndex, string textureName)
+    public int FindCombinedSamplerIndex(int textureBindingIndex, ResourceID textureName)
     {
         for (int i = 0; i < Elements.Length; i++)
         {

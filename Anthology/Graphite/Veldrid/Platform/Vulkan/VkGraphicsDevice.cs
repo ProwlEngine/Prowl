@@ -427,8 +427,14 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 case VkSampler sampler:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.SamplerExt, sampler.DeviceSampler.Handle, name);
                     break;
-                case VkShader shader:
-                    SetDebugMarkerName(DebugReportObjectTypeEXT.ShaderModuleExt, shader.ShaderModule.Handle, name);
+                case VkShaderProgram shaderProgram:
+                    foreach (Silk.NET.Vulkan.ShaderModule module in shaderProgram.Modules.Values)
+                    {
+                        SetDebugMarkerName(DebugReportObjectTypeEXT.ShaderModuleExt, module.Handle, name);
+                    }
+                    break;
+                case VkComputeProgram computeProgram:
+                    SetDebugMarkerName(DebugReportObjectTypeEXT.PipelineExt, computeProgram.DevicePipeline.Handle, name);
                     break;
                 case VkTexture tex:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.ImageExt, tex.OptimalDeviceImage.Handle, name);

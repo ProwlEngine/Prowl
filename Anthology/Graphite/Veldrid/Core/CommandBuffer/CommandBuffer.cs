@@ -33,6 +33,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected Framebuffer _framebuffer;
     private protected Pipeline _graphicsPipeline;
     private protected Pipeline _computePipeline;
+    private protected ShaderProgram _shaderProgram;
+    private protected ComputeProgram _computeProgram;
+    private protected OutputDescription _framebufferOutputs;
 
     internal CommandBuffer(
         GraphicsDeviceFeatures features,
@@ -49,6 +52,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _framebuffer = null;
         _graphicsPipeline = null;
         _computePipeline = null;
+        _shaderProgram = null;
+        _computeProgram = null;
+        _framebufferOutputs = default;
         ClearCachedState_ClearIndexBuffer();
     }
 
@@ -80,16 +86,49 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         if (pipeline.IsComputePipeline)
         {
             _computePipeline = pipeline;
+            _computeProgram = null;
         }
         else
         {
             _graphicsPipeline = pipeline;
+            _shaderProgram = null;
         }
 
         SetPipelineCore(pipeline);
     }
 
     private protected abstract void SetPipelineCore(Pipeline pipeline);
+
+    /// <summary>
+    /// Sets the active graphics <see cref="ShaderProgram"/> used for rendering. Calling this nulls any
+    /// previously-bound graphics <see cref="Pipeline"/> set via <see cref="SetPipeline(Pipeline)"/>; the
+    /// last-bound graphics path wins.
+    /// </summary>
+    /// <param name="program">The new <see cref="ShaderProgram"/> object.</param>
+    public void SetShader(ShaderProgram program)
+    {
+        SetShader_CheckProgram(program);
+        SetShaderCore(program);
+        _shaderProgram = program;
+        _graphicsPipeline = null;
+    }
+
+    private protected abstract void SetShaderCore(ShaderProgram program);
+
+    /// <summary>
+    /// Sets the active <see cref="ComputeProgram"/>. Calling this nulls any previously-bound compute
+    /// <see cref="Pipeline"/> set via <see cref="SetPipeline(Pipeline)"/>; the last-bound compute path wins.
+    /// </summary>
+    /// <param name="program">The new <see cref="ComputeProgram"/> object.</param>
+    public void SetComputeShader(ComputeProgram program)
+    {
+        SetComputeShader_CheckProgram(program);
+        SetComputeShaderCore(program);
+        _computeProgram = program;
+        _computePipeline = null;
+    }
+
+    private protected abstract void SetComputeShaderCore(ComputeProgram program);
 
     /// <summary>
     /// Sets the active <see cref="DeviceBuffer"/> for the given index.
@@ -248,6 +287,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         {
             _framebuffer = fb;
             SetFramebufferCore(fb);
+            _framebufferOutputs = fb != null ? fb.OutputDescription : default;
             SetFullViewports();
             SetFullScissorRects();
         }

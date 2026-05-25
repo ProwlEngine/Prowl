@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 
 using Silk.NET.Core.Native;
 using Silk.NET.Direct3D11;
@@ -11,114 +10,56 @@ internal unsafe class D3D11Pipeline : Pipeline
     private string _name;
     private bool _disposed;
 
-    public ID3D11BlendState* BlendState { get; }
+    private readonly D3D11ShaderProgram _shaderProgram;
+    private readonly D3D11ComputeProgram _computeProgram;
+    private readonly D3DPrimitiveTopology _primitiveTopology;
+    private readonly bool _outputMultisampled;
+    private readonly bool _isCompute;
+
+    public D3D11ShaderProgram Program => _shaderProgram;
+    public D3D11ComputeProgram ComputeProgramRef => _computeProgram;
+
+    public ID3D11BlendState* BlendState => _shaderProgram.BlendStateHandle;
     public float[] BlendFactor { get; }
-    public ID3D11DepthStencilState* DepthStencilState { get; }
+    public ID3D11DepthStencilState* DepthStencilState => _shaderProgram.DepthStencilStateHandle;
     public uint StencilReference { get; }
-    public ID3D11RasterizerState* RasterizerState { get; }
-    public D3DPrimitiveTopology PrimitiveTopology { get; }
-    public ID3D11InputLayout* InputLayout { get; }
-    public ID3D11VertexShader* VertexShader { get; }
-    public ID3D11GeometryShader* GeometryShader { get; } // May be null.
-    public ID3D11HullShader* HullShader { get; } // May be null.
-    public ID3D11DomainShader* DomainShader { get; } // May be null.
-    public ID3D11PixelShader* PixelShader { get; }
-    public ID3D11ComputeShader* ComputeShader { get; }
-    public new D3D11ResourceLayout[] ResourceLayouts { get; }
-    public int[] VertexStrides { get; }
+    public ID3D11RasterizerState* RasterizerState => _shaderProgram.RasterizerStateHandle;
+    public D3DPrimitiveTopology PrimitiveTopology => _primitiveTopology;
+    public ID3D11InputLayout* InputLayout => _shaderProgram.InputLayout;
+    public ID3D11VertexShader* VertexShader => _shaderProgram.VertexShader;
+    public ID3D11GeometryShader* GeometryShader => _shaderProgram.GeometryShader;
+    public ID3D11HullShader* HullShader => _shaderProgram.HullShader;
+    public ID3D11DomainShader* DomainShader => _shaderProgram.DomainShader;
+    public ID3D11PixelShader* PixelShader => _shaderProgram.PixelShader;
+    public ID3D11ComputeShader* ComputeShader => _computeProgram.ComputeShader;
+    public new D3D11ResourceLayout[] ResourceLayouts => _isCompute
+        ? _computeProgram.D3D11ResourceLayouts
+        : _shaderProgram.D3D11ResourceLayouts;
+    public int[] VertexStrides => _isCompute
+        ? Array.Empty<int>()
+        : _shaderProgram.VertexStridesInts;
 
-    public override bool IsComputePipeline { get; }
+    public override bool IsComputePipeline => _isCompute;
 
-    public D3D11Pipeline(D3D11ResourceCache cache, ref GraphicsPipelineDescription description)
-        : base(ref description)
+    public D3D11Pipeline(ResourceFactory factory, D3D11ResourceCache cache, ref GraphicsPipelineDescription description)
+        : base(factory, ref description)
     {
-        byte[] vsBytecode = null;
-        ShaderProgram[] stages = description.ShaderSet.Shaders;
-        for (int i = 0; i < description.ShaderSet.Shaders.Length; i++)
-        {
-            if (stages[i].Stage == ShaderStages.Vertex)
-            {
-                D3D11Shader d3d11VertexShader = ((D3D11Shader)stages[i]);
-                VertexShader = (ID3D11VertexShader*)d3d11VertexShader.DeviceShader.Handle;
-                vsBytecode = d3d11VertexShader.Bytecode;
-            }
-            if (stages[i].Stage == ShaderStages.Geometry)
-            {
-                GeometryShader = (ID3D11GeometryShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
-            }
-            if (stages[i].Stage == ShaderStages.TessellationControl)
-            {
-                HullShader = (ID3D11HullShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
-            }
-            if (stages[i].Stage == ShaderStages.TessellationEvaluation)
-            {
-                DomainShader = (ID3D11DomainShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
-            }
-            if (stages[i].Stage == ShaderStages.Fragment)
-            {
-                PixelShader = (ID3D11PixelShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
-            }
-            if (stages[i].Stage == ShaderStages.Compute)
-            {
-                ComputeShader = (ID3D11ComputeShader*)((D3D11Shader)stages[i]).DeviceShader.Handle;
-            }
-        }
+        _shaderProgram = Util.AssertSubtype<ShaderProgram, D3D11ShaderProgram>(description.Program);
+        _isCompute = false;
+        _outputMultisampled = description.Outputs.SampleCount != TextureSampleCount.Count1;
+        _shaderProgram.EnsureCacheResolved(_outputMultisampled);
 
-        cache.GetPipelineResources(
-            ref description.BlendState,
-            ref description.DepthStencilState,
-            ref description.RasterizerState,
-            description.Outputs.SampleCount != TextureSampleCount.Count1,
-            description.ShaderSet.VertexLayouts,
-            vsBytecode,
-            out ID3D11BlendState* blendState,
-            out ID3D11DepthStencilState* depthStencilState,
-            out ID3D11RasterizerState* rasterizerState,
-            out ID3D11InputLayout* inputLayout);
-
-        BlendState = blendState;
-        var bf = description.BlendState.BlendFactor;
+        var bf = _shaderProgram.BlendState.BlendFactor;
         BlendFactor = new float[] { bf.R, bf.G, bf.B, bf.A };
-        DepthStencilState = depthStencilState;
-        StencilReference = description.DepthStencilState.StencilReference;
-        RasterizerState = rasterizerState;
-        PrimitiveTopology = D3D11Formats.VdToD3D11PrimitiveTopology(description.PrimitiveTopology);
-
-        ResourceLayout[] genericLayouts = description.ResourceLayouts;
-        ResourceLayouts = new D3D11ResourceLayout[genericLayouts.Length];
-        for (int i = 0; i < ResourceLayouts.Length; i++)
-        {
-            ResourceLayouts[i] = Util.AssertSubtype<ResourceLayout, D3D11ResourceLayout>(genericLayouts[i]);
-        }
-
-        Debug.Assert(vsBytecode != null || ComputeShader != null);
-        if (vsBytecode != null && description.ShaderSet.VertexLayouts.Length > 0)
-        {
-            InputLayout = inputLayout;
-            int numVertexBuffers = description.ShaderSet.VertexLayouts.Length;
-            VertexStrides = new int[numVertexBuffers];
-            for (int i = 0; i < numVertexBuffers; i++)
-            {
-                VertexStrides[i] = (int)description.ShaderSet.VertexLayouts[i].Stride;
-            }
-        }
-        else
-        {
-            VertexStrides = Array.Empty<int>();
-        }
+        StencilReference = _shaderProgram.DepthStencilState.StencilReference;
+        _primitiveTopology = D3D11Formats.VdToD3D11PrimitiveTopology(description.PrimitiveTopology);
     }
 
-    public D3D11Pipeline(D3D11ResourceCache cache, ref ComputePipelineDescription description)
-        : base(ref description)
+    public D3D11Pipeline(ResourceFactory factory, D3D11ResourceCache cache, ref ComputePipelineDescription description)
+        : base(factory, ref description)
     {
-        IsComputePipeline = true;
-        ComputeShader = (ID3D11ComputeShader*)((D3D11Shader)description.ComputeShader).DeviceShader.Handle;
-        ResourceLayout[] genericLayouts = description.ResourceLayouts;
-        ResourceLayouts = new D3D11ResourceLayout[genericLayouts.Length];
-        for (int i = 0; i < ResourceLayouts.Length; i++)
-        {
-            ResourceLayouts[i] = Util.AssertSubtype<ResourceLayout, D3D11ResourceLayout>(genericLayouts[i]);
-        }
+        _computeProgram = Util.AssertSubtype<ComputeProgram, D3D11ComputeProgram>(description.Program);
+        _isCompute = true;
     }
 
     public override string Name
@@ -131,6 +72,8 @@ internal unsafe class D3D11Pipeline : Pipeline
 
     public override void Dispose()
     {
+        if (_disposed) return;
         _disposed = true;
+        DisposeAdapterResourceLayouts();
     }
 }

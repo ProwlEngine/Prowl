@@ -19,6 +19,8 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
         private readonly EntryPool<SetFramebufferEntry> _setFramebufferEntryPool = new EntryPool<SetFramebufferEntry>();
         private readonly EntryPool<SetIndexBufferEntry> _setIndexBufferEntryPool = new EntryPool<SetIndexBufferEntry>();
         private readonly EntryPool<SetPipelineEntry> _setPipelineEntryPool = new EntryPool<SetPipelineEntry>();
+        private readonly EntryPool<SetShaderEntry> _setShaderEntryPool = new EntryPool<SetShaderEntry>();
+        private readonly EntryPool<SetComputeShaderEntry> _setComputeShaderEntryPool = new EntryPool<SetComputeShaderEntry>();
         private readonly EntryPool<SetGraphicsResourceSetEntry> _setGraphicsResourceSetEntryPool = new EntryPool<SetGraphicsResourceSetEntry>();
         private readonly EntryPool<SetComputeResourceSetEntry> _setComputeResourceSetEntryPool = new EntryPool<SetComputeResourceSetEntry>();
         private readonly EntryPool<SetScissorRectEntry> _setScissorRectEntryPool = new EntryPool<SetScissorRectEntry>();
@@ -102,6 +104,16 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
         public void SetPipeline(Pipeline pipeline)
         {
             _commands.Add(_setPipelineEntryPool.Rent().Init(pipeline));
+        }
+
+        public void SetShader(ShaderProgram program)
+        {
+            _commands.Add(_setShaderEntryPool.Rent().Init(program));
+        }
+
+        public void SetComputeShader(ComputeProgram program)
+        {
+            _commands.Add(_setComputeShaderEntryPool.Rent().Init(program));
         }
 
         public void SetGraphicsResourceSet(uint slot, ResourceSet rs)
@@ -230,6 +242,14 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
                     case SetPipelineEntry spe:
                         executor.SetPipeline(spe.Pipeline);
                         _setPipelineEntryPool.Return(spe);
+                        break;
+                    case SetShaderEntry sse:
+                        executor.SetShader(sse.Program);
+                        _setShaderEntryPool.Return(sse);
+                        break;
+                    case SetComputeShaderEntry scse:
+                        executor.SetComputeShader(scse.Program);
+                        _setComputeShaderEntryPool.Return(scse);
                         break;
                     case SetGraphicsResourceSetEntry sgrse:
                         executor.SetGraphicsResourceSet(sgrse.Slot, sgrse.ResourceSet);

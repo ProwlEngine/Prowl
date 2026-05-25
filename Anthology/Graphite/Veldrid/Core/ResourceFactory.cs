@@ -221,22 +221,46 @@ public abstract partial class ResourceFactory
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
     /// <returns>A new <see cref="ShaderProgram"/>.</returns>
-    public ShaderProgram CreateShader(ShaderDescription description) => CreateShader(ref description);
+    public ShaderProgram CreateShaderProgram(ShaderDescription description) => CreateShaderProgram(ref description);
+
     /// <summary>
     /// Creates a new <see cref="ShaderProgram"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
     /// <returns>A new <see cref="ShaderProgram"/>.</returns>
-    public ShaderProgram CreateShader(ref ShaderDescription description)
+    public ShaderProgram CreateShaderProgram(ref ShaderDescription description)
     {
-        CreateShader_CheckDescription(ref description);
-        return CreateShaderCore(ref description);
+        CreateShaderProgram_CheckDescription(ref description);
+        return CreateShaderProgramCore(ref description);
     }
 
     /// <summary></summary>
     /// <param name="description"></param>
     /// <returns></returns>
-    protected abstract ShaderProgram CreateShaderCore(ref ShaderDescription description);
+    protected abstract ShaderProgram CreateShaderProgramCore(ref ShaderDescription description);
+
+    /// <summary>
+    /// Creates a new <see cref="ComputeProgram"/>.
+    /// </summary>
+    /// <param name="description">The desired properties of the created object.</param>
+    /// <returns>A new <see cref="ComputeProgram"/>.</returns>
+    public ComputeProgram CreateComputeProgram(ComputeDescription description) => CreateComputeProgram(ref description);
+
+    /// <summary>
+    /// Creates a new <see cref="ComputeProgram"/>.
+    /// </summary>
+    /// <param name="description">The desired properties of the created object.</param>
+    /// <returns>A new <see cref="ComputeProgram"/>.</returns>
+    public ComputeProgram CreateComputeProgram(ref ComputeDescription description)
+    {
+        CreateComputeProgram_CheckDescription(ref description);
+        return CreateComputeProgramCore(ref description);
+    }
+
+    /// <summary></summary>
+    /// <param name="description"></param>
+    /// <returns></returns>
+    protected abstract ComputeProgram CreateComputeProgramCore(ref ComputeDescription description);
 
     /// <summary>
     /// Creates a new <see cref="CommandBuffer"/>.

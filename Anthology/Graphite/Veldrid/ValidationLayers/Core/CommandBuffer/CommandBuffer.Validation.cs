@@ -47,19 +47,31 @@ public abstract partial class CommandBuffer
     private void SetGraphicsResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
 #if VALIDATE_USAGE
-        if (_graphicsPipeline == null)
+        if (_graphicsPipeline != null)
         {
-            throw new RenderException($"A graphics Pipeline must be active before {nameof(SetGraphicsResourceSet)} can be called.");
+            ResourceLayout layout = FindLayoutForSet(_graphicsPipeline.ResourceLayouts, slot);
+            if (layout == null)
+            {
+                throw new RenderException(
+                    $"Failed to bind ResourceSet to slot {slot}. The active graphics Pipeline declares no ResourceLayout with Set = {slot}.");
+            }
+            CheckResourceSetMatchesLayout(slot, layout, rs);
+        }
+        else if (_shaderProgram != null)
+        {
+            ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_shaderProgram.ResourceLayoutsArray, slot);
+            if (layoutDesc == null)
+            {
+                throw new RenderException(
+                    $"Failed to bind ResourceSet to slot {slot}. The active graphics ShaderProgram declares no ResourceLayout with Set = {slot}.");
+            }
+            CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
+        }
+        else
+        {
+            throw new RenderException($"A graphics ShaderProgram or Pipeline must be active before {nameof(SetGraphicsResourceSet)} can be called.");
         }
 
-        ResourceLayout layout = FindLayoutForSet(_graphicsPipeline.ResourceLayouts, slot);
-        if (layout == null)
-        {
-            throw new RenderException(
-                $"Failed to bind ResourceSet to slot {slot}. The active graphics Pipeline declares no ResourceLayout with Set = {slot}.");
-        }
-
-        CheckResourceSetMatchesLayout(slot, layout, rs);
         CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
 #endif
     }
@@ -68,20 +80,54 @@ public abstract partial class CommandBuffer
     private void SetComputeResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
 #if VALIDATE_USAGE
-        if (_computePipeline == null)
+        if (_computePipeline != null)
         {
-            throw new RenderException($"A compute Pipeline must be active before {nameof(SetComputeResourceSet)} can be called.");
+            ResourceLayout layout = FindLayoutForSet(_computePipeline.ResourceLayouts, slot);
+            if (layout == null)
+            {
+                throw new RenderException(
+                    $"Failed to bind ResourceSet to slot {slot}. The active compute Pipeline declares no ResourceLayout with Set = {slot}.");
+            }
+            CheckResourceSetMatchesLayout(slot, layout, rs);
+        }
+        else if (_computeProgram != null)
+        {
+            ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_computeProgram.ResourceLayoutsArray, slot);
+            if (layoutDesc == null)
+            {
+                throw new RenderException(
+                    $"Failed to bind ResourceSet to slot {slot}. The active ComputeProgram declares no ResourceLayout with Set = {slot}.");
+            }
+            CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
+        }
+        else
+        {
+            throw new RenderException($"A ComputeProgram or compute Pipeline must be active before {nameof(SetComputeResourceSet)} can be called.");
         }
 
-        ResourceLayout layout = FindLayoutForSet(_computePipeline.ResourceLayouts, slot);
-        if (layout == null)
-        {
-            throw new RenderException(
-                $"Failed to bind ResourceSet to slot {slot}. The active compute Pipeline declares no ResourceLayout with Set = {slot}.");
-        }
-
-        CheckResourceSetMatchesLayout(slot, layout, rs);
         CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void SetShader_CheckProgram(ShaderProgram p)
+    {
+#if VALIDATE_USAGE
+        if (p == null)
+        {
+            throw new RenderException("ShaderProgram passed to SetShader must be non-null.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void SetComputeShader_CheckProgram(ComputeProgram p)
+    {
+#if VALIDATE_USAGE
+        if (p == null)
+        {
+            throw new RenderException("ComputeProgram passed to SetComputeShader must be non-null.");
+        }
 #endif
     }
 
@@ -96,6 +142,39 @@ public abstract partial class CommandBuffer
             }
         }
         return null;
+    }
+
+    private static ResourceLayoutDescription? FindLayoutDescForSet(ResourceLayoutDescription[] layouts, uint set)
+    {
+        for (int i = 0; i < layouts.Length; i++)
+        {
+            if (layouts[i].Set == set)
+            {
+                return layouts[i];
+            }
+        }
+        return null;
+    }
+
+    private static void CheckResourceSetMatchesLayoutDescription(uint slot, ResourceLayoutDescription layoutDesc, ResourceSet rs)
+    {
+        int pipelineLength = layoutDesc.Elements.Length;
+        ResourceLayoutDescription setLayoutDesc = rs.Layout.Description;
+        int setLength = setLayoutDesc.Elements.Length;
+        if (pipelineLength != setLength)
+        {
+            throw new RenderException($"Failed to bind ResourceSet to slot {slot}. The number of resources in the ResourceSet ({setLength}) does not match the number expected by the active ShaderProgram ({pipelineLength}).");
+        }
+        for (int i = 0; i < pipelineLength; i++)
+        {
+            ResourceKind programKind = layoutDesc.Elements[i].Kind;
+            ResourceKind setKind = setLayoutDesc.Elements[i].Kind;
+            if (programKind != setKind)
+            {
+                throw new RenderException(
+                    $"Failed to bind ResourceSet to slot {slot}. Resource element {i} was of the incorrect type. The bound ShaderProgram expects {programKind}, but the ResourceSet contained {setKind}.");
+            }
+        }
     }
 
     private static void CheckResourceSetMatchesLayout(uint slot, ResourceLayout layout, ResourceSet rs)
@@ -393,15 +472,15 @@ public abstract partial class CommandBuffer
     private void Draw_PreDrawValidation()
     {
 #if VALIDATE_USAGE
-        if (_graphicsPipeline == null)
+        if (_graphicsPipeline == null && _shaderProgram == null)
         {
-            throw new RenderException($"A graphics {nameof(Pipeline)} must be set in order to issue draw commands.");
+            throw new RenderException($"A graphics ShaderProgram or Pipeline must be set in order to issue draw commands.");
         }
         if (_framebuffer == null)
         {
             throw new RenderException($"A {nameof(Framebuffer)} must be set in order to issue draw commands.");
         }
-        if (!_graphicsPipeline.GraphicsOutputDescription.Equals(_framebuffer.OutputDescription))
+        if (_graphicsPipeline != null && !_graphicsPipeline.GraphicsOutputDescription.Equals(_framebuffer.OutputDescription))
         {
             throw new RenderException($"The {nameof(OutputDescription)} of the current graphics {nameof(Pipeline)} is not compatible with the current {nameof(Framebuffer)}.");
         }

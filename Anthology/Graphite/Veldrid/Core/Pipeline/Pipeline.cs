@@ -9,19 +9,49 @@ namespace Prowl.Veldrid;
 /// </summary>
 public abstract partial class Pipeline : DeviceResource, IDisposable
 {
-    internal Pipeline(ref GraphicsPipelineDescription graphicsDescription)
-        : this(graphicsDescription.ResourceLayouts)
+    private readonly ResourceLayout[] _adapterResourceLayouts;
+
+    internal Pipeline(ResourceFactory factory, ref GraphicsPipelineDescription graphicsDescription)
     {
+        _adapterResourceLayouts = MaterializeResourceLayouts(factory, graphicsDescription.Program?.ResourceLayoutsArray);
         Pipeline_StoreGraphicsOutputDescription(ref graphicsDescription);
+        Pipeline_StoreResourceLayouts(_adapterResourceLayouts);
     }
 
-    internal Pipeline(ref ComputePipelineDescription computeDescription)
-        : this(computeDescription.ResourceLayouts)
-    { }
-
-    internal Pipeline(ResourceLayout[] resourceLayouts)
+    internal Pipeline(ResourceFactory factory, ref ComputePipelineDescription computeDescription)
     {
-        Pipeline_StoreResourceLayouts(resourceLayouts);
+        _adapterResourceLayouts = MaterializeResourceLayouts(factory, computeDescription.Program?.ResourceLayoutsArray);
+        Pipeline_StoreResourceLayouts(_adapterResourceLayouts);
+    }
+
+    private static ResourceLayout[] MaterializeResourceLayouts(ResourceFactory factory, ResourceLayoutDescription[] descs)
+    {
+        if (descs == null || descs.Length == 0)
+        {
+            return Array.Empty<ResourceLayout>();
+        }
+        ResourceLayout[] layouts = new ResourceLayout[descs.Length];
+        for (int i = 0; i < descs.Length; i++)
+        {
+            layouts[i] = factory.CreateResourceLayout(ref descs[i]);
+        }
+        return layouts;
+    }
+
+    /// <summary>
+    /// Releases the adapter <see cref="ResourceLayout"/> instances this pipeline created from its wrapped program.
+    /// Backends must call this from their <see cref="Dispose"/> implementations.
+    /// </summary>
+    protected void DisposeAdapterResourceLayouts()
+    {
+        if (_adapterResourceLayouts == null)
+        {
+            return;
+        }
+        for (int i = 0; i < _adapterResourceLayouts.Length; i++)
+        {
+            _adapterResourceLayouts[i]?.Dispose();
+        }
     }
 
     /// <summary>

@@ -2,177 +2,168 @@ using Silk.NET.OpenGL;
 
 using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
-using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
-
 using System.Text;
-using System.Diagnostics;
 using System.Collections.Generic;
 using System;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
+internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
 {
     private const uint GL_INVALID_INDEX = 0xFFFFFFFF;
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
 
-    // Graphics Pipeline
-    public ShaderProgram[] GraphicsShaders { get; }
-    public VertexLayoutDescription[] VertexLayouts { get; }
-    public BlendStateDescription BlendState { get; }
-    public DepthStencilStateDescription DepthStencilState { get; }
-    public RasterizerStateDescription RasterizerState { get; }
-    public PrimitiveTopology PrimitiveTopology { get; }
+    private readonly OpenGLShaderProgram _graphicsProgram;
+    private readonly OpenGLComputeProgram _computeProgram;
 
-    // Compute Pipeline
-    public override bool IsComputePipeline { get; }
-    public ShaderProgram ComputeShader { get; }
+    private readonly PrimitiveTopology _primitiveTopology;
+    private readonly OutputDescription _outputs;
+    private readonly bool _isComputePipeline;
 
-    private uint _program;
     private bool _disposeRequested;
     private bool _disposed;
 
-    private SetBindingsInfo[] _setInfos;
-
-    public int[] VertexStrides { get; }
-
-    public uint Program => _program;
-
+    public override bool IsComputePipeline => _isComputePipeline;
     public override string Name { get; set; }
-
     public override bool IsDisposed => _disposeRequested;
 
+    public OpenGLShaderProgram ShaderProgram => _graphicsProgram;
+    public OpenGLComputeProgram ComputeProgram => _computeProgram;
+
+    public uint Program => _isComputePipeline ? _computeProgram.GLProgram : _graphicsProgram.GLProgram;
+
+    public BlendStateDescription BlendState => _graphicsProgram.BlendState;
+    public DepthStencilStateDescription DepthStencilState => _graphicsProgram.DepthStencilState;
+    public RasterizerStateDescription RasterizerState => _graphicsProgram.RasterizerState;
+    public IReadOnlyList<VertexLayoutDescription> VertexLayouts => _graphicsProgram.VertexLayouts;
+    public PrimitiveTopology PrimitiveTopology => _primitiveTopology;
+    public int[] VertexStrides => _isComputePipeline ? Array.Empty<int>() : _graphicsProgram.VertexStrides;
+
+    public int ResourceLayoutCount => _isComputePipeline
+        ? _computeProgram.ResourceLayouts.Count
+        : _graphicsProgram.ResourceLayouts.Count;
+
     public OpenGLPipeline(OpenGLGraphicsDevice gd, ref GraphicsPipelineDescription description)
-        : base(ref description)
+        : base(gd.ResourceFactory, ref description)
     {
         _gd = gd;
-        GraphicsShaders = Util.ShallowClone(description.ShaderSet.Shaders);
-        VertexLayouts = Util.ShallowClone(description.ShaderSet.VertexLayouts);
-        BlendState = description.BlendState.ShallowClone();
-        DepthStencilState = description.DepthStencilState;
-        RasterizerState = description.RasterizerState;
-        PrimitiveTopology = description.PrimitiveTopology;
-
-        int numVertexBuffers = description.ShaderSet.VertexLayouts.Length;
-        VertexStrides = new int[numVertexBuffers];
-        for (int i = 0; i < numVertexBuffers; i++)
-        {
-            VertexStrides[i] = (int)description.ShaderSet.VertexLayouts[i].Stride;
-        }
-
-        OpenGLPipeline_StoreResourceLayouts(description.ResourceLayouts);
+        _graphicsProgram = Util.AssertSubtype<ShaderProgram, OpenGLShaderProgram>(description.Program);
+        _primitiveTopology = description.PrimitiveTopology;
+        _outputs = description.Outputs;
+        _isComputePipeline = false;
     }
 
     public OpenGLPipeline(OpenGLGraphicsDevice gd, ref ComputePipelineDescription description)
-        : base(ref description)
+        : base(gd.ResourceFactory, ref description)
     {
         _gd = gd;
-        IsComputePipeline = true;
-        ComputeShader = description.ComputeShader;
-        VertexStrides = Array.Empty<int>();
-        OpenGLPipeline_StoreResourceLayouts(description.ResourceLayouts);
+        _computeProgram = Util.AssertSubtype<ComputeProgram, OpenGLComputeProgram>(description.Program);
+        _isComputePipeline = true;
     }
 
-    public bool Created { get; private set; }
+    public bool Created => _isComputePipeline
+        ? _computeProgram.Created
+        : _graphicsProgram.Created;
 
     public void EnsureResourcesCreated()
     {
-        if (!Created)
+        if (_isComputePipeline)
         {
-            CreateGLResources();
-        }
-    }
-
-    private void CreateGLResources()
-    {
-        if (!IsComputePipeline)
-        {
-            CreateGraphicsGLResources();
+            _computeProgram.EnsureResourcesCreated();
         }
         else
         {
-            CreateComputeGLResources();
+            _graphicsProgram.EnsureResourcesCreated();
         }
-
-        Created = true;
     }
 
-    private void CreateGraphicsGLResources()
-    {
-        _program = _gl.CreateProgram();
-        CheckLastError();
-        foreach (ShaderProgram stage in GraphicsShaders)
-        {
-            OpenGLShader glShader = Util.AssertSubtype<ShaderProgram, OpenGLShader>(stage);
-            glShader.EnsureResourcesCreated();
-            _gl.AttachShader(_program, glShader.Shader);
-            CheckLastError();
-        }
+    public bool GetUniformBindingForSlot(uint set, uint slot, out OpenGLUniformBinding binding)
+        => _isComputePipeline
+            ? _computeProgram.GetUniformBindingForSlot(set, slot, out binding)
+            : _graphicsProgram.GetUniformBindingForSlot(set, slot, out binding);
 
-        // Each layout's elements occupy a contiguous range of attribute slots starting
-        // at layoutDesc.Location. Shaders that declare layout(location=...) explicitly
-        // win over BindAttribLocation; this is a fallback for the ones that don't.
-        foreach (VertexLayoutDescription layoutDesc in VertexLayouts)
+    public bool GetTextureBindingInfo(uint set, uint slot, out OpenGLTextureBindingSlotInfo binding)
+        => _isComputePipeline
+            ? _computeProgram.GetTextureBindingInfo(set, slot, out binding)
+            : _graphicsProgram.GetTextureBindingInfo(set, slot, out binding);
+
+    public bool GetStorageBufferBindingForSlot(uint set, uint slot, out OpenGLShaderStorageBinding binding)
+        => _isComputePipeline
+            ? _computeProgram.GetStorageBufferBindingForSlot(set, slot, out binding)
+            : _graphicsProgram.GetStorageBufferBindingForSlot(set, slot, out binding);
+
+    public override void Dispose()
+    {
+        if (!_disposeRequested)
+        {
+            _disposeRequested = true;
+            DisposeAdapterResourceLayouts();
+            _gd.EnqueueDisposal(this);
+        }
+    }
+
+    public void DestroyGLResources()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+        }
+    }
+
+    internal static void BindVertexAttribLocations(GL gl, uint program, IReadOnlyList<VertexLayoutDescription> layouts)
+    {
+        foreach (VertexLayoutDescription layoutDesc in layouts)
         {
             for (int i = 0; i < layoutDesc.Elements.Length; i++)
             {
-                BindAttribLocation(layoutDesc.Location + (uint)i, layoutDesc.Elements[i].Name);
+                string attribName = VertexAttributeID.ToString(layoutDesc.Elements[i].Name)
+                    ?? throw new RenderException("Vertex attribute name was not interned.");
+                gl.BindAttribLocation(program, layoutDesc.Location + (uint)i, attribName);
+                CheckLastError();
             }
         }
-
-        _gl.LinkProgram(_program);
-        CheckLastError();
-
-        _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out int linkStatus);
-        CheckLastError();
-        if (linkStatus != 1)
-        {
-            string log = _gl.GetProgramInfoLog(_program);
-            CheckLastError();
-            throw new RenderException($"Error linking GL program: {log}");
-        }
-
-        ProcessResourceSetLayouts(ResourceLayouts);
     }
 
-    void BindAttribLocation(uint slot, string elementName)
+    internal static SetBindingsInfo[] BuildSetBindingsInfo(
+        GL gl,
+        uint program,
+        IReadOnlyList<ResourceLayoutDescription> resourceLayouts,
+        GraphicsBackend backend)
     {
-        _gl.BindAttribLocation(_program, slot, elementName);
-        CheckLastError();
-    }
-
-    private void ProcessResourceSetLayouts(ResourceLayout[] layouts)
-    {
-        int resourceLayoutCount = layouts.Length;
-        _setInfos = new SetBindingsInfo[resourceLayoutCount];
+        int resourceLayoutCount = resourceLayouts.Count;
+        SetBindingsInfo[] setInfos = new SetBindingsInfo[resourceLayoutCount];
         for (uint setSlot = 0; setSlot < resourceLayoutCount; setSlot++)
         {
-            OpenGLResourceLayout glSetLayout = Util.AssertSubtype<ResourceLayout, OpenGLResourceLayout>(layouts[setSlot]);
-            ResourceLayoutElementDescription[] resources = glSetLayout.Elements;
+            ResourceLayoutDescription layoutDesc = resourceLayouts[(int)setSlot];
+            ResourceLayoutElementDescription[] resources = layoutDesc.Elements;
 
-            Dictionary<uint, OpenGLUniformBinding> uniformBindings = new Dictionary<uint, OpenGLUniformBinding>();
-            Dictionary<uint, OpenGLTextureBindingSlotInfo> textureBindings = new Dictionary<uint, OpenGLTextureBindingSlotInfo>();
-            Dictionary<uint, OpenGLShaderStorageBinding> storageBufferBindings = new Dictionary<uint, OpenGLShaderStorageBinding>();
+            Dictionary<uint, OpenGLUniformBinding> uniformBindings = new();
+            Dictionary<uint, OpenGLTextureBindingSlotInfo> textureBindings = new();
+            Dictionary<uint, OpenGLShaderStorageBinding> storageBufferBindings = new();
 
             for (uint i = 0; i < resources.Length; i++)
             {
                 ResourceLayoutElementDescription resource = resources[i];
                 int bindingIndex = resource.BindingIndex;
+                string resourceName = ResourceID.ToString(resource.Name)
+                    ?? throw new RenderException("Resource layout element name was not interned.");
                 if (resource.Kind == ResourceKind.UniformBuffer)
                 {
-                    uint blockIndex = GetUniformBlockIndex(resource.Name);
+                    uint blockIndex = gl.GetUniformBlockIndex(program, resourceName);
+                    CheckLastError();
                     if (blockIndex != GL_INVALID_INDEX)
                     {
-                        _gl.GetActiveUniformBlock(_program, blockIndex, UniformBlockPName.DataSize, out int blockSize);
+                        gl.GetActiveUniformBlock(program, blockIndex, UniformBlockPName.DataSize, out int blockSize);
                         CheckLastError();
-                        uniformBindings[i] = new OpenGLUniformBinding(_program, blockIndex, (uint)blockSize, (uint)bindingIndex);
+                        uniformBindings[i] = new OpenGLUniformBinding(program, blockIndex, (uint)blockSize, (uint)bindingIndex);
                     }
                 }
                 else if (resource.Kind == ResourceKind.TextureReadOnly
                     || resource.Kind == ResourceKind.TextureReadWrite)
                 {
-                    int location = GetUniformLocation(resource.Name);
+                    int location = gl.GetUniformLocation(program, resourceName);
+                    CheckLastError();
                     textureBindings[i] = new OpenGLTextureBindingSlotInfo()
                     {
                         RelativeIndex = bindingIndex,
@@ -183,132 +174,22 @@ internal unsafe partial class OpenGLPipeline : Pipeline, OpenGLDeferredResource
                     || resource.Kind == ResourceKind.StructuredBufferReadWrite)
                 {
                     uint storageBlockBinding;
-                    if (_gd.BackendType == GraphicsBackend.OpenGL)
+                    if (backend == GraphicsBackend.OpenGL)
                     {
-                        storageBlockBinding = GetProgramResourceIndex(resource.Name, ProgramInterface.ShaderStorageBlock);
+                        storageBlockBinding = gl.GetProgramResourceIndex(program, ProgramInterface.ShaderStorageBlock, resourceName);
+                        CheckLastError();
                     }
                     else
                     {
                         storageBlockBinding = (uint)bindingIndex;
                     }
-
                     storageBufferBindings[i] = new OpenGLShaderStorageBinding(storageBlockBinding, (uint)bindingIndex);
                 }
-                // Sampler elements are looked up at bind-time alongside their paired texture.
             }
 
-            _setInfos[setSlot] = new SetBindingsInfo(uniformBindings, textureBindings, storageBufferBindings);
+            setInfos[setSlot] = new SetBindingsInfo(uniformBindings, textureBindings, storageBufferBindings);
         }
-    }
-
-    uint GetUniformBlockIndex(string resourceName)
-    {
-        uint blockIndex = _gl.GetUniformBlockIndex(_program, resourceName);
-        CheckLastError();
-#if DEBUG && GL_VALIDATE_SHADER_RESOURCE_NAMES
-        if (blockIndex == GL_INVALID_INDEX)
-        {
-            uint uniformBufferIndex = 0;
-            uint bufferNameByteCount = 64;
-            byte* bufferNamePtr = stackalloc byte[(int)bufferNameByteCount];
-            var names = new List<string>();
-            while (true)
-            {
-                uint actualLength;
-                _gl.GetActiveUniformBlockName(_program, uniformBufferIndex, bufferNameByteCount, &actualLength, bufferNamePtr);
-
-                if (_gl.GetError() != 0)
-                {
-                    break;
-                }
-
-                string name = Encoding.UTF8.GetString(bufferNamePtr, (int)actualLength);
-                names.Add(name);
-                uniformBufferIndex++;
-            }
-
-            throw new VeldridException($"Unable to bind uniform buffer \"{resourceName}\" by name. Valid names for this pipeline are: {string.Join(", ", names)}");
-        }
-#endif
-        return blockIndex;
-    }
-
-    int GetUniformLocation(string resourceName)
-    {
-        int location = _gl.GetUniformLocation(_program, resourceName);
-        CheckLastError();
-        return location;
-    }
-
-    uint GetProgramResourceIndex(string resourceName, ProgramInterface resourceType)
-    {
-        uint binding = _gl.GetProgramResourceIndex(_program, resourceType, resourceName);
-        CheckLastError();
-        return binding;
-    }
-
-    private void CreateComputeGLResources()
-    {
-        _program = _gl.CreateProgram();
-        CheckLastError();
-        OpenGLShader glShader = Util.AssertSubtype<ShaderProgram, OpenGLShader>(ComputeShader);
-        glShader.EnsureResourcesCreated();
-        _gl.AttachShader(_program, glShader.Shader);
-        CheckLastError();
-
-        _gl.LinkProgram(_program);
-        CheckLastError();
-
-        _gl.GetProgram(_program, ProgramPropertyARB.LinkStatus, out int linkStatus);
-        CheckLastError();
-        if (linkStatus != 1)
-        {
-            string log = _gl.GetProgramInfoLog(_program);
-            CheckLastError();
-            throw new RenderException($"Error linking GL program: {log}");
-        }
-
-        ProcessResourceSetLayouts(ResourceLayouts);
-    }
-
-    public bool GetUniformBindingForSlot(uint set, uint slot, out OpenGLUniformBinding binding)
-    {
-        Debug.Assert(_setInfos != null, "EnsureResourcesCreated must be called before accessing resource set information.");
-        SetBindingsInfo setInfo = _setInfos[set];
-        return setInfo.GetUniformBindingForSlot(slot, out binding);
-    }
-
-    public bool GetTextureBindingInfo(uint set, uint slot, out OpenGLTextureBindingSlotInfo binding)
-    {
-        Debug.Assert(_setInfos != null, "EnsureResourcesCreated must be called before accessing resource set information.");
-        SetBindingsInfo setInfo = _setInfos[set];
-        return setInfo.GetTextureBindingInfo(slot, out binding);
-    }
-
-    public bool GetStorageBufferBindingForSlot(uint set, uint slot, out OpenGLShaderStorageBinding binding)
-    {
-        Debug.Assert(_setInfos != null, "EnsureResourcesCreated must be called before accessing resource set information.");
-        SetBindingsInfo setInfo = _setInfos[set];
-        return setInfo.GetStorageBufferBindingForSlot(slot, out binding);
-    }
-
-    public override void Dispose()
-    {
-        if (!_disposeRequested)
-        {
-            _disposeRequested = true;
-            _gd.EnqueueDisposal(this);
-        }
-    }
-
-    public void DestroyGLResources()
-    {
-        if (!_disposed)
-        {
-            _disposed = true;
-            _gl.DeleteProgram(_program);
-            CheckLastError();
-        }
+        return setInfos;
     }
 }
 
@@ -346,9 +227,7 @@ internal struct SetBindingsInfo
 
 internal struct OpenGLTextureBindingSlotInfo
 {
-    /// <summary>The texture unit this binding occupies (the layout element's BindingIndex).</summary>
     public int RelativeIndex;
-    /// <summary>The uniform location of the binding in the shader program.</summary>
     public int UniformLocation;
 }
 

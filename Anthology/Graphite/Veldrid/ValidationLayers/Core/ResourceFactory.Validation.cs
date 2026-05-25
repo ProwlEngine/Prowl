@@ -8,19 +8,26 @@ public abstract partial class ResourceFactory
     private void CreateGraphicsPipeline_CheckDescription(ref GraphicsPipelineDescription description)
     {
 #if VALIDATE_USAGE
-        if (!description.RasterizerState.DepthClipEnabled && !Features.DepthClipDisable)
+        if (description.Program == null)
+        {
+            throw new RenderException(
+                $"{nameof(GraphicsPipelineDescription)}.{nameof(GraphicsPipelineDescription.Program)} must be non-null.");
+        }
+        RasterizerStateDescription rasterizerState = description.Program.RasterizerState;
+        BlendStateDescription blendState = description.Program.BlendState;
+        if (!rasterizerState.DepthClipEnabled && !Features.DepthClipDisable)
         {
             throw new RenderException(
                 "RasterizerState.DepthClipEnabled must be true if GraphicsDeviceFeatures.DepthClipDisable is not supported.");
         }
         if (!Features.IndependentBlend)
         {
-            if (description.BlendState.AttachmentStates.Length > 0)
+            if (blendState.AttachmentStates.Length > 0)
             {
-                BlendAttachmentDescription attachmentState = description.BlendState.AttachmentStates[0];
-                for (int i = 1; i < description.BlendState.AttachmentStates.Length; i++)
+                BlendAttachmentDescription attachmentState = blendState.AttachmentStates[0];
+                for (int i = 1; i < blendState.AttachmentStates.Length; i++)
                 {
-                    if (!attachmentState.Equals(description.BlendState.AttachmentStates[i]))
+                    if (!attachmentState.Equals(blendState.AttachmentStates[i]))
                     {
                         throw new RenderException(
                             $"If GraphcsDeviceFeatures.IndependentBlend is false, then all members of BlendState.AttachmentStates must be equal.");
@@ -28,7 +35,19 @@ public abstract partial class ResourceFactory
                 }
             }
         }
-        foreach (VertexLayoutDescription layoutDesc in description.ShaderSet.VertexLayouts)
+        ResourceLayoutDescription[] programResourceLayouts = description.Program.ResourceLayoutsArray;
+        for (int i = 0; i < programResourceLayouts.Length; i++)
+        {
+            for (int j = i + 1; j < programResourceLayouts.Length; j++)
+            {
+                if (programResourceLayouts[i].Set == programResourceLayouts[j].Set)
+                {
+                    throw new RenderException(
+                        $"Two ResourceLayouts on the program share Set index {programResourceLayouts[i].Set}.");
+                }
+            }
+        }
+        foreach (VertexLayoutDescription layoutDesc in description.Program.VertexLayouts)
         {
             bool hasExplicitLayout = false;
             uint minOffset = 0;
@@ -194,22 +213,63 @@ public abstract partial class ResourceFactory
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private void CreateShader_CheckDescription(ref ShaderDescription description)
+    private void CreateShaderProgram_CheckDescription(ref ShaderDescription description)
     {
 #if VALIDATE_USAGE
-        if (!Features.ComputeShader && description.Stage == ShaderStages.Compute)
+        ShaderStageDescription[] stages = description.Stages;
+        if (stages == null || stages.Length == 0)
+        {
+            throw new RenderException($"{nameof(ShaderDescription)}.{nameof(ShaderDescription.Stages)} must contain at least one stage.");
+        }
+
+        bool hasVertex = false;
+        for (int i = 0; i < stages.Length; i++)
+        {
+            ShaderStages stage = stages[i].Stage;
+            if (stage == ShaderStages.Vertex) hasVertex = true;
+            for (int j = i + 1; j < stages.Length; j++)
+            {
+                if (stages[j].Stage == stage)
+                {
+                    throw new RenderException(
+                        $"{nameof(ShaderDescription)}.{nameof(ShaderDescription.Stages)} contains duplicate stage {stage}.");
+                }
+            }
+            if (!Features.ComputeShader && stage == ShaderStages.Compute)
+            {
+                throw new RenderException("GraphicsDevice does not support Compute Shaders.");
+            }
+            if (!Features.GeometryShader && stage == ShaderStages.Geometry)
+            {
+                throw new RenderException("GraphicsDevice does not support Geometry Shaders.");
+            }
+            if (!Features.TessellationShaders
+                && (stage == ShaderStages.TessellationControl || stage == ShaderStages.TessellationEvaluation))
+            {
+                throw new RenderException("GraphicsDevice does not support Tessellation Shaders.");
+            }
+        }
+
+        if (!hasVertex)
+        {
+            throw new RenderException(
+                $"{nameof(ShaderDescription)} must include a vertex stage.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private void CreateComputeProgram_CheckDescription(ref ComputeDescription description)
+    {
+#if VALIDATE_USAGE
+        if (!Features.ComputeShader)
         {
             throw new RenderException("GraphicsDevice does not support Compute Shaders.");
         }
-        if (!Features.GeometryShader && description.Stage == ShaderStages.Geometry)
+        if (description.Stage.Stage != ShaderStages.Compute)
         {
-            throw new RenderException("GraphicsDevice does not support Compute Shaders.");
-        }
-        if (!Features.TessellationShaders
-            && (description.Stage == ShaderStages.TessellationControl
-                || description.Stage == ShaderStages.TessellationEvaluation))
-        {
-            throw new RenderException("GraphicsDevice does not support Tessellation Shaders.");
+            throw new RenderException(
+                $"{nameof(ComputeDescription)}.{nameof(ComputeDescription.Stage)} must have Stage == ShaderStages.Compute.");
         }
 #endif
     }

@@ -1,89 +1,108 @@
-﻿using System;
+using System;
 
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// Describes a <see cref="ShaderProgram"/>, for creation using a <see cref="ResourceFactory"/>.
+/// Describes a monolithic <see cref="ShaderProgram"/>, for creation using a <see cref="ResourceFactory"/>.
+/// A program bundles every shader stage of a single graphics program plus the pipeline-level state owned by the shader
+/// (blend / depth / rasterizer / vertex layouts / resource layouts).
 /// </summary>
 public struct ShaderDescription : IEquatable<ShaderDescription>
 {
     /// <summary>
-    /// The shader stage this instance describes.
+    /// The per-stage descriptions that make up this program. Each entry must have a unique <see cref="ShaderStages"/> value.
     /// </summary>
-    public ShaderStages Stage;
+    public ShaderStageDescription[] Stages;
 
     /// <summary>
-    /// An array containing the raw shader bytes.
-    /// For Direct3D11 shaders, this array must contain HLSL bytecode or HLSL text.
-    /// For Vulkan shaders, this array must contain SPIR-V bytecode.
-    /// For OpenGL and OpenGL ES shaders, this array must contain the ASCII-encoded text of the shader code.
+    /// A description of the blend state, which controls how color values are blended into each color target.
     /// </summary>
-    public byte[] ShaderBytes;
+    public BlendStateDescription BlendState;
 
     /// <summary>
-    /// The name of the entry point function in the shader module to be used in this stage.
+    /// A description of the depth stencil state, which controls depth tests, writing, and comparisons.
     /// </summary>
-    public string EntryPoint;
+    public DepthStencilStateDescription DepthStencilState;
 
     /// <summary>
-    /// Indicates whether the shader should be debuggable. This flag only has an effect if <see cref="ShaderBytes"/> contains
-    /// shader code that will be compiled.
+    /// A description of the rasterizer state, which controls culling, clipping, scissor, and polygon-fill behavior.
     /// </summary>
-    public bool Debug;
+    public RasterizerStateDescription RasterizerState;
 
     /// <summary>
-    /// Constructs a new ShaderDescription.
+    /// The vertex input layouts understood by this program. Each element describes the layout of a single vertex
+    /// <see cref="DeviceBuffer"/> to be bound when drawing.
     /// </summary>
-    /// <param name="stage">The shader stage to create.</param>
-    /// <param name="shaderBytes">An array containing the raw shader bytes.</param>
-    /// <param name="entryPoint">The name of the entry point function in the shader module to be used in this stage.</param>
-    public ShaderDescription(ShaderStages stage, byte[] shaderBytes, string entryPoint)
+    public VertexLayoutDescription[] VertexLayouts;
+
+    /// <summary>
+    /// The resource layouts declared by this program.
+    /// </summary>
+    public ResourceLayoutDescription[] ResourceLayouts;
+
+    /// <summary>
+    /// Constructs a new <see cref="ShaderDescription"/> with default state and the given stages.
+    /// </summary>
+    /// <param name="stages">The per-stage descriptions.</param>
+    public ShaderDescription(params ShaderStageDescription[] stages)
     {
-        Stage = stage;
-        ShaderBytes = shaderBytes;
-        EntryPoint = entryPoint;
-        Debug = false;
+        Stages = stages;
+        BlendState = default;
+        DepthStencilState = default;
+        RasterizerState = default;
+        VertexLayouts = Array.Empty<VertexLayoutDescription>();
+        ResourceLayouts = Array.Empty<ResourceLayoutDescription>();
     }
 
     /// <summary>
-    /// Constructs a new ShaderDescription.
+    /// Constructs a new <see cref="ShaderDescription"/>.
     /// </summary>
-    /// <param name="stage">The shader stage to create.</param>
-    /// <param name="shaderBytes">An array containing the raw shader bytes.</param>
-    /// <param name="entryPoint">The name of the entry point function in the shader module to be used in this stage.</param>
-    /// <param name="debug">Indicates whether the shader should be debuggable. This flag only has an effect if
-    /// <paramref name="shaderBytes"/> contains shader code that will be compiled.</param>
-    public ShaderDescription(ShaderStages stage, byte[] shaderBytes, string entryPoint, bool debug)
+    /// <param name="stages">The per-stage descriptions.</param>
+    /// <param name="blendState">The blend state owned by the program.</param>
+    /// <param name="depthStencilState">The depth/stencil state owned by the program.</param>
+    /// <param name="rasterizerState">The rasterizer state owned by the program.</param>
+    /// <param name="vertexLayouts">The vertex input layouts.</param>
+    /// <param name="resourceLayouts">The resource layouts declared by the program.</param>
+    public ShaderDescription(
+        ShaderStageDescription[] stages,
+        BlendStateDescription blendState,
+        DepthStencilStateDescription depthStencilState,
+        RasterizerStateDescription rasterizerState,
+        VertexLayoutDescription[] vertexLayouts,
+        ResourceLayoutDescription[] resourceLayouts)
     {
-        Stage = stage;
-        ShaderBytes = shaderBytes;
-        EntryPoint = entryPoint;
-        Debug = debug;
+        Stages = stages;
+        BlendState = blendState;
+        DepthStencilState = depthStencilState;
+        RasterizerState = rasterizerState;
+        VertexLayouts = vertexLayouts;
+        ResourceLayouts = resourceLayouts;
     }
 
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements and if array instances are equal; false otherswise.</returns>
     public bool Equals(ShaderDescription other)
     {
-        return Stage == other.Stage
-            && ShaderBytes == other.ShaderBytes
-            && EntryPoint.Equals(other.EntryPoint)
-            && Debug.Equals(other.Debug);
+        return Util.ArrayEqualsEquatable(Stages, other.Stages)
+            && BlendState.Equals(other.BlendState)
+            && DepthStencilState.Equals(other.DepthStencilState)
+            && RasterizerState.Equals(other.RasterizerState)
+            && Util.ArrayEqualsEquatable(VertexLayouts, other.VertexLayouts)
+            && Util.ArrayEqualsEquatable(ResourceLayouts, other.ResourceLayouts);
     }
 
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
     public override int GetHashCode()
     {
         return HashCode.Combine(
-            (int)Stage,
-            ShaderBytes.GetHashCode(),
-            EntryPoint.GetHashCode(),
-            Debug.GetHashCode());
+            Stages.ArrayHash(),
+            BlendState,
+            DepthStencilState,
+            RasterizerState,
+            VertexLayouts.ArrayHash(),
+            ResourceLayouts.ArrayHash());
     }
 }

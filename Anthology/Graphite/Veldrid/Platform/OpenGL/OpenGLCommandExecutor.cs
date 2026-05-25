@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 using Silk.NET.OpenGL;
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
@@ -22,6 +23,7 @@ internal unsafe class OpenGLCommandExecutor
     private Framebuffer _fb;
     private bool _isSwapchainFB;
     private OpenGLPipeline _graphicsPipeline;
+    private OpenGLShaderProgram _currentShaderProgram;
     private BoundResourceSetInfo[] _graphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _newGraphicsResourceSets = Array.Empty<bool>();
     private OpenGLBuffer[] _vertexBuffers = Array.Empty<OpenGLBuffer>();
@@ -34,6 +36,7 @@ internal unsafe class OpenGLCommandExecutor
     private PrimitiveType _primitiveType;
 
     private OpenGLPipeline _computePipeline;
+    private OpenGLComputeProgram _currentComputeProgram;
     private BoundResourceSetInfo[] _computeResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _newComputeResourceSets = Array.Empty<bool>();
 
@@ -68,7 +71,7 @@ internal unsafe class OpenGLCommandExecutor
         _gl.ClearColor(color.R, color.G, color.B, color.A);
         CheckLastError();
 
-        if (_graphicsPipeline != null && _graphicsPipeline.RasterizerState.ScissorTestEnabled)
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
         {
             _gl.Disable(EnableCap.ScissorTest);
             CheckLastError();
@@ -77,7 +80,7 @@ internal unsafe class OpenGLCommandExecutor
         _gl.Clear(ClearBufferMask.ColorBufferBit);
         CheckLastError();
 
-        if (_graphicsPipeline != null && _graphicsPipeline.RasterizerState.ScissorTestEnabled)
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
         {
             _gl.Enable(EnableCap.ScissorTest);
         }
@@ -106,7 +109,7 @@ internal unsafe class OpenGLCommandExecutor
         _gl.ClearStencil(stencil);
         CheckLastError();
 
-        if (_graphicsPipeline != null && _graphicsPipeline.RasterizerState.ScissorTestEnabled)
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
         {
             _gl.Disable(EnableCap.ScissorTest);
             CheckLastError();
@@ -116,7 +119,7 @@ internal unsafe class OpenGLCommandExecutor
         _gl.Clear(ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
         CheckLastError();
 
-        if (_graphicsPipeline != null && _graphicsPipeline.RasterizerState.ScissorTestEnabled)
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
         {
             _gl.Enable(EnableCap.ScissorTest);
         }
@@ -255,7 +258,11 @@ internal unsafe class OpenGLCommandExecutor
     {
         if (!_graphicsPipelineActive)
         {
-            ActivateGraphicsPipeline();
+            PrimitiveType topology = _graphicsPipeline != null
+                ? OpenGLFormats.VdToGLPrimitiveType(_graphicsPipeline.PrimitiveTopology)
+                // STAGE 1 TEMP: topology default removed in Stage 4
+                : PrimitiveType.Triangles;
+            ActivateGraphicsPipeline(topology);
         }
 
         FlushResourceSets(graphics: true);
@@ -269,8 +276,8 @@ internal unsafe class OpenGLCommandExecutor
     private void FlushResourceSets(bool graphics)
     {
         uint sets = graphics
-            ? (uint)_graphicsPipeline.ResourceLayouts.Length
-            : (uint)_computePipeline.ResourceLayouts.Length;
+            ? (uint)_currentShaderProgram.ResourceLayouts.Count
+            : (uint)_currentComputeProgram.ResourceLayouts.Count;
         for (uint slot = 0; slot < sets; slot++)
         {
             BoundResourceSetInfo brsi = graphics ? _graphicsResourceSets[slot] : _computeResourceSets[slot];
@@ -291,8 +298,8 @@ internal unsafe class OpenGLCommandExecutor
         // is the layout's index in the pipeline's VertexLayouts array, which is what
         // SetVertexBuffer takes.
         uint highestAttribBound = 0;
-        VertexLayoutDescription[] layouts = _graphicsPipeline.VertexLayouts;
-        for (int i = 0; i < layouts.Length; i++)
+        IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
+        for (int i = 0; i < layouts.Count; i++)
         {
             VertexLayoutDescription input = layouts[i];
             OpenGLBuffer vb = _vertexBuffers[i];
@@ -321,7 +328,7 @@ internal unsafe class OpenGLCommandExecutor
                         actualSlot,
                         FormatHelpers.GetElementCount(element.Format),
                         (VertexAttribIType)type,
-                        (uint)_graphicsPipeline.VertexStrides[i],
+                        (uint)_currentShaderProgram.VertexStrides[i],
                         (void*)actualOffset);
                     CheckLastError();
                 }
@@ -332,7 +339,7 @@ internal unsafe class OpenGLCommandExecutor
                         FormatHelpers.GetElementCount(element.Format),
                         type,
                         normalized,
-                        (uint)_graphicsPipeline.VertexStrides[i],
+                        (uint)_currentShaderProgram.VertexStrides[i],
                         (void*)actualOffset);
                     CheckLastError();
                 }
@@ -472,34 +479,56 @@ internal unsafe class OpenGLCommandExecutor
         if (!pipeline.IsComputePipeline && _graphicsPipeline != pipeline)
         {
             _graphicsPipeline = Util.AssertSubtype<Pipeline, OpenGLPipeline>(pipeline);
-            ActivateGraphicsPipeline();
+            _currentShaderProgram = _graphicsPipeline.ShaderProgram;
+            ActivateGraphicsPipeline(OpenGLFormats.VdToGLPrimitiveType(_graphicsPipeline.PrimitiveTopology));
             _vertexLayoutFlushed = false;
         }
         else if (pipeline.IsComputePipeline && _computePipeline != pipeline)
         {
             _computePipeline = Util.AssertSubtype<Pipeline, OpenGLPipeline>(pipeline);
+            _currentComputeProgram = _computePipeline.ComputeProgram;
             ActivateComputePipeline();
             _vertexLayoutFlushed = false;
         }
     }
 
-    private void ActivateGraphicsPipeline()
+    public void SetShader(ShaderProgram program)
+    {
+        OpenGLShaderProgram sp = Util.AssertSubtype<ShaderProgram, OpenGLShaderProgram>(program);
+        if (_currentShaderProgram == sp && _graphicsPipeline == null) return;
+        _currentShaderProgram = sp;
+        _graphicsPipeline = null;
+        // STAGE 1 TEMP: topology default removed in Stage 4
+        ActivateGraphicsPipeline(PrimitiveType.Triangles);
+        _vertexLayoutFlushed = false;
+    }
+
+    public void SetComputeShader(ComputeProgram program)
+    {
+        OpenGLComputeProgram cp = Util.AssertSubtype<ComputeProgram, OpenGLComputeProgram>(program);
+        if (_currentComputeProgram == cp && _computePipeline == null) return;
+        _currentComputeProgram = cp;
+        _computePipeline = null;
+        ActivateComputePipeline();
+    }
+
+    private void ActivateGraphicsPipeline(PrimitiveType primitiveTopology)
     {
         _graphicsPipelineActive = true;
-        _graphicsPipeline.EnsureResourcesCreated();
+        _currentShaderProgram.EnsureResourcesCreated();
 
-        Util.EnsureArrayMinimumSize(ref _graphicsResourceSets, (uint)_graphicsPipeline.ResourceLayouts.Length);
-        Util.EnsureArrayMinimumSize(ref _newGraphicsResourceSets, (uint)_graphicsPipeline.ResourceLayouts.Length);
+        Util.EnsureArrayMinimumSize(ref _graphicsResourceSets, (uint)_currentShaderProgram.ResourceLayouts.Count);
+        Util.EnsureArrayMinimumSize(ref _newGraphicsResourceSets, (uint)_currentShaderProgram.ResourceLayouts.Count);
 
         // Force ResourceSets to be re-bound.
-        for (int i = 0; i < _graphicsPipeline.ResourceLayouts.Length; i++)
+        for (int i = 0; i < _currentShaderProgram.ResourceLayouts.Count; i++)
         {
             _newGraphicsResourceSets[i] = true;
         }
 
         // Blend State
 
-        BlendStateDescription blendState = _graphicsPipeline.BlendState;
+        BlendStateDescription blendState = _currentShaderProgram.BlendState;
         _gl.BlendColor(blendState.BlendFactor.R, blendState.BlendFactor.G, blendState.BlendFactor.B, blendState.BlendFactor.A);
         CheckLastError();
 
@@ -593,7 +622,7 @@ internal unsafe class OpenGLCommandExecutor
 
         // Depth Stencil State
 
-        DepthStencilStateDescription dss = _graphicsPipeline.DepthStencilState;
+        DepthStencilStateDescription dss = _currentShaderProgram.DepthStencilState;
         if (!dss.DepthTestEnabled)
         {
             _gl.Disable(EnableCap.DepthTest);
@@ -655,7 +684,7 @@ internal unsafe class OpenGLCommandExecutor
 
         // Rasterizer State
 
-        RasterizerStateDescription rs = _graphicsPipeline.RasterizerState;
+        RasterizerStateDescription rs = _currentShaderProgram.RasterizerState;
         if (rs.CullMode == FaceCullMode.None)
         {
             _gl.Disable(EnableCap.CullFace);
@@ -705,13 +734,13 @@ internal unsafe class OpenGLCommandExecutor
         CheckLastError();
 
         // Primitive Topology
-        _primitiveType = OpenGLFormats.VdToGLPrimitiveType(_graphicsPipeline.PrimitiveTopology);
+        _primitiveType = primitiveTopology;
 
         // Shader Set
-        _gl.UseProgram(_graphicsPipeline.Program);
+        _gl.UseProgram(_currentShaderProgram.GLProgram);
         CheckLastError();
 
-        int vertexStridesCount = _graphicsPipeline.VertexStrides.Length;
+        int vertexStridesCount = _currentShaderProgram.VertexStrides.Length;
         Util.EnsureArrayMinimumSize(ref _vertexBuffers, (uint)vertexStridesCount);
         Util.EnsureArrayMinimumSize(ref _vbOffsets, (uint)vertexStridesCount);
 
@@ -719,9 +748,9 @@ internal unsafe class OpenGLCommandExecutor
         // Attributes are addressed by Location..Location+Elements.Length-1 per layout, so
         // the array must reach the max(Location + Elements.Length).
         uint maxAttribIndex = 0;
-        for (int i = 0; i < _graphicsPipeline.VertexLayouts.Length; i++)
+        for (int i = 0; i < _currentShaderProgram.VertexLayouts.Count; i++)
         {
-            VertexLayoutDescription layout = _graphicsPipeline.VertexLayouts[i];
+            VertexLayoutDescription layout = _currentShaderProgram.VertexLayouts[i];
             uint end = layout.Location + (uint)layout.Elements.Length;
             if (end > maxAttribIndex)
                 maxAttribIndex = end;
@@ -820,18 +849,18 @@ internal unsafe class OpenGLCommandExecutor
     private void ActivateComputePipeline()
     {
         _graphicsPipelineActive = false;
-        _computePipeline.EnsureResourcesCreated();
-        Util.EnsureArrayMinimumSize(ref _computeResourceSets, (uint)_computePipeline.ResourceLayouts.Length);
-        Util.EnsureArrayMinimumSize(ref _newComputeResourceSets, (uint)_computePipeline.ResourceLayouts.Length);
+        _currentComputeProgram.EnsureResourcesCreated();
+        Util.EnsureArrayMinimumSize(ref _computeResourceSets, (uint)_currentComputeProgram.ResourceLayouts.Count);
+        Util.EnsureArrayMinimumSize(ref _newComputeResourceSets, (uint)_currentComputeProgram.ResourceLayouts.Count);
 
         // Force ResourceSets to be re-bound.
-        for (int i = 0; i < _computePipeline.ResourceLayouts.Length; i++)
+        for (int i = 0; i < _currentComputeProgram.ResourceLayouts.Count; i++)
         {
             _newComputeResourceSets[i] = true;
         }
 
         // Shader Set
-        _gl.UseProgram(_computePipeline.Program);
+        _gl.UseProgram(_currentComputeProgram.GLProgram);
         CheckLastError();
     }
 
@@ -855,6 +884,22 @@ internal unsafe class OpenGLCommandExecutor
         }
     }
 
+    private uint ActiveProgramHandle(bool graphics) => graphics
+        ? _currentShaderProgram.GLProgram
+        : _currentComputeProgram.GLProgram;
+
+    private bool GetUniformBindingForSlot(bool graphics, uint set, uint slot, out OpenGLUniformBinding b) => graphics
+        ? _currentShaderProgram.GetUniformBindingForSlot(set, slot, out b)
+        : _currentComputeProgram.GetUniformBindingForSlot(set, slot, out b);
+
+    private bool GetTextureBindingInfo(bool graphics, uint set, uint slot, out OpenGLTextureBindingSlotInfo b) => graphics
+        ? _currentShaderProgram.GetTextureBindingInfo(set, slot, out b)
+        : _currentComputeProgram.GetTextureBindingInfo(set, slot, out b);
+
+    private bool GetStorageBufferBindingForSlot(bool graphics, uint set, uint slot, out OpenGLShaderStorageBinding b) => graphics
+        ? _currentShaderProgram.GetStorageBufferBindingForSlot(set, slot, out b)
+        : _currentComputeProgram.GetStorageBufferBindingForSlot(set, slot, out b);
+
     private void ActivateResourceSet(
         uint slot,
         bool graphics,
@@ -863,7 +908,6 @@ internal unsafe class OpenGLCommandExecutor
         bool isNew)
     {
         OpenGLResourceSet glResourceSet = Util.AssertSubtype<ResourceSet, OpenGLResourceSet>(brsi.Set);
-        OpenGLPipeline pipeline = graphics ? _graphicsPipeline : _computePipeline;
 
         uint dynamicOffsetIndex = 0;
         for (uint element = 0; element < glResourceSet.Resources.Length; element++)
@@ -889,15 +933,15 @@ internal unsafe class OpenGLCommandExecutor
                         OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
 
                         glUB.EnsureResourcesCreated();
-                        if (pipeline.GetUniformBindingForSlot(slot, element, out OpenGLUniformBinding uniformBindingInfo))
+                        if (GetUniformBindingForSlot(graphics, slot, element, out OpenGLUniformBinding uniformBindingInfo))
                         {
                             if (range.SizeInBytes < uniformBindingInfo.BlockSize)
                             {
-                                string name = glResourceSet.Layout.Elements[element].Name;
+                                string name = ResourceID.ToString(glResourceSet.Layout.Elements[element].Name) ?? "<unknown>";
                                 throw new RenderException(
                                     $"Not enough data in uniform buffer \"{name}\" (slot {slot}, element {element}). Shader expects at least {uniformBindingInfo.BlockSize} bytes, but buffer only contains {range.SizeInBytes} bytes");
                             }
-                            _gl.UniformBlockBinding(pipeline.Program, uniformBindingInfo.BlockLocation, uniformBindingInfo.BindingPoint);
+                            _gl.UniformBlockBinding(ActiveProgramHandle(graphics), uniformBindingInfo.BlockLocation, uniformBindingInfo.BindingPoint);
                             CheckLastError();
 
                             _gl.BindBufferRange(
@@ -919,12 +963,12 @@ internal unsafe class OpenGLCommandExecutor
                         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
 
                         glBuffer.EnsureResourcesCreated();
-                        if (pipeline.GetStorageBufferBindingForSlot(slot, element, out OpenGLShaderStorageBinding shaderStorageBinding))
+                        if (GetStorageBufferBindingForSlot(graphics, slot, element, out OpenGLShaderStorageBinding shaderStorageBinding))
                         {
                             if (_backend == GraphicsBackend.OpenGL)
                             {
                                 _gl.ShaderStorageBlockBinding(
-                                    pipeline.Program,
+                                    ActiveProgramHandle(graphics),
                                     shaderStorageBinding.StorageBlockBinding,
                                     shaderStorageBinding.BindingPoint);
                                 CheckLastError();
@@ -944,7 +988,7 @@ internal unsafe class OpenGLCommandExecutor
                     TextureView texView = Util.GetTextureView(_gd, resource);
                     OpenGLTextureView glTexView = Util.AssertSubtype<TextureView, OpenGLTextureView>(texView);
                     glTexView.EnsureResourcesCreated();
-                    if (pipeline.GetTextureBindingInfo(slot, element, out OpenGLTextureBindingSlotInfo textureBindingInfo))
+                    if (GetTextureBindingInfo(graphics, slot, element, out OpenGLTextureBindingSlotInfo textureBindingInfo))
                     {
                         uint textureUnit = (uint)textureBindingInfo.RelativeIndex;
                         _textureSamplerManager.SetTexture(textureUnit, glTexView);
@@ -968,7 +1012,7 @@ internal unsafe class OpenGLCommandExecutor
                     TextureView texViewRW = Util.GetTextureView(_gd, resource);
                     OpenGLTextureView glTexViewRW = Util.AssertSubtype<TextureView, OpenGLTextureView>(texViewRW);
                     glTexViewRW.EnsureResourcesCreated();
-                    if (pipeline.GetTextureBindingInfo(slot, element, out OpenGLTextureBindingSlotInfo imageBindingInfo))
+                    if (GetTextureBindingInfo(graphics, slot, element, out OpenGLTextureBindingSlotInfo imageBindingInfo))
                     {
                         bool layered = texViewRW.Target.Usage.HasFlag(TextureUsage.Cubemap) || texViewRW.ArrayLayers > 1;
 
