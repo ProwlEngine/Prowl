@@ -8,9 +8,9 @@ namespace Prowl.Veldrid;
 public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElementDescription>
 {
     /// <summary>
-    /// The name of the element.
+    /// The interned name of the element. Implicit conversion from <see cref="string"/> is supported.
     /// </summary>
-    public string Name;
+    public ResourceID Name;
 
     /// <summary>
     /// The kind of resource.
@@ -64,7 +64,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Name.GetHashCode(), (int)Kind, (int)Stages, BindingIndex, (int)Options);
+        return HashCode.Combine(Name, (int)Kind, (int)Stages, BindingIndex, (int)Options);
     }
 }
 

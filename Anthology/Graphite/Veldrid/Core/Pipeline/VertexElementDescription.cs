@@ -8,9 +8,10 @@ namespace Prowl.Veldrid;
 public struct VertexElementDescription : IEquatable<VertexElementDescription>
 {
     /// <summary>
-    /// The name of the element. Used as the HLSL Semantic in the DX backend.
+    /// The interned name of the element. Used as the HLSL Semantic in the DX backend.
+    /// Implicit conversion from <see cref="string"/> is supported.
     /// </summary>
-    public string Name;
+    public VertexAttributeID Name;
 
     /// <summary>
     /// The format of the element.
@@ -47,7 +48,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     /// </summary>
     public bool Equals(VertexElementDescription other)
     {
-        return Name.Equals(other.Name)
+        return Name == other.Name
             && Format == other.Format
             && Offset == other.Offset;
     }
@@ -58,7 +59,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     public override int GetHashCode()
     {
         return HashCode.Combine(
-            Name.GetHashCode(),
+            Name,
             (int)Format,
             (int)Offset);
     }
