@@ -4,6 +4,7 @@
         <IsPackable>true</IsPackable>
         <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with backends for Vulkan, Direct3D 11, and OpenGL. Veldrid can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
         <PackageTags>3D Graphics Direct3D DirectX Vulkan OpenGL Core Game</PackageTags>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <PropertyGroup>
