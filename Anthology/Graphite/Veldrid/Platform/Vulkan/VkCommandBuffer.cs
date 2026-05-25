@@ -34,6 +34,9 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private bool _currentFramebufferEverActive;
     private RenderPass _activeRenderPass;
     private VkPipeline _currentGraphicsPipeline;
+    private VkPipelineCacheEntry _currentResolvedPipeline;
+    private bool _hasResolvedPipeline;
+    private PrimitiveTopology _currentTopology = PrimitiveTopology.TriangleList; // STAGE 1 TEMP: topology default removed in Stage 4
     private BoundResourceSetInfo[] _currentGraphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _graphicsResourceSetsChanged;
 
@@ -176,6 +179,9 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _currentFramebuffer = null;
         _currentGraphicsPipeline = null;
         _currentShaderProgram = null;
+        _currentResolvedPipeline = default;
+        _hasResolvedPipeline = false;
+        _currentTopology = PrimitiveTopology.TriangleList; // STAGE 1 TEMP: topology default removed in Stage 4
         ClearSets(_currentGraphicsResourceSets);
         Util.ClearArray(_scissorRects);
 
@@ -259,21 +265,18 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private protected override void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
-        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         _gd.Vk.CmdDraw(_cb, vertexCount, instanceCount, vertexStart, instanceStart);
     }
 
     private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         _gd.Vk.CmdDrawIndexed(_cb, indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
     private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
-        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
@@ -282,7 +285,6 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
-        EnsureVulkanDrawHasLegacyPipeline();
         PreDrawCommand();
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
@@ -294,30 +296,69 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         TransitionImages(_preDrawSampledImages, ImageLayout.ShaderReadOnlyOptimal);
         _preDrawSampledImages.Clear();
 
+        ResolveAndBindGraphicsPipeline();
         EnsureRenderPassActive();
+
+        uint resourceSetCount;
+        Silk.NET.Vulkan.PipelineLayout pipelineLayout;
+        int dynamicOffsetsCount;
+
+        if (_currentGraphicsPipeline != null)
+        {
+            resourceSetCount = _currentGraphicsPipeline.ResourceSetCount;
+            pipelineLayout = _currentGraphicsPipeline.PipelineLayout;
+            dynamicOffsetsCount = _currentGraphicsPipeline.DynamicOffsetsCount;
+        }
+        else
+        {
+            resourceSetCount = _currentResolvedPipeline.ResourceSetCount;
+            pipelineLayout = _currentResolvedPipeline.PipelineLayout;
+            dynamicOffsetsCount = _currentResolvedPipeline.DynamicOffsetsCount;
+        }
 
         FlushNewResourceSets(
             _currentGraphicsResourceSets,
             _graphicsResourceSetsChanged,
-            _currentGraphicsPipeline.ResourceSetCount,
+            resourceSetCount,
+            dynamicOffsetsCount,
             PipelineBindPoint.Graphics,
-            _currentGraphicsPipeline.PipelineLayout);
+            pipelineLayout);
+    }
+
+    private void ResolveAndBindGraphicsPipeline()
+    {
+        if (_currentGraphicsPipeline != null) return;
+        if (_hasResolvedPipeline) return;
+
+        if (_currentShaderProgram == null || _currentFramebuffer == null)
+        {
+            throw new RenderException("Cannot draw: no graphics ShaderProgram or Framebuffer bound.");
+        }
+
+        VkPipelineCacheKey key = new VkPipelineCacheKey(
+            _currentShaderProgram,
+            _framebufferOutputs,
+            _currentTopology); // STAGE 1 TEMP: topology default removed in Stage 4
+
+        _currentResolvedPipeline = _gd.PipelineCache.GetOrAdd(in key);
+        _hasResolvedPipeline = true;
+
+        _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Graphics, _currentResolvedPipeline.Pipeline);
     }
 
     private void FlushNewResourceSets(
         BoundResourceSetInfo[] resourceSets,
         bool[] resourceSetsChanged,
         uint resourceSetCount,
+        int dynamicOffsetsCount,
         PipelineBindPoint bindPoint,
         Silk.NET.Vulkan.PipelineLayout pipelineLayout)
     {
-        VkPipeline pipeline = bindPoint == PipelineBindPoint.Graphics ? _currentGraphicsPipeline : _currentComputePipeline;
-
         DescriptorSet* descriptorSets = stackalloc DescriptorSet[(int)resourceSetCount];
         uint* dynamicOffsets = null;
-        if (pipeline.DynamicOffsetsCount > 0)
+        if (dynamicOffsetsCount > 0)
         {
-            uint* alloc = stackalloc uint[pipeline.DynamicOffsetsCount];
+            uint* alloc = stackalloc uint[dynamicOffsetsCount];
             dynamicOffsets = alloc;
         }
         uint currentBatchCount = 0;
@@ -433,6 +474,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             _currentComputeResourceSets,
             _computeResourceSetsChanged,
             _currentComputePipeline.ResourceSetCount,
+            _currentComputePipeline.DynamicOffsetsCount,
             PipelineBindPoint.Compute,
             _currentComputePipeline.PipelineLayout);
     }
@@ -531,6 +573,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _currentFramebuffer = vkFB;
         _currentFramebufferEverActive = false;
         _newFramebuffer = true;
+        _hasResolvedPipeline = false;
         Util.EnsureArrayMinimumSize(ref _scissorRects, Math.Max(1, (uint)vkFB.ColorTargets.Count));
         uint clearValueCount = (uint)vkFB.ColorTargets.Count;
         Util.EnsureArrayMinimumSize(ref _clearValues, clearValueCount + 1); // Leave an extra space for the depth value (tracked separately).
@@ -691,6 +734,8 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             Util.EnsureArrayMinimumSize(ref _graphicsResourceSetsChanged, vkPipeline.ResourceSetCount);
             _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Graphics, vkPipeline.DevicePipeline);
             _currentGraphicsPipeline = vkPipeline;
+            _currentShaderProgram = null;
+            _hasResolvedPipeline = false;
         }
         else if (pipeline.IsComputePipeline && _currentComputePipeline != pipeline)
         {
@@ -710,13 +755,14 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private protected override void SetShaderCore(ShaderProgram program)
     {
         VkShaderProgram sp = Util.AssertSubtype<ShaderProgram, VkShaderProgram>(program);
+        if (_currentShaderProgram == sp) return;
+
         _currentShaderProgram = sp;
         _currentGraphicsPipeline = null;
+        _hasResolvedPipeline = false;
         Util.EnsureArrayMinimumSize(ref _currentGraphicsResourceSets, sp.ResourceSetCount);
         ClearSets(_currentGraphicsResourceSets);
         Util.EnsureArrayMinimumSize(ref _graphicsResourceSetsChanged, sp.ResourceSetCount);
-        // No pipeline bind here: Vulkan graphics via SetShader is gated until Stage 2 builds
-        // the implicit pipeline cache. EnsureVulkanDrawHasLegacyPipeline throws at draw time.
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)
@@ -729,17 +775,6 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         Util.EnsureArrayMinimumSize(ref _computeResourceSetsChanged, cp.ResourceSetCount);
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, cp.DevicePipeline);
         _currentStagingInfo.Resources.Add(cp.RefCount);
-    }
-
-    private void EnsureVulkanDrawHasLegacyPipeline()
-    {
-        if (_currentGraphicsPipeline == null && _currentShaderProgram != null)
-        {
-            throw new RenderException(
-                "Vulkan: drawing via SetShader requires the Stage 2 implicit pipeline cache, " +
-                "which has not landed yet. Bind a legacy Pipeline via SetPipeline for now, " +
-                "or use OpenGL/D3D11 for the SetShader path.");
-        }
     }
 
     private void ClearSets(BoundResourceSetInfo[] boundSets)

@@ -121,6 +121,18 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     public string DriverInfo => _driverInfo;
     public VkDeviceMemoryManager MemoryManager => _memoryManager;
     public VkDescriptorPoolManager DescriptorPoolManager => _descriptorPoolManager;
+
+    /// <summary>
+    /// Per-device managed cache of resolved graphics pipelines, keyed on
+    /// <c>(VkShaderProgram, OutputDescription, PrimitiveTopology)</c>.
+    /// </summary>
+    internal VkPipelineCache PipelineCache => _pipelineCache;
+
+    /// <summary>
+    /// Driver-side <c>VkPipelineCache</c> handle passed to every
+    /// <c>vkCreateGraphicsPipelines</c> call to amortize driver pipeline compile cost.
+    /// </summary>
+    internal Silk.NET.Vulkan.PipelineCache DriverPipelineCache => _driverPipelineCache;
     public vkCmdDebugMarkerBeginEXT_t MarkerBegin => _markerBegin;
     public vkCmdDebugMarkerEndEXT_t MarkerEnd => _markerEnd;
     public vkCmdDebugMarkerInsertEXT_t MarkerInsert => _markerInsert;
@@ -133,6 +145,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private readonly ConcurrentQueue<VkFenceHandle> _availableSubmissionFences = new ConcurrentQueue<VkFenceHandle>();
     private readonly List<FenceSubmissionInfo> _submittedFences = new List<FenceSubmissionInfo>();
     private readonly VkSwapchain _mainSwapchain;
+
+    private VkPipelineCache _pipelineCache;
+    private Silk.NET.Vulkan.PipelineCache _driverPipelineCache;
 
     private readonly List<FixedUtf8String> _surfaceExtensions = new List<FixedUtf8String>();
 
@@ -190,6 +205,17 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         CreateDescriptorPool();
         CreateGraphicsCommandPool();
+
+        PipelineCacheCreateInfo pcCI = new PipelineCacheCreateInfo
+        {
+            SType = StructureType.PipelineCacheCreateInfo,
+            InitialDataSize = 0,
+            PInitialData = null,
+        };
+        Result pcResult = _vk.CreatePipelineCache(_device, in pcCI, null, out _driverPipelineCache);
+        CheckResult(pcResult);
+        _pipelineCache = new VkPipelineCache(this);
+
         for (int i = 0; i < SharedCommandPoolCount; i++)
         {
             _sharedGraphicsCommandPools.Push(new SharedCommandPool(this, true));
@@ -1105,6 +1131,10 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 sharedPool.Destroy();
             }
         }
+
+        _pipelineCache?.Dispose();
+        _pipelineCache = null;
+        _vk.DestroyPipelineCache(_device, _driverPipelineCache, null);
 
         _memoryManager.Dispose();
 

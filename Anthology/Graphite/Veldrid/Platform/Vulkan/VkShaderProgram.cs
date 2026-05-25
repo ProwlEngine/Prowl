@@ -147,6 +147,9 @@ internal unsafe class VkShaderProgram : ShaderProgram
     {
         if (_disposed) return;
         _disposed = true;
+
+        _gd.PipelineCache.EvictByProgram(this);
+
         foreach (ShaderModule m in _modules.Values)
         {
             _gd.Vk.DestroyShaderModule(_gd.Device, m, null);
