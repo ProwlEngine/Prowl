@@ -3,7 +3,7 @@
         <Project Path="Veldrid/Prowl.Veldrid.csproj" />
     </Folder>
     <Folder Name="/Tests/">
-        <Project Path="Tests/Veldrid.Tests.csproj" />
+        <Project Path="Tests/Prowl.Veldrid.Tests.csproj" />
     </Folder>
     <Folder Name="/Samples/">
         <Project Path="Samples/HelloTriangle/HelloTriangle.csproj" />
