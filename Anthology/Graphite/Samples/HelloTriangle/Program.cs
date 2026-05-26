@@ -127,9 +127,7 @@ void main()
             ]
         };
 
-        ShaderProgram shader = factory.CreateShaderProgram(new ShaderDescription(
-            new ShaderStageDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShaderSource), "main"),
-            new ShaderStageDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main")));
+        ShaderProgram shader = factory.CreateShaderProgram(shaderDesc);
 
         CommandBuffer cl = factory.CreateCommandBuffer();
 
