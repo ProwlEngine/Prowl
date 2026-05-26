@@ -226,7 +226,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             depthClipDisable: true,
             texture1D: true,
             independentBlend: true,
-            structuredBuffer: true,
+            structuredBuffer: featureLevel >= D3DFeatureLevel.Level110,
             subsetTextureView: true,
             CommandBufferDebugMarkers: featureLevel >= D3DFeatureLevel.Level111,
             bufferRangeBinding: featureLevel >= D3DFeatureLevel.Level111,
