@@ -14,6 +14,7 @@ public abstract partial class GraphicsDevice : IDisposable
     private readonly object _deferredDisposalLock = new object();
     private readonly List<IDisposable> _disposables = new List<IDisposable>();
     private Sampler _aniso4xSampler;
+    private bool _disposed;
 
     internal GraphicsDevice() { }
 
@@ -712,11 +713,22 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
+    /// A bool indicating whether this instance has been disposed.
+    /// </summary>
+    public bool IsDisposed => _disposed;
+
+    /// <summary>
     /// Frees unmanaged resources controlled by this device.
     /// All created child resources must be Disposed prior to calling this method.
     /// </summary>
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+
         WaitForIdle();
         PointSampler.Dispose();
         LinearSampler.Dispose();
