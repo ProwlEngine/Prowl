@@ -96,9 +96,8 @@ public abstract class Texture : DeviceResource, MappableResource, IDisposable, B
         lock (_fullTextureViewLock)
         {
             _fullTextureView?.Dispose();
+            DisposeCore();
         }
-
-        DisposeCore();
     }
 
     private protected abstract void DisposeCore();
