@@ -113,7 +113,10 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             rrc.Increment();
         }
 
-        _submittedStagingInfos.Add(cb, _currentStagingInfo);
+        lock (_stagingLock)
+        {
+            _submittedStagingInfos.Add(cb, _currentStagingInfo);
+        }
         _currentStagingInfo = null;
     }
 
@@ -136,10 +139,9 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         lock (_stagingLock)
         {
-            if (_submittedStagingInfos.TryGetValue(completedCB, out StagingResourceInfo info))
+            if (_submittedStagingInfos.Remove(completedCB, out StagingResourceInfo? info))
             {
                 RecycleStagingInfo(info);
-                _submittedStagingInfos.Remove(completedCB);
             }
         }
 
