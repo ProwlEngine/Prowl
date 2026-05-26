@@ -24,15 +24,15 @@ public enum BufferUsage : byte
     /// </summary>
     UniformBuffer = 1 << 2,
     /// <summary>
-    /// Indicates that a <see cref="DeviceBuffer"/> can be used as a read-only structured Buffer.
-    /// This flag enables the use of a Buffer in a <see cref="ResourceSet"/> as a read-only structured Buffer.
-    /// This flag can only be combined with <see cref="Dynamic"/>.
+    /// Can be combined with <see cref="VertexBuffer"/>, <see cref="IndexBuffer"/>, or <see cref="IndirectBuffer"/>
+    /// so a compute shader can fill that buffer. This combination requires
+    /// <see cref="BufferDescription.UseTypedHlslBinding"/> to be <see langword="false"/> (its default).
     /// </summary>
     StructuredBufferReadOnly = 1 << 3,
     /// <summary>
-    /// Indicates that a <see cref="DeviceBuffer"/> can be used as a read-write structured Buffer.
-    /// This flag enables the use of a Buffer in a <see cref="ResourceSet"/> as a read-write structured Buffer.
-    /// This flag cannot be combined with any other flag.
+    /// Can be combined with <see cref="VertexBuffer"/>, <see cref="IndexBuffer"/>, or <see cref="IndirectBuffer"/>
+    /// so a compute shader can fill that buffer. This combination requires
+    /// <see cref="BufferDescription.UseTypedHlslBinding"/> to be <see langword="false"/> (its default).
     /// </summary>
     StructuredBufferReadWrite = 1 << 4,
     /// <summary>

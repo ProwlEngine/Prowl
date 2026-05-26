@@ -49,18 +49,18 @@ internal unsafe class D3D11Buffer : DeviceBuffer
         {
             if (useTypedHlslBinding)
             {
-                bd.MiscFlags = (uint)ResourceMiscFlag.BufferStructured;
+                bd.MiscFlags |= (uint)ResourceMiscFlag.BufferStructured;
                 bd.StructureByteStride = structureByteStride;
             }
             else
             {
-                bd.MiscFlags = (uint)ResourceMiscFlag.BufferAllowRawViews;
+                bd.MiscFlags |= (uint)ResourceMiscFlag.BufferAllowRawViews;
             }
         }
 
         if ((usage & BufferUsage.IndirectBuffer) == BufferUsage.IndirectBuffer)
         {
-            bd.MiscFlags = (uint)ResourceMiscFlag.DrawindirectArgs;
+            bd.MiscFlags |= (uint)ResourceMiscFlag.DrawindirectArgs;
         }
 
         if ((usage & BufferUsage.Dynamic) == BufferUsage.Dynamic)
