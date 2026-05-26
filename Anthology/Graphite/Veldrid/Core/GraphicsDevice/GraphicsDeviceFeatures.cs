@@ -81,7 +81,7 @@ public class GraphicsDeviceFeatures
     /// <see cref="CommandBuffer.PushDebugGroup(string)"/>, <see cref="CommandBuffer.PopDebugGroup"/>, and
     /// <see cref="CommandBuffer.InsertDebugMarker(string)"/> methods. If not, these methods will have no effect.
     /// </summary>
-    public bool CommandListDebugMarkers { get; }
+    public bool CommandBufferDebugMarkers { get; }
     /// <summary>
     /// Indicates whether uniform and structured buffers can be bound with an offset and a size. If false, buffer resources
     /// must be bound with their full range.
@@ -108,7 +108,7 @@ public class GraphicsDeviceFeatures
         bool independentBlend,
         bool structuredBuffer,
         bool subsetTextureView,
-        bool commandListDebugMarkers,
+        bool CommandBufferDebugMarkers,
         bool bufferRangeBinding,
         bool shaderFloat64)
     {
@@ -127,7 +127,7 @@ public class GraphicsDeviceFeatures
         IndependentBlend = independentBlend;
         StructuredBuffer = structuredBuffer;
         SubsetTextureView = subsetTextureView;
-        CommandListDebugMarkers = commandListDebugMarkers;
+        CommandBufferDebugMarkers = CommandBufferDebugMarkers;
         BufferRangeBinding = bufferRangeBinding;
         ShaderFloat64 = shaderFloat64;
     }

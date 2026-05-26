@@ -160,8 +160,8 @@ internal sealed class TrackingResourceFactory : ResourceFactory
         return resource;
     }
 
-    public override CommandBuffer CreateCommandList(ref CommandBufferDescription description)
-        => Track(_inner.CreateCommandList(ref description));
+    public override CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description)
+        => Track(_inner.CreateCommandBuffer(ref description));
 
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
         => Track(_inner.CreateFramebuffer(ref description));
@@ -237,7 +237,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         else
         {
             readback = RF.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-            CommandBuffer cl = RF.CreateCommandList();
+            CommandBuffer cl = RF.CreateCommandBuffer();
             cl.Begin();
             cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
             cl.End();
@@ -267,7 +267,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
                 texture.Format,
                 TextureUsage.Staging, texture.Type);
             Texture readback = RF.CreateTexture(ref desc);
-            CommandBuffer cl = RF.CreateCommandList();
+            CommandBuffer cl = RF.CreateCommandBuffer();
             cl.Begin();
             cl.CopyTexture(texture, readback);
             cl.End();

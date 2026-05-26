@@ -191,7 +191,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             independentBlend: _physicalDeviceFeatures.IndependentBlend,
             structuredBuffer: true,
             subsetTextureView: true,
-            commandListDebugMarkers: _debugMarkerEnabled,
+            CommandBufferDebugMarkers: _debugMarkerEnabled,
             bufferRangeBinding: true,
             shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
 
@@ -230,10 +230,10 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     private protected override void SubmitCommandsCore(CommandBuffer cl, Fence fence)
     {
-        SubmitCommandList(cl, 0, null, 0, null, fence);
+        SubmitCommandBuffer(cl, 0, null, 0, null, fence);
     }
 
-    private void SubmitCommandList(
+    private void SubmitCommandBuffer(
         CommandBuffer cl,
         uint waitSemaphoreCount,
         VkSemaphore* waitSemaphoresPtr,
@@ -326,8 +326,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private void CompleteFenceSubmission(FenceSubmissionInfo fsi)
     {
         VkFenceHandle fence = fsi.Fence;
-        Silk.NET.Vulkan.CommandBuffer completedCB = fsi.CommandBuffer;
-        fsi.CommandList?.CommandBufferCompleted(completedCB);
+        Silk.NET.Vulkan.CommandBuffer completedCB = fsi.VulkanCommandBuffer;
+        fsi.CommandBuffer?.CommandBufferCompleted(completedCB);
         Result resetResult = _vk.ResetFences(_device, 1, &fence);
         CheckResult(resetResult);
         ReturnSubmissionFence(fence);
@@ -421,14 +421,14 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 case VkBuffer buffer:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.BufferExt, buffer.DeviceBuffer.Handle, name);
                     break;
-                case VkCommandBuffer commandList:
+                case VkCommandBuffer CommandBuffer:
                     SetDebugMarkerName(
                         DebugReportObjectTypeEXT.CommandBufferExt,
-                        (ulong)commandList.CommandBuffer.Handle,
+                        (ulong)CommandBuffer.CommandBuffer.Handle,
                         string.Format("{0}_CommandBuffer", name));
                     SetDebugMarkerName(
                         DebugReportObjectTypeEXT.CommandPoolExt,
-                        commandList.CommandPool.Handle,
+                        CommandBuffer.CommandPool.Handle,
                         string.Format("{0}_CommandPool", name));
                     break;
                 case VkFramebuffer framebuffer:
@@ -1641,13 +1641,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private struct FenceSubmissionInfo
     {
         public VkFenceHandle Fence;
-        public VkCommandBuffer CommandList;
-        public Silk.NET.Vulkan.CommandBuffer CommandBuffer;
-        public FenceSubmissionInfo(VkFenceHandle fence, VkCommandBuffer commandList, Silk.NET.Vulkan.CommandBuffer commandBuffer)
+        public VkCommandBuffer CommandBuffer;
+        public Silk.NET.Vulkan.CommandBuffer VulkanCommandBuffer;
+        public FenceSubmissionInfo(VkFenceHandle fence, VkCommandBuffer commandBuffer, Silk.NET.Vulkan.CommandBuffer vulkanCommandBuffer)
         {
             Fence = fence;
-            CommandList = commandList;
             CommandBuffer = commandBuffer;
+            VulkanCommandBuffer = vulkanCommandBuffer;
         }
     }
 }

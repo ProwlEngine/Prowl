@@ -151,7 +151,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         if (_commandBufferBegun)
         {
             throw new RenderException(
-                "CommandList must be in its initial state, or End() must have been called, for Begin() to be valid to call.");
+                "CommandBuffer must be in its initial state, or End() must have been called, for Begin() to be valid to call.");
         }
         if (_commandBufferEnded)
         {
@@ -1348,7 +1348,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             if (ret == null)
             {
                 ret = (VkBuffer)_gd.ResourceFactory.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
-                ret.Name = $"Staging Buffer (CommandList {_name})";
+                ret.Name = $"Staging Buffer (CommandBuffer {_name})";
             }
 
             _currentStagingInfo.BuffersUsed.Add(ret);

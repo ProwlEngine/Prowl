@@ -113,26 +113,26 @@ public abstract partial class GraphicsDevice : IDisposable
     /// Submits the given <see cref="CommandBuffer"/> for execution by this device.
     /// Commands submitted in this way may not be completed when this method returns.
     /// Use <see cref="WaitForIdle"/> to wait for all submitted commands to complete.
-    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="commandList"/> for this method to succeed.
+    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="CommandBuffer"/> for this method to succeed.
     /// </summary>
-    /// <param name="commandList">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
+    /// <param name="CommandBuffer">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
     /// been previously called on this object.</param>
-    public void SubmitCommands(CommandBuffer commandList) => SubmitCommandsCore(commandList, null);
+    public void SubmitCommands(CommandBuffer CommandBuffer) => SubmitCommandsCore(CommandBuffer, null);
 
     /// <summary>
     /// Submits the given <see cref="CommandBuffer"/> for execution by this device.
     /// Commands submitted in this way may not be completed when this method returns.
     /// Use <see cref="WaitForIdle"/> to wait for all submitted commands to complete.
-    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="commandList"/> for this method to succeed.
+    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="CommandBuffer"/> for this method to succeed.
     /// </summary>
-    /// <param name="commandList">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
+    /// <param name="CommandBuffer">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
     /// been previously called on this object.</param>
     /// <param name="fence">A <see cref="Fence"/> which will become signaled after this submission fully completes
     /// execution.</param>
-    public void SubmitCommands(CommandBuffer commandList, Fence fence) => SubmitCommandsCore(commandList, fence);
+    public void SubmitCommands(CommandBuffer CommandBuffer, Fence fence) => SubmitCommandsCore(CommandBuffer, fence);
 
     private protected abstract void SubmitCommandsCore(
-        CommandBuffer commandList,
+        CommandBuffer CommandBuffer,
         Fence fence);
 
     /// <summary>

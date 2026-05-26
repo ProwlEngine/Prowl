@@ -39,11 +39,11 @@ internal class OpenGLCommandBuffer : CommandBuffer
             _currentCommands.Dispose();
         }
 
-        _currentCommands = GetFreeCommandList();
+        _currentCommands = GetFreeCommandBuffer();
         _currentCommands.Begin();
     }
 
-    private OpenGLCommandEntryList GetFreeCommandList()
+    private OpenGLCommandEntryList GetFreeCommandBuffer()
     {
         lock (_lock)
         {

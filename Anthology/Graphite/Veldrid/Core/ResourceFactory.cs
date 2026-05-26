@@ -228,19 +228,19 @@ public abstract partial class ResourceFactory
     /// Creates a new <see cref="CommandBuffer"/>.
     /// </summary>
     /// <returns>A new <see cref="CommandBuffer"/>.</returns>
-    public CommandBuffer CreateCommandList() => CreateCommandList(new CommandBufferDescription());
+    public CommandBuffer CreateCommandBuffer() => CreateCommandBuffer(new CommandBufferDescription());
     /// <summary>
     /// Creates a new <see cref="CommandBuffer"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
     /// <returns>A new <see cref="CommandBuffer"/>.</returns>
-    public CommandBuffer CreateCommandList(CommandBufferDescription description) => CreateCommandList(ref description);
+    public CommandBuffer CreateCommandBuffer(CommandBufferDescription description) => CreateCommandBuffer(ref description);
     /// <summary>
     /// Creates a new <see cref="CommandBuffer"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
     /// <returns>A new <see cref="CommandBuffer"/>.</returns>
-    public abstract CommandBuffer CreateCommandList(ref CommandBufferDescription description);
+    public abstract CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description);
 
     /// <summary>
     /// Creates a new <see cref="ResourceLayout"/>.

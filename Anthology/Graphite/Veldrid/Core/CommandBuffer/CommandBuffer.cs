@@ -335,13 +335,13 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     public abstract void SetScissorRect(uint index, uint x, uint y, uint width, uint height);
 
     /// <summary>
-    /// Draws primitives from the currently-bound state in this CommandList. An index Buffer is not used.
+    /// Draws primitives from the currently-bound state in this CommandBuffer. An index Buffer is not used.
     /// </summary>
     /// <param name="vertexCount">The number of vertices.</param>
     public void Draw(uint vertexCount) => Draw(vertexCount, 1, 0, 0);
 
     /// <summary>
-    /// Draws primitives from the currently-bound state in this CommandList. An index Buffer is not used.
+    /// Draws primitives from the currently-bound state in this CommandBuffer. An index Buffer is not used.
     /// </summary>
     /// <param name="vertexCount">The number of vertices.</param>
     /// <param name="instanceCount">The number of instances.</param>
@@ -853,7 +853,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected abstract void PopDebugGroupCore();
 
     /// <summary>
-    /// Inserts a debug marker into the CommandList at the current position. This is used by graphics debuggers to identify
+    /// Inserts a debug marker into the CommandBuffer at the current position. This is used by graphics debuggers to identify
     /// points of interest in a command stream.
     /// </summary>
     /// <param name="name">The name of the marker. This is an opaque identifier used for display by graphics debuggers.</param>

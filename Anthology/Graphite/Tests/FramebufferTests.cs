@@ -15,7 +15,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             TextureDescription.Texture2D(1024, 1024, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, colorTarget));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(fb);
         cl.ClearColorTarget(0, Color.Red);
@@ -50,7 +50,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             TextureDescription.Texture2D(1024, 1024, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, colorTarget));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(fb);
         Assert.Throws<VeldridException>(() => cl.ClearDepthStencil(1f));
@@ -63,7 +63,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             TextureDescription.Texture2D(1024, 1024, 1, 1, PixelFormat.R16_UNorm, TextureUsage.DepthStencil));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depthTarget));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(fb);
         Assert.Throws<VeldridException>(() => cl.ClearColorTarget(0, Color.Red));
@@ -78,7 +78,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         Texture colorTarget1 = RF.CreateTexture(desc);
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, colorTarget0, colorTarget1));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(fb);
         cl.ClearColorTarget(0, Color.Red);
@@ -100,7 +100,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
                 new FramebufferDescription(null, new[] { new FramebufferAttachmentDescription(testTex, 0, level) }));
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         for (uint level = 0; level < 11; level++)
         {
@@ -142,7 +142,7 @@ public abstract class SwapchainFramebufferTests<T> : GraphicsDeviceTestBase<T> w
     [Fact]
     public void ClearSwapchainFramebuffer_Succeeds()
     {
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(GD.SwapchainFramebuffer);
         cl.ClearColorTarget(0, Color.Red);

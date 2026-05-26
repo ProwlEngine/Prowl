@@ -168,7 +168,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         };
     }
 
-    public void AddCommandListReference(D3D11CommandBuffer cl)
+    public void AddCommandBufferReference(D3D11CommandBuffer cl)
     {
         lock (_referencedCLsLock)
         {
@@ -176,7 +176,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         }
     }
 
-    public void RemoveCommandListReference(D3D11CommandBuffer cl)
+    public void RemoveCommandBufferReference(D3D11CommandBuffer cl)
     {
         lock (_referencedCLsLock)
         {

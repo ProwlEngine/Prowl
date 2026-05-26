@@ -867,7 +867,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
                 else
                 {
                     PackRangeParams(range);
-                    if (!_gd.SupportsCommandLists)
+                    if (!_gd.SupportsCommandBuffers)
                     {
                         ID3D11Buffer* nullBuf = null;
                         Ctx->VSSetConstantBuffers((uint)slot, 1, &nullBuf);
@@ -891,7 +891,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             else
             {
                 PackRangeParams(range);
-                if (!_gd.SupportsCommandLists)
+                if (!_gd.SupportsCommandBuffers)
                 {
                     ID3D11Buffer* nullBuf = null;
                     Ctx->GSSetConstantBuffers((uint)slot, 1, &nullBuf);
@@ -914,7 +914,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             else
             {
                 PackRangeParams(range);
-                if (!_gd.SupportsCommandLists)
+                if (!_gd.SupportsCommandBuffers)
                 {
                     ID3D11Buffer* nullBuf = null;
                     Ctx->HSSetConstantBuffers((uint)slot, 1, &nullBuf);
@@ -937,7 +937,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             else
             {
                 PackRangeParams(range);
-                if (!_gd.SupportsCommandLists)
+                if (!_gd.SupportsCommandBuffers)
                 {
                     ID3D11Buffer* nullBuf = null;
                     Ctx->DSSetConstantBuffers((uint)slot, 1, &nullBuf);
@@ -975,7 +975,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
                 else
                 {
                     PackRangeParams(range);
-                    if (!_gd.SupportsCommandLists)
+                    if (!_gd.SupportsCommandBuffers)
                     {
                         ID3D11Buffer* nullBuf = null;
                         Ctx->PSSetConstantBuffers((uint)slot, 1, &nullBuf);
@@ -999,7 +999,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             else
             {
                 PackRangeParams(range);
-                if (!_gd.SupportsCommandLists)
+                if (!_gd.SupportsCommandBuffers)
                 {
                     ID3D11Buffer* nullBuf = null;
                     Ctx->CSSetConstantBuffers((uint)slot, 1, &nullBuf);
@@ -1189,7 +1189,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         D3D11Framebuffer d3dFB = Util.AssertSubtype<Framebuffer, D3D11Framebuffer>(fb);
         if (d3dFB.Swapchain != null)
         {
-            d3dFB.Swapchain.AddCommandListReference(this);
+            d3dFB.Swapchain.AddCommandBufferReference(this);
             _referencedSwapchains.Add(d3dFB.Swapchain);
         }
 
@@ -1303,7 +1303,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         Box region,
         IntPtr data)
     {
-        bool needWorkaround = !_gd.SupportsCommandLists;
+        bool needWorkaround = !_gd.SupportsCommandBuffers;
         void* pAdjustedSrcData = data.ToPointer();
         if (needWorkaround)
         {
@@ -1427,7 +1427,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         foreach (D3D11Swapchain sc in _referencedSwapchains)
         {
-            sc.RemoveCommandListReference(this);
+            sc.RemoveCommandBufferReference(this);
         }
         _referencedSwapchains.Clear();
 

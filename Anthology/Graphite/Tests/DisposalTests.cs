@@ -39,9 +39,9 @@ public abstract class DisposalTestBase<T> : GraphicsDeviceTestBase<T> where T : 
     }
 
     [Fact]
-    public void Dispose_CommandList()
+    public void Dispose_CommandBuffer()
     {
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Dispose();
         Assert.True(cl.IsDisposed);
     }

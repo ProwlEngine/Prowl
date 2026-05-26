@@ -18,7 +18,7 @@ internal class OpenGLResourceFactory : ResourceFactory
         _pool = gd.StagingMemoryPool;
     }
 
-    public override CommandBuffer CreateCommandList(ref CommandBufferDescription description)
+    public override CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description)
     {
         return new OpenGLCommandBuffer(_gd, ref description);
     }

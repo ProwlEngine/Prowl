@@ -9,7 +9,7 @@ namespace Prowl.Veldrid;
 public abstract class Fence : DeviceResource, IDisposable
 {
     /// <summary>
-    /// Gets a value indicating whether the Fence is currently signaled. A Fence is signaled after a CommandList finishes
+    /// Gets a value indicating whether the Fence is currently signaled. A Fence is signaled after a CommandBuffer finishes
     /// execution after it was submitted with a Fence instance.
     /// </summary>
     public abstract bool Signaled { get; }

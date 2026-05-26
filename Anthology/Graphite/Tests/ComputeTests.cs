@@ -87,7 +87,7 @@ void main()
             computeTargetTextureView,
             fillValueBuffer));
 
-        using CommandBuffer cl = RF.CreateCommandList();
+        using CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
 
         cl.UpdateBuffer(fillValueBuffer, 0, new FillValueStruct(FillValue));
@@ -130,7 +130,7 @@ void main()
 
         Texture staging = factory.CreateTexture(ref description);
 
-        using CommandBuffer cl = factory.CreateCommandList();
+        using CommandBuffer cl = factory.CreateCommandBuffer();
         cl.Begin();
 
         cl.CopyTexture(texture,
@@ -215,7 +215,7 @@ void main()
             layout,
             16, 16, 1));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetPipeline(pipeline);
         cl.SetComputeResourceSet(0, rs);
@@ -276,7 +276,7 @@ void main()
             computeLayout,
             32, 32, 1));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetPipeline(computePipeline);
         cl.SetComputeResourceSet(0, computeSet);
@@ -365,7 +365,7 @@ void main()
             }
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetPipeline(computePipeline);
         cl.SetComputeResourceSet(0, computeSet);

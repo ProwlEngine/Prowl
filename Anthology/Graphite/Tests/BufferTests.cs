@@ -119,7 +119,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         DeviceBuffer dst = CreateBuffer(1024, BufferUsage.Staging);
 
-        CommandBuffer copyCL = RF.CreateCommandList();
+        CommandBuffer copyCL = RF.CreateCommandBuffer();
         copyCL.Begin();
         copyCL.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
         copyCL.End();
@@ -149,7 +149,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
                 .Select(i => RF.CreateBuffer(new BufferDescription(1024, BufferUsage.UniformBuffer)))
                 .ToArray();
 
-            CommandBuffer copyCL = RF.CreateCommandList();
+            CommandBuffer copyCL = RF.CreateCommandBuffer();
             copyCL.Begin();
             copyCL.CopyBuffer(src, 0, dsts[0], 0, src.SizeInBytes);
             for (int i = 0; i < chainLength - 1; i++)
@@ -221,7 +221,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         byte[] data = Enumerable.Range(0, 208).Select(i => (byte)(i * 150)).ToArray();
         GD.UpdateBuffer(src, 0, data);
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
         cl.End();
@@ -244,7 +244,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.UpdateBuffer(dynamic, 0, initialData);
 
         byte[] replacementData = Enumerable.Repeat((byte)255, 512).ToArray();
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.UpdateBuffer(dynamic, 512, replacementData);
         cl.End();
@@ -282,13 +282,13 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     }
 
     [Fact]
-    public void CommandList_Update_Staging()
+    public void CommandBuffer_Update_Staging()
     {
         DeviceBuffer staging = RF.CreateBuffer(
             new BufferDescription(1024, BufferUsage.Staging));
         byte[] data = Enumerable.Range(0, 1024).Select(i => (byte)i).ToArray();
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.UpdateBuffer(staging, 0, data);
         cl.End();
@@ -334,7 +334,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         byte[] data = Enumerable.Range(0, (int)srcBufferSize).Select(i => (byte)i).ToArray();
         GD.UpdateBuffer(src, 0, data);
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyBuffer(src, srcCopyOffset, dst, dstCopyOffset, copySize);
         cl.End();
@@ -357,11 +357,11 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     [Theory]
     [InlineData(BufferUsage.VertexBuffer, 13, 5, 1)]
     [InlineData(BufferUsage.Staging, 13, 5, 1)]
-    public void CommandList_UpdateNonStaging_Unaligned(BufferUsage usage, uint bufferSize, uint dataSize, uint offset)
+    public void CommandBuffer_UpdateNonStaging_Unaligned(BufferUsage usage, uint bufferSize, uint dataSize, uint offset)
     {
         DeviceBuffer buffer = CreateBuffer(bufferSize, usage);
         byte[] data = Enumerable.Range(0, (int)dataSize).Select(i => (byte)i).ToArray();
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.UpdateBuffer(buffer, offset, data);
         cl.End();
@@ -402,10 +402,10 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     [InlineData(BufferUsage.UniformBuffer | BufferUsage.Dynamic)]
     [InlineData(BufferUsage.UniformBuffer)]
     [InlineData(BufferUsage.Staging)]
-    public void UpdateUniform_Offset_CommandList(BufferUsage usage)
+    public void UpdateUniform_Offset_CommandBuffer(BufferUsage usage)
     {
         DeviceBuffer buffer = CreateBuffer(128, usage);
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         Float4x4 mat1 = new Float4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
         cl.UpdateBuffer(buffer, 0, ref mat1);
@@ -479,7 +479,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.UpdateBuffer(src, 0, initialDataSrc);
         GD.UpdateBuffer(dst, 0, initialDataDst);
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyBuffer(src, 0, dst, 0, 0);
         cl.End();
@@ -511,7 +511,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     [InlineData(BufferUsage.IndirectBuffer, true)]
     [InlineData(BufferUsage.Staging, false)]
     [InlineData(BufferUsage.Staging, true)]
-    public unsafe void UpdateBuffer_ZeroSize(BufferUsage usage, bool useCommandListUpdate)
+    public unsafe void UpdateBuffer_ZeroSize(BufferUsage usage, bool useCommandBufferUpdate)
     {
         DeviceBuffer buffer = CreateBuffer(1024, usage);
 
@@ -519,9 +519,9 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         byte[] otherData = Enumerable.Range(0, 1024).Select(i => (byte)(i + 10)).ToArray();
         GD.UpdateBuffer(buffer, 0, initialData);
 
-        if (useCommandListUpdate)
+        if (useCommandBufferUpdate)
         {
-            CommandBuffer cl = RF.CreateCommandList();
+            CommandBuffer cl = RF.CreateCommandBuffer();
             cl.Begin();
             fixed (byte* dataPtr = otherData)
             {

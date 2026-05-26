@@ -26,7 +26,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
     private readonly D3D11ResourceFactory _d3d11ResourceFactory;
     private readonly D3D11Swapchain _mainSwapchain;
     private readonly bool _supportsConcurrentResources;
-    private readonly bool _supportsCommandLists;
+    private readonly bool _supportsCommandBuffers;
     private readonly object _immediateContextLock = new object();
     private readonly BackendInfoD3D11 _d3d11Info;
 
@@ -63,7 +63,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
     public bool SupportsConcurrentResources => _supportsConcurrentResources;
 
-    public bool SupportsCommandLists => _supportsCommandLists;
+    public bool SupportsCommandBuffers => _supportsCommandBuffers;
 
     public int DeviceId => _deviceId;
 
@@ -204,7 +204,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         FeatureDataThreading threadingData;
         pDevice->CheckFeatureSupport(Silk.NET.Direct3D11.Feature.Threading, &threadingData, (uint)sizeof(FeatureDataThreading));
         _supportsConcurrentResources = threadingData.DriverConcurrentCreates;
-        _supportsCommandLists = threadingData.DriverCommandLists;
+        _supportsCommandBuffers = threadingData.DriverCommandLists;
 
         IsDebugEnabled = (flags & CreateDeviceFlag.Debug) != 0;
 
@@ -228,7 +228,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             independentBlend: true,
             structuredBuffer: true,
             subsetTextureView: true,
-            commandListDebugMarkers: featureLevel >= D3DFeatureLevel.Level111,
+            CommandBufferDebugMarkers: featureLevel >= D3DFeatureLevel.Level111,
             bufferRangeBinding: featureLevel >= D3DFeatureLevel.Level111,
             shaderFloat64: doublesData.DoublePrecisionFloatShaderOps);
 

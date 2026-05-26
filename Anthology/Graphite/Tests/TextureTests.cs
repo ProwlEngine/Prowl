@@ -117,7 +117,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(src, (IntPtr)dataPtr, 256 * 256 * sizeof(ushort), 0, 0, 0, 256, 256, 1, 2, 0);
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(src, dst, 2, 0);
         cl.End();
@@ -251,7 +251,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(src, data, 0, 0, 0, TexSize, TexSize, 1, 0, face);
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(src, dst);
         cl.End();
@@ -299,7 +299,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(src, data, 0, 0, 0, TexSize, TexSize, 1, 0, face);
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         for (uint face = 0; face < 6; face++)
             cl.CopyTexture(src, dst, 0, face);
@@ -355,7 +355,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         for (uint face = 0; face < 6; face++)
             cl.CopyTexture(src, dst, CopiedMip, face);
@@ -404,7 +404,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(src, dst);
         cl.End();
@@ -457,7 +457,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         for (uint mip = 0; mip < MipLevels; mip++)
             cl.CopyTexture(src, dst, mip, CopiedArrayLayer);
@@ -524,7 +524,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.Unmap(readback, subresource);
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.GenerateMipmaps(tex);
         cl.End();
@@ -644,7 +644,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(tex, readback);
         cl.End();
@@ -725,7 +725,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(copySrc, (IntPtr)dataPtr, totalDataSize, srcX, srcY, 0, copyWidth, copyHeight, 1, 0, 0);
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(
             copySrc, srcX, srcY, 0, 0, 0,
@@ -779,7 +779,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 0, layer);
         }
 
-        CommandBuffer copyCL = RF.CreateCommandList();
+        CommandBuffer copyCL = RF.CreateCommandBuffer();
         copyCL.Begin();
         if (separateLayerCopies)
         {
@@ -938,7 +938,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         }
         GD.Unmap(tex1D);
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(
             tex1D, 0, 0, 0, 0, 0,
@@ -1003,7 +1003,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         }
         GD.Unmap(tex1D, 1);
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(
             tex1D, 0, 0, 0, 1, 0,
@@ -1044,7 +1044,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         GD.UpdateTexture(src, srcData, 0, 0, 0, src.Width, src.Height, 1, 0, 0);
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(
             src,
@@ -1082,7 +1082,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         GD.Unmap(src, 5);
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(
             src, 0, 0, 0, 0, 5,
@@ -1228,7 +1228,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture staging = RF.CreateTexture(TextureDescription.Texture3D(
             16, 16, 16, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(tex3D, staging);
         cl.End();
@@ -1270,7 +1270,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 0, 0);
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(src, dst);
         cl.End();
@@ -1338,7 +1338,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             dstWidth, dstHeight, dstDepth, dstMipLevels, dstArrayLayers,
             format, TextureUsage.Staging, dstType));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
 
         cl.CopyTexture(
@@ -1412,7 +1412,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             GD.UpdateTexture(tex, (IntPtr)pixelDataPtr, 1024 * 1024 * 16, 0, 0, 0, 1024, 1024, 1, 0, 0);
         }
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.GenerateMipmaps(tex);
         cl.CopyTexture(tex, readback);
@@ -1436,7 +1436,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         Texture src = RF.CreateTexture(TextureDescription.Texture2D(16, 16, 4, 1, PixelFormat.BC3_UNorm, TextureUsage.Staging));
         Texture dst = RF.CreateTexture(TextureDescription.Texture2D(16, 16, 4, 1, PixelFormat.BC3_UNorm, TextureUsage.Sampled));
 
-        CommandBuffer cl = RF.CreateCommandList();
+        CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.CopyTexture(
             src, 0, 0, 0, 3, 0,

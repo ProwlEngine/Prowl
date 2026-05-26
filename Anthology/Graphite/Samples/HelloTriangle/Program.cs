@@ -131,7 +131,7 @@ void main()
             new ShaderStageDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShaderSource), "main"),
             new ShaderStageDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main")));
 
-        CommandBuffer cl = factory.CreateCommandList();
+        CommandBuffer cl = factory.CreateCommandBuffer();
 
         bool running = true;
         Event evt;
