@@ -10,8 +10,6 @@ internal unsafe class D3D11ComputeProgram : ComputeProgram
 
     public byte[] ComputeBytecode { get; }
     public ID3D11ComputeShader* ComputeShader { get; }
-    public D3D11ResourceLayout[] D3D11ResourceLayouts { get; }
-
     private ComPtr<ID3D11DeviceChild> _shaderHandle;
 
     public D3D11ComputeProgram(ID3D11Device* device, ref ComputeDescription description)
@@ -29,12 +27,6 @@ internal unsafe class D3D11ComputeProgram : ComputeProgram
             _shaderHandle.Handle = (ID3D11DeviceChild*)p;
         }
 
-        ResourceLayoutDescription[] descs = ResourceLayoutsArray;
-        D3D11ResourceLayouts = new D3D11ResourceLayout[descs.Length];
-        for (int i = 0; i < descs.Length; i++)
-        {
-            D3D11ResourceLayouts[i] = new D3D11ResourceLayout(ref descs[i]);
-        }
     }
 
     public override string Name { get => _name; set => _name = value; }

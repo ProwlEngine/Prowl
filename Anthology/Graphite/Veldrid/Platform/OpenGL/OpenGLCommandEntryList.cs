@@ -19,8 +19,8 @@ internal interface OpenGLCommandEntryList
     void SetFramebuffer(Framebuffer fb);
     void SetShader(ShaderProgram program);
     void SetComputeShader(ComputeProgram program);
-    void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets);
-    void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets);
+    void SetProperties(PropertySet ps);
+    void ClearProperties();
     void SetScissorRect(uint index, uint x, uint y, uint width, uint height);
     void SetVertexSource(IVertexSource source);
     void SetViewport(uint index, ref Viewport viewport);

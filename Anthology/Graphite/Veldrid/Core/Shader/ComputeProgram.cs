@@ -17,6 +17,7 @@ public abstract class ComputeProgram : DeviceResource, IDisposable
     internal ComputeProgram(ref ComputeDescription description)
     {
         _resourceLayouts = Util.ShallowClone(description.ResourceLayouts) ?? Array.Empty<ResourceLayoutDescription>();
+        ShaderProgram.DeepCloneUniformFields(_resourceLayouts);
         _threadGroupSizeX = description.ThreadGroupSizeX;
         _threadGroupSizeY = description.ThreadGroupSizeY;
         _threadGroupSizeZ = description.ThreadGroupSizeZ;

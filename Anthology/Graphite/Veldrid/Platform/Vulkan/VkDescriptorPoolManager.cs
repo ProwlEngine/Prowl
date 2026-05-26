@@ -11,11 +11,38 @@ internal class VkDescriptorPoolManager
     private readonly VkGraphicsDevice _gd;
     private readonly List<PoolInfo> _pools = new List<PoolInfo>();
     private readonly object _lock = new object();
+    private readonly bool _freeDescriptorSets;
 
+    /// <summary>Creates a pool manager for long-lived descriptor sets (supports per-set free).</summary>
     public VkDescriptorPoolManager(VkGraphicsDevice gd)
     {
         _gd = gd;
+        _freeDescriptorSets = true;
         _pools.Add(CreateNewPool());
+    }
+
+    /// <summary>Creates a per-frame pool manager whose sets are reclaimed wholesale by <see cref="ResetAll"/>.</summary>
+    public VkDescriptorPoolManager(VkGraphicsDevice gd, bool freeDescriptorSets)
+    {
+        _gd = gd;
+        _freeDescriptorSets = freeDescriptorSets;
+        _pools.Add(CreateNewPool());
+    }
+
+    /// <summary>
+    /// Resets every <c>VkDescriptorPool</c> in this manager, invalidating all previously allocated sets.
+    /// Used at frame-begin time to reclaim all sets from the previous frame occupying this ring slot.
+    /// </summary>
+    public unsafe void ResetAll()
+    {
+        lock (_lock)
+        {
+            foreach (PoolInfo poolInfo in _pools)
+            {
+                _gd.Vk.ResetDescriptorPool(_gd.Device, poolInfo.Pool, 0);
+                poolInfo.ResetCounters();
+            }
+        }
     }
 
     public unsafe DescriptorAllocationToken Allocate(DescriptorResourceCounts counts, DescriptorSetLayout setLayout)
@@ -96,7 +123,7 @@ internal class VkDescriptorPoolManager
         {
             SType = StructureType.DescriptorPoolCreateInfo
         };
-        poolCI.Flags = DescriptorPoolCreateFlags.FreeDescriptorSetBit;
+        poolCI.Flags = _freeDescriptorSets ? DescriptorPoolCreateFlags.FreeDescriptorSetBit : 0;
         poolCI.MaxSets = totalSets;
         poolCI.PPoolSizes = sizes;
         poolCI.PoolSizeCount = poolSizeCount;
@@ -182,6 +209,18 @@ internal class VkDescriptorPoolManager
             StorageBufferCount += counts.StorageBufferCount;
             StorageBufferDynamicCount += counts.StorageBufferDynamicCount;
             StorageImageCount += counts.StorageImageCount;
+        }
+
+        internal void ResetCounters()
+        {
+            RemainingSets = 1000;
+            UniformBufferCount = 100;
+            UniformBufferDynamicCount = 100;
+            SampledImageCount = 100;
+            SamplerCount = 100;
+            StorageBufferCount = 100;
+            StorageBufferDynamicCount = 100;
+            StorageImageCount = 100;
         }
     }
 }

@@ -26,17 +26,6 @@ internal class VkResourceFactory : ResourceFactory
         return new VkFramebuffer(_gd, ref description, false);
     }
 
-    public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
-    {
-        return new VkResourceLayout(_gd, ref description);
-    }
-
-    public override ResourceSet CreateResourceSet(ref ResourceSetDescription description)
-    {
-        ValidationHelpers.ValidateResourceSet(_gd, ref description);
-        return new VkResourceSet(_gd, ref description);
-    }
-
     protected override Sampler CreateSamplerCore(ref SamplerDescription description)
     {
         return new VkSampler(_gd, ref description);

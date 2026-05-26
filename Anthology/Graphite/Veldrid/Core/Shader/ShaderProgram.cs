@@ -34,6 +34,27 @@ public abstract class ShaderProgram : DeviceResource, IDisposable
         _rasterizerState = description.RasterizerState;
         _vertexLayouts = Util.ShallowClone(description.VertexLayouts) ?? Array.Empty<VertexLayoutDescription>();
         _resourceLayouts = Util.ShallowClone(description.ResourceLayouts) ?? Array.Empty<ResourceLayoutDescription>();
+        DeepCloneUniformFields(_resourceLayouts);
+    }
+
+    internal static void DeepCloneUniformFields(ResourceLayoutDescription[] layouts)
+    {
+        for (int i = 0; i < layouts.Length; i++)
+        {
+            ResourceLayoutElementDescription[] elements = layouts[i].Elements;
+            if (elements == null) continue;
+            ResourceLayoutElementDescription[] clonedElements = new ResourceLayoutElementDescription[elements.Length];
+            for (int j = 0; j < elements.Length; j++)
+            {
+                ResourceLayoutElementDescription elem = elements[j];
+                if (elem.UniformFields != null)
+                {
+                    elem.UniformFields = (UniformBlockField[])elem.UniformFields.Clone();
+                }
+                clonedElements[j] = elem;
+            }
+            layouts[i].Elements = clonedElements;
+        }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -36,6 +37,32 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected OutputDescription _framebufferOutputs;
     private protected IVertexSource _currentVertexSource;
 
+    /// <summary>Per-command-buffer merged property table. Vk and D3D11 read this at draw time.</summary>
+    private protected readonly MergedPropertyTable _mergedTable = new();
+
+    /// <summary>Tracks the last-seen uniform and resource version for each PropertySet merged via SetProperties.</summary>
+    private readonly Dictionary<PropertySet, (uint uniformV, uint resourceV)> _seenVersions = new();
+
+    /// <summary>
+    /// Per-frame cache of allocated transient UBO ranges for graphics (ShaderProgram) draws.
+    /// Cleared at <see cref="Begin"/>. Key: (shader, set, binding, merged uniform version).
+    /// Used by Vk and D3D11 at draw time. OpenGL replay uses a separate cache on the executor.
+    /// </summary>
+    private protected readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = new();
+
+    /// <summary>
+    /// Per-frame cache of allocated transient UBO ranges for compute dispatches (ComputeProgram).
+    /// Separate from <see cref="_frameUboCache"/> because <see cref="ComputeProgram"/> and
+    /// <see cref="ShaderProgram"/> are separate type hierarchies.
+    /// </summary>
+    private protected readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = new();
+
+    /// <summary>
+    /// Gets whether <see cref="End"/> has been called on this <see cref="CommandBuffer"/> since the last
+    /// <see cref="Begin"/> call. Used by the frame system to validate commands before submission.
+    /// </summary>
+    internal bool HasEnded { get; private protected set; }
+
     internal CommandBuffer(
         GraphicsDeviceFeatures features,
         uint uniformAlignment,
@@ -53,6 +80,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _computeProgram = null;
         _framebufferOutputs = default;
         _currentVertexSource = null;
+        _mergedTable.Clear();
+        _seenVersions.Clear();
+        _frameUboCache.Clear();
+        _computeUboCache.Clear();
     }
 
     /// <summary>
@@ -120,85 +151,69 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected abstract void SetVertexSourceCore(IVertexSource source);
 
     /// <summary>
-    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
-    /// <see cref="ShaderProgram"/>.
+    /// Merges the named entries of <paramref name="properties"/> into this command buffer's merged bind table.
+    /// Last-writer-by-name wins. The merged state persists until <see cref="ClearProperties"/> or
+    /// <see cref="Begin"/> is called.
+    /// <para>
+    /// Calling <see cref="SetProperties"/> twice with the same instance and no mutations between calls is a
+    /// no-op: the command buffer tracks each <see cref="PropertySet"/>'s last-seen versions and skips
+    /// re-merging unchanged sets.
+    /// </para>
     /// </summary>
-    /// <param name="slot">The resource slot.</param>
-    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    public unsafe void SetGraphicsResourceSet(uint slot, ResourceSet rs)
-        => SetGraphicsResourceSet(slot, rs, 0, ref Unsafe.AsRef<uint>(null));
-
-    /// <summary>
-    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
-    /// <see cref="ShaderProgram"/>.
-    /// </summary>
-    /// <param name="slot">The resource slot.</param>
-    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    /// <param name="dynamicOffsets">An array containing the offsets to apply to the dynamic
-    /// buffers contained in the <see cref="ResourceSet"/>. The number of elements in this array must be equal to the number
-    /// of dynamic buffers (<see cref="ResourceLayoutElementOptions.DynamicBinding"/>) contained in the
-    /// <see cref="ResourceSet"/>. These offsets are applied in the order that dynamic buffer
-    /// elements appear in the <see cref="ResourceSet"/>'s layout. Each of these offsets must be a multiple of either
-    /// <see cref="GraphicsDevice.UniformBufferMinOffsetAlignment"/> or
-    /// <see cref="GraphicsDevice.StructuredBufferMinOffsetAlignment"/>, depending on the kind of resource.</param>
-    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint[] dynamicOffsets)
-        => SetGraphicsResourceSet(slot, rs, (uint)dynamicOffsets.Length, ref dynamicOffsets[0]);
-
-    /// <summary>
-    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
-    /// <see cref="ShaderProgram"/>.
-    /// </summary>
-    /// <param name="slot">The resource slot.</param>
-    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    /// <param name="dynamicOffsetsCount">The number of dynamic offsets being used. This must be equal to the number of
-    /// dynamic buffers (<see cref="ResourceLayoutElementOptions.DynamicBinding"/>) contained in the
-    /// <see cref="ResourceSet"/>.</param>
-    /// <param name="dynamicOffsets">A reference to the first of a series of offsets which will be applied to the dynamic
-    /// buffers contained in the <see cref="ResourceSet"/>. These offsets are applied in the order that dynamic buffer
-    /// elements appear in the <see cref="ResourceSet"/>'s layout.</param>
-    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+    /// <param name="properties">The property set to merge into the command buffer state.</param>
+    public void SetProperties(PropertySet properties)
     {
-        SetGraphicsResourceSet_CheckLayoutCompatibility(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
-        SetGraphicsResourceSetCore(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
+        ChangeMask mask = ComputeChangeMask(properties);
+        if (mask != ChangeMask.None)
+        {
+            _mergedTable.IngestFrom(properties, mask);
+            _seenVersions[properties] = (properties.UniformVersion, properties.ResourceVersion);
+            SetPropertiesCore(properties);
+        }
     }
 
-    private protected abstract void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets);
-
-    /// <summary>
-    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
-    /// <see cref="ComputeProgram"/>.
-    /// </summary>
-    /// <param name="slot">The resource slot.</param>
-    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    public unsafe void SetComputeResourceSet(uint slot, ResourceSet rs)
-        => SetComputeResourceSet(slot, rs, 0, ref Unsafe.AsRef<uint>(null));
-
-    /// <summary>
-    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
-    /// <see cref="ComputeProgram"/>.
-    /// </summary>
-    /// <param name="slot">The resource slot.</param>
-    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    /// <param name="dynamicOffsets">An array containing the offsets to apply to the dynamic buffers contained in the
-    /// <see cref="ResourceSet"/>.</param>
-    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint[] dynamicOffsets)
-        => SetComputeResourceSet(slot, rs, (uint)dynamicOffsets.Length, ref dynamicOffsets[0]);
-
-    /// <summary>
-    /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
-    /// <see cref="ComputeProgram"/>.
-    /// </summary>
-    /// <param name="slot">The resource slot.</param>
-    /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
-    /// <param name="dynamicOffsetsCount">The number of dynamic offsets being used.</param>
-    /// <param name="dynamicOffsets">A reference to the first of a series of offsets.</param>
-    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+    private ChangeMask ComputeChangeMask(PropertySet properties)
     {
-        SetComputeResourceSet_CheckLayoutCompatibility(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
-        SetComputeResourceSetCore(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
+        if (!_seenVersions.TryGetValue(properties, out (uint uniformV, uint resourceV) seen))
+            return ChangeMask.Both;
+
+        bool uChanged = seen.uniformV != properties.UniformVersion;
+        bool rChanged = seen.resourceV != properties.ResourceVersion;
+
+        if (uChanged && rChanged) return ChangeMask.Both;
+        if (uChanged) return ChangeMask.Uniforms;
+        if (rChanged) return ChangeMask.Resources;
+        return ChangeMask.None;
     }
 
-    private protected abstract void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets);
+    /// <summary>
+    /// Performs any backend-specific work when a <see cref="PropertySet"/> is merged into the command buffer.
+    /// The base class has already updated <see cref="_mergedTable"/>. Backends that record deferred commands
+    /// (OpenGL) override this to snapshot entries into the active entry list.
+    /// </summary>
+    private protected abstract void SetPropertiesCore(PropertySet properties);
+
+    /// <summary>
+    /// Clears all merged property state. Drops every entry from the merged table and the last-seen-version
+    /// dictionary. Increments both merged-table version counters. Issues no GPU calls.
+    /// <para>
+    /// <see cref="Begin"/> calls this implicitly before returning.
+    /// </para>
+    /// </summary>
+    public void ClearProperties()
+    {
+        _mergedTable.Clear();     // bump both merged version counters
+        _seenVersions.Clear();
+        _frameUboCache.Clear();
+        _computeUboCache.Clear();
+        ClearPropertiesCore();    // OpenGL emits a ClearPropertiesEntry; Vk/D3D11 no-op
+    }
+
+    /// <summary>
+    /// Performs any backend-specific work when the merged property state is cleared.
+    /// OpenGL backends override this to emit a ClearPropertiesEntry into the active entry list.
+    /// </summary>
+    private protected abstract void ClearPropertiesCore();
 
     /// <summary>
     /// Sets the active <see cref="Framebuffer"/> which will be rendered to.

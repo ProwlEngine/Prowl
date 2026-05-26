@@ -11,6 +11,7 @@ using System.Threading;
 
 namespace Prowl.Veldrid.D3D11;
 
+
 internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 {
     /// <summary>DXGI_DEBUG_ALL - reports live objects from all producers (D3D11, DXGI, etc.).</summary>
@@ -29,6 +30,19 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
     private readonly bool _supportsCommandBuffers;
     private readonly object _immediateContextLock = new object();
     private readonly BackendInfoD3D11 _d3d11Info;
+
+    private unsafe struct SlotState
+    {
+        public ID3D11Query* EventQuery;
+        public D3D11Fence FenceWrapper;
+        public D3D11Buffer TransientPrimary;
+        public List<D3D11Buffer> TransientOverflow;
+        public ulong CurrentFrameId;
+    }
+
+    private SlotState[] _slots;
+    private readonly List<D3D11Buffer> _transientFreePool = new List<D3D11Buffer>();
+    private readonly object _transientFreePoolLock = new object();
 
     private readonly object _mappedResourceLock = new object();
     private readonly Dictionary<MappedResourceCacheKey, MappedResourceInfo> _mappedResources
@@ -72,11 +86,16 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
     public override GraphicsDeviceFeatures Features { get; }
 
     public D3D11GraphicsDevice(GraphicsDeviceOptions options, D3D11DeviceOptions d3D11DeviceOptions, SwapchainDescription? swapchainDesc)
-        : this(MergeOptions(d3D11DeviceOptions, options), swapchainDesc)
+        : this(MergeOptions(d3D11DeviceOptions, options), swapchainDesc, options)
     {
     }
 
     public D3D11GraphicsDevice(D3D11DeviceOptions options, SwapchainDescription? swapchainDesc)
+        : this(options, swapchainDesc, default)
+    {
+    }
+
+    private unsafe D3D11GraphicsDevice(D3D11DeviceOptions options, SwapchainDescription? swapchainDesc, GraphicsDeviceOptions graphicsOptions)
     {
 #pragma warning disable CS0618
         _d3d11Api = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -88,7 +107,6 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 #if DEBUG
         flags |= CreateDeviceFlag.Debug;
 #endif
-        // If debug flag set but SDK layers aren't available we can't enable debug.
         if ((flags & CreateDeviceFlag.Debug) != 0 && !SdkLayersAvailable(_d3d11Api))
         {
             flags &= ~CreateDeviceFlag.Debug;
@@ -143,7 +161,6 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         _immediateContext = default;
         _immediateContext.Handle = pContext;
 
-        // Query adapter information
         {
             IDXGIDevice* pDxgiDevice;
             var dxgiDeviceGuid = IDXGIDevice.Guid;
@@ -200,7 +217,6 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             _mainSwapchain = new D3D11Swapchain(this, ref desc);
         }
 
-        // Check threading support
         FeatureDataThreading threadingData;
         pDevice->CheckFeatureSupport(Silk.NET.Direct3D11.Feature.Threading, &threadingData, (uint)sizeof(FeatureDataThreading));
         _supportsConcurrentResources = threadingData.DriverConcurrentCreates;
@@ -208,7 +224,6 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
         IsDebugEnabled = (flags & CreateDeviceFlag.Debug) != 0;
 
-        // Check double precision support
         FeatureDataDoubles doublesData;
         pDevice->CheckFeatureSupport(Silk.NET.Direct3D11.Feature.Doubles, &doublesData, (uint)sizeof(FeatureDataDoubles));
 
@@ -235,6 +250,8 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         _d3d11ResourceFactory = new D3D11ResourceFactory(this);
         _d3d11Info = new BackendInfoD3D11(this);
 
+        InitializeFrameOptions(graphicsOptions);
+        InitializeSlots();
         PostDeviceCreated();
     }
 
@@ -265,22 +282,175 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         return d3D11DeviceOptions;
     }
 
-    private protected override void SubmitCommandsCore(CommandBuffer cl, Fence fence)
+    private unsafe void InitializeSlots()
+    {
+        _slots = new SlotState[_maxFramesInFlight];
+        ID3D11Device* pDevice = (ID3D11Device*)_device;
+
+        for (int i = 0; i < _slots.Length; i++)
+        {
+            QueryDesc queryDesc = new QueryDesc { Query = Query.Event, MiscFlags = 0 };
+            ID3D11Query* pQuery;
+            SilkMarshal.ThrowHResult(pDevice->CreateQuery(&queryDesc, &pQuery));
+
+            _slots[i] = new SlotState
+            {
+                EventQuery = pQuery,
+                FenceWrapper = new D3D11Fence(signaled: false),
+                TransientPrimary = (D3D11Buffer)ResourceFactory.CreateBuffer(
+                    new BufferDescription(_transientInitialSize, BufferUsage.UniformBuffer | BufferUsage.Dynamic)),
+                TransientOverflow = new List<D3D11Buffer>(),
+                CurrentFrameId = 0,
+            };
+        }
+    }
+
+    private protected override unsafe Frame BeginFrameCore(ulong frameId, uint ringSlot)
+    {
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId != 0)
+        {
+            PollUntilComplete(slot.EventQuery);
+            ulong completed = slot.CurrentFrameId;
+            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), completed));
+            slot.FenceWrapper.Set();
+        }
+
+        slot.FenceWrapper.Reset();
+
+        if (slot.TransientOverflow.Count > 0)
+        {
+            lock (_transientFreePoolLock)
+            {
+                _transientFreePool.AddRange(slot.TransientOverflow);
+            }
+            slot.TransientOverflow.Clear();
+        }
+
+        slot.CurrentFrameId = frameId;
+
+        return new D3D11Frame(this, frameId, ringSlot, slot.FenceWrapper,
+            slot.TransientPrimary, slot.TransientOverflow);
+    }
+
+    private protected override unsafe void EndFrameCore(Frame frame)
+    {
+        D3D11Frame d3d11Frame = Util.AssertSubtype<Frame, D3D11Frame>(frame);
+        d3d11Frame.UnmapActiveBuffer();
+
+        ref SlotState slot = ref _slots[frame.RingSlot];
+
+        lock (_immediateContextLock)
+        {
+            ((ID3D11DeviceContext*)_immediateContext)->End((ID3D11Asynchronous*)slot.EventQuery);
+        }
+    }
+
+    private protected override unsafe bool IsFrameCompleteCore(ulong frameId)
+    {
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId > frameId)
+            return true;
+
+        if (slot.CurrentFrameId == frameId)
+        {
+            int done;
+            lock (_immediateContextLock)
+            {
+                int hr = ((ID3D11DeviceContext*)_immediateContext)->GetData(
+                    (ID3D11Asynchronous*)slot.EventQuery, &done, sizeof(int),
+                    (uint)AsyncGetdataFlag.Donotflush);
+                return hr == 0 && done != 0;
+            }
+        }
+
+        return true;
+    }
+
+    private protected override unsafe bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout)
+    {
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId > frameId)
+            return true;
+
+        if (slot.CurrentFrameId == frameId)
+        {
+            long deadline = nanosecondTimeout == ulong.MaxValue
+                ? long.MaxValue
+                : Environment.TickCount64 + (long)(nanosecondTimeout / 1_000_000);
+
+            lock (_immediateContextLock)
+            {
+                while (true)
+                {
+                    int done;
+                    int hr = ((ID3D11DeviceContext*)_immediateContext)->GetData(
+                        (ID3D11Asynchronous*)slot.EventQuery, &done, sizeof(int), 0);
+                    if (hr == 0 && done != 0)
+                        return true;
+
+                    if (nanosecondTimeout != ulong.MaxValue && Environment.TickCount64 >= deadline)
+                        return false;
+
+                    Thread.Yield();
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private unsafe void PollUntilComplete(ID3D11Query* query)
+    {
+        lock (_immediateContextLock)
+        {
+            while (true)
+            {
+                int done;
+                int hr = ((ID3D11DeviceContext*)_immediateContext)->GetData(
+                    (ID3D11Asynchronous*)query, &done, sizeof(int), 0);
+                if (hr == 0 && done != 0)
+                    return;
+                Thread.Yield();
+            }
+        }
+    }
+
+    internal void SubmitCommandBufferInternal(CommandBuffer cl)
     {
         D3D11CommandBuffer d3d11CL = Util.AssertSubtype<CommandBuffer, D3D11CommandBuffer>(cl);
         lock (_immediateContextLock)
         {
-            if (d3d11CL.DeviceCommandList != null) // CommandList may have been reset in the meantime (resized swapchain).
+            if (d3d11CL.DeviceCommandList != null)
             {
                 ((ID3D11DeviceContext*)_immediateContext)->ExecuteCommandList(d3d11CL.DeviceCommandList, false);
                 d3d11CL.OnCompleted();
             }
         }
+    }
 
-        if (fence is D3D11Fence d3d11Fence)
+    internal D3D11Buffer CreateTransientBuffer(uint sizeInBytes)
+    {
+        lock (_transientFreePoolLock)
         {
-            d3d11Fence.Set();
+            for (int i = 0; i < _transientFreePool.Count; i++)
+            {
+                if (_transientFreePool[i].SizeInBytes >= sizeInBytes)
+                {
+                    D3D11Buffer buf = _transientFreePool[i];
+                    _transientFreePool.RemoveAt(i);
+                    return buf;
+                }
+            }
         }
+
+        return Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(
+            ResourceFactory.CreateBuffer(new BufferDescription(sizeInBytes, BufferUsage.UniformBuffer | BufferUsage.Dynamic)));
     }
 
     private protected override void SwapBuffersCore(Swapchain swapchain)
@@ -702,9 +872,28 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
     internal override uint GetStructuredBufferMinOffsetAlignmentCore() => 16;
 
-    protected override void PlatformDispose()
+    protected override unsafe void PlatformDispose()
     {
-        // Dispose staging buffers
+        if (_slots != null)
+        {
+            foreach (ref SlotState slot in _slots.AsSpan())
+            {
+                if (slot.EventQuery != null)
+                    ((IUnknown*)slot.EventQuery)->Release();
+                slot.TransientPrimary?.Dispose();
+                foreach (D3D11Buffer buf in slot.TransientOverflow)
+                    buf.Dispose();
+                slot.FenceWrapper?.Dispose();
+            }
+        }
+
+        lock (_transientFreePoolLock)
+        {
+            foreach (D3D11Buffer buf in _transientFreePool)
+                buf.Dispose();
+            _transientFreePool.Clear();
+        }
+
         foreach (DeviceBuffer buffer in _availableStagingBuffers)
         {
             buffer.Dispose();
@@ -765,8 +954,29 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         _d3d11Api.Dispose();
     }
 
-    private protected override void WaitForIdleCore()
+    private protected override unsafe void WaitForIdleCore()
     {
+        if (_slots == null) return;
+
+        lock (_immediateContextLock)
+        {
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                ref SlotState slot = ref _slots[i];
+                if (slot.CurrentFrameId == 0) continue;
+
+                while (true)
+                {
+                    int done;
+                    int hr = ((ID3D11DeviceContext*)_immediateContext)->GetData(
+                        (ID3D11Asynchronous*)slot.EventQuery, &done, sizeof(int), 0);
+                    if (hr == 0 && done != 0) break;
+                    Thread.Yield();
+                }
+
+                slot.FenceWrapper.Set();
+            }
+        }
     }
 
     public override bool GetD3D11Info(out BackendInfoD3D11 info)

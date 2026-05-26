@@ -243,32 +243,6 @@ public abstract partial class ResourceFactory
     public abstract CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description);
 
     /// <summary>
-    /// Creates a new <see cref="ResourceLayout"/>.
-    /// </summary>
-    /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="ResourceLayout"/>.</returns>
-    public ResourceLayout CreateResourceLayout(ResourceLayoutDescription description) => CreateResourceLayout(ref description);
-    /// <summary>
-    /// Creates a new <see cref="ResourceLayout"/>.
-    /// </summary>
-    /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="ResourceLayout"/>.</returns>
-    public abstract ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description);
-
-    /// <summary>
-    /// Creates a new <see cref="ResourceSet"/>.
-    /// </summary>
-    /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="ResourceSet"/>.</returns>
-    public ResourceSet CreateResourceSet(ResourceSetDescription description) => CreateResourceSet(ref description);
-    /// <summary>
-    /// Creates a new <see cref="ResourceSet"/>.
-    /// </summary>
-    /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="ResourceSet"/>.</returns>
-    public abstract ResourceSet CreateResourceSet(ref ResourceSetDescription description);
-
-    /// <summary>
     /// Creates a new <see cref="Fence"/> in the given state.
     /// </summary>
     /// <param name="signaled">A value indicating whether the Fence should be in the signaled state when created.</param>

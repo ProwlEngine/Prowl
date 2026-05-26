@@ -31,17 +31,6 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
         return new D3D11Framebuffer(_device, ref description);
     }
 
-    public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
-    {
-        return new D3D11ResourceLayout(ref description);
-    }
-
-    public override ResourceSet CreateResourceSet(ref ResourceSetDescription description)
-    {
-        ValidationHelpers.ValidateResourceSet(_gd, ref description);
-        return new D3D11ResourceSet(ref description);
-    }
-
     protected override Sampler CreateSamplerCore(ref SamplerDescription description)
     {
         return new D3D11Sampler(_device, ref description);

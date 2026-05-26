@@ -1,9 +1,12 @@
 using System;
+using System.Buffers;
 using Silk.NET.Vulkan;
 using static Prowl.Veldrid.Vk.VulkanUtil;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 using VkApi = Silk.NET.Vulkan.Vk;
@@ -36,14 +39,17 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private VkPipelineCacheEntry _currentResolvedPipeline;
     private bool _hasResolvedPipeline;
     private PrimitiveTopology _resolvedTopology;
-    private BoundResourceSetInfo[] _currentGraphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
-    private bool[] _graphicsResourceSetsChanged;
 
     private bool _newFramebuffer; // Render pass cycle state
 
-    // Compute State
-    private BoundResourceSetInfo[] _currentComputeResourceSets = Array.Empty<BoundResourceSetInfo>();
-    private bool[] _computeResourceSetsChanged;
+    // Resource bind cache: (programKey, setIndex, mergedResourceVersion) -> DescriptorSet
+    private readonly Dictionary<(object, int, uint), DescriptorSet> _resourceBindCache = new();
+
+    // Tracks the VkBuffer handle written into each cached descriptor set's UBO bindings.
+    // Key: (programKey, setIndex); Value: backing VkBuffer handles per UBO element.
+    // Used to detect transient overflow (allocator switched to a new backing buffer).
+    private readonly Dictionary<(object, int), VkBufferHandle[]> _uboBackingBuffers = new();
+
     private string _name;
 
     private readonly object _commandBufferListLock = new object();
@@ -158,6 +164,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         if (_commandBufferEnded)
         {
             _commandBufferEnded = false;
+            HasEnded = false;
             _cb = GetNextCommandBuffer();
             if (_currentStagingInfo != null)
             {
@@ -176,16 +183,16 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _commandBufferBegun = true;
 
         ClearCachedState();
+        _resourceBindCache.Clear();
+        _uboBackingBuffers.Clear();
         _currentFramebuffer = null;
         _currentShaderProgram = null;
         _currentResolvedPipeline = default;
         _hasResolvedPipeline = false;
         _resolvedTopology = default;
-        ClearSets(_currentGraphicsResourceSets);
         Util.ClearArray(_scissorRects);
 
         _currentComputeProgram = null;
-        ClearSets(_currentComputeResourceSets);
     }
 
     private protected override void ClearColorTargetCore(uint index, Color clearColor)
@@ -337,15 +344,22 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _preDrawSampledImages.Clear();
 
         ResolveAndBindGraphicsPipeline();
+
+        // Transition property textures to the right layout before the render pass begins.
+        TransitionPropertyTextures(isCompute: false);
+
         EnsureRenderPassActive();
 
-        FlushNewResourceSets(
-            _currentGraphicsResourceSets,
-            _graphicsResourceSetsChanged,
-            _currentResolvedPipeline.ResourceSetCount,
-            _currentResolvedPipeline.DynamicOffsetsCount,
+        BindPropertySets(
+            _currentShaderProgram,
+            _currentShaderProgram.ResourceLayoutsArray,
+            _currentShaderProgram.DescriptorSetLayouts,
+            _currentShaderProgram.PerSetCounts,
+            _currentShaderProgram.ResourceSetCount,
+            _currentShaderProgram.TotalDynamicUboCount,
+            _currentResolvedPipeline.PipelineLayout,
             PipelineBindPoint.Graphics,
-            _currentResolvedPipeline.PipelineLayout);
+            isCompute: false);
     }
 
     private void ResolveAndBindGraphicsPipeline()
@@ -371,93 +385,6 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Graphics, _currentResolvedPipeline.Pipeline);
     }
 
-    private void FlushNewResourceSets(
-        BoundResourceSetInfo[] resourceSets,
-        bool[] resourceSetsChanged,
-        uint resourceSetCount,
-        int dynamicOffsetsCount,
-        PipelineBindPoint bindPoint,
-        Silk.NET.Vulkan.PipelineLayout pipelineLayout)
-    {
-        DescriptorSet* descriptorSets = stackalloc DescriptorSet[(int)resourceSetCount];
-        uint* dynamicOffsets = null;
-        if (dynamicOffsetsCount > 0)
-        {
-            uint* alloc = stackalloc uint[dynamicOffsetsCount];
-            dynamicOffsets = alloc;
-        }
-        uint currentBatchCount = 0;
-        uint currentBatchFirstSet = 0;
-        uint currentBatchDynamicOffsetCount = 0;
-
-        for (uint currentSlot = 0; currentSlot < resourceSetCount; currentSlot++)
-        {
-            bool batchEnded = !resourceSetsChanged[currentSlot] || currentSlot == resourceSetCount - 1;
-
-            if (resourceSetsChanged[currentSlot])
-            {
-                resourceSetsChanged[currentSlot] = false;
-                VkResourceSet vkSet = Util.AssertSubtype<ResourceSet, VkResourceSet>(resourceSets[currentSlot].Set);
-                descriptorSets[currentBatchCount] = vkSet.DescriptorSet;
-                currentBatchCount += 1;
-
-                // Vulkan expects offsets ordered by binding number within the descriptor set.
-                // The user supplied them in element-array order; remap via the layout's
-                // precomputed sorted dynamic-element index.
-                VkResourceLayout vkLayout = Util.AssertSubtype<ResourceLayout, VkResourceLayout>(vkSet.Layout);
-                int[] order = vkLayout.DynamicElementsByBindingOrder;
-                ref BoundResourceSetInfo info = ref resourceSets[currentSlot];
-                ResourceLayoutElementDescription[] elems = vkLayout.Description.Elements;
-                for (int j = 0; j < order.Length; j++)
-                {
-                    // The j-th dynamic descriptor in binding-number order corresponds to the
-                    // dynamic-offsets[] entry whose position in the user's array matches the
-                    // ordinal of order[j] among dynamic-flagged elements in element-array order.
-                    uint userIndex = (uint)CountDynamicBefore(elems, order[j]);
-                    dynamicOffsets[currentBatchDynamicOffsetCount] = info.Offsets.Get(userIndex);
-                    currentBatchDynamicOffsetCount += 1;
-                }
-
-                _currentStagingInfo.Resources.Add(vkSet.RefCount);
-                for (int i = 0; i < vkSet.RefCounts.Count; i++)
-                {
-                    _currentStagingInfo.Resources.Add(vkSet.RefCounts[i]);
-                }
-            }
-
-            if (batchEnded)
-            {
-                if (currentBatchCount != 0)
-                {
-                    _gd.Vk.CmdBindDescriptorSets(
-                        _cb,
-                        bindPoint,
-                        pipelineLayout,
-                        currentBatchFirstSet,
-                        currentBatchCount,
-                        descriptorSets,
-                        currentBatchDynamicOffsetCount,
-                        dynamicOffsets);
-                }
-
-                currentBatchCount = 0;
-                currentBatchFirstSet = currentSlot + 1;
-                currentBatchDynamicOffsetCount = 0;
-            }
-        }
-    }
-
-    private static int CountDynamicBefore(ResourceLayoutElementDescription[] elems, int elementIndex)
-    {
-        int count = 0;
-        for (int i = 0; i < elementIndex; i++)
-        {
-            if ((elems[i].Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
-                count++;
-        }
-        return count;
-    }
-
     private void TransitionImages(List<VkTexture> sampledTextures, ImageLayout layout)
     {
         for (int i = 0; i < sampledTextures.Count; i++)
@@ -478,30 +405,21 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         EnsureNoRenderPass();
 
-        for (uint currentSlot = 0; currentSlot < _currentComputeProgram.ResourceSetCount; currentSlot++)
-        {
-            VkResourceSet vkSet = Util.AssertSubtype<ResourceSet, VkResourceSet>(
-                _currentComputeResourceSets[currentSlot].Set);
+        TransitionImages(_preDrawSampledImages, ImageLayout.ShaderReadOnlyOptimal);
+        _preDrawSampledImages.Clear();
 
-            TransitionImages(vkSet.SampledTextures, ImageLayout.ShaderReadOnlyOptimal);
-            TransitionImages(vkSet.StorageTextures, ImageLayout.General);
-            for (int texIdx = 0; texIdx < vkSet.StorageTextures.Count; texIdx++)
-            {
-                VkTexture storageTex = vkSet.StorageTextures[texIdx];
-                if ((storageTex.Usage & TextureUsage.Sampled) != 0)
-                {
-                    _preDrawSampledImages.Add(storageTex);
-                }
-            }
-        }
+        TransitionPropertyTextures(isCompute: true);
 
-        FlushNewResourceSets(
-            _currentComputeResourceSets,
-            _computeResourceSetsChanged,
+        BindPropertySets(
+            _currentComputeProgram,
+            _currentComputeProgram.ResourceLayoutsArray,
+            _currentComputeProgram.DescriptorSetLayouts,
+            _currentComputeProgram.PerSetCounts,
             _currentComputeProgram.ResourceSetCount,
-            _currentComputeProgram.DynamicOffsetsCount,
+            _currentComputeProgram.TotalDynamicUboCount,
+            _currentComputeProgram.PipelineLayout,
             PipelineBindPoint.Compute,
-            _currentComputeProgram.PipelineLayout);
+            isCompute: true);
     }
 
     private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
@@ -561,6 +479,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         _commandBufferBegun = false;
         _commandBufferEnded = true;
+        HasEnded = true;
 
         if (!_currentFramebufferEverActive && _currentFramebuffer != null)
         {
@@ -748,49 +667,407 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         _currentShaderProgram = sp;
         _hasResolvedPipeline = false;
-        Util.EnsureArrayMinimumSize(ref _currentGraphicsResourceSets, sp.ResourceSetCount);
-        ClearSets(_currentGraphicsResourceSets);
-        Util.EnsureArrayMinimumSize(ref _graphicsResourceSetsChanged, sp.ResourceSetCount);
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)
     {
         VkComputeProgram cp = Util.AssertSubtype<ComputeProgram, VkComputeProgram>(program);
         _currentComputeProgram = cp;
-        Util.EnsureArrayMinimumSize(ref _currentComputeResourceSets, cp.ResourceSetCount);
-        ClearSets(_currentComputeResourceSets);
-        Util.EnsureArrayMinimumSize(ref _computeResourceSetsChanged, cp.ResourceSetCount);
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, cp.DevicePipeline);
         _currentStagingInfo.Resources.Add(cp.RefCount);
     }
 
-    private void ClearSets(BoundResourceSetInfo[] boundSets)
+    private protected override void SetPropertiesCore(PropertySet properties) { }
+
+    private protected override void ClearPropertiesCore()
     {
-        for (int i = 0; i < boundSets.Length; i++)
+        _resourceBindCache.Clear();
+        _uboBackingBuffers.Clear();
+    }
+
+    private void TransitionPropertyTextures(bool isCompute)
+    {
+        ResourceLayoutDescription[] layouts = isCompute
+            ? _currentComputeProgram.ResourceLayoutsArray
+            : _currentShaderProgram.ResourceLayoutsArray;
+
+        foreach (ResourceLayoutDescription layout in layouts)
         {
-            boundSets[i].Offsets.Dispose();
-            boundSets[i] = default;
+            foreach (ResourceLayoutElementDescription elem in layout.Elements)
+            {
+                if (elem.Kind != ResourceKind.TextureReadOnly && elem.Kind != ResourceKind.TextureReadWrite)
+                    continue;
+
+                VkTexture tex;
+                if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry)
+                    && entry.Kind == PropertyEntryKind.Texture)
+                {
+                    Texture resolved = entry.Texture ?? entry.TextureView?.Target;
+                    tex = resolved != null ? (VkTexture)resolved : GetMissingTexture(elem.Kind);
+                }
+                else
+                {
+                    tex = GetMissingTexture(elem.Kind);
+                }
+
+                ImageLayout targetLayout = elem.Kind == ResourceKind.TextureReadOnly
+                    ? ImageLayout.ShaderReadOnlyOptimal
+                    : ImageLayout.General;
+
+                tex.TransitionImageLayout(_cb, 0, tex.MipLevels, 0, tex.ActualArrayLayers, targetLayout);
+
+                if (elem.Kind == ResourceKind.TextureReadWrite && (tex.Usage & TextureUsage.Sampled) != 0)
+                    _preDrawSampledImages.Add(tex);
+            }
         }
     }
 
-    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+    private VkTexture GetMissingTexture(ResourceKind kind)
+        => (VkTexture)(kind == ResourceKind.TextureReadWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D);
+
+    private unsafe void BindPropertySets(
+        object programKey,
+        ResourceLayoutDescription[] resourceLayouts,
+        DescriptorSetLayout[] dslLayouts,
+        DescriptorResourceCounts[] perSetCounts,
+        uint setCount,
+        int totalDynamicUboCount,
+        Silk.NET.Vulkan.PipelineLayout pipelineLayout,
+        PipelineBindPoint bindPoint,
+        bool isCompute)
     {
-        if (!_currentGraphicsResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
+        if (setCount == 0) return;
+
+        VkDescriptorPoolManager framePool = _gd.GetFrameDescriptorPool(_gd.CurrentFrame.RingSlot);
+        uint resourceVersion = _mergedTable.ResourceVersion;
+        uint uniformVersion = _mergedTable.UniformVersion;
+
+        DescriptorSet* sets = stackalloc DescriptorSet[(int)setCount];
+        uint* dynOffsets = stackalloc uint[totalDynamicUboCount > 0 ? totalDynamicUboCount : 1];
+        int dynOffsetCount = 0;
+
+        for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
         {
-            _currentGraphicsResourceSets[slot].Offsets.Dispose();
-            _currentGraphicsResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetsCount, ref dynamicOffsets);
-            _graphicsResourceSetsChanged[slot] = true;
+            ResourceLayoutDescription layout = resourceLayouts[setIdx];
+            var cacheKey = (programKey, setIdx, resourceVersion);
+
+            bool miss = !_resourceBindCache.TryGetValue(cacheKey, out DescriptorSet ds);
+            if (!miss && UboBackingBufferChanged(programKey, setIdx, in layout, isCompute, uniformVersion))
+            {
+                _resourceBindCache.Remove(cacheKey);
+                miss = true;
+            }
+
+            if (miss)
+            {
+                DescriptorAllocationToken tok = framePool.Allocate(perSetCounts[setIdx], dslLayouts[setIdx]);
+                ds = tok.Set;
+                WriteDescriptorSlot(programKey, (uint)setIdx, in layout, ds, isCompute, uniformVersion);
+                _resourceBindCache[cacheKey] = ds;
+            }
+
+            sets[setIdx] = ds;
+            AppendDynOffsets(programKey, (uint)setIdx, in layout, isCompute, uniformVersion, dynOffsets, ref dynOffsetCount);
         }
+
+        _gd.Vk.CmdBindDescriptorSets(_cb, bindPoint, pipelineLayout, 0, setCount, sets, (uint)dynOffsetCount, dynOffsets);
     }
 
-    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
+    private bool UboBackingBufferChanged(
+        object programKey, int setIdx, in ResourceLayoutDescription layout,
+        bool isCompute, uint uniformVersion)
     {
-        if (!_currentComputeResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
+        if (!_uboBackingBuffers.TryGetValue((programKey, setIdx), out VkBufferHandle[] stored))
+            return false;
+
+        int idx = 0;
+        foreach (ResourceLayoutElementDescription elem in layout.Elements)
         {
-            _currentComputeResourceSets[slot].Offsets.Dispose();
-            _currentComputeResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetsCount, ref dynamicOffsets);
-            _computeResourceSetsChanged[slot] = true;
+            if (elem.Kind != ResourceKind.UniformBuffer) continue;
+            DeviceBufferRange range = ResolveUboRange(programKey, (uint)setIdx, in elem, isCompute, uniformVersion);
+            VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
+            if (idx >= stored.Length || stored[idx].Handle != vkBuf.DeviceBuffer.Handle)
+                return true;
+            idx++;
         }
+        return false;
+    }
+
+    private unsafe void AppendDynOffsets(
+        object programKey, uint setIdx, in ResourceLayoutDescription layout,
+        bool isCompute, uint uniformVersion, uint* dynOffsets, ref int dynOffsetCount)
+    {
+        const int MaxUbosPerSet = 16;
+        (int binding, uint offset)* uboData = stackalloc (int, uint)[MaxUbosPerSet];
+        int uboCount = 0;
+
+        foreach (ResourceLayoutElementDescription elem in layout.Elements)
+        {
+            if (elem.Kind != ResourceKind.UniformBuffer) continue;
+            DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, isCompute, uniformVersion);
+            uboData[uboCount++] = (elem.BindingIndex, range.Offset);
+        }
+
+        // Sort by binding index (Vulkan requires dynamic offsets in binding-number order).
+        for (int i = 1; i < uboCount; i++)
+        {
+            var key = uboData[i];
+            int j = i - 1;
+            while (j >= 0 && uboData[j].Item1 > key.Item1) { uboData[j + 1] = uboData[j]; j--; }
+            uboData[j + 1] = key;
+        }
+
+        for (int i = 0; i < uboCount; i++)
+            dynOffsets[dynOffsetCount++] = uboData[i].Item2;
+    }
+
+    private unsafe void WriteDescriptorSlot(
+        object programKey, uint setIdx, in ResourceLayoutDescription layout,
+        DescriptorSet dstSet, bool isCompute, uint uniformVersion)
+    {
+        const int MaxElems = 64;
+        WriteDescriptorSet* writes = stackalloc WriteDescriptorSet[MaxElems];
+        DescriptorBufferInfo* bufInfos = stackalloc DescriptorBufferInfo[MaxElems];
+        DescriptorImageInfo* imgInfos = stackalloc DescriptorImageInfo[MaxElems];
+        int writeCount = 0, bufIdx = 0, imgIdx = 0;
+
+        int uboCount = 0;
+        foreach (ResourceLayoutElementDescription elem in layout.Elements)
+            if (elem.Kind == ResourceKind.UniformBuffer) uboCount++;
+
+        VkBufferHandle[]? uboBuffers = uboCount > 0 ? new VkBufferHandle[uboCount] : null;
+        int uboTrackedIdx = 0;
+
+        foreach (ResourceLayoutElementDescription elem in layout.Elements)
+        {
+            WriteDescriptorSet write = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = dstSet,
+                DstBinding = (uint)elem.BindingIndex,
+                DescriptorCount = 1,
+            };
+
+            switch (elem.Kind)
+            {
+                case ResourceKind.UniformBuffer:
+                    {
+                        DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, isCompute, uniformVersion);
+                        VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
+                        uboBuffers![uboTrackedIdx++] = vkBuf.DeviceBuffer;
+                        bufInfos[bufIdx] = new DescriptorBufferInfo
+                        {
+                            Buffer = vkBuf.DeviceBuffer,
+                            Offset = 0,
+                            Range = range.SizeInBytes,
+                        };
+                        write.DescriptorType = DescriptorType.UniformBufferDynamic;
+                        write.PBufferInfo = &bufInfos[bufIdx++];
+                        break;
+                    }
+
+                case ResourceKind.StructuredBufferReadOnly:
+                case ResourceKind.StructuredBufferReadWrite:
+                    {
+                        DeviceBufferRange range;
+                        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry ssboEntry)
+                            && ssboEntry.Kind == PropertyEntryKind.Buffer)
+                        {
+                            range = new DeviceBufferRange(ssboEntry.Buffer, ssboEntry.BufferOffset, ssboEntry.BufferSize);
+                        }
+                        else
+                        {
+                            _gd.OnMissingProperty?.Invoke(
+                                _currentShaderProgram,
+                                null,
+                                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+                            range = new DeviceBufferRange(_gd.NullStructuredRW, 0, 0);
+                        }
+                        VkBuffer ssboVkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
+                        bufInfos[bufIdx] = new DescriptorBufferInfo
+                        {
+                            Buffer = ssboVkBuf.DeviceBuffer,
+                            Offset = range.Offset,
+                            Range = range.SizeInBytes,
+                        };
+                        write.DescriptorType = DescriptorType.StorageBuffer;
+                        write.PBufferInfo = &bufInfos[bufIdx++];
+                        break;
+                    }
+
+                case ResourceKind.TextureReadOnly:
+                    {
+                        VkTextureView view = ResolveTextureView(in elem, isCompute, setIdx);
+                        imgInfos[imgIdx] = new DescriptorImageInfo
+                        {
+                            ImageView = view.ImageView,
+                            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                        };
+                        write.DescriptorType = DescriptorType.SampledImage;
+                        write.PImageInfo = &imgInfos[imgIdx++];
+                        break;
+                    }
+
+                case ResourceKind.TextureReadWrite:
+                    {
+                        VkTextureView view = ResolveTextureView(in elem, isCompute, setIdx);
+                        imgInfos[imgIdx] = new DescriptorImageInfo
+                        {
+                            ImageView = view.ImageView,
+                            ImageLayout = ImageLayout.General,
+                        };
+                        write.DescriptorType = DescriptorType.StorageImage;
+                        write.PImageInfo = &imgInfos[imgIdx++];
+                        break;
+                    }
+
+                case ResourceKind.Sampler:
+                    {
+                        VkSampler sampler = ResolveSampler(in elem, in layout);
+                        imgInfos[imgIdx] = new DescriptorImageInfo
+                        {
+                            Sampler = sampler.DeviceSampler,
+                        };
+                        write.DescriptorType = DescriptorType.Sampler;
+                        write.PImageInfo = &imgInfos[imgIdx++];
+                        break;
+                    }
+
+                default:
+                    continue;
+            }
+
+            writes[writeCount++] = write;
+        }
+
+        if (writeCount > 0)
+            _gd.Vk.UpdateDescriptorSets(_gd.Device, (uint)writeCount, writes, 0, null);
+
+        if (uboBuffers != null)
+            _uboBackingBuffers[(programKey, (int)setIdx)] = uboBuffers;
+    }
+
+    private DeviceBufferRange ResolveUboRange(
+        object programKey, uint setIdx, in ResourceLayoutElementDescription elem,
+        bool isCompute, uint uniformVersion)
+    {
+        if (elem.UniformFields != null && elem.UniformFields.Length > 0)
+            return GetOrBuildImplicitUbo(programKey, setIdx, elem.BindingIndex, elem.UniformFields, isCompute, uniformVersion);
+
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry uboEntry)
+            && uboEntry.Kind == PropertyEntryKind.Buffer)
+        {
+            return new DeviceBufferRange(uboEntry.Buffer, uboEntry.BufferOffset, uboEntry.BufferSize);
+        }
+
+        _gd.OnMissingProperty?.Invoke(
+            _currentShaderProgram,
+            null,
+            elem.Name, ResourceKind.UniformBuffer, setIdx, elem.BindingIndex);
+        return _gd.CurrentFrame.AllocateTransient(16);
+    }
+
+    private unsafe DeviceBufferRange GetOrBuildImplicitUbo(
+        object programKey, uint setIdx, int bindingIndex,
+        UniformBlockField[] fields, bool isCompute, uint uniformVersion)
+    {
+        if (!isCompute)
+        {
+            var key = new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion);
+            if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
+        }
+        else
+        {
+            var key = new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion);
+            if (_computeUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
+        }
+
+        uint totalSize = 0;
+        foreach (UniformBlockField field in fields)
+            totalSize = Math.Max(totalSize, field.Offset + field.Size);
+        if (totalSize == 0) totalSize = 16;
+
+        DeviceBufferRange range = _gd.CurrentFrame.AllocateTransient(totalSize);
+
+        byte[] uploadBuf = ArrayPool<byte>.Shared.Rent((int)totalSize);
+        try
+        {
+            Array.Clear(uploadBuf, 0, (int)totalSize);
+            foreach (UniformBlockField field in fields)
+            {
+                if (_mergedTable.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                    && uEntry.Kind == PropertyEntryKind.Uniform)
+                {
+                    ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
+                        ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
+                        (int)field.Size);
+                    src.CopyTo(uploadBuf.AsSpan((int)field.Offset, (int)field.Size));
+                }
+            }
+            fixed (byte* ptr = uploadBuf)
+                _gd.UpdateBuffer(range.Buffer, range.Offset, (IntPtr)ptr, totalSize);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(uploadBuf);
+        }
+
+        if (!isCompute)
+            _frameUboCache[new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
+        else
+            _computeUboCache[new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
+
+        return range;
+    }
+
+    private VkTextureView ResolveTextureView(
+        in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
+    {
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+            && texEntry.Kind == PropertyEntryKind.Texture)
+        {
+            if (texEntry.TextureView != null)
+                return (VkTextureView)texEntry.TextureView;
+            if (texEntry.Texture != null)
+                return _gd.GetOrCreateDefaultView((VkTexture)texEntry.Texture);
+        }
+
+        _gd.OnMissingProperty?.Invoke(
+            _currentShaderProgram,
+            null,
+            elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+        return _gd.GetOrCreateDefaultView(GetMissingTexture(elem.Kind));
+    }
+
+    private VkSampler ResolveSampler(
+        in ResourceLayoutElementDescription elem, in ResourceLayoutDescription layout)
+    {
+        // Rule 1: explicit SetSampler(name) entry
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
+            && samplerEntry.Kind == PropertyEntryKind.Sampler
+            && samplerEntry.Sampler != null)
+        {
+            return (VkSampler)samplerEntry.Sampler;
+        }
+
+        // Rule 2: SetTexture(name, _, sampler) where the texture element shares this name
+        foreach (ResourceLayoutElementDescription other in layout.Elements)
+        {
+            if (other.Name == elem.Name
+                && (other.Kind == ResourceKind.TextureReadOnly || other.Kind == ResourceKind.TextureReadWrite))
+            {
+                if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+                    && texEntry.Kind == PropertyEntryKind.Texture
+                    && texEntry.Sampler != null)
+                {
+                    return (VkSampler)texEntry.Sampler;
+                }
+                break;
+            }
+        }
+
+        // Rule 3: fallback to LinearSampler
+        return (VkSampler)_gd.LinearSampler;
     }
 
     public override void SetScissorRect(uint index, uint x, uint y, uint width, uint height)

@@ -51,13 +51,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     private D3D11ShaderProgram _currentShaderProgram;
     private D3D11ComputeProgram _currentComputeProgram;
-    private BoundResourceSetInfo[] _graphicsResourceSets = new BoundResourceSetInfo[1];
-    // Resource sets are invalidated when a new resource set is bound with an incompatible SRV or UAV.
-    private bool[] _invalidatedGraphicsResourceSets = new bool[1];
-
-    private BoundResourceSetInfo[] _computeResourceSets = new BoundResourceSetInfo[1];
-    // Resource sets are invalidated when a new resource set is bound with an incompatible SRV or UAV.
-    private bool[] _invalidatedComputeResourceSets = new bool[1];
     private string _name;
     private ID3D11Buffer*[] _cbOut = new ID3D11Buffer*[1];
     private int[] _firstConstRef = new int[1];
@@ -140,6 +133,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
         ClearState();
         _begun = true;
+        HasEnded = false;
     }
 
     private void ClearState()
@@ -177,8 +171,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         _domainShader = null;
         _pixelShader = null;
 
-        ClearSets(_graphicsResourceSets);
-
         Util.ClearArray(_vertexBoundUniformBuffers);
         Util.ClearArray(_vertexBoundTextureViews);
         Util.ClearArray(_vertexBoundSamplers);
@@ -186,8 +178,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         Util.ClearArray(_fragmentBoundUniformBuffers);
         Util.ClearArray(_fragmentBoundTextureViews);
         Util.ClearArray(_fragmentBoundSamplers);
-
-        ClearSets(_computeResourceSets);
 
         foreach (KeyValuePair<Texture, List<BoundTextureInfo>> kvp in _boundSRVs)
         {
@@ -206,15 +196,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         _boundUAVs.Clear();
     }
 
-    private void ClearSets(BoundResourceSetInfo[] boundSets)
-    {
-        for (int i = 0; i < boundSets.Length; i++)
-        {
-            boundSets[i].Offsets.Dispose();
-            boundSets[i] = default;
-        }
-    }
-
     public override void End()
     {
         if (_commandList.Handle != null)
@@ -230,6 +211,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             D3D11Util.SetDebugName((ID3D11DeviceChild*)_commandList.Handle, _name);
         ResetManagedState();
         _begun = false;
+        HasEnded = true;
     }
 
     public void Reset()
@@ -287,8 +269,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         sp.EnsureCacheResolved(msaa);
 
         _currentShaderProgram = sp;
-        ClearSets(_graphicsResourceSets);
-        Util.ClearArray(_invalidatedGraphicsResourceSets);
 
         ID3D11BlendState* blendState = sp.BlendStateHandle;
         BlendStateDescription bsDesc = sp.BlendState;
@@ -342,9 +322,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             }
         }
         Util.EnsureArrayMinimumSize(ref _vertexStrides, 1);
-
-        Util.EnsureArrayMinimumSize(ref _graphicsResourceSets, (uint)sp.D3D11ResourceLayouts.Length);
-        Util.EnsureArrayMinimumSize(ref _invalidatedGraphicsResourceSets, (uint)sp.D3D11ResourceLayouts.Length);
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)
@@ -352,11 +329,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         D3D11ComputeProgram cp = Util.AssertSubtype<ComputeProgram, D3D11ComputeProgram>(program);
         if (_currentComputeProgram == cp) return;
         _currentComputeProgram = cp;
-        ClearSets(_computeResourceSets);
-        Util.ClearArray(_invalidatedComputeResourceSets);
         Ctx->CSSetShader(cp.ComputeShader, null, 0);
-        Util.EnsureArrayMinimumSize(ref _computeResourceSets, (uint)cp.D3D11ResourceLayouts.Length);
-        Util.EnsureArrayMinimumSize(ref _invalidatedComputeResourceSets, (uint)cp.D3D11ResourceLayouts.Length);
     }
 
     private static bool BlendFactorEquals(float[] a, float[] b)
@@ -364,127 +337,18 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3];
     }
 
-    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
-    {
-        if (_graphicsResourceSets[slot].Equals(rs, dynamicOffsetsCount, ref dynamicOffsets))
-        {
-            return;
-        }
+    /// <inheritdoc/>
+    private protected override void SetPropertiesCore(PropertySet ps) { }
 
-        _graphicsResourceSets[slot].Offsets.Dispose();
-        _graphicsResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetsCount, ref dynamicOffsets);
-        ActivateResourceSet(slot, _graphicsResourceSets[slot], true);
-    }
-
-    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet set, uint dynamicOffsetsCount, ref uint dynamicOffsets)
-    {
-        if (_computeResourceSets[slot].Equals(set, dynamicOffsetsCount, ref dynamicOffsets))
-        {
-            return;
-        }
-
-        _computeResourceSets[slot].Offsets.Dispose();
-        _computeResourceSets[slot] = new BoundResourceSetInfo(set, dynamicOffsetsCount, ref dynamicOffsets);
-        ActivateResourceSet(slot, _computeResourceSets[slot], false);
-    }
-
-    private void ActivateResourceSet(uint slot, BoundResourceSetInfo brsi, bool graphics)
-    {
-        D3D11ResourceSet d3d11RS = Util.AssertSubtype<ResourceSet, D3D11ResourceSet>(brsi.Set);
-
-        D3D11ResourceLayout layout = d3d11RS.Layout;
-        ResourceLayoutElementDescription[] elements = layout.Elements;
-        BindableResource[] resources = d3d11RS.Resources;
-        uint dynamicOffsetIndex = 0;
-        for (int i = 0; i < resources.Length; i++)
-        {
-            BindableResource resource = resources[i];
-            ResourceLayoutElementDescription element = elements[i];
-            int bindingIndex = element.BindingIndex;
-            uint bufferOffset = 0;
-            if ((element.Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
-            {
-                bufferOffset = brsi.Offsets.Get(dynamicOffsetIndex);
-                dynamicOffsetIndex += 1;
-            }
-            switch (element.Kind)
-            {
-                case ResourceKind.UniformBuffer:
-                    {
-                        D3D11BufferRange range = GetBufferRange(resource, bufferOffset);
-                        BindUniformBuffer(range, bindingIndex, element.Stages);
-                        break;
-                    }
-                case ResourceKind.StructuredBufferReadOnly:
-                    {
-                        D3D11BufferRange range = GetBufferRange(resource, bufferOffset);
-                        BindStorageBufferView(range, bindingIndex, element.Stages);
-                        break;
-                    }
-                case ResourceKind.StructuredBufferReadWrite:
-                    {
-                        D3D11BufferRange range = GetBufferRange(resource, bufferOffset);
-                        ID3D11UnorderedAccessView* uav = range.Buffer.GetUnorderedAccessView(range.Offset, range.Size);
-                        BindUnorderedAccessView(null, range.Buffer, uav, bindingIndex, element.Stages, slot);
-                        break;
-                    }
-                case ResourceKind.TextureReadOnly:
-                    TextureView texView = Util.GetTextureView(_gd, resource);
-                    D3D11TextureView d3d11TexView = Util.AssertSubtype<TextureView, D3D11TextureView>(texView);
-                    UnbindUAVTexture(d3d11TexView.Target);
-                    BindTextureView(d3d11TexView, bindingIndex, element.Stages, slot);
-                    break;
-                case ResourceKind.TextureReadWrite:
-                    TextureView rwTexView = Util.GetTextureView(_gd, resource);
-                    D3D11TextureView d3d11RWTexView = Util.AssertSubtype<TextureView, D3D11TextureView>(rwTexView);
-                    UnbindSRVTexture(d3d11RWTexView.Target);
-                    BindUnorderedAccessView(d3d11RWTexView.Target, null, d3d11RWTexView.UnorderedAccessView, bindingIndex, element.Stages, slot);
-                    break;
-                case ResourceKind.Sampler:
-                    D3D11Sampler sampler = Util.AssertSubtype<BindableResource, D3D11Sampler>(resource);
-                    BindSampler(sampler, bindingIndex, element.Stages);
-                    break;
-                default: throw Illegal.Value<ResourceKind>();
-            }
-        }
-    }
-
-    private D3D11BufferRange GetBufferRange(BindableResource resource, uint additionalOffset)
-    {
-        if (resource is D3D11Buffer d3d11Buff)
-        {
-            return new D3D11BufferRange(d3d11Buff, additionalOffset, d3d11Buff.SizeInBytes);
-        }
-        else if (resource is DeviceBufferRange range)
-        {
-            return new D3D11BufferRange(
-                Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(range.Buffer),
-                range.Offset + additionalOffset,
-                range.SizeInBytes);
-        }
-        else
-        {
-            throw new RenderException($"Unexpected resource type used in a buffer type slot: {resource.GetType().Name}");
-        }
-    }
+    /// <inheritdoc/>
+    private protected override void ClearPropertiesCore() { }
 
     private void UnbindSRVTexture(Texture target)
     {
         if (_boundSRVs.TryGetValue(target, out List<BoundTextureInfo> btis))
         {
             foreach (BoundTextureInfo bti in btis)
-            {
-                BindTextureView(null, bti.Slot, bti.Stages, 0);
-
-                if ((bti.Stages & ShaderStages.Compute) == ShaderStages.Compute)
-                {
-                    _invalidatedComputeResourceSets[bti.ResourceSet] = true;
-                }
-                else
-                {
-                    _invalidatedGraphicsResourceSets[bti.ResourceSet] = true;
-                }
-            }
+                BindTextureView(null, bti.Slot, bti.Stages);
 
             bool result = _boundSRVs.Remove(target);
             Debug.Assert(result);
@@ -504,17 +368,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         if (_boundUAVs.TryGetValue(target, out List<BoundTextureInfo> btis))
         {
             foreach (BoundTextureInfo bti in btis)
-            {
-                BindUnorderedAccessView(null, null, null, bti.Slot, bti.Stages, bti.ResourceSet);
-                if ((bti.Stages & ShaderStages.Compute) == ShaderStages.Compute)
-                {
-                    _invalidatedComputeResourceSets[bti.ResourceSet] = true;
-                }
-                else
-                {
-                    _invalidatedGraphicsResourceSets[bti.ResourceSet] = true;
-                }
-            }
+                BindUnorderedAccessView(null, null, null, bti.Slot, bti.Stages);
 
             bool result = _boundUAVs.Remove(target);
             Debug.Assert(result);
@@ -593,16 +447,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
 
         FlushVertexBindings();
-
-        int graphicsResourceCount = _currentShaderProgram.D3D11ResourceLayouts.Length;
-        for (uint i = 0; i < graphicsResourceCount; i++)
-        {
-            if (_invalidatedGraphicsResourceSets[i])
-            {
-                _invalidatedGraphicsResourceSets[i] = false;
-                ActivateResourceSet(i, _graphicsResourceSets[i], true);
-            }
-        }
+        BindProperties(isCompute: false);
     }
 
     public override void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
@@ -621,15 +466,251 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     private void PreDispatchCommand()
     {
-        int computeResourceCount = _currentComputeProgram.D3D11ResourceLayouts.Length;
-        for (uint i = 0; i < computeResourceCount; i++)
+        BindProperties(isCompute: true);
+    }
+
+    private void BindProperties(bool isCompute)
+    {
+        ResourceLayoutDescription[] layouts = isCompute
+            ? _currentComputeProgram.ResourceLayoutsArray
+            : _currentShaderProgram.ResourceLayoutsArray;
+
+        for (int setIdx = 0; setIdx < layouts.Length; setIdx++)
         {
-            if (_invalidatedComputeResourceSets[i])
+            ResourceLayoutDescription layout = layouts[setIdx];
+            foreach (ResourceLayoutElementDescription elem in layout.Elements)
+                BindPropertySlot(in elem, in layout, isCompute, (uint)setIdx);
+        }
+    }
+
+    private unsafe void BindPropertySlot(
+        in ResourceLayoutElementDescription elem,
+        in ResourceLayoutDescription layout,
+        bool isCompute, uint setIdx)
+    {
+        int bindingIndex = elem.BindingIndex;
+        ShaderStages stages = isCompute ? ShaderStages.Compute : elem.Stages;
+
+        switch (elem.Kind)
+        {
+            case ResourceKind.UniformBuffer:
+                {
+                    D3D11BufferRange range = ResolveUboD3D11(in elem, isCompute, setIdx);
+                    BindUniformBuffer(range, bindingIndex, stages);
+                    break;
+                }
+            case ResourceKind.StructuredBufferReadOnly:
+                {
+                    D3D11BufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
+                    if (range.Buffer != null)
+                        BindStorageBufferView(range, bindingIndex, stages);
+                    else
+                        BindNullStorageBuffer(bindingIndex, stages, false);
+                    break;
+                }
+            case ResourceKind.StructuredBufferReadWrite:
+                {
+                    D3D11BufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
+                    if (range.Buffer != null)
+                    {
+                        ID3D11UnorderedAccessView* uav = range.Buffer.GetUnorderedAccessView(range.Offset, range.Size);
+                        BindUnorderedAccessView(null, range.Buffer, uav, bindingIndex, stages);
+                    }
+                    else
+                        BindNullStorageBuffer(bindingIndex, stages, true);
+                    break;
+                }
+            case ResourceKind.TextureReadOnly:
+                {
+                    D3D11TextureView texView = ResolveTextureViewD3D11(in elem, isCompute, setIdx, false);
+                    UnbindUAVTexture(texView.Target);
+                    BindTextureView(texView, bindingIndex, stages);
+                    break;
+                }
+            case ResourceKind.TextureReadWrite:
+                {
+                    D3D11TextureView rwTexView = ResolveTextureViewD3D11(in elem, isCompute, setIdx, true);
+                    UnbindSRVTexture(rwTexView.Target);
+                    BindUnorderedAccessView(rwTexView.Target, null, rwTexView.UnorderedAccessView, bindingIndex, stages);
+                    break;
+                }
+            case ResourceKind.Sampler:
+                {
+                    D3D11Sampler sampler = ResolveD3D11Sampler(in elem, in layout);
+                    BindSampler(sampler, bindingIndex, stages);
+                    break;
+                }
+        }
+    }
+
+    private D3D11BufferRange ResolveUboD3D11(
+        in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
+    {
+        if (elem.UniformFields != null && elem.UniformFields.Length > 0)
+        {
+            object key = isCompute ? (object)_currentComputeProgram : _currentShaderProgram;
+            DeviceBufferRange r = GetOrBuildImplicitUboD3D11(key, setIdx, elem.BindingIndex, elem.UniformFields, isCompute);
+            return new D3D11BufferRange(
+                Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(r.Buffer), r.Offset, r.SizeInBytes);
+        }
+
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry uboEntry)
+            && uboEntry.Kind == PropertyEntryKind.Buffer)
+        {
+            return new D3D11BufferRange(
+                Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(uboEntry.Buffer),
+                uboEntry.BufferOffset, uboEntry.BufferSize);
+        }
+
+        _gd.OnMissingProperty?.Invoke(
+            !isCompute ? _currentShaderProgram : null,
+            isCompute ? _currentComputeProgram : null,
+            elem.Name, ResourceKind.UniformBuffer, setIdx, elem.BindingIndex);
+
+        return new D3D11BufferRange(Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(_gd.NullUniform), 0, 16);
+    }
+
+    private unsafe DeviceBufferRange GetOrBuildImplicitUboD3D11(
+        object programKey, uint setIdx, int bindingIndex,
+        UniformBlockField[] fields, bool isCompute)
+    {
+        uint uniformVersion = _mergedTable.UniformVersion;
+
+        if (!isCompute)
+        {
+            var key = new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion);
+            if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
+        }
+        else
+        {
+            var key = new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion);
+            if (_computeUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
+        }
+
+        uint totalSize = 0;
+        foreach (UniformBlockField field in fields)
+            totalSize = Math.Max(totalSize, field.Offset + field.Size);
+        if (totalSize == 0) totalSize = 16;
+
+        DeviceBufferRange range = _gd.CurrentFrame.AllocateTransient(totalSize);
+
+        byte[] uploadBuf = ArrayPool<byte>.Shared.Rent((int)totalSize);
+        try
+        {
+            Array.Clear(uploadBuf, 0, (int)totalSize);
+            foreach (UniformBlockField field in fields)
             {
-                _invalidatedComputeResourceSets[i] = false;
-                ActivateResourceSet(i, _computeResourceSets[i], false);
+                if (_mergedTable.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                    && uEntry.Kind == PropertyEntryKind.Uniform)
+                {
+                    MemoryMarshal.CreateReadOnlySpan(
+                        ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
+                        (int)field.Size)
+                        .CopyTo(uploadBuf.AsSpan((int)field.Offset, (int)field.Size));
+                }
+            }
+            fixed (byte* ptr = uploadBuf)
+                ((D3D11Frame)_gd.CurrentFrame).WriteTransient(range.Offset, ptr, totalSize);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(uploadBuf);
+        }
+
+        if (!isCompute)
+            _frameUboCache[new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
+        else
+            _computeUboCache[new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
+
+        return range;
+    }
+
+    private D3D11BufferRange ResolveStorageBufferD3D11(
+        in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
+    {
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry)
+            && entry.Kind == PropertyEntryKind.Buffer)
+        {
+            return new D3D11BufferRange(
+                Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(entry.Buffer),
+                entry.BufferOffset, entry.BufferSize);
+        }
+
+        _gd.OnMissingProperty?.Invoke(
+            !isCompute ? _currentShaderProgram : null,
+            isCompute ? _currentComputeProgram : null,
+            elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+
+        return default;
+    }
+
+    private void BindNullStorageBuffer(int slot, ShaderStages stages, bool isUav)
+    {
+        if (isUav)
+        {
+            ID3D11UnorderedAccessView* nullUav = null;
+            uint initialCount = unchecked((uint)-1);
+            if ((stages & ShaderStages.Compute) == ShaderStages.Compute)
+                Ctx->CSSetUnorderedAccessViews((uint)slot, 1, &nullUav, &initialCount);
+        }
+        else
+        {
+            ID3D11ShaderResourceView* nullSrv = null;
+            if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
+                Ctx->VSSetShaderResources((uint)slot, 1, &nullSrv);
+            if ((stages & ShaderStages.Fragment) == ShaderStages.Fragment)
+                Ctx->PSSetShaderResources((uint)slot, 1, &nullSrv);
+            if ((stages & ShaderStages.Compute) == ShaderStages.Compute)
+                Ctx->CSSetShaderResources((uint)slot, 1, &nullSrv);
+        }
+    }
+
+    private D3D11TextureView ResolveTextureViewD3D11(
+        in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx, bool isReadWrite)
+    {
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+            && texEntry.Kind == PropertyEntryKind.Texture)
+        {
+            if (texEntry.TextureView != null)
+                return Util.AssertSubtype<TextureView, D3D11TextureView>(texEntry.TextureView);
+            if (texEntry.Texture != null)
+                return Util.AssertSubtype<TextureView, D3D11TextureView>(texEntry.Texture.GetFullTextureView(_gd));
+        }
+
+        _gd.OnMissingProperty?.Invoke(
+            !isCompute ? _currentShaderProgram : null,
+            isCompute ? _currentComputeProgram : null,
+            elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+        Texture fallbackTex = isReadWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D;
+        return Util.AssertSubtype<TextureView, D3D11TextureView>(fallbackTex.GetFullTextureView(_gd));
+    }
+
+    private D3D11Sampler ResolveD3D11Sampler(
+        in ResourceLayoutElementDescription elem, in ResourceLayoutDescription layout)
+    {
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
+            && samplerEntry.Kind == PropertyEntryKind.Sampler
+            && samplerEntry.Sampler != null)
+        {
+            return Util.AssertSubtype<Sampler, D3D11Sampler>(samplerEntry.Sampler);
+        }
+
+        foreach (ResourceLayoutElementDescription other in layout.Elements)
+        {
+            if (other.Name == elem.Name
+                && (other.Kind == ResourceKind.TextureReadOnly || other.Kind == ResourceKind.TextureReadWrite))
+            {
+                if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+                    && texEntry.Kind == PropertyEntryKind.Texture
+                    && texEntry.Sampler != null)
+                {
+                    return Util.AssertSubtype<Sampler, D3D11Sampler>(texEntry.Sampler);
+                }
+                break;
             }
         }
+
+        return Util.AssertSubtype<Sampler, D3D11Sampler>(_gd.LinearSampler);
     }
 
     protected override void ResolveTextureCore(Texture source, Texture destination)
@@ -723,7 +804,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         };
     }
 
-    private void BindTextureView(D3D11TextureView texView, int slot, ShaderStages stages, uint resourceSet)
+    private void BindTextureView(D3D11TextureView texView, int slot, ShaderStages stages)
     {
         ID3D11ShaderResourceView* srv = texView != null ? texView.ShaderResourceView : null;
         if (srv != null)
@@ -733,7 +814,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
                 list = GetNewOrCachedBoundTextureInfoList();
                 _boundSRVs.Add(texView.Target, list);
             }
-            list.Add(new BoundTextureInfo { Slot = slot, Stages = stages, ResourceSet = resourceSet });
+            list.Add(new BoundTextureInfo { Slot = slot, Stages = stages });
         }
 
         if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
@@ -1027,8 +1108,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         DeviceBuffer buffer,
         ID3D11UnorderedAccessView* uav,
         int slot,
-        ShaderStages stages,
-        uint resourceSet)
+        ShaderStages stages)
     {
         bool compute = stages == ShaderStages.Compute;
         Debug.Assert(compute || ((stages & ShaderStages.Compute) == 0));
@@ -1041,7 +1121,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
                 list = GetNewOrCachedBoundTextureInfoList();
                 _boundUAVs.Add(texture, list);
             }
-            list.Add(new BoundTextureInfo { Slot = slot, Stages = stages, ResourceSet = resourceSet });
+            list.Add(new BoundTextureInfo { Slot = slot, Stages = stages });
         }
 
         int baseSlot = 0;
@@ -1486,7 +1566,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     {
         public int Slot;
         public ShaderStages Stages;
-        public uint ResourceSet;
     }
 
     private struct D3D11BufferRange : IEquatable<D3D11BufferRange>

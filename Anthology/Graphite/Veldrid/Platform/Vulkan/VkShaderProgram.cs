@@ -3,7 +3,6 @@ using Silk.NET.Vulkan;
 using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace Prowl.Veldrid.Vk;
@@ -13,34 +12,42 @@ internal unsafe class VkShaderProgram : ShaderProgram
     private readonly VkGraphicsDevice _gd;
     private readonly Dictionary<ShaderStages, ShaderModule> _modules = new();
     private readonly Dictionary<ShaderStages, string> _entryPoints = new();
-    private readonly VkResourceLayout[] _materializedLayouts;
-    private readonly DescriptorSetLayout[] _descriptorSetLayouts;
-    private readonly PipelineLayout _pipelineLayout;
+
+    /// <summary>
+    /// Descriptor-set layouts indexed by set index (0..maxSet). Empty-DSL for gaps.
+    /// </summary>
+    internal readonly DescriptorSetLayout[] DescriptorSetLayouts;
+
+    /// <summary>
+    /// Per-set descriptor resource counts, indexed parallel to <see cref="DescriptorSetLayouts"/>.
+    /// Used to size the per-frame descriptor pool allocation.
+    /// </summary>
+    internal readonly DescriptorResourceCounts[] PerSetCounts;
+
+    internal readonly PipelineLayout PipelineLayout;
+
+    /// <summary>Total number of UNIFORM_BUFFER_DYNAMIC bindings across all sets.</summary>
+    internal readonly int TotalDynamicUboCount;
+
+    /// <summary>Total number of set slots (max set index + 1).</summary>
+    internal readonly uint ResourceSetCount;
+
     private DescriptorSetLayout _emptyDescriptorSetLayout;
-    private readonly uint _resourceSetCount;
-    private readonly int _dynamicOffsetsCount;
     private bool _disposed;
     private string _name;
 
     public override bool IsDisposed => _disposed;
 
     internal IReadOnlyDictionary<ShaderStages, ShaderModule> Modules => _modules;
+
     internal ShaderModule GetModule(ShaderStages stage)
     {
         if (!_modules.TryGetValue(stage, out ShaderModule module))
-        {
             throw new RenderException($"ShaderProgram does not contain a module for stage {stage}.");
-        }
         return module;
     }
 
     internal string GetEntryPoint(ShaderStages stage) => _entryPoints[stage];
-
-    internal VkResourceLayout[] MaterializedResourceLayouts => _materializedLayouts;
-    internal DescriptorSetLayout[] DescriptorSetLayouts => _descriptorSetLayouts;
-    internal PipelineLayout PipelineLayout => _pipelineLayout;
-    internal uint ResourceSetCount => _resourceSetCount;
-    internal int DynamicOffsetsCount => _dynamicOffsetsCount;
 
     public VkShaderProgram(VkGraphicsDevice gd, ref ShaderDescription description)
         : base(ref description)
@@ -67,50 +74,111 @@ internal unsafe class VkShaderProgram : ShaderProgram
         }
 
         ResourceLayoutDescription[] descs = ResourceLayoutsArray;
-        _materializedLayouts = new VkResourceLayout[descs.Length];
-        int dynamicTotal = 0;
-        for (int i = 0; i < descs.Length; i++)
-        {
-            _materializedLayouts[i] = new VkResourceLayout(_gd, ref descs[i]);
-            dynamicTotal += _materializedLayouts[i].DynamicBufferCount;
-        }
-        _dynamicOffsetsCount = dynamicTotal;
+        (DescriptorSetLayouts, PerSetCounts, ResourceSetCount, TotalDynamicUboCount) =
+            BuildDescriptorSetLayouts(descs);
 
-        _pipelineLayout = CreatePipelineLayout(_materializedLayouts, out _resourceSetCount, out _descriptorSetLayouts);
+        PipelineLayout = BuildPipelineLayout(DescriptorSetLayouts, ResourceSetCount);
     }
 
-    private PipelineLayout CreatePipelineLayout(VkResourceLayout[] layouts, out uint setCount, out DescriptorSetLayout[] perSetDsl)
+    private (DescriptorSetLayout[] dsls, DescriptorResourceCounts[] counts, uint setCount, int dynamicUboTotal)
+        BuildDescriptorSetLayouts(ResourceLayoutDescription[] descs)
     {
         uint maxSet = 0;
         bool any = false;
-        for (int i = 0; i < layouts.Length; i++)
+        for (int i = 0; i < descs.Length; i++)
         {
-            uint set = layouts[i].Description.Set;
-            if (!any || set > maxSet) maxSet = set;
+            if (!any || descs[i].Set > maxSet) maxSet = descs[i].Set;
             any = true;
         }
-        setCount = any ? maxSet + 1 : 0;
+        uint setCount = any ? maxSet + 1 : 0;
+        DescriptorSetLayout[] dsls = new DescriptorSetLayout[setCount];
+        DescriptorResourceCounts[] counts = new DescriptorResourceCounts[setCount];
 
-        perSetDsl = new DescriptorSetLayout[setCount];
-        for (int i = 0; i < layouts.Length; i++)
+        for (int i = 0; i < descs.Length; i++)
         {
-            uint set = layouts[i].Description.Set;
-            if (perSetDsl[set].Handle != 0)
-            {
+            uint set = descs[i].Set;
+            if (dsls[set].Handle != 0)
                 throw new RenderException($"Multiple ResourceLayouts share Set index {set}.");
-            }
-            perSetDsl[set] = layouts[i].DescriptorSetLayout;
+            (dsls[set], counts[set]) = CreateDescriptorSetLayout(ref descs[i]);
         }
+
+        int dynamicTotal = 0;
         for (int i = 0; i < setCount; i++)
         {
-            if (perSetDsl[i].Handle == 0)
+            if (dsls[i].Handle == 0)
+                dsls[i] = GetOrCreateEmptyDescriptorSetLayout();
+            dynamicTotal += (int)counts[i].UniformBufferDynamicCount;
+        }
+
+        return (dsls, counts, setCount, dynamicTotal);
+    }
+
+    private (DescriptorSetLayout dsl, DescriptorResourceCounts counts) CreateDescriptorSetLayout(
+        ref ResourceLayoutDescription desc)
+    {
+        ResourceLayoutElementDescription[] elems = desc.Elements;
+        DescriptorSetLayoutBinding* bindings = stackalloc DescriptorSetLayoutBinding[elems.Length];
+
+        uint uniformBufferDynamic = 0;
+        uint sampledImage = 0;
+        uint sampler = 0;
+        uint storageBuffer = 0;
+        uint storageImage = 0;
+
+        for (int i = 0; i < elems.Length; i++)
+        {
+            ref ResourceLayoutElementDescription elem = ref elems[i];
+            DescriptorType descType = GetDescriptorType(elem.Kind);
+            bindings[i] = new DescriptorSetLayoutBinding
             {
-                perSetDsl[i] = GetOrCreateEmptyDescriptorSetLayout();
+                Binding = (uint)elem.BindingIndex,
+                DescriptorType = descType,
+                DescriptorCount = 1,
+                StageFlags = VkFormats.VdToVkShaderStages(elem.Stages),
+            };
+
+            switch (descType)
+            {
+                case DescriptorType.UniformBufferDynamic: uniformBufferDynamic++; break;
+                case DescriptorType.SampledImage: sampledImage++; break;
+                case DescriptorType.Sampler: sampler++; break;
+                case DescriptorType.StorageBuffer: storageBuffer++; break;
+                case DescriptorType.StorageImage: storageImage++; break;
             }
         }
 
+        DescriptorSetLayoutCreateInfo dslCI = new DescriptorSetLayoutCreateInfo
+        {
+            SType = StructureType.DescriptorSetLayoutCreateInfo,
+            BindingCount = (uint)elems.Length,
+            PBindings = bindings,
+        };
+        Result result = _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out DescriptorSetLayout dsl);
+        CheckResult(result);
+
+        return (dsl, new DescriptorResourceCounts(
+            0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage));
+    }
+
+    /// <summary>
+    /// Returns the Vulkan descriptor type for the given <see cref="ResourceKind"/> per Stage 7 rules.
+    /// All uniform buffers are <c>UNIFORM_BUFFER_DYNAMIC</c>; textures use separate image/sampler descriptors.
+    /// </summary>
+    private static DescriptorType GetDescriptorType(ResourceKind kind) => kind switch
+    {
+        ResourceKind.UniformBuffer => DescriptorType.UniformBufferDynamic,
+        ResourceKind.StructuredBufferReadOnly => DescriptorType.StorageBuffer,
+        ResourceKind.StructuredBufferReadWrite => DescriptorType.StorageBuffer,
+        ResourceKind.TextureReadOnly => DescriptorType.SampledImage,
+        ResourceKind.TextureReadWrite => DescriptorType.StorageImage,
+        ResourceKind.Sampler => DescriptorType.Sampler,
+        _ => throw Illegal.Value<ResourceKind>(),
+    };
+
+    private PipelineLayout BuildPipelineLayout(DescriptorSetLayout[] dsls, uint setCount)
+    {
         DescriptorSetLayout* dslsPtr = stackalloc DescriptorSetLayout[(int)setCount];
-        for (int i = 0; i < setCount; i++) dslsPtr[i] = perSetDsl[i];
+        for (int i = 0; i < setCount; i++) dslsPtr[i] = dsls[i];
 
         PipelineLayoutCreateInfo pipelineLayoutCI = new PipelineLayoutCreateInfo
         {
@@ -151,17 +219,17 @@ internal unsafe class VkShaderProgram : ShaderProgram
         _gd.PipelineCache.EvictByProgram(this);
 
         foreach (ShaderModule m in _modules.Values)
-        {
             _gd.Vk.DestroyShaderModule(_gd.Device, m, null);
-        }
-        _gd.Vk.DestroyPipelineLayout(_gd.Device, _pipelineLayout, null);
+
+        _gd.Vk.DestroyPipelineLayout(_gd.Device, PipelineLayout, null);
+
         if (_emptyDescriptorSetLayout.Handle != 0)
-        {
             _gd.Vk.DestroyDescriptorSetLayout(_gd.Device, _emptyDescriptorSetLayout, null);
-        }
-        for (int i = 0; i < _materializedLayouts.Length; i++)
+
+        foreach (DescriptorSetLayout dsl in DescriptorSetLayouts)
         {
-            _materializedLayouts[i].Dispose();
+            if (dsl.Handle != 0 && dsl.Handle != _emptyDescriptorSetLayout.Handle)
+                _gd.Vk.DestroyDescriptorSetLayout(_gd.Device, dsl, null);
         }
     }
 }

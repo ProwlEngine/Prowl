@@ -64,6 +64,8 @@ internal class OpenGLExtensions : IReadOnlyCollection<string>
         ARB_uniform_buffer_object = IsExtensionSupported("GL_ARB_uniform_buffer_object");
 
         AnisotropicFilter = IsExtensionSupported("GL_EXT_texture_filter_anisotropic") || IsExtensionSupported("GL_ARB_texture_filter_anisotropic");
+
+        ARB_BufferStorage = GLVersion(4, 4) || IsExtensionSupported("GL_ARB_buffer_storage") || IsExtensionSupported("GL_EXT_buffer_storage");
     }
 
     public readonly bool ARB_DirectStateAccess;
@@ -92,6 +94,7 @@ internal class OpenGLExtensions : IReadOnlyCollection<string>
     public readonly bool MultiDrawIndirect;
     public readonly bool StorageBuffers;
     public readonly bool AnisotropicFilter;
+    public readonly bool ARB_BufferStorage;
 
     /// <summary>
     /// Returns a value indicating whether the given extension is supported.

@@ -59,7 +59,7 @@ internal static unsafe class OpenGLCachedPipeline
             {
                 ResourceLayoutElementDescription resource = resources[i];
                 int bindingIndex = resource.BindingIndex;
-                string resourceName = ResourceID.ToString(resource.Name)
+                string resourceName = PropertyID.ToString(resource.Name)
                     ?? throw new RenderException("Resource layout element name was not interned.");
                 if (resource.Kind == ResourceKind.UniformBuffer)
                 {

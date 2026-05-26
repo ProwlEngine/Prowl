@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Prowl.Veldrid;
 
@@ -15,6 +16,30 @@ public abstract partial class GraphicsDevice : IDisposable
     private readonly List<IDisposable> _disposables = new List<IDisposable>();
     private Sampler _aniso4xSampler;
     private bool _disposed;
+    private readonly object _nullTextureLock = new object();
+    private DeviceBuffer _nullStructuredRead;
+    private DeviceBuffer _nullStructuredReadWrite;
+
+    /// <summary>The maximum number of frames that can be in flight simultaneously.</summary>
+    protected internal uint _maxFramesInFlight;
+
+    /// <summary>The initial size of each slot's transient bump-allocator buffer, in bytes.</summary>
+    protected internal uint _transientInitialSize;
+
+    /// <summary>The soft cap for per-frame transient usage, in bytes.</summary>
+    protected internal uint _transientSoftCapBytes;
+
+    /// <summary>The hard cap for per-frame transient usage, in bytes.</summary>
+    protected internal uint _transientHardCapBytes;
+
+    /// <summary>Monotonically increasing frame counter; 0 means no frame has ever started.</summary>
+    protected ulong _frameIdCounter;
+
+    /// <summary>The FrameId of the most recently completed frame, updated opportunistically.</summary>
+    protected ulong _lastCompletedFrameId;
+
+    /// <summary>Set to true after the soft cap warning has been emitted once.</summary>
+    protected internal bool _transientSoftCapWarned;
 
     internal GraphicsDevice() { }
 
@@ -111,30 +136,196 @@ public abstract partial class GraphicsDevice : IDisposable
     internal abstract uint GetStructuredBufferMinOffsetAlignmentCore();
 
     /// <summary>
-    /// Submits the given <see cref="CommandBuffer"/> for execution by this device.
-    /// Commands submitted in this way may not be completed when this method returns.
-    /// Use <see cref="WaitForIdle"/> to wait for all submitted commands to complete.
-    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="CommandBuffer"/> for this method to succeed.
+    /// Gets the currently active <see cref="Frame"/>, or <see langword="null"/> if no frame is in progress.
     /// </summary>
-    /// <param name="CommandBuffer">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
-    /// been previously called on this object.</param>
-    public void SubmitCommands(CommandBuffer CommandBuffer) => SubmitCommandsCore(CommandBuffer, null);
+    public Frame CurrentFrame { get; private protected set; }
 
     /// <summary>
-    /// Submits the given <see cref="CommandBuffer"/> for execution by this device.
-    /// Commands submitted in this way may not be completed when this method returns.
-    /// Use <see cref="WaitForIdle"/> to wait for all submitted commands to complete.
-    /// <see cref="CommandBuffer.End"/> must have been called on <paramref name="CommandBuffer"/> for this method to succeed.
+    /// Gets the <see cref="Frame.FrameId"/> of the most recently GPU-completed frame.
+    /// This value advances opportunistically during <see cref="IsFrameComplete(ulong)"/>,
+    /// <see cref="WaitForFrame(ulong)"/>, and <see cref="BeginFrame"/> calls.
+    /// Returns 0 before any frame has completed.
     /// </summary>
-    /// <param name="CommandBuffer">The completed <see cref="CommandBuffer"/> to execute. <see cref="CommandBuffer.End"/> must have
-    /// been previously called on this object.</param>
-    /// <param name="fence">A <see cref="Fence"/> which will become signaled after this submission fully completes
-    /// execution.</param>
-    public void SubmitCommands(CommandBuffer CommandBuffer, Fence fence) => SubmitCommandsCore(CommandBuffer, fence);
+    public ulong LastCompletedFrameId => Volatile.Read(ref _lastCompletedFrameId);
 
-    private protected abstract void SubmitCommandsCore(
-        CommandBuffer CommandBuffer,
-        Fence fence);
+    /// <summary>
+    /// Gets the maximum number of frames that may be simultaneously in flight on the GPU.
+    /// </summary>
+    public uint MaxFramesInFlight => _maxFramesInFlight;
+
+    /// <summary>
+    /// Gets the number of frames currently in flight (submitted to the GPU but not yet signaled as complete).
+    /// </summary>
+    public uint FramesInFlight => (uint)(_frameIdCounter - Volatile.Read(ref _lastCompletedFrameId));
+
+    /// <summary>
+    /// Begins a new frame and returns the active <see cref="Frame"/> object.
+    /// If the oldest in-flight ring slot has not yet completed, this method blocks until it does.
+    /// </summary>
+    /// <remarks>
+    /// Typical usage:
+    /// <code>
+    /// Frame frame = device.BeginFrame();
+    /// frame.SubmitCommands(commandBuffer);
+    /// device.EndFrame(frame);
+    /// device.SwapBuffers();
+    /// </code>
+    /// </remarks>
+    /// <returns>The new active <see cref="Frame"/>.</returns>
+    /// <exception cref="RenderException">Thrown if a frame is already active.</exception>
+    public Frame BeginFrame()
+    {
+        if (CurrentFrame != null)
+            throw new RenderException("BeginFrame called while a frame is already active. Call EndFrame first.");
+
+        ulong frameId = ++_frameIdCounter;
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        Frame frame = BeginFrameCore(frameId, ringSlot);
+        CurrentFrame = frame;
+        return frame;
+    }
+
+    /// <summary>
+    /// Ends the currently active frame and signals the GPU to mark its completion fence.
+    /// Equivalent to <c>EndFrame(CurrentFrame)</c>.
+    /// This method does not block.
+    /// </summary>
+    /// <exception cref="RenderException">Thrown if no frame is currently active.</exception>
+    public void EndFrame()
+    {
+        if (CurrentFrame == null)
+            throw new RenderException("EndFrame called with no active frame. Call BeginFrame first.");
+        EndFrame(CurrentFrame);
+    }
+
+    /// <summary>
+    /// Ends the specified frame and signals the GPU to mark its completion fence.
+    /// This method does not block.
+    /// </summary>
+    /// <param name="frame">The frame to end. Must be the currently active frame.</param>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="frame"/> is null.</exception>
+    /// <exception cref="RenderException">Thrown if <paramref name="frame"/> is not the currently active frame.</exception>
+    public void EndFrame(Frame frame)
+    {
+        if (frame == null)
+            throw new ArgumentNullException(nameof(frame));
+        if (CurrentFrame != frame)
+            throw new RenderException("The specified Frame is not the currently active frame.");
+        CurrentFrame = null;
+        EndFrameCore(frame);
+    }
+
+    /// <summary>
+    /// Returns whether the frame with the given <see cref="Frame.FrameId"/> has completed on the GPU.
+    /// Also opportunistically advances <see cref="LastCompletedFrameId"/> when new completions are detected.
+    /// </summary>
+    /// <param name="frameId">The frame ID to query. Must be greater than 0 and at most <see cref="LastCompletedFrameId"/> + <see cref="MaxFramesInFlight"/>.</param>
+    /// <returns>True if the frame has completed; false if it is still in flight or currently open.</returns>
+    /// <exception cref="RenderException">Thrown if <paramref name="frameId"/> is 0 or has not yet been started.</exception>
+    public bool IsFrameComplete(ulong frameId)
+    {
+        if (frameId == 0 || frameId > _frameIdCounter)
+            throw new RenderException($"Cannot query frame {frameId}: it has not been started yet.");
+        if (frameId <= Volatile.Read(ref _lastCompletedFrameId))
+            return true;
+        bool complete = IsFrameCompleteCore(frameId);
+        if (complete)
+            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), frameId));
+        return complete;
+    }
+
+    /// <summary>
+    /// Returns whether the given <see cref="Frame"/> has completed on the GPU.
+    /// </summary>
+    /// <param name="frame">The frame to query.</param>
+    /// <returns>True if the frame has completed; false otherwise.</returns>
+    public bool IsFrameComplete(Frame frame) => IsFrameComplete(frame.FrameId);
+
+    /// <summary>
+    /// Blocks the calling thread until the frame with the given <see cref="Frame.FrameId"/> has completed on the GPU.
+    /// </summary>
+    /// <param name="frameId">The frame ID to wait for.</param>
+    /// <exception cref="RenderException">Thrown if <paramref name="frameId"/> is the currently open frame, is 0, or has not been started.</exception>
+    public void WaitForFrame(ulong frameId)
+    {
+        if (!WaitForFrame(frameId, ulong.MaxValue))
+            throw new RenderException("The operation timed out before the frame completed.");
+    }
+
+    /// <summary>
+    /// Blocks the calling thread until the frame with the given <see cref="Frame.FrameId"/> has completed on the GPU,
+    /// or until the timeout elapses.
+    /// </summary>
+    /// <param name="frameId">The frame ID to wait for.</param>
+    /// <param name="nanosecondTimeout">Maximum time to wait, in nanoseconds. Pass <see cref="ulong.MaxValue"/> for infinite wait.</param>
+    /// <returns>True if the frame completed before the timeout; false otherwise.</returns>
+    /// <exception cref="RenderException">Thrown if <paramref name="frameId"/> is the currently open frame, is 0, or has not been started.</exception>
+    public bool WaitForFrame(ulong frameId, ulong nanosecondTimeout)
+    {
+        if (frameId == 0 || frameId > _frameIdCounter)
+            throw new RenderException($"Cannot wait on frame {frameId}: it has not been started yet.");
+        if (CurrentFrame != null && CurrentFrame.FrameId == frameId)
+            throw new RenderException("Cannot wait on the currently open frame. Call EndFrame first.");
+        if (frameId <= Volatile.Read(ref _lastCompletedFrameId))
+            return true;
+        bool completed = WaitForFrameCore(frameId, nanosecondTimeout);
+        if (completed)
+            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), frameId));
+        return completed;
+    }
+
+    /// <summary>
+    /// Blocks the calling thread until the given <see cref="Frame"/> has completed on the GPU.
+    /// </summary>
+    /// <param name="frame">The frame to wait for.</param>
+    public void WaitForFrame(Frame frame) => WaitForFrame(frame.FrameId);
+
+    /// <summary>
+    /// Blocks the calling thread until the given <see cref="Frame"/> has completed on the GPU,
+    /// or until the timeout elapses.
+    /// </summary>
+    /// <param name="frame">The frame to wait for.</param>
+    /// <param name="nanosecondTimeout">Maximum time to wait, in nanoseconds.</param>
+    /// <returns>True if the frame completed before the timeout; false otherwise.</returns>
+    public bool WaitForFrame(Frame frame, ulong nanosecondTimeout) => WaitForFrame(frame.FrameId, nanosecondTimeout);
+
+    /// <summary>
+    /// Allocates a transient <see cref="DeviceBufferRange"/> from the currently active frame's bump allocator.
+    /// Convenience wrapper over <see cref="Frame.AllocateTransient"/>. A frame must be active.
+    /// </summary>
+    /// <param name="sizeInBytes">The number of bytes to allocate.</param>
+    /// <returns>A <see cref="DeviceBufferRange"/> pointing into the frame's transient buffer.</returns>
+    /// <exception cref="RenderException">Thrown if no frame is currently active.</exception>
+    public DeviceBufferRange AllocateTransient(uint sizeInBytes)
+    {
+        if (CurrentFrame == null)
+            throw new RenderException("AllocateTransient requires an active frame. Call BeginFrame first.");
+        return CurrentFrame.AllocateTransient(sizeInBytes);
+    }
+
+    private protected abstract Frame BeginFrameCore(ulong frameId, uint ringSlot);
+    private protected abstract void EndFrameCore(Frame frame);
+    private protected abstract bool IsFrameCompleteCore(ulong frameId);
+    private protected abstract bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout);
+
+    /// <summary>
+    /// Initializes the frame system options from the given <see cref="GraphicsDeviceOptions"/>.
+    /// Call this before <see cref="PostDeviceCreated"/> in each backend constructor.
+    /// </summary>
+    /// <param name="options">The options to read from.</param>
+    /// <exception cref="RenderException">Thrown if <see cref="GraphicsDeviceOptions.MaxFramesInFlight"/> is 0.</exception>
+    protected void InitializeFrameOptions(GraphicsDeviceOptions options)
+    {
+        _maxFramesInFlight = options.MaxFramesInFlight == 0 ? 3 : options.MaxFramesInFlight;
+        _transientInitialSize = options.TransientBufferInitialSize == 0 ? 4 * 1024 * 1024 : options.TransientBufferInitialSize;
+        _transientSoftCapBytes = options.TransientBufferSoftCapBytes == 0 ? 64 * 1024 * 1024 : options.TransientBufferSoftCapBytes;
+        _transientHardCapBytes = options.TransientBufferHardCapBytes == 0 ? 256 * 1024 * 1024 : options.TransientBufferHardCapBytes;
+
+        if (_transientSoftCapBytes < _transientInitialSize)
+            _transientSoftCapBytes = _transientInitialSize;
+        if (_transientHardCapBytes < _transientSoftCapBytes)
+            _transientHardCapBytes = _transientSoftCapBytes;
+    }
 
     /// <summary>
     /// Blocks the calling thread until the given <see cref="Fence"/> becomes signaled.
@@ -221,11 +412,16 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// A blocking method that returns when all submitted <see cref="CommandBuffer"/> objects have fully completed.
+    /// A blocking method that returns when all submitted <see cref="CommandBuffer"/> objects have fully completed
+    /// and all in-flight frames have been signaled as complete.
     /// </summary>
+    /// <exception cref="RenderException">Thrown if <see cref="CurrentFrame"/> is not null. Call <see cref="EndFrame()"/> before <see cref="WaitForIdle"/>.</exception>
     public void WaitForIdle()
     {
+        if (CurrentFrame != null)
+            throw new RenderException("WaitForIdle cannot be called while a frame is active. Call EndFrame first.");
         WaitForIdleCore();
+        Volatile.Write(ref _lastCompletedFrameId, _frameIdCounter);
         FlushDeferredDisposals();
     }
 
@@ -674,9 +870,19 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         PointSampler = ResourceFactory.CreateSampler(SamplerDescription.Point);
         LinearSampler = ResourceFactory.CreateSampler(SamplerDescription.Linear);
+        NullUniform = ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
+        NullTexture2D = ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
+        NullTextureRW2D = ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Storage));
+
         if (Features.SamplerAnisotropy)
         {
             _aniso4xSampler = ResourceFactory.CreateSampler(SamplerDescription.Aniso4x);
+        }
+
+        if (Features.StructuredBuffer)
+        {
+            _nullStructuredRead = ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadOnly, 16));
+            _nullStructuredReadWrite = ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite, 16));
         }
     }
 
@@ -691,6 +897,61 @@ public abstract partial class GraphicsDevice : IDisposable
     /// This object is created with <see cref="SamplerDescription.Linear"/>.
     /// </summary>
     public Sampler LinearSampler { get; private set; }
+
+    /// <summary>
+    /// Gets a 1x1 black transparent <see cref="Texture"/> used as the fallback when a
+    /// <see cref="ResourceKind.TextureReadOnly"/> slot has no matching entry in the merged property table.
+    /// </summary>
+    public Texture NullTexture2D { get; private set; }
+
+    /// <summary>
+    /// Gets a 1x1 black transparent read-write <see cref="Texture"/> used as the fallback when a
+    /// <see cref="ResourceKind.TextureReadWrite"/> slot has no matching entry in the merged property table.
+    /// </summary>
+    public Texture NullTextureRW2D { get; private set; }
+
+    /// <summary>
+    /// Gets a 1x1 black transparent <see cref="Texture"/> used as the fallback when a
+    /// <see cref="ResourceKind.TextureReadOnly"/> slot has no matching entry in the merged property table.
+    /// </summary>
+    public DeviceBuffer NullUniform { get; private set; }
+
+    public DeviceBuffer NullStructured
+    {
+        get
+        {
+            if (!Features.StructuredBuffer)
+            {
+                throw new RenderException(
+                    "GraphicsDevice.NullStructured cannot be used unless GraphicsDeviceFeatures.StructuredBuffer is supported.");
+            }
+
+            Debug.Assert(_nullStructuredRead != null);
+            return _nullStructuredRead;
+        }
+    }
+
+    public DeviceBuffer NullStructuredRW
+    {
+        get
+        {
+            if (!Features.StructuredBuffer)
+            {
+                throw new RenderException(
+                    "GraphicsDevice.NullStructuredRW cannot be used unless GraphicsDeviceFeatures.StructuredBuffer is supported.");
+            }
+
+            Debug.Assert(_nullStructuredReadWrite != null);
+            return _nullStructuredReadWrite;
+        }
+    }
+
+
+    /// <summary>
+    /// Optional callback invoked at draw/dispatch time when a reflected resource slot has no matching entry
+    /// in the merged property table and a default value is substituted. Null by default (silent).
+    /// </summary>
+    public MissingPropertyHandler? OnMissingProperty { get; set; }
 
     /// <summary>
     /// Gets a simple 4x anisotropic-filtered <see cref="Sampler"/> object owned by this instance.
@@ -732,7 +993,12 @@ public abstract partial class GraphicsDevice : IDisposable
         WaitForIdle();
         PointSampler.Dispose();
         LinearSampler.Dispose();
+        NullTexture2D.Dispose();
+        NullTextureRW2D.Dispose();
+        NullUniform.Dispose();
         _aniso4xSampler?.Dispose();
+        _nullStructuredRead?.Dispose();
+        _nullStructuredReadWrite?.Dispose();
         PlatformDispose();
     }
 

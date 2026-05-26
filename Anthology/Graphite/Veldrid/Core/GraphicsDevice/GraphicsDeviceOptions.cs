@@ -41,6 +41,30 @@ public struct GraphicsDeviceOptions
     public bool SwapchainSrgbFormat;
 
     /// <summary>
+    /// The maximum number of frames that may be simultaneously in flight on the GPU.
+    /// Must be greater than zero; if 0, a default of 3 is used at device creation.
+    /// </summary>
+    public uint MaxFramesInFlight;
+
+    /// <summary>
+    /// The initial size in bytes of each per-slot transient bump-allocator buffer.
+    /// If 0, the device defaults to 4 MB.
+    /// </summary>
+    public uint TransientBufferInitialSize;
+
+    /// <summary>
+    /// A soft cap in bytes for the total transient memory allocated in a single frame.
+    /// Exceeding this limit logs a one-shot warning per device. If 0, the device defaults to 64 MB.
+    /// </summary>
+    public uint TransientBufferSoftCapBytes;
+
+    /// <summary>
+    /// A hard cap in bytes for the total transient memory allocated in a single frame.
+    /// Exceeding this limit throws a <see cref="RenderException"/>. If 0, the device defaults to 256 MB.
+    /// </summary>
+    public uint TransientBufferHardCapBytes;
+
+    /// <summary>
     /// Constructs a new GraphicsDeviceOptions for a device with no main Swapchain.
     /// </summary>
     /// <param name="debug">Indicates whether the GraphicsDevice will support debug features, provided they are supported by

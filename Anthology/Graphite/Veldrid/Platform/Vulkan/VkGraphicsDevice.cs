@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
@@ -63,6 +64,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private const int SharedCommandPoolCount = 4;
     private Stack<SharedCommandPool> _sharedGraphicsCommandPools = new Stack<SharedCommandPool>();
     private VkDescriptorPoolManager _descriptorPoolManager;
+    private VkDescriptorPoolManager[] _frameDescriptorPools;
+    private readonly Dictionary<Texture, VkTextureView> _defaultTextureViews = new();
+    private readonly object _defaultTextureViewsLock = new object();
     private bool _standardValidationSupported;
     private bool _khronosValidationSupported;
     private bool _standardClipYDirection;
@@ -84,6 +88,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         = new Dictionary<Silk.NET.Vulkan.CommandBuffer, VkBuffer>();
     private readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, SharedCommandPool> _submittedSharedCommandPools
         = new Dictionary<Silk.NET.Vulkan.CommandBuffer, SharedCommandPool>();
+
+    private readonly VkBuffer _emptyUniformBuffer;
+    private readonly VkBuffer _emptyStructuredBuffer;
 
     public override string DeviceName => _deviceName;
 
@@ -122,6 +129,26 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     public VkDeviceMemoryManager MemoryManager => _memoryManager;
     public VkDescriptorPoolManager DescriptorPoolManager => _descriptorPoolManager;
 
+    /// <summary>Returns the per-frame descriptor pool for <paramref name="ringSlot"/>. Reset at each BeginFrame.</summary>
+    public VkDescriptorPoolManager GetFrameDescriptorPool(uint ringSlot) => _frameDescriptorPools[ringSlot];
+
+    /// <summary>
+    /// Returns a lazily-created full-range <see cref="VkTextureView"/> for <paramref name="texture"/>.
+    /// Views are device-owned and live until <see cref="PlatformDispose"/> is called.
+    /// </summary>
+    internal VkTextureView GetOrCreateDefaultView(VkTexture texture)
+    {
+        lock (_defaultTextureViewsLock)
+        {
+            if (!_defaultTextureViews.TryGetValue(texture, out VkTextureView view))
+            {
+                view = (VkTextureView)ResourceFactory.CreateTextureView(texture);
+                _defaultTextureViews[texture] = view;
+            }
+            return view;
+        }
+    }
+
     /// <summary>
     /// Per-device managed cache of resolved graphics pipelines, keyed on
     /// <c>(VkShaderProgram, OutputDescription, PrimitiveTopology)</c>.
@@ -132,7 +159,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     /// Driver-side <c>VkPipelineCache</c> handle passed to every
     /// <c>vkCreateGraphicsPipelines</c> call to amortize driver pipeline compile cost.
     /// </summary>
-    internal Silk.NET.Vulkan.PipelineCache DriverPipelineCache => _driverPipelineCache;
+    internal PipelineCache DriverPipelineCache => _driverPipelineCache;
     public vkCmdDebugMarkerBeginEXT_t MarkerBegin => _markerBegin;
     public vkCmdDebugMarkerEndEXT_t MarkerEnd => _markerEnd;
     public vkCmdDebugMarkerInsertEXT_t MarkerInsert => _markerInsert;
@@ -223,14 +250,163 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         _vulkanInfo = new BackendInfoVulkan(this);
 
+        InitializeFrameOptions(options);
+        InitializeSlots();
         PostDeviceCreated();
     }
 
     public override ResourceFactory ResourceFactory { get; }
 
-    private protected override void SubmitCommandsCore(CommandBuffer cl, Fence fence)
+    // --------------- Frame lifecycle slot state ---------------
+
+    private unsafe struct SlotState
     {
-        SubmitCommandBuffer(cl, 0, null, 0, null, fence);
+        public VkFenceHandle Fence;
+        public VkFence FenceWrapper;
+        public VkBuffer TransientPrimary;
+        public byte* TransientMapped;
+        public List<VkBuffer> TransientOverflow;
+        public ulong CurrentFrameId;
+    }
+
+    private SlotState[] _slots;
+    private readonly List<VkBuffer> _transientFreePool = new List<VkBuffer>();
+    private readonly object _transientFreePoolLock = new object();
+
+    private unsafe void InitializeSlots()
+    {
+        _slots = new SlotState[_maxFramesInFlight];
+        _frameDescriptorPools = new VkDescriptorPoolManager[_maxFramesInFlight];
+        for (uint i = 0; i < _maxFramesInFlight; i++)
+        {
+            _frameDescriptorPools[i] = new VkDescriptorPoolManager(this, freeDescriptorSets: false);
+            VkFence slotWrapper = new VkFence(this, false);
+
+            VkBuffer primary = new VkBuffer(this, _transientInitialSize,
+                BufferUsage.Dynamic | BufferUsage.VertexBuffer | BufferUsage.IndexBuffer
+                | BufferUsage.UniformBuffer | BufferUsage.StructuredBufferReadOnly);
+            byte* mapped = (byte*)primary.Memory.BlockMappedPointer;
+
+            _slots[i] = new SlotState
+            {
+                Fence = slotWrapper.DeviceFence,
+                FenceWrapper = slotWrapper,
+                TransientPrimary = primary,
+                TransientMapped = mapped,
+                TransientOverflow = new List<VkBuffer>(),
+                CurrentFrameId = 0,
+            };
+        }
+    }
+
+    // --------------- Frame lifecycle implementations ---------------
+
+    private protected override unsafe Frame BeginFrameCore(ulong frameId, uint ringSlot)
+    {
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId != 0)
+        {
+            VkFenceHandle fence = slot.Fence;
+            CheckResult(_vk.WaitForFences(_device, 1, in fence, true, ulong.MaxValue));
+            ulong completed = slot.CurrentFrameId;
+            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), completed));
+        }
+
+        VkFenceHandle slotFence = slot.Fence;
+        CheckResult(_vk.ResetFences(_device, 1, in slotFence));
+        slot.FenceWrapper.Reset();
+
+        // Return overflow buffers to the free pool and reset transient head
+        if (slot.TransientOverflow.Count > 0)
+        {
+            lock (_transientFreePoolLock)
+            {
+                _transientFreePool.AddRange(slot.TransientOverflow);
+            }
+            slot.TransientOverflow.Clear();
+        }
+
+        // Reset the per-frame descriptor pool for this slot (safe: prior frame's fence was waited above).
+        _frameDescriptorPools[ringSlot].ResetAll();
+
+        slot.CurrentFrameId = frameId;
+
+        return new VkFrame(this, frameId, ringSlot, slot.FenceWrapper,
+            slot.TransientPrimary, slot.TransientOverflow);
+    }
+
+    private protected override unsafe void EndFrameCore(Frame frame)
+    {
+        uint ringSlot = frame.RingSlot;
+        VkFenceHandle slotFence = _slots[ringSlot].Fence;
+
+        SubmitInfo si = new SubmitInfo(sType: StructureType.SubmitInfo);
+        si.CommandBufferCount = 0;
+
+        lock (_graphicsQueueLock)
+        {
+            CheckResult(_vk.QueueSubmit(_graphicsQueue, 1, in si, slotFence));
+            FlushValidationErrors();
+        }
+    }
+
+    private protected override bool IsFrameCompleteCore(ulong frameId)
+    {
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId > frameId)
+            return true;
+
+        if (slot.CurrentFrameId == frameId)
+        {
+            Result status = _vk.GetFenceStatus(_device, slot.Fence);
+            return status == Result.Success;
+        }
+
+        return true;
+    }
+
+    private protected override bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout)
+    {
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId > frameId)
+            return true;
+
+        if (slot.CurrentFrameId == frameId)
+        {
+            VkFenceHandle fence = slot.Fence;
+            Result result = _vk.WaitForFences(_device, 1, in fence, true, nanosecondTimeout);
+            return result == Result.Success;
+        }
+
+        return true;
+    }
+
+    internal VkBuffer CreateTransientBuffer(uint sizeInBytes)
+    {
+        lock (_transientFreePoolLock)
+        {
+            for (int i = 0; i < _transientFreePool.Count; i++)
+            {
+                if (_transientFreePool[i].SizeInBytes >= sizeInBytes)
+                {
+                    VkBuffer buf = _transientFreePool[i];
+                    _transientFreePool.RemoveAt(i);
+                    return buf;
+                }
+            }
+        }
+
+        return new VkBuffer(this, sizeInBytes, BufferUsage.Dynamic | BufferUsage.UniformBuffer);
+    }
+
+    internal void SubmitCommandBufferInternal(CommandBuffer cl)
+    {
+        SubmitCommandBuffer(cl, 0, null, 0, null, null);
     }
 
     private void SubmitCommandBuffer(
@@ -437,20 +613,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                         framebuffer.CurrentFramebuffer.Handle,
                         name);
                     break;
-                case VkResourceLayout resourceLayout:
-                    SetDebugMarkerName(
-                        DebugReportObjectTypeEXT.DescriptorSetLayoutExt,
-                        resourceLayout.DescriptorSetLayout.Handle,
-                        name);
-                    break;
-                case VkResourceSet resourceSet:
-                    SetDebugMarkerName(DebugReportObjectTypeEXT.DescriptorSetExt, resourceSet.DescriptorSet.Handle, name);
-                    break;
                 case VkSampler sampler:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.SamplerExt, sampler.DeviceSampler.Handle, name);
                     break;
                 case VkShaderProgram shaderProgram:
-                    foreach (Silk.NET.Vulkan.ShaderModule module in shaderProgram.Modules.Values)
+                    foreach (ShaderModule module in shaderProgram.Modules.Values)
                     {
                         SetDebugMarkerName(DebugReportObjectTypeEXT.ShaderModuleExt, module.Handle, name);
                     }
@@ -464,7 +631,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 case VkTextureView texView:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.ImageViewExt, texView.ImageView.Handle, name);
                     break;
-                case Prowl.Veldrid.Vk.VkFence fence:
+                case VkFence fence:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.FenceExt, fence.DeviceFence.Handle, name);
                     break;
                 case VkSwapchain sc:
@@ -1097,8 +1264,26 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
     }
 
-    protected override void PlatformDispose()
+    protected override unsafe void PlatformDispose()
     {
+        if (_slots != null)
+        {
+            foreach (ref SlotState slot in _slots.AsSpan())
+            {
+                slot.TransientPrimary?.Dispose();
+                foreach (VkBuffer overflow in slot.TransientOverflow)
+                    overflow.Dispose();
+                slot.FenceWrapper?.Dispose();
+            }
+        }
+
+        lock (_transientFreePoolLock)
+        {
+            foreach (VkBuffer buf in _transientFreePool)
+                buf.Dispose();
+            _transientFreePool.Clear();
+        }
+
         Debug.Assert(_submittedFences.Count == 0);
         foreach (VkFenceHandle fence in _availableSubmissionFences)
         {
@@ -1112,6 +1297,12 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
 
         _descriptorPoolManager.DestroyAll();
+        foreach (VkDescriptorPoolManager pool in _frameDescriptorPools)
+        {
+            pool.DestroyAll();
+        }
+        foreach (VkTextureView view in _defaultTextureViews.Values)
+            view.Dispose();
         _vk.DestroyCommandPool(_device, _graphicsCommandPool, null);
 
         Debug.Assert(_submittedStagingTextures.Count == 0);

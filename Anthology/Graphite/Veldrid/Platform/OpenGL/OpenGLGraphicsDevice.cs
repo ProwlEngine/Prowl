@@ -68,6 +68,19 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     private uint _minUboOffsetAlignment;
     private uint _minSsboOffsetAlignment;
 
+    private struct SlotState
+    {
+        public nint SyncObject;
+        public OpenGLFence FenceWrapper;
+        public OpenGLBuffer TransientPrimary;
+        public List<OpenGLBuffer> TransientOverflow;
+        public ulong CurrentFrameId;
+    }
+
+    private SlotState[] _slots;
+    private readonly List<OpenGLBuffer> _transientFreePool = new List<OpenGLBuffer>();
+    private readonly object _transientFreePoolLock = new object();
+
     private readonly StagingMemoryPool _stagingMemoryPool = new StagingMemoryPool();
     private BlockingCollection<ExecutionThreadWorkItem> _workItems;
     private ExecutionThread _executionThread;
@@ -321,6 +334,8 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         _executionThread = new ExecutionThread(this, _workItems, _glContext);
         _openglInfo = new BackendInfoOpenGL(this);
 
+        InitializeFrameOptions(options);
+        InitializeSlots();
         PostDeviceCreated();
     }
 
@@ -412,9 +427,117 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         }
     }
 
-    private protected override void SubmitCommandsCore(
-        CommandBuffer cl,
-        Fence fence)
+    private void InitializeSlots()
+    {
+        _slots = new SlotState[_maxFramesInFlight];
+        for (int i = 0; i < _slots.Length; i++)
+        {
+            _slots[i] = new SlotState
+            {
+                SyncObject = 0,
+                FenceWrapper = new OpenGLFence(signaled: false),
+                TransientPrimary = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(
+                    ResourceFactory.CreateBuffer(new BufferDescription(_transientInitialSize, BufferUsage.Dynamic | BufferUsage.UniformBuffer))),
+                TransientOverflow = new List<OpenGLBuffer>(),
+                CurrentFrameId = 0,
+            };
+        }
+    }
+
+    private protected override Frame BeginFrameCore(ulong frameId, uint ringSlot)
+    {
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId != 0 && slot.SyncObject != 0)
+        {
+            nint sync = slot.SyncObject;
+            ExecuteOnGLThread(() =>
+            {
+                GL.ClientWaitSync((IntPtr)sync, SyncObjectMask.Bit, ulong.MaxValue);
+                GL.DeleteSync((IntPtr)sync);
+            });
+            slot.SyncObject = 0;
+
+            ulong completed = slot.CurrentFrameId;
+            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), completed));
+            slot.FenceWrapper.Set();
+        }
+
+        slot.FenceWrapper.Reset();
+
+        if (slot.TransientOverflow.Count > 0)
+        {
+            lock (_transientFreePoolLock)
+            {
+                _transientFreePool.AddRange(slot.TransientOverflow);
+            }
+            slot.TransientOverflow.Clear();
+        }
+
+        slot.CurrentFrameId = frameId;
+
+        return new OpenGLFrame(this, frameId, ringSlot, slot.FenceWrapper,
+            slot.TransientPrimary, slot.TransientOverflow);
+    }
+
+    private protected override void EndFrameCore(Frame frame)
+    {
+        ref SlotState slot = ref _slots[frame.RingSlot];
+        nint sync = 0;
+        ExecuteOnGLThread(() =>
+        {
+            sync = (nint)GL.FenceSync(SyncCondition.SyncGpuCommandsComplete, SyncBehaviorFlags.None);
+        });
+        slot.SyncObject = sync;
+    }
+
+    private protected override bool IsFrameCompleteCore(ulong frameId)
+    {
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId > frameId)
+            return true;
+
+        if (slot.CurrentFrameId == frameId && slot.SyncObject != 0)
+        {
+            bool done = false;
+            nint sync = slot.SyncObject;
+            ExecuteOnGLThread(() =>
+            {
+                GLEnum status = GL.ClientWaitSync((IntPtr)sync, (SyncObjectMask)0, 0);
+                done = status == GLEnum.AlreadySignaled || status == GLEnum.ConditionSatisfied;
+            });
+            return done;
+        }
+
+        return true;
+    }
+
+    private protected override bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout)
+    {
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        ref SlotState slot = ref _slots[ringSlot];
+
+        if (slot.CurrentFrameId > frameId)
+            return true;
+
+        if (slot.CurrentFrameId == frameId && slot.SyncObject != 0)
+        {
+            bool succeeded = false;
+            nint sync = slot.SyncObject;
+            ExecuteOnGLThread(() =>
+            {
+                GLEnum status = GL.ClientWaitSync((IntPtr)sync, SyncObjectMask.Bit, nanosecondTimeout);
+                succeeded = status == GLEnum.AlreadySignaled || status == GLEnum.ConditionSatisfied;
+            });
+            return succeeded;
+        }
+
+        return true;
+    }
+
+    internal void SubmitCommandBufferInternal(CommandBuffer cl)
     {
         lock (_CommandBufferDisposalLock)
         {
@@ -422,11 +545,25 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             OpenGLCommandEntryList entryList = glCommandBuffer.CurrentCommands;
             IncrementCount(glCommandBuffer);
             _executionThread.ExecuteCommands(entryList);
-            if (fence is OpenGLFence glFence)
+        }
+    }
+
+    internal OpenGLBuffer CreateTransientBuffer(uint sizeInBytes)
+    {
+        lock (_transientFreePoolLock)
+        {
+            for (int i = 0; i < _transientFreePool.Count; i++)
             {
-                glFence.Set();
+                if (_transientFreePool[i].SizeInBytes >= sizeInBytes)
+                {
+                    OpenGLBuffer buf = _transientFreePool[i];
+                    _transientFreePool.RemoveAt(i);
+                    return buf;
+                }
             }
         }
+
+        return new OpenGLBuffer(this, sizeInBytes, BufferUsage.Dynamic | BufferUsage.UniformBuffer);
     }
 
     private int IncrementCount(OpenGLCommandBuffer glCommandBuffer)
@@ -482,6 +619,25 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     {
         try
         {
+            if (_slots != null)
+            {
+                for (int i = 0; i < _slots.Length; i++)
+                {
+                    ref SlotState slot = ref _slots[i];
+                    if (slot.CurrentFrameId != 0 && slot.SyncObject != 0)
+                    {
+                        nint sync = slot.SyncObject;
+                        ExecuteOnGLThread(() =>
+                        {
+                            GL.ClientWaitSync((IntPtr)sync, SyncObjectMask.Bit, ulong.MaxValue);
+                            GL.DeleteSync((IntPtr)sync);
+                        });
+                        slot.SyncObject = 0;
+                        slot.FenceWrapper.Set();
+                    }
+                }
+            }
+
             _executionThread.WaitForIdle();
         }
         catch (RenderException)
@@ -737,6 +893,30 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
 
     protected override void PlatformDispose()
     {
+        if (_slots != null)
+        {
+            foreach (ref SlotState slot in _slots.AsSpan())
+            {
+                if (slot.SyncObject != 0)
+                {
+                    nint sync = slot.SyncObject;
+                    try { ExecuteOnGLThread(() => GL.DeleteSync((IntPtr)sync)); }
+                    catch { }
+                }
+                slot.TransientPrimary?.Dispose();
+                foreach (OpenGLBuffer buf in slot.TransientOverflow)
+                    buf.Dispose();
+                slot.FenceWrapper?.Dispose();
+            }
+        }
+
+        lock (_transientFreePoolLock)
+        {
+            foreach (OpenGLBuffer buf in _transientFreePool)
+                buf.Dispose();
+            _transientFreePool.Clear();
+        }
+
         try
         {
             FlushAndFinish();

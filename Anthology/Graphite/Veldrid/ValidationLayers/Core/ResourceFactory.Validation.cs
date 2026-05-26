@@ -219,6 +219,8 @@ public abstract partial class ResourceFactory
                             $"Two ResourceLayouts on the ShaderProgram share Set index {programResourceLayouts[i].Set}.");
                     }
                 }
+
+                ValidateResourceLayoutElements(programResourceLayouts[i]);
             }
         }
 
@@ -269,6 +271,94 @@ public abstract partial class ResourceFactory
             throw new RenderException(
                 $"{nameof(ComputeDescription)}.{nameof(ComputeDescription.Stage)} must have Stage == ShaderStages.Compute.");
         }
+
+        ResourceLayoutDescription[] computeResourceLayouts = description.ResourceLayouts;
+        if (computeResourceLayouts != null)
+        {
+            for (int i = 0; i < computeResourceLayouts.Length; i++)
+            {
+                for (int j = i + 1; j < computeResourceLayouts.Length; j++)
+                {
+                    if (computeResourceLayouts[i].Set == computeResourceLayouts[j].Set)
+                    {
+                        throw new RenderException(
+                            $"Two ResourceLayouts on the ComputeProgram share Set index {computeResourceLayouts[i].Set}.");
+                    }
+                }
+
+                ValidateResourceLayoutElements(computeResourceLayouts[i]);
+            }
+        }
 #endif
     }
+
+#if VALIDATE_USAGE
+    private static void ValidateResourceLayoutElements(ResourceLayoutDescription layout)
+    {
+        ResourceLayoutElementDescription[] elements = layout.Elements;
+        if (elements == null) return;
+
+        for (int e = 0; e < elements.Length; e++)
+        {
+            ref ResourceLayoutElementDescription element = ref elements[e];
+            UniformBlockField[] fields = element.UniformFields;
+            bool hasFields = fields != null && fields.Length > 0;
+
+            if (hasFields && element.Kind != ResourceKind.UniformBuffer)
+            {
+                throw new RenderException(
+                    $"ResourceLayoutElementDescription '{PropertyID.ToString(element.Name)}' has UniformFields but its Kind is {element.Kind}; UniformFields are only valid on UniformBuffer elements.");
+            }
+
+            if (!hasFields) continue;
+
+            for (int a = 0; a < fields.Length; a++)
+            {
+                ref UniformBlockField fa = ref fields[a];
+                uint expected = NaturalSize(fa.Type);
+                if (fa.Size != expected)
+                {
+                    throw new RenderException(
+                        $"UniformBlockField '{PropertyID.ToString(fa.Name)}' on '{PropertyID.ToString(element.Name)}' has Size={fa.Size} but Type {fa.Type} requires Size={expected}.");
+                }
+
+                for (int b = a + 1; b < fields.Length; b++)
+                {
+                    ref UniformBlockField fb = ref fields[b];
+                    if (fa.Name == fb.Name)
+                    {
+                        throw new RenderException(
+                            $"UniformBlockField name '{PropertyID.ToString(fa.Name)}' is duplicated on '{PropertyID.ToString(element.Name)}'.");
+                    }
+
+                    bool nonOverlap = (fa.Offset + fa.Size <= fb.Offset) || (fb.Offset + fb.Size <= fa.Offset);
+                    if (!nonOverlap)
+                    {
+                        throw new RenderException(
+                            $"UniformBlockFields '{PropertyID.ToString(fa.Name)}' and '{PropertyID.ToString(fb.Name)}' on '{PropertyID.ToString(element.Name)}' overlap.");
+                    }
+                }
+            }
+        }
+    }
+
+    private static uint NaturalSize(UniformScalarType type) => type switch
+    {
+        UniformScalarType.Float1 => 4,
+        UniformScalarType.Int1 => 4,
+        UniformScalarType.Float2 => 8,
+        UniformScalarType.Int2 => 8,
+        UniformScalarType.Double1 => 8,
+        UniformScalarType.Float3 => 12,
+        UniformScalarType.Int3 => 12,
+        UniformScalarType.Float4 => 16,
+        UniformScalarType.Int4 => 16,
+        UniformScalarType.Double2 => 16,
+        UniformScalarType.Double3 => 24,
+        UniformScalarType.Double4 => 32,
+        UniformScalarType.Float4x4 => 64,
+        UniformScalarType.Double4x4 => 128,
+        _ => 0,
+    };
+#endif
 }

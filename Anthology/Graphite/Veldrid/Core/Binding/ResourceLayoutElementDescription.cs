@@ -10,7 +10,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
     /// <summary>
     /// The interned name of the element. Implicit conversion from <see cref="string"/> is supported.
     /// </summary>
-    public ResourceID Name;
+    public PropertyID Name;
 
     /// <summary>
     /// The kind of resource.
@@ -39,6 +39,21 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
     /// </summary>
     public ResourceLayoutElementOptions Options;
 
+    // OpenGL-only: overrides the name passed to glGetUniformLocation / glGetUniformBlockIndex.
+    /// <summary>
+    /// Optional in-shader name used by the OpenGL backend when resolving this element via
+    /// <c>glGetUniformLocation</c> / <c>glGetUniformBlockIndex</c>. Ignored by other backends.
+    /// When null or empty, the OpenGL backend falls back to <c>ResourceID.ToString(Name)</c>.
+    /// </summary>
+    public string GLUniformName;
+
+    /// <summary>
+    /// Flat list of fields describing the layout of this uniform block. Must be null or empty
+    /// unless <see cref="Kind"/> is <see cref="ResourceKind.UniformBuffer"/>. Order is not
+    /// significant; Stage 7 looks fields up by <see cref="UniformBlockField.Name"/>.
+    /// </summary>
+    public UniformBlockField[] UniformFields;
+
     public ResourceLayoutElementDescription(string name, ResourceKind kind, ShaderStages stages, int bindingIndex)
     {
         Name = name;
@@ -46,6 +61,8 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
         Stages = stages;
         BindingIndex = bindingIndex;
         Options = ResourceLayoutElementOptions.None;
+        GLUniformName = null;
+        UniformFields = null;
     }
 
     public ResourceLayoutElementDescription(string name, ResourceKind kind, ShaderStages stages, int bindingIndex, ResourceLayoutElementOptions options)
@@ -55,16 +72,67 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
         Stages = stages;
         BindingIndex = bindingIndex;
         Options = options;
+        GLUniformName = null;
+        UniformFields = null;
+    }
+
+    /// <summary>
+    /// Constructs a fully-specified element including the OpenGL resolve name and per-field UBO metadata.
+    /// </summary>
+    public ResourceLayoutElementDescription(
+        PropertyID name,
+        ResourceKind kind,
+        ShaderStages stages,
+        int bindingIndex,
+        ResourceLayoutElementOptions options,
+        string glUniformName,
+        UniformBlockField[] uniformFields)
+    {
+        Name = name;
+        Kind = kind;
+        Stages = stages;
+        BindingIndex = bindingIndex;
+        Options = options;
+        GLUniformName = glUniformName;
+        UniformFields = uniformFields;
+    }
+
+    /// <summary>
+    /// Convenience overload that interns <paramref name="name"/> implicitly.
+    /// </summary>
+    public ResourceLayoutElementDescription(
+        string name,
+        ResourceKind kind,
+        ShaderStages stages,
+        int bindingIndex,
+        ResourceLayoutElementOptions options,
+        string glUniformName,
+        UniformBlockField[] uniformFields)
+        : this((PropertyID)name, kind, stages, bindingIndex, options, glUniformName, uniformFields)
+    {
     }
 
     public bool Equals(ResourceLayoutElementDescription other)
     {
-        return Name == other.Name && Kind == other.Kind && Stages == other.Stages && BindingIndex == other.BindingIndex && Options == other.Options;
+        return Name == other.Name
+            && Kind == other.Kind
+            && Stages == other.Stages
+            && BindingIndex == other.BindingIndex
+            && Options == other.Options
+            && string.Equals(GLUniformName, other.GLUniformName, StringComparison.Ordinal)
+            && Util.ArrayEqualsEquatable(UniformFields, other.UniformFields);
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Name, (int)Kind, (int)Stages, BindingIndex, (int)Options);
+        return HashCode.Combine(
+            Name,
+            (int)Kind,
+            (int)Stages,
+            BindingIndex,
+            (int)Options,
+            GLUniformName != null ? StringComparer.Ordinal.GetHashCode(GLUniformName) : 0,
+            UniformFields != null ? UniformFields.ArrayHash() : 0);
     }
 }
 

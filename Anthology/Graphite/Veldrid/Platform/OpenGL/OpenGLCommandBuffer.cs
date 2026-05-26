@@ -41,6 +41,7 @@ internal class OpenGLCommandBuffer : CommandBuffer
 
         _currentCommands = GetFreeCommandBuffer();
         _currentCommands.Begin();
+        HasEnded = false;
     }
 
     private OpenGLCommandEntryList GetFreeCommandBuffer()
@@ -108,6 +109,7 @@ internal class OpenGLCommandBuffer : CommandBuffer
     public override void End()
     {
         _currentCommands.End();
+        HasEnded = true;
     }
 
     private protected override void SetFramebufferCore(Framebuffer fb)
@@ -130,14 +132,16 @@ internal class OpenGLCommandBuffer : CommandBuffer
         _currentCommands.SetComputeShader(program);
     }
 
-    private protected override void SetGraphicsResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
+    /// <inheritdoc/>
+    private protected override void SetPropertiesCore(PropertySet ps)
     {
-        _currentCommands.SetGraphicsResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets);
+        _currentCommands.SetProperties(ps);
     }
 
-    private protected override void SetComputeResourceSetCore(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
+    /// <inheritdoc/>
+    private protected override void ClearPropertiesCore()
     {
-        _currentCommands.SetComputeResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets);
+        _currentCommands.ClearProperties();
     }
 
     public override void SetScissorRect(uint index, uint x, uint y, uint width, uint height)

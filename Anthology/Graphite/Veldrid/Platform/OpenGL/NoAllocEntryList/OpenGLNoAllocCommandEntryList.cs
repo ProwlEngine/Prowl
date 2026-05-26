@@ -37,9 +37,13 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
     private static readonly uint SetFramebufferEntrySize = Util.USizeOf<NoAllocSetFramebufferEntry>();
 
     // ID 7 was SetIndexBufferEntry, deleted in Stage 4 (vertex source owns index buffer).
+    // ID 9 was SetResourceSetEntry, deleted in Stage 7 (replaced by PropertySet).
 
-    private const byte SetResourceSetEntryID = 9;
-    private static readonly uint SetResourceSetEntrySize = Util.USizeOf<NoAllocSetResourceSetEntry>();
+    private const byte SetPropertiesEntryID = 29;
+    private static readonly uint SetPropertiesEntrySize = Util.USizeOf<NoAllocSetPropertiesEntry>();
+
+    private const byte ClearPropertiesEntryID = 30;
+    private static readonly uint ClearPropertiesEntrySize = Util.USizeOf<NoAllocClearPropertiesEntry>();
 
     private const byte SetScissorRectEntryID = 10;
     private static readonly uint SetScissorRectEntrySize = Util.USizeOf<NoAllocSetScissorRectEntry>();
@@ -280,29 +284,14 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
                     executor.SetFramebuffer(sfbe.Framebuffer.Get(_resourceList));
                     currentOffset += SetFramebufferEntrySize;
                     break;
-                case SetResourceSetEntryID:
-                    NoAllocSetResourceSetEntry srse = Unsafe.ReadUnaligned<NoAllocSetResourceSetEntry>(entryBasePtr);
-
-                    uint* dynamicOffsetsPtr = srse.DynamicOffsetCount > NoAllocSetResourceSetEntry.MaxInlineDynamicOffsets
-                        ? (uint*)srse.DynamicOffsets_Block.Data
-                        : srse.DynamicOffsets_Inline;
-                    if (srse.IsGraphics)
-                    {
-                        executor.SetGraphicsResourceSet(
-                            srse.Slot,
-                            srse.ResourceSet.Get(_resourceList),
-                            srse.DynamicOffsetCount,
-                            ref Unsafe.AsRef<uint>(dynamicOffsetsPtr));
-                    }
-                    else
-                    {
-                        executor.SetComputeResourceSet(
-                            srse.Slot,
-                            srse.ResourceSet.Get(_resourceList),
-                            srse.DynamicOffsetCount,
-                            ref Unsafe.AsRef<uint>(dynamicOffsetsPtr));
-                    }
-                    currentOffset += SetResourceSetEntrySize;
+                case SetPropertiesEntryID:
+                    NoAllocSetPropertiesEntry spse = Unsafe.ReadUnaligned<NoAllocSetPropertiesEntry>(entryBasePtr);
+                    executor.SetProperties(spse.Properties.Get(_resourceList));
+                    currentOffset += SetPropertiesEntrySize;
+                    break;
+                case ClearPropertiesEntryID:
+                    executor.ClearProperties();
+                    currentOffset += ClearPropertiesEntrySize;
                     break;
                 case SetScissorRectEntryID:
                     NoAllocSetScissorRectEntry ssre = Unsafe.ReadUnaligned<NoAllocSetScissorRectEntry>(entryBasePtr);
@@ -471,37 +460,16 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
         AddEntry(SetComputeShaderEntryID, ref entry);
     }
 
-    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
+    public void SetProperties(PropertySet ps)
     {
-        SetResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets, isGraphics: true);
+        NoAllocSetPropertiesEntry entry = new NoAllocSetPropertiesEntry(Track(ps));
+        AddEntry(SetPropertiesEntryID, ref entry);
     }
 
-    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
+    public void ClearProperties()
     {
-        SetResourceSet(slot, rs, dynamicOffsetCount, ref dynamicOffsets, isGraphics: false);
-    }
-
-    private void SetResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets, bool isGraphics)
-    {
-        NoAllocSetResourceSetEntry entry;
-
-        if (dynamicOffsetCount > NoAllocSetResourceSetEntry.MaxInlineDynamicOffsets)
-        {
-            StagingBlock block = _memoryPool.GetStagingBlock(dynamicOffsetCount * sizeof(uint));
-            _stagingBlocks.Add(block);
-            for (uint i = 0; i < dynamicOffsetCount; i++)
-            {
-                *((uint*)block.Data + i) = Unsafe.Add(ref dynamicOffsets, (int)i);
-            }
-
-            entry = new NoAllocSetResourceSetEntry(slot, Track(rs), isGraphics, block);
-        }
-        else
-        {
-            entry = new NoAllocSetResourceSetEntry(slot, Track(rs), isGraphics, dynamicOffsetCount, ref dynamicOffsets);
-        }
-
-        AddEntry(SetResourceSetEntryID, ref entry);
+        NoAllocClearPropertiesEntry entry = new NoAllocClearPropertiesEntry();
+        AddEntry(ClearPropertiesEntryID, ref entry);
     }
 
     public void SetScissorRect(uint index, uint x, uint y, uint width, uint height)

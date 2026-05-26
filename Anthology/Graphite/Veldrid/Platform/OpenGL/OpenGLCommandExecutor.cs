@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 using Silk.NET.OpenGL;
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
@@ -23,8 +26,6 @@ internal unsafe class OpenGLCommandExecutor
     private Framebuffer _fb;
     private bool _isSwapchainFB;
     private OpenGLShaderProgram _currentShaderProgram;
-    private BoundResourceSetInfo[] _graphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
-    private bool[] _newGraphicsResourceSets = Array.Empty<bool>();
     private uint[] _vertexAttribDivisors = Array.Empty<uint>();
     private uint _vertexAttributesBound;
     private readonly Viewport[] _viewports = new Viewport[20];
@@ -37,8 +38,10 @@ internal unsafe class OpenGLCommandExecutor
     private uint _currentIbOffset;
 
     private OpenGLComputeProgram _currentComputeProgram;
-    private BoundResourceSetInfo[] _computeResourceSets = Array.Empty<BoundResourceSetInfo>();
-    private bool[] _newComputeResourceSets = Array.Empty<bool>();
+
+    private readonly MergedPropertyTable _mergedTable = new();
+    private readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = new();
+    private readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = new();
 
     private bool _graphicsPipelineActive;
     private bool _vertexLayoutFlushed;
@@ -266,7 +269,7 @@ internal unsafe class OpenGLCommandExecutor
 
         _primitiveType = OpenGLFormats.VdToGLPrimitiveType(_currentVertexSource.Topology);
 
-        FlushResourceSets(graphics: true);
+        BindProperties(graphics: true);
         if (!_vertexLayoutFlushed)
         {
             FlushVertexLayouts();
@@ -303,22 +306,229 @@ internal unsafe class OpenGLCommandExecutor
         _currentIbOffset = offset;
     }
 
-    private void FlushResourceSets(bool graphics)
+    private void BindProperties(bool graphics)
     {
-        uint sets = graphics
-            ? (uint)_currentShaderProgram.ResourceLayouts.Count
-            : (uint)_currentComputeProgram.ResourceLayouts.Count;
-        for (uint slot = 0; slot < sets; slot++)
-        {
-            BoundResourceSetInfo brsi = graphics ? _graphicsResourceSets[slot] : _computeResourceSets[slot];
-            OpenGLResourceSet glSet = Util.AssertSubtype<ResourceSet, OpenGLResourceSet>(brsi.Set);
-            ResourceLayoutElementDescription[] layoutElements = glSet.Layout.Elements;
-            bool isNew = graphics ? _newGraphicsResourceSets[slot] : _newComputeResourceSets[slot];
+        ResourceLayoutDescription[] layouts = graphics
+            ? _currentShaderProgram.ResourceLayoutsArray
+            : _currentComputeProgram.ResourceLayoutsArray;
 
-            ActivateResourceSet(slot, graphics, brsi, layoutElements, isNew);
+        for (uint setIdx = 0; setIdx < layouts.Length; setIdx++)
+        {
+            ResourceLayoutDescription layout = layouts[setIdx];
+            for (uint elemIdx = 0; elemIdx < layout.Elements.Length; elemIdx++)
+            {
+                ref ResourceLayoutElementDescription elem = ref layout.Elements[elemIdx];
+                switch (elem.Kind)
+                {
+                    case ResourceKind.UniformBuffer:
+                        BindUniformBufferGL(setIdx, elemIdx, in elem, graphics);
+                        break;
+                    case ResourceKind.StructuredBufferReadOnly:
+                    case ResourceKind.StructuredBufferReadWrite:
+                        BindStorageBufferGL(setIdx, elemIdx, in elem, graphics);
+                        break;
+                    case ResourceKind.TextureReadOnly:
+                        BindTextureGL(setIdx, elemIdx, in elem, graphics, readWrite: false);
+                        break;
+                    case ResourceKind.TextureReadWrite:
+                        BindTextureGL(setIdx, elemIdx, in elem, graphics, readWrite: true);
+                        break;
+                    case ResourceKind.Sampler:
+                        break;
+                    default:
+                        throw Illegal.Value<ResourceKind>();
+                }
+            }
+        }
+    }
+
+    private void BindUniformBufferGL(uint setIdx, uint elemIdx, in ResourceLayoutElementDescription elem, bool graphics)
+    {
+        if (!GetUniformBindingForSlot(graphics, setIdx, elemIdx, out OpenGLUniformBinding uniformBinding))
+            return;
+
+        DeviceBufferRange range;
+        bool hasImplicit = elem.UniformFields != null && elem.UniformFields.Length > 0;
+        if (hasImplicit)
+        {
+            range = GetOrBuildImplicitUboGL(graphics, setIdx, elem.BindingIndex, elem.UniformFields, uniformBinding.BlockSize);
+            if (range.Buffer == null) return;
+        }
+        else
+        {
+            if (!_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
+                return;
+            uint sz = entry.BufferSize > 0 ? entry.BufferSize : entry.Buffer.SizeInBytes;
+            range = new DeviceBufferRange(entry.Buffer, entry.BufferOffset, sz);
         }
 
-        Util.ClearArray(graphics ? _newGraphicsResourceSets : _newComputeResourceSets);
+        OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
+        glUB.EnsureResourcesCreated();
+
+        if (range.SizeInBytes < uniformBinding.BlockSize)
+        {
+            string name = PropertyID.ToString(elem.Name) ?? "<unknown>";
+            throw new RenderException(
+                $"Not enough data in uniform buffer \"{name}\" (set {setIdx}, element {elemIdx}). Shader expects at least {uniformBinding.BlockSize} bytes, but buffer only contains {range.SizeInBytes} bytes");
+        }
+
+        _gl.UniformBlockBinding(ActiveProgramHandle(graphics), uniformBinding.BlockLocation, uniformBinding.BindingPoint);
+        CheckLastError();
+        _gl.BindBufferRange(BufferTargetARB.UniformBuffer, uniformBinding.BindingPoint, glUB.Buffer, (IntPtr)range.Offset, (UIntPtr)range.SizeInBytes);
+        CheckLastError();
+    }
+
+    private unsafe DeviceBufferRange GetOrBuildImplicitUboGL(
+        bool graphics, uint setIdx, int bindingIndex,
+        UniformBlockField[] fields, uint blockSize)
+    {
+        uint uniformVersion = _mergedTable.UniformVersion;
+
+        if (graphics)
+        {
+            var key = new UboCacheKey(_currentShaderProgram, setIdx, bindingIndex, uniformVersion);
+            if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached))
+                return cached;
+        }
+        else
+        {
+            var key = new ComputeUboCacheKey(_currentComputeProgram, setIdx, bindingIndex, uniformVersion);
+            if (_computeUboCache.TryGetValue(key, out DeviceBufferRange cached))
+                return cached;
+        }
+
+        byte[] scratch = ArrayPool<byte>.Shared.Rent((int)blockSize);
+        scratch.AsSpan(0, (int)blockSize).Clear();
+
+        foreach (UniformBlockField field in fields)
+        {
+            if (!_mergedTable.Entries.TryGetValue(field.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Uniform)
+                continue;
+            Span<byte> src = MemoryMarshal.CreateSpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), 128);
+            src.Slice(0, (int)Math.Min(field.Size, (uint)src.Length)).CopyTo(scratch.AsSpan((int)field.Offset));
+        }
+
+        DeviceBufferRange range = _gd.CurrentFrame.AllocateTransient(blockSize);
+        fixed (byte* ptr = scratch)
+        {
+            UpdateBuffer(range.Buffer, range.Offset, (IntPtr)ptr, blockSize);
+        }
+        ArrayPool<byte>.Shared.Return(scratch);
+
+        if (graphics)
+            _frameUboCache[new UboCacheKey(_currentShaderProgram, setIdx, bindingIndex, uniformVersion)] = range;
+        else
+            _computeUboCache[new ComputeUboCacheKey(_currentComputeProgram, setIdx, bindingIndex, uniformVersion)] = range;
+
+        return range;
+    }
+
+    private void BindStorageBufferGL(uint setIdx, uint elemIdx, in ResourceLayoutElementDescription elem, bool graphics)
+    {
+        if (!GetStorageBufferBindingForSlot(graphics, setIdx, elemIdx, out OpenGLShaderStorageBinding ssBinding))
+            return;
+
+        if (!_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                graphics ? _currentShaderProgram : null,
+                !graphics ? _currentComputeProgram : null,
+                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+            _gl.BindBufferBase(BufferTargetARB.ShaderStorageBuffer, ssBinding.BindingPoint, 0);
+            CheckLastError();
+            return;
+        }
+
+        uint sz = entry.BufferSize > 0 ? entry.BufferSize : entry.Buffer.SizeInBytes;
+        DeviceBufferRange range = new DeviceBufferRange(entry.Buffer, entry.BufferOffset, sz);
+        OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
+        glBuffer.EnsureResourcesCreated();
+
+        if (_backend == GraphicsBackend.OpenGL)
+        {
+            _gl.ShaderStorageBlockBinding(ActiveProgramHandle(graphics), ssBinding.StorageBlockBinding, ssBinding.BindingPoint);
+            CheckLastError();
+        }
+
+        _gl.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, ssBinding.BindingPoint, glBuffer.Buffer, (IntPtr)range.Offset, (UIntPtr)range.SizeInBytes);
+        CheckLastError();
+    }
+
+    private void BindTextureGL(uint setIdx, uint elemIdx, in ResourceLayoutElementDescription elem, bool graphics, bool readWrite)
+    {
+        if (!GetTextureBindingInfo(graphics, setIdx, elemIdx, out OpenGLTextureBindingSlotInfo bindingInfo))
+            return;
+
+        TextureView texView;
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry) && entry.Kind == PropertyEntryKind.Texture)
+        {
+            if (entry.TextureView != null)
+                texView = entry.TextureView;
+            else if (entry.Texture != null)
+                texView = entry.Texture.GetFullTextureView(_gd);
+            else
+                texView = null;
+        }
+        else
+            texView = null;
+
+        if (texView == null)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                graphics ? _currentShaderProgram : null,
+                !graphics ? _currentComputeProgram : null,
+                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+            texView = (readWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D).GetFullTextureView(_gd);
+        }
+
+        OpenGLTextureView glTexView = Util.AssertSubtype<TextureView, OpenGLTextureView>(texView);
+        glTexView.EnsureResourcesCreated();
+
+        if (readWrite)
+        {
+            bool layered = texView.Target.Usage.HasFlag(TextureUsage.Cubemap) || texView.ArrayLayers > 1;
+            if (layered && (texView.BaseArrayLayer > 0 || (texView.ArrayLayers > 1 && texView.ArrayLayers < texView.Target.ArrayLayers)))
+                throw new RenderException("Cannot bind texture with BaseArrayLayer > 0 and ArrayLayers > 1, or with an incomplete set of array layers (cubemaps have ArrayLayers == 6 implicitly).");
+
+            _gl.BindImageTexture(
+                (uint)bindingInfo.RelativeIndex,
+                glTexView.Target.Texture,
+                (int)texView.BaseMipLevel,
+                layered,
+                (int)texView.BaseArrayLayer,
+                BufferAccessARB.ReadWrite,
+                (InternalFormat)glTexView.GetReadWriteSizedInternalFormat());
+            CheckLastError();
+            if (_backend == GraphicsBackend.OpenGL)
+            {
+                _gl.Uniform1(bindingInfo.UniformLocation, bindingInfo.RelativeIndex);
+                CheckLastError();
+            }
+        }
+        else
+        {
+            uint textureUnit = (uint)bindingInfo.RelativeIndex;
+            _textureSamplerManager.SetTexture(textureUnit, glTexView);
+            _gl.Uniform1(bindingInfo.UniformLocation, bindingInfo.RelativeIndex);
+            CheckLastError();
+
+            Sampler sampler = entry.Sampler ?? _gd.LinearSampler;
+            OpenGLSampler glSampler = Util.AssertSubtype<Sampler, OpenGLSampler>(sampler);
+            glSampler.EnsureResourcesCreated();
+            _textureSamplerManager.SetSampler(textureUnit, glSampler);
+        }
+    }
+
+    public void SetProperties(PropertySet ps)
+    {
+        _mergedTable.IngestFrom(ps, ChangeMask.Both);
+    }
+
+    public void ClearProperties()
+    {
+        _mergedTable.Clear();
+        _frameUboCache.Clear();
+        _computeUboCache.Clear();
     }
 
     private void FlushVertexLayouts()
@@ -428,7 +638,7 @@ internal unsafe class OpenGLCommandExecutor
             ActivateComputePipeline();
         }
 
-        FlushResourceSets(false);
+        BindProperties(graphics: false);
     }
 
     private static void PostDispatchCommand()
@@ -514,15 +724,6 @@ internal unsafe class OpenGLCommandExecutor
     {
         _graphicsPipelineActive = true;
         _currentShaderProgram.EnsureResourcesCreated();
-
-        Util.EnsureArrayMinimumSize(ref _graphicsResourceSets, (uint)_currentShaderProgram.ResourceLayouts.Count);
-        Util.EnsureArrayMinimumSize(ref _newGraphicsResourceSets, (uint)_currentShaderProgram.ResourceLayouts.Count);
-
-        // Force ResourceSets to be re-bound.
-        for (int i = 0; i < _currentShaderProgram.ResourceLayouts.Count; i++)
-        {
-            _newGraphicsResourceSets[i] = true;
-        }
 
         // Blend State
 
@@ -841,38 +1042,9 @@ internal unsafe class OpenGLCommandExecutor
     {
         _graphicsPipelineActive = false;
         _currentComputeProgram.EnsureResourcesCreated();
-        Util.EnsureArrayMinimumSize(ref _computeResourceSets, (uint)_currentComputeProgram.ResourceLayouts.Count);
-        Util.EnsureArrayMinimumSize(ref _newComputeResourceSets, (uint)_currentComputeProgram.ResourceLayouts.Count);
 
-        // Force ResourceSets to be re-bound.
-        for (int i = 0; i < _currentComputeProgram.ResourceLayouts.Count; i++)
-        {
-            _newComputeResourceSets[i] = true;
-        }
-
-        // Shader Set
         _gl.UseProgram(_currentComputeProgram.GLProgram);
         CheckLastError();
-    }
-
-    public void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
-    {
-        if (!_graphicsResourceSets[slot].Equals(rs, dynamicOffsetCount, ref dynamicOffsets))
-        {
-            _graphicsResourceSets[slot].Offsets.Dispose();
-            _graphicsResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetCount, ref dynamicOffsets);
-            _newGraphicsResourceSets[slot] = true;
-        }
-    }
-
-    public void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets)
-    {
-        if (!_computeResourceSets[slot].Equals(rs, dynamicOffsetCount, ref dynamicOffsets))
-        {
-            _computeResourceSets[slot].Offsets.Dispose();
-            _computeResourceSets[slot] = new BoundResourceSetInfo(rs, dynamicOffsetCount, ref dynamicOffsets);
-            _newComputeResourceSets[slot] = true;
-        }
     }
 
     private uint ActiveProgramHandle(bool graphics) => graphics
@@ -890,153 +1062,6 @@ internal unsafe class OpenGLCommandExecutor
     private bool GetStorageBufferBindingForSlot(bool graphics, uint set, uint slot, out OpenGLShaderStorageBinding b) => graphics
         ? _currentShaderProgram.GetStorageBufferBindingForSlot(set, slot, out b)
         : _currentComputeProgram.GetStorageBufferBindingForSlot(set, slot, out b);
-
-    private void ActivateResourceSet(
-        uint slot,
-        bool graphics,
-        BoundResourceSetInfo brsi,
-        ResourceLayoutElementDescription[] layoutElements,
-        bool isNew)
-    {
-        OpenGLResourceSet glResourceSet = Util.AssertSubtype<ResourceSet, OpenGLResourceSet>(brsi.Set);
-
-        uint dynamicOffsetIndex = 0;
-        for (uint element = 0; element < glResourceSet.Resources.Length; element++)
-        {
-            ResourceLayoutElementDescription layoutElement = layoutElements[element];
-            ResourceKind kind = layoutElement.Kind;
-            BindableResource resource = glResourceSet.Resources[(int)element];
-
-            uint bufferOffset = 0;
-            if ((layoutElement.Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
-            {
-                bufferOffset = brsi.Offsets.Get(dynamicOffsetIndex);
-                dynamicOffsetIndex += 1;
-            }
-
-            switch (kind)
-            {
-                case ResourceKind.UniformBuffer:
-                    {
-                        if (!isNew) { continue; }
-
-                        DeviceBufferRange range = Util.GetBufferRange(resource, bufferOffset);
-                        OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
-
-                        glUB.EnsureResourcesCreated();
-                        if (GetUniformBindingForSlot(graphics, slot, element, out OpenGLUniformBinding uniformBindingInfo))
-                        {
-                            if (range.SizeInBytes < uniformBindingInfo.BlockSize)
-                            {
-                                string name = ResourceID.ToString(glResourceSet.Layout.Elements[element].Name) ?? "<unknown>";
-                                throw new RenderException(
-                                    $"Not enough data in uniform buffer \"{name}\" (slot {slot}, element {element}). Shader expects at least {uniformBindingInfo.BlockSize} bytes, but buffer only contains {range.SizeInBytes} bytes");
-                            }
-                            _gl.UniformBlockBinding(ActiveProgramHandle(graphics), uniformBindingInfo.BlockLocation, uniformBindingInfo.BindingPoint);
-                            CheckLastError();
-
-                            _gl.BindBufferRange(
-                                BufferTargetARB.UniformBuffer,
-                                uniformBindingInfo.BindingPoint,
-                                glUB.Buffer,
-                                (IntPtr)range.Offset,
-                                (UIntPtr)range.SizeInBytes);
-                            CheckLastError();
-                        }
-                        break;
-                    }
-                case ResourceKind.StructuredBufferReadWrite:
-                case ResourceKind.StructuredBufferReadOnly:
-                    {
-                        if (!isNew) { continue; }
-
-                        DeviceBufferRange range = Util.GetBufferRange(resource, bufferOffset);
-                        OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
-
-                        glBuffer.EnsureResourcesCreated();
-                        if (GetStorageBufferBindingForSlot(graphics, slot, element, out OpenGLShaderStorageBinding shaderStorageBinding))
-                        {
-                            if (_backend == GraphicsBackend.OpenGL)
-                            {
-                                _gl.ShaderStorageBlockBinding(
-                                    ActiveProgramHandle(graphics),
-                                    shaderStorageBinding.StorageBlockBinding,
-                                    shaderStorageBinding.BindingPoint);
-                                CheckLastError();
-                            }
-
-                            _gl.BindBufferRange(
-                                BufferTargetARB.ShaderStorageBuffer,
-                                shaderStorageBinding.BindingPoint,
-                                glBuffer.Buffer,
-                                (IntPtr)range.Offset,
-                                (UIntPtr)range.SizeInBytes);
-                            CheckLastError();
-                        }
-                        break;
-                    }
-                case ResourceKind.TextureReadOnly:
-                    TextureView texView = Util.GetTextureView(_gd, resource);
-                    OpenGLTextureView glTexView = Util.AssertSubtype<TextureView, OpenGLTextureView>(texView);
-                    glTexView.EnsureResourcesCreated();
-                    if (GetTextureBindingInfo(graphics, slot, element, out OpenGLTextureBindingSlotInfo textureBindingInfo))
-                    {
-                        uint textureUnit = (uint)textureBindingInfo.RelativeIndex;
-                        _textureSamplerManager.SetTexture(textureUnit, glTexView);
-                        _gl.Uniform1(textureBindingInfo.UniformLocation, textureBindingInfo.RelativeIndex);
-                        CheckLastError();
-
-                        // Combined sampler/texture: locate a paired Sampler element in this layout
-                        // (same BindingIndex + Name) and bind its sampler state to the same texture unit.
-                        int samplerElementIndex = glResourceSet.Layout.FindCombinedSamplerIndex(
-                            layoutElement.BindingIndex, layoutElement.Name);
-                        if (samplerElementIndex >= 0)
-                        {
-                            OpenGLSampler glSampler = Util.AssertSubtype<BindableResource, OpenGLSampler>(
-                                glResourceSet.Resources[samplerElementIndex]);
-                            glSampler.EnsureResourcesCreated();
-                            _textureSamplerManager.SetSampler(textureUnit, glSampler);
-                        }
-                    }
-                    break;
-                case ResourceKind.TextureReadWrite:
-                    TextureView texViewRW = Util.GetTextureView(_gd, resource);
-                    OpenGLTextureView glTexViewRW = Util.AssertSubtype<TextureView, OpenGLTextureView>(texViewRW);
-                    glTexViewRW.EnsureResourcesCreated();
-                    if (GetTextureBindingInfo(graphics, slot, element, out OpenGLTextureBindingSlotInfo imageBindingInfo))
-                    {
-                        bool layered = texViewRW.Target.Usage.HasFlag(TextureUsage.Cubemap) || texViewRW.ArrayLayers > 1;
-
-                        if (layered && (texViewRW.BaseArrayLayer > 0
-                            || (texViewRW.ArrayLayers > 1 && texViewRW.ArrayLayers < texViewRW.Target.ArrayLayers)))
-                        {
-                            throw new RenderException(
-                                "Cannot bind texture with BaseArrayLayer > 0 and ArrayLayers > 1, or with an incomplete set of array layers (cubemaps have ArrayLayers == 6 implicitly).");
-                        }
-
-                        _gl.BindImageTexture(
-                            (uint)imageBindingInfo.RelativeIndex,
-                            glTexViewRW.Target.Texture,
-                            (int)texViewRW.BaseMipLevel,
-                            layered,
-                            (int)texViewRW.BaseArrayLayer,
-                            BufferAccessARB.ReadWrite,
-                            (InternalFormat)glTexViewRW.GetReadWriteSizedInternalFormat());
-                        CheckLastError();
-                        if (_backend == GraphicsBackend.OpenGL)
-                        {
-                            _gl.Uniform1(imageBindingInfo.UniformLocation, imageBindingInfo.RelativeIndex);
-                            CheckLastError();
-                        }
-                    }
-                    break;
-                case ResourceKind.Sampler:
-                    // Sampler elements are handled in concert with their paired TextureReadOnly element above.
-                    break;
-                default: throw Illegal.Value<ResourceKind>();
-            }
-        }
-    }
 
     public void ResolveTexture(Texture source, Texture destination)
     {

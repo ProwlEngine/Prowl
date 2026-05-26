@@ -24,7 +24,6 @@ internal unsafe class D3D11ShaderProgram : ShaderProgram
 
     private ComPtr<ID3D11DeviceChild>[] _stageHandles;
 
-    public D3D11ResourceLayout[] D3D11ResourceLayouts { get; }
     public int[] VertexStridesInts { get; }
 
     public ID3D11BlendState* BlendStateHandle { get; private set; }
@@ -46,13 +45,6 @@ internal unsafe class D3D11ShaderProgram : ShaderProgram
         {
             byte[] bytecode = GetOrCompileBytecode(ref stages[i]);
             CreateStageShader(stages[i].Stage, bytecode, i);
-        }
-
-        ResourceLayoutDescription[] descs = ResourceLayoutsArray;
-        D3D11ResourceLayouts = new D3D11ResourceLayout[descs.Length];
-        for (int i = 0; i < descs.Length; i++)
-        {
-            D3D11ResourceLayouts[i] = new D3D11ResourceLayout(ref descs[i]);
         }
 
         VertexStridesInts = new int[VertexLayoutsArray.Length];

@@ -52,48 +52,6 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private void SetGraphicsResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
-    {
-#if VALIDATE_USAGE
-        if (_shaderProgram == null)
-        {
-            throw new RenderException($"A graphics ShaderProgram must be active before {nameof(SetGraphicsResourceSet)} can be called.");
-        }
-
-        ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_shaderProgram.ResourceLayoutsArray, slot);
-        if (layoutDesc == null)
-        {
-            throw new RenderException(
-                $"Failed to bind ResourceSet to slot {slot}. The active graphics ShaderProgram declares no ResourceLayout with Set = {slot}.");
-        }
-        CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
-
-        CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
-    private void SetComputeResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
-    {
-#if VALIDATE_USAGE
-        if (_computeProgram == null)
-        {
-            throw new RenderException($"A compute ComputeProgram must be active before {nameof(SetComputeResourceSet)} can be called.");
-        }
-
-        ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_computeProgram.ResourceLayoutsArray, slot);
-        if (layoutDesc == null)
-        {
-            throw new RenderException(
-                $"Failed to bind ResourceSet to slot {slot}. The active ComputeProgram declares no ResourceLayout with Set = {slot}.");
-        }
-        CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
-
-        CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
     private static void SetShader_CheckProgram(ShaderProgram p)
     {
 #if VALIDATE_USAGE
@@ -115,75 +73,6 @@ public abstract partial class CommandBuffer
 #endif
     }
 
-#if VALIDATE_USAGE
-    private static ResourceLayoutDescription? FindLayoutDescForSet(ResourceLayoutDescription[] layouts, uint set)
-    {
-        for (int i = 0; i < layouts.Length; i++)
-        {
-            if (layouts[i].Set == set)
-            {
-                return layouts[i];
-            }
-        }
-        return null;
-    }
-
-    private static void CheckResourceSetMatchesLayoutDescription(uint slot, ResourceLayoutDescription layoutDesc, ResourceSet rs)
-    {
-        int pipelineLength = layoutDesc.Elements.Length;
-        ResourceLayoutDescription setLayoutDesc = rs.Layout.Description;
-        int setLength = setLayoutDesc.Elements.Length;
-        if (pipelineLength != setLength)
-        {
-            throw new RenderException($"Failed to bind ResourceSet to slot {slot}. The number of resources in the ResourceSet ({setLength}) does not match the number expected by the active ShaderProgram ({pipelineLength}).");
-        }
-        for (int i = 0; i < pipelineLength; i++)
-        {
-            ResourceKind programKind = layoutDesc.Elements[i].Kind;
-            ResourceKind setKind = setLayoutDesc.Elements[i].Kind;
-            if (programKind != setKind)
-            {
-                throw new RenderException(
-                    $"Failed to bind ResourceSet to slot {slot}. Resource element {i} was of the incorrect type. The bound ShaderProgram expects {programKind}, but the ResourceSet contained {setKind}.");
-            }
-        }
-    }
-
-    private void CheckDynamicOffsets(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
-    {
-        ResourceLayoutDescription layoutDesc = rs.Layout.Description;
-
-        if (rs.Layout.DynamicBufferCount != dynamicOffsetsCount)
-        {
-            throw new RenderException(
-                $"A dynamic offset must be provided for each resource that specifies " +
-                $"{nameof(ResourceLayoutElementOptions)}.{nameof(ResourceLayoutElementOptions.DynamicBinding)}. " +
-                $"{rs.Layout.DynamicBufferCount} offsets were expected, but {dynamicOffsetsCount} were provided.");
-        }
-
-        uint dynamicOffsetIndex = 0;
-        for (uint i = 0; i < layoutDesc.Elements.Length; i++)
-        {
-            if ((layoutDesc.Elements[i].Options & ResourceLayoutElementOptions.DynamicBinding) != 0)
-            {
-                uint requiredAlignment = layoutDesc.Elements[i].Kind == ResourceKind.UniformBuffer
-                    ? _uniformBufferAlignment
-                    : _structuredBufferAlignment;
-                uint desiredOffset = System.Runtime.CompilerServices.Unsafe.Add(ref dynamicOffsets, (int)dynamicOffsetIndex);
-                dynamicOffsetIndex += 1;
-                DeviceBufferRange range = Util.GetBufferRange(rs.Resources[i], desiredOffset);
-
-                if ((range.Offset % requiredAlignment) != 0)
-                {
-                    throw new RenderException(
-                        $"The effective offset of the buffer in slot {i} does not meet the alignment " +
-                        $"requirements of this device. The offset must be a multiple of {requiredAlignment}, but it is " +
-                        $"{range.Offset}");
-                }
-            }
-        }
-    }
-#endif
 
     [Conditional("VALIDATE_USAGE")]
     private void ClearColorTarget_CheckFramebuffer(uint index)

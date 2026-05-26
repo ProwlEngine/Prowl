@@ -28,17 +28,6 @@ internal class OpenGLResourceFactory : ResourceFactory
         return new OpenGLFramebuffer(_gd, ref description);
     }
 
-    public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
-    {
-        return new OpenGLResourceLayout(ref description);
-    }
-
-    public override ResourceSet CreateResourceSet(ref ResourceSetDescription description)
-    {
-        ValidationHelpers.ValidateResourceSet(_gd, ref description);
-        return new OpenGLResourceSet(ref description);
-    }
-
     protected override Sampler CreateSamplerCore(ref SamplerDescription description)
     {
         return new OpenGLSampler(_gd, ref description);
