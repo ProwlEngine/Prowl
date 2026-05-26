@@ -23,7 +23,7 @@ internal class OpenGLExtensions : IReadOnlyCollection<string>
             || GLESVersion(3, 0);
         TextureStorageMultisample = IsExtensionSupported("GL_ARB_texture_storage_multisample")
             || GLESVersion(3, 1);
-        ARB_DirectStateAccess = IsExtensionSupported("GL_ARB_direct_state_access");
+        ARB_DirectStateAccess = GLVersion(4, 5) || IsExtensionSupported("GL_ARB_direct_state_access"); // OpenGL 4.5
         ARB_MultiBind = IsExtensionSupported("GL_ARB_multi_bind");
         ARB_TextureView = GLVersion(4, 3) || IsExtensionSupported("GL_ARB_texture_view") // OpenGL 4.3
             || IsExtensionSupported("GL_OES_texture_view");
@@ -45,7 +45,7 @@ internal class OpenGLExtensions : IReadOnlyCollection<string>
             || IsExtensionSupported("GL_ARB_draw_elements_base_vertex")
             || GLESVersion(3, 2)
             || IsExtensionSupported("GL_OES_draw_elements_base_vertex");
-        IndependentBlend = GLVersion(4, 0) || GLESVersion(3, 2);
+        IndependentBlend = GLVersion(4, 0) || IsExtensionSupported("GL_ARB_draw_buffers_blend") || GLESVersion(3, 2);
 
         DrawIndirect = GLVersion(4, 0) || IsExtensionSupported("GL_ARB_draw_indirect")
             || GLESVersion(3, 1);
