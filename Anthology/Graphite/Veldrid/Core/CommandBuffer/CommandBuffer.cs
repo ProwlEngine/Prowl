@@ -17,7 +17,7 @@ namespace Prowl.Veldrid;
 /// NOTE: The use of <see cref="CommandBuffer"/> is not thread-safe. Access to the <see cref="CommandBuffer"/> must be
 /// externally synchronized.
 /// There are some limitations dictating proper usage and ordering of graphics commands. For example, a
-/// <see cref="Framebuffer"/>, <see cref="Pipeline"/>, vertex buffer, and index buffer must all be
+/// <see cref="Framebuffer"/>, <see cref="ShaderProgram"/>, and <see cref="IVertexSource"/> must all be
 /// bound before a call to <see cref="DrawIndexed(uint, uint, uint, int, uint)"/> will succeed.
 /// These limitations are described in each function, where applicable.
 /// <see cref="CommandBuffer"/> instances cannot be executed multiple times per-recording. When executed by a
@@ -31,11 +31,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private readonly uint _structuredBufferAlignment;
 
     private protected Framebuffer _framebuffer;
-    private protected Pipeline _graphicsPipeline;
-    private protected Pipeline _computePipeline;
     private protected ShaderProgram _shaderProgram;
     private protected ComputeProgram _computeProgram;
     private protected OutputDescription _framebufferOutputs;
+    private protected IVertexSource _currentVertexSource;
 
     internal CommandBuffer(
         GraphicsDeviceFeatures features,
@@ -50,12 +49,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     internal void ClearCachedState()
     {
         _framebuffer = null;
-        _graphicsPipeline = null;
-        _computePipeline = null;
         _shaderProgram = null;
         _computeProgram = null;
         _framebufferOutputs = default;
-        ClearCachedState_ClearIndexBuffer();
+        _currentVertexSource = null;
     }
 
     /// <summary>
@@ -74,35 +71,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     public abstract void End();
 
     /// <summary>
-    /// Sets the active <see cref="Pipeline"/> used for rendering.
-    /// When drawing, the active <see cref="Pipeline"/> must be compatible with the bound <see cref="Framebuffer"/>,
-    /// <see cref="ResourceSet"/>, and <see cref="DeviceBuffer"/> objects.
-    /// When a new Pipeline is set, the previously-bound ResourceSets on this CommandList become invalidated and must be
-    /// re-bound.
-    /// </summary>
-    /// <param name="pipeline">The new <see cref="Pipeline"/> object.</param>
-    public void SetPipeline(Pipeline pipeline)
-    {
-        if (pipeline.IsComputePipeline)
-        {
-            _computePipeline = pipeline;
-            _computeProgram = null;
-        }
-        else
-        {
-            _graphicsPipeline = pipeline;
-            _shaderProgram = null;
-        }
-
-        SetPipelineCore(pipeline);
-    }
-
-    private protected abstract void SetPipelineCore(Pipeline pipeline);
-
-    /// <summary>
-    /// Sets the active graphics <see cref="ShaderProgram"/> used for rendering. Calling this nulls any
-    /// previously-bound graphics <see cref="Pipeline"/> set via <see cref="SetPipeline(Pipeline)"/>; the
-    /// last-bound graphics path wins.
+    /// Sets the active graphics <see cref="ShaderProgram"/> used for rendering.
+    /// When drawing, the active <see cref="ShaderProgram"/> must be compatible with the bound
+    /// <see cref="Framebuffer"/>, <see cref="ResourceSet"/>, and <see cref="DeviceBuffer"/> objects.
+    /// When a new <see cref="ShaderProgram"/> is set, the previously-bound ResourceSets on this
+    /// <see cref="CommandBuffer"/> become invalidated and must be re-bound.
     /// </summary>
     /// <param name="program">The new <see cref="ShaderProgram"/> object.</param>
     public void SetShader(ShaderProgram program)
@@ -110,14 +83,14 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         SetShader_CheckProgram(program);
         SetShaderCore(program);
         _shaderProgram = program;
-        _graphicsPipeline = null;
     }
 
     private protected abstract void SetShaderCore(ShaderProgram program);
 
     /// <summary>
-    /// Sets the active <see cref="ComputeProgram"/>. Calling this nulls any previously-bound compute
-    /// <see cref="Pipeline"/> set via <see cref="SetPipeline(Pipeline)"/>; the last-bound compute path wins.
+    /// Sets the active <see cref="ComputeProgram"/> used for compute dispatches.
+    /// When a new <see cref="ComputeProgram"/> is set, the previously-bound compute ResourceSets on
+    /// this <see cref="CommandBuffer"/> become invalidated and must be re-bound.
     /// </summary>
     /// <param name="program">The new <see cref="ComputeProgram"/> object.</param>
     public void SetComputeShader(ComputeProgram program)
@@ -125,78 +98,30 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         SetComputeShader_CheckProgram(program);
         SetComputeShaderCore(program);
         _computeProgram = program;
-        _computePipeline = null;
     }
 
     private protected abstract void SetComputeShaderCore(ComputeProgram program);
 
     /// <summary>
-    /// Sets the active <see cref="DeviceBuffer"/> for the given index.
-    /// When drawing, the bound <see cref="DeviceBuffer"/> objects must be compatible with the bound <see cref="Pipeline"/>.
-    /// The given buffer must be non-null. It is not necessary to un-bind vertex buffers for Pipelines which will not
-    /// use them. All extra vertex buffers are simply ignored.
+    /// Binds the given <see cref="IVertexSource"/> as the active source of
+    /// vertex buffer data, index buffer data, and primitive topology for
+    /// subsequent draws. Fully replaces any previously bound source: no
+    /// per-slot or index state is retained from the prior source.
     /// </summary>
-    /// <param name="index">The vertex buffer slot, i.e. the index of the corresponding
-    /// <see cref="VertexLayoutDescription"/> in <see cref="ShaderSetDescription.VertexLayouts"/>.
-    /// Not related to <see cref="VertexLayoutDescription.Location"/>, which is the shader
-    /// attribute index.</param>
-    /// <param name="buffer">The new <see cref="DeviceBuffer"/>.</param>
-    public void SetVertexBuffer(uint index, DeviceBuffer buffer)
+    /// <param name="source">The <see cref="IVertexSource"/> to bind. Must be non-null;
+    /// bind an empty implementation if a vertex-source-free draw is intended.</param>
+    public void SetVertexSource(IVertexSource source)
     {
-        SetVertexBuffer(index, buffer, 0);
+        SetVertexSource_CheckNonNull(source);
+        _currentVertexSource = source;
+        SetVertexSourceCore(source);
     }
 
-    /// <summary>
-    /// Sets the active <see cref="DeviceBuffer"/> for the given index.
-    /// When drawing, the bound <see cref="DeviceBuffer"/> objects must be compatible with the bound <see cref="Pipeline"/>.
-    /// The given buffer must be non-null. It is not necessary to un-bind vertex buffers for Pipelines which will not
-    /// use them. All extra vertex buffers are simply ignored.
-    /// </summary>
-    /// <param name="index">The vertex buffer slot, i.e. the index of the corresponding
-    /// <see cref="VertexLayoutDescription"/> in <see cref="ShaderSetDescription.VertexLayouts"/>.
-    /// Not related to <see cref="VertexLayoutDescription.Location"/>, which is the shader
-    /// attribute index.</param>
-    /// <param name="buffer">The new <see cref="DeviceBuffer"/>.</param>
-    /// <param name="offset">The offset from the start of the buffer, in bytes, from which data will start to be read.
-    /// </param>
-    public void SetVertexBuffer(uint index, DeviceBuffer buffer, uint offset)
-    {
-        SetVertexBuffer_CheckUsage(buffer);
-        SetVertexBufferCore(index, buffer, offset);
-    }
-
-    private protected abstract void SetVertexBufferCore(uint index, DeviceBuffer buffer, uint offset);
-
-    /// <summary>
-    /// Sets the active <see cref="DeviceBuffer"/>.
-    /// When drawing, an <see cref="DeviceBuffer"/> must be bound.
-    /// </summary>
-    /// <param name="buffer">The new <see cref="DeviceBuffer"/>.</param>
-    /// <param name="format">The format of data in the <see cref="DeviceBuffer"/>.</param>
-    public void SetIndexBuffer(DeviceBuffer buffer, IndexFormat format)
-    {
-        SetIndexBuffer(buffer, format, 0);
-    }
-
-    /// <summary>
-    /// Sets the active <see cref="DeviceBuffer"/>.
-    /// When drawing, an <see cref="DeviceBuffer"/> must be bound.
-    /// </summary>
-    /// <param name="buffer">The new <see cref="DeviceBuffer"/>.</param>
-    /// <param name="format">The format of data in the <see cref="DeviceBuffer"/>.</param>
-    /// <param name="offset">The offset from the start of the buffer, in bytes, from which data will start to be read.
-    /// </param>
-    public void SetIndexBuffer(DeviceBuffer buffer, IndexFormat format, uint offset)
-    {
-        SetIndexBuffer_CheckUsageAndStore(buffer, format);
-        SetIndexBufferCore(buffer, format, offset);
-    }
-
-    private protected abstract void SetIndexBufferCore(DeviceBuffer buffer, IndexFormat format, uint offset);
+    private protected abstract void SetVertexSourceCore(IVertexSource source);
 
     /// <summary>
     /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
-    /// Pipeline.
+    /// <see cref="ShaderProgram"/>.
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
@@ -205,7 +130,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
-    /// Pipeline.
+    /// <see cref="ShaderProgram"/>.
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
@@ -221,7 +146,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the graphics
-    /// Pipeline.
+    /// <see cref="ShaderProgram"/>.
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
@@ -241,7 +166,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
-    /// <see cref="Pipeline"/>.
+    /// <see cref="ComputeProgram"/>.
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
@@ -250,7 +175,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
-    /// <see cref="Pipeline"/>.
+    /// <see cref="ComputeProgram"/>.
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
@@ -261,7 +186,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Sets the active <see cref="ResourceSet"/> for the given index. This ResourceSet is only active for the compute
-    /// <see cref="Pipeline"/>.
+    /// <see cref="ComputeProgram"/>.
     /// </summary>
     /// <param name="slot">The resource slot.</param>
     /// <param name="rs">The new <see cref="ResourceSet"/>.</param>
@@ -277,8 +202,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Sets the active <see cref="Framebuffer"/> which will be rendered to.
-    /// When drawing, the active <see cref="Framebuffer"/> must be compatible with the active <see cref="Pipeline"/>.
-    /// A compatible <see cref="Pipeline"/> has the same number of output attachments with matching formats.
+    /// When drawing, the active <see cref="Framebuffer"/> must be compatible with the active <see cref="ShaderProgram"/>.
+    /// A compatible <see cref="ShaderProgram"/> has the same number of output attachments with matching formats.
     /// </summary>
     /// <param name="fb">The new <see cref="Framebuffer"/>.</param>
     public void SetFramebuffer(Framebuffer fb)
@@ -519,7 +444,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected abstract void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
 
     /// <summary>
-    /// Dispatches a compute operation from the currently-bound compute state of this Pipeline.
+    /// Dispatches a compute operation from the currently-bound compute state of this <see cref="ComputeProgram"/>.
     /// </summary>
     /// <param name="groupCountX">The X dimension of the compute thread groups that are dispatched.</param>
     /// <param name="groupCountY">The Y dimension of the compute thread groups that are dispatched.</param>

@@ -35,6 +35,26 @@ void main()
 }
 ";
 
+    private struct Provider : IVertexSource
+    {
+        public DeviceBuffer Buffer;
+
+        public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
+
+        public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
+        {
+            binding = new(Buffer);
+        }
+
+        public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint offset)
+        {
+            buffer = null;
+            format = IndexFormat.UInt32;
+            offset = 0;
+            return false;
+        }
+    }
+
     private static int Main()
     {
         WindowCreateInfo wci = new WindowCreateInfo
@@ -81,33 +101,36 @@ void main()
         DeviceBuffer vertexBuffer = factory.CreateBuffer(new BufferDescription(vertexBufferSize, BufferUsage.VertexBuffer));
         gd.UpdateBuffer(vertexBuffer, 0, vertices);
 
-        ShaderProgram vertexShader = factory.CreateShader(new ShaderDescription(
-            ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShaderSource), "main"));
-        ShaderProgram fragmentShader = factory.CreateShader(new ShaderDescription(
-            ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main"));
-
-        VertexLayoutDescription vertexLayout = new(
-            0u,
-            new VertexElementDescription("a_Position", VertexElementFormat.Float2),
-            new VertexElementDescription("a_UV", VertexElementFormat.Float2));
-
-        GraphicsPipelineDescription pipelineDesc = new()
+        Provider provider = new()
         {
-            BlendState = BlendStateDescription.SingleOverrideBlend,
-            DepthStencilState = new DepthStencilStateDescription(
-                depthTestEnabled: false,
-                depthWriteEnabled: false,
-                comparisonKind: ComparisonKind.Always),
-            RasterizerState = RasterizerStateDescription.CullNone,
-            PrimitiveTopology = PrimitiveTopology.TriangleList,
-            ResourceLayouts = [],
-            ShaderSet = new ShaderSetDescription(
-                vertexLayouts: [vertexLayout],
-                shaders: [vertexShader, fragmentShader]),
-            Outputs = gd.SwapchainFramebuffer.OutputDescription,
+            Buffer = vertexBuffer
         };
 
-        Pipeline pipeline = factory.CreateGraphicsPipeline(pipelineDesc);
+        ShaderDescription shaderDesc = new()
+        {
+            Stages =
+            [
+                new ShaderStageDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShaderSource), "main"),
+                new ShaderStageDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main")
+            ],
+
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            ResourceLayouts = [],
+            VertexLayouts =
+            [
+                new VertexLayoutDescription(
+                    0u,
+                    new VertexElementDescription("a_Position", VertexElementFormat.Float2),
+                    new VertexElementDescription("a_UV", VertexElementFormat.Float2))
+            ]
+        };
+
+        ShaderProgram shader = factory.CreateShaderProgram(new ShaderDescription(
+            new ShaderStageDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShaderSource), "main"),
+            new ShaderStageDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main")));
+
         CommandBuffer cl = factory.CreateCommandList();
 
         bool running = true;
@@ -144,9 +167,9 @@ void main()
 
             cl.Begin();
             cl.SetFramebuffer(gd.SwapchainFramebuffer);
-            cl.ClearColorTarget(0, new Prowl.Vector.Color(0.10f, 0.12f, 0.16f, 1.0f));
-            cl.SetPipeline(pipeline);
-            cl.SetVertexBuffer(0, vertexBuffer);
+            cl.ClearColorTarget(0, new Vector.Color(0.10f, 0.12f, 0.16f, 1.0f));
+            cl.SetShader(shader);
+            cl.SetVertexSource(provider);
             cl.Draw(vertexCount: 3);
             cl.End();
 
@@ -155,9 +178,7 @@ void main()
         }
 
         cl.Dispose();
-        pipeline.Dispose();
-        vertexShader.Dispose();
-        fragmentShader.Dispose();
+        shader.Dispose();
         vertexBuffer.Dispose();
         gd.Dispose();
 

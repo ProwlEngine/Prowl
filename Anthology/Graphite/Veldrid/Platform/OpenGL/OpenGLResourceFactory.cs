@@ -28,18 +28,6 @@ internal class OpenGLResourceFactory : ResourceFactory
         return new OpenGLFramebuffer(_gd, ref description);
     }
 
-    protected override Pipeline CreateGraphicsPipelineCore(ref GraphicsPipelineDescription description)
-    {
-        return new OpenGLPipeline(_gd, ref description);
-    }
-
-    public override Pipeline CreateComputePipeline(ref ComputePipelineDescription description)
-    {
-        OpenGLPipeline pipeline = new OpenGLPipeline(_gd, ref description);
-        _gd.EnsureResourceInitialized(pipeline);
-        return pipeline;
-    }
-
     public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
     {
         return new OpenGLResourceLayout(ref description);

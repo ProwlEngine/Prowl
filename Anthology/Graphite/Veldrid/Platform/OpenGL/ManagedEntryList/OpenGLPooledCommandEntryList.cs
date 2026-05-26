@@ -17,14 +17,12 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
         private readonly EntryPool<DispatchEntry> _dispatchEntryPool = new EntryPool<DispatchEntry>();
         private readonly EntryPool<EndEntry> _endEntryPool = new EntryPool<EndEntry>();
         private readonly EntryPool<SetFramebufferEntry> _setFramebufferEntryPool = new EntryPool<SetFramebufferEntry>();
-        private readonly EntryPool<SetIndexBufferEntry> _setIndexBufferEntryPool = new EntryPool<SetIndexBufferEntry>();
-        private readonly EntryPool<SetPipelineEntry> _setPipelineEntryPool = new EntryPool<SetPipelineEntry>();
         private readonly EntryPool<SetShaderEntry> _setShaderEntryPool = new EntryPool<SetShaderEntry>();
         private readonly EntryPool<SetComputeShaderEntry> _setComputeShaderEntryPool = new EntryPool<SetComputeShaderEntry>();
         private readonly EntryPool<SetGraphicsResourceSetEntry> _setGraphicsResourceSetEntryPool = new EntryPool<SetGraphicsResourceSetEntry>();
         private readonly EntryPool<SetComputeResourceSetEntry> _setComputeResourceSetEntryPool = new EntryPool<SetComputeResourceSetEntry>();
         private readonly EntryPool<SetScissorRectEntry> _setScissorRectEntryPool = new EntryPool<SetScissorRectEntry>();
-        private readonly EntryPool<SetVertexBufferEntry> _setVertexBufferEntryPool = new EntryPool<SetVertexBufferEntry>();
+        private readonly EntryPool<SetVertexSourceEntry> _setVertexSourceEntryPool = new EntryPool<SetVertexSourceEntry>();
         private readonly EntryPool<SetViewportEntry> _setViewportEntryPool = new EntryPool<SetViewportEntry>();
         private readonly EntryPool<UpdateBufferEntry> _updateBufferEntryPool = new EntryPool<UpdateBufferEntry>();
         private readonly EntryPool<UpdateTextureEntry> _updateTextureEntryPool = new EntryPool<UpdateTextureEntry>();
@@ -96,16 +94,6 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
             _commands.Add(_setFramebufferEntryPool.Rent().Init(fb));
         }
 
-        public void SetIndexBuffer(Buffer buffer, IndexFormat format)
-        {
-            _commands.Add(_setIndexBufferEntryPool.Rent().Init(buffer, format));
-        }
-
-        public void SetPipeline(Pipeline pipeline)
-        {
-            _commands.Add(_setPipelineEntryPool.Rent().Init(pipeline));
-        }
-
         public void SetShader(ShaderProgram program)
         {
             _commands.Add(_setShaderEntryPool.Rent().Init(program));
@@ -131,9 +119,9 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
             _commands.Add(_setScissorRectEntryPool.Rent().Init(index, x, y, width, height));
         }
 
-        public void SetVertexBuffer(uint index, Buffer vb)
+        public void SetVertexSource(IVertexSource source)
         {
-            _commands.Add(_setVertexBufferEntryPool.Rent().Init(index, vb));
+            _commands.Add(_setVertexSourceEntryPool.Rent().Init(source));
         }
 
         public void SetViewport(uint index, ref Viewport viewport)
@@ -235,14 +223,6 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
                         executor.SetFramebuffer(sfbe.Framebuffer);
                         _setFramebufferEntryPool.Return(sfbe);
                         break;
-                    case SetIndexBufferEntry sibe:
-                        executor.SetIndexBuffer(sibe.Buffer, sibe.Format);
-                        _setIndexBufferEntryPool.Return(sibe);
-                        break;
-                    case SetPipelineEntry spe:
-                        executor.SetPipeline(spe.Pipeline);
-                        _setPipelineEntryPool.Return(spe);
-                        break;
                     case SetShaderEntry sse:
                         executor.SetShader(sse.Program);
                         _setShaderEntryPool.Return(sse);
@@ -263,9 +243,9 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
                         executor.SetScissorRect(ssre.Index, ssre.X, ssre.Y, ssre.Width, ssre.Height);
                         _setScissorRectEntryPool.Return(ssre);
                         break;
-                    case SetVertexBufferEntry svbe:
-                        executor.SetVertexBuffer(svbe.Index, svbe.Buffer);
-                        _setVertexBufferEntryPool.Return(svbe);
+                    case SetVertexSourceEntry svse:
+                        executor.SetVertexSource(svse.Source, null);
+                        _setVertexSourceEntryPool.Return(svse);
                         break;
                     case SetViewportEntry sve:
                         executor.SetViewport(sve.Index, ref sve.Viewport);

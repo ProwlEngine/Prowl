@@ -2,115 +2,23 @@ using Silk.NET.OpenGL;
 
 using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
-using System.Text;
 using System.Collections.Generic;
-using System;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
+/// <summary>
+/// Static helpers used by <see cref="OpenGLShaderProgram"/> and <see cref="OpenGLComputeProgram"/>
+/// to bind vertex attribute locations and to build the per-set GL binding tables for a linked
+/// GL program at link time.
+/// </summary>
+internal static unsafe class OpenGLCachedPipeline
 {
     private const uint GL_INVALID_INDEX = 0xFFFFFFFF;
-    private readonly OpenGLGraphicsDevice _gd;
-    private GL _gl => _gd.GL;
 
-    private readonly OpenGLShaderProgram _graphicsProgram;
-    private readonly OpenGLComputeProgram _computeProgram;
-
-    private readonly PrimitiveTopology _primitiveTopology;
-    private readonly OutputDescription _outputs;
-    private readonly bool _isComputePipeline;
-
-    private bool _disposeRequested;
-    private bool _disposed;
-
-    public override bool IsComputePipeline => _isComputePipeline;
-    public override string Name { get; set; }
-    public override bool IsDisposed => _disposeRequested;
-
-    public OpenGLShaderProgram ShaderProgram => _graphicsProgram;
-    public OpenGLComputeProgram ComputeProgram => _computeProgram;
-
-    public uint Program => _isComputePipeline ? _computeProgram.GLProgram : _graphicsProgram.GLProgram;
-
-    public BlendStateDescription BlendState => _graphicsProgram.BlendState;
-    public DepthStencilStateDescription DepthStencilState => _graphicsProgram.DepthStencilState;
-    public RasterizerStateDescription RasterizerState => _graphicsProgram.RasterizerState;
-    public IReadOnlyList<VertexLayoutDescription> VertexLayouts => _graphicsProgram.VertexLayouts;
-    public PrimitiveTopology PrimitiveTopology => _primitiveTopology;
-    public int[] VertexStrides => _isComputePipeline ? Array.Empty<int>() : _graphicsProgram.VertexStrides;
-
-    public int ResourceLayoutCount => _isComputePipeline
-        ? _computeProgram.ResourceLayouts.Count
-        : _graphicsProgram.ResourceLayouts.Count;
-
-    public OpenGLPipeline(OpenGLGraphicsDevice gd, ref GraphicsPipelineDescription description)
-        : base(gd.ResourceFactory, ref description)
-    {
-        _gd = gd;
-        _graphicsProgram = Util.AssertSubtype<ShaderProgram, OpenGLShaderProgram>(description.Program);
-        _primitiveTopology = description.PrimitiveTopology;
-        _outputs = description.Outputs;
-        _isComputePipeline = false;
-    }
-
-    public OpenGLPipeline(OpenGLGraphicsDevice gd, ref ComputePipelineDescription description)
-        : base(gd.ResourceFactory, ref description)
-    {
-        _gd = gd;
-        _computeProgram = Util.AssertSubtype<ComputeProgram, OpenGLComputeProgram>(description.Program);
-        _isComputePipeline = true;
-    }
-
-    public bool Created => _isComputePipeline
-        ? _computeProgram.Created
-        : _graphicsProgram.Created;
-
-    public void EnsureResourcesCreated()
-    {
-        if (_isComputePipeline)
-        {
-            _computeProgram.EnsureResourcesCreated();
-        }
-        else
-        {
-            _graphicsProgram.EnsureResourcesCreated();
-        }
-    }
-
-    public bool GetUniformBindingForSlot(uint set, uint slot, out OpenGLUniformBinding binding)
-        => _isComputePipeline
-            ? _computeProgram.GetUniformBindingForSlot(set, slot, out binding)
-            : _graphicsProgram.GetUniformBindingForSlot(set, slot, out binding);
-
-    public bool GetTextureBindingInfo(uint set, uint slot, out OpenGLTextureBindingSlotInfo binding)
-        => _isComputePipeline
-            ? _computeProgram.GetTextureBindingInfo(set, slot, out binding)
-            : _graphicsProgram.GetTextureBindingInfo(set, slot, out binding);
-
-    public bool GetStorageBufferBindingForSlot(uint set, uint slot, out OpenGLShaderStorageBinding binding)
-        => _isComputePipeline
-            ? _computeProgram.GetStorageBufferBindingForSlot(set, slot, out binding)
-            : _graphicsProgram.GetStorageBufferBindingForSlot(set, slot, out binding);
-
-    public override void Dispose()
-    {
-        if (!_disposeRequested)
-        {
-            _disposeRequested = true;
-            DisposeAdapterResourceLayouts();
-            _gd.EnqueueDisposal(this);
-        }
-    }
-
-    public void DestroyGLResources()
-    {
-        if (!_disposed)
-        {
-            _disposed = true;
-        }
-    }
-
+    /// <summary>
+    /// Wires each <see cref="VertexElementDescription"/> to its shader attribute location
+    /// before the GL program is linked.
+    /// </summary>
     internal static void BindVertexAttribLocations(GL gl, uint program, IReadOnlyList<VertexLayoutDescription> layouts)
     {
         foreach (VertexLayoutDescription layoutDesc in layouts)
@@ -125,6 +33,11 @@ internal unsafe class OpenGLPipeline : Pipeline, OpenGLDeferredResource
         }
     }
 
+    /// <summary>
+    /// Queries the linked GL program for the uniform / texture / storage-block bindings declared
+    /// in each <see cref="ResourceLayoutDescription"/>, producing a <see cref="SetBindingsInfo"/>
+    /// per set slot that the executor can later use at draw / dispatch time.
+    /// </summary>
     internal static SetBindingsInfo[] BuildSetBindingsInfo(
         GL gl,
         uint program,

@@ -1,5 +1,3 @@
-using System;
-
 namespace Prowl.Veldrid;
 
 /// <summary>
@@ -23,42 +21,6 @@ public abstract partial class ResourceFactory
     /// Gets the <see cref="GraphicsDeviceFeatures"/> this instance was created with.
     /// </summary>
     public GraphicsDeviceFeatures Features { get; }
-
-    /// <summary>
-    /// Creates a new <see cref="Pipeline"/>.
-    /// </summary>
-    /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="Pipeline"/>.</returns>
-    public Pipeline CreateGraphicsPipeline(GraphicsPipelineDescription description) => CreateGraphicsPipeline(ref description);
-    /// <summary>
-    /// Creates a new <see cref="Pipeline"/> object.
-    /// </summary>
-    /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="Pipeline"/> which, when bound to a CommandList, is used to dispatch draw commands.</returns>
-    public Pipeline CreateGraphicsPipeline(ref GraphicsPipelineDescription description)
-    {
-        CreateGraphicsPipeline_CheckDescription(ref description);
-        return CreateGraphicsPipelineCore(ref description);
-    }
-
-    /// <summary></summary>
-    /// <param name="description"></param>
-    /// <returns></returns>
-    protected abstract Pipeline CreateGraphicsPipelineCore(ref GraphicsPipelineDescription description);
-
-    /// <summary>
-    /// Creates a new compute <see cref="Pipeline"/> object.
-    /// </summary>
-    /// <param name="description">The desirede properties of the created object.</param>
-    /// <returns>A new <see cref="Pipeline"/> which, when bound to a CommandList, is used to dispatch compute commands.</returns>
-    public Pipeline CreateComputePipeline(ComputePipelineDescription description) => CreateComputePipeline(ref description);
-
-    /// <summary>
-    /// Creates a new compute <see cref="Pipeline"/> object.
-    /// </summary>
-    /// <param name="description">The desirede properties of the created object.</param>
-    /// <returns>A new <see cref="Pipeline"/> which, when bound to a CommandList, is used to dispatch compute commands.</returns>
-    public abstract Pipeline CreateComputePipeline(ref ComputePipelineDescription description);
 
     /// <summary>
     /// Creates a new <see cref="Framebuffer"/>.

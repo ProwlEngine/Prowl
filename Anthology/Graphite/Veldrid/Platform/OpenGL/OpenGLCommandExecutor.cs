@@ -22,20 +22,20 @@ internal unsafe class OpenGLCommandExecutor
 
     private Framebuffer _fb;
     private bool _isSwapchainFB;
-    private OpenGLPipeline _graphicsPipeline;
     private OpenGLShaderProgram _currentShaderProgram;
     private BoundResourceSetInfo[] _graphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _newGraphicsResourceSets = Array.Empty<bool>();
-    private OpenGLBuffer[] _vertexBuffers = Array.Empty<OpenGLBuffer>();
-    private uint[] _vbOffsets = Array.Empty<uint>();
     private uint[] _vertexAttribDivisors = Array.Empty<uint>();
     private uint _vertexAttributesBound;
     private readonly Viewport[] _viewports = new Viewport[20];
-    private DrawElementsType _drawElementsType;
-    private uint _ibOffset;
     private PrimitiveType _primitiveType;
 
-    private OpenGLPipeline _computePipeline;
+    private IVertexSource _currentVertexSource;
+    private OpenGLCommandBuffer _currentReplayingBuffer;
+    private OpenGLBuffer _currentIndexBuffer;
+    private DrawElementsType _currentDrawElementsType;
+    private uint _currentIbOffset;
+
     private OpenGLComputeProgram _currentComputeProgram;
     private BoundResourceSetInfo[] _computeResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _newComputeResourceSets = Array.Empty<bool>();
@@ -152,20 +152,21 @@ internal unsafe class OpenGLCommandExecutor
     public void DrawIndexed(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
+        ResolveIndexBufferForDraw();
 
-        uint indexSize = _drawElementsType == DrawElementsType.UnsignedShort ? 2u : 4u;
-        void* indices = (void*)((indexStart * indexSize) + _ibOffset);
+        uint indexSize = _currentDrawElementsType == DrawElementsType.UnsignedShort ? 2u : 4u;
+        void* indices = (void*)((indexStart * indexSize) + _currentIbOffset);
 
         if (instanceCount == 1 && instanceStart == 0)
         {
             if (vertexOffset == 0)
             {
-                _gl.DrawElements(_primitiveType, indexCount, _drawElementsType, indices);
+                _gl.DrawElements(_primitiveType, indexCount, _currentDrawElementsType, indices);
                 CheckLastError();
             }
             else
             {
-                _gl.DrawElementsBaseVertex(_primitiveType, indexCount, _drawElementsType, indices, vertexOffset);
+                _gl.DrawElementsBaseVertex(_primitiveType, indexCount, _currentDrawElementsType, indices, vertexOffset);
                 CheckLastError();
             }
         }
@@ -176,7 +177,7 @@ internal unsafe class OpenGLCommandExecutor
                 _gl.DrawElementsInstancedBaseVertexBaseInstance(
                     _primitiveType,
                     indexCount,
-                    _drawElementsType,
+                    _currentDrawElementsType,
                     indices,
                     instanceCount,
                     vertexOffset,
@@ -185,7 +186,7 @@ internal unsafe class OpenGLCommandExecutor
             }
             else if (vertexOffset == 0)
             {
-                _gl.DrawElementsInstanced(_primitiveType, indexCount, _drawElementsType, indices, instanceCount);
+                _gl.DrawElementsInstanced(_primitiveType, indexCount, _currentDrawElementsType, indices, instanceCount);
                 CheckLastError();
             }
             else
@@ -193,7 +194,7 @@ internal unsafe class OpenGLCommandExecutor
                 _gl.DrawElementsInstancedBaseVertex(
                     _primitiveType,
                     indexCount,
-                    _drawElementsType,
+                    _currentDrawElementsType,
                     indices,
                     instanceCount,
                     vertexOffset);
@@ -236,9 +237,11 @@ internal unsafe class OpenGLCommandExecutor
         _gl.BindBuffer(BufferTargetARB.DrawIndirectBuffer, glBuffer.Buffer);
         CheckLastError();
 
+        ResolveIndexBufferForDraw();
+
         if (_extensions.MultiDrawIndirect)
         {
-            _gl.MultiDrawElementsIndirect(_primitiveType, _drawElementsType, (void*)offset, drawCount, stride);
+            _gl.MultiDrawElementsIndirect(_primitiveType, _currentDrawElementsType, (void*)offset, drawCount, stride);
             CheckLastError();
         }
         else
@@ -246,7 +249,7 @@ internal unsafe class OpenGLCommandExecutor
             uint indirect = offset;
             for (uint i = 0; i < drawCount; i++)
             {
-                _gl.DrawElementsIndirect(_primitiveType, _drawElementsType, (void*)indirect);
+                _gl.DrawElementsIndirect(_primitiveType, _currentDrawElementsType, (void*)indirect);
                 CheckLastError();
 
                 indirect += stride;
@@ -258,12 +261,10 @@ internal unsafe class OpenGLCommandExecutor
     {
         if (!_graphicsPipelineActive)
         {
-            PrimitiveType topology = _graphicsPipeline != null
-                ? OpenGLFormats.VdToGLPrimitiveType(_graphicsPipeline.PrimitiveTopology)
-                // STAGE 1 TEMP: topology default removed in Stage 4
-                : PrimitiveType.Triangles;
-            ActivateGraphicsPipeline(topology);
+            ActivateGraphicsPipeline();
         }
+
+        _primitiveType = OpenGLFormats.VdToGLPrimitiveType(_currentVertexSource.Topology);
 
         FlushResourceSets(graphics: true);
         if (!_vertexLayoutFlushed)
@@ -271,6 +272,35 @@ internal unsafe class OpenGLCommandExecutor
             FlushVertexLayouts();
             _vertexLayoutFlushed = true;
         }
+    }
+
+    public void SetVertexSource(IVertexSource source, OpenGLCommandBuffer owner)
+    {
+        _currentVertexSource = source;
+        _currentReplayingBuffer = owner;
+        _vertexLayoutFlushed = false;
+        _currentIndexBuffer = null;
+    }
+
+    private void ResolveIndexBufferForDraw()
+    {
+        bool has = _currentVertexSource.TryGetIndexBuffer(
+            out DeviceBuffer ib, out IndexFormat fmt, out uint offset);
+        System.Diagnostics.Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
+        _currentReplayingBuffer?.Bridge_CheckIndexBufferUsage(ib);
+
+        OpenGLBuffer glIB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(ib);
+        glIB.EnsureResourcesCreated();
+
+        if (!ReferenceEquals(_currentIndexBuffer, glIB))
+        {
+            _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glIB.Buffer);
+            CheckLastError();
+            _currentIndexBuffer = glIB;
+        }
+
+        _currentDrawElementsType = OpenGLFormats.VdToGLDrawElementsType(fmt);
+        _currentIbOffset = offset;
     }
 
     private void FlushResourceSets(bool graphics)
@@ -293,19 +323,20 @@ internal unsafe class OpenGLCommandExecutor
 
     private void FlushVertexLayouts()
     {
-        // Attributes are addressed by their shader location: a layout with Location = L
-        // and N elements occupies attribute indices L..L+N-1. The VBO slot it reads from
-        // is the layout's index in the pipeline's VertexLayouts array, which is what
-        // SetVertexBuffer takes.
         uint highestAttribBound = 0;
         IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
         for (int i = 0; i < layouts.Count; i++)
         {
             VertexLayoutDescription input = layouts[i];
-            OpenGLBuffer vb = _vertexBuffers[i];
+
+            _currentVertexSource.ResolveSlot((uint)i, in input, out VertexBinding binding);
+            _currentReplayingBuffer?.Bridge_CheckVertexBindingUsage(in binding, (uint)i);
+
+            OpenGLBuffer vb = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(binding.Buffer);
+            vb.EnsureResourcesCreated();
             _gl.BindBuffer(BufferTargetARB.ArrayBuffer, vb.Buffer);
             uint offset = 0;
-            uint vbOffset = _vbOffsets[i];
+            uint vbOffset = binding.Offset;
             for (uint slot = 0; slot < input.Elements.Length; slot++)
             {
                 ref VertexElementDescription element = ref input.Elements[slot]; // Large structure -- use by reference.
@@ -462,57 +493,24 @@ internal unsafe class OpenGLCommandExecutor
         _fb = fb;
     }
 
-    public void SetIndexBuffer(DeviceBuffer ib, IndexFormat format, uint offset)
-    {
-        OpenGLBuffer glIB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(ib);
-        glIB.EnsureResourcesCreated();
-
-        _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glIB.Buffer);
-        CheckLastError();
-
-        _drawElementsType = OpenGLFormats.VdToGLDrawElementsType(format);
-        _ibOffset = offset;
-    }
-
-    public void SetPipeline(Pipeline pipeline)
-    {
-        if (!pipeline.IsComputePipeline && _graphicsPipeline != pipeline)
-        {
-            _graphicsPipeline = Util.AssertSubtype<Pipeline, OpenGLPipeline>(pipeline);
-            _currentShaderProgram = _graphicsPipeline.ShaderProgram;
-            ActivateGraphicsPipeline(OpenGLFormats.VdToGLPrimitiveType(_graphicsPipeline.PrimitiveTopology));
-            _vertexLayoutFlushed = false;
-        }
-        else if (pipeline.IsComputePipeline && _computePipeline != pipeline)
-        {
-            _computePipeline = Util.AssertSubtype<Pipeline, OpenGLPipeline>(pipeline);
-            _currentComputeProgram = _computePipeline.ComputeProgram;
-            ActivateComputePipeline();
-            _vertexLayoutFlushed = false;
-        }
-    }
-
     public void SetShader(ShaderProgram program)
     {
         OpenGLShaderProgram sp = Util.AssertSubtype<ShaderProgram, OpenGLShaderProgram>(program);
-        if (_currentShaderProgram == sp && _graphicsPipeline == null) return;
+        if (_currentShaderProgram == sp && _graphicsPipelineActive) return;
         _currentShaderProgram = sp;
-        _graphicsPipeline = null;
-        // STAGE 1 TEMP: topology default removed in Stage 4
-        ActivateGraphicsPipeline(PrimitiveType.Triangles);
+        ActivateGraphicsPipeline();
         _vertexLayoutFlushed = false;
     }
 
     public void SetComputeShader(ComputeProgram program)
     {
         OpenGLComputeProgram cp = Util.AssertSubtype<ComputeProgram, OpenGLComputeProgram>(program);
-        if (_currentComputeProgram == cp && _computePipeline == null) return;
+        if (_currentComputeProgram == cp && !_graphicsPipelineActive) return;
         _currentComputeProgram = cp;
-        _computePipeline = null;
         ActivateComputePipeline();
     }
 
-    private void ActivateGraphicsPipeline(PrimitiveType primitiveTopology)
+    private void ActivateGraphicsPipeline()
     {
         _graphicsPipelineActive = true;
         _currentShaderProgram.EnsureResourcesCreated();
@@ -733,16 +731,9 @@ internal unsafe class OpenGLCommandExecutor
         _gl.FrontFace(OpenGLFormats.VdToGLFrontFaceDirection(rs.FrontFace));
         CheckLastError();
 
-        // Primitive Topology
-        _primitiveType = primitiveTopology;
-
         // Shader Set
         _gl.UseProgram(_currentShaderProgram.GLProgram);
         CheckLastError();
-
-        int vertexStridesCount = _currentShaderProgram.VertexStrides.Length;
-        Util.EnsureArrayMinimumSize(ref _vertexBuffers, (uint)vertexStridesCount);
-        Util.EnsureArrayMinimumSize(ref _vbOffsets, (uint)vertexStridesCount);
 
         // Size the divisor cache to cover the highest attribute index this pipeline uses.
         // Attributes are addressed by Location..Location+Elements.Length-1 per layout, so
@@ -1104,18 +1095,6 @@ internal unsafe class OpenGLCommandExecutor
                 CheckLastError();
             }
         }
-    }
-
-    public void SetVertexBuffer(uint index, DeviceBuffer vb, uint offset)
-    {
-        OpenGLBuffer glVB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(vb);
-        glVB.EnsureResourcesCreated();
-
-        Util.EnsureArrayMinimumSize(ref _vertexBuffers, index + 1);
-        Util.EnsureArrayMinimumSize(ref _vbOffsets, index + 1);
-        _vertexLayoutFlushed = false;
-        _vertexBuffers[index] = glVB;
-        _vbOffsets[index] = offset;
     }
 
     public void SetViewport(uint index, ref Viewport viewport)

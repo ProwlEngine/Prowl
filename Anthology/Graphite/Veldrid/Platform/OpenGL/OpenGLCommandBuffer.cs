@@ -115,14 +115,9 @@ internal class OpenGLCommandBuffer : CommandBuffer
         _currentCommands.SetFramebuffer(fb);
     }
 
-    private protected override void SetIndexBufferCore(DeviceBuffer buffer, IndexFormat format, uint offset)
+    private protected override void SetVertexSourceCore(IVertexSource source)
     {
-        _currentCommands.SetIndexBuffer(buffer, format, offset);
-    }
-
-    private protected override void SetPipelineCore(Pipeline pipeline)
-    {
-        _currentCommands.SetPipeline(pipeline);
+        _currentCommands.SetVertexSource(source);
     }
 
     private protected override void SetShaderCore(ShaderProgram program)
@@ -148,11 +143,6 @@ internal class OpenGLCommandBuffer : CommandBuffer
     public override void SetScissorRect(uint index, uint x, uint y, uint width, uint height)
     {
         _currentCommands.SetScissorRect(index, x, y, width, height);
-    }
-
-    private protected override void SetVertexBufferCore(uint index, DeviceBuffer buffer, uint offset)
-    {
-        _currentCommands.SetVertexBuffer(index, buffer, offset);
     }
 
     public override void SetViewport(uint index, ref Viewport viewport)
@@ -250,6 +240,14 @@ internal class OpenGLCommandBuffer : CommandBuffer
     {
         _currentCommands.InsertDebugMarker(name);
     }
+
+    [System.Diagnostics.Conditional("VALIDATE_USAGE")]
+    internal void Bridge_CheckVertexBindingUsage(in VertexBinding binding, uint slot)
+        => CheckVertexBindingUsage(in binding, slot);
+
+    [System.Diagnostics.Conditional("VALIDATE_USAGE")]
+    internal void Bridge_CheckIndexBufferUsage(DeviceBuffer buffer)
+        => CheckIndexBufferUsage(buffer);
 
     public override void Dispose()
     {

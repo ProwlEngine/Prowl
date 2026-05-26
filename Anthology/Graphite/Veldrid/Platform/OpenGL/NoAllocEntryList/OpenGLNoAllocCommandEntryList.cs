@@ -36,11 +36,7 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
     private const byte SetFramebufferEntryID = 6;
     private static readonly uint SetFramebufferEntrySize = Util.USizeOf<NoAllocSetFramebufferEntry>();
 
-    private const byte SetIndexBufferEntryID = 7;
-    private static readonly uint SetIndexBufferEntrySize = Util.USizeOf<NoAllocSetIndexBufferEntry>();
-
-    private const byte SetPipelineEntryID = 8;
-    private static readonly uint SetPipelineEntrySize = Util.USizeOf<NoAllocSetPipelineEntry>();
+    // ID 7 was SetIndexBufferEntry, deleted in Stage 4 (vertex source owns index buffer).
 
     private const byte SetResourceSetEntryID = 9;
     private static readonly uint SetResourceSetEntrySize = Util.USizeOf<NoAllocSetResourceSetEntry>();
@@ -48,8 +44,8 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
     private const byte SetScissorRectEntryID = 10;
     private static readonly uint SetScissorRectEntrySize = Util.USizeOf<NoAllocSetScissorRectEntry>();
 
-    private const byte SetVertexBufferEntryID = 11;
-    private static readonly uint SetVertexBufferEntrySize = Util.USizeOf<NoAllocSetVertexBufferEntry>();
+    private const byte SetVertexSourceEntryID = 11;
+    private static readonly uint SetVertexSourceEntrySize = Util.USizeOf<NoAllocSetVertexSourceEntry>();
 
     private const byte SetViewportEntryID = 12;
     private static readonly uint SetViewportEntrySize = Util.USizeOf<NoAllocSetViewportEntry>();
@@ -284,16 +280,6 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
                     executor.SetFramebuffer(sfbe.Framebuffer.Get(_resourceList));
                     currentOffset += SetFramebufferEntrySize;
                     break;
-                case SetIndexBufferEntryID:
-                    NoAllocSetIndexBufferEntry sibe = Unsafe.ReadUnaligned<NoAllocSetIndexBufferEntry>(entryBasePtr);
-                    executor.SetIndexBuffer(sibe.Buffer.Get(_resourceList), sibe.Format, sibe.Offset);
-                    currentOffset += SetIndexBufferEntrySize;
-                    break;
-                case SetPipelineEntryID:
-                    NoAllocSetPipelineEntry spe = Unsafe.ReadUnaligned<NoAllocSetPipelineEntry>(entryBasePtr);
-                    executor.SetPipeline(spe.Pipeline.Get(_resourceList));
-                    currentOffset += SetPipelineEntrySize;
-                    break;
                 case SetResourceSetEntryID:
                     NoAllocSetResourceSetEntry srse = Unsafe.ReadUnaligned<NoAllocSetResourceSetEntry>(entryBasePtr);
 
@@ -323,10 +309,10 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
                     executor.SetScissorRect(ssre.Index, ssre.X, ssre.Y, ssre.Width, ssre.Height);
                     currentOffset += SetScissorRectEntrySize;
                     break;
-                case SetVertexBufferEntryID:
-                    NoAllocSetVertexBufferEntry svbe = Unsafe.ReadUnaligned<NoAllocSetVertexBufferEntry>(entryBasePtr);
-                    executor.SetVertexBuffer(svbe.Index, svbe.Buffer.Get(_resourceList), svbe.Offset);
-                    currentOffset += SetVertexBufferEntrySize;
+                case SetVertexSourceEntryID:
+                    NoAllocSetVertexSourceEntry svse = Unsafe.ReadUnaligned<NoAllocSetVertexSourceEntry>(entryBasePtr);
+                    executor.SetVertexSource(svse.Source.Get(_resourceList), Parent);
+                    currentOffset += SetVertexSourceEntrySize;
                     break;
                 case SetViewportEntryID:
                     NoAllocSetViewportEntry svpe = Unsafe.ReadUnaligned<NoAllocSetViewportEntry>(entryBasePtr);
@@ -473,18 +459,6 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
         AddEntry(SetFramebufferEntryID, ref entry);
     }
 
-    public void SetIndexBuffer(DeviceBuffer buffer, IndexFormat format, uint offset)
-    {
-        NoAllocSetIndexBufferEntry entry = new NoAllocSetIndexBufferEntry(Track(buffer), format, offset);
-        AddEntry(SetIndexBufferEntryID, ref entry);
-    }
-
-    public void SetPipeline(Pipeline pipeline)
-    {
-        NoAllocSetPipelineEntry entry = new NoAllocSetPipelineEntry(Track(pipeline));
-        AddEntry(SetPipelineEntryID, ref entry);
-    }
-
     public void SetShader(ShaderProgram program)
     {
         NoAllocSetShaderEntry entry = new NoAllocSetShaderEntry(Track(program));
@@ -536,10 +510,10 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
         AddEntry(SetScissorRectEntryID, ref entry);
     }
 
-    public void SetVertexBuffer(uint index, DeviceBuffer buffer, uint offset)
+    public void SetVertexSource(IVertexSource source)
     {
-        NoAllocSetVertexBufferEntry entry = new NoAllocSetVertexBufferEntry(index, Track(buffer), offset);
-        AddEntry(SetVertexBufferEntryID, ref entry);
+        NoAllocSetVertexSourceEntry entry = new NoAllocSetVertexSourceEntry(Track(source));
+        AddEntry(SetVertexSourceEntryID, ref entry);
     }
 
     public void SetViewport(uint index, ref Viewport viewport)

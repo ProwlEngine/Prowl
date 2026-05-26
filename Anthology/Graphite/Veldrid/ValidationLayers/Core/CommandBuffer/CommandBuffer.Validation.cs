@@ -1,45 +1,53 @@
+using System;
 using System.Diagnostics;
 
 namespace Prowl.Veldrid;
 
 public abstract partial class CommandBuffer
 {
-#if VALIDATE_USAGE
-    private DeviceBuffer _indexBuffer;
-    private IndexFormat _indexFormat;
-#endif
-
     [Conditional("VALIDATE_USAGE")]
-    private void ClearCachedState_ClearIndexBuffer()
+    private static void SetVertexSource_CheckNonNull(IVertexSource source)
     {
 #if VALIDATE_USAGE
-        _indexBuffer = null;
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
-    private static void SetVertexBuffer_CheckUsage(DeviceBuffer buffer)
-    {
-#if VALIDATE_USAGE
-        if ((buffer.Usage & BufferUsage.VertexBuffer) == 0)
+        if (source == null)
         {
-            throw new RenderException(
-                $"Buffer cannot be bound as a vertex buffer because it was not created with BufferUsage.VertexBuffer.");
+            throw new ArgumentNullException(nameof(source),
+                "IVertexSource must be non-null. Bind an empty implementation if a vertex-source-free draw is intended.");
         }
 #endif
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private void SetIndexBuffer_CheckUsageAndStore(DeviceBuffer buffer, IndexFormat format)
+    private protected void CheckVertexBindingUsage(in VertexBinding binding, uint layoutSlot)
     {
 #if VALIDATE_USAGE
+        if (binding.Buffer == null)
+        {
+            throw new RenderException(
+                $"IVertexSource.ResolveSlot returned a null Buffer for layout slot {layoutSlot}.");
+        }
+        if ((binding.Buffer.Usage & BufferUsage.VertexBuffer) == 0)
+        {
+            throw new RenderException(
+                $"Buffer for layout slot {layoutSlot} cannot be bound as a vertex buffer because it was not created with BufferUsage.VertexBuffer.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private protected void CheckIndexBufferUsage(DeviceBuffer buffer)
+    {
+#if VALIDATE_USAGE
+        if (buffer == null)
+        {
+            throw new RenderException(
+                "IVertexSource.TryGetIndexBuffer returned true but the index buffer is null.");
+        }
         if ((buffer.Usage & BufferUsage.IndexBuffer) == 0)
         {
             throw new RenderException(
-                $"Buffer cannot be bound as an index buffer because it was not created with BufferUsage.IndexBuffer.");
+                "Buffer cannot be bound as an index buffer because it was not created with BufferUsage.IndexBuffer.");
         }
-        _indexBuffer = buffer;
-        _indexFormat = format;
 #endif
     }
 
@@ -47,30 +55,18 @@ public abstract partial class CommandBuffer
     private void SetGraphicsResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
 #if VALIDATE_USAGE
-        if (_graphicsPipeline != null)
+        if (_shaderProgram == null)
         {
-            ResourceLayout layout = FindLayoutForSet(_graphicsPipeline.ResourceLayouts, slot);
-            if (layout == null)
-            {
-                throw new RenderException(
-                    $"Failed to bind ResourceSet to slot {slot}. The active graphics Pipeline declares no ResourceLayout with Set = {slot}.");
-            }
-            CheckResourceSetMatchesLayout(slot, layout, rs);
+            throw new RenderException($"A graphics ShaderProgram must be active before {nameof(SetGraphicsResourceSet)} can be called.");
         }
-        else if (_shaderProgram != null)
+
+        ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_shaderProgram.ResourceLayoutsArray, slot);
+        if (layoutDesc == null)
         {
-            ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_shaderProgram.ResourceLayoutsArray, slot);
-            if (layoutDesc == null)
-            {
-                throw new RenderException(
-                    $"Failed to bind ResourceSet to slot {slot}. The active graphics ShaderProgram declares no ResourceLayout with Set = {slot}.");
-            }
-            CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
+            throw new RenderException(
+                $"Failed to bind ResourceSet to slot {slot}. The active graphics ShaderProgram declares no ResourceLayout with Set = {slot}.");
         }
-        else
-        {
-            throw new RenderException($"A graphics ShaderProgram or Pipeline must be active before {nameof(SetGraphicsResourceSet)} can be called.");
-        }
+        CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
 
         CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
 #endif
@@ -80,30 +76,18 @@ public abstract partial class CommandBuffer
     private void SetComputeResourceSet_CheckLayoutCompatibility(uint slot, ResourceSet rs, uint dynamicOffsetsCount, ref uint dynamicOffsets)
     {
 #if VALIDATE_USAGE
-        if (_computePipeline != null)
+        if (_computeProgram == null)
         {
-            ResourceLayout layout = FindLayoutForSet(_computePipeline.ResourceLayouts, slot);
-            if (layout == null)
-            {
-                throw new RenderException(
-                    $"Failed to bind ResourceSet to slot {slot}. The active compute Pipeline declares no ResourceLayout with Set = {slot}.");
-            }
-            CheckResourceSetMatchesLayout(slot, layout, rs);
+            throw new RenderException($"A compute ComputeProgram must be active before {nameof(SetComputeResourceSet)} can be called.");
         }
-        else if (_computeProgram != null)
+
+        ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_computeProgram.ResourceLayoutsArray, slot);
+        if (layoutDesc == null)
         {
-            ResourceLayoutDescription? layoutDesc = FindLayoutDescForSet(_computeProgram.ResourceLayoutsArray, slot);
-            if (layoutDesc == null)
-            {
-                throw new RenderException(
-                    $"Failed to bind ResourceSet to slot {slot}. The active ComputeProgram declares no ResourceLayout with Set = {slot}.");
-            }
-            CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
+            throw new RenderException(
+                $"Failed to bind ResourceSet to slot {slot}. The active ComputeProgram declares no ResourceLayout with Set = {slot}.");
         }
-        else
-        {
-            throw new RenderException($"A ComputeProgram or compute Pipeline must be active before {nameof(SetComputeResourceSet)} can be called.");
-        }
+        CheckResourceSetMatchesLayoutDescription(slot, layoutDesc.Value, rs);
 
         CheckDynamicOffsets(slot, rs, dynamicOffsetsCount, ref dynamicOffsets);
 #endif
@@ -132,18 +116,6 @@ public abstract partial class CommandBuffer
     }
 
 #if VALIDATE_USAGE
-    private static ResourceLayout FindLayoutForSet(ResourceLayout[] layouts, uint set)
-    {
-        for (int i = 0; i < layouts.Length; i++)
-        {
-            if (layouts[i].Description.Set == set)
-            {
-                return layouts[i];
-            }
-        }
-        return null;
-    }
-
     private static ResourceLayoutDescription? FindLayoutDescForSet(ResourceLayoutDescription[] layouts, uint set)
     {
         for (int i = 0; i < layouts.Length; i++)
@@ -173,28 +145,6 @@ public abstract partial class CommandBuffer
             {
                 throw new RenderException(
                     $"Failed to bind ResourceSet to slot {slot}. Resource element {i} was of the incorrect type. The bound ShaderProgram expects {programKind}, but the ResourceSet contained {setKind}.");
-            }
-        }
-    }
-
-    private static void CheckResourceSetMatchesLayout(uint slot, ResourceLayout layout, ResourceSet rs)
-    {
-        int pipelineLength = layout.Description.Elements.Length;
-        ResourceLayoutDescription layoutDesc = rs.Layout.Description;
-        int setLength = layoutDesc.Elements.Length;
-        if (pipelineLength != setLength)
-        {
-            throw new RenderException($"Failed to bind ResourceSet to slot {slot}. The number of resources in the ResourceSet ({setLength}) does not match the number expected by the active Pipeline ({pipelineLength}).");
-        }
-
-        for (int i = 0; i < pipelineLength; i++)
-        {
-            ResourceKind pipelineKind = layout.Description.Elements[i].Kind;
-            ResourceKind setKind = layoutDesc.Elements[i].Kind;
-            if (pipelineKind != setKind)
-            {
-                throw new RenderException(
-                    $"Failed to bind ResourceSet to slot {slot}. Resource element {i} was of the incorrect type. The bound Pipeline expects {pipelineKind}, but the ResourceSet contained {setKind}.");
             }
         }
     }
@@ -453,17 +403,37 @@ public abstract partial class CommandBuffer
     private void DrawIndexed_CheckIndexBuffer(uint indexCount)
     {
 #if VALIDATE_USAGE
-        if (_indexBuffer == null)
+        if (_currentVertexSource == null)
         {
-            throw new RenderException($"An index buffer must be bound before {nameof(CommandBuffer)}.{nameof(DrawIndexed)} can be called.");
+            return;
         }
-
-        uint indexFormatSize = _indexFormat == IndexFormat.UInt16 ? 2u : 4u;
-        uint bytesNeeded = indexCount * indexFormatSize;
-        if (_indexBuffer.SizeInBytes < bytesNeeded)
+        if (!_currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out _))
         {
             throw new RenderException(
-                $"The active index buffer does not contain enough data to satisfy the given draw command. {bytesNeeded} bytes are needed, but the buffer only contains {_indexBuffer.SizeInBytes}.");
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
+
+        uint indexFormatSize = fmt == IndexFormat.UInt16 ? 2u : 4u;
+        uint bytesNeeded = indexCount * indexFormatSize;
+        if (ib.SizeInBytes < bytesNeeded)
+        {
+            throw new RenderException(
+                $"The active index buffer does not contain enough data to satisfy the given draw command. {bytesNeeded} bytes are needed, but the buffer only contains {ib.SizeInBytes}.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private void DrawIndexedIndirect_CheckIndexBuffer()
+    {
+#if VALIDATE_USAGE
+        if (_currentVertexSource != null
+            && !_currentVertexSource.TryGetIndexBuffer(out _, out _, out _))
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
         }
 #endif
     }
@@ -472,17 +442,19 @@ public abstract partial class CommandBuffer
     private void Draw_PreDrawValidation()
     {
 #if VALIDATE_USAGE
-        if (_graphicsPipeline == null && _shaderProgram == null)
+        if (_shaderProgram == null)
         {
-            throw new RenderException($"A graphics ShaderProgram or Pipeline must be set in order to issue draw commands.");
+            throw new RenderException($"A graphics ShaderProgram must be set in order to issue draw commands.");
         }
         if (_framebuffer == null)
         {
             throw new RenderException($"A {nameof(Framebuffer)} must be set in order to issue draw commands.");
         }
-        if (_graphicsPipeline != null && !_graphicsPipeline.GraphicsOutputDescription.Equals(_framebuffer.OutputDescription))
+        if (_currentVertexSource == null)
         {
-            throw new RenderException($"The {nameof(OutputDescription)} of the current graphics {nameof(Pipeline)} is not compatible with the current {nameof(Framebuffer)}.");
+            throw new RenderException(
+                "An IVertexSource must be set via SetVertexSource before issuing draw commands. " +
+                "Bind an empty IVertexSource implementation if no vertex data is required.");
         }
 #endif
     }

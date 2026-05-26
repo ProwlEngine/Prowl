@@ -437,10 +437,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                         framebuffer.CurrentFramebuffer.Handle,
                         name);
                     break;
-                case VkPipeline pipeline:
-                    SetDebugMarkerName(DebugReportObjectTypeEXT.PipelineExt, pipeline.DevicePipeline.Handle, name);
-                    SetDebugMarkerName(DebugReportObjectTypeEXT.PipelineLayoutExt, pipeline.PipelineLayout.Handle, name);
-                    break;
                 case VkResourceLayout resourceLayout:
                     SetDebugMarkerName(
                         DebugReportObjectTypeEXT.DescriptorSetLayoutExt,

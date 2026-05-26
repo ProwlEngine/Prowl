@@ -10,8 +10,9 @@ namespace Prowl.Veldrid.Vk;
 
 /// <summary>
 /// Builds a <see cref="VkPipelineCacheEntry"/> from a <see cref="VkPipelineCacheKey"/>.
-/// Mirrors the graphics pipeline creation body of the legacy <c>VkPipeline</c> ctor
-/// but sources all per-program state from the key's <see cref="VkShaderProgram"/>.
+/// Builds a Vulkan graphics pipeline for the given <see cref="VkShaderProgram"/> /
+/// framebuffer / topology key. Called lazily from <see cref="VkPipelineCache"/> at
+/// draw time.
 /// </summary>
 internal static unsafe class VkPipelineCacheFactory
 {

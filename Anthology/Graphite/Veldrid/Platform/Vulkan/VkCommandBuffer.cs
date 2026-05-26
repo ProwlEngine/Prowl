@@ -33,17 +33,15 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private VkFramebufferBase _currentFramebuffer;
     private bool _currentFramebufferEverActive;
     private RenderPass _activeRenderPass;
-    private VkPipeline _currentGraphicsPipeline;
     private VkPipelineCacheEntry _currentResolvedPipeline;
     private bool _hasResolvedPipeline;
-    private PrimitiveTopology _currentTopology = PrimitiveTopology.TriangleList; // STAGE 1 TEMP: topology default removed in Stage 4
+    private PrimitiveTopology _resolvedTopology;
     private BoundResourceSetInfo[] _currentGraphicsResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _graphicsResourceSetsChanged;
 
     private bool _newFramebuffer; // Render pass cycle state
 
     // Compute State
-    private VkPipeline _currentComputePipeline;
     private BoundResourceSetInfo[] _currentComputeResourceSets = Array.Empty<BoundResourceSetInfo>();
     private bool[] _computeResourceSetsChanged;
     private string _name;
@@ -177,15 +175,13 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         ClearCachedState();
         _currentFramebuffer = null;
-        _currentGraphicsPipeline = null;
         _currentShaderProgram = null;
         _currentResolvedPipeline = default;
         _hasResolvedPipeline = false;
-        _currentTopology = PrimitiveTopology.TriangleList; // STAGE 1 TEMP: topology default removed in Stage 4
+        _resolvedTopology = default;
         ClearSets(_currentGraphicsResourceSets);
         Util.ClearArray(_scissorRects);
 
-        _currentComputePipeline = null;
         _currentComputeProgram = null;
         ClearSets(_currentComputeResourceSets);
     }
@@ -266,18 +262,22 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private protected override void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
         PreDrawCommand();
+        BindVertexBuffersFromSource();
         _gd.Vk.CmdDraw(_cb, vertexCount, instanceCount, vertexStart, instanceStart);
     }
 
     private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
+        BindVertexBuffersFromSource();
+        BindIndexBufferFromSource();
         _gd.Vk.CmdDrawIndexed(_cb, indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
     private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
         PreDrawCommand();
+        BindVertexBuffersFromSource();
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
         _gd.Vk.CmdDrawIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
@@ -286,9 +286,47 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
         PreDrawCommand();
+        BindVertexBuffersFromSource();
+        BindIndexBufferFromSource();
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
         _gd.Vk.CmdDrawIndexedIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
+    }
+
+    private void BindVertexBuffersFromSource()
+    {
+        System.Collections.Generic.IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
+        int count = layouts.Count;
+        if (count == 0) return;
+
+        VkBufferHandle* buffers = stackalloc VkBufferHandle[count];
+        ulong* offsets = stackalloc ulong[count];
+
+        for (int slot = 0; slot < count; slot++)
+        {
+            VertexLayoutDescription layout = layouts[slot];
+            _currentVertexSource.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
+            CheckVertexBindingUsage(in binding, (uint)slot);
+
+            VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(binding.Buffer);
+            buffers[slot] = vkBuffer.DeviceBuffer;
+            offsets[slot] = binding.Offset;
+
+            _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
+        }
+
+        _gd.Vk.CmdBindVertexBuffers(_cb, 0u, (uint)count, buffers, offsets);
+    }
+
+    private void BindIndexBufferFromSource()
+    {
+        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint offset);
+        Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
+        CheckIndexBufferUsage(ib);
+
+        VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
+        _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, offset, VkFormats.VdToVkIndexFormat(fmt));
+        _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
     }
 
     private void PreDrawCommand()
@@ -299,36 +337,20 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         ResolveAndBindGraphicsPipeline();
         EnsureRenderPassActive();
 
-        uint resourceSetCount;
-        Silk.NET.Vulkan.PipelineLayout pipelineLayout;
-        int dynamicOffsetsCount;
-
-        if (_currentGraphicsPipeline != null)
-        {
-            resourceSetCount = _currentGraphicsPipeline.ResourceSetCount;
-            pipelineLayout = _currentGraphicsPipeline.PipelineLayout;
-            dynamicOffsetsCount = _currentGraphicsPipeline.DynamicOffsetsCount;
-        }
-        else
-        {
-            resourceSetCount = _currentResolvedPipeline.ResourceSetCount;
-            pipelineLayout = _currentResolvedPipeline.PipelineLayout;
-            dynamicOffsetsCount = _currentResolvedPipeline.DynamicOffsetsCount;
-        }
-
         FlushNewResourceSets(
             _currentGraphicsResourceSets,
             _graphicsResourceSetsChanged,
-            resourceSetCount,
-            dynamicOffsetsCount,
+            _currentResolvedPipeline.ResourceSetCount,
+            _currentResolvedPipeline.DynamicOffsetsCount,
             PipelineBindPoint.Graphics,
-            pipelineLayout);
+            _currentResolvedPipeline.PipelineLayout);
     }
 
     private void ResolveAndBindGraphicsPipeline()
     {
-        if (_currentGraphicsPipeline != null) return;
-        if (_hasResolvedPipeline) return;
+        PrimitiveTopology srcTopology = _currentVertexSource.Topology;
+
+        if (_hasResolvedPipeline && _resolvedTopology == srcTopology) return;
 
         if (_currentShaderProgram == null || _currentFramebuffer == null)
         {
@@ -338,9 +360,10 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         VkPipelineCacheKey key = new VkPipelineCacheKey(
             _currentShaderProgram,
             _framebufferOutputs,
-            _currentTopology); // STAGE 1 TEMP: topology default removed in Stage 4
+            srcTopology);
 
         _currentResolvedPipeline = _gd.PipelineCache.GetOrAdd(in key);
+        _resolvedTopology = srcTopology;
         _hasResolvedPipeline = true;
 
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Graphics, _currentResolvedPipeline.Pipeline);
@@ -453,7 +476,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         EnsureNoRenderPass();
 
-        for (uint currentSlot = 0; currentSlot < _currentComputePipeline.ResourceSetCount; currentSlot++)
+        for (uint currentSlot = 0; currentSlot < _currentComputeProgram.ResourceSetCount; currentSlot++)
         {
             VkResourceSet vkSet = Util.AssertSubtype<ResourceSet, VkResourceSet>(
                 _currentComputeResourceSets[currentSlot].Set);
@@ -473,10 +496,10 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         FlushNewResourceSets(
             _currentComputeResourceSets,
             _computeResourceSetsChanged,
-            _currentComputePipeline.ResourceSetCount,
-            _currentComputePipeline.DynamicOffsetsCount,
+            _currentComputeProgram.ResourceSetCount,
+            _currentComputeProgram.DynamicOffsetsCount,
             PipelineBindPoint.Compute,
-            _currentComputePipeline.PipelineLayout);
+            _currentComputeProgram.PipelineLayout);
     }
 
     private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
@@ -708,45 +731,9 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             null);
     }
 
-    private protected override void SetVertexBufferCore(uint index, DeviceBuffer buffer, uint offset)
+    private protected override void SetVertexSourceCore(IVertexSource source)
     {
-        VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(buffer);
-        VkBufferHandle deviceBuffer = vkBuffer.DeviceBuffer;
-        ulong offset64 = offset;
-        _gd.Vk.CmdBindVertexBuffers(_cb, index, 1, in deviceBuffer, in offset64);
-        _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
-    }
-
-    private protected override void SetIndexBufferCore(DeviceBuffer buffer, IndexFormat format, uint offset)
-    {
-        VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(buffer);
-        _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, offset, VkFormats.VdToVkIndexFormat(format));
-        _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
-    }
-
-    private protected override void SetPipelineCore(Pipeline pipeline)
-    {
-        VkPipeline vkPipeline = Util.AssertSubtype<Pipeline, VkPipeline>(pipeline);
-        if (!pipeline.IsComputePipeline && _currentGraphicsPipeline != pipeline)
-        {
-            Util.EnsureArrayMinimumSize(ref _currentGraphicsResourceSets, vkPipeline.ResourceSetCount);
-            ClearSets(_currentGraphicsResourceSets);
-            Util.EnsureArrayMinimumSize(ref _graphicsResourceSetsChanged, vkPipeline.ResourceSetCount);
-            _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Graphics, vkPipeline.DevicePipeline);
-            _currentGraphicsPipeline = vkPipeline;
-            _currentShaderProgram = null;
-            _hasResolvedPipeline = false;
-        }
-        else if (pipeline.IsComputePipeline && _currentComputePipeline != pipeline)
-        {
-            Util.EnsureArrayMinimumSize(ref _currentComputeResourceSets, vkPipeline.ResourceSetCount);
-            ClearSets(_currentComputeResourceSets);
-            Util.EnsureArrayMinimumSize(ref _computeResourceSetsChanged, vkPipeline.ResourceSetCount);
-            _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, vkPipeline.DevicePipeline);
-            _currentComputePipeline = vkPipeline;
-        }
-
-        _currentStagingInfo.Resources.Add(vkPipeline.RefCount);
+        _hasResolvedPipeline = false;
     }
 
     private VkShaderProgram _currentShaderProgram;
@@ -758,7 +745,6 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         if (_currentShaderProgram == sp) return;
 
         _currentShaderProgram = sp;
-        _currentGraphicsPipeline = null;
         _hasResolvedPipeline = false;
         Util.EnsureArrayMinimumSize(ref _currentGraphicsResourceSets, sp.ResourceSetCount);
         ClearSets(_currentGraphicsResourceSets);
@@ -769,7 +755,6 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         VkComputeProgram cp = Util.AssertSubtype<ComputeProgram, VkComputeProgram>(program);
         _currentComputeProgram = cp;
-        _currentComputePipeline = null;
         Util.EnsureArrayMinimumSize(ref _currentComputeResourceSets, cp.ResourceSetCount);
         ClearSets(_currentComputeResourceSets);
         Util.EnsureArrayMinimumSize(ref _computeResourceSetsChanged, cp.ResourceSetCount);

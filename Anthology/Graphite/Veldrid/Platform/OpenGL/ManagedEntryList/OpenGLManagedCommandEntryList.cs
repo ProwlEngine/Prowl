@@ -71,16 +71,6 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
             _commands.Add(new SetFramebufferEntry(fb));
         }
 
-        public void SetIndexBuffer(Buffer buffer, IndexFormat format)
-        {
-            _commands.Add(new SetIndexBufferEntry(buffer, format));
-        }
-
-        public void SetPipeline(Pipeline pipeline)
-        {
-            _commands.Add(new SetPipelineEntry(pipeline));
-        }
-
         public void SetGraphicsResourceSet(uint slot, ResourceSet rs)
         {
             _commands.Add(new SetGraphicsResourceSetEntry(slot, rs));
@@ -96,9 +86,9 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
             _commands.Add(new SetScissorRectEntry(index, x, y, width, height));
         }
 
-        public void SetVertexBuffer(uint index, Buffer vb)
+        public void SetVertexSource(IVertexSource source)
         {
-            _commands.Add(new SetVertexBufferEntry(index, vb));
+            _commands.Add(new SetVertexSourceEntry(source));
         }
 
         public void SetViewport(uint index, ref Viewport viewport)
@@ -191,20 +181,14 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
                     case SetFramebufferEntry sfbe:
                         executor.SetFramebuffer(sfbe.Framebuffer);
                         break;
-                    case SetIndexBufferEntry sibe:
-                        executor.SetIndexBuffer(sibe.Buffer, sibe.Format);
-                        break;
-                    case SetPipelineEntry spe:
-                        executor.SetPipeline(spe.Pipeline);
-                        break;
                     case SetGraphicsResourceSetEntry srse:
                         executor.SetGraphicsResourceSet(srse.Slot, srse.ResourceSet);
                         break;
                     case SetScissorRectEntry ssre:
                         executor.SetScissorRect(ssre.Index, ssre.X, ssre.Y, ssre.Width, ssre.Height);
                         break;
-                    case SetVertexBufferEntry svbe:
-                        executor.SetVertexBuffer(svbe.Index, svbe.Buffer);
+                    case SetVertexSourceEntry svse:
+                        executor.SetVertexSource(svse.Source, null);
                         break;
                     case SetViewportEntry sve:
                         executor.SetViewport(sve.Index, ref sve.Viewport);

@@ -10,12 +10,12 @@ public enum BufferUsage : byte
 {
     /// <summary>
     /// Indicates that a <see cref="DeviceBuffer"/> can be used as the source of vertex data for drawing commands.
-    /// This flag enables the use of a Buffer in the <see cref="CommandBuffer.SetVertexBuffer(uint, DeviceBuffer)"/> method.
+    /// This flag enables the use of a Buffer as a vertex buffer returned from an <see cref="IVertexSource.ResolveSlot"/> implementation.
     /// </summary>
     VertexBuffer = 1 << 0,
     /// <summary>
     /// Indicates that a <see cref="DeviceBuffer"/> can be used as the source of index data for drawing commands.
-    /// This flag enables the use of a Buffer in the <see cref="CommandBuffer.SetIndexBuffer(DeviceBuffer, IndexFormat)" /> method.
+    /// This flag enables the use of a Buffer as an index buffer returned from an <see cref="IVertexSource.TryGetIndexBuffer"/> implementation.
     /// </summary>
     IndexBuffer = 1 << 1,
     /// <summary>

@@ -14,9 +14,9 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     /// <c>VkVertexInputAttributeDescription.location</c>, and on D3D11 it has no shader
     /// effect (semantics are name-based). This does <b>not</b> identify the vertex buffer
     /// binding slot; the slot is determined by the layout's index in
-    /// <see cref="ShaderSetDescription.VertexLayouts"/> and is what
-    /// <see cref="CommandBuffer.SetVertexBuffer(uint, DeviceBuffer)"/>'s <c>index</c>
-    /// parameter refers to.
+    /// <see cref="ShaderProgram.VertexLayouts"/>, which is what
+    /// <see cref="IVertexSource.ResolveSlot"/>'s <c>layoutSlot</c>
+    /// parameter receives.
     /// </summary>
     public uint Location;
     /// <summary>

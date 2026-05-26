@@ -85,7 +85,7 @@ internal unsafe class OpenGLShaderProgram : ShaderProgram, OpenGLDeferredResourc
             CheckLastError();
         }
 
-        OpenGLPipeline.BindVertexAttribLocations(_gl, _program, VertexLayoutsArray);
+        OpenGLCachedPipeline.BindVertexAttribLocations(_gl, _program, VertexLayoutsArray);
 
         _gl.LinkProgram(_program);
         CheckLastError();
@@ -99,7 +99,7 @@ internal unsafe class OpenGLShaderProgram : ShaderProgram, OpenGLDeferredResourc
             throw new RenderException($"Error linking GL program: {log}");
         }
 
-        _setInfos = OpenGLPipeline.BuildSetBindingsInfo(_gl, _program, ResourceLayoutsArray, _gd.BackendType);
+        _setInfos = OpenGLCachedPipeline.BuildSetBindingsInfo(_gl, _program, ResourceLayoutsArray, _gd.BackendType);
 
         _created = true;
     }

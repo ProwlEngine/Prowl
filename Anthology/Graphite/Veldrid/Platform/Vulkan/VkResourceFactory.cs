@@ -26,16 +26,6 @@ internal class VkResourceFactory : ResourceFactory
         return new VkFramebuffer(_gd, ref description, false);
     }
 
-    protected override Pipeline CreateGraphicsPipelineCore(ref GraphicsPipelineDescription description)
-    {
-        return new VkPipeline(_gd, this, ref description);
-    }
-
-    public override Pipeline CreateComputePipeline(ref ComputePipelineDescription description)
-    {
-        return new VkPipeline(_gd, this, ref description);
-    }
-
     public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
     {
         return new VkResourceLayout(_gd, ref description);

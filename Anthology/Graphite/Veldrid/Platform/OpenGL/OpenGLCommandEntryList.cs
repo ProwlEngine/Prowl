@@ -17,14 +17,12 @@ internal interface OpenGLCommandEntryList
     void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ);
     void End();
     void SetFramebuffer(Framebuffer fb);
-    void SetIndexBuffer(DeviceBuffer buffer, IndexFormat format, uint offset);
-    void SetPipeline(Pipeline pipeline);
     void SetShader(ShaderProgram program);
     void SetComputeShader(ComputeProgram program);
     void SetGraphicsResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets);
     void SetComputeResourceSet(uint slot, ResourceSet rs, uint dynamicOffsetCount, ref uint dynamicOffsets);
     void SetScissorRect(uint index, uint x, uint y, uint width, uint height);
-    void SetVertexBuffer(uint index, DeviceBuffer buffer, uint offset);
+    void SetVertexSource(IVertexSource source);
     void SetViewport(uint index, ref Viewport viewport);
     void ResolveTexture(Texture source, Texture destination);
     void UpdateBuffer(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);

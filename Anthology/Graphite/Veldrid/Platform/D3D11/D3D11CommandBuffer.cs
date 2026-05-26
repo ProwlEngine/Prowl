@@ -30,14 +30,12 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private bool _viewportsChanged;
     private bool _scissorRectsChanged;
 
-    private uint _numVertexBindings = 0;
-    private nint[] _vertexBindings = new nint[1];
     private int[] _vertexStrides = new int[1];
-    private int[] _vertexOffsets = new int[1];
 
     // Cached pipeline State
-    private DeviceBuffer _ib;
-    private uint _ibOffset;
+    private DeviceBuffer _currentIndexBuffer;
+    private Format _currentIndexFormat;
+    private uint _currentIndexOffset;
     private ID3D11BlendState* _blendState;
     private float[] _blendFactor = new float[4];
     private ID3D11DepthStencilState* _depthStencilState;
@@ -51,19 +49,16 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private ID3D11DomainShader* _domainShader;
     private ID3D11PixelShader* _pixelShader;
 
-    private new D3D11Pipeline _graphicsPipeline;
     private D3D11ShaderProgram _currentShaderProgram;
     private D3D11ComputeProgram _currentComputeProgram;
     private BoundResourceSetInfo[] _graphicsResourceSets = new BoundResourceSetInfo[1];
     // Resource sets are invalidated when a new resource set is bound with an incompatible SRV or UAV.
     private bool[] _invalidatedGraphicsResourceSets = new bool[1];
 
-    private new D3D11Pipeline _computePipeline;
     private BoundResourceSetInfo[] _computeResourceSets = new BoundResourceSetInfo[1];
     // Resource sets are invalidated when a new resource set is bound with an incompatible SRV or UAV.
     private bool[] _invalidatedComputeResourceSets = new bool[1];
     private string _name;
-    private bool _vertexBindingsChanged;
     private ID3D11Buffer*[] _cbOut = new ID3D11Buffer*[1];
     private int[] _firstConstRef = new int[1];
     private int[] _numConstsRef = new int[1];
@@ -156,10 +151,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     private void ResetManagedState()
     {
-        _numVertexBindings = 0;
-        Util.ClearArray(_vertexBindings);
         Util.ClearArray(_vertexStrides);
-        Util.ClearArray(_vertexOffsets);
 
         _framebuffer = null;
 
@@ -168,8 +160,9 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         _viewportsChanged = false;
         _scissorRectsChanged = false;
 
-        _ib = null;
-        _graphicsPipeline = null;
+        _currentIndexBuffer = null;
+        _currentIndexFormat = Format.FormatUnknown;
+        _currentIndexOffset = 0;
         _currentShaderProgram = null;
         _currentComputeProgram = null;
         _blendState = null;
@@ -194,7 +187,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         Util.ClearArray(_fragmentBoundTextureViews);
         Util.ClearArray(_fragmentBoundSamplers);
 
-        _computePipeline = null;
         ClearSets(_computeResourceSets);
 
         foreach (KeyValuePair<Texture, List<BoundTextureInfo>> kvp in _boundSRVs)
@@ -259,149 +251,42 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         _begun = false;
     }
 
-    private protected override void SetIndexBufferCore(DeviceBuffer buffer, IndexFormat format, uint offset)
+    private protected override void SetVertexSourceCore(IVertexSource source)
     {
-        if (_ib != buffer || _ibOffset != offset)
-        {
-            _ib = buffer;
-            _ibOffset = offset;
-            D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(buffer);
-            UnbindUAVBuffer(buffer);
-            Ctx->IASetIndexBuffer(d3d11Buffer.Buffer, D3D11Formats.ToDxgiFormat(format), (uint)offset);
-        }
+        _currentIndexBuffer = null;
     }
 
-    private protected override void SetPipelineCore(Pipeline pipeline)
+    private void ResolveAndBindIndexBuffer()
     {
-        if (!pipeline.IsComputePipeline && _graphicsPipeline != pipeline)
+        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint offset);
+        Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
+        CheckIndexBufferUsage(ib);
+
+        Format dxgiFmt = D3D11Formats.ToDxgiFormat(fmt);
+
+        if (!ReferenceEquals(_currentIndexBuffer, ib)
+            || _currentIndexFormat != dxgiFmt
+            || _currentIndexOffset != offset)
         {
-            D3D11Pipeline d3dPipeline = Util.AssertSubtype<Pipeline, D3D11Pipeline>(pipeline);
-            _graphicsPipeline = d3dPipeline;
-            _currentShaderProgram = d3dPipeline.Program;
-            ClearSets(_graphicsResourceSets); // Invalidate resource set bindings -- they may be invalid.
-            Util.ClearArray(_invalidatedGraphicsResourceSets);
-
-            ID3D11BlendState* blendState = d3dPipeline.BlendState;
-            float[] blendFactor = d3dPipeline.BlendFactor;
-            if (_blendState != blendState || !BlendFactorEquals(_blendFactor, blendFactor))
-            {
-                _blendState = blendState;
-                Array.Copy(blendFactor, _blendFactor, 4);
-                fixed (float* pBf = _blendFactor)
-                {
-                    Ctx->OMSetBlendState(blendState, pBf, 0xFFFFFFFF);
-                }
-            }
-
-            ID3D11DepthStencilState* depthStencilState = d3dPipeline.DepthStencilState;
-            uint stencilReference = d3dPipeline.StencilReference;
-            if (_depthStencilState != depthStencilState || _stencilReference != stencilReference)
-            {
-                _depthStencilState = depthStencilState;
-                _stencilReference = stencilReference;
-                Ctx->OMSetDepthStencilState(depthStencilState, stencilReference);
-            }
-
-            ID3D11RasterizerState* rasterizerState = d3dPipeline.RasterizerState;
-            if (_rasterizerState != rasterizerState)
-            {
-                _rasterizerState = rasterizerState;
-                Ctx->RSSetState(rasterizerState);
-            }
-
-            D3DPrimitiveTopology primitiveTopology = d3dPipeline.PrimitiveTopology;
-            if (_primitiveTopology != primitiveTopology)
-            {
-                _primitiveTopology = primitiveTopology;
-                Ctx->IASetPrimitiveTopology(primitiveTopology);
-            }
-
-            ID3D11InputLayout* inputLayout = d3dPipeline.InputLayout;
-            if (_inputLayout != inputLayout)
-            {
-                _inputLayout = inputLayout;
-                Ctx->IASetInputLayout(inputLayout);
-            }
-
-            ID3D11VertexShader* vertexShader = d3dPipeline.VertexShader;
-            if (_vertexShader != vertexShader)
-            {
-                _vertexShader = vertexShader;
-                Ctx->VSSetShader(vertexShader, null, 0);
-            }
-
-            ID3D11GeometryShader* geometryShader = d3dPipeline.GeometryShader;
-            if (_geometryShader != geometryShader)
-            {
-                _geometryShader = geometryShader;
-                Ctx->GSSetShader(geometryShader, null, 0);
-            }
-
-            ID3D11HullShader* hullShader = d3dPipeline.HullShader;
-            if (_hullShader != hullShader)
-            {
-                _hullShader = hullShader;
-                Ctx->HSSetShader(hullShader, null, 0);
-            }
-
-            ID3D11DomainShader* domainShader = d3dPipeline.DomainShader;
-            if (_domainShader != domainShader)
-            {
-                _domainShader = domainShader;
-                Ctx->DSSetShader(domainShader, null, 0);
-            }
-
-            ID3D11PixelShader* pixelShader = d3dPipeline.PixelShader;
-            if (_pixelShader != pixelShader)
-            {
-                _pixelShader = pixelShader;
-                Ctx->PSSetShader(pixelShader, null, 0);
-            }
-
-            if (!Util.ArrayEqualsEquatable(_vertexStrides, d3dPipeline.VertexStrides))
-            {
-                _vertexBindingsChanged = true;
-
-                if (d3dPipeline.VertexStrides != null)
-                {
-                    Util.EnsureArrayMinimumSize(ref _vertexStrides, (uint)d3dPipeline.VertexStrides.Length);
-                    d3dPipeline.VertexStrides.CopyTo(_vertexStrides, 0);
-                }
-            }
-
-            Util.EnsureArrayMinimumSize(ref _vertexStrides, 1);
-            Util.EnsureArrayMinimumSize(ref _vertexBindings, (uint)_vertexStrides.Length);
-            Util.EnsureArrayMinimumSize(ref _vertexOffsets, (uint)_vertexStrides.Length);
-
-            Util.EnsureArrayMinimumSize(ref _graphicsResourceSets, (uint)d3dPipeline.ResourceLayouts.Length);
-            Util.EnsureArrayMinimumSize(ref _invalidatedGraphicsResourceSets, (uint)d3dPipeline.ResourceLayouts.Length);
-        }
-        else if (pipeline.IsComputePipeline && _computePipeline != pipeline)
-        {
-            D3D11Pipeline d3dPipeline = Util.AssertSubtype<Pipeline, D3D11Pipeline>(pipeline);
-            _computePipeline = d3dPipeline;
-            _currentComputeProgram = d3dPipeline.ComputeProgramRef;
-            ClearSets(_computeResourceSets); // Invalidate resource set bindings -- they may be invalid.
-            Util.ClearArray(_invalidatedComputeResourceSets);
-
-            ID3D11ComputeShader* computeShader = d3dPipeline.ComputeShader;
-            Ctx->CSSetShader(computeShader, null, 0);
-            Util.EnsureArrayMinimumSize(ref _computeResourceSets, (uint)d3dPipeline.ResourceLayouts.Length);
-            Util.EnsureArrayMinimumSize(ref _invalidatedComputeResourceSets, (uint)d3dPipeline.ResourceLayouts.Length);
+            D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(ib);
+            UnbindUAVBuffer(ib);
+            Ctx->IASetIndexBuffer(d3d11Buffer.Buffer, dxgiFmt, offset);
+            _currentIndexBuffer = ib;
+            _currentIndexFormat = dxgiFmt;
+            _currentIndexOffset = offset;
         }
     }
 
     private protected override void SetShaderCore(ShaderProgram program)
     {
         D3D11ShaderProgram sp = Util.AssertSubtype<ShaderProgram, D3D11ShaderProgram>(program);
-        if (_currentShaderProgram == sp && _graphicsPipeline == null) return;
+        if (_currentShaderProgram == sp) return;
 
         bool msaa = _framebuffer != null
             && _framebuffer.OutputDescription.SampleCount != TextureSampleCount.Count1;
         sp.EnsureCacheResolved(msaa);
 
         _currentShaderProgram = sp;
-        _graphicsPipeline = null;
         ClearSets(_graphicsResourceSets);
         Util.ClearArray(_invalidatedGraphicsResourceSets);
 
@@ -434,14 +319,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             Ctx->RSSetState(rasterizerState);
         }
 
-        // STAGE 1 TEMP: topology default removed in Stage 4
-        D3DPrimitiveTopology primitiveTopology = D3DPrimitiveTopology.D3DPrimitiveTopologyTrianglelist;
-        if (_primitiveTopology != primitiveTopology)
-        {
-            _primitiveTopology = primitiveTopology;
-            Ctx->IASetPrimitiveTopology(primitiveTopology);
-        }
-
         ID3D11InputLayout* inputLayout = sp.InputLayout;
         if (_inputLayout != inputLayout)
         {
@@ -458,7 +335,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         int[] strides = sp.VertexStridesInts;
         if (!Util.ArrayEqualsEquatable(_vertexStrides, strides))
         {
-            _vertexBindingsChanged = true;
             if (strides != null)
             {
                 Util.EnsureArrayMinimumSize(ref _vertexStrides, (uint)strides.Length);
@@ -466,8 +342,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             }
         }
         Util.EnsureArrayMinimumSize(ref _vertexStrides, 1);
-        Util.EnsureArrayMinimumSize(ref _vertexBindings, (uint)_vertexStrides.Length);
-        Util.EnsureArrayMinimumSize(ref _vertexOffsets, (uint)_vertexStrides.Length);
 
         Util.EnsureArrayMinimumSize(ref _graphicsResourceSets, (uint)sp.D3D11ResourceLayouts.Length);
         Util.EnsureArrayMinimumSize(ref _invalidatedGraphicsResourceSets, (uint)sp.D3D11ResourceLayouts.Length);
@@ -476,9 +350,8 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private protected override void SetComputeShaderCore(ComputeProgram program)
     {
         D3D11ComputeProgram cp = Util.AssertSubtype<ComputeProgram, D3D11ComputeProgram>(program);
-        if (_currentComputeProgram == cp && _computePipeline == null) return;
+        if (_currentComputeProgram == cp) return;
         _currentComputeProgram = cp;
-        _computePipeline = null;
         ClearSets(_computeResourceSets);
         Util.ClearArray(_invalidatedComputeResourceSets);
         Ctx->CSSetShader(cp.ComputeShader, null, 0);
@@ -651,19 +524,6 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
     }
 
-    private protected override void SetVertexBufferCore(uint index, DeviceBuffer buffer, uint offset)
-    {
-        D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(buffer);
-        if ((ID3D11Buffer*)_vertexBindings[index] != d3d11Buffer.Buffer || _vertexOffsets[index] != (int)offset)
-        {
-            _vertexBindingsChanged = true;
-            UnbindUAVBuffer(buffer);
-            _vertexBindings[index] = (nint)d3d11Buffer.Buffer;
-            _vertexOffsets[index] = (int)offset;
-            _numVertexBindings = Math.Max((index + 1), _numVertexBindings);
-        }
-    }
-
     private protected override void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
         PreDrawCommand();
@@ -681,8 +541,8 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
+        ResolveAndBindIndexBuffer();
 
-        Debug.Assert(_ib != null);
         if (instanceCount == 1 && instanceStart == 0)
         {
             Ctx->DrawIndexed(indexCount, indexStart, vertexOffset);
@@ -709,6 +569,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private protected override void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
         PreDrawCommand();
+        ResolveAndBindIndexBuffer();
 
         D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(indirectBuffer);
         uint currentOffset = offset;
@@ -723,6 +584,14 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     {
         FlushViewports();
         FlushScissorRects();
+
+        D3DPrimitiveTopology topology = D3D11Formats.VdToD3D11PrimitiveTopology(_currentVertexSource.Topology);
+        if (_primitiveTopology != topology)
+        {
+            _primitiveTopology = topology;
+            Ctx->IASetPrimitiveTopology(topology);
+        }
+
         FlushVertexBindings();
 
         int graphicsResourceCount = _currentShaderProgram.D3D11ResourceLayouts.Length;
@@ -806,23 +675,30 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     private void FlushVertexBindings()
     {
-        if (_vertexBindingsChanged)
+        System.Collections.Generic.IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
+        int count = layouts.Count;
+        if (count == 0) return;
+
+        ID3D11Buffer** ppBuffers = stackalloc ID3D11Buffer*[count];
+        uint* pStrides = stackalloc uint[count];
+        uint* pOffsets = stackalloc uint[count];
+
+        for (int slot = 0; slot < count; slot++)
         {
-            int count = (int)_numVertexBindings;
-            ID3D11Buffer** ppBuffers = stackalloc ID3D11Buffer*[count];
-            for (int i = 0; i < count; i++)
-            {
-                ppBuffers[i] = (ID3D11Buffer*)_vertexBindings[i];
-            }
+            VertexLayoutDescription layout = layouts[slot];
 
-            fixed (int* pStrides = _vertexStrides)
-            fixed (int* pOffsets = _vertexOffsets)
-            {
-                Ctx->IASetVertexBuffers(0, _numVertexBindings, ppBuffers, (uint*)pStrides, (uint*)pOffsets);
-            }
+            _currentVertexSource.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
+            CheckVertexBindingUsage(in binding, (uint)slot);
 
-            _vertexBindingsChanged = false;
+            D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(binding.Buffer);
+            UnbindUAVBuffer(binding.Buffer);
+
+            ppBuffers[slot] = d3d11Buffer.Buffer;
+            pStrides[slot] = (uint)_vertexStrides[slot];
+            pOffsets[slot] = binding.Offset;
         }
+
+        Ctx->IASetVertexBuffers(0u, (uint)count, ppBuffers, pStrides, pOffsets);
     }
 
     public override void SetScissorRect(uint index, uint x, uint y, uint width, uint height)

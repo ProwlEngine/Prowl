@@ -5,7 +5,7 @@ using Prowl.Vector;
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// A <see cref="Pipeline"/> component describing how values are blended into each individual color target.
+/// A <see cref="ShaderProgram"/> component describing how values are blended into each individual color target.
 /// </summary>
 public struct BlendStateDescription : IEquatable<BlendStateDescription>
 {
@@ -16,7 +16,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     public Color BlendFactor;
     /// <summary>
     /// An array of <see cref="BlendAttachmentDescription"/> describing how blending is performed for each color target
-    /// used in the <see cref="Pipeline"/>.
+    /// used in the <see cref="ShaderProgram"/>.
     /// </summary>
     public BlendAttachmentDescription[] AttachmentStates;
     /// <summary>

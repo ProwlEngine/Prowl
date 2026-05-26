@@ -102,7 +102,7 @@ internal unsafe class OpenGLComputeProgram : ComputeProgram, OpenGLDeferredResou
             throw new RenderException($"Error linking GL compute program: {log}");
         }
 
-        _setInfos = OpenGLPipeline.BuildSetBindingsInfo(_gl, _program, ResourceLayoutsArray, _gd.BackendType);
+        _setInfos = OpenGLCachedPipeline.BuildSetBindingsInfo(_gl, _program, ResourceLayoutsArray, _gd.BackendType);
         _created = true;
     }
 

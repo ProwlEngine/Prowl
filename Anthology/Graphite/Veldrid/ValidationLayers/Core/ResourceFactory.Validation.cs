@@ -5,80 +5,6 @@ namespace Prowl.Veldrid;
 public abstract partial class ResourceFactory
 {
     [Conditional("VALIDATE_USAGE")]
-    private void CreateGraphicsPipeline_CheckDescription(ref GraphicsPipelineDescription description)
-    {
-#if VALIDATE_USAGE
-        if (description.Program == null)
-        {
-            throw new RenderException(
-                $"{nameof(GraphicsPipelineDescription)}.{nameof(GraphicsPipelineDescription.Program)} must be non-null.");
-        }
-        RasterizerStateDescription rasterizerState = description.Program.RasterizerState;
-        BlendStateDescription blendState = description.Program.BlendState;
-        if (!rasterizerState.DepthClipEnabled && !Features.DepthClipDisable)
-        {
-            throw new RenderException(
-                "RasterizerState.DepthClipEnabled must be true if GraphicsDeviceFeatures.DepthClipDisable is not supported.");
-        }
-        if (!Features.IndependentBlend)
-        {
-            if (blendState.AttachmentStates.Length > 0)
-            {
-                BlendAttachmentDescription attachmentState = blendState.AttachmentStates[0];
-                for (int i = 1; i < blendState.AttachmentStates.Length; i++)
-                {
-                    if (!attachmentState.Equals(blendState.AttachmentStates[i]))
-                    {
-                        throw new RenderException(
-                            $"If GraphcsDeviceFeatures.IndependentBlend is false, then all members of BlendState.AttachmentStates must be equal.");
-                    }
-                }
-            }
-        }
-        ResourceLayoutDescription[] programResourceLayouts = description.Program.ResourceLayoutsArray;
-        for (int i = 0; i < programResourceLayouts.Length; i++)
-        {
-            for (int j = i + 1; j < programResourceLayouts.Length; j++)
-            {
-                if (programResourceLayouts[i].Set == programResourceLayouts[j].Set)
-                {
-                    throw new RenderException(
-                        $"Two ResourceLayouts on the program share Set index {programResourceLayouts[i].Set}.");
-                }
-            }
-        }
-        foreach (VertexLayoutDescription layoutDesc in description.Program.VertexLayouts)
-        {
-            bool hasExplicitLayout = false;
-            uint minOffset = 0;
-            foreach (VertexElementDescription elementDesc in layoutDesc.Elements)
-            {
-                if (hasExplicitLayout && elementDesc.Offset == 0)
-                {
-                    throw new RenderException(
-                        $"If any vertex element has an explicit offset, then all elements must have an explicit offset.");
-                }
-
-                if (elementDesc.Offset != 0 && elementDesc.Offset < minOffset)
-                {
-                    throw new RenderException(
-                        $"Vertex element \"{elementDesc.Name}\" has an explicit offset which overlaps with the previous element.");
-                }
-
-                minOffset = elementDesc.Offset + FormatSizeHelpers.GetSizeInBytes(elementDesc.Format);
-                hasExplicitLayout |= elementDesc.Offset != 0;
-            }
-
-            if (minOffset > layoutDesc.Stride)
-            {
-                throw new RenderException(
-                    $"The vertex layout's stride ({layoutDesc.Stride}) is less than the full size of the vertex ({minOffset})");
-            }
-        }
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
     private void CreateTexture_CheckDescription(ref TextureDescription description)
     {
 #if VALIDATE_USAGE
@@ -254,6 +180,74 @@ public abstract partial class ResourceFactory
         {
             throw new RenderException(
                 $"{nameof(ShaderDescription)} must include a vertex stage.");
+        }
+
+        RasterizerStateDescription rasterizerState = description.RasterizerState;
+        BlendStateDescription blendState = description.BlendState;
+        if (!rasterizerState.DepthClipEnabled && !Features.DepthClipDisable)
+        {
+            throw new RenderException(
+                "RasterizerState.DepthClipEnabled must be true if GraphicsDeviceFeatures.DepthClipDisable is not supported.");
+        }
+        if (!Features.IndependentBlend && blendState.AttachmentStates != null && blendState.AttachmentStates.Length > 0)
+        {
+            BlendAttachmentDescription attachmentState = blendState.AttachmentStates[0];
+            for (int i = 1; i < blendState.AttachmentStates.Length; i++)
+            {
+                if (!attachmentState.Equals(blendState.AttachmentStates[i]))
+                {
+                    throw new RenderException(
+                        $"If GraphicsDeviceFeatures.IndependentBlend is false, then all members of BlendState.AttachmentStates must be equal.");
+                }
+            }
+        }
+
+        ResourceLayoutDescription[] programResourceLayouts = description.ResourceLayouts;
+        if (programResourceLayouts != null)
+        {
+            for (int i = 0; i < programResourceLayouts.Length; i++)
+            {
+                for (int j = i + 1; j < programResourceLayouts.Length; j++)
+                {
+                    if (programResourceLayouts[i].Set == programResourceLayouts[j].Set)
+                    {
+                        throw new RenderException(
+                            $"Two ResourceLayouts on the ShaderProgram share Set index {programResourceLayouts[i].Set}.");
+                    }
+                }
+            }
+        }
+
+        if (description.VertexLayouts != null)
+        {
+            foreach (VertexLayoutDescription layoutDesc in description.VertexLayouts)
+            {
+                bool hasExplicitLayout = false;
+                uint minOffset = 0;
+                foreach (VertexElementDescription elementDesc in layoutDesc.Elements)
+                {
+                    if (hasExplicitLayout && elementDesc.Offset == 0)
+                    {
+                        throw new RenderException(
+                            $"If any vertex element has an explicit offset, then all elements must have an explicit offset.");
+                    }
+
+                    if (elementDesc.Offset != 0 && elementDesc.Offset < minOffset)
+                    {
+                        throw new RenderException(
+                            $"Vertex element \"{elementDesc.Name}\" has an explicit offset which overlaps with the previous element.");
+                    }
+
+                    minOffset = elementDesc.Offset + FormatSizeHelpers.GetSizeInBytes(elementDesc.Format);
+                    hasExplicitLayout |= elementDesc.Offset != 0;
+                }
+
+                if (minOffset > layoutDesc.Stride)
+                {
+                    throw new RenderException(
+                        $"The vertex layout's stride ({layoutDesc.Stride}) is less than the full size of the vertex ({minOffset})");
+                }
+            }
         }
 #endif
     }

@@ -31,16 +31,6 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
         return new D3D11Framebuffer(_device, ref description);
     }
 
-    protected override Pipeline CreateGraphicsPipelineCore(ref GraphicsPipelineDescription description)
-    {
-        return new D3D11Pipeline(this, _cache, ref description);
-    }
-
-    public override Pipeline CreateComputePipeline(ref ComputePipelineDescription description)
-    {
-        return new D3D11Pipeline(this, _cache, ref description);
-    }
-
     public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
     {
         return new D3D11ResourceLayout(ref description);

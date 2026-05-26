@@ -3,7 +3,7 @@ using System;
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// Describes the layout of <see cref="BindableResource"/> objects for a <see cref="Pipeline"/>.
+/// Describes the layout of <see cref="BindableResource"/> objects for a <see cref="ShaderProgram"/>.
 /// </summary>
 public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
 {

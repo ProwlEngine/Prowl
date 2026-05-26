@@ -263,6 +263,9 @@ internal unsafe class D3D11ResourceCache : IDisposable
         return result;
     }
 
+    // Latent: cache key is VertexLayoutDescription[] only. Two programs with identical vertex
+    // layouts but incompatible VS input signatures will share an input layout and the second
+    // draw will fail D3D11 validation. Deferred per Stage 1 D3D11 doc ("Input-layout cache key").
     private ID3D11InputLayout* AcquireInputLayout(VertexLayoutDescription[] vertexLayouts, byte[] vsBytecode)
     {
         Debug.Assert(Monitor.IsEntered(_lock));
@@ -335,9 +338,9 @@ internal unsafe class D3D11ResourceCache : IDisposable
                     Format = D3D11Formats.ToDxgiFormat(desc.Format),
                     AlignedByteOffset = desc.Offset != 0 ? desc.Offset : (uint)currentOffset,
                     // InputSlot matches the IASetVertexBuffers slot, which is the layout
-                    // index (what SetVertexBuffer takes). D3D11 binds attributes by
-                    // SemanticName, so VertexLayoutDescription.Location has no shader
-                    // effect here.
+                    // index (what IVertexSource.ResolveSlot's layoutSlot receives). D3D11
+                    // binds attributes by SemanticName, so VertexLayoutDescription.Location
+                    // has no shader effect here.
                     InputSlot = (uint)slot,
                     InputSlotClass = stepRate == 0 ? InputClassification.PerVertexData : InputClassification.PerInstanceData,
                     InstanceDataStepRate = stepRate,
