@@ -40,10 +40,11 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             SType = StructureType.RenderPassCreateInfo
         };
 
-        StackList<AttachmentDescription> attachments = new StackList<AttachmentDescription>();
-
         uint colorAttachmentCount = (uint)ColorTargets.Count;
-        StackList<AttachmentReference> colorAttachmentRefs = new StackList<AttachmentReference>();
+
+        AttachmentDescription* attachments = stackalloc AttachmentDescription[(int)colorAttachmentCount + 1];
+        uint attachmentCount = 0;
+        AttachmentReference* colorAttachmentRefs = stackalloc AttachmentReference[(int)colorAttachmentCount];
         for (int i = 0; i < colorAttachmentCount; i++)
         {
             VkTexture vkColorTex = Util.AssertSubtype<Texture, VkTexture>(ColorTargets[i].Target);
@@ -60,12 +61,12 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
                     ? ImageLayout.ShaderReadOnlyOptimal
                     : ImageLayout.ColorAttachmentOptimal;
             colorAttachmentDesc.FinalLayout = ImageLayout.ColorAttachmentOptimal;
-            attachments.Add(colorAttachmentDesc);
+            attachments[attachmentCount++] = colorAttachmentDesc;
 
             AttachmentReference colorAttachmentRef = new AttachmentReference();
             colorAttachmentRef.Attachment = (uint)i;
             colorAttachmentRef.Layout = ImageLayout.ColorAttachmentOptimal;
-            colorAttachmentRefs.Add(colorAttachmentRef);
+            colorAttachmentRefs[i] = colorAttachmentRef;
         }
 
         AttachmentDescription depthAttachmentDesc = new AttachmentDescription();
@@ -96,13 +97,13 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         if (ColorTargets.Count > 0)
         {
             subpass.ColorAttachmentCount = colorAttachmentCount;
-            subpass.PColorAttachments = (AttachmentReference*)colorAttachmentRefs.Data;
+            subpass.PColorAttachments = colorAttachmentRefs;
         }
 
         if (DepthTarget != null)
         {
             subpass.PDepthStencilAttachment = &depthAttachmentRef;
-            attachments.Add(depthAttachmentDesc);
+            attachments[attachmentCount++] = depthAttachmentDesc;
         }
 
         SubpassDependency subpassDependency = new SubpassDependency();
@@ -111,8 +112,8 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         subpassDependency.DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
         subpassDependency.DstAccessMask = AccessFlags.ColorAttachmentReadBit | AccessFlags.ColorAttachmentWriteBit;
 
-        renderPassCI.AttachmentCount = attachments.Count;
-        renderPassCI.PAttachments = (AttachmentDescription*)attachments.Data;
+        renderPassCI.AttachmentCount = attachmentCount;
+        renderPassCI.PAttachments = attachments;
         renderPassCI.SubpassCount = 1;
         renderPassCI.PSubpasses = &subpass;
         renderPassCI.DependencyCount = 1;
@@ -128,12 +129,12 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         }
         if (DepthTarget != null)
         {
-            attachments[attachments.Count - 1].LoadOp = AttachmentLoadOp.Load;
-            attachments[attachments.Count - 1].InitialLayout = ImageLayout.DepthStencilAttachmentOptimal;
+            attachments[attachmentCount - 1].LoadOp = AttachmentLoadOp.Load;
+            attachments[attachmentCount - 1].InitialLayout = ImageLayout.DepthStencilAttachmentOptimal;
             bool hasStencil = FormatHelpers.IsStencilFormat(DepthTarget.Value.Target.Format);
             if (hasStencil)
             {
-                attachments[attachments.Count - 1].StencilLoadOp = AttachmentLoadOp.Load;
+                attachments[attachmentCount - 1].StencilLoadOp = AttachmentLoadOp.Load;
             }
 
         }
@@ -145,12 +146,12 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
 
         if (DepthTarget != null)
         {
-            attachments[attachments.Count - 1].LoadOp = AttachmentLoadOp.Clear;
-            attachments[attachments.Count - 1].InitialLayout = ImageLayout.Undefined;
+            attachments[attachmentCount - 1].LoadOp = AttachmentLoadOp.Clear;
+            attachments[attachmentCount - 1].InitialLayout = ImageLayout.Undefined;
             bool hasStencil = FormatHelpers.IsStencilFormat(DepthTarget.Value.Target.Format);
             if (hasStencil)
             {
-                attachments[attachments.Count - 1].StencilLoadOp = AttachmentLoadOp.Clear;
+                attachments[attachmentCount - 1].StencilLoadOp = AttachmentLoadOp.Clear;
             }
         }
 

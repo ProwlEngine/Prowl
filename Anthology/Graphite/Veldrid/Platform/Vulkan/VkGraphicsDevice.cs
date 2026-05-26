@@ -512,8 +512,14 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         instanceCI.PApplicationInfo = &applicationInfo;
 
-        StackList<IntPtr, Size64Bytes> instanceExtensions = new StackList<IntPtr, Size64Bytes>();
-        StackList<IntPtr, Size64Bytes> instanceLayers = new StackList<IntPtr, Size64Bytes>();
+        // Capacity = the caller's requested extensions plus the fixed ones added below. The
+        // fixed set is at most 8 (portability_enumeration + up to 5 platform surface extensions
+        // + properties2 + debug_report); 16 leaves headroom so adding one can't overflow silently.
+        int maxInstanceExtensions = (options.InstanceExtensions?.Length ?? 0) + 16;
+        IntPtr* instanceExtensions = stackalloc IntPtr[maxInstanceExtensions];
+        uint instanceExtensionCount = 0;
+        IntPtr* instanceLayers = stackalloc IntPtr[2];
+        uint instanceLayerCount = 0;
 
         if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_portability_subset))
         {
@@ -522,7 +528,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_portability_enumeration))
         {
-            instanceExtensions.Add(CommonStrings.VK_KHR_portability_enumeration);
+            instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_portability_enumeration;
             instanceCI.Flags |= (InstanceCreateFlags)VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
         }
 
@@ -578,13 +584,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         foreach (var ext in _surfaceExtensions)
         {
-            instanceExtensions.Add(ext);
+            instanceExtensions[instanceExtensionCount++] = ext;
         }
 
         bool hasDeviceProperties2 = availableInstanceExtensions.Contains(CommonStrings.VK_KHR_get_physical_device_properties2);
         if (hasDeviceProperties2)
         {
-            instanceExtensions.Add(CommonStrings.VK_KHR_get_physical_device_properties2);
+            instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_get_physical_device_properties2;
         }
 
         string[] requestedInstanceExtensions = options.InstanceExtensions ?? Array.Empty<string>();
@@ -597,7 +603,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             }
 
             FixedUtf8String utf8Str = new FixedUtf8String(requiredExt);
-            instanceExtensions.Add(utf8Str);
+            instanceExtensions[instanceExtensionCount++] = utf8Str;
             tempStrings.Add(utf8Str);
         }
 
@@ -607,27 +613,27 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
             {
                 debugReportExtensionAvailable = true;
-                instanceExtensions.Add(CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+                instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
             }
             if (availableInstanceLayers.Contains(CommonStrings.StandardValidationLayerName))
             {
                 _standardValidationSupported = true;
-                instanceLayers.Add(CommonStrings.StandardValidationLayerName);
+                instanceLayers[instanceLayerCount++] = CommonStrings.StandardValidationLayerName;
             }
             if (availableInstanceLayers.Contains(CommonStrings.KhronosValidationLayerName))
             {
                 _khronosValidationSupported = true;
-                instanceLayers.Add(CommonStrings.KhronosValidationLayerName);
+                instanceLayers[instanceLayerCount++] = CommonStrings.KhronosValidationLayerName;
             }
         }
 
-        instanceCI.EnabledExtensionCount = instanceExtensions.Count;
-        instanceCI.PpEnabledExtensionNames = (byte**)instanceExtensions.Data;
+        instanceCI.EnabledExtensionCount = instanceExtensionCount;
+        instanceCI.PpEnabledExtensionNames = (byte**)instanceExtensions;
 
-        instanceCI.EnabledLayerCount = instanceLayers.Count;
-        if (instanceLayers.Count > 0)
+        instanceCI.EnabledLayerCount = instanceLayerCount;
+        if (instanceLayerCount > 0)
         {
-            instanceCI.PpEnabledLayerNames = (byte**)instanceLayers.Data;
+            instanceCI.PpEnabledLayerNames = (byte**)instanceLayers;
         }
 
         Result result = _vk.CreateInstance(in instanceCI, null, out _instance);
@@ -856,17 +862,18 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         deviceCreateInfo.PEnabledFeatures = &deviceFeatures;
 
-        StackList<IntPtr> layerNames = new StackList<IntPtr>();
+        IntPtr* layerNames = stackalloc IntPtr[2];
+        uint layerNameCount = 0;
         if (_standardValidationSupported)
         {
-            layerNames.Add(CommonStrings.StandardValidationLayerName);
+            layerNames[layerNameCount++] = CommonStrings.StandardValidationLayerName;
         }
         if (_khronosValidationSupported)
         {
-            layerNames.Add(CommonStrings.KhronosValidationLayerName);
+            layerNames[layerNameCount++] = CommonStrings.KhronosValidationLayerName;
         }
-        deviceCreateInfo.EnabledLayerCount = layerNames.Count;
-        deviceCreateInfo.PpEnabledLayerNames = (byte**)layerNames.Data;
+        deviceCreateInfo.EnabledLayerCount = layerNameCount;
+        deviceCreateInfo.PpEnabledLayerNames = (byte**)layerNames;
 
         fixed (IntPtr* activeExtensionsPtr = activeExtensions)
         {

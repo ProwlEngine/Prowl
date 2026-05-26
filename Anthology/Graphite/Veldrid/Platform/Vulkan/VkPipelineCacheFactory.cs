@@ -165,18 +165,19 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.PVertexInputState = &vertexInputCI;
 
         // Shader Stage
-        StackList<PipelineShaderStageCreateInfo> stages = new StackList<PipelineShaderStageCreateInfo>();
+        PipelineShaderStageCreateInfo* stages = stackalloc PipelineShaderStageCreateInfo[program.Modules.Count];
+        uint stageCount = 0;
         foreach (KeyValuePair<ShaderStages, ShaderModule> kvp in program.Modules)
         {
             PipelineShaderStageCreateInfo stageCI = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo };
             stageCI.Module = kvp.Value;
             stageCI.Stage = VkFormats.VdToVkShaderStages(kvp.Key);
             stageCI.PName = new FixedUtf8String(program.GetEntryPoint(kvp.Key)); // TODO: DONT ALLOCATE HERE
-            stages.Add(stageCI);
+            stages[stageCount++] = stageCI;
         }
 
-        pipelineCI.StageCount = stages.Count;
-        pipelineCI.PStages = (PipelineShaderStageCreateInfo*)stages.Data;
+        pipelineCI.StageCount = stageCount;
+        pipelineCI.PStages = stages;
 
         // ViewportState
         PipelineViewportStateCreateInfo viewportStateCI = new PipelineViewportStateCreateInfo { SType = StructureType.PipelineViewportStateCreateInfo };
@@ -191,10 +192,11 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Compatibility RenderPass
         RenderPassCreateInfo renderPassCI = new RenderPassCreateInfo { SType = StructureType.RenderPassCreateInfo };
-        StackList<AttachmentDescription, Size512Bytes> attachments = new StackList<AttachmentDescription, Size512Bytes>();
+        AttachmentDescription* attachments = stackalloc AttachmentDescription[outputDesc.ColorAttachments.Length + 1];
+        uint attachmentCount = 0;
 
-        StackList<AttachmentDescription> colorAttachmentDescs = new StackList<AttachmentDescription>();
-        StackList<AttachmentReference> colorAttachmentRefs = new StackList<AttachmentReference>();
+        AttachmentDescription* colorAttachmentDescs = stackalloc AttachmentDescription[outputDesc.ColorAttachments.Length];
+        AttachmentReference* colorAttachmentRefs = stackalloc AttachmentReference[outputDesc.ColorAttachments.Length];
         for (uint i = 0; i < outputDesc.ColorAttachments.Length; i++)
         {
             colorAttachmentDescs[i].Format = VkFormats.VdToVkPixelFormat(outputDesc.ColorAttachments[i].Format);
@@ -205,7 +207,7 @@ internal static unsafe class VkPipelineCacheFactory
             colorAttachmentDescs[i].StencilStoreOp = AttachmentStoreOp.DontCare;
             colorAttachmentDescs[i].InitialLayout = ImageLayout.Undefined;
             colorAttachmentDescs[i].FinalLayout = ImageLayout.ShaderReadOnlyOptimal;
-            attachments.Add(colorAttachmentDescs[i]);
+            attachments[attachmentCount++] = colorAttachmentDescs[i];
 
             colorAttachmentRefs[i].Attachment = i;
             colorAttachmentRefs[i].Layout = ImageLayout.ColorAttachmentOptimal;
@@ -233,16 +235,12 @@ internal static unsafe class VkPipelineCacheFactory
         SubpassDescription subpass = new SubpassDescription();
         subpass.PipelineBindPoint = PipelineBindPoint.Graphics;
         subpass.ColorAttachmentCount = (uint)outputDesc.ColorAttachments.Length;
-        subpass.PColorAttachments = (AttachmentReference*)colorAttachmentRefs.Data;
-        for (int i = 0; i < colorAttachmentDescs.Count; i++)
-        {
-            attachments.Add(colorAttachmentDescs[i]);
-        }
+        subpass.PColorAttachments = colorAttachmentRefs;
 
         if (outputDesc.DepthAttachment != null)
         {
             subpass.PDepthStencilAttachment = &depthAttachmentRef;
-            attachments.Add(depthAttachmentDesc);
+            attachments[attachmentCount++] = depthAttachmentDesc;
         }
 
         SubpassDependency subpassDependency = new SubpassDependency();
@@ -251,8 +249,8 @@ internal static unsafe class VkPipelineCacheFactory
         subpassDependency.DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
         subpassDependency.DstAccessMask = AccessFlags.ColorAttachmentReadBit | AccessFlags.ColorAttachmentWriteBit;
 
-        renderPassCI.AttachmentCount = attachments.Count;
-        renderPassCI.PAttachments = (AttachmentDescription*)attachments.Data;
+        renderPassCI.AttachmentCount = attachmentCount;
+        renderPassCI.PAttachments = attachments;
         renderPassCI.SubpassCount = 1;
         renderPassCI.PSubpasses = &subpass;
         renderPassCI.DependencyCount = 1;
