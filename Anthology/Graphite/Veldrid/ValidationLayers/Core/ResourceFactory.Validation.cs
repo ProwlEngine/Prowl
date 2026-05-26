@@ -114,6 +114,10 @@ public abstract partial class ResourceFactory
         {
             throw new RenderException("Buffers with Staging Usage must not specify any other Usage flags.");
         }
+        if ((usage & BufferUsage.Dynamic) != 0 && (usage & (BufferUsage.StructuredBufferReadWrite | BufferUsage.IndirectBuffer)) != 0)
+        {
+            throw new RenderException($"{nameof(BufferUsage)}.{nameof(BufferUsage.Dynamic)} cannot be combined with {nameof(BufferUsage.StructuredBufferReadWrite)} or {nameof(BufferUsage.IndirectBuffer)}.");
+        }
         if ((usage & BufferUsage.UniformBuffer) != 0 && (description.SizeInBytes % 16) != 0)
         {
             throw new RenderException($"Uniform buffer size must be a multiple of 16 bytes.");
