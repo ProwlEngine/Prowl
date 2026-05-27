@@ -5,11 +5,12 @@
     <Folder Name="/Tests/">
         <Project Path="Tests/Prowl.Veldrid.Tests.csproj" />
     </Folder>
+    <Folder Name="/Samples/" />
     <Folder Name="/Samples/HelloTriangle/">
         <Project Path="Samples/HelloTriangle/HelloTriangle.csproj" />
     </Folder>
-    <Folder Name="/Samples/HelloTexture/">
-        <Project Path="Samples/HelloTexture/HelloTexture.csproj" />
+    <Folder Name="/Samples/TexturedQuad/">
+        <Project Path="Samples/TexturedQuad/TexturedQuad.csproj" />
     </Folder>
     <Folder Name="/Samples/Shared/">
         <Project Path="Samples/Shared/Shared.csproj" />

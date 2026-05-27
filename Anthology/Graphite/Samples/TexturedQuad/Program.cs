@@ -4,7 +4,7 @@ using Silk.NET.Windowing;
 using Silk.NET.Maths;
 
 
-namespace Prowl.Veldrid.Samples.HelloTriangle;
+namespace Prowl.Veldrid.Samples.TexturedQuad;
 
 
 public static class Program
