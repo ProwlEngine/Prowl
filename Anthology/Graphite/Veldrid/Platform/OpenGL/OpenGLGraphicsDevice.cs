@@ -78,6 +78,15 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     }
 
     private SlotState[] _slots;
+
+    /// <summary>
+    /// The active frame as seen by the GL execution thread. Updated only by the executor when it
+    /// processes a <see cref="WorkItemType.SetActiveFrame"/> work item, so it lags behind
+    /// <see cref="GraphicsDevice.CurrentFrame"/> by the depth of the work queue. Use this anywhere
+    /// inside the executor (e.g. transient UBO allocation) instead of <c>_gd.CurrentFrame</c>.
+    /// </summary>
+    internal Frame ExecutorActiveFrame;
+
     private readonly List<OpenGLBuffer> _transientFreePool = new List<OpenGLBuffer>();
     private readonly object _transientFreePoolLock = new object();
 
@@ -476,8 +485,12 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
 
         slot.CurrentFrameId = frameId;
 
-        return new OpenGLFrame(this, frameId, ringSlot, slot.FenceWrapper,
+        OpenGLFrame frame = new OpenGLFrame(this, frameId, ringSlot, slot.FenceWrapper,
             slot.TransientPrimary, slot.TransientOverflow);
+
+        _executionThread.SetActiveFrame(frame);
+
+        return frame;
     }
 
     private protected override void EndFrameCore(Frame frame)
@@ -1141,6 +1154,11 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
                             }
                         }
                         break;
+                    case WorkItemType.SetActiveFrame:
+                        {
+                            _gd.ExecutorActiveFrame = (Frame)workItem.Object0;
+                        }
+                        break;
                     default:
                         throw new InvalidOperationException("Invalid command type: " + workItem.Type);
                 }
@@ -1526,6 +1544,12 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             _workItems.Add(new ExecutionThreadWorkItem(entryList));
         }
 
+        internal void SetActiveFrame(Frame frame)
+        {
+            CheckExceptions();
+            _workItems.Add(new ExecutionThreadWorkItem(WorkItemType.SetActiveFrame, frame));
+        }
+
         internal void UpdateBuffer(DeviceBuffer buffer, uint offsetInBytes, StagingBlock stagingBlock)
         {
             CheckExceptions();
@@ -1614,6 +1638,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         SwapBuffers,
         WaitForIdle,
         InitializeResource,
+        SetActiveFrame,
     }
 
     private unsafe struct ExecutionThreadWorkItem
@@ -1719,6 +1744,17 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             Type = WorkItemType.InitializeResource;
             Object0 = info;
+            Object1 = null;
+
+            UInt0 = 0;
+            UInt1 = 0;
+            UInt2 = 0;
+        }
+
+        public ExecutionThreadWorkItem(WorkItemType type, Frame frame)
+        {
+            Type = type;
+            Object0 = frame;
             Object1 = null;
 
             UInt0 = 0;

@@ -408,7 +408,7 @@ internal unsafe class OpenGLCommandExecutor
             src.Slice(0, (int)Math.Min(field.Size, (uint)src.Length)).CopyTo(scratch.AsSpan((int)field.Offset));
         }
 
-        DeviceBufferRange range = _gd.CurrentFrame.AllocateTransient(blockSize);
+        DeviceBufferRange range = _gd.ExecutorActiveFrame.AllocateTransient(blockSize);
         fixed (byte* ptr = scratch)
         {
             UpdateBuffer(range.Buffer, range.Offset, (IntPtr)ptr, blockSize);
