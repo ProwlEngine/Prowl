@@ -1,201 +1,81 @@
-using System.Runtime.InteropServices;
-using System.Text;
-
-using Prowl.Veldrid.OpenGL;
-
 using Prowl.Vector;
 
-using Silk.NET.SDL;
+using Silk.NET.Windowing;
+using Silk.NET.Maths;
+
 
 namespace Prowl.Veldrid.Samples.HelloTriangle;
 
-internal static unsafe class Program
+
+public static class Program
 {
-    private const string VertexShaderSource = @"#version 330 core
-layout(location = 0) in vec2 a_Position;
-layout(location = 1) in vec2 a_UV;
+    static IWindow window;
 
-out vec2 v_UV;
+    static GraphicsDevice device;
+    static CommandBuffer buffer;
+    static Mesh triangle;
+    static ShaderProgram shader;
+    static PropertySet properties;
 
-void main()
-{
-    v_UV = a_UV;
-    gl_Position = vec4(a_Position, 0.0, 1.0);
-}
-";
 
-    private const string FragmentShaderSource = @"#version 330 core
-in vec2 v_UV;
-
-out vec4 fragColor;
-
-void main()
-{
-    fragColor = vec4(v_UV, 0.0, 1.0);
-}
-";
-
-    private struct Provider : IVertexSource
+    private static void Main()
     {
-        public DeviceBuffer Buffer;
+        WindowOptions woptions = WindowOptions.Default;
+        woptions.Title = "My Window";
+        woptions.Size = new Vector2D<int>(600, 600);
+        woptions.WindowState = WindowState.Normal;
+        woptions.VideoMode = VideoMode.Default;
+        woptions.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
+        woptions.ShouldSwapAutomatically = false;
+        window = Window.Create(woptions);
 
-        public PrimitiveTopology Topology => PrimitiveTopology.TriangleList;
+        window.Load += Load;
+        window.Closing += Close;
 
-        public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-        {
-            binding = new(Buffer);
-        }
-
-        public bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint offset)
-        {
-            buffer = null;
-            format = IndexFormat.UInt32;
-            offset = 0;
-            return false;
-        }
+        window.Run();
     }
 
-    private static int Main()
+    public static void Load()
     {
-        WindowCreateInfo wci = new WindowCreateInfo
-        {
-            WindowWidth = 960,
-            WindowHeight = 540,
-            WindowTitle = "Hello Triangle",
-            WindowInitialState = WindowState.Normal,
-        };
-
-        Sdl2Window window = Startup.CreateWindow(ref wci, WindowFlags.Opengl);
-        Sdl sdl = Startup.Sdl;
-
-        SdlContext context = new SdlContext(sdl, window.Handle);
-        context.Create(
-            (GLattr.ContextMajorVersion, 3),
-            (GLattr.ContextMinorVersion, 3),
-            (GLattr.ContextProfileMask, (int)GLprofile.Core),
-            (GLattr.Doublebuffer, 1),
-            (GLattr.DepthSize, 24));
-
-        sdl.GLSetSwapInterval(0);
-
-        OpenGLPlatformInfo platformInfo = new OpenGLPlatformInfo(
-            glContext: context,
-            setSyncToVerticalBlank: sync => sdl.GLSetSwapInterval(sync ? 1 : 0));
-
-        GraphicsDeviceOptions options = new GraphicsDeviceOptions(
+        GraphicsDeviceOptions options = new(
             debug: false,
-            swapchainDepthFormat: PixelFormat.R16_UNorm,
+            swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt,
             syncToVerticalBlank: true);
 
-        GraphicsDevice gd = GraphicsDevice.CreateOpenGL(options, platformInfo, (uint)window.Width, (uint)window.Height);
-        ResourceFactory factory = gd.ResourceFactory;
+        device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.OpenGL);
+        device.SyncToVerticalBlank = false;
 
-        VertexPositionUV[] vertices =
-        [
-            new(new(  0.0f,  0.75f), new(1.0f, 1.0f)),
-            new(new( 0.75f, -0.75f), new(1.0f, 0.0f)),
-            new(new(-0.75f, -0.75f), new(0.0f, 1.0f)),
-        ];
+        shader = ShaderLoader.CreateShader(device);
+        triangle = ModelLoader.CreateTriangle(device);
+        buffer = device.ResourceFactory.CreateCommandBuffer();
 
-        uint vertexBufferSize = (uint)(vertices.Length * sizeof(VertexPositionUV));
-        DeviceBuffer vertexBuffer = factory.CreateBuffer(new BufferDescription(vertexBufferSize, BufferUsage.VertexBuffer));
-        gd.UpdateBuffer(vertexBuffer, 0, vertices);
-
-        Provider provider = new()
-        {
-            Buffer = vertexBuffer
-        };
-
-        ShaderDescription shaderDesc = new()
-        {
-            Stages =
-            [
-                new ShaderStageDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShaderSource), "main"),
-                new ShaderStageDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShaderSource), "main")
-            ],
-
-            BlendState = BlendStateDescription.SingleOverrideBlend,
-            DepthStencilState = DepthStencilStateDescription.Disabled,
-            RasterizerState = RasterizerStateDescription.CullNone,
-            ResourceLayouts = [],
-            VertexLayouts =
-            [
-                new VertexLayoutDescription(
-                    0u,
-                    new VertexElementDescription("a_Position", VertexElementFormat.Float2),
-                    new VertexElementDescription("a_UV", VertexElementFormat.Float2))
-            ]
-        };
-
-        ShaderProgram shader = factory.CreateShaderProgram(shaderDesc);
-
-        CommandBuffer cl = factory.CreateCommandBuffer();
-
-        bool running = true;
-        Event evt;
-        while (running)
-        {
-            while (sdl.PollEvent(&evt) != 0)
-            {
-                switch ((EventType)evt.Type)
-                {
-                    case EventType.Quit:
-                        running = false;
-                        break;
-                    case EventType.Windowevent:
-                        if (evt.Window.Event == (byte)WindowEventID.Close)
-                        {
-                            running = false;
-                        }
-                        else if (evt.Window.Event == (byte)WindowEventID.SizeChanged
-                              || evt.Window.Event == (byte)WindowEventID.Resized)
-                        {
-                            window.Resized(evt.Window.Data1, evt.Window.Data2);
-                            gd.ResizeMainWindow((uint)evt.Window.Data1, (uint)evt.Window.Data2);
-                        }
-                        break;
-                    case EventType.Keydown:
-                        if (evt.Key.Keysym.Sym == (int)KeyCode.KEscape)
-                        {
-                            running = false;
-                        }
-                        break;
-                }
-            }
-
-            cl.Begin();
-            cl.SetFramebuffer(gd.SwapchainFramebuffer);
-            cl.ClearColorTarget(0, new Vector.Color(0.10f, 0.12f, 0.16f, 1.0f));
-            cl.SetShader(shader);
-            cl.SetVertexSource(provider);
-            cl.Draw(vertexCount: 3);
-            cl.End();
-
-            gd.SubmitCommands(cl);
-            gd.SwapBuffers();
-        }
-
-        cl.Dispose();
-        shader.Dispose();
-        vertexBuffer.Dispose();
-        gd.Dispose();
-
-        window.Close();
-        sdl.Quit();
-
-        return 0;
+        window.Resize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
+        window.Render += Render;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct VertexPositionUV
-    {
-        public Float2 Position;
-        public Float2 UV;
 
-        public VertexPositionUV(Float2 position, Float2 uv)
-        {
-            Position = position;
-            UV = uv;
-        }
+    public static void Render(double dt)
+    {
+        buffer.Begin();
+        buffer.SetFramebuffer(device.SwapchainFramebuffer);
+        buffer.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        buffer.SetShader(shader);
+        buffer.SetVertexSource(triangle);
+        buffer.DrawIndexed();
+        buffer.End();
+
+        Frame frame = device.BeginFrame();
+        frame.SubmitCommands(buffer);
+        device.EndFrame(frame);
+        device.SwapBuffers();
+    }
+
+
+    public static void Close()
+    {
+        buffer.Dispose();
+        triangle.Dispose();
+        shader.Dispose();
+        device.Dispose();
     }
 }

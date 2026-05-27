@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
+        <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
+        <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
+
+        <PackageReference Include="Prowl.Slang" Version="0.3.1" />
+
+        <ProjectReference Include="../../Veldrid/Prowl.Veldrid.csproj" />
+    </ItemGroup>
+
+</Project>

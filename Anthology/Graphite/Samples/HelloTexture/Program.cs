@@ -1,0 +1,87 @@
+using Prowl.Vector;
+
+using Silk.NET.Windowing;
+using Silk.NET.Maths;
+
+
+namespace Prowl.Veldrid.Samples.HelloTriangle;
+
+
+public static class Program
+{
+    static IWindow window;
+
+    static GraphicsDevice device;
+    static CommandBuffer buffer;
+    static Mesh quad;
+    static ShaderProgram shader;
+    static PropertySet properties;
+    static Texture texture;
+    static Sampler sampler;
+
+
+    private static void Main()
+    {
+        WindowOptions woptions = WindowOptions.Default;
+        woptions.Title = "My Window";
+        woptions.Size = new Vector2D<int>(600, 600);
+        woptions.WindowState = WindowState.Normal;
+        woptions.VideoMode = VideoMode.Default;
+        woptions.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
+        woptions.ShouldSwapAutomatically = false;
+        window = Window.Create(woptions);
+
+        window.Load += Load;
+        window.Closing += Close;
+
+        window.Run();
+    }
+
+    public static void Load()
+    {
+        GraphicsDeviceOptions options = new(
+            debug: false,
+            swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt,
+            syncToVerticalBlank: true);
+
+        device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.OpenGL);
+        device.SyncToVerticalBlank = false;
+
+        shader = ShaderLoader.CreateShader(device);
+        quad = ModelLoader.CreateQuad(device);
+        (texture, sampler) = ImageLoader.Load(device, "Cat_cat.png");
+        buffer = device.ResourceFactory.CreateCommandBuffer();
+        properties = new();
+        properties.SetTexture("MainTexture", texture, sampler);
+
+        window.Resize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
+        window.Render += Render;
+    }
+
+
+    public static void Render(double dt)
+    {
+        buffer.Begin();
+        buffer.SetFramebuffer(device.SwapchainFramebuffer);
+        buffer.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        buffer.SetShader(shader);
+        buffer.SetProperties(properties);
+        buffer.SetVertexSource(quad);
+        buffer.DrawIndexed();
+        buffer.End();
+
+        Frame frame = device.BeginFrame();
+        frame.SubmitCommands(buffer);
+        device.EndFrame(frame);
+        device.SwapBuffers();
+    }
+
+
+    public static void Close()
+    {
+        buffer.Dispose();
+        quad.Dispose();
+        shader.Dispose();
+        device.Dispose();
+    }
+}

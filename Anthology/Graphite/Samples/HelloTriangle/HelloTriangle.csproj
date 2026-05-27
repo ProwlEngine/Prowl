@@ -2,13 +2,11 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <IsPackable>false</IsPackable>
-        <RootNamespace>Veldrid.Samples.HelloTriangle</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\Veldrid\Prowl.Veldrid.csproj" />
-        <PackageReference Include="Silk.NET.SDL" Version="$(SilkNetVersion)" />
+        <ProjectReference Include="../../Veldrid/Prowl.Veldrid.csproj" />
+        <ProjectReference Include="../Shared/Shared.csproj" />
     </ItemGroup>
 
 </Project>
