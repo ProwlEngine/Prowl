@@ -183,10 +183,10 @@ public static class ModelLoader
         ], 0);
 
         mesh.SetVertexInput([
-            new Float2(1.0f, 1.0f),   // top right
-            new Float2(1.0f, 0.0f),   // top left
-            new Float2(0.0f, 0.0f),   // bottom left
-            new Float2(0.0f, 1.0f),   // bottom right
+            new Float2(1.0f, 1.0f), // top right
+            new Float2(0.0f, 1.0f), // top left
+            new Float2(0.0f, 0.0f), // bottom left
+            new Float2(1.0f, 0.0f), // bottom right
         ], 1);
 
         mesh.SetIndexInput16([
