@@ -155,7 +155,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.Draw((uint)vertices.Length);
         cl.CopyTexture(target, staging);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
@@ -274,7 +274,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.Draw((uint)vertices.Length);
         cl.CopyTexture(target, staging);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
@@ -422,7 +422,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.Draw((uint)vertices.Length);
         cl.CopyTexture(target, staging);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
@@ -577,7 +577,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.Draw((uint)vertices.Length);
         cl.CopyTexture(target, staging);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
@@ -703,14 +703,14 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
             cl.Draw((uint)vertices.Length);
             cl.End();
-            GD.SubmitCommands(cl);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
             GD.WaitForIdle();
         }
 
         cl.Begin();
         cl.CopyTexture(target, staging);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
@@ -784,7 +784,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.SetGraphicsResourceSet(0, graphicsSet);
         cl.Draw(4);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture readback = GetReadback(output);
@@ -851,7 +851,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.SetGraphicsResourceSet(0, graphicsSet);
         cl.Draw(4);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture readback = GetReadback(finalOutput);
@@ -895,7 +895,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.SetComputeResourceSet(0, computeSet);
         cl.Dispatch(TexSize / 32, TexSize / 32, ArrayLayers);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         float sideColorStep = (float)Math.Floor(1.0f / ArrayLayers);
@@ -980,7 +980,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.Draw(3);
         cl.CopyTexture(target, staging);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
@@ -1096,7 +1096,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.CopyTexture(target1, staging3);
 
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> readView1 = GD.Map<Color>(staging1, MapMode.Read);
@@ -1165,7 +1165,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.SetGraphicsResourceSet(0, set);
         cl.Draw(3);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture staging = GetReadback(target);
@@ -1235,7 +1235,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.SetGraphicsResourceSet(0, set);
         cl.Draw(3);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture staging = GetReadback(target);
@@ -1288,7 +1288,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         cl.SetGraphicsResourceSet(0, rs);
         cl.Draw(3);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture readback = GetReadback(depthTarget);
@@ -1375,7 +1375,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.SetGraphicsResourceSet(0, graphicsSet);
             cl.Draw((uint)vertices.Length);
             cl.End();
-            GD.SubmitCommands(cl);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
             GD.WaitForIdle();
         }
 
@@ -1404,7 +1404,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.SetGraphicsResourceSet(0, graphicsSet);
             cl.Draw((uint)vertices.Length);
             cl.End();
-            GD.SubmitCommands(cl);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
             GD.WaitForIdle();
         }
 
@@ -1484,7 +1484,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             cl.SetGraphicsResourceSet(0, graphicsSet);
             cl.Draw((uint)vertices.Length);
             cl.End();
-            GD.SubmitCommands(cl);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
             GD.WaitForIdle();
         }
 
@@ -1515,7 +1515,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 cl.SetGraphicsResourceSet(0, graphicsSet);
                 cl.Draw((uint)vertices.Length);
                 cl.End();
-                GD.SubmitCommands(cl);
+                { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
                 GD.WaitForIdle();
             }
 

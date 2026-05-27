@@ -123,7 +123,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         copyCL.Begin();
         copyCL.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
         copyCL.End();
-        GD.SubmitCommands(copyCL);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(copyCL); GD.EndFrame(_f); }
         GD.WaitForIdle();
         src.Dispose();
 
@@ -158,7 +158,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
             }
             copyCL.CopyBuffer(dsts[dsts.Length - 1], 0, finalDst, 0, src.SizeInBytes);
             copyCL.End();
-            GD.SubmitCommands(copyCL);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(copyCL); GD.EndFrame(_f); }
             GD.WaitForIdle();
 
             MappedResourceView<int> view = GD.Map<int>(finalDst, MapMode.Read);
@@ -225,7 +225,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         cl.Begin();
         cl.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
         MappedResource readMap = GD.Map(dst, MapMode.Read);
         for (int i = 0; i < readMap.SizeInBytes; i++)
@@ -248,7 +248,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         cl.Begin();
         cl.UpdateBuffer(dynamic, 512, replacementData);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         DeviceBuffer dst = RF.CreateBuffer(
@@ -257,7 +257,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         cl.Begin();
         cl.CopyBuffer(dynamic, 0, dst, 0, dynamic.SizeInBytes);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<byte> readView = GD.Map<byte>(dst, MapMode.Read);
@@ -292,7 +292,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         cl.Begin();
         cl.UpdateBuffer(staging, 0, data);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<byte> readView = GD.Map<byte>(staging, MapMode.Read);
@@ -339,7 +339,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         cl.CopyBuffer(src, srcCopyOffset, dst, dstCopyOffset, copySize);
         cl.End();
 
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(dst);
@@ -365,7 +365,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         cl.Begin();
         cl.UpdateBuffer(buffer, offset, data);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(buffer);
@@ -412,7 +412,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         Float4x4 mat2 = new Float4x4(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
         cl.UpdateBuffer(buffer, 64, ref mat2);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(buffer);
@@ -483,7 +483,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         cl.Begin();
         cl.CopyBuffer(src, 0, dst, 0, 0);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(dst);
@@ -528,7 +528,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
                 cl.UpdateBuffer(buffer, 0, (IntPtr)dataPtr, 0);
             }
             cl.End();
-            GD.SubmitCommands(cl);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
             GD.WaitForIdle();
         }
         else

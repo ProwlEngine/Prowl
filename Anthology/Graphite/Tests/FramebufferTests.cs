@@ -20,7 +20,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         cl.SetFramebuffer(fb);
         cl.ClearColorTarget(0, Color.Red);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture staging = RF.CreateTexture(
@@ -32,7 +32,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             staging, 0, 0, 0, 0, 0,
             1024, 1024, 1, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color> view = GD.Map<Color>(staging, MapMode.Read);
@@ -108,7 +108,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
             cl.ClearColorTarget(0, new Color(level, level, level, 1));
         }
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture readback = RF.CreateTexture(
@@ -116,7 +116,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         cl.Begin();
         cl.CopyTexture(testTex, readback);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         uint mipWidth = 1024;

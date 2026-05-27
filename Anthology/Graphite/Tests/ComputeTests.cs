@@ -99,7 +99,7 @@ void main()
         cl.Dispatch(OutputTextureSize / GroupDivisorXY, OutputTextureSize / GroupDivisorXY, OutputTextureSize);
 
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         // Read back from our texture and make sure it has been properly filled.
@@ -143,7 +143,7 @@ void main()
             depth: 1, layerCount: 1);
 
         cl.End();
-        device.SubmitCommands(cl);
+        { Frame _f = device.BeginFrame(); _f.SubmitCommands(cl); device.EndFrame(_f); }
         device.WaitForIdle();
 
         try
@@ -221,7 +221,7 @@ void main()
         cl.SetComputeResourceSet(0, rs);
         cl.Dispatch(width / 16, width / 16, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         DeviceBuffer sourceReadback = GetReadback(sourceBuffer);
@@ -282,7 +282,7 @@ void main()
         cl.SetComputeResourceSet(0, computeSet);
         cl.Dispatch(TexSize / 32, TexSize / 32, 6);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         using (var readback = GetReadback(computeOutput))
@@ -371,7 +371,7 @@ void main()
         cl.SetComputeResourceSet(0, computeSet);
         cl.Dispatch((TexSize >> (int)BoundMipLevel) / 32, (TexSize >> (int)BoundMipLevel) / 32, 6);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         using (var readback = GetReadback(computeOutput))

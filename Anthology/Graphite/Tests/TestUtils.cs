@@ -169,23 +169,14 @@ internal sealed class TrackingResourceFactory : ResourceFactory
     protected override DeviceBuffer CreateBufferCore(ref BufferDescription description)
         => Track(_inner.CreateBuffer(ref description));
 
-    protected override Pipeline CreateGraphicsPipelineCore(ref GraphicsPipelineDescription description)
-        => Track(_inner.CreateGraphicsPipeline(ref description));
+    protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
+        => Track(_inner.CreateShaderProgram(ref description));
 
-    public override Pipeline CreateComputePipeline(ref ComputePipelineDescription description)
-        => Track(_inner.CreateComputePipeline(ref description));
-
-    public override ResourceLayout CreateResourceLayout(ref ResourceLayoutDescription description)
-        => Track(_inner.CreateResourceLayout(ref description));
-
-    public override ResourceSet CreateResourceSet(ref ResourceSetDescription description)
-        => Track(_inner.CreateResourceSet(ref description));
+    protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
+        => Track(_inner.CreateComputeProgram(ref description));
 
     protected override Sampler CreateSamplerCore(ref SamplerDescription description)
         => Track(_inner.CreateSampler(ref description));
-
-    protected override ShaderProgram CreateShaderCore(ref ShaderDescription description)
-        => Track(_inner.CreateShader(ref description));
 
     protected override Texture CreateTextureCore(ref TextureDescription description)
         => Track(_inner.CreateTexture(ref description));
@@ -208,21 +199,13 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
     private readonly Sdl2Window _window;
     private readonly GraphicsDevice _gd;
     private readonly TrackingResourceFactory _factory;
-    private readonly RenderDoc _renderDoc;
 
     public GraphicsDevice GD => _gd;
     public ResourceFactory RF => _factory;
     public Sdl2Window Window => _window;
-    public RenderDoc RenderDoc => _renderDoc;
 
     public GraphicsDeviceTestBase()
     {
-        if (Environment.GetEnvironmentVariable("VELDRID_TESTS_ENABLE_RENDERDOC") == "1"
-            && RenderDoc.Load(out _renderDoc))
-        {
-            _renderDoc.APIValidation = true;
-            _renderDoc.DebugOutputMute = false;
-        }
         Activator.CreateInstance<T>().CreateGraphicsDevice(out _window, out _gd);
         _factory = new TrackingResourceFactory(_gd.ResourceFactory);
     }
@@ -241,7 +224,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
             cl.Begin();
             cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
             cl.End();
-            GD.SubmitCommands(cl);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
             GD.WaitForIdle();
         }
 
@@ -271,7 +254,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
             cl.Begin();
             cl.CopyTexture(texture, readback);
             cl.End();
-            GD.SubmitCommands(cl);
+            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
             GD.WaitForIdle();
             return readback;
         }

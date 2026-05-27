@@ -121,7 +121,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.Begin();
         cl.CopyTexture(src, dst, 2, 0);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResource map = GD.Map(dst, MapMode.Read, 2);
@@ -255,7 +255,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.Begin();
         cl.CopyTexture(src, dst);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         foreach (var mip in Enumerable.Range(0, (int)MipLevels))
@@ -304,7 +304,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint face = 0; face < 6; face++)
             cl.CopyTexture(src, dst, 0, face);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         var readback = GetReadback(dst);
@@ -360,7 +360,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint face = 0; face < 6; face++)
             cl.CopyTexture(src, dst, CopiedMip, face);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         for (uint mip = 0; mip < MipLevels; mip++)
@@ -408,7 +408,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.Begin();
         cl.CopyTexture(src, dst);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         foreach (var mip in Enumerable.Range(0, (int)MipLevels))
@@ -462,7 +462,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         for (uint mip = 0; mip < MipLevels; mip++)
             cl.CopyTexture(src, dst, mip, CopiedArrayLayer);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         for (uint mip = 0; mip < MipLevels; mip++)
@@ -528,7 +528,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.Begin();
         cl.GenerateMipmaps(tex);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         readback = GetReadback(tex);
@@ -648,7 +648,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.Begin();
         cl.CopyTexture(tex, readback);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         for (uint mip = 0; mip < MipLevels; mip++)
@@ -732,7 +732,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             copyDst, 0, 0, 0, 0, 0,
             copyWidth, copyHeight, 1, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         uint numBytesPerRow = copyWidth / numPixelsInBlockSide * blockSizeInBytes;
@@ -793,9 +793,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             copyCL.CopyTexture(copySrc, 0, 0, 0, 0, 0, copyDst, 0, 0, 0, 0, 0, 16, 16, 1, copySrc.ArrayLayers);
         }
         copyCL.End();
-        Fence fence = RF.CreateFence(false);
-        GD.SubmitCommands(copyCL, fence);
-        GD.WaitForFence(fence);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(copyCL); GD.EndFrame(_f); GD.WaitForFrame(_f); }
 
         for (uint layer = 0; layer < copyDst.ArrayLayers; layer++)
         {
@@ -945,7 +943,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             tex2D, 0, 5, 0, 0, 0,
             tex1D.Width, 1, 1, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         cl.Dispose();
         GD.WaitForIdle();
 
@@ -1010,7 +1008,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             tex2D, 0, 5, 0, 0, 0,
             tex2D.Width, 1, 1, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         cl.Dispose();
         GD.WaitForIdle();
 
@@ -1053,7 +1051,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             10, 10, 0, 0, 0,
             50, 50, 1, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         Texture readback = GetReadback(dst);
@@ -1089,7 +1087,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             dst, 0, 0, 0, 0, 0,
             10, 10, 1, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color32> readView = GD.Map<Color32>(dst, MapMode.Read);
@@ -1232,7 +1230,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.Begin();
         cl.CopyTexture(tex3D, staging);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<Color32> view = GD.Map<Color32>(staging, MapMode.Read);
@@ -1274,7 +1272,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.Begin();
         cl.CopyTexture(src, dst);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResourceView<byte> readView = GD.Map<byte>(dst, MapMode.Read);
@@ -1347,7 +1345,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             copyWidth, copyHeight, copyDepth, 1);
 
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         MappedResource map = GD.Map(dstTex, MapMode.Read);
@@ -1417,7 +1415,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         cl.GenerateMipmaps(tex);
         cl.CopyTexture(tex, readback);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
         for (uint level = 1; level < 11; level++)
@@ -1443,7 +1441,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             dst, 0, 0, 0, 3, 0,
             4, 4, 1, 1);
         cl.End();
-        GD.SubmitCommands(cl);
+        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
     }
 
