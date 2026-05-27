@@ -39,6 +39,8 @@ public interface IVertexSource
 }
 ```
 
+3. To replace
+
 This component is part of the Prowl Game Engine and is licensed under the MIT License. See the LICENSE file in the project root for details.
 
 Thank you to the creators of [Veldrid](https://github.com/veldrid/veldrid) and [NeoVeldrid](https://github.com/jhm-ciberman/neo-veldrid) for being unaware of what I'm doing to your libraries.
