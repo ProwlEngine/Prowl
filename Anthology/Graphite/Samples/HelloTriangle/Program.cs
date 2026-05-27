@@ -16,6 +16,7 @@ public static class Program
     static Mesh triangle;
     static ShaderProgram shader;
     static PropertySet properties;
+    static RenderMSTracker tracker;
 
 
     private static void Main()
@@ -45,6 +46,7 @@ public static class Program
         device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.OpenGL);
         device.SyncToVerticalBlank = false;
 
+        tracker = new();
         shader = ShaderLoader.CreateShader(device);
         triangle = ModelLoader.CreateTriangle(device);
         buffer = device.ResourceFactory.CreateCommandBuffer();
@@ -56,6 +58,8 @@ public static class Program
 
     public static void Render(double dt)
     {
+        tracker.Begin();
+
         buffer.Begin();
         buffer.SetFramebuffer(device.SwapchainFramebuffer);
         buffer.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
@@ -67,6 +71,10 @@ public static class Program
         Frame frame = device.BeginFrame();
         frame.SubmitCommands(buffer);
         device.EndFrame(frame);
+
+        // Explicitly avoid timing SwapBuffers() to not pollute with OS throttling/presentation limits.
+        tracker.End(dt);
+
         device.SwapBuffers();
     }
 
