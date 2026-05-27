@@ -60,45 +60,40 @@ internal unsafe class D3D11Swapchain : Swapchain
             ? Format.FormatB8G8R8A8UnormSrgb
             : Format.FormatB8G8R8A8Unorm;
 
-        if (description.Source is Win32SwapchainSource win32Source)
+        Win32SwapchainSource win32Source = Util.AssertSubtype<SwapchainSource, Win32SwapchainSource>(description.Source);
+
+        SwapChainDesc dxgiSCDesc = new SwapChainDesc
         {
-            SwapChainDesc dxgiSCDesc = new SwapChainDesc
+            BufferCount = 2,
+            Windowed = 1,
+            BufferDesc = new ModeDesc
             {
-                BufferCount = 2,
-                Windowed = 1,
-                BufferDesc = new ModeDesc
-                {
-                    Width = description.Width,
-                    Height = description.Height,
-                    Format = _colorFormat,
-                },
-                OutputWindow = win32Source.Hwnd,
-                SampleDesc = new SampleDesc(1, 0),
-                SwapEffect = SwapEffect.Discard,
-                // DXGI_USAGE_RENDER_TARGET_OUTPUT = 0x00000020
-                BufferUsage = 0x00000020u,
-            };
+                Width = description.Width,
+                Height = description.Height,
+                Format = _colorFormat,
+            },
+            OutputWindow = win32Source.Hwnd,
+            SampleDesc = new SampleDesc(1, 0),
+            SwapEffect = SwapEffect.Discard,
+            // DXGI_USAGE_RENDER_TARGET_OUTPUT = 0x00000020
+            BufferUsage = 0x00000020u,
+        };
 
-            IDXGIFactory* pFactory;
-            var factoryGuid = IDXGIFactory.Guid;
-            SilkMarshal.ThrowHResult(
-                _gd.Adapter->GetParent(&factoryGuid, (void**)&pFactory));
+        IDXGIFactory* pFactory;
+        var factoryGuid = IDXGIFactory.Guid;
+        SilkMarshal.ThrowHResult(
+            _gd.Adapter->GetParent(&factoryGuid, (void**)&pFactory));
 
-            IDXGISwapChain* pSwapChain;
-            SilkMarshal.ThrowHResult(
-                pFactory->CreateSwapChain((IUnknown*)_gd.Device, &dxgiSCDesc, &pSwapChain));
+        IDXGISwapChain* pSwapChain;
+        SilkMarshal.ThrowHResult(
+            pFactory->CreateSwapChain((IUnknown*)_gd.Device, &dxgiSCDesc, &pSwapChain));
 
-            // DXGI_MWA_NO_ALT_ENTER = 0x2
-            pFactory->MakeWindowAssociation(win32Source.Hwnd, 0x2u);
-            pFactory->Release();
+        // DXGI_MWA_NO_ALT_ENTER = 0x2
+        pFactory->MakeWindowAssociation(win32Source.Hwnd, 0x2u);
+        pFactory->Release();
 
-            _dxgiSwapChain = default;
-            _dxgiSwapChain.Handle = pSwapChain;
-        }
-        else
-        {
-            throw new RenderException($"Unsupported swapchain source type: {description.Source?.GetType().Name}");
-        }
+        _dxgiSwapChain = default;
+        _dxgiSwapChain.Handle = pSwapChain;
 
         Resize(description.Width, description.Height);
     }

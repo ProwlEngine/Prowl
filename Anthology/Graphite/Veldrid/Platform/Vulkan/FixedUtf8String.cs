@@ -9,8 +9,23 @@ internal unsafe class FixedUtf8String : IDisposable
 {
     private GCHandle _handle;
     private uint _numBytes;
+    private byte* _overrideBytes;
 
-    public byte* StringPtr => (byte*)_handle.AddrOfPinnedObject().ToPointer();
+    public byte* StringPtr => _overrideBytes != null ? _overrideBytes : (byte*)_handle.AddrOfPinnedObject().ToPointer();
+
+
+    public FixedUtf8String(byte* s)
+    {
+        _overrideBytes = s;
+
+        uint length = 0;
+
+        while (s[length] != 0 && length < 256)
+            length++;
+
+        _numBytes = length;
+    }
+
 
     public FixedUtf8String(string s)
     {

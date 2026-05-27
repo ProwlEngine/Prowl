@@ -12,6 +12,7 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     /// This is a window-system-specific object which differs by platform.
     /// </summary>
     public SwapchainSource Source;
+
     /// <summary>
     /// The initial width of the Swapchain surface.
     /// </summary>

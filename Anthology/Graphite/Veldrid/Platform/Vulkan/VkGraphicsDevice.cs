@@ -18,6 +18,7 @@ using static Prowl.Veldrid.Vk.VulkanUtil;
 using VkApi = Silk.NET.Vulkan.Vk;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 using VkFenceHandle = Silk.NET.Vulkan.Fence;
+using Silk.NET.Core.Contexts;
 
 namespace Prowl.Veldrid.Vk;
 
@@ -187,9 +188,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         SurfaceKHR surface = default;
         if (scDesc != null)
-        {
-            surface = VkSurfaceUtil.CreateSurface(this, _instance, scDesc.Value.Source);
-        }
+            surface = Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(scDesc.Value.Source).GetSurface(this, Instance);
 
         CreatePhysicalDevice();
         CreateLogicalDevice(surface, options.PreferStandardClipSpaceYDirection, vkOptions);
