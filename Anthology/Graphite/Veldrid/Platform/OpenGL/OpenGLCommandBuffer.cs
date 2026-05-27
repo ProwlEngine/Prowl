@@ -41,6 +41,7 @@ internal class OpenGLCommandBuffer : CommandBuffer
 
         _currentCommands = GetFreeCommandBuffer();
         _currentCommands.Begin();
+        _currentCommands.ClearProperties();
         HasEnded = false;
     }
 
