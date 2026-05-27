@@ -84,7 +84,7 @@ public static class ShaderLoader
                         {
                             Stages = ShaderStages.Vertex | ShaderStages.Fragment,
                             Name = "Model",
-                            GLUniformName = "block_Model_0",
+                            GLUniformName = "block_ModelData_0",
                             Kind = ResourceKind.UniformBuffer,
                             BindingIndex = 0,
                             UniformFields =
