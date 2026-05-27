@@ -301,7 +301,7 @@ public abstract partial class ResourceFactory
         for (int e = 0; e < elements.Length; e++)
         {
             ref ResourceLayoutElementDescription element = ref elements[e];
-            UniformBlockField[] fields = element.UniformFields;
+            UniformBlockField[]? fields = element.UniformFields;
             bool hasFields = fields != null && fields.Length > 0;
 
             if (hasFields && element.Kind != ResourceKind.UniformBuffer)
@@ -310,7 +310,7 @@ public abstract partial class ResourceFactory
                     $"ResourceLayoutElementDescription '{PropertyID.ToString(element.Name)}' has UniformFields but its Kind is {element.Kind}; UniformFields are only valid on UniformBuffer elements.");
             }
 
-            if (!hasFields) continue;
+            if (!hasFields || fields == null) continue;
 
             for (int a = 0; a < fields.Length; a++)
             {

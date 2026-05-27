@@ -4,7 +4,7 @@ namespace Prowl.Veldrid;
 
 /// <summary>
 /// A <see cref="BindableResource"/> that represents a section of a <see cref="DeviceBuffer"/>. This can be used in place of
-/// a <see cref="DeviceBuffer"/> when creating a <see cref="ResourceSet"/> to make only a subset of the Buffer available to
+/// a <see cref="DeviceBuffer"/> when bound via a <see cref="PropertySet"/> to make only a subset of the Buffer available to
 /// shaders.
 /// </summary>
 public struct DeviceBufferRange : BindableResource, IEquatable<DeviceBufferRange>

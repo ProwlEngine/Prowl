@@ -328,6 +328,68 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
+    private static void SetProperties_CheckNonNull(PropertySet properties)
+    {
+#if VALIDATE_USAGE
+        if (properties == null)
+        {
+            throw new ArgumentNullException(nameof(properties),
+                "PropertySet passed to CommandBuffer.SetProperties must be non-null.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void CopyBuffer_CheckBuffers(DeviceBuffer source, DeviceBuffer destination)
+    {
+#if VALIDATE_USAGE
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+        if (destination == null)
+        {
+            throw new ArgumentNullException(nameof(destination));
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void CopyBuffer_CheckRange(
+        DeviceBuffer source, uint sourceOffset,
+        DeviceBuffer destination, uint destinationOffset,
+        uint sizeInBytes)
+    {
+#if VALIDATE_USAGE
+        if (sourceOffset + sizeInBytes > source.SizeInBytes)
+        {
+            throw new RenderException(
+                $"The source DeviceBuffer's capacity ({source.SizeInBytes}) is not large enough to read {sizeInBytes} bytes at offset {sourceOffset}.");
+        }
+        if (destinationOffset + sizeInBytes > destination.SizeInBytes)
+        {
+            throw new RenderException(
+                $"The destination DeviceBuffer's capacity ({destination.SizeInBytes}) is not large enough to write {sizeInBytes} bytes at offset {destinationOffset}.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void CopyTexture_CheckNotNull(Texture source, Texture destination)
+    {
+#if VALIDATE_USAGE
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+        if (destination == null)
+        {
+            throw new ArgumentNullException(nameof(destination));
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
     private void Draw_PreDrawValidation()
     {
 #if VALIDATE_USAGE

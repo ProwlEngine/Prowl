@@ -20,7 +20,7 @@ public enum BufferUsage : byte
     IndexBuffer = 1 << 1,
     /// <summary>
     /// Indicates that a <see cref="DeviceBuffer"/> can be used as a uniform Buffer.
-    /// This flag enables the use of a Buffer in a <see cref="ResourceSet"/> as a uniform Buffer.
+    /// This flag enables the use of a Buffer in a <see cref="PropertySet"/> as a uniform Buffer.
     /// </summary>
     UniformBuffer = 1 << 2,
     /// <summary>

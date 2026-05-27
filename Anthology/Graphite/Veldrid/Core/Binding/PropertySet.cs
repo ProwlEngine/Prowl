@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 using Prowl.Vector;
 
@@ -15,7 +14,7 @@ namespace Prowl.Veldrid;
 /// accessed from multiple threads.
 /// </para>
 /// </summary>
-public sealed class PropertySet
+public sealed partial class PropertySet
 {
     private readonly Dictionary<PropertyID, PropertyEntry> _entries;
 
@@ -106,13 +105,17 @@ public sealed class PropertySet
     /// <paramref name="readOnly"/> selects read-only vs read-write at apply time.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBuffer buffer, bool readOnly = true)
-        => SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes), readOnly);
+    {
+        SetBuffer_CheckBuffer(buffer);
+        SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes), readOnly);
+    }
 
     /// <summary>
     /// Binds a sub-range of a <see cref="DeviceBuffer"/> to the named property slot.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBufferRange range, bool readOnly = true)
     {
+        SetBuffer_CheckBuffer(range.Buffer);
         GetOrCreate(name).SetBuffer(range.Buffer, range.Offset, range.SizeInBytes, readOnly);
         unchecked { _resourceVersion++; }
     }
@@ -125,6 +128,7 @@ public sealed class PropertySet
     /// </summary>
     public void SetTexture(PropertyID name, Texture texture, Sampler? sampler = null)
     {
+        SetTexture_CheckTexture(texture);
         GetOrCreate(name).SetTexture(texture, null, sampler);
         unchecked { _resourceVersion++; }
     }
@@ -134,16 +138,18 @@ public sealed class PropertySet
     /// </summary>
     public void SetTexture(PropertyID name, TextureView view, Sampler? sampler = null)
     {
+        SetTexture_CheckView(view);
         GetOrCreate(name).SetTexture(null, view, sampler);
         unchecked { _resourceVersion++; }
     }
 
     /// <summary>
     /// Binds a <see cref="Sampler"/> to the named slot independently of any texture. On OpenGL this is
-    /// a no-op; the sampler is sourced from the matching <see cref="SetTexture"/> call instead.
+    /// a no-op; the sampler is sourced from the matching <see cref="SetTexture(PropertyID,Texture,Sampler?)"/> call instead.
     /// </summary>
     public void SetSampler(PropertyID name, Sampler sampler)
     {
+        SetSampler_CheckSampler(sampler);
         GetOrCreate(name).SetSampler(sampler);
         unchecked { _resourceVersion++; }
     }

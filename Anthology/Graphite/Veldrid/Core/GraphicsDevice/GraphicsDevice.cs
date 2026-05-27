@@ -109,25 +109,21 @@ public abstract partial class GraphicsDevice : IDisposable
         get => MainSwapchain?.SyncToVerticalBlank ?? false;
         set
         {
-            if (MainSwapchain == null)
-            {
-                throw new RenderException($"This GraphicsDevice was created without a main Swapchain. This property cannot be set.");
-            }
-
+            SyncToVerticalBlank_CheckMainSwapchain();
             MainSwapchain.SyncToVerticalBlank = value;
         }
     }
 
     /// <summary>
     /// The required alignment, in bytes, for uniform buffer offsets. <see cref="DeviceBufferRange.Offset"/> must be a
-    /// multiple of this value. When binding a <see cref="ResourceSet"/> to a <see cref="CommandBuffer"/> with an overload
+    /// multiple of this value. When binding a <see cref="PropertySet"/> to a <see cref="CommandBuffer"/> with an overload
     /// accepting dynamic offsets, each offset must be a multiple of this value.
     /// </summary>
     public uint UniformBufferMinOffsetAlignment => GetUniformBufferMinOffsetAlignmentCore();
 
     /// <summary>
     /// The required alignment, in bytes, for structured buffer offsets. <see cref="DeviceBufferRange.Offset"/> must be a
-    /// multiple of this value. When binding a <see cref="ResourceSet"/> to a <see cref="CommandBuffer"/> with an overload
+    /// multiple of this value. When binding a <see cref="PropertySet"/> to a <see cref="CommandBuffer"/> with an overload
     /// accepting dynamic offsets, each offset must be a multiple of this value.
     /// </summary>
     public uint StructuredBufferMinOffsetAlignment => GetStructuredBufferMinOffsetAlignmentCore();
@@ -175,8 +171,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <exception cref="RenderException">Thrown if a frame is already active.</exception>
     public Frame BeginFrame()
     {
-        if (CurrentFrame != null)
-            throw new RenderException("BeginFrame called while a frame is already active. Call EndFrame first.");
+        BeginFrame_CheckNoActive();
 
         ulong frameId = ++_frameIdCounter;
         uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
@@ -193,8 +188,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <exception cref="RenderException">Thrown if no frame is currently active.</exception>
     public void EndFrame()
     {
-        if (CurrentFrame == null)
-            throw new RenderException("EndFrame called with no active frame. Call BeginFrame first.");
+        EndFrame_CheckHasActive();
         EndFrame(CurrentFrame);
     }
 
@@ -207,10 +201,8 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <exception cref="RenderException">Thrown if <paramref name="frame"/> is not the currently active frame.</exception>
     public void EndFrame(Frame frame)
     {
-        if (frame == null)
-            throw new ArgumentNullException(nameof(frame));
-        if (CurrentFrame != frame)
-            throw new RenderException("The specified Frame is not the currently active frame.");
+        EndFrame_CheckFrameNonNull(frame);
+        EndFrame_CheckIsActive(frame);
         CurrentFrame = null;
         EndFrameCore(frame);
     }

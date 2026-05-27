@@ -1,10 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-using Silk.NET.Vulkan;
-
-using VkFenceHandle = Silk.NET.Vulkan.Fence;
-
 namespace Prowl.Veldrid.Vk;
 
 internal sealed unsafe class VkFrame : Frame
@@ -48,8 +44,7 @@ internal sealed unsafe class VkFrame : Frame
     /// <inheritdoc/>
     public override void SubmitCommands(CommandBuffer commandList)
     {
-        if (!commandList.HasEnded)
-            throw new RenderException("CommandBuffer.End() must be called before submitting.");
+        SubmitCommands_CheckEnded(commandList);
         _gd.SubmitCommandBufferInternal(commandList);
     }
 
@@ -95,8 +90,7 @@ internal sealed unsafe class VkFrame : Frame
         foreach (VkBuffer buf in _transientOverflow)
             cumulative += buf.SizeInBytes;
 
-        if (cumulative > _gd._transientHardCapBytes)
-            throw new RenderException($"Transient buffer hard cap of {_gd._transientHardCapBytes} bytes exceeded.");
+        CheckCumulativeCaps_CheckHardCap(cumulative, _gd._transientHardCapBytes);
 
         if (!_gd._transientSoftCapWarned && cumulative > _gd._transientSoftCapBytes)
         {

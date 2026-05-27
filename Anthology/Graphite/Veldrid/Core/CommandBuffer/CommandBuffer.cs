@@ -14,7 +14,7 @@ namespace Prowl.Veldrid;
 /// <see cref="GraphicsDevice"/>.
 /// Before graphics commands can be issued, the <see cref="Begin"/> method must be invoked.
 /// When the <see cref="CommandBuffer"/> is ready to be executed, <see cref="End"/> must be invoked, and then
-/// <see cref="GraphicsDevice.SubmitCommands(CommandBuffer)"/> should be used.
+/// <see cref="Frame.SubmitCommands(CommandBuffer)"/> should be used.
 /// NOTE: The use of <see cref="CommandBuffer"/> is not thread-safe. Access to the <see cref="CommandBuffer"/> must be
 /// externally synchronized.
 /// There are some limitations dictating proper usage and ordering of graphics commands. For example, a
@@ -90,7 +90,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// Puts this <see cref="CommandBuffer"/> into the initial state.
     /// This function must be called before other graphics commands can be issued.
     /// Begin must only be called if it has not been previously called, if <see cref="End"/> has been called,
-    /// or if <see cref="GraphicsDevice.SubmitCommands(CommandBuffer)"/> has been called on this instance.
+    /// or if <see cref="Frame.SubmitCommands(CommandBuffer)"/> has been called on this instance.
     /// </summary>
     public abstract void Begin();
 
@@ -104,7 +104,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>
     /// Sets the active graphics <see cref="ShaderProgram"/> used for rendering.
     /// When drawing, the active <see cref="ShaderProgram"/> must be compatible with the bound
-    /// <see cref="Framebuffer"/>, <see cref="ResourceSet"/>, and <see cref="DeviceBuffer"/> objects.
+    /// <see cref="Framebuffer"/>, <see cref="PropertySet"/>, and <see cref="DeviceBuffer"/> objects.
     /// When a new <see cref="ShaderProgram"/> is set, the previously-bound ResourceSets on this
     /// <see cref="CommandBuffer"/> become invalidated and must be re-bound.
     /// </summary>
@@ -163,6 +163,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="properties">The property set to merge into the command buffer state.</param>
     public void SetProperties(PropertySet properties)
     {
+        SetProperties_CheckNonNull(properties);
         ChangeMask mask = ComputeChangeMask(properties);
         if (mask != ChangeMask.None)
         {
@@ -675,10 +676,12 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="sizeInBytes">The number of bytes to copy.</param>
     public void CopyBuffer(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
     {
+        CopyBuffer_CheckBuffers(source, destination);
         if (sizeInBytes == 0)
         {
             return;
         }
+        CopyBuffer_CheckRange(source, sourceOffset, destination, destinationOffset, sizeInBytes);
 
         CopyBufferCore(source, sourceOffset, destination, destinationOffset, sizeInBytes);
     }
@@ -699,6 +702,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="destination">The destination of Texture data.</param>
     public void CopyTexture(Texture source, Texture destination)
     {
+        CopyTexture_CheckNotNull(source, destination);
         uint effectiveSrcArrayLayers = (source.Usage & TextureUsage.Cubemap) != 0
             ? source.ArrayLayers * 6
             : source.ArrayLayers;
@@ -724,6 +728,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="arrayLayer">The array layer to copy.</param>
     public void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer)
     {
+        CopyTexture_CheckNotNull(source, destination);
         CopyTexture_CheckCompatibilityForSubresource(source, destination, mipLevel, arrayLayer);
 
         Util.GetMipDimensions(source, mipLevel, out uint width, out uint height, out uint depth);
@@ -765,6 +770,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         uint width, uint height, uint depth,
         uint layerCount)
     {
+        CopyTexture_CheckNotNull(source, destination);
         CopyTexture_CheckRegion(
             source,
             srcX, srcY, srcZ,

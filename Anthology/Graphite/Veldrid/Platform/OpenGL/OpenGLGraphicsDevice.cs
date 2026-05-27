@@ -1619,8 +1619,8 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
     private unsafe struct ExecutionThreadWorkItem
     {
         public readonly WorkItemType Type;
-        public readonly object Object0;
-        public readonly object Object1;
+        public readonly object? Object0;
+        public readonly object? Object1;
         public readonly uint UInt0;
         public readonly uint UInt1;
         public readonly uint UInt2;

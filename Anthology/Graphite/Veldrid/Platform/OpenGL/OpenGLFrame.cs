@@ -43,8 +43,7 @@ internal sealed class OpenGLFrame : Frame
     /// <inheritdoc/>
     public override void SubmitCommands(CommandBuffer commandList)
     {
-        if (!commandList.HasEnded)
-            throw new RenderException("CommandBuffer.End() must be called before submitting.");
+        SubmitCommands_CheckEnded(commandList);
         _gd.SubmitCommandBufferInternal(commandList);
     }
 
@@ -87,8 +86,7 @@ internal sealed class OpenGLFrame : Frame
         foreach (OpenGLBuffer buf in _transientOverflow)
             cumulative += buf.SizeInBytes;
 
-        if (cumulative > _gd._transientHardCapBytes)
-            throw new RenderException($"Transient buffer hard cap of {_gd._transientHardCapBytes} bytes exceeded.");
+        CheckCumulativeCaps_CheckHardCap(cumulative, _gd._transientHardCapBytes);
 
         if (!_gd._transientSoftCapWarned && cumulative > _gd._transientSoftCapBytes)
         {

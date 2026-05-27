@@ -15,7 +15,7 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
 
     /// <summary>
     /// An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties of each resource
-    /// element in the <see cref="ResourceLayout"/>.
+    /// element in the <see cref="PropertySet"/>.
     /// </summary>
     public ResourceLayoutElementDescription[] Elements;
 
@@ -23,7 +23,7 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     /// Constructs a new ResourceLayoutDescription with a default set index of 0.
     /// </summary>
     /// <param name="elements">An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties
-    /// of each resource element in the <see cref="ResourceLayout"/>.</param>
+    /// of each resource element in the <see cref="PropertySet"/>.</param>
     public ResourceLayoutDescription(params ResourceLayoutElementDescription[] elements)
     {
         Set = 0;
@@ -35,7 +35,7 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     /// </summary>
     /// <param name="set">The descriptor set index (Vulkan set / DX12 register space).</param>
     /// <param name="elements">An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties
-    /// of each resource element in the <see cref="ResourceLayout"/>.</param>
+    /// of each resource element in the <see cref="PropertySet"/>.</param>
     public ResourceLayoutDescription(uint set, params ResourceLayoutElementDescription[] elements)
     {
         Set = set;

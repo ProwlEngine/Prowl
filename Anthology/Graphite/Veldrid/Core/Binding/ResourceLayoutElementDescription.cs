@@ -3,7 +3,7 @@ using System;
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// Describes an individual resource element in a <see cref="ResourceLayout"/>.
+/// Describes an individual resource element in a <see cref="PropertySet"/>.
 /// </summary>
 public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElementDescription>
 {
@@ -138,7 +138,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
 
 /// <summary>
-/// Miscellaneous options for an element in a <see cref="ResourceLayout"/>.
+/// Miscellaneous options for an element in a <see cref="PropertySet"/>.
 /// </summary>
 [Flags]
 public enum ResourceLayoutElementOptions
@@ -151,8 +151,7 @@ public enum ResourceLayoutElementOptions
     /// <summary>
     /// Can be applied to a buffer type resource (<see cref="ResourceKind.StructuredBufferReadOnly"/>,
     /// <see cref="ResourceKind.StructuredBufferReadWrite"/>, or <see cref="ResourceKind.UniformBuffer"/>), allowing it to be
-    /// bound with a dynamic offset using
-    /// <see cref="CommandBuffer.SetGraphicsResourceSet(uint, ResourceSet, uint[])"/>.
+    /// bound with a dynamic offset via <see cref="PropertySet"/>.
     /// Offsets specified this way must be a multiple of
     /// <see cref="GraphicsDevice.UniformBufferMinOffsetAlignment"/> or
     /// <see cref="GraphicsDevice.StructuredBufferMinOffsetAlignment"/>, depending on the kind of resource.

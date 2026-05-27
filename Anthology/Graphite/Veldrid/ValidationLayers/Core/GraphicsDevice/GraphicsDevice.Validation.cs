@@ -1,9 +1,65 @@
+using System;
 using System.Diagnostics;
 
 namespace Prowl.Veldrid;
 
 public abstract partial class GraphicsDevice
 {
+    [Conditional("VALIDATE_USAGE")]
+    private void BeginFrame_CheckNoActive()
+    {
+#if VALIDATE_USAGE
+        if (CurrentFrame != null)
+        {
+            throw new RenderException("BeginFrame called while a frame is already active. Call EndFrame first.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private void EndFrame_CheckHasActive()
+    {
+#if VALIDATE_USAGE
+        if (CurrentFrame == null)
+        {
+            throw new RenderException("EndFrame called with no active frame. Call BeginFrame first.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void EndFrame_CheckFrameNonNull(Frame frame)
+    {
+#if VALIDATE_USAGE
+        if (frame == null)
+        {
+            throw new ArgumentNullException(nameof(frame));
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private void EndFrame_CheckIsActive(Frame frame)
+    {
+#if VALIDATE_USAGE
+        if (CurrentFrame != frame)
+        {
+            throw new RenderException("The specified Frame is not the currently active frame.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private void SyncToVerticalBlank_CheckMainSwapchain()
+    {
+#if VALIDATE_USAGE
+        if (MainSwapchain == null)
+        {
+            throw new RenderException("This GraphicsDevice was created without a main Swapchain. This property cannot be set.");
+        }
+#endif
+    }
+
     [Conditional("VALIDATE_USAGE")]
     private static void Map_CheckResource(MappableResource resource, MapMode mode, uint subresource)
     {
