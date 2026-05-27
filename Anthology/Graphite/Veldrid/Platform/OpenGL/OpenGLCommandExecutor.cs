@@ -35,7 +35,7 @@ internal unsafe class OpenGLCommandExecutor
     private OpenGLCommandBuffer _currentReplayingBuffer;
     private OpenGLBuffer _currentIndexBuffer;
     private DrawElementsType _currentDrawElementsType;
-    private uint _currentIbOffset;
+    private uint _currentIndexCount;
 
     private OpenGLComputeProgram _currentComputeProgram;
 
@@ -152,24 +152,24 @@ internal unsafe class OpenGLCommandExecutor
         }
     }
 
-    public void DrawIndexed(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
         ResolveIndexBufferForDraw();
 
         uint indexSize = _currentDrawElementsType == DrawElementsType.UnsignedShort ? 2u : 4u;
-        void* indices = (void*)((indexStart * indexSize) + _currentIbOffset);
+        void* indices = (void*)(indexStart * indexSize);
 
         if (instanceCount == 1 && instanceStart == 0)
         {
             if (vertexOffset == 0)
             {
-                _gl.DrawElements(_primitiveType, indexCount, _currentDrawElementsType, indices);
+                _gl.DrawElements(_primitiveType, _currentIndexCount, _currentDrawElementsType, indices);
                 CheckLastError();
             }
             else
             {
-                _gl.DrawElementsBaseVertex(_primitiveType, indexCount, _currentDrawElementsType, indices, vertexOffset);
+                _gl.DrawElementsBaseVertex(_primitiveType, _currentIndexCount, _currentDrawElementsType, indices, vertexOffset);
                 CheckLastError();
             }
         }
@@ -179,7 +179,7 @@ internal unsafe class OpenGLCommandExecutor
             {
                 _gl.DrawElementsInstancedBaseVertexBaseInstance(
                     _primitiveType,
-                    indexCount,
+                    _currentIndexCount,
                     _currentDrawElementsType,
                     indices,
                     instanceCount,
@@ -189,14 +189,14 @@ internal unsafe class OpenGLCommandExecutor
             }
             else if (vertexOffset == 0)
             {
-                _gl.DrawElementsInstanced(_primitiveType, indexCount, _currentDrawElementsType, indices, instanceCount);
+                _gl.DrawElementsInstanced(_primitiveType, _currentIndexCount, _currentDrawElementsType, indices, instanceCount);
                 CheckLastError();
             }
             else
             {
                 _gl.DrawElementsInstancedBaseVertex(
                     _primitiveType,
-                    indexCount,
+                    _currentIndexCount,
                     _currentDrawElementsType,
                     indices,
                     instanceCount,
@@ -287,9 +287,9 @@ internal unsafe class OpenGLCommandExecutor
 
     private void ResolveIndexBufferForDraw()
     {
-        bool has = _currentVertexSource.TryGetIndexBuffer(
-            out DeviceBuffer ib, out IndexFormat fmt, out uint offset);
+        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
         System.Diagnostics.Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
+
         _currentReplayingBuffer?.Bridge_CheckIndexBufferUsage(ib);
 
         OpenGLBuffer glIB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(ib);
@@ -303,7 +303,7 @@ internal unsafe class OpenGLCommandExecutor
         }
 
         _currentDrawElementsType = OpenGLFormats.VdToGLDrawElementsType(fmt);
-        _currentIbOffset = offset;
+        _currentIndexCount = count;
     }
 
     private void BindProperties(bool graphics)
@@ -459,18 +459,18 @@ internal unsafe class OpenGLCommandExecutor
         if (!GetTextureBindingInfo(graphics, setIdx, elemIdx, out OpenGLTextureBindingSlotInfo bindingInfo))
             return;
 
-        TextureView texView;
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry) && entry.Kind == PropertyEntryKind.Texture)
+        TextureView? texView = null;
+        Sampler? sampler = null;
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? entry) && entry.Kind == PropertyEntryKind.Texture)
         {
             if (entry.TextureView != null)
                 texView = entry.TextureView;
             else if (entry.Texture != null)
                 texView = entry.Texture.GetFullTextureView(_gd);
-            else
-                texView = null;
+
+            if (entry.Sampler != null)
+                sampler = entry.Sampler;
         }
-        else
-            texView = null;
 
         if (texView == null)
         {
@@ -478,7 +478,18 @@ internal unsafe class OpenGLCommandExecutor
                 graphics ? _currentShaderProgram : null,
                 !graphics ? _currentComputeProgram : null,
                 elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+
             texView = (readWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D).GetFullTextureView(_gd);
+        }
+
+        if (sampler == null)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                graphics ? _currentShaderProgram : null,
+                !graphics ? _currentComputeProgram : null,
+                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+
+            sampler = _gd.PointSampler;
         }
 
         OpenGLTextureView glTexView = Util.AssertSubtype<TextureView, OpenGLTextureView>(texView);
@@ -512,7 +523,6 @@ internal unsafe class OpenGLCommandExecutor
             _gl.Uniform1(bindingInfo.UniformLocation, bindingInfo.RelativeIndex);
             CheckLastError();
 
-            Sampler sampler = entry.Sampler ?? _gd.LinearSampler;
             OpenGLSampler glSampler = Util.AssertSubtype<Sampler, OpenGLSampler>(sampler);
             glSampler.EnsureResourcesCreated();
             _textureSamplerManager.SetSampler(textureUnit, glSampler);

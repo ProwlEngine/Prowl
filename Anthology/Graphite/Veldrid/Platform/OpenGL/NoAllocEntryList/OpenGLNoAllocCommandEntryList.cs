@@ -248,7 +248,7 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
                     break;
                 case DrawIndexedEntryID:
                     NoAllocDrawIndexedEntry die = Unsafe.ReadUnaligned<NoAllocDrawIndexedEntry>(entryBasePtr);
-                    executor.DrawIndexed(die.IndexCount, die.InstanceCount, die.IndexStart, die.VertexOffset, die.InstanceStart);
+                    executor.DrawIndexed(die.InstanceCount, die.IndexStart, die.VertexOffset, die.InstanceStart);
                     currentOffset += DrawIndexedEntrySize;
                     break;
                 case DrawIndirectEntryID:
@@ -406,9 +406,9 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
         AddEntry(DrawEntryID, ref entry);
     }
 
-    public void DrawIndexed(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        NoAllocDrawIndexedEntry entry = new NoAllocDrawIndexedEntry(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+        NoAllocDrawIndexedEntry entry = new NoAllocDrawIndexedEntry(instanceCount, indexStart, vertexOffset, instanceStart);
         AddEntry(DrawIndexedEntryID, ref entry);
     }
 

@@ -36,9 +36,9 @@ namespace Prowl.Veldrid.OpenGL.ManagedEntryList
             _commands.Add(new DrawEntry(vertexCount, instanceCount, vertexStart, instanceStart));
         }
 
-        public void DrawIndexed(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+        public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
         {
-            _commands.Add(new DrawIndexedEntry(indexCount, instanceCount, indexStart, vertexOffset, instanceStart));
+            _commands.Add(new DrawIndexedEntry(instanceCount, indexStart, vertexOffset, instanceStart));
         }
 
         public void DrawIndirect(Buffer indirectBuffer, uint offset, uint drawCount, uint stride)

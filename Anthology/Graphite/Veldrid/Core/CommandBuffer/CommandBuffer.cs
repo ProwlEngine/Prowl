@@ -37,6 +37,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected OutputDescription _framebufferOutputs;
     private protected IVertexSource _currentVertexSource;
 
+
     /// <summary>Per-command-buffer merged property table. Vk and D3D11 read this at draw time.</summary>
     private protected readonly MergedPropertyTable _mergedTable = new();
 
@@ -374,27 +375,25 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>
     /// Draws indexed primitives from the currently-bound state in this <see cref="CommandBuffer"/>.
     /// </summary>
-    /// <param name="indexCount">The number of indices.</param>
-    public void DrawIndexed(uint indexCount) => DrawIndexed(indexCount, 1, 0, 0, 0);
+    public void DrawIndexed() => DrawIndexed(1, 0, 0, 0);
 
     /// <summary>
     /// Draws indexed primitives from the currently-bound state in this <see cref="CommandBuffer"/>.
     /// </summary>
-    /// <param name="indexCount">The number of indices.</param>
     /// <param name="instanceCount">The number of instances.</param>
     /// <param name="indexStart">The number of indices to skip in the active index buffer.</param>
     /// <param name="vertexOffset">The base vertex value, which is added to each index value read from the index buffer.</param>
     /// <param name="instanceStart">The starting instance value.</param>
-    public void DrawIndexed(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        DrawIndexed_CheckIndexBuffer(indexCount);
+        DrawIndexed_CheckIndexBuffer();
         Draw_PreDrawValidation();
         DrawIndexed_CheckBaseVertexInstance(vertexOffset, instanceStart);
 
-        DrawIndexedCore(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+        DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
-    private protected abstract void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
+    private protected abstract void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
 
     /// <summary>
     /// Issues indirect draw commands based on the information contained in the given indirect <see cref="DeviceBuffer"/>.

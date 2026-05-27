@@ -289,14 +289,14 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private void DrawIndexed_CheckIndexBuffer(uint indexCount)
+    private void DrawIndexed_CheckIndexBuffer()
     {
 #if VALIDATE_USAGE
         if (_currentVertexSource == null)
         {
             return;
         }
-        if (!_currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out _))
+        if (!_currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount))
         {
             throw new RenderException(
                 "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +

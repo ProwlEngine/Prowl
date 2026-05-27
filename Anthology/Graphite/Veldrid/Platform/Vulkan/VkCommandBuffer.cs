@@ -39,6 +39,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private VkPipelineCacheEntry _currentResolvedPipeline;
     private bool _hasResolvedPipeline;
     private PrimitiveTopology _resolvedTopology;
+    private uint _currentIndexCount;
 
     private bool _newFramebuffer; // Render pass cycle state
 
@@ -275,12 +276,12 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _gd.Vk.CmdDraw(_cb, vertexCount, instanceCount, vertexStart, instanceStart);
     }
 
-    private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    private protected override void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
         BindVertexBuffersFromSource();
         BindIndexBufferFromSource();
-        _gd.Vk.CmdDrawIndexed(_cb, indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+        _gd.Vk.CmdDrawIndexed(_cb, _currentIndexCount, instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
     private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
@@ -329,12 +330,13 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private void BindIndexBufferFromSource()
     {
-        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint offset);
+        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount);
+        _currentIndexCount = indexCount;
         Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
         CheckIndexBufferUsage(ib);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
-        _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, offset, VkFormats.VdToVkIndexFormat(fmt));
+        _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.VdToVkIndexFormat(fmt));
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
     }
 

@@ -2,15 +2,13 @@
 
 internal class DrawIndexedEntry : OpenGLCommandEntry
 {
-    public uint IndexCount;
     public uint InstanceCount;
     public uint IndexStart;
     public int VertexOffset;
     public uint InstanceStart;
 
-    public DrawIndexedEntry(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    public DrawIndexedEntry(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        IndexCount = indexCount;
         InstanceCount = instanceCount;
         IndexStart = indexStart;
         VertexOffset = vertexOffset;
@@ -19,9 +17,8 @@ internal class DrawIndexedEntry : OpenGLCommandEntry
 
     public DrawIndexedEntry() { }
 
-    public DrawIndexedEntry Init(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    public DrawIndexedEntry Init(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        IndexCount = indexCount;
         InstanceCount = instanceCount;
         IndexStart = indexStart;
         VertexOffset = vertexOffset;

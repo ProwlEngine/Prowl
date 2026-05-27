@@ -35,7 +35,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     // Cached pipeline State
     private DeviceBuffer _currentIndexBuffer;
     private Format _currentIndexFormat;
-    private uint _currentIndexOffset;
+    private uint _currentIndexCount;
     private ID3D11BlendState* _blendState;
     private float[] _blendFactor = new float[4];
     private ID3D11DepthStencilState* _depthStencilState;
@@ -156,7 +156,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         _currentIndexBuffer = null;
         _currentIndexFormat = Format.FormatUnknown;
-        _currentIndexOffset = 0;
+        _currentIndexCount = 0;
         _currentShaderProgram = null;
         _currentComputeProgram = null;
         _blendState = null;
@@ -240,7 +240,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     private void ResolveAndBindIndexBuffer()
     {
-        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint offset);
+        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
         Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
         CheckIndexBufferUsage(ib);
 
@@ -248,14 +248,14 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         if (!ReferenceEquals(_currentIndexBuffer, ib)
             || _currentIndexFormat != dxgiFmt
-            || _currentIndexOffset != offset)
+            || _currentIndexCount != count)
         {
             D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(ib);
             UnbindUAVBuffer(ib);
-            Ctx->IASetIndexBuffer(d3d11Buffer.Buffer, dxgiFmt, offset);
+            Ctx->IASetIndexBuffer(d3d11Buffer.Buffer, dxgiFmt, count);
             _currentIndexBuffer = ib;
             _currentIndexFormat = dxgiFmt;
-            _currentIndexOffset = offset;
+            _currentIndexCount = count;
         }
     }
 
@@ -392,18 +392,18 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
     }
 
-    private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    private protected override void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         PreDrawCommand();
         ResolveAndBindIndexBuffer();
 
         if (instanceCount == 1 && instanceStart == 0)
         {
-            Ctx->DrawIndexed(indexCount, indexStart, vertexOffset);
+            Ctx->DrawIndexed(_currentIndexCount, indexStart, vertexOffset);
         }
         else
         {
-            Ctx->DrawIndexedInstanced(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+            Ctx->DrawIndexedInstanced(_currentIndexCount, instanceCount, indexStart, vertexOffset, instanceStart);
         }
     }
 

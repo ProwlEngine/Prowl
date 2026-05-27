@@ -76,9 +76,9 @@ internal class OpenGLCommandBuffer : CommandBuffer
         _currentCommands.Draw(vertexCount, instanceCount, vertexStart, instanceStart);
     }
 
-    private protected override void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    private protected override void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
-        _currentCommands.DrawIndexed(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+        _currentCommands.DrawIndexed(instanceCount, indexStart, vertexOffset, instanceStart);
     }
 
     private protected override void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)

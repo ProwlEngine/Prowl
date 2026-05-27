@@ -11,7 +11,7 @@ internal interface OpenGLCommandEntryList
     void ClearColorTarget(uint index, Color clearColor);
     void ClearDepthTarget(float depth, byte stencil);
     void Draw(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
-    void DrawIndexed(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
+    void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
     void DrawIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
     void DrawIndexedIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
     void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ);

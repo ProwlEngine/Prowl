@@ -41,13 +41,13 @@ public interface IVertexSource
     /// </summary>
     /// <remarks>
     /// Called by the backend only on indexed draw paths
-    /// (<see cref="CommandBuffer.DrawIndexed(uint)"/>, <see cref="CommandBuffer.DrawIndexedIndirect"/>).
+    /// (<see cref="CommandBuffer.DrawIndexed()"/>, <see cref="CommandBuffer.DrawIndexedIndirect"/>).
     /// Backends that already resolved this on a previous draw still re-query;
     /// no caching across draws.
     /// </remarks>
     /// <param name="buffer">The resolved index buffer, when the return value is <c>true</c>.</param>
     /// <param name="format">The resolved index format, when the return value is <c>true</c>.</param>
-    /// <param name="offset">The byte offset from the start of the index buffer, when the return value is <c>true</c>.</param>
+    /// <param name="indexCount">The index count of the buffer.</param>
     /// <returns><c>true</c> if an index buffer is available; otherwise <c>false</c>.</returns>
-    bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint offset);
+    bool TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount);
 }
