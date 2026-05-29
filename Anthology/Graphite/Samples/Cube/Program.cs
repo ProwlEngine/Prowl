@@ -48,7 +48,7 @@ public static class Program
         Cube.Create(device);
         buffer = device.ResourceFactory.CreateCommandBuffer();
 
-        window.Resize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
+        window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
         window.Render += Render;
     }
 

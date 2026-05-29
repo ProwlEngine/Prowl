@@ -52,7 +52,7 @@ public static class Program
         triangle = ModelLoader.CreateTriangle(device);
         buffer = device.ResourceFactory.CreateCommandBuffer();
 
-        window.Resize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
+        window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
         window.Render += Render;
     }
 
@@ -73,6 +73,7 @@ public static class Program
         buffer.End();
 
         frame.SubmitCommands(buffer);
+
         device.EndFrame(frame);
 
         // Explicitly avoid timing SwapBuffers() to not pollute with OS throttling/presentation limits.

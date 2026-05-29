@@ -56,7 +56,7 @@ public static class Program
         properties = new();
         properties.SetTexture("MainTexture", texture, sampler);
 
-        window.Resize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
+        window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
         window.Render += Render;
     }
 

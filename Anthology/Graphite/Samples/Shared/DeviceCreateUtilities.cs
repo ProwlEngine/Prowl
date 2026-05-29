@@ -46,8 +46,8 @@ public static class DeviceCreateUtilities
                 {
                     DepthFormat = options.SwapchainDepthFormat,
                     ColorSrgb = options.SwapchainSrgbFormat,
-                    Width = (uint)window.Size.X,
-                    Height = (uint)window.Size.Y,
+                    Width = (uint)window.FramebufferSize.X,
+                    Height = (uint)window.FramebufferSize.Y,
                     SyncToVerticalBlank = options.SyncToVerticalBlank,
                     Source = SwapchainSource.CreateWin32(Hwnd, HInstance)
                 };

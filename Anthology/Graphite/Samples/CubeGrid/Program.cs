@@ -3,6 +3,8 @@ using Prowl.Vector;
 using Silk.NET.Windowing;
 using Silk.NET.Maths;
 
+using System.IO;
+
 
 namespace Prowl.Veldrid.Samples.CubeGrid;
 
@@ -19,6 +21,8 @@ public static class Program
 
     private static void Main()
     {
+        Window.PrioritizeSdl();
+
         WindowOptions woptions = WindowOptions.Default;
         woptions.Title = "My Window";
         woptions.Size = new Vector2D<int>(600, 600);
@@ -27,6 +31,10 @@ public static class Program
         woptions.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
         woptions.ShouldSwapAutomatically = false;
         window = Window.Create(woptions);
+
+        var sdl = Silk.NET.SDL.Sdl.GetApi();
+        string basePath = System.Environment.ProcessPath;
+        sdl.VulkanLoadLibrary(Path.Join(basePath, "vulkan/path/relative/to/your/exe/dll.dylib"));
 
         window.Load += Load;
         window.Closing += Close;
@@ -48,7 +56,7 @@ public static class Program
         CubeGrid.Create(device);
         buffer = device.ResourceFactory.CreateCommandBuffer();
 
-        window.Resize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
+        window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
         window.Render += Render;
     }
 
