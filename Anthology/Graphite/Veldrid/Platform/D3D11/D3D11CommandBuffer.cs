@@ -101,6 +101,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         ID3D11DeviceContext1* pContext1;
         var ctx1Guid = ID3D11DeviceContext1.Guid;
+
         if (((IUnknown*)pDeferredContext)->QueryInterface(&ctx1Guid, (void**)&pContext1) >= 0)
         {
             _context1 = default;
@@ -109,6 +110,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         ID3DUserDefinedAnnotation* pUda;
         var udaGuid = ID3DUserDefinedAnnotation.Guid;
+
         if (((IUnknown*)pDeferredContext)->QueryInterface(&udaGuid, (void**)&pUda) >= 0)
         {
             _uda = default;
@@ -921,8 +923,40 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
     }
 
-    private void BindUniformBuffer(D3D11BufferRange range, int slot, ShaderStages stages)
+
+    private delegate void SetBufferFunc(uint startSlot, uint numBuffers, ID3D11Buffer** buffers);
+    private delegate void SetBuffer1Func(uint startSlot, uint numBuffers, ID3D11Buffer** buffers, uint* firstConstant, uint* numConstants);
+
+
+    private void BindUniformBuffer(DeviceBufferRange range, int slot, ShaderStages stages)
     {
+        void SetBuffer(SetBufferFunc set, SetBuffer1Func set1)
+        {
+            ID3D11Buffer* cb = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(range.Buffer).Buffer;
+
+            if (range.IsFullRange)
+            {
+                set((uint)slot, 1, &cb);
+            }
+            else
+            {
+                PackRangeParams(range);
+                if (!_gd.SupportsCommandBuffers)
+                {
+                    ID3D11Buffer* nullBuf = null;
+                    set((uint)slot, 1, &nullBuf);
+                }
+                ID3D11Buffer* cbOut = _cbOut[0];
+                fixed (int* pFirstConst = _firstConstRef)
+                fixed (int* pNumConsts = _numConstsRef)
+                {
+                    set1((uint)slot, 1, &cbOut, (uint*)pFirstConst, (uint*)pNumConsts);
+                }
+            }
+        }
+
+        ID3D11DeviceContext1* ctx1 = (ID3D11DeviceContext1*)_context1;
+
         if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
         {
             bool bind = false;
@@ -939,98 +973,18 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
                 bind = true;
             }
             if (bind)
-            {
-                if (range.IsFullRange)
-                {
-                    ID3D11Buffer* cb = range.Buffer.Buffer;
-                    Ctx->VSSetConstantBuffers((uint)slot, 1, &cb);
-                }
-                else
-                {
-                    PackRangeParams(range);
-                    if (!_gd.SupportsCommandBuffers)
-                    {
-                        ID3D11Buffer* nullBuf = null;
-                        Ctx->VSSetConstantBuffers((uint)slot, 1, &nullBuf);
-                    }
-                    ID3D11Buffer* cb = _cbOut[0];
-                    fixed (int* pFirstConst = _firstConstRef)
-                    fixed (int* pNumConsts = _numConstsRef)
-                    {
-                        ((ID3D11DeviceContext1*)_context1)->VSSetConstantBuffers1((uint)slot, 1, &cb, (uint*)pFirstConst, (uint*)pNumConsts);
-                    }
-                }
-            }
+                SetBuffer(Ctx->VSSetConstantBuffers, ctx1->VSSetConstantBuffers1);
         }
+
         if ((stages & ShaderStages.Geometry) == ShaderStages.Geometry)
-        {
-            if (range.IsFullRange)
-            {
-                ID3D11Buffer* cb = range.Buffer.Buffer;
-                Ctx->GSSetConstantBuffers((uint)slot, 1, &cb);
-            }
-            else
-            {
-                PackRangeParams(range);
-                if (!_gd.SupportsCommandBuffers)
-                {
-                    ID3D11Buffer* nullBuf = null;
-                    Ctx->GSSetConstantBuffers((uint)slot, 1, &nullBuf);
-                }
-                ID3D11Buffer* cb = _cbOut[0];
-                fixed (int* pFirstConst = _firstConstRef)
-                fixed (int* pNumConsts = _numConstsRef)
-                {
-                    ((ID3D11DeviceContext1*)_context1)->GSSetConstantBuffers1((uint)slot, 1, &cb, (uint*)pFirstConst, (uint*)pNumConsts);
-                }
-            }
-        }
+            SetBuffer(Ctx->GSSetConstantBuffers, ctx1->GSSetConstantBuffers1);
+
         if ((stages & ShaderStages.TessellationControl) == ShaderStages.TessellationControl)
-        {
-            if (range.IsFullRange)
-            {
-                ID3D11Buffer* cb = range.Buffer.Buffer;
-                Ctx->HSSetConstantBuffers((uint)slot, 1, &cb);
-            }
-            else
-            {
-                PackRangeParams(range);
-                if (!_gd.SupportsCommandBuffers)
-                {
-                    ID3D11Buffer* nullBuf = null;
-                    Ctx->HSSetConstantBuffers((uint)slot, 1, &nullBuf);
-                }
-                ID3D11Buffer* cb = _cbOut[0];
-                fixed (int* pFirstConst = _firstConstRef)
-                fixed (int* pNumConsts = _numConstsRef)
-                {
-                    ((ID3D11DeviceContext1*)_context1)->HSSetConstantBuffers1((uint)slot, 1, &cb, (uint*)pFirstConst, (uint*)pNumConsts);
-                }
-            }
-        }
+            SetBuffer(Ctx->HSSetConstantBuffers, ctx1->HSSetConstantBuffers1);
+
         if ((stages & ShaderStages.TessellationEvaluation) == ShaderStages.TessellationEvaluation)
-        {
-            if (range.IsFullRange)
-            {
-                ID3D11Buffer* cb = range.Buffer.Buffer;
-                Ctx->DSSetConstantBuffers((uint)slot, 1, &cb);
-            }
-            else
-            {
-                PackRangeParams(range);
-                if (!_gd.SupportsCommandBuffers)
-                {
-                    ID3D11Buffer* nullBuf = null;
-                    Ctx->DSSetConstantBuffers((uint)slot, 1, &nullBuf);
-                }
-                ID3D11Buffer* cb = _cbOut[0];
-                fixed (int* pFirstConst = _firstConstRef)
-                fixed (int* pNumConsts = _numConstsRef)
-                {
-                    ((ID3D11DeviceContext1*)_context1)->DSSetConstantBuffers1((uint)slot, 1, &cb, (uint*)pFirstConst, (uint*)pNumConsts);
-                }
-            }
-        }
+            SetBuffer(Ctx->DSSetConstantBuffers, ctx1->DSSetConstantBuffers1);
+
         if ((stages & ShaderStages.Fragment) == ShaderStages.Fragment)
         {
             bool bind = false;
@@ -1046,52 +1000,13 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             {
                 bind = true;
             }
+
             if (bind)
-            {
-                if (range.IsFullRange)
-                {
-                    ID3D11Buffer* cb = range.Buffer.Buffer;
-                    Ctx->PSSetConstantBuffers((uint)slot, 1, &cb);
-                }
-                else
-                {
-                    PackRangeParams(range);
-                    if (!_gd.SupportsCommandBuffers)
-                    {
-                        ID3D11Buffer* nullBuf = null;
-                        Ctx->PSSetConstantBuffers((uint)slot, 1, &nullBuf);
-                    }
-                    ID3D11Buffer* cb = _cbOut[0];
-                    fixed (int* pFirstConst = _firstConstRef)
-                    fixed (int* pNumConsts = _numConstsRef)
-                    {
-                        ((ID3D11DeviceContext1*)_context1)->PSSetConstantBuffers1((uint)slot, 1, &cb, (uint*)pFirstConst, (uint*)pNumConsts);
-                    }
-                }
-            }
+                SetBuffer(Ctx->PSSetConstantBuffers, ctx1->PSSetConstantBuffers1);
         }
         if ((stages & ShaderStages.Compute) == ShaderStages.Compute)
         {
-            if (range.IsFullRange)
-            {
-                ID3D11Buffer* cb = range.Buffer.Buffer;
-                Ctx->CSSetConstantBuffers((uint)slot, 1, &cb);
-            }
-            else
-            {
-                PackRangeParams(range);
-                if (!_gd.SupportsCommandBuffers)
-                {
-                    ID3D11Buffer* nullBuf = null;
-                    Ctx->CSSetConstantBuffers((uint)slot, 1, &nullBuf);
-                }
-                ID3D11Buffer* cb = _cbOut[0];
-                fixed (int* pFirstConst = _firstConstRef)
-                fixed (int* pNumConsts = _numConstsRef)
-                {
-                    ((ID3D11DeviceContext1*)_context1)->CSSetConstantBuffers1((uint)slot, 1, &cb, (uint*)pFirstConst, (uint*)pNumConsts);
-                }
-            }
+            SetBuffer(Ctx->CSSetConstantBuffers, ctx1->CSSetConstantBuffers1);
         }
     }
 
