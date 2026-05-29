@@ -59,6 +59,7 @@ public static class Program
 
         buffer.Begin();
         buffer.SetFramebuffer(device.SwapchainFramebuffer);
+        buffer.ClearDepthStencil(1, 0);
         buffer.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         CubeGrid.Draw(time += (float)dt, buffer);
         buffer.End();
@@ -67,10 +68,9 @@ public static class Program
         frame.SubmitCommands(buffer);
         device.EndFrame(frame);
 
-        // Explicitly avoid timing SwapBuffers() to not pollute with OS throttling/presentation limits.
-        tracker.End(dt);
-
         device.SwapBuffers();
+
+        tracker.End(dt);
     }
 
 
