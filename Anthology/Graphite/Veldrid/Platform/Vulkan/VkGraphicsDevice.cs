@@ -695,9 +695,24 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (surface != null)
         {
             byte** surfaceExtensions = surface.VkSurface.GetRequiredExtensions(out uint extensionCount);
+            HashSet<string> addedExtensions = new();
+            string[] requested = [
+                "VK_KHR_surface"
+            ];
 
             for (int i = 0; i < extensionCount; i++)
+            {
                 instanceExtensions[instanceExtensionCount++] = (nint)surfaceExtensions[i];
+                addedExtensions.Add(new FixedUtf8String(surfaceExtensions[i]));
+            }
+
+            for (int r = 0; r < requested.Length; r++)
+            {
+                if (addedExtensions.Contains(requested[r]))
+                    continue;
+
+                instanceExtensions[instanceExtensionCount++] = new FixedUtf8String(requested[r]);
+            }
         }
 
         bool hasDeviceProperties2 = availableInstanceExtensions.Contains(CommonStrings.VK_KHR_get_physical_device_properties2);
