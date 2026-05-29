@@ -272,12 +272,23 @@ internal static class PropertyApply
         }
     }
 
+    // Streaming fallback: a material texture override that hasn't loaded yet binds the
+    // built-in white texture this frame (rather than leaving a stale slot) and the access to
+    // .Res above queues the real texture for background load. Cached to avoid a lookup per draw.
+    private static Texture2D? s_whiteFallback;
+
     private static void WalkAssetTextures(Dictionary<string, AssetRef<Texture2D>> d, GraphicsProgram p, CommandExecutor exec)
     {
         foreach (var kv in d)
         {
             var tex = kv.Value.Res;
-            if (!tex.IsValid()) continue;
+            if (!tex.IsValid())
+            {
+                // Asset is still streaming in (kv.Value.Res queued the load). Bind white so the
+                // sampler reads something sane until the real texture arrives.
+                tex = s_whiteFallback ??= Texture2D.LoadDefault(DefaultTexture.White);
+                if (!tex.IsValid()) continue;
+            }
             BindTexUniform(p, kv.Key, tex.Handle, exec);
         }
     }

@@ -28,7 +28,15 @@ public static class ThumbnailGenerator
         public Guid Guid;
         public EngineObject Asset;
         public string? SourceFilePath;
+        // Stopwatch timestamp when this job first started waiting on dependencies (0 = not waiting yet).
+        public long FirstWaitTimestamp;
     }
+
+    // Wall-clock (not frame-count) cap on waiting for dependencies to stream in. Frame rate is a
+    // bad unit here a fast machine on a slow disk would blow through a frame budget while the
+    // assets are still loading. After this we render best-effort so a genuinely missing/broken
+    // dependency can't keep a job cycling forever.
+    private const double MaxDependencyWaitSeconds = 10.0;
 
     public static void Enqueue(Guid guid, EngineObject asset, string? sourceFilePath = null)
     {
@@ -57,6 +65,27 @@ public static class ThumbnailGenerator
         if (job.Asset.IsDisposed) return;
         if (File.Exists(GetThumbnailPath(job.Guid, db.ThumbnailsPath))) return;
 
+        // A thumbnail is a one-shot render + readback. With async asset loading on, the asset's
+        // dependencies (a material's shader/textures, a model's materials, etc.) may not be loaded
+        // yet, and we'd cache a blank thumbnail. Rather than block the main thread loading them,
+        // request the missing ones in the background and re-queue this job for a later frame; only
+        // render once everything is cached (its GPU create/upload commands are then already queued
+        // ahead of the preview draw). Give up after a time budget so a broken dependency can't loop forever.
+        if (!RequestDependencies(db, job.Guid))
+        {
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (job.FirstWaitTimestamp == 0) job.FirstWaitTimestamp = now;
+            double waitedSeconds = (now - job.FirstWaitTimestamp) / (double)System.Diagnostics.Stopwatch.Frequency;
+
+            if (waitedSeconds < MaxDependencyWaitSeconds)
+            {
+                _queued.Add(job.Guid);
+                _queue.Enqueue(job);
+                return;
+            }
+            // Timed out waiting render best-effort below with whatever loaded.
+        }
+
         byte[]? pixels = null;
         try
         {
@@ -84,6 +113,31 @@ public static class ThumbnailGenerator
             }
             catch { }
         }
+    }
+
+    /// <summary>
+    /// Returns true when every asset in the thumbnail subject's forward dependency closure is
+    /// already loaded. For any that aren't, kicks off a background load. Non-blocking.
+    /// </summary>
+    private static bool RequestDependencies(EditorAssetDatabase db, Guid guid)
+    {
+        bool ready = true;
+        try
+        {
+            foreach (var dep in db.Dependencies.GetTransitiveDependencies(new[] { guid }))
+            {
+                if (AssetDatabase.GetCached(dep) == null)
+                {
+                    AssetLoader.Request(dep);
+                    ready = false;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Thumbnail dependency check failed for {guid}: {ex.Message}");
+        }
+        return ready;
     }
 
     public static void EnqueueMissing()

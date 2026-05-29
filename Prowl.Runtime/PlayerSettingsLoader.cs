@@ -25,6 +25,7 @@ public static class PlayerSettingsLoader
             return;
         }
 
+        ApplyAssetConfig(settingsDir);
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
@@ -39,6 +40,27 @@ public static class PlayerSettingsLoader
             if (_settingsDir != null)
                 ApplyPhysics(_settingsDir);
         };
+    }
+
+    /// <summary>
+    /// Apply the async-asset-loading toggle. Exposed separately so the player can set it
+    /// BEFORE the default scene loads (component OnEnable may resolve AssetRefs), not just
+    /// during the bulk <see cref="Apply"/> that runs after scene load.
+    /// </summary>
+    public static void ApplyAssetConfig(string dir)
+    {
+        var jsonN = ReadJson(dir, "Assets.json");
+        if (jsonN == null) return;
+        var json = jsonN.Value;
+
+        try
+        {
+            // Default ON if the key is absent.
+            bool async = !json.TryGetProperty("AsyncAssetLoading", out var a) || a.GetBoolean();
+            AssetLoadingConfig.AsyncEnabled = async;
+            Debug.Log($"[PlayerSettings] Async asset loading: {async}.");
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply asset config: {ex.Message}"); }
     }
 
     private static void ApplyPhysics(string dir)

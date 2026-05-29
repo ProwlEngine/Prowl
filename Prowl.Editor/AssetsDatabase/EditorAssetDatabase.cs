@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 using Prowl.Echo;
 using Prowl.Editor.Thumbnails;
@@ -22,11 +24,19 @@ public class EditorAssetDatabase : IAssetDatabase
     public static EditorAssetDatabase? Instance { get; private set; }
 
     private readonly Project _project;
-    private readonly Dictionary<Guid, AssetEntry> _guidToEntry = new();
+    // Concurrent so the background AssetLoader thread can read entries / write loaded assets
+    // while the main thread imports/scans. (_pathToGuid is main-thread-only — the loader never touches it.)
+    private readonly ConcurrentDictionary<Guid, AssetEntry> _guidToEntry = new();
     private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<Guid, EngineObject> _loadedAssets = new();
-    private readonly Dictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
-    private readonly HashSet<Guid> _currentlyLoading = new(); // re-entrancy guard
+    private readonly ConcurrentDictionary<Guid, EngineObject> _loadedAssets = new();
+    private readonly ConcurrentDictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
+    // Per-thread re-entrancy guard that breaks dependency/sub-asset cycles during deserialize.
+    [ThreadStatic] private static HashSet<Guid>? _loadingStack;
+    // Serializes the deserialize body so concurrent loads of the same asset collapse onto one.
+    private readonly object _loadLock = new();
+    // Importing (and the file writes / GPU work it implies) stays on the main thread; the
+    // background loader only deserializes already-imported on-disk cache files.
+    private int _mainThreadId = -1;
     private readonly DependencyGraph _dependencies = new();
     private AssetWatcher? _watcher;
 
@@ -46,6 +56,8 @@ public class EditorAssetDatabase : IAssetDatabase
 
     public void Initialize()
     {
+        _mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
         ImporterRegistry.Initialize();
 
         // Try loading cached index for fast startup
@@ -122,27 +134,47 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         if (assetId == Guid.Empty) return null;
 
-        // Check in-memory cache (covers both main assets and sub-assets)
-        if (_loadedAssets.TryGetValue(assetId, out var loaded))
+        // Check in-memory cache (covers both main assets and sub-assets). Lock-free.
+        if (_loadedAssets.TryGetValue(assetId, out var loaded) && loaded != null && !loaded.IsDisposed)
             return loaded;
 
-        // Re-entrancy guard prevents infinite recursion when deserializing
-        // assets that reference each other or their own sub-assets
-        if (!_currentlyLoading.Add(assetId))
+        // Per-thread re-entrancy guard: prevents infinite recursion when deserializing
+        // assets that reference each other or their own sub-assets.
+        var stack = _loadingStack ??= new HashSet<Guid>();
+        if (!stack.Add(assetId))
             return null; // Already loading this asset higher up the call stack
 
         try
         {
-            return GetInternal(assetId);
+            // Serialize the deserialize/import so concurrent callers (background loader +
+            // main/render thread in sync mode) don't double-load; the loser picks up the cache.
+            lock (_loadLock)
+            {
+                if (_loadedAssets.TryGetValue(assetId, out loaded) && loaded != null && !loaded.IsDisposed)
+                    return loaded;
+                return GetInternal(assetId);
+            }
         }
         finally
         {
-            _currentlyLoading.Remove(assetId);
+            stack.Remove(assetId);
         }
+    }
+
+    /// <summary>Non-blocking cache peek (no deserialize, no import). Safe from any thread.</summary>
+    public EngineObject? GetCached(Guid assetId)
+    {
+        if (assetId == Guid.Empty) return null;
+        return _loadedAssets.TryGetValue(assetId, out var c) && c != null && !c.IsDisposed ? c : null;
     }
 
     private EngineObject? GetInternal(Guid assetId)
     {
+        // Importing writes files / creates GPU resources and mutates the index, so it must run
+        // on the main thread. The background loader only deserializes existing cache files; if a
+        // (re)import is required it bails and leaves it to the main-thread import flow.
+        bool onMainThread = Thread.CurrentThread.ManagedThreadId == _mainThreadId;
+
         // Check if this is a sub-asset
         if (_subAssetIndex.TryGetValue(assetId, out var subInfo))
         {
@@ -157,7 +189,7 @@ public class EditorAssetDatabase : IAssetDatabase
         var entry = GetEntry(assetId);
 
         // Validate cache check importer version matches current importer
-        if (entry != null && !string.IsNullOrEmpty(entry.ImporterType))
+        if (onMainThread && entry != null && !string.IsNullOrEmpty(entry.ImporterType))
         {
             var importer = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType);
             if (importer != null && importer.Version != entry.ImporterVersion)
@@ -198,8 +230,9 @@ public class EditorAssetDatabase : IAssetDatabase
             }
         }
 
-        // Cache miss try importing on demand
-        if (_guidToEntry.TryGetValue(assetId, out var e) && !string.IsNullOrEmpty(e.Path))
+        // Cache miss try importing on demand (main thread only the loader leaves importing
+        // to the main-thread flow and simply reports the asset as not-yet-available).
+        if (onMainThread && _guidToEntry.TryGetValue(assetId, out var e) && !string.IsNullOrEmpty(e.Path))
         {
             RunImport(e);
             return _loadedAssets.GetValueOrDefault(assetId);
@@ -291,9 +324,9 @@ public class EditorAssetDatabase : IAssetDatabase
                 if (meta.Guid != existingGuid)
                 {
                     // Clean up old GUID references
-                    _guidToEntry.Remove(existingGuid);
+                    _guidToEntry.TryRemove(existingGuid, out _);
                     _pathToGuid.Remove(relativePath);
-                    _loadedAssets.Remove(existingGuid);
+                    _loadedAssets.TryRemove(existingGuid, out _);
                     _dependencies.RemoveAsset(existingGuid);
 
                     // Remove old sub-asset index entries
@@ -301,8 +334,8 @@ public class EditorAssetDatabase : IAssetDatabase
                     {
                         foreach (var sub in entry.SubAssets)
                         {
-                            _subAssetIndex.Remove(sub.Guid);
-                            _loadedAssets.Remove(sub.Guid);
+                            _subAssetIndex.TryRemove(sub.Guid, out _);
+                            _loadedAssets.TryRemove(sub.Guid, out _);
                         }
                     }
 
@@ -367,7 +400,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 foreach (var sub in entry.SubAssets)
                 {
                     DisposeAndRemove(sub.Guid);
-                    _subAssetIndex.Remove(sub.Guid);
+                    _subAssetIndex.TryRemove(sub.Guid, out _);
 
                     // Clean sub-asset cache file
                     string subCachePath = GetCachePath(sub.Guid);
@@ -377,7 +410,7 @@ public class EditorAssetDatabase : IAssetDatabase
             }
 
             _pathToGuid.Remove(entry.Path);
-            _guidToEntry.Remove(guid);
+            _guidToEntry.TryRemove(guid, out _);
             _dependencies.RemoveAsset(guid);
 
             // Clean main cache file
@@ -767,7 +800,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 foreach (var sub in entry.SubAssets)
                 {
                     DisposeAndRemove(sub.Guid);
-                    _subAssetIndex.Remove(sub.Guid);
+                    _subAssetIndex.TryRemove(sub.Guid, out _);
 
                     // Clean sub-asset cache file
                     string subCachePath = GetCachePath(sub.Guid);
@@ -775,7 +808,7 @@ public class EditorAssetDatabase : IAssetDatabase
                         try { File.Delete(subCachePath); } catch { }
                 }
 
-            _guidToEntry.Remove(guid);
+            _guidToEntry.TryRemove(guid, out _);
             _pathToGuid.Remove(relativePath);
             _dependencies.RemoveAsset(guid);
 
@@ -967,7 +1000,7 @@ public class EditorAssetDatabase : IAssetDatabase
         if (_loadedAssets.TryGetValue(guid, out var old))
         {
             try { old?.Dispose(); } catch { }
-            _loadedAssets.Remove(guid);
+            _loadedAssets.TryRemove(guid, out _);
         }
     }
 
@@ -1100,7 +1133,7 @@ public class EditorAssetDatabase : IAssetDatabase
                             foreach (var sub in deletedEntry.SubAssets)
                             {
                                 DisposeAndRemove(sub.Guid);
-                                _subAssetIndex.Remove(sub.Guid);
+                                _subAssetIndex.TryRemove(sub.Guid, out _);
 
                                 // Clean sub-asset cache file
                                 string subCachePath = GetCachePath(sub.Guid);
@@ -1109,7 +1142,7 @@ public class EditorAssetDatabase : IAssetDatabase
                             }
                         }
 
-                        _guidToEntry.Remove(guid);
+                        _guidToEntry.TryRemove(guid, out _);
                         _pathToGuid.Remove(relativePath);
                         _dependencies.RemoveAsset(guid);
 

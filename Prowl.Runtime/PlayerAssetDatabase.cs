@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -19,8 +20,10 @@ public class PlayerAssetDatabase : IAssetDatabase
     private readonly AssetPackagingMode _mode;
     private readonly string _basePath;
     private readonly Dictionary<Guid, string> _guidToPath = new();
-    private readonly Dictionary<Guid, EngineObject> _cache = new();
-    private readonly HashSet<Guid> _currentlyLoading = new();
+    private readonly ConcurrentDictionary<Guid, EngineObject> _cache = new();
+    private readonly object _loadLock = new();
+    // Per-thread re-entrancy guard that breaks dependency cycles during deserialization.
+    [ThreadStatic] private static HashSet<Guid>? _loadingStack;
     private readonly List<ZipArchive> _pakArchives = new();
 
     public Dictionary<string, Guid> ResourcesMap { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -49,24 +52,35 @@ public class PlayerAssetDatabase : IAssetDatabase
         if (assetId == Guid.Empty) return null;
         if (_cache.TryGetValue(assetId, out var cached) && cached != null && !cached.IsDisposed)
             return cached;
-        if (!_currentlyLoading.Add(assetId))
+
+        // Break dependency cycles on the loading thread.
+        var stack = _loadingStack ??= new HashSet<Guid>();
+        if (!stack.Add(assetId))
             return null;
 
         try
         {
-            byte[]? data = LoadRawAsset(assetId);
-            if (data == null) return null;
-
-            var echo = ReadEchoBinary(data);
-            if (echo == null) return null;
-
-            var obj = Serializer.Deserialize<EngineObject>(echo);
-            if (obj != null)
+            // Serialize the deserialize so concurrent callers (e.g. loader + render thread in
+            // sync mode) don't double-load; the second caller picks up the cached result.
+            lock (_loadLock)
             {
-                obj.AssetID = assetId;
-                _cache[assetId] = obj;
+                if (_cache.TryGetValue(assetId, out cached) && cached != null && !cached.IsDisposed)
+                    return cached;
+
+                byte[]? data = LoadRawAsset(assetId);
+                if (data == null) return null;
+
+                var echo = ReadEchoBinary(data);
+                if (echo == null) return null;
+
+                var obj = Serializer.Deserialize<EngineObject>(echo);
+                if (obj != null)
+                {
+                    obj.AssetID = assetId;
+                    _cache[assetId] = obj;
+                }
+                return obj;
             }
-            return obj;
         }
         catch (Exception ex)
         {
@@ -75,8 +89,15 @@ public class PlayerAssetDatabase : IAssetDatabase
         }
         finally
         {
-            _currentlyLoading.Remove(assetId);
+            stack.Remove(assetId);
         }
+    }
+
+    /// <summary>Non-blocking cache peek (no deserialize). Safe from any thread.</summary>
+    public EngineObject? GetCached(Guid assetId)
+    {
+        if (assetId == Guid.Empty) return null;
+        return _cache.TryGetValue(assetId, out var c) && c != null && !c.IsDisposed ? c : null;
     }
 
     /// <summary>Load a scene by GUID.</summary>

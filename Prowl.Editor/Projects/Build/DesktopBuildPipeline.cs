@@ -498,6 +498,9 @@ public class DesktopBuildPipeline : BuildPipeline
                     Prowl.Runtime.AssetDatabase.Current = db;
                     Prowl.Runtime.GameResources.Initialize(db.ResourcesMap);
 
+                    // Apply the async-loading toggle before the scene loads (component OnEnable may resolve AssetRefs).
+                    Prowl.Runtime.PlayerSettingsLoader.ApplyAssetConfig(Path.Combine(Prowl.Runtime.Application.DataPath, "Content", "Settings"));
+
                     // Load default scene
                     var scene = db.LoadScene(Guid.Parse("{{defaultSceneGuid}}"));
                     if (scene != null)

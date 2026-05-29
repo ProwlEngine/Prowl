@@ -126,25 +126,31 @@ public static class BuiltInAssets
         if (!_entries.TryGetValue(guid, out var entry))
             return null;
 
-        if (_cache.TryGetValue(guid, out var cached) && cached != null && !cached.IsDisposed)
-            return cached;
+        // _entries is populated once in Initialize() and read-only afterward, but _cache is
+        // filled lazily and is now hit from multiple threads (render thread texture fallback,
+        // AssetLoader background thread, main thread). Guard it so a built-in is created once.
+        lock (_cache)
+        {
+            if (_cache.TryGetValue(guid, out var cached) && cached != null && !cached.IsDisposed)
+                return cached;
 
-        try
-        {
-            var obj = entry.Loader();
-            if (obj != null)
+            try
             {
-                obj.AssetID = guid;
-                obj.AssetPath = entry.Path;
-                obj.Name = entry.Name;
-                _cache[guid] = obj;
+                var obj = entry.Loader();
+                if (obj != null)
+                {
+                    obj.AssetID = guid;
+                    obj.AssetPath = entry.Path;
+                    obj.Name = entry.Name;
+                    _cache[guid] = obj;
+                }
+                return obj;
             }
-            return obj;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"Failed to load built-in asset '{entry.Path}': {ex.Message}");
-            return null;
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to load built-in asset '{entry.Path}': {ex.Message}");
+                return null;
+            }
         }
     }
 

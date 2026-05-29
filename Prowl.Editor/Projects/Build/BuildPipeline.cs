@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -183,28 +184,22 @@ public abstract class BuildPipeline
         progress?.Log("Exporting settings...", 0.6f);
         Directory.CreateDirectory(outputSettingsDir);
 
-        var project = Project.Current!;
-        if (!Directory.Exists(project.ProjectSettingsPath)) return;
-
-        // Only export settings marked with ExportToBuild = true
-        var exportNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Serialize the live (in-memory) settings instances to JSON. The editor persists
+        // settings as YAML, so the in-memory registry is the source of truth at build time;
+        // the player (PlayerSettingsLoader) reads these JSON files by field name.
+        var opts = new JsonSerializerOptions { IncludeFields = true, WriteIndented = true };
         foreach (var entry in ProjectSettingsRegistry.Entries)
-            if (entry.ExportToBuild)
-                exportNames.Add(entry.Name);
-
-        foreach (var jsonFile in Directory.GetFiles(project.ProjectSettingsPath, "*.json"))
         {
-            string name = Path.GetFileNameWithoutExtension(jsonFile);
-            if (!exportNames.Contains(name)) continue;
+            if (!entry.ExportToBuild) continue;
 
             try
             {
-                string destFile = Path.Combine(outputSettingsDir, Path.GetFileName(jsonFile));
-                File.Copy(jsonFile, destFile, true);
+                string json = JsonSerializer.Serialize(entry.Instance, entry.Type, opts);
+                File.WriteAllText(Path.Combine(outputSettingsDir, $"{entry.Name}.json"), json);
             }
             catch (Exception ex)
             {
-                Runtime.Debug.LogWarning($"[Build] Failed to export setting {jsonFile}: {ex.Message}");
+                Runtime.Debug.LogWarning($"[Build] Failed to export setting '{entry.Name}': {ex.Message}");
             }
         }
     }

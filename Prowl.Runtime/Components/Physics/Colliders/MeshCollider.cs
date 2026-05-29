@@ -52,12 +52,20 @@ public sealed class MeshCollider : Collider
 
     public override RigidBodyShape[] CreateShapes()
     {
+        // Physics needs the mesh present now: a collider is built once, so a transient null
+        // from async streaming would leave it permanently missing. Block-load it (prioritized).
+        mesh.EnsureLoaded();
         var m = mesh.Res;
         if (m == null)
         {
             // Try to grab from a MeshRenderer on this GO
             var mr = GetComponent<MeshRenderer>();
-            if (mr != null) m = mr.Mesh.Res;
+            if (mr != null)
+            {
+                var rendererMesh = mr.Mesh;
+                rendererMesh.EnsureLoaded();
+                m = rendererMesh.Res;
+            }
         }
 
         if (m == null)

@@ -387,7 +387,9 @@ public abstract class RenderPipeline : EngineObject
             IRenderable renderable = renderables[renderIndex];
 
             Material material = renderable.GetMaterial();
-            if (material.Shader.IsNotValid()) continue;
+            // Skip until the material AND its shader have streamed in (async loading). Accessing
+            // material.Shader (=_shader.Res) queues the shader load; the object pops in once ready.
+            if (material == null || material.Shader.IsNotValid()) continue;
 
             // Get rendering data to determine if this is instanced or single-instance rendering
             renderable.GetRenderingData(viewer, out PropertyState _, out Mesh mesh, out Float4x4 _, out InstanceData[]? instanceData);

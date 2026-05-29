@@ -42,22 +42,46 @@ public class AnimationComponent : MonoBehaviour
     // Bone path → Transform lookup (cached on first use)
     [System.NonSerialized] private Dictionary<string, Transform>? _boneCache;
 
+    // Set when PlayAutomatically wanted to start but the clip was still streaming in (async
+    // loading); Update starts it once the clip arrives.
+    [System.NonSerialized] private bool _pendingAutoPlay;
+
     public override void OnEnable()
     {
         _boneCache = null; // Force rebuild on enable
 
         if (PlayAutomatically)
         {
-            var clip = DefaultClip.Res;
-            if (clip == null && Clips.Count > 0)
-                clip = Clips[0].Res;
+            var clip = ResolveAutoPlayClip();
             if (clip != null)
                 Play(clip);
+            else
+                _pendingAutoPlay = true; // clip still streaming in defer to Update
         }
+    }
+
+    /// <summary>The clip PlayAutomatically should start: the default clip, else the first clip.</summary>
+    private AnimationClip? ResolveAutoPlayClip()
+    {
+        var clip = DefaultClip.Res;
+        if (clip == null && Clips.Count > 0)
+            clip = Clips[0].Res;
+        return clip;
     }
 
     public override void Update()
     {
+        // Deferred auto-play: the clip was still streaming in at OnEnable; start it now.
+        if (_pendingAutoPlay)
+        {
+            var clip = ResolveAutoPlayClip();
+            if (clip != null)
+            {
+                _pendingAutoPlay = false;
+                Play(clip);
+            }
+        }
+
         if (!IsPlaying || CurrentClip == null) return;
 
         Time += Prowl.Runtime.Time.DeltaTime * Speed;

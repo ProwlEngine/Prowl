@@ -241,6 +241,9 @@ public static class Window
 
     public static void OnClose()
     {
+        // Stop background asset loading first so no load runs during teardown (it would
+        // otherwise race scene unload and try to submit GPU work after the render thread exits).
+        AssetLoader.Stop();
         Closing?.Invoke();
         WindowInputHandler.Dispose();
         Graphics.Dispose();

@@ -25,15 +25,44 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     private Guid assetID;
 
     /// <summary>
-    /// The resolved asset. Lazily loaded via AssetDatabase.Get() if not cached.
-    /// Returns null if the asset is missing or this ref is explicitly null.
+    /// The resolved asset.
+    /// <para>
+    /// When async asset loading is enabled (<see cref="AssetLoadingConfig.AsyncEnabled"/>),
+    /// this is non-blocking: it returns the cached instance if available, otherwise it queues
+    /// a background load and returns <c>null</c> for now. Callers MUST handle a transient null
+    /// (the asset will stream in over subsequent frames). Use <see cref="EnsureLoaded"/> when an
+    /// immediate value is required. When async loading is disabled, this blocks and loads
+    /// synchronously (legacy behavior).
+    /// </para>
+    /// Also returns null if the asset is genuinely missing or this ref is explicitly null.
     /// </summary>
     public T? Res
     {
         get
         {
-            if (instance.IsNotValid())
-                RetrieveInstance();
+            if (instance.IsValid())
+                return instance;
+
+            if (assetID == Guid.Empty)
+            {
+                instance = null;
+                return null;
+            }
+
+            if (AssetLoadingConfig.AsyncEnabled)
+            {
+                // Non-blocking: cached instance if present, otherwise kick off a background
+                // load and return null until it streams in.
+                instance = AssetDatabase.GetCached(assetID) as T;
+                if (instance == null)
+                    AssetLoader.Request(assetID);
+            }
+            else
+            {
+                // Synchronous (legacy) behavior: block on the calling thread until loaded.
+                instance = AssetDatabase.Get(assetID) as T;
+            }
+
             return instance;
         }
         set
@@ -85,23 +114,30 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
             Res = null;
     }
 
-    /// <summary>Force a reload from the asset database.</summary>
+    /// <summary>
+    /// Block until the asset is loaded, prioritizing it ahead of background streaming.
+    /// Use this when an immediate, non-null value is required (e.g. editor inspectors, or a
+    /// system that cannot tolerate a transient null from <see cref="Res"/>). When async loading
+    /// is disabled this is equivalent to a normal synchronous resolve.
+    /// </summary>
     public void EnsureLoaded()
     {
-        if (instance.IsNotValid())
-            RetrieveInstance();
+        if (instance.IsValid())
+            return;
+
+        if (assetID == Guid.Empty)
+        {
+            instance = null;
+            return;
+        }
+
+        instance = AssetLoadingConfig.AsyncEnabled
+            ? AssetLoader.LoadBlocking(assetID) as T
+            : AssetDatabase.Get(assetID) as T;
     }
 
     /// <summary>Clear the cached instance. Next access will re-resolve from the database.</summary>
     public void Detach() => instance = null;
-
-    private void RetrieveInstance()
-    {
-        if (assetID != Guid.Empty)
-            instance = AssetDatabase.Get(assetID) as T;
-        else
-            instance = null;
-    }
 
     // ================================================================
     //  Serialization stores AssetID + inline instance for runtime resources

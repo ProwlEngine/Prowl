@@ -94,6 +94,9 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         if (_isRegistered || GameObject?.Scene?.Physics == null || _terrain == null)
             return;
 
+        // Collider registration happens once: block-load the terrain data (prioritized) so a
+        // transient null from async streaming doesn't leave the terrain without collision.
+        _terrain.Data.EnsureLoaded();
         var terrainData = _terrain.Data.Res;
         if (terrainData == null) return;
 

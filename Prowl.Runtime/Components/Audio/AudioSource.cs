@@ -40,6 +40,9 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     // Audio clip and playback settings
     private AssetRef<AudioClip> _clip;
     private bool _playOnStart = false;
+    // Set when OnEnable wanted to auto-play but the clip was still streaming in (async loading);
+    // Update performs the play once the clip arrives.
+    private bool _pendingAutoPlay = false;
     private bool _loop = false;
     private float _volume = 1.0f;
     private float _pitch = 1.0f;
@@ -329,27 +332,38 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
             // Apply all serialized settings
             ApplySettings();
 
-            // Handle playback
-            if (_clip.Res != null)
-            {
-                if (ResumePositionOnLoad && _wasPlaying && _savedCursor > 0)
-                {
-                    // Resume from saved position
-                    Play();
-                    Cursor = _savedCursor;
-                }
-                else if (_playOnStart)
-                {
-                    // Start fresh
-                    Play();
-                }
-            }
+            // Handle playback. If the clip is still streaming in (async loading), defer the
+            // auto-play until it arrives (see Update) instead of silently never playing.
+            if (!TryAutoPlay() && (_playOnStart || (ResumePositionOnLoad && _wasPlaying && _savedCursor > 0)))
+                _pendingAutoPlay = true;
         }
+    }
+
+    /// <summary>Perform the OnEnable auto-play (resume or play-on-start) if the clip is loaded.
+    /// Returns false if the clip hasn't streamed in yet so the caller can defer.</summary>
+    private bool TryAutoPlay()
+    {
+        if (_clip.Res == null) return false;
+
+        if (ResumePositionOnLoad && _wasPlaying && _savedCursor > 0)
+        {
+            Play();
+            Cursor = _savedCursor;
+        }
+        else if (_playOnStart)
+        {
+            Play();
+        }
+        return true;
     }
 
     public override void Update()
     {
         if (_soundGroup.pointer == IntPtr.Zero) return;
+
+        // Deferred auto-play: the clip was still streaming in at OnEnable; play once it arrives.
+        if (_pendingAutoPlay && TryAutoPlay())
+            _pendingAutoPlay = false;
 
         // Update spatial audio properties based on transform
         if (_spatial)
