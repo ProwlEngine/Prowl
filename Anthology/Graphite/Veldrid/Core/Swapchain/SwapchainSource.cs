@@ -25,24 +25,15 @@ internal class VkSurfaceSwapchainSource : SwapchainSource
 {
     public IVkSurface VkSurface { get; }
 
+
     public VkSurfaceSwapchainSource(IVkSurface surface)
     {
         VkSurface = surface;
     }
 
 
-    internal unsafe SurfaceKHR GetSurface(Vk.VkGraphicsDevice device, Instance instance)
+    internal unsafe SurfaceKHR GetSurface(Instance instance)
     {
-        byte** strings = VkSurface.GetRequiredExtensions(out uint count);
-
-        for (int i = 0; i < count; i++)
-        {
-            Vk.FixedUtf8String required = new(strings[i]);
-
-            if (!device.HasSurfaceExtension(required))
-                throw new RenderException($"Vk Instance does not have required swapchain extension: {required}");
-        }
-
         return VkSurface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
     }
 }
