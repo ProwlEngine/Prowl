@@ -872,10 +872,10 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 case ResourceKind.StructuredBufferReadWrite:
                     {
                         DeviceBufferRange range;
-                        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry ssboEntry)
+                        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? ssboEntry)
                             && ssboEntry.Kind == PropertyEntryKind.Buffer)
                         {
-                            range = new DeviceBufferRange(ssboEntry.Buffer, ssboEntry.BufferOffset, ssboEntry.BufferSize);
+                            range = ssboEntry.Buffer!.Value;
                         }
                         else
                         {
@@ -956,10 +956,10 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
             return GetOrBuildImplicitUbo(programKey, setIdx, elem.BindingIndex, elem.UniformFields, isCompute, uniformVersion);
 
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry uboEntry)
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
             && uboEntry.Kind == PropertyEntryKind.Buffer)
         {
-            return new DeviceBufferRange(uboEntry.Buffer, uboEntry.BufferOffset, uboEntry.BufferSize);
+            return uboEntry.Buffer!.Value;
         }
 
         _gd.OnMissingProperty?.Invoke(

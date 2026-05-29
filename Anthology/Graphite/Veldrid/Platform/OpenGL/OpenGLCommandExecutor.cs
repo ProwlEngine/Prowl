@@ -358,8 +358,8 @@ internal unsafe class OpenGLCommandExecutor
         {
             if (!_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
                 return;
-            uint sz = entry.BufferSize > 0 ? entry.BufferSize : entry.Buffer.SizeInBytes;
-            range = new DeviceBufferRange(entry.Buffer, entry.BufferOffset, sz);
+
+            range = entry.Buffer.Value;
         }
 
         OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
@@ -374,7 +374,7 @@ internal unsafe class OpenGLCommandExecutor
 
         _gl.UniformBlockBinding(ActiveProgramHandle(graphics), uniformBinding.BlockLocation, uniformBinding.BindingPoint);
         CheckLastError();
-        _gl.BindBufferRange(BufferTargetARB.UniformBuffer, uniformBinding.BindingPoint, glUB.Buffer, (IntPtr)range.Offset, (UIntPtr)range.SizeInBytes);
+        _gl.BindBufferRange(BufferTargetARB.UniformBuffer, uniformBinding.BindingPoint, glUB.Buffer, (IntPtr)range.Offset, range.SizeInBytes);
         CheckLastError();
     }
 
@@ -439,8 +439,7 @@ internal unsafe class OpenGLCommandExecutor
             return;
         }
 
-        uint sz = entry.BufferSize > 0 ? entry.BufferSize : entry.Buffer.SizeInBytes;
-        DeviceBufferRange range = new DeviceBufferRange(entry.Buffer, entry.BufferOffset, sz);
+        DeviceBufferRange range = entry.Buffer.Value;
         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
         glBuffer.EnsureResourcesCreated();
 
@@ -450,7 +449,7 @@ internal unsafe class OpenGLCommandExecutor
             CheckLastError();
         }
 
-        _gl.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, ssBinding.BindingPoint, glBuffer.Buffer, (IntPtr)range.Offset, (UIntPtr)range.SizeInBytes);
+        _gl.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, ssBinding.BindingPoint, glBuffer.Buffer, (IntPtr)range.Offset, range.SizeInBytes);
         CheckLastError();
     }
 

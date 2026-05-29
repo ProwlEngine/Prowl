@@ -23,6 +23,11 @@ public struct DeviceBufferRange : BindableResource, IEquatable<DeviceBufferRange
     public uint SizeInBytes;
 
     /// <summary>
+    /// Whether or not this buffer range is a view into the entire buffer.
+    /// </summary>
+    public bool IsFullRange => Offset == 0 && SizeInBytes == Buffer.SizeInBytes;
+
+    /// <summary>
     /// Constructs a new <see cref="DeviceBufferRange"/>.
     /// </summary>
     /// <param name="buffer">The underlying <see cref="DeviceBuffer"/> that this range will refer to.</param>

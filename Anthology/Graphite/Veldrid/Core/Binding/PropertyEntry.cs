@@ -1,7 +1,10 @@
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+
 namespace Prowl.Veldrid;
+
 
 internal enum PropertyEntryKind : byte
 {
@@ -10,6 +13,7 @@ internal enum PropertyEntryKind : byte
     Texture,
     Sampler,
 }
+
 
 /// <summary>
 /// A single entry stored inside a PropertySet. Carries either a uniform scalar/vector/matrix
@@ -23,35 +27,33 @@ internal sealed class PropertyEntry
 
     public unsafe struct UniformPayload
     {
+        // 'oh but mah memory usa-' you're not updating a million uniform double4x4's, a few fixed bytes won't hurt you
         public fixed byte _e0[128];
     }
 
     public UniformPayload Uniform;
 
-    public DeviceBuffer? Buffer;
-    public uint BufferOffset;
-    public uint BufferSize;
-
+    public DeviceBufferRange? Buffer;
     public Texture? Texture;
     public TextureView? TextureView;
     public Sampler? Sampler;
 
 
-    public void WriteUniform<T>(T value, UniformScalarType type) where T : unmanaged
+    public unsafe void WriteUniform<T>(T value, UniformScalarType type) where T : unmanaged
     {
         Kind = PropertyEntryKind.Uniform;
         UniformType = type;
-        MemoryMarshal.Write(MemoryMarshal.CreateSpan(ref Unsafe.As<UniformPayload, byte>(ref Uniform), 128), value);
+
+        fixed (UniformPayload* uniformPtr = &Uniform)
+            NativeMemory.Copy(&value, uniformPtr, (nuint)sizeof(T));
     }
 
 
-    public void SetBuffer(DeviceBuffer buffer, uint offset, uint size, bool readOnly)
+    public void SetBuffer(DeviceBufferRange buffer, bool readOnly)
     {
         Kind = PropertyEntryKind.Buffer;
         ReadOnly = readOnly;
         Buffer = buffer;
-        BufferOffset = offset;
-        BufferSize = size;
         Texture = null;
         TextureView = null;
         Sampler = null;

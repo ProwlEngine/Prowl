@@ -99,11 +99,7 @@ public sealed partial class PropertySet
     // Resource setters
     // ------------------------------------------------------------------
 
-    /// <summary>
-    /// Binds a <see cref="DeviceBuffer"/> to the named property slot. Covers both
-    /// <see cref="ResourceKind.UniformBuffer"/> (whole-buffer path) and structured-buffer kinds;
-    /// <paramref name="readOnly"/> selects read-only vs read-write at apply time.
-    /// </summary>
+    /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange, bool)"/>
     public void SetBuffer(PropertyID name, DeviceBuffer buffer, bool readOnly = true)
     {
         SetBuffer_CheckBuffer(buffer);
@@ -111,21 +107,19 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds a sub-range of a <see cref="DeviceBuffer"/> to the named property slot.
+    /// Binds a <see cref="DeviceBuffer"/> to the named property slot. Covers both
+    /// <see cref="ResourceKind.UniformBuffer"/> (whole-buffer path) and structured-buffer kinds;
+    /// if <paramref name="readOnly"/> is false, the buffer (if uniform) will have its uniforms set by the binder.
+    /// if <paramref name="readOnly"/> is true, it'll simply bind the buffer - this is the default.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBufferRange range, bool readOnly = true)
     {
         SetBuffer_CheckBuffer(range.Buffer);
-        GetOrCreate(name).SetBuffer(range.Buffer, range.Offset, range.SizeInBytes, readOnly);
+        GetOrCreate(name).SetBuffer(range, readOnly);
         unchecked { _resourceVersion++; }
     }
 
-    /// <summary>
-    /// Binds a <see cref="Texture"/> to the named property slot with an optional paired sampler.
-    /// On OpenGL the sampler is bound alongside the texture. On Vulkan and D3D11 the sampler is also
-    /// applied to the matched sampler slot (see <see cref="CommandBuffer.SetProperties"/> remarks).
-    /// When <paramref name="sampler"/> is null, <see cref="GraphicsDevice.LinearSampler"/> is used.
-    /// </summary>
+    /// <inheritdoc cref="SetTexture(PropertyID, TextureView, Sampler)"/>
     public void SetTexture(PropertyID name, Texture texture, Sampler? sampler = null)
     {
         SetTexture_CheckTexture(texture);
@@ -134,7 +128,10 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds a <see cref="TextureView"/> to the named property slot with an optional paired sampler.
+    /// Binds a <see cref="Texture"/> to the named property slot with an optional paired sampler.
+    /// On OpenGL the sampler is bound alongside the texture. On Vulkan and D3D11 the sampler is also
+    /// applied to the matched sampler slot (see <see cref="CommandBuffer.SetProperties"/> remarks).
+    /// When <paramref name="sampler"/> is null, <see cref="GraphicsDevice.LinearSampler"/> is used.
     /// </summary>
     public void SetTexture(PropertyID name, TextureView view, Sampler? sampler = null)
     {

@@ -58,8 +58,8 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
     // Cached resources
     private const int MaxCachedUniformBuffers = 15;
-    private readonly D3D11BufferRange[] _vertexBoundUniformBuffers = new D3D11BufferRange[MaxCachedUniformBuffers];
-    private readonly D3D11BufferRange[] _fragmentBoundUniformBuffers = new D3D11BufferRange[MaxCachedUniformBuffers];
+    private readonly DeviceBufferRange[] _vertexBoundUniformBuffers = new DeviceBufferRange[MaxCachedUniformBuffers];
+    private readonly DeviceBufferRange[] _fragmentBoundUniformBuffers = new DeviceBufferRange[MaxCachedUniformBuffers];
     private const int MaxCachedTextureViews = 16;
     private readonly D3D11TextureView[] _vertexBoundTextureViews = new D3D11TextureView[MaxCachedTextureViews];
     private readonly D3D11TextureView[] _fragmentBoundTextureViews = new D3D11TextureView[MaxCachedTextureViews];
@@ -495,13 +495,13 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         {
             case ResourceKind.UniformBuffer:
                 {
-                    D3D11BufferRange range = ResolveUboD3D11(in elem, isCompute, setIdx);
+                    DeviceBufferRange range = ResolveUboD3D11(in elem, isCompute, setIdx);
                     BindUniformBuffer(range, bindingIndex, stages);
                     break;
                 }
             case ResourceKind.StructuredBufferReadOnly:
                 {
-                    D3D11BufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
+                    DeviceBufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
                     if (range.Buffer != null)
                         BindStorageBufferView(range, bindingIndex, stages);
                     else
@@ -510,10 +510,12 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
                 }
             case ResourceKind.StructuredBufferReadWrite:
                 {
-                    D3D11BufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
+                    DeviceBufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
                     if (range.Buffer != null)
                     {
-                        ID3D11UnorderedAccessView* uav = range.Buffer.GetUnorderedAccessView(range.Offset, range.Size);
+                        ID3D11UnorderedAccessView* uav = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(range.Buffer)
+                            .GetUnorderedAccessView(range.Offset, range.SizeInBytes);
+
                         BindUnorderedAccessView(null, range.Buffer, uav, bindingIndex, stages);
                     }
                     else
@@ -543,23 +545,22 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
     }
 
-    private D3D11BufferRange ResolveUboD3D11(
+    private DeviceBufferRange ResolveUboD3D11(
         in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
     {
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
         {
-            object key = isCompute ? (object)_currentComputeProgram : _currentShaderProgram;
+            object key = isCompute ? _currentComputeProgram : _currentShaderProgram;
+
             DeviceBufferRange r = GetOrBuildImplicitUboD3D11(key, setIdx, elem.BindingIndex, elem.UniformFields, isCompute);
-            return new D3D11BufferRange(
+
+            return new DeviceBufferRange(
                 Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(r.Buffer), r.Offset, r.SizeInBytes);
         }
 
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry uboEntry)
-            && uboEntry.Kind == PropertyEntryKind.Buffer)
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry) && uboEntry.Kind == PropertyEntryKind.Buffer)
         {
-            return new D3D11BufferRange(
-                Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(uboEntry.Buffer),
-                uboEntry.BufferOffset, uboEntry.BufferSize);
+            return uboEntry.Buffer!.Value;
         }
 
         _gd.OnMissingProperty?.Invoke(
@@ -567,7 +568,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             isCompute ? _currentComputeProgram : null,
             elem.Name, ResourceKind.UniformBuffer, setIdx, elem.BindingIndex);
 
-        return new D3D11BufferRange(Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(_gd.NullUniform), 0, 16);
+        return new DeviceBufferRange(Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(_gd.NullUniform), 0, 16);
     }
 
     private unsafe DeviceBufferRange GetOrBuildImplicitUboD3D11(
@@ -625,15 +626,13 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         return range;
     }
 
-    private D3D11BufferRange ResolveStorageBufferD3D11(
+    private DeviceBufferRange ResolveStorageBufferD3D11(
         in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
     {
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry)
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? entry)
             && entry.Kind == PropertyEntryKind.Buffer)
         {
-            return new D3D11BufferRange(
-                Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(entry.Buffer),
-                entry.BufferOffset, entry.BufferSize);
+            return entry.Buffer!.Value;
         }
 
         _gd.OnMissingProperty?.Invoke(
@@ -888,12 +887,13 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         return new List<BoundTextureInfo>();
     }
 
-    private void BindStorageBufferView(D3D11BufferRange range, int slot, ShaderStages stages)
+    private void BindStorageBufferView(DeviceBufferRange range, int slot, ShaderStages stages)
     {
         bool compute = (stages & ShaderStages.Compute) != 0;
         UnbindUAVBuffer(range.Buffer);
 
-        ID3D11ShaderResourceView* srv = range.Buffer.GetShaderResourceView(range.Offset, range.Size);
+        ID3D11ShaderResourceView* srv = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(range.Buffer)
+            .GetShaderResourceView(range.Offset, range.SizeInBytes);
 
         if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
         {
@@ -1095,11 +1095,11 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
     }
 
-    private void PackRangeParams(D3D11BufferRange range)
+    private void PackRangeParams(DeviceBufferRange range)
     {
-        _cbOut[0] = range.Buffer.Buffer;
+        _cbOut[0] = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(range.Buffer).Buffer;
         _firstConstRef[0] = (int)range.Offset / 16;
-        uint roundedSize = range.Size < 256 ? 256u : range.Size;
+        uint roundedSize = range.SizeInBytes < 256 ? 256u : range.SizeInBytes;
         _numConstsRef[0] = (int)roundedSize / 16;
     }
 
