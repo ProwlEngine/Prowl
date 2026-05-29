@@ -446,6 +446,8 @@ public sealed class CommandBuffer : IDisposable
         Write(startIndex);
         Write(baseVertex);
         Write(index32bit ? (byte)1 : (byte)0);
+
+        RenderStats.RecordDraw(topo, indexCount);
     }
 
     public void DrawIndexedInstanced(GraphicsVertexArray vao, Topology topo,
@@ -461,6 +463,8 @@ public sealed class CommandBuffer : IDisposable
         Write(startIndex);
         Write(baseVertex);
         Write(index32bit ? (byte)1 : (byte)0);
+
+        RenderStats.RecordDraw(topo, indexCount, instanceCount);
     }
 
     public void DrawArrays(GraphicsVertexArray vao, Topology topo, int first, uint count)

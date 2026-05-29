@@ -754,7 +754,6 @@ internal sealed class CommandExecutor
             else
                 Graphics.GL.DrawElementsBaseVertex(mode, indexCount, fmt, (void*)(startIndex * indexSize), baseVertex);
         }
-        RenderStats.RecordDraw(topo, indexCount);
     }
 
     private void DoDrawIndexedInstanced(GraphicsVertexArray? vao, Topology topo, uint indexCount,
@@ -775,7 +774,6 @@ internal sealed class CommandExecutor
             Graphics.GL.DrawElementsInstanced(mode, indexCount, fmt,
                 (void*)(startIndex * indexSize), instanceCount);
         }
-        RenderStats.RecordDraw(topo, indexCount, instanceCount);
     }
 
     private void DoDrawArrays(GraphicsVertexArray? vao, Topology topo, int first, uint count)
