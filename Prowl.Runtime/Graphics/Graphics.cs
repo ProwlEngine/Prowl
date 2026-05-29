@@ -33,12 +33,16 @@ public static unsafe class Graphics
 
     public static CommandBuffer GetCommandBuffer(string? name = null) => CommandBufferPool.Rent(name);
 
-    // Per-frame render thread protocol:
-    //   main: BeginFrame      -> wakes render thread (MakeCurrent + drain queue)
+    // Render thread protocol:
+    //   The render thread holds the GL context for its whole life and continuously
+    //   drains the queue, executing CBs in submit order as they arrive. This means
+    //   resource creation and SubmitAndWait jobs enqueued at ANY time (between frames,
+    //   or from background threads) are serviced promptly rather than waiting for the
+    //   next BeginFrame.
+    //   main: BeginFrame      -> arm frameDone for this frame
     //   main: encode CBs        (main has no context; render is draining)
-    //   main: EndFrameAndWait -> pushes frame-end sentinel, blocks
-    //   render: hits sentinel, Clear context, signal frameDone
-    //   main: MakeCurrent + SwapBuffers + Clear
+    //   main: EndFrameAndWait -> push frame-end sentinel, block on frameDone
+    //   render: hits sentinel, SwapBuffers, signal frameDone
 
     private sealed class CBJob
     {

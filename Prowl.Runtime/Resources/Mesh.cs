@@ -317,10 +317,10 @@ public class Mesh : EngineObject, ISerializable
         bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && VertexLayoutMatches(lastVertexLayout, layout);
         bool canReuseIndexBuffer = indexBuffer != null && lastIndexCount == indices.Length;
 
-        // Resource creation stays synchronous (Graphics.CreateBuffer creates the GL
-        // object and uploads initial data inline). Reuses go through a CommandBuffer
-        // so any rendering CB submitted after this Upload is guaranteed to see the
-        // new data the executor preserves submit order.
+        // Resource creation and reuse both flow through CommandBuffers submitted in
+        // order: Graphics.CreateBuffer enqueues a create+upload CB, and reuses encode
+        // an UpdateBuffer here. Any rendering CB submitted after this Upload is
+        // guaranteed to see the new data because the executor preserves submit order.
         using var cmd = Graphics.GetCommandBuffer("Mesh.Upload");
 
         if (canReuseVertexBuffer)
@@ -372,9 +372,9 @@ public class Mesh : EngineObject, ISerializable
 
         Graphics.Submit(cmd);
 
-        // VAO recreation must come AFTER the upload submit so the new VAO captures
-        // whatever buffer state actually lives on the GPU. Graphics.CreateVertexArray
-        // is synchronous and binds the buffers itself.
+        // VAO recreation must come AFTER the upload submit so the create-VAO CB is
+        // sequenced behind the buffer create/update CBs. CreateGLObject (run later on
+        // the render thread) then binds buffers whose handles are already valid.
         if (!canReuseVertexBuffer || !canReuseIndexBuffer || vertexArrayObject == null)
         {
             vertexArrayObject?.Dispose();

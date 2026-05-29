@@ -189,9 +189,10 @@ public abstract class Game
 
                 RenderTexture.UpdatePool();
                 // Dispose any GPU resources that were replaced mid-frame (e.g.
-                // grown instance buffers). All CommandBuffers for the frame have
-                // already executed by this point, so it's safe to delete the old
-                // GL objects now.
+                // grown instance buffers). This only ENQUEUES delete CBs; the render
+                // thread is still draining this frame's queue. Because the deletes are
+                // submitted after every draw that referenced the old handle, submit
+                // order guarantees they execute last on the render thread.
                 Graphics.FlushDeferredDisposes();
 
                 // === End of End Graphics ===
