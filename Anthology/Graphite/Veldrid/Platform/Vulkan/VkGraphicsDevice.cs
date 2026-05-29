@@ -175,20 +175,22 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private readonly VkSwapchain _mainSwapchain;
 
     private VkPipelineCache _pipelineCache;
-    private Silk.NET.Vulkan.PipelineCache _driverPipelineCache;
+    private PipelineCache _driverPipelineCache;
 
-    private readonly List<FixedUtf8String> _surfaceExtensions = new List<FixedUtf8String>();
 
     public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc)
         : this(options, scDesc, new VulkanDeviceOptions()) { }
 
     public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc, VulkanDeviceOptions vkOptions)
     {
-        CreateInstance(options.Debug, vkOptions);
+        VkSurfaceSwapchainSource? surfaceSource = scDesc != null ?
+            Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(scDesc.Value.Source) : null;
+
+        CreateInstance(options.Debug, vkOptions, surfaceSource);
 
         SurfaceKHR surface = default;
-        if (scDesc != null)
-            surface = Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(scDesc.Value.Source).GetSurface(this, Instance);
+        if (surfaceSource != null)
+            surface = surfaceSource.GetSurface(Instance);
 
         CreatePhysicalDevice();
         CreateLogicalDevice(surface, options.PreferStandardClipSpaceYDirection, vkOptions);
@@ -258,7 +260,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     // --------------- Frame lifecycle slot state ---------------
 
-    private unsafe struct SlotState
+    private struct SlotState
     {
         public VkFenceHandle Fence;
         public VkFence FenceWrapper;
@@ -272,7 +274,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private readonly List<VkBuffer> _transientFreePool = new List<VkBuffer>();
     private readonly object _transientFreePoolLock = new object();
 
-    private unsafe void InitializeSlots()
+    private void InitializeSlots()
     {
         _slots = new SlotState[_maxFramesInFlight];
         _frameDescriptorPools = new VkDescriptorPoolManager[_maxFramesInFlight];
@@ -300,7 +302,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     // --------------- Frame lifecycle implementations ---------------
 
-    private protected override unsafe Frame BeginFrameCore(ulong frameId, uint ringSlot)
+    private protected override Frame BeginFrameCore(ulong frameId, uint ringSlot)
     {
         ref SlotState slot = ref _slots[ringSlot];
 
@@ -663,18 +665,20 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         CheckResult(result);
     }
 
-    private void CreateInstance(bool debug, VulkanDeviceOptions options)
+    private void CreateInstance(bool debug, VulkanDeviceOptions options, VkSurfaceSwapchainSource? surface)
     {
-        HashSet<string> availableInstanceLayers = new HashSet<string>(EnumerateInstanceLayers());
-        HashSet<string> availableInstanceExtensions = new HashSet<string>(GetInstanceExtensions());
+        HashSet<string> availableInstanceLayers = [.. EnumerateInstanceLayers()];
+        HashSet<string> availableInstanceExtensions = [.. GetInstanceExtensions()];
 
         InstanceCreateInfo instanceCI = new InstanceCreateInfo(sType: StructureType.InstanceCreateInfo);
-        ApplicationInfo applicationInfo = new ApplicationInfo(sType: StructureType.ApplicationInfo);
-        applicationInfo.ApiVersion = new Version32(1, 0, 0);
-        applicationInfo.ApplicationVersion = new Version32(1, 0, 0);
-        applicationInfo.EngineVersion = new Version32(1, 0, 0);
-        applicationInfo.PApplicationName = s_name;
-        applicationInfo.PEngineName = s_name;
+        ApplicationInfo applicationInfo = new ApplicationInfo(sType: StructureType.ApplicationInfo)
+        {
+            ApiVersion = new Version32(1, 0, 0),
+            ApplicationVersion = new Version32(1, 0, 0),
+            EngineVersion = new Version32(1, 0, 0),
+            PApplicationName = s_name,
+            PEngineName = s_name
+        };
 
         instanceCI.PApplicationInfo = &applicationInfo;
 
@@ -688,9 +692,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         uint instanceLayerCount = 0;
 
         if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_portability_subset))
-        {
-            _surfaceExtensions.Add(CommonStrings.VK_KHR_portability_subset);
-        }
+            instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_portability_subset;
 
         if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_portability_enumeration))
         {
@@ -698,75 +700,24 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             instanceCI.Flags |= (InstanceCreateFlags)VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
         }
 
-        if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_SURFACE_EXTENSION_NAME))
+        if (surface != null)
         {
-            _surfaceExtensions.Add(CommonStrings.VK_KHR_SURFACE_EXTENSION_NAME);
-        }
+            byte** surfaceExtensions = surface.VkSurface.GetRequiredExtensions(out uint extensionCount);
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_WIN32_SURFACE_EXTENSION_NAME))
-            {
-                _surfaceExtensions.Add(CommonStrings.VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-            }
-        }
-        else if (
-#if NET5_0_OR_GREATER
-            OperatingSystem.IsAndroid() ||
-#endif
-            RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME))
-            {
-                _surfaceExtensions.Add(CommonStrings.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
-            }
-            if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_XLIB_SURFACE_EXTENSION_NAME))
-            {
-                _surfaceExtensions.Add(CommonStrings.VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
-            }
-            if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
-            {
-                _surfaceExtensions.Add(CommonStrings.VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
-            }
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_METAL_SURFACE_EXTENSION_NAME))
-            {
-                _surfaceExtensions.Add(CommonStrings.VK_EXT_METAL_SURFACE_EXTENSION_NAME);
-            }
-            else // Legacy MoltenVK extensions
-            {
-                if (availableInstanceExtensions.Contains(CommonStrings.VK_MVK_MACOS_SURFACE_EXTENSION_NAME))
-                {
-                    _surfaceExtensions.Add(CommonStrings.VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
-                }
-                if (availableInstanceExtensions.Contains(CommonStrings.VK_MVK_IOS_SURFACE_EXTENSION_NAME))
-                {
-                    _surfaceExtensions.Add(CommonStrings.VK_MVK_IOS_SURFACE_EXTENSION_NAME);
-                }
-            }
-        }
-
-        foreach (var ext in _surfaceExtensions)
-        {
-            instanceExtensions[instanceExtensionCount++] = ext;
+            for (int i = 0; i < extensionCount; i++)
+                instanceExtensions[instanceExtensionCount++] = (nint)surfaceExtensions[i];
         }
 
         bool hasDeviceProperties2 = availableInstanceExtensions.Contains(CommonStrings.VK_KHR_get_physical_device_properties2);
         if (hasDeviceProperties2)
-        {
             instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_get_physical_device_properties2;
-        }
 
         string[] requestedInstanceExtensions = options.InstanceExtensions ?? Array.Empty<string>();
         List<FixedUtf8String> tempStrings = new List<FixedUtf8String>();
         foreach (string requiredExt in requestedInstanceExtensions)
         {
             if (!availableInstanceExtensions.Contains(requiredExt))
-            {
                 throw new RenderException($"The required instance extension was not available: {requiredExt}");
-            }
 
             FixedUtf8String utf8Str = new FixedUtf8String(requiredExt);
             instanceExtensions[instanceExtensionCount++] = utf8Str;
@@ -820,11 +771,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         {
             tempStr.Dispose();
         }
-    }
-
-    public bool HasSurfaceExtension(FixedUtf8String extension)
-    {
-        return _surfaceExtensions.Contains(extension);
     }
 
     public void EnableDebugCallback(DebugReportFlagsEXT flags = DebugReportFlagsEXT.WarningBitExt | DebugReportFlagsEXT.ErrorBitExt)

@@ -61,7 +61,7 @@ internal unsafe class VkSwapchain : Swapchain
 
         if (existingSurface.Handle == default)
         {
-            _surface = Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(description.Source).GetSurface(gd, gd.Instance);
+            _surface = Util.AssertSubtype<SwapchainSource, VkSurfaceSwapchainSource>(description.Source).GetSurface(gd.Instance);
         }
         else
         {

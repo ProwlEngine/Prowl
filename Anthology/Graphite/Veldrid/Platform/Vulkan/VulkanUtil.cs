@@ -12,14 +12,14 @@ internal unsafe static class VulkanUtil
     private static Lazy<bool> s_isVulkanLoaded = new Lazy<bool>(TryLoadVulkan);
     private static readonly Lazy<string[]> s_instanceExtensions = new Lazy<string[]>(EnumerateInstanceExtensions);
 
+
     [Conditional("DEBUG")]
     public static void CheckResult(Result result)
     {
         if (result != Result.Success)
-        {
             throw new RenderException("Unsuccessful VkResult: " + result);
-        }
     }
+
 
     public static bool TryFindMemoryType(PhysicalDeviceMemoryProperties memProperties, uint typeFilter, MemoryPropertyFlags properties, out uint typeIndex)
     {
@@ -37,6 +37,7 @@ internal unsafe static class VulkanUtil
 
         return false;
     }
+
 
     public static string[] EnumerateInstanceLayers()
     {
@@ -67,27 +68,22 @@ internal unsafe static class VulkanUtil
         return ret;
     }
 
+
     public static string[] GetInstanceExtensions() => s_instanceExtensions.Value;
 
     private static string[] EnumerateInstanceExtensions()
     {
         if (!IsVulkanLoaded())
-        {
-            return Array.Empty<string>();
-        }
+            return [];
 
         using var vk = VkApi.GetApi();
         uint propCount = 0;
         Result result = vk.EnumerateInstanceExtensionProperties((byte*)null, ref propCount, null);
         if (result != Result.Success)
-        {
-            return Array.Empty<string>();
-        }
+            return [];
 
         if (propCount == 0)
-        {
-            return Array.Empty<string>();
-        }
+            return [];
 
         ExtensionProperties[] props = new ExtensionProperties[propCount];
         fixed (ExtensionProperties* propsPtr = props)
@@ -133,12 +129,15 @@ internal unsafe static class VulkanUtil
         ImageLayout newLayout)
     {
         Debug.Assert(oldLayout != newLayout);
-        ImageMemoryBarrier barrier = new ImageMemoryBarrier(sType: StructureType.ImageMemoryBarrier);
-        barrier.OldLayout = oldLayout;
-        barrier.NewLayout = newLayout;
-        barrier.SrcQueueFamilyIndex = VkApi.QueueFamilyIgnored;
-        barrier.DstQueueFamilyIndex = VkApi.QueueFamilyIgnored;
-        barrier.Image = image;
+        ImageMemoryBarrier barrier = new ImageMemoryBarrier(sType: StructureType.ImageMemoryBarrier)
+        {
+            OldLayout = oldLayout,
+            NewLayout = newLayout,
+            SrcQueueFamilyIndex = VkApi.QueueFamilyIgnored,
+            DstQueueFamilyIndex = VkApi.QueueFamilyIgnored,
+            Image = image
+        };
+
         barrier.SubresourceRange.AspectMask = aspectMask;
         barrier.SubresourceRange.BaseMipLevel = baseMipLevel;
         barrier.SubresourceRange.LevelCount = levelCount;
@@ -323,13 +322,5 @@ internal unsafe static class VulkanUtil
             0, null,
             0, null,
             1, &barrier);
-    }
-}
-
-internal unsafe static class VkPhysicalDeviceMemoryPropertiesEx
-{
-    public static MemoryType GetMemoryType(this PhysicalDeviceMemoryProperties memoryProperties, uint index)
-    {
-        return memoryProperties.MemoryTypes[(int)index];
     }
 }
