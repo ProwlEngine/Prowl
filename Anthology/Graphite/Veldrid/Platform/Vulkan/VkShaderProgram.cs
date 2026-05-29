@@ -32,6 +32,17 @@ internal unsafe class VkShaderProgram : ShaderProgram
     /// <summary>Total number of set slots (max set index + 1).</summary>
     internal readonly uint ResourceSetCount;
 
+    internal readonly ResourceRefCount RefCount;
+
+    /// <summary>
+    /// Per-program cache of resolved graphics pipelines, keyed on
+    /// <c>(OutputDescription, PrimitiveTopology)</c>. Lookup and factory invocation are guarded by
+    /// <see cref="_pipelineCacheLock"/> so <c>vkCreateGraphicsPipelines</c> never runs twice
+    /// concurrently for the same key.
+    /// </summary>
+    private readonly Dictionary<VkPipelineCacheKey, VkPipelineCacheEntry> _pipelineCache = new();
+    private readonly object _pipelineCacheLock = new object();
+
     private DescriptorSetLayout _emptyDescriptorSetLayout;
     private bool _disposed;
     private string _name;
@@ -39,6 +50,23 @@ internal unsafe class VkShaderProgram : ShaderProgram
     public override bool IsDisposed => _disposed;
 
     internal IReadOnlyDictionary<ShaderStages, ShaderModule> Modules => _modules;
+
+    /// <summary>
+    /// Returns the cached pipeline entry for <paramref name="key"/>, building and inserting one if
+    /// missing. The compatibility render pass and pipeline handle live for the program's lifetime.
+    /// </summary>
+    internal VkPipelineCacheEntry GetOrAddPipeline(in VkPipelineCacheKey key)
+    {
+        lock (_pipelineCacheLock)
+        {
+            if (_pipelineCache.TryGetValue(key, out VkPipelineCacheEntry entry))
+                return entry;
+
+            entry = VkPipelineCacheFactory.Build(_gd, this, in key);
+            _pipelineCache.Add(key, entry);
+            return entry;
+        }
+    }
 
     internal ShaderModule GetModule(ShaderStages stage)
     {
@@ -53,6 +81,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
         : base(ref description)
     {
         _gd = gd;
+        RefCount = new ResourceRefCount(DisposeCore);
 
         ShaderStageDescription[] stages = description.Stages;
         for (int i = 0; i < stages.Length; i++)
@@ -211,12 +240,19 @@ internal unsafe class VkShaderProgram : ShaderProgram
         set { _name = value; _gd.SetResourceName(this, value); }
     }
 
-    public override void Dispose()
+    public override void Dispose() => RefCount.Decrement();
+
+    private void DisposeCore()
     {
         if (_disposed) return;
         _disposed = true;
 
-        _gd.PipelineCache.EvictByProgram(this);
+        foreach (VkPipelineCacheEntry entry in _pipelineCache.Values)
+        {
+            _gd.Vk.DestroyPipeline(_gd.Device, entry.Pipeline, null);
+            _gd.Vk.DestroyRenderPass(_gd.Device, entry.CompatRenderPass, null);
+        }
+        _pipelineCache.Clear();
 
         foreach (ShaderModule m in _modules.Values)
             _gd.Vk.DestroyShaderModule(_gd.Device, m, null);

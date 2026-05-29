@@ -9,16 +9,14 @@ using System.Collections.Generic;
 namespace Prowl.Veldrid.Vk;
 
 /// <summary>
-/// Builds a <see cref="VkPipelineCacheEntry"/> from a <see cref="VkPipelineCacheKey"/>.
-/// Builds a Vulkan graphics pipeline for the given <see cref="VkShaderProgram"/> /
-/// framebuffer / topology key. Called lazily from <see cref="VkPipelineCache"/> at
-/// draw time.
+/// Builds a <see cref="VkPipelineCacheEntry"/> from a <see cref="VkShaderProgram"/> and a
+/// <see cref="VkPipelineCacheKey"/>. Builds a Vulkan graphics pipeline for the given program /
+/// framebuffer / topology key. Called lazily from the program's per-program cache at draw time.
 /// </summary>
 internal static unsafe class VkPipelineCacheFactory
 {
-    public static VkPipelineCacheEntry Build(VkGraphicsDevice gd, in VkPipelineCacheKey key)
+    public static VkPipelineCacheEntry Build(VkGraphicsDevice gd, VkShaderProgram program, in VkPipelineCacheKey key)
     {
-        VkShaderProgram program = key.Program;
         OutputDescription outputDesc = key.Outputs;
 
         GraphicsPipelineCreateInfo pipelineCI = new GraphicsPipelineCreateInfo { SType = StructureType.GraphicsPipelineCreateInfo };

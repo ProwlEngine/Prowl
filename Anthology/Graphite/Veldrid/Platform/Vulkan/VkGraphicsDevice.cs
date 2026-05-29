@@ -151,12 +151,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     /// <summary>
-    /// Per-device managed cache of resolved graphics pipelines, keyed on
-    /// <c>(VkShaderProgram, OutputDescription, PrimitiveTopology)</c>.
-    /// </summary>
-    internal VkPipelineCache PipelineCache => _pipelineCache;
-
-    /// <summary>
     /// Driver-side <c>VkPipelineCache</c> handle passed to every
     /// <c>vkCreateGraphicsPipelines</c> call to amortize driver pipeline compile cost.
     /// </summary>
@@ -174,7 +168,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private readonly List<FenceSubmissionInfo> _submittedFences = new List<FenceSubmissionInfo>();
     private readonly VkSwapchain _mainSwapchain;
 
-    private VkPipelineCache _pipelineCache;
     private PipelineCache _driverPipelineCache;
 
 
@@ -242,7 +235,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         };
         Result pcResult = _vk.CreatePipelineCache(_device, in pcCI, null, out _driverPipelineCache);
         CheckResult(pcResult);
-        _pipelineCache = new VkPipelineCache(this);
 
         for (int i = 0; i < SharedCommandPoolCount; i++)
         {
@@ -1271,8 +1263,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             }
         }
 
-        _pipelineCache?.Dispose();
-        _pipelineCache = null;
         _vk.DestroyPipelineCache(_device, _driverPipelineCache, null);
 
         _memoryManager.Dispose();

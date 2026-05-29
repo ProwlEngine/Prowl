@@ -376,11 +376,10 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         }
 
         VkPipelineCacheKey key = new VkPipelineCacheKey(
-            _currentShaderProgram,
             _framebufferOutputs,
             srcTopology);
 
-        _currentResolvedPipeline = _gd.PipelineCache.GetOrAdd(in key);
+        _currentResolvedPipeline = _currentShaderProgram.GetOrAddPipeline(in key);
         _resolvedTopology = srcTopology;
         _hasResolvedPipeline = true;
 
@@ -669,6 +668,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         _currentShaderProgram = sp;
         _hasResolvedPipeline = false;
+        _currentStagingInfo.Resources.Add(sp.RefCount);
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)

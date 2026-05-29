@@ -1,7 +1,7 @@
 namespace Prowl.Veldrid.Vk;
 
 /// <summary>
-/// Resolved Vulkan pipeline + companion data cached by <see cref="VkPipelineCache"/>.
+/// Resolved Vulkan pipeline + companion data cached by <see cref="VkShaderProgram"/>'s per-program pipeline cache.
 /// </summary>
 /// <remarks>
 /// <see cref="PipelineLayout"/>, <see cref="ResourceSetCount"/>, and <see cref="DynamicOffsetsCount"/>
