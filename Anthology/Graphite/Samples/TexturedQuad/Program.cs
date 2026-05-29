@@ -67,6 +67,7 @@ public static class Program
 
         buffer.Begin();
         buffer.SetFramebuffer(device.SwapchainFramebuffer);
+        buffer.ClearDepthStencil(1, 0);
         buffer.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         buffer.SetShader(shader);
         buffer.SetProperties(properties);
