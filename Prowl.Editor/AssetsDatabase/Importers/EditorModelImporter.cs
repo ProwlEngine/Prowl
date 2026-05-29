@@ -39,6 +39,17 @@ public class EditorModelImporter : AssetImporter
             var importer = new ModelImporter();
             var data = importer.Import(new FileInfo(ctx.AbsolutePath), importSettings);
 
+            // 1b. Optionally generate lightmap UVs (UV2) for every mesh. Off by default it's slow
+            // (full unwrap per mesh) and some models ship their own UV2. Done before sub-asset
+            // registration / feature generation / serialization so the baked UV2 is captured.
+            bool generateLightmapUVs = ctx.Settings != null
+                && ctx.Settings.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
+            if (generateLightmapUVs)
+            {
+                for (int i = 0; i < data.Meshes.Count; i++)
+                    LightmapUVGenerator.Generate(data.Meshes[i]);
+            }
+
             // 2. Register sub-assets assigns deterministic GUIDs immediately
             for (int i = 0; i < data.Meshes.Count; i++)
                 ctx.AddSubAsset(data.Meshes[i].Name ?? $"Mesh_{i}", data.Meshes[i]);
@@ -143,6 +154,7 @@ public class EditorModelImporter : AssetImporter
         s["calculateTangents"] = new EchoObject(true);
         s["flipUVs"] = new EchoObject(true);
         s["unitScale"] = new EchoObject(1.0f);
+        s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;
     }

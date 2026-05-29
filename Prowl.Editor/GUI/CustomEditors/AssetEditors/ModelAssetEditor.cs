@@ -26,6 +26,7 @@ public class ModelAssetEditor : AssetImporterEditor
     private bool _flipUVs;
     private bool _globalScale;
     private float _unitScale = 1f;
+    private bool _generateLightmapUVs;
     // Mesh feature settings applies to every imported sub-mesh.
     private bool _generateSDF;
     private int _sdfResolution = 64;
@@ -111,6 +112,12 @@ public class ModelAssetEditor : AssetImporterEditor
         InspectorRow.Draw(paper, $"{id}_unitScale", "Unit Scale", () =>
             Origami.NumericField<float>(paper, $"{id}_unitScale_v", _unitScale,
                 v => { _unitScale = v; _settingsDirty = true; }).Show());
+
+        // Lightmapping generates a UV2 atlas for every mesh via Prowl.Unwrapper. Off by default:
+        // it's slow (a full unwrap per mesh) and some models already ship their own UV2.
+        Origami.Checkbox(paper, $"{id}_lightmapUVs", _generateLightmapUVs,
+                v => { _generateLightmapUVs = v; _settingsDirty = true; })
+            .LabelRight("Generate Lightmap UVs (slow)").Show();
 
         // Mesh features produces an SDF sub-asset alongside every imported mesh.
                 Origami.Header(paper, $"{id}_h_features", "Mesh Features").Underline().Show();
@@ -205,6 +212,7 @@ public class ModelAssetEditor : AssetImporterEditor
             _flipUVs = s.TryGet("flipUVs", out var fu) && fu.BoolValue;
             _globalScale = s.TryGet("globalScale", out var gs) && gs.BoolValue;
             _unitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1f;
+            _generateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
 
             if (s.TryGet(SDFFeatureSpec.KeyRoot, out var sdf) && sdf != null)
             {
@@ -234,6 +242,7 @@ public class ModelAssetEditor : AssetImporterEditor
         s["flipUVs"] = new EchoObject(_flipUVs);
         s["globalScale"] = new EchoObject(_globalScale);
         s["unitScale"] = new EchoObject(_unitScale);
+        s["generateLightmapUVs"] = new EchoObject(_generateLightmapUVs);
 
         var sdf = EchoObject.NewCompound();
         sdf[SDFFeatureSpec.Key_Enabled] = new EchoObject(_generateSDF);
