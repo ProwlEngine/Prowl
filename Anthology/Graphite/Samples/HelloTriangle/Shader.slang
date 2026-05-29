@@ -21,7 +21,7 @@ struct ModelData
 {
     float4x4 MatrixMVP;
     float4 Color;
-    Sampler2D<float4> MainTexture;
+    // Sampler2D<float4> MainTexture;
 };
 ParameterBlock<ModelData> Model;
 

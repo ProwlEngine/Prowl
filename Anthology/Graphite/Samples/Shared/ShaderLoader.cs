@@ -133,22 +133,42 @@ public static class ShaderLoader
                 {
                     ShaderBytes = composite.GetEntryPointCode(0, 0, out _).ToArray(),
                     Stage = ShaderStages.Vertex,
-                    EntryPoint = "vertex"
+                    EntryPoint = "main"
                 },
                 new ShaderStageDescription()
                 {
                     ShaderBytes = composite.GetEntryPointCode(1, 0, out _).ToArray(),
                     Stage = ShaderStages.Fragment,
-                    EntryPoint = "fragment"
+                    EntryPoint = "main"
                 }
             ]
         };
 
 
-        Console.WriteLine(System.Text.Encoding.UTF8.GetString(shaderDesc.Stages[0].ShaderBytes));
-        Console.WriteLine(System.Text.Encoding.UTF8.GetString(shaderDesc.Stages[1].ShaderBytes));
+        DumpSpirvHeader("vertex", shaderDesc.Stages[0].ShaderBytes);
+        DumpSpirvHeader("fragment", shaderDesc.Stages[1].ShaderBytes);
 
 
         return device.ResourceFactory.CreateShaderProgram(shaderDesc);
+    }
+
+
+    private static void DumpSpirvHeader(string stage, byte[] bytes)
+    {
+        int len = bytes.Length;
+        bool aligned = len % 4 == 0;
+
+        uint magic = len >= 4 ? BitConverter.ToUInt32(bytes, 0) : 0;
+        uint version = len >= 8 ? BitConverter.ToUInt32(bytes, 4) : 0;
+
+        int major = (int)((version >> 16) & 0xFF);
+        int minor = (int)((version >> 8) & 0xFF);
+
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{stage}.spv");
+        System.IO.File.WriteAllBytes(path, bytes);
+
+        Console.WriteLine(
+            $"[{stage}] bytes={len} aligned4={aligned} magic=0x{magic:X8} " +
+            $"(expect 0x07230203) spirv={major}.{minor} -> {path}");
     }
 }
