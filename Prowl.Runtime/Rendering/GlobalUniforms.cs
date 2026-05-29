@@ -90,13 +90,14 @@ public static class GlobalUniforms
     }
 
     /// <summary>
-    /// Gets the uniform buffer for binding to shaders
+    /// Gets the uniform buffer for binding to shaders. Does NOT lazily initialize:
+    /// this is called by the executor on the render thread, and the non-atomic
+    /// create-if-null in <see cref="Initialize"/> must only ever run on the main
+    /// thread. <see cref="Upload"/> (called by the pipeline each frame before any
+    /// draw) creates the buffer, so by submit order it is non-null here. Returns
+    /// null only before the first Upload; PrepareDraw skips the bind in that case.
     /// </summary>
-    public static GraphicsBuffer GetBuffer()
-    {
-        Initialize();
-        return s_uniformBuffer!;
-    }
+    public static GraphicsBuffer? GetBuffer() => s_uniformBuffer;
 
     /// <summary>
     /// Cleans up the global uniform buffer resources
