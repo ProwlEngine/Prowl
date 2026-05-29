@@ -460,12 +460,12 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         if (slot.CurrentFrameId != 0 && slot.SyncObject != 0)
         {
             nint sync = slot.SyncObject;
-            ExecuteOnGLThread(() =>
+            slot.SyncObject = 0;
+            _executionThread.Run(() =>
             {
                 GL.ClientWaitSync((IntPtr)sync, SyncObjectMask.Bit, ulong.MaxValue);
                 GL.DeleteSync((IntPtr)sync);
             });
-            slot.SyncObject = 0;
 
             ulong completed = slot.CurrentFrameId;
             Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), completed));
@@ -623,8 +623,6 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
 
     private protected override void SwapBuffersCore(Swapchain swapchain)
     {
-        WaitForIdle();
-
         _executionThread.SwapBuffers();
     }
 
@@ -634,20 +632,29 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
         {
             if (_slots != null)
             {
+                List<nint> pending = null;
                 for (int i = 0; i < _slots.Length; i++)
                 {
                     ref SlotState slot = ref _slots[i];
                     if (slot.CurrentFrameId != 0 && slot.SyncObject != 0)
                     {
-                        nint sync = slot.SyncObject;
-                        ExecuteOnGLThread(() =>
-                        {
-                            GL.ClientWaitSync((IntPtr)sync, SyncObjectMask.Bit, ulong.MaxValue);
-                            GL.DeleteSync((IntPtr)sync);
-                        });
+                        (pending ??= new List<nint>()).Add(slot.SyncObject);
                         slot.SyncObject = 0;
                         slot.FenceWrapper.Set();
                     }
+                }
+
+                if (pending != null)
+                {
+                    nint[] syncs = pending.ToArray();
+                    _executionThread.Run(() =>
+                    {
+                        for (int i = 0; i < syncs.Length; i++)
+                        {
+                            GL.ClientWaitSync((IntPtr)syncs[i], SyncObjectMask.Bit, ulong.MaxValue);
+                            GL.DeleteSync((IntPtr)syncs[i]);
+                        }
+                    });
                 }
             }
 
