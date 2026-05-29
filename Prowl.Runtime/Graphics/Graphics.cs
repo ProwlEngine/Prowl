@@ -54,8 +54,6 @@ public static unsafe class Graphics
 
     private static readonly System.Collections.Concurrent.BlockingCollection<CBJob> s_renderQueue = new();
     private static System.Threading.Thread? s_renderThread;
-    private static volatile bool s_renderThreadStop;
-    private static readonly System.Threading.SemaphoreSlim s_renderWake = new(0, 1);
     private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
 
     /// <summary>Enqueue a CB for the render thread to execute. Fire-and-forget.</summary>
@@ -88,8 +86,10 @@ public static unsafe class Graphics
 
     internal static void BeginFrame()
     {
+        // Arm the frame-done gate so EndFrameAndWait blocks until THIS frame's
+        // sentinel is processed. The render thread is always draining, so there's
+        // nothing to wake.
         s_renderFrameDone.Reset();
-        s_renderWake.Release();
     }
 
     /// <summary>Time the main thread spent blocked in <see cref="EndFrameAndWait"/>
@@ -129,8 +129,8 @@ public static unsafe class Graphics
 
     public static void StartRenderThread()
     {
+        // Hand the context off the main thread so the render thread can MakeCurrent.
         Window.InternalWindow.GLContext!.Clear();
-        s_renderThreadStop = false;
         s_renderThread = new System.Threading.Thread(RenderThreadLoop)
         {
             IsBackground = true,
@@ -168,47 +168,40 @@ public static unsafe class Graphics
 
         try
         {
-            while (!s_renderThreadStop)
+            // Single continuous drain loop. Jobs execute in submit order as they
+            // arrive, so resource-creation and SubmitAndWait jobs enqueued between
+            // frames or from background threads are serviced without waiting for the
+            // next BeginFrame. SwapBuffers + frame-done signalling happen only on the
+            // frame-end sentinel pushed by EndFrameAndWait.
+            while (true)
             {
-                s_renderWake.Wait();
-                if (s_renderThreadStop) break;
+                CBJob job;
+                try { job = s_renderQueue.Take(); }
+                catch (System.InvalidOperationException) { break; } // CompleteAdding + drained
 
-                try
+                if (job.IsFrameEnd)
                 {
-                    while (true)
-                    {
-                        CBJob job;
-                        try { job = s_renderQueue.Take(); }
-                        catch (System.InvalidOperationException) { return; } // CompleteAdding called
+                    try { Window.InternalWindow.GLContext!.SwapBuffers(); }
+                    catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
+                    finally { s_renderFrameDone.Set(); }
+                    continue;
+                }
+                if (job.Cmd == null) { job.Done?.Set(); continue; }
 
-                        if (job.IsFrameEnd)
-                        {
-                            try { Window.InternalWindow.GLContext!.SwapBuffers(); }
-                            catch (Exception ex) { Debug.LogError($"SwapBuffers failed: {ex}"); }
-                            break;
-                        }
-                        if (job.Cmd == null) { job.Done?.Set(); continue; }
-
-                        var cmd = job.Cmd;
-                        bool pushed = PushCBDebugGroup(cmd.Name);
-                        try { Executor.Execute(cmd); }
-                        catch (Exception ex)
-                        {
-                            job.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
-                            if (job.Done == null)
-                                Debug.LogError($"Render thread CB '{cmd.Name ?? "<?>"}' execute failed: {ex}");
-                        }
-                        finally
-                        {
-                            if (pushed) PopCBDebugGroup();
-                            CommandBufferPool.Return(cmd);
-                            job.Done?.Set();
-                        }
-                    }
+                var cmd = job.Cmd;
+                bool pushed = PushCBDebugGroup(cmd.Name);
+                try { Executor.Execute(cmd); }
+                catch (Exception ex)
+                {
+                    job.Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                    if (job.Done == null)
+                        Debug.LogError($"Render thread CB '{cmd.Name ?? "<?>"}' execute failed: {ex}");
                 }
                 finally
                 {
-                    s_renderFrameDone.Set();
+                    if (pushed) PopCBDebugGroup();
+                    CommandBufferPool.Return(cmd);
+                    job.Done?.Set();
                 }
             }
         }
@@ -229,11 +222,10 @@ public static unsafe class Graphics
 
     public static void Dispose()
     {
-        // Render thread may be parked on s_renderWake or blocked on a Take.
-        // Releasing both wakes it; it then sees the stop flag and exits.
-        s_renderThreadStop = true;
+        // CompleteAdding makes the render thread's Take throw once the queue is
+        // drained, so it finishes any pending work (including shutdown resource
+        // disposes enqueued during Closing) and then exits cleanly.
         try { s_renderQueue.CompleteAdding(); } catch { }
-        try { s_renderWake.Release(); } catch { }
         s_renderThread?.Join();
         try { Window.InternalWindow.GLContext?.MakeCurrent(); } catch { }
         GL.Dispose();
