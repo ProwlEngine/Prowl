@@ -6,10 +6,23 @@ namespace Prowl.Veldrid;
 public abstract partial class GraphicsDevice
 {
     [Conditional("VALIDATE_USAGE")]
+    private void CurrentFrame_CheckActive()
+    {
+#if VALIDATE_USAGE
+        if (_currentFrame == null)
+        {
+            throw new RenderException(
+                "This operation requires an active frame, but none is open. Call BeginFrame before " +
+                "recording frame-dependent commands, and submit them before EndFrame.");
+        }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
     private void BeginFrame_CheckNoActive()
     {
 #if VALIDATE_USAGE
-        if (CurrentFrame != null)
+        if (_currentFrame != null)
         {
             throw new RenderException("BeginFrame called while a frame is already active. Call EndFrame first.");
         }
@@ -20,7 +33,7 @@ public abstract partial class GraphicsDevice
     private void EndFrame_CheckHasActive()
     {
 #if VALIDATE_USAGE
-        if (CurrentFrame == null)
+        if (_currentFrame == null)
         {
             throw new RenderException("EndFrame called with no active frame. Call BeginFrame first.");
         }

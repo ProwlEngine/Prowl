@@ -131,10 +131,26 @@ public abstract partial class GraphicsDevice : IDisposable
     internal abstract uint GetUniformBufferMinOffsetAlignmentCore();
     internal abstract uint GetStructuredBufferMinOffsetAlignmentCore();
 
+    private Frame _currentFrame;
+
     /// <summary>
-    /// Gets the currently active <see cref="Frame"/>, or <see langword="null"/> if no frame is in progress.
+    /// Gets the currently active <see cref="Frame"/>.
+    /// <para>
+    /// This is the single guarded entry point for frame access from recording code: when usage
+    /// validation is enabled (VALIDATE_USAGE), reading it while no frame is open throws a
+    /// <see cref="RenderException"/>, so backends never need to null-check before allocating
+    /// transient memory or per-frame resources. Without validation it returns
+    /// <see langword="null"/> if no frame is in progress.
+    /// </para>
     /// </summary>
-    public Frame CurrentFrame { get; private protected set; }
+    public Frame CurrentFrame
+    {
+        get
+        {
+            CurrentFrame_CheckActive();
+            return _currentFrame;
+        }
+    }
 
     /// <summary>
     /// Gets the <see cref="Frame.FrameId"/> of the most recently GPU-completed frame.
@@ -176,7 +192,7 @@ public abstract partial class GraphicsDevice : IDisposable
         ulong frameId = ++_frameIdCounter;
         uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
         Frame frame = BeginFrameCore(frameId, ringSlot);
-        CurrentFrame = frame;
+        _currentFrame = frame;
         return frame;
     }
 
@@ -189,7 +205,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void EndFrame()
     {
         EndFrame_CheckHasActive();
-        EndFrame(CurrentFrame);
+        EndFrame(_currentFrame);
     }
 
     /// <summary>
@@ -203,7 +219,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         EndFrame_CheckFrameNonNull(frame);
         EndFrame_CheckIsActive(frame);
-        CurrentFrame = null;
+        _currentFrame = null;
         EndFrameCore(frame);
     }
 
@@ -256,7 +272,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         if (frameId == 0 || frameId > _frameIdCounter)
             throw new RenderException($"Cannot wait on frame {frameId}: it has not been started yet.");
-        if (CurrentFrame != null && CurrentFrame.FrameId == frameId)
+        if (_currentFrame != null && _currentFrame.FrameId == frameId)
             throw new RenderException("Cannot wait on the currently open frame. Call EndFrame first.");
         if (frameId <= Volatile.Read(ref _lastCompletedFrameId))
             return true;
@@ -290,9 +306,9 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <exception cref="RenderException">Thrown if no frame is currently active.</exception>
     public DeviceBufferRange AllocateTransient(uint sizeInBytes)
     {
-        if (CurrentFrame == null)
+        if (_currentFrame == null)
             throw new RenderException("AllocateTransient requires an active frame. Call BeginFrame first.");
-        return CurrentFrame.AllocateTransient(sizeInBytes);
+        return _currentFrame.AllocateTransient(sizeInBytes);
     }
 
     private protected abstract Frame BeginFrameCore(ulong frameId, uint ringSlot);
@@ -410,7 +426,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <exception cref="RenderException">Thrown if <see cref="CurrentFrame"/> is not null. Call <see cref="EndFrame()"/> before <see cref="WaitForIdle"/>.</exception>
     public void WaitForIdle()
     {
-        if (CurrentFrame != null)
+        if (_currentFrame != null)
             throw new RenderException("WaitForIdle cannot be called while a frame is active. Call EndFrame first.");
         WaitForIdleCore();
         Volatile.Write(ref _lastCompletedFrameId, _frameIdCounter);

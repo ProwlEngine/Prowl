@@ -15,7 +15,7 @@ using Silk.NET.Core.Contexts;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
+internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 {
     private ResourceFactory _resourceFactory;
     private string _deviceName;
@@ -79,13 +79,27 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
 
     private SlotState[] _slots;
 
+    private Frame _executorActiveFrame;
+
     /// <summary>
     /// The active frame as seen by the GL execution thread. Updated only by the executor when it
     /// processes a <see cref="WorkItemType.SetActiveFrame"/> work item, so it lags behind
     /// <see cref="GraphicsDevice.CurrentFrame"/> by the depth of the work queue. Use this anywhere
     /// inside the executor (e.g. transient UBO allocation) instead of <c>_gd.CurrentFrame</c>.
+    /// <para>
+    /// When usage validation is enabled (VALIDATE_USAGE), reading this while no frame is active on
+    /// the execution thread throws a <see cref="RenderException"/>, catching frame-dependent commands
+    /// submitted outside a frame. Without validation it returns <see langword="null"/>.
+    /// </para>
     /// </summary>
-    internal Frame ExecutorActiveFrame;
+    internal Frame ExecutorActiveFrame
+    {
+        get
+        {
+            ExecutorActiveFrame_CheckActive();
+            return _executorActiveFrame;
+        }
+    }
 
     private readonly List<OpenGLBuffer> _transientFreePool = new List<OpenGLBuffer>();
     private readonly object _transientFreePoolLock = new object();
@@ -502,6 +516,8 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
             sync = (nint)GL.FenceSync(SyncCondition.SyncGpuCommandsComplete, SyncBehaviorFlags.None);
         });
         slot.SyncObject = sync;
+
+        _executionThread.SetActiveFrame(null);
     }
 
     private protected override bool IsFrameCompleteCore(ulong frameId)
@@ -1163,7 +1179,7 @@ internal unsafe class OpenGLGraphicsDevice : GraphicsDevice
                         break;
                     case WorkItemType.SetActiveFrame:
                         {
-                            _gd.ExecutorActiveFrame = (Frame)workItem.Object0;
+                            _gd._executorActiveFrame = (Frame)workItem.Object0;
                         }
                         break;
                     default:

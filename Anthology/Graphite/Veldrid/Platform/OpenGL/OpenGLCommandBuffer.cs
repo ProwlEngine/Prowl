@@ -8,7 +8,7 @@ using Prowl.Vector;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal class OpenGLCommandBuffer : CommandBuffer
+internal partial class OpenGLCommandBuffer : CommandBuffer
 {
     private readonly OpenGLGraphicsDevice _gd;
     private OpenGLCommandEntryList _currentCommands;
