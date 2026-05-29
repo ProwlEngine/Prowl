@@ -26,7 +26,7 @@ public static class Program
         woptions.Size = new Vector2D<int>(600, 600);
         woptions.WindowState = WindowState.Normal;
         woptions.VideoMode = VideoMode.Default;
-        woptions.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
+        woptions.API = new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1));
         woptions.ShouldSwapAutomatically = false;
         window = Window.Create(woptions);
 
@@ -39,11 +39,12 @@ public static class Program
     public static void Load()
     {
         GraphicsDeviceOptions options = new(
-            debug: false,
+            debug: true,
             swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt,
             syncToVerticalBlank: true);
+        options.PreferStandardClipSpaceYDirection = true;
 
-        device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.OpenGL);
+        device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.Vulkan);
         device.SyncToVerticalBlank = false;
 
         tracker = new();
@@ -60,15 +61,17 @@ public static class Program
     {
         tracker.Begin();
 
+        Frame frame = device.BeginFrame();
+
         buffer.Begin();
         buffer.SetFramebuffer(device.SwapchainFramebuffer);
+        buffer.ClearDepthStencil(1, 0);
         buffer.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         buffer.SetShader(shader);
         buffer.SetVertexSource(triangle);
         buffer.DrawIndexed();
         buffer.End();
 
-        Frame frame = device.BeginFrame();
         frame.SubmitCommands(buffer);
         device.EndFrame(frame);
 
