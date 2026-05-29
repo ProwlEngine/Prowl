@@ -118,7 +118,7 @@ internal unsafe class VkSwapchain : Swapchain
             &imageIndex);
         _currentImageIndex = imageIndex;
         _framebuffer.SetImageIndex(_currentImageIndex);
-        if (result == Result.ErrorOutOfDateKhr/* || result == Result.SuboptimalKhr */)
+        if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
         {
             CreateSwapchain(_framebuffer.Width, _framebuffer.Height);
             return false;
