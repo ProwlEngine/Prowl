@@ -1,5 +1,4 @@
 ﻿using Prowl.PaperUI;
-using Prowl.PaperUI.Themes.Origami;
 using Prowl.Vector;
 
 // using Shared.Components;
@@ -995,7 +994,6 @@ namespace Shared
         {
             using (ScrollView.Begin(Gui, "Content", 800, 600))
             {
-                OrigamiExample.ShowExample(Gui, Fonts.arial);
             }
 
             //TextArea.Secondary("SearchTextField", searchText, newValue => searchText = newValue, "Search...")
