@@ -47,7 +47,7 @@ internal class OpenGLSwapchainFramebuffer : Framebuffer
             colorFormat,
             TextureUsage.RenderTarget,
             TextureSampleCount.Count1);
-        _colorTargets = new[] { new FramebufferAttachment(_colorTexture, 0) };
+        _colorTargets = [new FramebufferAttachment(_colorTexture, 0)];
 
         if (_depthFormat != null)
         {

@@ -25,8 +25,8 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private bool _disposed;
     private ComPtr<ID3D11CommandList> _commandList;
 
-    private D3D11Viewport[] _viewports = new D3D11Viewport[0];
-    private RawRect[] _scissors = new RawRect[0];
+    private D3D11Viewport[] _viewports = [];
+    private RawRect[] _scissors = [];
     private bool _viewportsChanged;
     private bool _scissorRectsChanged;
 
@@ -274,7 +274,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         ID3D11BlendState* blendState = sp.BlendStateHandle;
         BlendStateDescription bsDesc = sp.BlendState;
-        float[] blendFactor = new float[] { bsDesc.BlendFactor.R, bsDesc.BlendFactor.G, bsDesc.BlendFactor.B, bsDesc.BlendFactor.A };
+        float[] blendFactor = [bsDesc.BlendFactor.R, bsDesc.BlendFactor.G, bsDesc.BlendFactor.B, bsDesc.BlendFactor.A];
         if (_blendState != blendState || !BlendFactorEquals(_blendFactor, blendFactor))
         {
             _blendState = blendState;

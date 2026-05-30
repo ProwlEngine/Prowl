@@ -17,7 +17,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
     private uint _currentImageIndex;
 
     private VkFramebuffer[] _scFramebuffers;
-    private Image[] _scImages = { };
+    private Image[] _scImages = [];
     private Format _scImageFormat;
     private Extent2D _scExtent;
     private FramebufferAttachment[][] _scColorTextures;
@@ -163,7 +163,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
             FramebufferDescription desc = new FramebufferDescription(_depthAttachment?.Target, colorTex);
             VkFramebuffer fb = new VkFramebuffer(_gd, ref desc, true);
             _scFramebuffers[i] = fb;
-            _scColorTextures[i] = new FramebufferAttachment[] { new FramebufferAttachment(colorTex, 0) };
+            _scColorTextures[i] = [new FramebufferAttachment(colorTex, 0)];
         }
     }
 

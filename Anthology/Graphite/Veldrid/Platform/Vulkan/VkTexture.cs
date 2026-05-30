@@ -233,7 +233,7 @@ internal unsafe class VkTexture : Texture
         SampleCount = sampleCount;
         VkSampleCount = VkFormats.VdToVkSampleCount(sampleCount);
         _optimalImage = existingImage;
-        _imageLayouts = new[] { ImageLayout.Undefined };
+        _imageLayouts = [ImageLayout.Undefined];
         _isSwapchainTexture = true;
 
         ClearIfRenderTarget();

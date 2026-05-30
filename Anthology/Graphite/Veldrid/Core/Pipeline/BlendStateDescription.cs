@@ -58,7 +58,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// </summary>
     public static readonly BlendStateDescription SingleOverrideBlend = new BlendStateDescription
     {
-        AttachmentStates = new BlendAttachmentDescription[] { BlendAttachmentDescription.OverrideBlend }
+        AttachmentStates = [BlendAttachmentDescription.OverrideBlend]
     };
 
     /// <summary>
@@ -66,7 +66,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// </summary>
     public static readonly BlendStateDescription SingleAlphaBlend = new BlendStateDescription
     {
-        AttachmentStates = new BlendAttachmentDescription[] { BlendAttachmentDescription.AlphaBlend }
+        AttachmentStates = [BlendAttachmentDescription.AlphaBlend]
     };
 
     /// <summary>
@@ -74,7 +74,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// </summary>
     public static readonly BlendStateDescription SingleAdditiveBlend = new BlendStateDescription
     {
-        AttachmentStates = new BlendAttachmentDescription[] { BlendAttachmentDescription.AdditiveBlend }
+        AttachmentStates = [BlendAttachmentDescription.AdditiveBlend]
     };
 
     /// <summary>
@@ -82,7 +82,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// </summary>
     public static readonly BlendStateDescription SingleDisabled = new BlendStateDescription
     {
-        AttachmentStates = new BlendAttachmentDescription[] { BlendAttachmentDescription.Disabled }
+        AttachmentStates = [BlendAttachmentDescription.Disabled]
     };
 
     /// <summary>
