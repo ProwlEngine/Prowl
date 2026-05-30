@@ -99,9 +99,9 @@ namespace SFMLExample
             // Initialize demos
             _demos = new List<IDemo>
             {
-                new CanvasDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y, _demoTexture, RobotoFont, AlamakFont),
-                new SVGDemo(_canvas, (int)_window.Size.X, (int)_window.Size.Y),
-                new BenchmarkScene(_canvas, RobotoFont, (int)_window.Size.X, (int)_window.Size.Y),
+                new CanvasDemo(_canvas, _demoTexture, RobotoFont, AlamakFont),
+                new SVGDemo(_canvas),
+                new BenchmarkScene(_canvas, RobotoFont),
             };
         }
         

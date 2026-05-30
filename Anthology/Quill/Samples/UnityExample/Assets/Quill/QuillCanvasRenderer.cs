@@ -245,7 +245,7 @@ namespace Quill.Unity
                 _material.SetTexture(_MainTexID, texture);
 
                 // Set DPI scale
-                _material.SetFloat(_DpiScaleID, canvas.Scale);
+                _material.SetFloat(_DpiScaleID, (float)canvas.FramebufferScale);
 
                 // Set scissor parameters
                 drawCall.GetScissor(out var scissorMat, out var scissorExt);
@@ -332,8 +332,8 @@ namespace Quill.Unity
             // Set viewport
             cmd.SetViewport(new UnityEngine.Rect(0, 0, _width, _height));
 
-            // Set up orthographic projection (matching ImGui approach)
-            // Small offset improves text rendering
+            // Set up orthographic projection.
+            // Small offset improves text rendering.
             var viewMatrix = Matrix4x4.Translate(new Vector3(0.5f / _width, 0.5f / _height, 0f));
             var projectionMatrix = Matrix4x4.Ortho(0, _width, _height, 0, -1, 1);
             cmd.SetViewProjectionMatrices(viewMatrix, projectionMatrix);
@@ -348,7 +348,7 @@ namespace Quill.Unity
                 _propertyBlock.SetTexture(_MainTexID, texture);
 
                 // Set DPI scale
-                _propertyBlock.SetFloat(_DpiScaleID, canvas.Scale);
+                _propertyBlock.SetFloat(_DpiScaleID, (float)canvas.FramebufferScale);
 
                 // Set scissor parameters
                 drawCall.GetScissor(out var scissorMat, out var scissorExt);

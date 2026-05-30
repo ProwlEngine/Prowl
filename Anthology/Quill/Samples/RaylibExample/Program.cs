@@ -38,9 +38,9 @@ namespace RaylibExample
 
             var demos = new List<IDemo>
             {
-                new CanvasDemo(canvas, screenWidth, screenHeight, demoTexture, RobotoFont, AlamakFont),
-                new SVGDemo(canvas, screenWidth, screenHeight),
-                new BenchmarkScene(canvas, RobotoFont, screenWidth, screenHeight)
+                new CanvasDemo(canvas, demoTexture, RobotoFont, AlamakFont),
+                new SVGDemo(canvas),
+                new BenchmarkScene(canvas, RobotoFont)
             };
 
             int currentDemoIndex = 0;

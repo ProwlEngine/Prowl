@@ -56,9 +56,9 @@ public partial class App
 
         _demos = new List<IDemo>
         {
-            new CanvasDemo(_canvas, cw, ch, wallTexture!, robotoFont!, alamakFont!),
-            new SVGDemo(_canvas, cw, ch),
-            new BenchmarkScene(_canvas, robotoFont!, cw, ch),
+            new CanvasDemo(_canvas, wallTexture!, robotoFont!, alamakFont!),
+            new SVGDemo(_canvas),
+            new BenchmarkScene(_canvas, robotoFont!),
         };
 
         Console.WriteLine($"Initialized: {cw}x{ch}, {svgElements.Count} SVGs, {_demos.Count} demos");

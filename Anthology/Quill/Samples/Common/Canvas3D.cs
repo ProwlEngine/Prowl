@@ -59,28 +59,31 @@ public class Canvas3D
     }
 
     /// <summary>
-    /// Sets or gets the viewport width used for projection
+    /// Sets or gets the viewport width used for projection.
+    /// If not explicitly set, returns the canvas width.
     /// </summary>
     public float ViewportWidth {
-        get => _viewportWidth;
+        get => _viewportWidth > 0 ? _viewportWidth : _canvas.Width;
         set => _viewportWidth = value;
     }
 
     /// <summary>
-    /// Sets or gets the viewport height used for projection
+    /// Sets or gets the viewport height used for projection.
+    /// If not explicitly set, returns the canvas height.
     /// </summary>
     public float ViewportHeight {
-        get => _viewportHeight;
+        get => _viewportHeight > 0 ? _viewportHeight : _canvas.Height;
         set => _viewportHeight = value;
     }
 
     /// <summary>
-    /// Creates a new Canvas3D wrapper around an existing Canvas
+    /// Creates a new Canvas3D wrapper around an existing Canvas.
+    /// By default uses the canvas dimensions for the viewport.
     /// </summary>
     /// <param name="canvas">The Canvas to wrap</param>
-    /// <param name="viewportWidth">Width of the viewport</param>
-    /// <param name="viewportHeight">Height of the viewport</param>
-    public Canvas3D(Canvas canvas, float viewportWidth = 800, float viewportHeight = 600)
+    /// <param name="viewportWidth">Width of the viewport (0 = use canvas width)</param>
+    /// <param name="viewportHeight">Height of the viewport (0 = use canvas height)</param>
+    public Canvas3D(Canvas canvas, float viewportWidth = 0, float viewportHeight = 0)
     {
         _canvas = canvas;
         _viewportWidth = viewportWidth;

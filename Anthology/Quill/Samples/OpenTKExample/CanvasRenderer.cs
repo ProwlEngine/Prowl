@@ -494,7 +494,7 @@ namespace OpenTKExample
                     GL.UniformMatrix4(_projectionLocation, false, ref _projection);
 
                     // Set DPI scale for converting pixel coords to logical coords in shader
-                    GL.Uniform1(_dpiScaleLoc, canvas.Scale);
+                    GL.Uniform1(_dpiScaleLoc, (float)canvas.FramebufferScale);
 
                     // Set scissor rectangle
                     drawCall.GetScissor(out var scissor, out var extent);

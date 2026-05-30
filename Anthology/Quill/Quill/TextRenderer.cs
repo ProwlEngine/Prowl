@@ -108,9 +108,9 @@ namespace Prowl.Quill
             // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
             var uvOffset = new Float2(2.0f, 2.0f);
 
-            // Positions from Scribe are in pixel space (scaled). Convert back to logical units
-            // before TransformPoint, which will apply the canvas transform and then scale back.
-            float invScale = 1.0f / _canvas.Scale;
+            // Scribe glyph positions are in pixel space (already scaled). TransformPoint expects
+            // logical units (it will re-apply the framebuffer scale), so divide out first.
+            float invScale = 1.0f / _canvas.FramebufferScale;
 
             for (int i = 0; i < indices.Length; i += 3)
             {
@@ -118,8 +118,6 @@ namespace Prowl.Quill
                 var b = vertices[indices[i + 1]];
                 var c = vertices[indices[i + 2]];
 
-                // Convert from pixel space to logical units, then transform
-                // TransformPoint applies the canvas transform and scales back to pixels
                 uint index = (uint)_canvas.Vertices.Count;
                 var vertA = new Vertex(_canvas.TransformPoint(new Float2(a.Position.X * invScale, a.Position.Y * invScale)), a.TextureCoordinate + uvOffset, ToColor(a.Color));
                 var vertB = new Vertex(_canvas.TransformPoint(new Float2(b.Position.X * invScale, b.Position.Y * invScale)), b.TextureCoordinate + uvOffset, ToColor(b.Color));

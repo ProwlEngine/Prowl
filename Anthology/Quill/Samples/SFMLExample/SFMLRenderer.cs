@@ -509,7 +509,7 @@ void main()
                     try
                     {
                         // Set DPI scale for converting pixel coords to logical coords in shader
-                        _shader.SetUniform("dpiScale", canvas.Scale);
+                        _shader.SetUniform("dpiScale", (float)canvas.FramebufferScale);
 
                         // Get scissor parameters - this is crucial for the scissor to work
                         drawCall.GetScissor(out var scissor, out var extent);

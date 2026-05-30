@@ -12,8 +12,8 @@ namespace Common
     {
         private Canvas _canvas;
         private Canvas3D _canvas3D;
-        private float _width;
-        private float _height;
+        private float _width => _canvas.Width;
+        private float _height => _canvas.Height;
         private object _texture;
         private FontFile _fontA;
         private FontFile _fontB;
@@ -31,12 +31,10 @@ namespace Common
         private float _currentFps = 0;
         private const float FPS_UPDATE_INTERVAL = 0.5f; // Update FPS display every half second
 
-        public CanvasDemo(Canvas canvas, float width, float height, object texture, FontFile fontA, FontFile fontB)
+        public CanvasDemo(Canvas canvas, object texture, FontFile fontA, FontFile fontB)
         {
             _canvas = canvas;
-            _width = width;
-            _height = height;
-            _canvas3D = new Canvas3D(canvas, width, height);
+            _canvas3D = new Canvas3D(canvas);
             _texture = texture;
             _fontA = fontA;
             _fontB = fontB;
