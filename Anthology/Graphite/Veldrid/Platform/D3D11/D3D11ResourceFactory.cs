@@ -1,7 +1,7 @@
-using Silk.NET.Direct3D11;
-using Silk.NET.Core.Native;
-
 using System;
+
+using Silk.NET.Core.Native;
+using Silk.NET.Direct3D11;
 
 namespace Prowl.Veldrid.D3D11;
 

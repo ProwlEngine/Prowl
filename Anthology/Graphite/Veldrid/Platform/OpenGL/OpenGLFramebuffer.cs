@@ -1,6 +1,6 @@
-using static Prowl.Veldrid.OpenGL.OpenGLUtil;
-
 using Silk.NET.OpenGL;
+
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
 

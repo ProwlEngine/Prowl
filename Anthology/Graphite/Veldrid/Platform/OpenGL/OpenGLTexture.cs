@@ -1,12 +1,12 @@
+using System;
+using System.Diagnostics;
+
 using Silk.NET.OpenGL;
 
 using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
-using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
-
-using System;
-using System.Diagnostics;
+using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
 namespace Prowl.Veldrid.OpenGL;
 

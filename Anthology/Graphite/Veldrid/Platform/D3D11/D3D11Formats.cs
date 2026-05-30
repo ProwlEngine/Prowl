@@ -1,9 +1,9 @@
 using System;
 using System.Diagnostics;
 
+using Silk.NET.Core.Native;
 using Silk.NET.Direct3D11;
 using Silk.NET.DXGI;
-using Silk.NET.Core.Native;
 
 namespace Prowl.Veldrid.D3D11;
 

@@ -1,8 +1,8 @@
+using System.Collections.Generic;
+
 using Silk.NET.OpenGL;
 
 using static Prowl.Veldrid.OpenGL.OpenGLUtil;
-
-using System.Collections.Generic;
 
 namespace Prowl.Veldrid.OpenGL;
 

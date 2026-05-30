@@ -1,7 +1,9 @@
 using System;
-using static Prowl.Veldrid.OpenGL.OpenGLUtil;
-using Silk.NET.OpenGL;
 using System.Diagnostics;
+
+using Silk.NET.OpenGL;
+
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 namespace Prowl.Veldrid.OpenGL;
 
@@ -25,14 +27,18 @@ internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
 
     public override bool IsDisposed => _disposeRequested;
 
+
     public OpenGLBuffer(OpenGLGraphicsDevice gd, uint sizeInBytes, BufferUsage usage)
     {
         _gd = gd;
+        _name = "";
         _dynamic = (usage & BufferUsage.Dynamic) == BufferUsage.Dynamic;
 
+        Name = _name;
         SizeInBytes = sizeInBytes;
         Usage = usage;
     }
+
 
     public void EnsureResourcesCreated()
     {

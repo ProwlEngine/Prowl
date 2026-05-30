@@ -3,12 +3,16 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using static Prowl.Veldrid.OpenGL.OpenGLUtil;
-using Silk.NET.OpenGL;
-using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
-using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
 using System.Text;
+
 using Prowl.Vector;
+
+using Silk.NET.OpenGL;
+
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
+
+using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
+using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
 namespace Prowl.Veldrid.OpenGL;
 

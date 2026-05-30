@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Diagnostics;
-using Prowl.Vector;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using Prowl.Vector;
+
 using Xunit;
 
 namespace Prowl.Veldrid.Tests;

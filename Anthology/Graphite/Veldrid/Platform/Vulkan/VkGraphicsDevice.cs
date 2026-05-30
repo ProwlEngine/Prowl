@@ -7,16 +7,16 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
+using Silk.NET.Core;
+using Silk.NET.Core.Contexts;
+using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
-using Silk.NET.Core;
-using Silk.NET.Core.Native;
 
 using VkApi = Silk.NET.Vulkan.Vk;
-using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 using VkFenceHandle = Silk.NET.Vulkan.Fence;
-using Silk.NET.Core.Contexts;
+using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Veldrid.Vk;
 

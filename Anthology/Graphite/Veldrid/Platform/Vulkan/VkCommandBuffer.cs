@@ -1,17 +1,19 @@
 using System;
 using System.Buffers;
-using Silk.NET.Vulkan;
-using System.Diagnostics;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
+using Prowl.Vector;
+
+using Silk.NET.Vulkan;
+
 using VkApi = Silk.NET.Vulkan.Vk;
 using VkBufferHandle = Silk.NET.Vulkan.Buffer;
 using VkImageHandle = Silk.NET.Vulkan.Image;
-using Prowl.Vector;
 
 namespace Prowl.Veldrid.Vk;
 

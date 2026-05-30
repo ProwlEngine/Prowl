@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 using Silk.NET.Vulkan;
 
-using VkSamplerAddressMode = Silk.NET.Vulkan.SamplerAddressMode;
 using VkBlendFactor = Silk.NET.Vulkan.BlendFactor;
 using VkPrimitiveTopology = Silk.NET.Vulkan.PrimitiveTopology;
+using VkSamplerAddressMode = Silk.NET.Vulkan.SamplerAddressMode;
 
 namespace Prowl.Veldrid.Vk;
 

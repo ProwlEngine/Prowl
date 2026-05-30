@@ -1,10 +1,12 @@
-using System.Linq;
-using Silk.NET.Vulkan;
-using Silk.NET.Core;
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
-using VkSemaphore = Silk.NET.Vulkan.Semaphore;
+
+using Silk.NET.Core;
+using Silk.NET.Vulkan;
+
 using VkFenceHandle = Silk.NET.Vulkan.Fence;
+using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Veldrid.Vk;
 

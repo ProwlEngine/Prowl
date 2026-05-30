@@ -1,9 +1,8 @@
-using Silk.NET.Vulkan;
+using System.Collections.Generic;
 
 using Prowl.Vector;
 
-
-using System.Collections.Generic;
+using Silk.NET.Vulkan;
 
 namespace Prowl.Veldrid.Vk;
 

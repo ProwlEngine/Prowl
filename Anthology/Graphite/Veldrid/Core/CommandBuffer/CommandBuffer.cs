@@ -19,7 +19,7 @@ namespace Prowl.Veldrid;
 /// externally synchronized.
 /// There are some limitations dictating proper usage and ordering of graphics commands. For example, a
 /// <see cref="Framebuffer"/>, <see cref="ShaderProgram"/>, and <see cref="IVertexSource"/> must all be
-/// bound before a call to <see cref="DrawIndexed(uint, uint, uint, int, uint)"/> will succeed.
+/// bound before a call to <see cref="DrawIndexed(uint, uint, int, uint)"/> will succeed.
 /// These limitations are described in each function, where applicable.
 /// <see cref="CommandBuffer"/> instances cannot be executed multiple times per-recording. When executed by a
 /// <see cref="GraphicsDevice"/>, they must be reset and commands must be issued again.

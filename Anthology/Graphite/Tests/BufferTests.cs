@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
-using Prowl.Vector;
 using System.Runtime.CompilerServices;
+
+using Prowl.Vector;
+
 using Xunit;
 
 namespace Prowl.Veldrid.Tests;

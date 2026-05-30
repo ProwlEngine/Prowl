@@ -24,12 +24,10 @@ internal readonly struct ComputeUboCacheKey : IEquatable<ComputeUboCacheKey>
     }
 
     public bool Equals(ComputeUboCacheKey other)
-        => ReferenceEquals(Program, other.Program)
-        && Set == other.Set
-        && Binding == other.Binding
-        && UniformVersion == other.UniformVersion;
+        => Program.Equals(other.Program) && Set == other.Set && Binding == other.Binding && UniformVersion == other.UniformVersion;
 
-    public override bool Equals(object? obj) => obj is ComputeUboCacheKey k && Equals(k);
+    public override bool Equals(object? obj)
+        => obj is ComputeUboCacheKey k && Equals(k);
 
     public override int GetHashCode() => HashCode.Combine(
         RuntimeHelpers.GetHashCode(Program),

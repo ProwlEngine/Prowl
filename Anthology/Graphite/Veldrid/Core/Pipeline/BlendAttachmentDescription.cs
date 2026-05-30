@@ -16,6 +16,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     /// If <c>null</c>, the mask will be set to <see cref="Prowl.Veldrid.ColorWriteMask.All"/>.
     /// </summary>
     public ColorWriteMask? ColorWriteMask;
+
     /// <summary>
     /// Controls the source color's influence on the blend result.
     /// </summary>

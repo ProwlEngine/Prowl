@@ -1,7 +1,7 @@
-using Silk.NET.Vulkan;
-
-using System.Diagnostics;
 using System;
+using System.Diagnostics;
+
+using Silk.NET.Vulkan;
 
 namespace Prowl.Veldrid.Vk;
 

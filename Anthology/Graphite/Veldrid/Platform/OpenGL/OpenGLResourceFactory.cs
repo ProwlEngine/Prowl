@@ -1,6 +1,6 @@
-using Silk.NET.OpenGL;
-
 using System;
+
+using Silk.NET.OpenGL;
 
 namespace Prowl.Veldrid.OpenGL;
 

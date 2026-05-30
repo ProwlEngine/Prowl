@@ -1,9 +1,8 @@
-using Silk.NET.Vulkan;
-
-
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System;
+
+using Silk.NET.Vulkan;
 
 using VkBufferHandle = Silk.NET.Vulkan.Buffer;
 

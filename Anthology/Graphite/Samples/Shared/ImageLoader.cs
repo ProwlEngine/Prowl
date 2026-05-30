@@ -1,11 +1,10 @@
 using System;
 using System.IO;
 
-using Prowl.Veldrid;
-using Prowl.Vector;
-
-
 using ImageMagick;
+
+using Prowl.Vector;
+using Prowl.Veldrid;
 
 
 namespace Prowl.Veldrid.Samples;

@@ -1,6 +1,7 @@
 using System;
-using Prowl.Vector;
 using System.Runtime.InteropServices;
+
+using Prowl.Vector;
 
 using Xunit;
 

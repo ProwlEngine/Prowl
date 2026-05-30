@@ -1,8 +1,8 @@
-using static Prowl.Veldrid.OpenGL.OpenGLUtil;
+using Prowl.Vector;
 
 using Silk.NET.OpenGL;
 
-using Prowl.Vector;
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 namespace Prowl.Veldrid.OpenGL;
 

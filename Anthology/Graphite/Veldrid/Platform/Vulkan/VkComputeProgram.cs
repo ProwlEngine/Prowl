@@ -1,7 +1,6 @@
-using Silk.NET.Vulkan;
-
-
 using System;
+
+using Silk.NET.Vulkan;
 
 using VkPipelineHandle = Silk.NET.Vulkan.Pipeline;
 

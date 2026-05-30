@@ -1,10 +1,10 @@
+using System;
+
 using Silk.NET.OpenGL;
 
 using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
-
-using System;
 
 namespace Prowl.Veldrid.OpenGL;
 

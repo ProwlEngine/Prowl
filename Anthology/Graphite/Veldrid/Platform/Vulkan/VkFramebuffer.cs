@@ -1,7 +1,9 @@
-using System.Collections.Generic;
-using Silk.NET.Vulkan;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+
+using Silk.NET.Vulkan;
+
 using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
 
 namespace Prowl.Veldrid.Vk;

@@ -1,17 +1,20 @@
-﻿using static Prowl.Veldrid.OpenGL.OpenGLUtil;
-using System;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+using Silk.NET.Core.Contexts;
 using Silk.NET.Core.Loader;
 using Silk.NET.OpenGL;
 using Silk.NET.OpenGL.Extensions.EXT;
-using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
+
+using static Prowl.Veldrid.OpenGL.OpenGLUtil;
+
 using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
-using System.Collections.Concurrent;
-using System.Runtime.InteropServices;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading;
-using System.Runtime.CompilerServices;
-using Silk.NET.Core.Contexts;
+using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
 namespace Prowl.Veldrid.OpenGL;
 

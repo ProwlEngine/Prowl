@@ -2,9 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 
-using Prowl.Veldrid.OpenGL.NoAllocEntryList;
-
 using Prowl.Vector;
+using Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
 namespace Prowl.Veldrid.OpenGL;
 

@@ -1,9 +1,9 @@
+using System.IO;
+
 using Prowl.Vector;
 
-using Silk.NET.Windowing;
 using Silk.NET.Maths;
-
-using System.IO;
+using Silk.NET.Windowing;
 
 
 namespace Prowl.Veldrid.Samples.CubeGrid;

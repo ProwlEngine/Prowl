@@ -1,8 +1,8 @@
-﻿using Prowl.Vector;
-
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+
+using Prowl.Vector;
 
 using Xunit;
 
