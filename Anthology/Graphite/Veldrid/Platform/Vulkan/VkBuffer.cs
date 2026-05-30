@@ -55,7 +55,7 @@ internal unsafe class VkBuffer : DeviceBuffer
             vkUsage |= BufferUsageFlags.IndirectBufferBit;
         }
 
-        BufferCreateInfo bufferCI = new BufferCreateInfo
+        BufferCreateInfo bufferCI = new()
         {
             SType = StructureType.BufferCreateInfo,
             Size = sizeInBytes,
@@ -66,16 +66,16 @@ internal unsafe class VkBuffer : DeviceBuffer
         bool prefersDedicatedAllocation;
         if (_gd.GetBufferMemoryRequirements2 != null)
         {
-            BufferMemoryRequirementsInfo2KHR memReqInfo2 = new BufferMemoryRequirementsInfo2KHR
+            BufferMemoryRequirementsInfo2KHR memReqInfo2 = new()
             {
                 SType = StructureType.BufferMemoryRequirementsInfo2Khr,
                 Buffer = _deviceBuffer
             };
-            MemoryRequirements2KHR memReqs2 = new MemoryRequirements2KHR
+            MemoryRequirements2KHR memReqs2 = new()
             {
                 SType = StructureType.MemoryRequirements2Khr
             };
-            MemoryDedicatedRequirementsKHR dedicatedReqs = new MemoryDedicatedRequirementsKHR
+            MemoryDedicatedRequirementsKHR dedicatedReqs = new()
             {
                 SType = StructureType.MemoryDedicatedRequirementsKhr
             };

@@ -18,7 +18,7 @@ internal enum ChangeMask : byte
 /// </summary>
 internal sealed class MergedPropertyTable
 {
-    public readonly Dictionary<PropertyID, PropertyEntry> Entries = new();
+    public readonly Dictionary<PropertyID, PropertyEntry> Entries = [];
 
     /// <summary>Incremented when a merge dirtied at least one uniform entry.</summary>
     public uint UniformVersion;

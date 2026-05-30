@@ -35,14 +35,14 @@ internal class OpenGLResourceFactory : ResourceFactory
 
     protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
     {
-        OpenGLShaderProgram program = new OpenGLShaderProgram(_gd, ref description);
+        OpenGLShaderProgram program = new(_gd, ref description);
         _gd.EnsureResourceInitialized(program);
         return program;
     }
 
     protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
     {
-        OpenGLComputeProgram program = new OpenGLComputeProgram(_gd, ref description);
+        OpenGLComputeProgram program = new(_gd, ref description);
         _gd.EnsureResourceInitialized(program);
         return program;
     }

@@ -24,7 +24,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 {
     private const uint VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR = 0x00000001;
     private static readonly FixedUtf8String s_name = "Prowl.Veldrid-VkGraphicsDevice";
-    private static readonly Lazy<bool> s_isSupported = new Lazy<bool>(CheckIsSupported, isThreadSafe: true);
+    private static readonly Lazy<bool> s_isSupported = new(CheckIsSupported, isThreadSafe: true);
 
     private readonly VkApi _vk = VkApi.GetApi();
 
@@ -43,9 +43,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private uint _graphicsQueueIndex;
     private uint _presentQueueIndex;
     private CommandPool _graphicsCommandPool;
-    private readonly object _graphicsCommandPoolLock = new object();
+    private readonly object _graphicsCommandPoolLock = new();
     private Queue _graphicsQueue;
-    private readonly object _graphicsQueueLock = new object();
+    private readonly object _graphicsQueueLock = new();
     private DebugReportCallbackEXT _debugCallbackHandle;
     private PfnDebugReportCallbackEXT _debugCallbackFunc;
     private bool _debugMarkerEnabled;
@@ -53,7 +53,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private vkCmdDebugMarkerBeginEXT_t _markerBegin;
     private vkCmdDebugMarkerEndEXT_t _markerEnd;
     private vkCmdDebugMarkerInsertEXT_t _markerInsert;
-    private readonly ConcurrentDictionary<Format, Filter> _filters = new ConcurrentDictionary<Format, Filter>();
+    private readonly ConcurrentDictionary<Format, Filter> _filters = new();
     private readonly BackendInfoVulkan _vulkanInfo;
 
     private ExtDebugReport _extDebugReport;
@@ -61,11 +61,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private KhrSwapchain _khrSwapchain;
 
     private const int SharedCommandPoolCount = 4;
-    private Stack<SharedCommandPool> _sharedGraphicsCommandPools = new Stack<SharedCommandPool>();
+    private Stack<SharedCommandPool> _sharedGraphicsCommandPools = new();
     private VkDescriptorPoolManager _descriptorPoolManager;
     private VkDescriptorPoolManager[] _frameDescriptorPools;
-    private readonly Dictionary<Texture, VkTextureView> _defaultTextureViews = new();
-    private readonly object _defaultTextureViewsLock = new object();
+    private readonly Dictionary<Texture, VkTextureView> _defaultTextureViews = [];
+    private readonly object _defaultTextureViewsLock = new();
     private bool _standardValidationSupported;
     private bool _khronosValidationSupported;
     private bool _standardClipYDirection;
@@ -77,16 +77,16 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private const uint MinStagingBufferSize = 64;
     private const uint MaxStagingBufferSize = 512;
 
-    private readonly object _stagingResourcesLock = new object();
-    private readonly List<VkTexture> _availableStagingTextures = new List<VkTexture>();
-    private readonly List<VkBuffer> _availableStagingBuffers = new List<VkBuffer>();
+    private readonly object _stagingResourcesLock = new();
+    private readonly List<VkTexture> _availableStagingTextures = [];
+    private readonly List<VkBuffer> _availableStagingBuffers = [];
 
     private readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, VkTexture> _submittedStagingTextures
-        = new Dictionary<Silk.NET.Vulkan.CommandBuffer, VkTexture>();
+        = [];
     private readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, VkBuffer> _submittedStagingBuffers
-        = new Dictionary<Silk.NET.Vulkan.CommandBuffer, VkBuffer>();
+        = [];
     private readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, SharedCommandPool> _submittedSharedCommandPools
-        = new Dictionary<Silk.NET.Vulkan.CommandBuffer, SharedCommandPool>();
+        = [];
 
     private readonly VkBuffer _emptyUniformBuffer;
     private readonly VkBuffer _emptyStructuredBuffer;
@@ -161,9 +161,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     public KhrSurface KhrSurface => _khrSurface;
     public KhrSwapchain KhrSwapchain => _khrSwapchain;
 
-    private readonly object _submittedFencesLock = new object();
-    private readonly ConcurrentQueue<VkFenceHandle> _availableSubmissionFences = new ConcurrentQueue<VkFenceHandle>();
-    private readonly List<FenceSubmissionInfo> _submittedFences = new List<FenceSubmissionInfo>();
+    private readonly object _submittedFencesLock = new();
+    private readonly ConcurrentQueue<VkFenceHandle> _availableSubmissionFences = new();
+    private readonly List<FenceSubmissionInfo> _submittedFences = [];
     private readonly VkSwapchain _mainSwapchain;
 
     private PipelineCache _driverPipelineCache;
@@ -225,7 +225,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         CreateDescriptorPool();
         CreateGraphicsCommandPool();
 
-        PipelineCacheCreateInfo pcCI = new PipelineCacheCreateInfo
+        PipelineCacheCreateInfo pcCI = new()
         {
             SType = StructureType.PipelineCacheCreateInfo,
             InitialDataSize = 0,
@@ -260,8 +260,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     private SlotState[] _slots;
-    private readonly List<VkBuffer> _transientFreePool = new List<VkBuffer>();
-    private readonly object _transientFreePoolLock = new object();
+    private readonly List<VkBuffer> _transientFreePool = [];
+    private readonly object _transientFreePoolLock = new();
 
     private void InitializeSlots()
     {
@@ -270,9 +270,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         for (uint i = 0; i < _maxFramesInFlight; i++)
         {
             _frameDescriptorPools[i] = new VkDescriptorPoolManager(this, freeDescriptorSets: false);
-            VkFence slotWrapper = new VkFence(this, false);
+            VkFence slotWrapper = new(this, false);
 
-            VkBuffer primary = new VkBuffer(this, _transientInitialSize,
+            VkBuffer primary = new(this, _transientInitialSize,
                 BufferUsage.Dynamic | BufferUsage.VertexBuffer | BufferUsage.IndexBuffer
                 | BufferUsage.UniformBuffer | BufferUsage.StructuredBufferReadOnly);
             byte* mapped = (byte*)primary.Memory.BlockMappedPointer;
@@ -283,7 +283,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 FenceWrapper = slotWrapper,
                 TransientPrimary = primary,
                 TransientMapped = mapped,
-                TransientOverflow = new List<VkBuffer>(),
+                TransientOverflow = [],
                 CurrentFrameId = 0,
             };
         }
@@ -331,7 +331,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         uint ringSlot = frame.RingSlot;
         VkFenceHandle slotFence = _slots[ringSlot].Fence;
 
-        SubmitInfo si = new SubmitInfo(sType: StructureType.SubmitInfo);
+        SubmitInfo si = new(sType: StructureType.SubmitInfo);
         si.CommandBufferCount = 0;
 
         lock (_graphicsQueueLock)
@@ -426,7 +426,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         CheckSubmittedFences();
 
         bool useExtraFence = fence != null;
-        SubmitInfo si = new SubmitInfo(sType: StructureType.SubmitInfo);
+        SubmitInfo si = new(sType: StructureType.SubmitInfo);
         si.CommandBufferCount = 1;
         si.PCommandBuffers = &vkCB;
         PipelineStageFlags waitDstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
@@ -544,7 +544,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
         else
         {
-            FenceCreateInfo fenceCI = new FenceCreateInfo(sType: StructureType.FenceCreateInfo);
+            FenceCreateInfo fenceCI = new(sType: StructureType.FenceCreateInfo);
             VkFenceHandle newFence;
             _vk.CreateFence(_device, &fenceCI, null, &newFence).CheckResult();
             return newFence;
@@ -555,7 +555,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     {
         VkSwapchain vkSC = Util.AssertSubtype<Swapchain, VkSwapchain>(swapchain);
         SwapchainKHR deviceSwapchain = vkSC.DeviceSwapchain;
-        PresentInfoKHR presentInfo = new PresentInfoKHR(sType: StructureType.PresentInfoKhr);
+        PresentInfoKHR presentInfo = new(sType: StructureType.PresentInfoKhr);
         presentInfo.SwapchainCount = 1;
         presentInfo.PSwapchains = &deviceSwapchain;
         uint imageIndex = vkSC.ImageIndex;
@@ -633,7 +633,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     {
         Debug.Assert(_setObjectNameDelegate != null);
 
-        DebugMarkerObjectNameInfoEXT nameInfo = new DebugMarkerObjectNameInfoEXT(sType: StructureType.DebugMarkerObjectNameInfoExt);
+        DebugMarkerObjectNameInfoEXT nameInfo = new(sType: StructureType.DebugMarkerObjectNameInfoExt);
         nameInfo.ObjectType = type;
         nameInfo.Object = target;
 
@@ -654,8 +654,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         HashSet<string> availableInstanceLayers = [.. Vk.EnumerateInstanceLayers((LayerProperties*)0)];
         HashSet<string> availableInstanceExtensions = [.. Vk.EnumerateInstanceExtensionProperties((byte*)0)];
 
-        InstanceCreateInfo instanceCI = new InstanceCreateInfo(sType: StructureType.InstanceCreateInfo);
-        ApplicationInfo applicationInfo = new ApplicationInfo(sType: StructureType.ApplicationInfo)
+        InstanceCreateInfo instanceCI = new(sType: StructureType.InstanceCreateInfo);
+        ApplicationInfo applicationInfo = new(sType: StructureType.ApplicationInfo)
         {
             ApiVersion = new Version32(1, 0, 0),
             ApplicationVersion = new Version32(1, 0, 0),
@@ -687,7 +687,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (surface != null)
         {
             byte** surfaceExtensions = surface.VkSurface.GetRequiredExtensions(out uint extensionCount);
-            HashSet<string> addedExtensions = new();
+            HashSet<string> addedExtensions = [];
             string[] requested = [
                 "VK_KHR_surface"
             ];
@@ -712,13 +712,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_get_physical_device_properties2;
 
         string[] requestedInstanceExtensions = options.InstanceExtensions ?? Array.Empty<string>();
-        List<FixedUtf8String> tempStrings = new List<FixedUtf8String>();
+        List<FixedUtf8String> tempStrings = [];
         foreach (string requiredExt in requestedInstanceExtensions)
         {
             if (!availableInstanceExtensions.Contains(requiredExt))
                 throw new RenderException($"The required instance extension was not available: {requiredExt}");
 
-            FixedUtf8String utf8Str = new FixedUtf8String(requiredExt);
+            FixedUtf8String utf8Str = new(requiredExt);
             instanceExtensions[instanceExtensionCount++] = utf8Str;
             tempStrings.Add(utf8Str);
         }
@@ -775,7 +775,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     {
         Debug.WriteLine("Enabling Vulkan Debug callbacks.");
         _debugCallbackFunc = new PfnDebugReportCallbackEXT(&DebugCallback);
-        DebugReportCallbackCreateInfoEXT debugCallbackCI = new DebugReportCallbackCreateInfoEXT(sType: StructureType.DebugReportCallbackCreateInfoExt);
+        DebugReportCallbackCreateInfoEXT debugCallbackCI = new(sType: StructureType.DebugReportCallbackCreateInfoExt);
         debugCallbackCI.Flags = flags;
         debugCallbackCI.PfnCallback = _debugCallbackFunc;
 
@@ -876,14 +876,14 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     {
         GetQueueFamilyIndices(surface);
 
-        HashSet<uint> familyIndices = new HashSet<uint> { _graphicsQueueIndex, _presentQueueIndex };
+        HashSet<uint> familyIndices = [_graphicsQueueIndex, _presentQueueIndex];
         DeviceQueueCreateInfo* queueCreateInfos = stackalloc DeviceQueueCreateInfo[familyIndices.Count];
         uint queueCreateInfosCount = (uint)familyIndices.Count;
 
         int i = 0;
         foreach (uint index in familyIndices)
         {
-            DeviceQueueCreateInfo queueCreateInfo = new DeviceQueueCreateInfo(sType: StructureType.DeviceQueueCreateInfo);
+            DeviceQueueCreateInfo queueCreateInfo = new(sType: StructureType.DeviceQueueCreateInfo);
             queueCreateInfo.QueueFamilyIndex = index;
             queueCreateInfo.QueueCount = 1;
             float priority = 1f;
@@ -896,7 +896,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         ExtensionProperties[] props = GetDeviceExtensionProperties();
 
-        HashSet<string> requiredInstanceExtensions = new HashSet<string>(options.DeviceExtensions ?? Array.Empty<string>());
+        HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
 
         bool hasMemReqs2 = false;
         bool hasDedicatedAllocation = false;
@@ -963,7 +963,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 $"The following Vulkan device extensions were not available: {missingList}");
         }
 
-        DeviceCreateInfo deviceCreateInfo = new DeviceCreateInfo(sType: StructureType.DeviceCreateInfo);
+        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo);
         deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
         deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
 
@@ -1015,7 +1015,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
         if (_getPhysicalDeviceProperties2 != null && hasDriverProperties)
         {
-            PhysicalDeviceProperties2KHR deviceProps = new PhysicalDeviceProperties2KHR(sType: StructureType.PhysicalDeviceProperties2Khr);
+            PhysicalDeviceProperties2KHR deviceProps = new(sType: StructureType.PhysicalDeviceProperties2Khr);
             VkPhysicalDeviceDriverProperties driverProps = VkPhysicalDeviceDriverProperties.New();
 
             deviceProps.PNext = &driverProps;
@@ -1130,7 +1130,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     private void CreateGraphicsCommandPool()
     {
-        CommandPoolCreateInfo commandPoolCI = new CommandPoolCreateInfo(sType: StructureType.CommandPoolCreateInfo);
+        CommandPoolCreateInfo commandPoolCI = new(sType: StructureType.CommandPoolCreateInfo);
         commandPoolCI.Flags = CommandPoolCreateFlags.ResetCommandBufferBit;
         commandPoolCI.QueueFamilyIndex = _graphicsQueueIndex;
         _vk.CreateCommandPool(_device, in commandPoolCI, null, out _graphicsCommandPool).CheckResult();
@@ -1402,7 +1402,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             SharedCommandPool pool = GetFreeCommandPool();
             Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
 
-            BufferCopy copyRegion = new BufferCopy
+            BufferCopy copyRegion = new()
             {
                 DstOffset = bufferOffsetInBytes,
                 Size = sizeInBytes
@@ -1580,8 +1580,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (!vk.IsLoaded())
             return false;
 
-        InstanceCreateInfo instanceCI = new InstanceCreateInfo(sType: StructureType.InstanceCreateInfo);
-        ApplicationInfo applicationInfo = new ApplicationInfo(sType: StructureType.ApplicationInfo);
+        InstanceCreateInfo instanceCI = new(sType: StructureType.InstanceCreateInfo);
+        ApplicationInfo applicationInfo = new(sType: StructureType.ApplicationInfo);
         applicationInfo.ApiVersion = new Version32(1, 0, 0);
         applicationInfo.ApplicationVersion = new Version32(1, 0, 0);
         applicationInfo.EngineVersion = new Version32(1, 0, 0);
@@ -1655,7 +1655,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         {
             effectiveLayers *= 6;
         }
-        ImageSubresourceRange range = new ImageSubresourceRange(
+        ImageSubresourceRange range = new(
              ImageAspectFlags.ColorBit,
              0,
              texture.MipLevels,
@@ -1680,7 +1680,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         ImageAspectFlags aspect = FormatHelpers.IsStencilFormat(texture.Format)
             ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
             : ImageAspectFlags.DepthBit;
-        ImageSubresourceRange range = new ImageSubresourceRange(
+        ImageSubresourceRange range = new(
             aspect,
             0,
             texture.MipLevels,
@@ -1727,12 +1727,12 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             _gd = gd;
             IsCached = isCached;
 
-            CommandPoolCreateInfo commandPoolCI = new CommandPoolCreateInfo(sType: StructureType.CommandPoolCreateInfo);
+            CommandPoolCreateInfo commandPoolCI = new(sType: StructureType.CommandPoolCreateInfo);
             commandPoolCI.Flags = CommandPoolCreateFlags.TransientBit | CommandPoolCreateFlags.ResetCommandBufferBit;
             commandPoolCI.QueueFamilyIndex = _gd.GraphicsQueueIndex;
             _gd._vk.CreateCommandPool(_gd.Device, in commandPoolCI, null, out _pool).CheckResult();
 
-            CommandBufferAllocateInfo allocateInfo = new CommandBufferAllocateInfo(sType: StructureType.CommandBufferAllocateInfo);
+            CommandBufferAllocateInfo allocateInfo = new(sType: StructureType.CommandBufferAllocateInfo);
             allocateInfo.CommandBufferCount = 1;
             allocateInfo.Level = CommandBufferLevel.Primary;
             allocateInfo.CommandPool = _pool;
@@ -1742,7 +1742,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         public Silk.NET.Vulkan.CommandBuffer BeginNewCommandBuffer()
         {
-            CommandBufferBeginInfo beginInfo = new CommandBufferBeginInfo(sType: StructureType.CommandBufferBeginInfo);
+            CommandBufferBeginInfo beginInfo = new(sType: StructureType.CommandBufferBeginInfo);
             beginInfo.Flags = CommandBufferUsageFlags.OneTimeSubmitBit;
             _gd._vk.BeginCommandBuffer(_cb, in beginInfo).CheckResult();
 

@@ -12,11 +12,11 @@ namespace Prowl.Veldrid;
 /// </summary>
 public abstract partial class GraphicsDevice : IDisposable
 {
-    private readonly object _deferredDisposalLock = new object();
-    private readonly List<IDisposable> _disposables = new List<IDisposable>();
+    private readonly object _deferredDisposalLock = new();
+    private readonly List<IDisposable> _disposables = [];
     private Sampler _aniso4xSampler;
     private bool _disposed;
-    private readonly object _nullTextureLock = new object();
+    private readonly object _nullTextureLock = new();
     private DeviceBuffer _nullStructuredRead;
     private DeviceBuffer _nullStructuredReadWrite;
 
@@ -1179,7 +1179,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <returns>A new <see cref="GraphicsDevice"/> using the Direct3D 11 API.</returns>
     public static GraphicsDevice CreateD3D11(GraphicsDeviceOptions options, IntPtr hwnd, uint width, uint height)
     {
-        SwapchainDescription swapchainDescription = new SwapchainDescription(
+        SwapchainDescription swapchainDescription = new(
             SwapchainSource.CreateWin32(hwnd, IntPtr.Zero),
             width, height,
             options.SwapchainDepthFormat,

@@ -16,7 +16,7 @@ internal unsafe class VkFence : Fence
     public VkFence(VkGraphicsDevice gd, bool signaled)
     {
         _gd = gd;
-        FenceCreateInfo fenceCI = new FenceCreateInfo
+        FenceCreateInfo fenceCI = new()
         {
             SType = StructureType.FenceCreateInfo,
             Flags = signaled ? FenceCreateFlags.SignaledBit : 0

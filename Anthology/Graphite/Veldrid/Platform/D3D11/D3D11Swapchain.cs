@@ -22,8 +22,8 @@ internal unsafe class D3D11Swapchain : Swapchain
     private bool _disposed;
     private string _name;
 
-    private readonly object _referencedCLsLock = new object();
-    private HashSet<D3D11CommandBuffer> _referencedCLs = new HashSet<D3D11CommandBuffer>();
+    private readonly object _referencedCLsLock = new();
+    private HashSet<D3D11CommandBuffer> _referencedCLs = [];
 
     public override Framebuffer Framebuffer => _framebuffer;
 
@@ -62,7 +62,7 @@ internal unsafe class D3D11Swapchain : Swapchain
 
         Win32SwapchainSource win32Source = Util.AssertSubtype<SwapchainSource, Win32SwapchainSource>(description.Source);
 
-        SwapChainDesc dxgiSCDesc = new SwapChainDesc
+        SwapChainDesc dxgiSCDesc = new()
         {
             BufferCount = 2,
             Windowed = 1,
@@ -140,7 +140,7 @@ internal unsafe class D3D11Swapchain : Swapchain
 
         if (_depthFormat != null)
         {
-            TextureDescription depthDesc = new TextureDescription(
+            TextureDescription depthDesc = new(
                 actualWidth, actualHeight, 1, 1, 1,
                 _depthFormat.Value,
                 TextureUsage.DepthStencil,
@@ -156,7 +156,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         // Release our GetBuffer reference; D3D11Texture constructor calls AddRef to take ownership.
         pBackBuffer->Release();
 
-        FramebufferDescription desc = new FramebufferDescription(_depthTexture, _backBufferVdTexture);
+        FramebufferDescription desc = new(_depthTexture, _backBufferVdTexture);
         _framebuffer = new D3D11Framebuffer(_gd.Device, ref desc)
         {
             Swapchain = this

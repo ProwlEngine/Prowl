@@ -17,7 +17,7 @@ internal unsafe class D3D11Sampler : Sampler
             ? ComparisonFunc.Never
             : D3D11Formats.VdToD3D11ComparisonFunc(description.ComparisonKind.Value);
 
-        SamplerDesc samplerStateDesc = new SamplerDesc
+        SamplerDesc samplerStateDesc = new()
         {
             AddressU = D3D11Formats.VdToD3D11AddressMode(description.AddressModeU),
             AddressV = D3D11Formats.VdToD3D11AddressMode(description.AddressModeV),

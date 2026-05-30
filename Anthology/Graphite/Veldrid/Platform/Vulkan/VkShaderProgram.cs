@@ -9,8 +9,8 @@ namespace Prowl.Veldrid.Vk;
 internal unsafe class VkShaderProgram : ShaderProgram
 {
     private readonly VkGraphicsDevice _gd;
-    private readonly Dictionary<ShaderStages, ShaderModule> _modules = new();
-    private readonly Dictionary<ShaderStages, string> _entryPoints = new();
+    private readonly Dictionary<ShaderStages, ShaderModule> _modules = [];
+    private readonly Dictionary<ShaderStages, string> _entryPoints = [];
 
     /// <summary>
     /// Descriptor-set layouts indexed by set index (0..maxSet). Empty-DSL for gaps.
@@ -39,8 +39,8 @@ internal unsafe class VkShaderProgram : ShaderProgram
     /// <see cref="_pipelineCacheLock"/> so <c>vkCreateGraphicsPipelines</c> never runs twice
     /// concurrently for the same key.
     /// </summary>
-    private readonly Dictionary<VkPipelineCacheKey, VkPipelineCacheEntry> _pipelineCache = new();
-    private readonly object _pipelineCacheLock = new object();
+    private readonly Dictionary<VkPipelineCacheKey, VkPipelineCacheEntry> _pipelineCache = [];
+    private readonly object _pipelineCacheLock = new();
 
     private DescriptorSetLayout _emptyDescriptorSetLayout;
     private bool _disposed;
@@ -86,7 +86,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
         for (int i = 0; i < stages.Length; i++)
         {
             ShaderStageDescription sd = stages[i];
-            ShaderModuleCreateInfo shaderModuleCI = new ShaderModuleCreateInfo
+            ShaderModuleCreateInfo shaderModuleCI = new()
             {
                 SType = StructureType.ShaderModuleCreateInfo
             };
@@ -174,7 +174,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
             }
         }
 
-        DescriptorSetLayoutCreateInfo dslCI = new DescriptorSetLayoutCreateInfo
+        DescriptorSetLayoutCreateInfo dslCI = new()
         {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
             BindingCount = (uint)elems.Length,
@@ -206,7 +206,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
         DescriptorSetLayout* dslsPtr = stackalloc DescriptorSetLayout[(int)setCount];
         for (int i = 0; i < setCount; i++) dslsPtr[i] = dsls[i];
 
-        PipelineLayoutCreateInfo pipelineLayoutCI = new PipelineLayoutCreateInfo
+        PipelineLayoutCreateInfo pipelineLayoutCI = new()
         {
             SType = StructureType.PipelineLayoutCreateInfo,
             SetLayoutCount = setCount,
@@ -219,7 +219,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
     private DescriptorSetLayout GetOrCreateEmptyDescriptorSetLayout()
     {
         if (_emptyDescriptorSetLayout.Handle != 0) return _emptyDescriptorSetLayout;
-        DescriptorSetLayoutCreateInfo dslCI = new DescriptorSetLayoutCreateInfo
+        DescriptorSetLayoutCreateInfo dslCI = new()
         {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
             BindingCount = 0,

@@ -42,21 +42,21 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected readonly MergedPropertyTable _mergedTable = new();
 
     /// <summary>Tracks the last-seen uniform and resource version for each PropertySet merged via SetProperties.</summary>
-    private readonly Dictionary<PropertySet, (uint uniformV, uint resourceV)> _seenVersions = new();
+    private readonly Dictionary<PropertySet, (uint uniformV, uint resourceV)> _seenVersions = [];
 
     /// <summary>
     /// Per-frame cache of allocated transient UBO ranges for graphics (ShaderProgram) draws.
     /// Cleared at <see cref="Begin"/>. Key: (shader, set, binding, merged uniform version).
     /// Used by Vk and D3D11 at draw time. OpenGL replay uses a separate cache on the executor.
     /// </summary>
-    private protected readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = new();
+    private protected readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = [];
 
     /// <summary>
     /// Per-frame cache of allocated transient UBO ranges for compute dispatches (ComputeProgram).
     /// Separate from <see cref="_frameUboCache"/> because <see cref="ComputeProgram"/> and
     /// <see cref="ShaderProgram"/> are separate type hierarchies.
     /// </summary>
-    private protected readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = new();
+    private protected readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = [];
 
     /// <summary>
     /// Gets whether <see cref="End"/> has been called on this <see cref="CommandBuffer"/> since the last

@@ -101,23 +101,23 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         }
     }
 
-    private readonly List<OpenGLBuffer> _transientFreePool = new List<OpenGLBuffer>();
-    private readonly object _transientFreePoolLock = new object();
+    private readonly List<OpenGLBuffer> _transientFreePool = [];
+    private readonly object _transientFreePoolLock = new();
 
-    private readonly StagingMemoryPool _stagingMemoryPool = new StagingMemoryPool();
+    private readonly StagingMemoryPool _stagingMemoryPool = new();
     private BlockingCollection<ExecutionThreadWorkItem> _workItems;
     private ExecutionThread _executionThread;
-    private readonly object _CommandBufferDisposalLock = new object();
+    private readonly object _CommandBufferDisposalLock = new();
     private readonly Dictionary<OpenGLCommandBuffer, int> _submittedCommandBufferCounts
-        = new Dictionary<OpenGLCommandBuffer, int>();
-    private readonly HashSet<OpenGLCommandBuffer> _CommandBuffersToDispose = new HashSet<OpenGLCommandBuffer>();
+        = [];
+    private readonly HashSet<OpenGLCommandBuffer> _CommandBuffersToDispose = [];
 
-    private readonly object _mappedResourceLock = new object();
+    private readonly object _mappedResourceLock = new();
     private readonly Dictionary<MappedResourceCacheKey, MappedResourceInfoWithStaging> _mappedResources
-        = new Dictionary<MappedResourceCacheKey, MappedResourceInfoWithStaging>();
+        = [];
 
-    private readonly object _resetEventsLock = new object();
-    private readonly List<ManualResetEventSlim[]> _resetEvents = new List<ManualResetEventSlim[]>();
+    private readonly object _resetEventsLock = new();
+    private readonly List<ManualResetEventSlim[]> _resetEvents = [];
     private Swapchain _mainSwapchain;
 
     private bool _syncToVBlank;
@@ -218,7 +218,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         GL.GetInteger(GetPName.NumExtensions, out int extensionCount);
         CheckLastError();
 
-        HashSet<string> extensions = new HashSet<string>();
+        HashSet<string> extensions = [];
         for (uint i = 0; i < extensionCount; i++)
         {
             byte* extensionNamePtr = GL.GetString(StringName.Extensions, i);
@@ -461,7 +461,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                 FenceWrapper = new OpenGLFence(signaled: false),
                 TransientPrimary = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(
                     ResourceFactory.CreateBuffer(new BufferDescription(_transientInitialSize, BufferUsage.Dynamic | BufferUsage.UniformBuffer))),
-                TransientOverflow = new List<OpenGLBuffer>(),
+                TransientOverflow = [],
                 CurrentFrameId = 0,
             };
         }
@@ -499,7 +499,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
         slot.CurrentFrameId = frameId;
 
-        OpenGLFrame frame = new OpenGLFrame(this, frameId, ringSlot, slot.FenceWrapper,
+        OpenGLFrame frame = new(this, frameId, ringSlot, slot.FenceWrapper,
             slot.TransientPrimary, slot.TransientOverflow);
 
         _executionThread.SetActiveFrame(frame);
@@ -654,7 +654,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                     ref SlotState slot = ref _slots[i];
                     if (slot.CurrentFrameId != 0 && slot.SyncObject != 0)
                     {
-                        (pending ??= new List<nint>()).Add(slot.SyncObject);
+                        (pending ??= []).Add(slot.SyncObject);
                         slot.SyncObject = 0;
                         slot.FenceWrapper.Set();
                     }
@@ -721,7 +721,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
     protected override MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource)
     {
-        MappedResourceCacheKey key = new MappedResourceCacheKey(resource, subresource);
+        MappedResourceCacheKey key = new(resource, subresource);
         lock (_mappedResourceLock)
         {
             if (_mappedResources.TryGetValue(key, out MappedResourceInfoWithStaging info))
@@ -998,9 +998,9 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         private readonly BlockingCollection<ExecutionThreadWorkItem> _workItems;
         private readonly IGLContext _context;
         private bool _terminated;
-        private readonly ManualResetEventSlim _terminatedEvent = new ManualResetEventSlim();
-        private readonly List<Exception> _exceptions = new List<Exception>();
-        private readonly object _exceptionsLock = new object();
+        private readonly ManualResetEventSlim _terminatedEvent = new();
+        private readonly List<Exception> _exceptions = [];
+        private readonly object _exceptionsLock = new();
 
         public ExecutionThread(
             OpenGLGraphicsDevice gd,
@@ -1010,7 +1010,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             _gd = gd;
             _workItems = workItems;
             _context = context;
-            Thread thread = new Thread(Run);
+            Thread thread = new(Run);
             thread.IsBackground = true;
             thread.Start();
         }
@@ -1203,7 +1203,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             uint subresource = result->Subresource;
             MapMode mode = result->MapMode;
 
-            MappedResourceCacheKey key = new MappedResourceCacheKey(resource, subresource);
+            MappedResourceCacheKey key = new(resource, subresource);
             try
             {
                 lock (_gd._mappedResourceLock)
@@ -1228,7 +1228,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                             CheckLastError();
                         }
 
-                        MappedResourceInfoWithStaging info = new MappedResourceInfoWithStaging();
+                        MappedResourceInfoWithStaging info = new();
                         info.MappedResource = new MappedResource(
                             resource,
                             mode,
@@ -1420,7 +1420,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
                         uint rowPitch = FormatHelpers.GetRowPitch(mipWidth, texture.Format);
                         uint depthPitch = FormatHelpers.GetDepthPitch(rowPitch, mipHeight, texture.Format);
-                        MappedResourceInfoWithStaging info = new MappedResourceInfoWithStaging();
+                        MappedResourceInfoWithStaging info = new();
                         info.MappedResource = new MappedResource(
                             resource,
                             mode,
@@ -1454,7 +1454,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
         private void ExecuteUnmapResource(MappableResource resource, uint subresource, ManualResetEventSlim mre)
         {
-            MappedResourceCacheKey key = new MappedResourceCacheKey(resource, subresource);
+            MappedResourceCacheKey key = new(resource, subresource);
             lock (_gd._mappedResourceLock)
             {
                 MappedResourceInfoWithStaging info = _gd._mappedResources[key];
@@ -1528,12 +1528,12 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         {
             CheckExceptions();
 
-            MapParams mrp = new MapParams();
+            MapParams mrp = new();
             mrp.Map = true;
             mrp.Subresource = subresource;
             mrp.MapMode = mode;
 
-            ManualResetEventSlim mre = new ManualResetEventSlim(false);
+            ManualResetEventSlim mre = new(false);
             _workItems.Add(new ExecutionThreadWorkItem(resource, &mrp, mre));
             mre.Wait();
             if (!mrp.Succeeded)
@@ -1550,11 +1550,11 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         {
             CheckExceptions();
 
-            MapParams mrp = new MapParams();
+            MapParams mrp = new();
             mrp.Map = false;
             mrp.Subresource = subresource;
 
-            ManualResetEventSlim mre = new ManualResetEventSlim(false);
+            ManualResetEventSlim mre = new(false);
             _workItems.Add(new ExecutionThreadWorkItem(resource, &mrp, mre));
             mre.Wait();
             mre.Dispose();
@@ -1606,7 +1606,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
         internal void WaitForIdle()
         {
-            ManualResetEventSlim mre = new ManualResetEventSlim();
+            ManualResetEventSlim mre = new();
             _workItems.Add(new ExecutionThreadWorkItem(mre, isFullFlush: false));
             mre.Wait();
             mre.Dispose();
@@ -1626,7 +1626,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
         internal void FlushAndFinish()
         {
-            ManualResetEventSlim mre = new ManualResetEventSlim();
+            ManualResetEventSlim mre = new();
             _workItems.Add(new ExecutionThreadWorkItem(mre, isFullFlush: true));
             mre.Wait();
             mre.Dispose();
@@ -1636,7 +1636,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
         internal void InitializeResource(OpenGLDeferredResource deferredResource)
         {
-            InitializeResourceInfo info = new InitializeResourceInfo(deferredResource, new ManualResetEventSlim());
+            InitializeResourceInfo info = new(deferredResource, new ManualResetEventSlim());
             _workItems.Add(new ExecutionThreadWorkItem(info));
             info.ResetEvent.Wait();
             info.ResetEvent.Dispose();

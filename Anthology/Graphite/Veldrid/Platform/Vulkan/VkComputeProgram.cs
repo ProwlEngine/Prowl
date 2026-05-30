@@ -37,7 +37,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
         RefCount = new ResourceRefCount(DisposeCore);
 
         ShaderStageDescription stage = description.Stage;
-        ShaderModuleCreateInfo shaderModuleCI = new ShaderModuleCreateInfo { SType = StructureType.ShaderModuleCreateInfo };
+        ShaderModuleCreateInfo shaderModuleCI = new() { SType = StructureType.ShaderModuleCreateInfo };
         fixed (byte* codePtr = stage.ShaderBytes)
         {
             shaderModuleCI.CodeSize = (UIntPtr)stage.ShaderBytes.Length;
@@ -51,10 +51,10 @@ internal unsafe class VkComputeProgram : ComputeProgram
 
         PipelineLayout = BuildPipelineLayout(DescriptorSetLayouts, ResourceSetCount);
 
-        ComputePipelineCreateInfo pipelineCI = new ComputePipelineCreateInfo { SType = StructureType.ComputePipelineCreateInfo };
+        ComputePipelineCreateInfo pipelineCI = new() { SType = StructureType.ComputePipelineCreateInfo };
         pipelineCI.Layout = PipelineLayout;
 
-        PipelineShaderStageCreateInfo stageCI = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo };
+        PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
         stageCI.Module = _module;
         stageCI.Stage = VkFormats.VdToVkShaderStages(ShaderStages.Compute);
         stageCI.PName = CommonStrings.main;
@@ -126,7 +126,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
             }
         }
 
-        DescriptorSetLayoutCreateInfo dslCI = new DescriptorSetLayoutCreateInfo
+        DescriptorSetLayoutCreateInfo dslCI = new()
         {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
             BindingCount = (uint)elems.Length,
@@ -153,7 +153,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
         DescriptorSetLayout* dslsPtr = stackalloc DescriptorSetLayout[(int)setCount];
         for (int i = 0; i < setCount; i++) dslsPtr[i] = dsls[i];
 
-        PipelineLayoutCreateInfo plCI = new PipelineLayoutCreateInfo
+        PipelineLayoutCreateInfo plCI = new()
         {
             SType = StructureType.PipelineLayoutCreateInfo,
             SetLayoutCount = setCount,
@@ -166,7 +166,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
     private DescriptorSetLayout GetOrCreateEmptyDescriptorSetLayout()
     {
         if (_emptyDescriptorSetLayout.Handle != 0) return _emptyDescriptorSetLayout;
-        DescriptorSetLayoutCreateInfo dslCI = new DescriptorSetLayoutCreateInfo
+        DescriptorSetLayoutCreateInfo dslCI = new()
         {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
             BindingCount = 0,

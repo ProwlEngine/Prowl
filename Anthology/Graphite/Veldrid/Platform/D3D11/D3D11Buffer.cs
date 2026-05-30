@@ -11,7 +11,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
 {
     private readonly ID3D11Device* _device;
     private ComPtr<ID3D11Buffer> _buffer;
-    private readonly object _accessViewLock = new object();
+    private readonly object _accessViewLock = new();
 
     private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> _srvs = [];
     private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs = [];
@@ -38,7 +38,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
         _structureByteStride = structureByteStride;
         _useTypedHlslBinding = useTypedHlslBinding;
 
-        BufferDesc bd = new BufferDesc
+        BufferDesc bd = new()
         {
             ByteWidth = sizeInBytes,
             BindFlags = (uint)D3D11Formats.VdToD3D11BindFlags(usage),
@@ -116,7 +116,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
     {
         lock (_accessViewLock)
         {
-            OffsetSizePair pair = new OffsetSizePair(offset, size);
+            OffsetSizePair pair = new(offset, size);
             if (!_srvs.TryGetValue(pair, out ComPtr<ID3D11ShaderResourceView> srv))
             {
                 srv = CreateShaderResourceView(offset, size);
@@ -131,7 +131,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
     {
         lock (_accessViewLock)
         {
-            OffsetSizePair pair = new OffsetSizePair(offset, size);
+            OffsetSizePair pair = new(offset, size);
             if (!_uavs.TryGetValue(pair, out ComPtr<ID3D11UnorderedAccessView> uav))
             {
                 uav = CreateUnorderedAccessView(offset, size);
@@ -144,7 +144,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
 
     private ComPtr<ID3D11ShaderResourceView> CreateShaderResourceView(uint offset, uint size)
     {
-        ShaderResourceViewDesc srvDesc = new ShaderResourceViewDesc();
+        ShaderResourceViewDesc srvDesc = new();
 
         if (_useTypedHlslBinding)
         {
@@ -170,7 +170,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
 
     private ComPtr<ID3D11UnorderedAccessView> CreateUnorderedAccessView(uint offset, uint size)
     {
-        UnorderedAccessViewDesc uavDesc = new UnorderedAccessViewDesc
+        UnorderedAccessViewDesc uavDesc = new()
         {
             ViewDimension = UavDimension.Buffer,
         };

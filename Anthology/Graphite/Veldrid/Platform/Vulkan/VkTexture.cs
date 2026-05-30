@@ -78,7 +78,7 @@ internal unsafe class VkTexture : Texture
 
         if (!isStaging)
         {
-            ImageCreateInfo imageCI = new ImageCreateInfo { SType = StructureType.ImageCreateInfo };
+            ImageCreateInfo imageCI = new() { SType = StructureType.ImageCreateInfo };
             imageCI.MipLevels = MipLevels;
             imageCI.ArrayLayers = _actualImageArrayLayers;
             imageCI.ImageType = VkFormats.VdToVkTextureType(Type);
@@ -104,10 +104,10 @@ internal unsafe class VkTexture : Texture
             bool prefersDedicatedAllocation;
             if (_gd.GetImageMemoryRequirements2 != null)
             {
-                ImageMemoryRequirementsInfo2KHR memReqsInfo2 = new ImageMemoryRequirementsInfo2KHR { SType = StructureType.ImageMemoryRequirementsInfo2Khr };
+                ImageMemoryRequirementsInfo2KHR memReqsInfo2 = new() { SType = StructureType.ImageMemoryRequirementsInfo2Khr };
                 memReqsInfo2.Image = _optimalImage;
-                MemoryRequirements2KHR memReqs2 = new MemoryRequirements2KHR { SType = StructureType.MemoryRequirements2Khr };
-                MemoryDedicatedRequirementsKHR dedicatedReqs = new MemoryDedicatedRequirementsKHR { SType = StructureType.MemoryDedicatedRequirementsKhr };
+                MemoryRequirements2KHR memReqs2 = new() { SType = StructureType.MemoryRequirements2Khr };
+                MemoryDedicatedRequirementsKHR dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirementsKhr };
                 memReqs2.PNext = &dedicatedReqs;
                 _gd.GetImageMemoryRequirements2(_gd.Device, &memReqsInfo2, &memReqs2);
                 memoryRequirements = memReqs2.MemoryRequirements;
@@ -158,7 +158,7 @@ internal unsafe class VkTexture : Texture
             }
             stagingSize *= ArrayLayers;
 
-            BufferCreateInfo bufferCI = new BufferCreateInfo { SType = StructureType.BufferCreateInfo };
+            BufferCreateInfo bufferCI = new() { SType = StructureType.BufferCreateInfo };
             bufferCI.Usage = BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit;
             bufferCI.Size = stagingSize;
             _gd.Vk.CreateBuffer(_gd.Device, in bufferCI, null, out _stagingBuffer).CheckResult();
@@ -167,10 +167,10 @@ internal unsafe class VkTexture : Texture
             bool prefersDedicatedAllocation;
             if (_gd.GetBufferMemoryRequirements2 != null)
             {
-                BufferMemoryRequirementsInfo2KHR memReqInfo2 = new BufferMemoryRequirementsInfo2KHR { SType = StructureType.BufferMemoryRequirementsInfo2Khr };
+                BufferMemoryRequirementsInfo2KHR memReqInfo2 = new() { SType = StructureType.BufferMemoryRequirementsInfo2Khr };
                 memReqInfo2.Buffer = _stagingBuffer;
-                MemoryRequirements2KHR memReqs2 = new MemoryRequirements2KHR { SType = StructureType.MemoryRequirements2Khr };
-                MemoryDedicatedRequirementsKHR dedicatedReqs = new MemoryDedicatedRequirementsKHR { SType = StructureType.MemoryDedicatedRequirementsKhr };
+                MemoryRequirements2KHR memReqs2 = new() { SType = StructureType.MemoryRequirements2Khr };
+                MemoryDedicatedRequirementsKHR dedicatedReqs = new() { SType = StructureType.MemoryDedicatedRequirementsKhr };
                 memReqs2.PNext = &dedicatedReqs;
                 _gd.GetBufferMemoryRequirements2(_gd.Device, &memReqInfo2, &memReqs2);
                 bufferMemReqs = memReqs2.MemoryRequirements;
@@ -270,7 +270,7 @@ internal unsafe class VkTexture : Texture
             ImageAspectFlags aspect = (Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil
               ? (ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit)
               : ImageAspectFlags.ColorBit;
-            ImageSubresource imageSubresource = new ImageSubresource
+            ImageSubresource imageSubresource = new()
             {
                 ArrayLayer = arrayLayer,
                 MipLevel = mipLevel,
@@ -287,7 +287,7 @@ internal unsafe class VkTexture : Texture
             uint rowPitch = FormatHelpers.GetRowPitch(mipWidth, Format);
             uint depthPitch = FormatHelpers.GetDepthPitch(rowPitch, mipHeight, Format);
 
-            SubresourceLayout layout = new SubresourceLayout()
+            SubresourceLayout layout = new()
             {
                 RowPitch = rowPitch,
                 DepthPitch = depthPitch,

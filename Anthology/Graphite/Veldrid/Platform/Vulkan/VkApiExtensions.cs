@@ -121,7 +121,7 @@ public static class VkApiExtensions
         ImageLayout newLayout)
     {
         Debug.Assert(oldLayout != newLayout);
-        ImageMemoryBarrier barrier = new ImageMemoryBarrier(sType: StructureType.ImageMemoryBarrier)
+        ImageMemoryBarrier barrier = new(sType: StructureType.ImageMemoryBarrier)
         {
             OldLayout = oldLayout,
             NewLayout = newLayout,

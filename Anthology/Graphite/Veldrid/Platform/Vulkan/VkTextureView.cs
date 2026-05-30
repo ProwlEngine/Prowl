@@ -22,7 +22,7 @@ internal unsafe class VkTextureView : TextureView
         : base(ref description)
     {
         _gd = gd;
-        ImageViewCreateInfo imageViewCI = new ImageViewCreateInfo
+        ImageViewCreateInfo imageViewCI = new()
         {
             SType = StructureType.ImageViewCreateInfo
         };

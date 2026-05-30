@@ -18,10 +18,10 @@ internal static unsafe class VkPipelineCacheFactory
     {
         OutputDescription outputDesc = key.Outputs;
 
-        GraphicsPipelineCreateInfo pipelineCI = new GraphicsPipelineCreateInfo { SType = StructureType.GraphicsPipelineCreateInfo };
+        GraphicsPipelineCreateInfo pipelineCI = new() { SType = StructureType.GraphicsPipelineCreateInfo };
 
         // Blend State
-        PipelineColorBlendStateCreateInfo blendStateCI = new PipelineColorBlendStateCreateInfo { SType = StructureType.PipelineColorBlendStateCreateInfo };
+        PipelineColorBlendStateCreateInfo blendStateCI = new() { SType = StructureType.PipelineColorBlendStateCreateInfo };
         BlendStateDescription programBlendState = program.BlendState;
         int attachmentsCount = programBlendState.AttachmentStates.Length;
         PipelineColorBlendAttachmentState* attachmentsPtr
@@ -29,7 +29,7 @@ internal static unsafe class VkPipelineCacheFactory
         for (int i = 0; i < attachmentsCount; i++)
         {
             BlendAttachmentDescription vdDesc = programBlendState.AttachmentStates[i];
-            PipelineColorBlendAttachmentState attachmentState = new PipelineColorBlendAttachmentState();
+            PipelineColorBlendAttachmentState attachmentState = new();
             attachmentState.SrcColorBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.SourceColorFactor);
             attachmentState.DstColorBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.DestinationColorFactor);
             attachmentState.ColorBlendOp = VkFormats.VdToVkBlendOp(vdDesc.ColorFunction);
@@ -53,7 +53,7 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Rasterizer State
         RasterizerStateDescription rsDesc = program.RasterizerState;
-        PipelineRasterizationStateCreateInfo rsCI = new PipelineRasterizationStateCreateInfo { SType = StructureType.PipelineRasterizationStateCreateInfo };
+        PipelineRasterizationStateCreateInfo rsCI = new() { SType = StructureType.PipelineRasterizationStateCreateInfo };
         rsCI.CullMode = VkFormats.VdToVkCullMode(rsDesc.CullMode);
         rsCI.PolygonMode = PolygonMode.Fill;
         rsCI.DepthClampEnable = !rsDesc.DepthClipEnabled;
@@ -63,7 +63,7 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.PRasterizationState = &rsCI;
 
         // Dynamic State
-        PipelineDynamicStateCreateInfo dynamicStateCI = new PipelineDynamicStateCreateInfo { SType = StructureType.PipelineDynamicStateCreateInfo };
+        PipelineDynamicStateCreateInfo dynamicStateCI = new() { SType = StructureType.PipelineDynamicStateCreateInfo };
         DynamicState* dynamicStates = stackalloc DynamicState[2];
         dynamicStates[0] = DynamicState.Viewport;
         dynamicStates[1] = DynamicState.Scissor;
@@ -74,7 +74,7 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Depth Stencil State
         DepthStencilStateDescription vdDssDesc = program.DepthStencilState;
-        PipelineDepthStencilStateCreateInfo dssCI = new PipelineDepthStencilStateCreateInfo { SType = StructureType.PipelineDepthStencilStateCreateInfo };
+        PipelineDepthStencilStateCreateInfo dssCI = new() { SType = StructureType.PipelineDepthStencilStateCreateInfo };
         dssCI.DepthWriteEnable = vdDssDesc.DepthWriteEnabled;
         dssCI.DepthTestEnable = vdDssDesc.DepthTestEnabled;
         dssCI.DepthCompareOp = VkFormats.VdToVkCompareOp(vdDssDesc.DepthComparison);
@@ -99,7 +99,7 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.PDepthStencilState = &dssCI;
 
         // Multisample
-        PipelineMultisampleStateCreateInfo multisampleCI = new PipelineMultisampleStateCreateInfo { SType = StructureType.PipelineMultisampleStateCreateInfo };
+        PipelineMultisampleStateCreateInfo multisampleCI = new() { SType = StructureType.PipelineMultisampleStateCreateInfo };
         SampleCountFlags vkSampleCount = VkFormats.VdToVkSampleCount(outputDesc.SampleCount);
         multisampleCI.RasterizationSamples = vkSampleCount;
         multisampleCI.AlphaToCoverageEnable = programBlendState.AlphaToCoverageEnabled;
@@ -107,13 +107,13 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.PMultisampleState = &multisampleCI;
 
         // Input Assembly
-        PipelineInputAssemblyStateCreateInfo inputAssemblyCI = new PipelineInputAssemblyStateCreateInfo { SType = StructureType.PipelineInputAssemblyStateCreateInfo };
+        PipelineInputAssemblyStateCreateInfo inputAssemblyCI = new() { SType = StructureType.PipelineInputAssemblyStateCreateInfo };
         inputAssemblyCI.Topology = VkFormats.VdToVkPrimitiveTopology(key.Topology);
 
         pipelineCI.PInputAssemblyState = &inputAssemblyCI;
 
         // Vertex Input State
-        PipelineVertexInputStateCreateInfo vertexInputCI = new PipelineVertexInputStateCreateInfo { SType = StructureType.PipelineVertexInputStateCreateInfo };
+        PipelineVertexInputStateCreateInfo vertexInputCI = new() { SType = StructureType.PipelineVertexInputStateCreateInfo };
 
         VertexLayoutDescription[] inputDescriptions = program.VertexLayoutsArray;
         uint bindingCount = (uint)inputDescriptions.Length;
@@ -166,7 +166,7 @@ internal static unsafe class VkPipelineCacheFactory
         uint stageCount = 0;
         foreach (KeyValuePair<ShaderStages, ShaderModule> kvp in program.Modules)
         {
-            PipelineShaderStageCreateInfo stageCI = new PipelineShaderStageCreateInfo { SType = StructureType.PipelineShaderStageCreateInfo };
+            PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
             stageCI.Module = kvp.Value;
             stageCI.Stage = VkFormats.VdToVkShaderStages(kvp.Key);
             stageCI.PName = new FixedUtf8String(program.GetEntryPoint(kvp.Key)); // TODO: DONT ALLOCATE HERE
@@ -177,7 +177,7 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.PStages = stages;
 
         // ViewportState
-        PipelineViewportStateCreateInfo viewportStateCI = new PipelineViewportStateCreateInfo { SType = StructureType.PipelineViewportStateCreateInfo };
+        PipelineViewportStateCreateInfo viewportStateCI = new() { SType = StructureType.PipelineViewportStateCreateInfo };
         viewportStateCI.ViewportCount = 1;
         viewportStateCI.ScissorCount = 1;
 
@@ -188,7 +188,7 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.Layout = pipelineLayout;
 
         // Compatibility RenderPass
-        RenderPassCreateInfo renderPassCI = new RenderPassCreateInfo { SType = StructureType.RenderPassCreateInfo };
+        RenderPassCreateInfo renderPassCI = new() { SType = StructureType.RenderPassCreateInfo };
         AttachmentDescription* attachments = stackalloc AttachmentDescription[outputDesc.ColorAttachments.Length + 1];
         uint attachmentCount = 0;
 
@@ -210,8 +210,8 @@ internal static unsafe class VkPipelineCacheFactory
             colorAttachmentRefs[i].Layout = ImageLayout.ColorAttachmentOptimal;
         }
 
-        AttachmentDescription depthAttachmentDesc = new AttachmentDescription();
-        AttachmentReference depthAttachmentRef = new AttachmentReference();
+        AttachmentDescription depthAttachmentDesc = new();
+        AttachmentReference depthAttachmentRef = new();
         if (outputDesc.DepthAttachment != null)
         {
             PixelFormat depthFormat = outputDesc.DepthAttachment.Value.Format;
@@ -229,7 +229,7 @@ internal static unsafe class VkPipelineCacheFactory
             depthAttachmentRef.Layout = ImageLayout.DepthStencilAttachmentOptimal;
         }
 
-        SubpassDescription subpass = new SubpassDescription();
+        SubpassDescription subpass = new();
         subpass.PipelineBindPoint = PipelineBindPoint.Graphics;
         subpass.ColorAttachmentCount = (uint)outputDesc.ColorAttachments.Length;
         subpass.PColorAttachments = colorAttachmentRefs;
@@ -240,7 +240,7 @@ internal static unsafe class VkPipelineCacheFactory
             attachments[attachmentCount++] = depthAttachmentDesc;
         }
 
-        SubpassDependency subpassDependency = new SubpassDependency();
+        SubpassDependency subpassDependency = new();
         subpassDependency.SrcSubpass = Silk.NET.Vulkan.Vk.SubpassExternal;
         subpassDependency.SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
         subpassDependency.DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;

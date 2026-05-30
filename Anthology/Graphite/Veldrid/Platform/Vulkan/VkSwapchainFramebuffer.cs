@@ -150,7 +150,7 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         Util.EnsureArrayMinimumSize(ref _scColorTextures, (uint)_scImages.Length);
         for (uint i = 0; i < _scImages.Length; i++)
         {
-            VkTexture colorTex = new VkTexture(
+            VkTexture colorTex = new(
                 _gd,
                 Math.Max(1, _scExtent.Width),
                 Math.Max(1, _scExtent.Height),
@@ -160,8 +160,8 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
                 TextureUsage.RenderTarget,
                 TextureSampleCount.Count1,
                 _scImages[i]);
-            FramebufferDescription desc = new FramebufferDescription(_depthAttachment?.Target, colorTex);
-            VkFramebuffer fb = new VkFramebuffer(_gd, ref desc, true);
+            FramebufferDescription desc = new(_depthAttachment?.Target, colorTex);
+            VkFramebuffer fb = new(_gd, ref desc, true);
             _scFramebuffers[i] = fb;
             _scColorTextures[i] = [new FramebufferAttachment(colorTex, 0)];
         }

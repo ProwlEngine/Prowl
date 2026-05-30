@@ -113,7 +113,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     ///     DestinationAlphaFactor = BlendFactor.Zero
     ///     AlphaFunction = BlendFunction.Add
     /// </summary>
-    public static readonly BlendAttachmentDescription OverrideBlend = new BlendAttachmentDescription
+    public static readonly BlendAttachmentDescription OverrideBlend = new()
     {
         BlendEnabled = true,
         SourceColorFactor = BlendFactor.One,
@@ -136,7 +136,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     ///     DestinationAlphaFactor = BlendFactor.InverseSourceAlpha
     ///     AlphaFunction = BlendFunction.Add
     /// </summary>
-    public static readonly BlendAttachmentDescription AlphaBlend = new BlendAttachmentDescription
+    public static readonly BlendAttachmentDescription AlphaBlend = new()
     {
         BlendEnabled = true,
         SourceColorFactor = BlendFactor.SourceAlpha,
@@ -159,7 +159,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     ///     DestinationAlphaFactor = BlendFactor.One
     ///     AlphaFunction = BlendFunction.Add
     /// </summary>
-    public static readonly BlendAttachmentDescription AdditiveBlend = new BlendAttachmentDescription
+    public static readonly BlendAttachmentDescription AdditiveBlend = new()
     {
         BlendEnabled = true,
         SourceColorFactor = BlendFactor.SourceAlpha,
@@ -182,7 +182,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     ///     DestinationAlphaFactor = BlendFactor.Zero
     ///     AlphaFunction = BlendFunction.Add
     /// </summary>
-    public static readonly BlendAttachmentDescription Disabled = new BlendAttachmentDescription
+    public static readonly BlendAttachmentDescription Disabled = new()
     {
         BlendEnabled = false,
         SourceColorFactor = BlendFactor.One,

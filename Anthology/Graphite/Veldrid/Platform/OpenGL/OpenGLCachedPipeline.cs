@@ -51,9 +51,9 @@ internal static unsafe class OpenGLCachedPipeline
             ResourceLayoutDescription layoutDesc = resourceLayouts[(int)setSlot];
             ResourceLayoutElementDescription[] resources = layoutDesc.Elements;
 
-            Dictionary<uint, OpenGLUniformBinding> uniformBindings = new();
-            Dictionary<uint, OpenGLTextureBindingSlotInfo> textureBindings = new();
-            Dictionary<uint, OpenGLShaderStorageBinding> storageBufferBindings = new();
+            Dictionary<uint, OpenGLUniformBinding> uniformBindings = [];
+            Dictionary<uint, OpenGLTextureBindingSlotInfo> textureBindings = [];
+            Dictionary<uint, OpenGLShaderStorageBinding> storageBufferBindings = [];
 
             for (uint i = 0; i < resources.Length; i++)
             {

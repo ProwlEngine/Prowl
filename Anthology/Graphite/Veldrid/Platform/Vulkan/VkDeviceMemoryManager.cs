@@ -17,10 +17,10 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
     private readonly PhysicalDevice _physicalDevice;
     private readonly ulong _bufferImageGranularity;
     private readonly Silk.NET.Vulkan.Vk _vk;
-    private readonly object _lock = new object();
+    private readonly object _lock = new();
     private ulong _totalAllocatedBytes;
-    private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryTypeUnmapped = new Dictionary<uint, ChunkAllocatorSet>();
-    private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryType = new Dictionary<uint, ChunkAllocatorSet>();
+    private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryTypeUnmapped = [];
+    private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryType = [];
 
     private readonly vkGetBufferMemoryRequirements2_t _getBufferMemoryRequirements2;
     private readonly vkGetImageMemoryRequirements2_t _getImageMemoryRequirements2;
@@ -76,12 +76,12 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
         {
             if (dedicatedImage.Handle != 0 && _getImageMemoryRequirements2 != null)
             {
-                ImageMemoryRequirementsInfo2KHR requirementsInfo = new ImageMemoryRequirementsInfo2KHR
+                ImageMemoryRequirementsInfo2KHR requirementsInfo = new()
                 {
                     SType = StructureType.ImageMemoryRequirementsInfo2
                 };
                 requirementsInfo.Image = dedicatedImage;
-                MemoryRequirements2KHR requirements = new MemoryRequirements2KHR
+                MemoryRequirements2KHR requirements = new()
                 {
                     SType = StructureType.MemoryRequirements2
                 };
@@ -90,12 +90,12 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
             }
             else if (dedicatedBuffer.Handle != 0 && _getBufferMemoryRequirements2 != null)
             {
-                BufferMemoryRequirementsInfo2KHR requirementsInfo = new BufferMemoryRequirementsInfo2KHR
+                BufferMemoryRequirementsInfo2KHR requirementsInfo = new()
                 {
                     SType = StructureType.BufferMemoryRequirementsInfo2
                 };
                 requirementsInfo.Buffer = dedicatedBuffer;
-                MemoryRequirements2KHR requirements = new MemoryRequirements2KHR
+                MemoryRequirements2KHR requirements = new()
                 {
                     SType = StructureType.MemoryRequirements2
                 };
@@ -123,7 +123,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
 
             if (dedicated || size >= minDedicatedAllocationSize)
             {
-                MemoryAllocateInfo allocateInfo = new MemoryAllocateInfo
+                MemoryAllocateInfo allocateInfo = new()
                 {
                     SType = StructureType.MemoryAllocateInfo
                 };
@@ -219,7 +219,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
         private readonly Device _device;
         private readonly uint _memoryTypeIndex;
         private readonly bool _persistentMapped;
-        private readonly List<ChunkAllocator> _allocators = new List<ChunkAllocator>();
+        private readonly List<ChunkAllocator> _allocators = [];
 
         public ChunkAllocatorSet(Silk.NET.Vulkan.Vk vk, Device device, uint memoryTypeIndex, bool persistentMapped)
         {
@@ -239,7 +239,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                 }
             }
 
-            ChunkAllocator newAllocator = new ChunkAllocator(_vk, _device, _memoryTypeIndex, _persistentMapped);
+            ChunkAllocator newAllocator = new(_vk, _device, _memoryTypeIndex, _persistentMapped);
             _allocators.Add(newAllocator);
             return newAllocator.Allocate(size, alignment, out block);
         }
@@ -272,7 +272,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
         private readonly Device _device;
         private readonly uint _memoryTypeIndex;
         private readonly bool _persistentMapped;
-        private readonly List<VkMemoryBlock> _freeBlocks = new List<VkMemoryBlock>();
+        private readonly List<VkMemoryBlock> _freeBlocks = [];
         private readonly DeviceMemory _memory;
         private readonly void* _mappedPtr;
 
@@ -289,7 +289,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
             _persistentMapped = persistentMapped;
             _totalMemorySize = persistentMapped ? PersistentMappedChunkSize : UnmappedChunkSize;
 
-            MemoryAllocateInfo memoryAI = new MemoryAllocateInfo
+            MemoryAllocateInfo memoryAI = new()
             {
                 SType = StructureType.MemoryAllocateInfo
             };
@@ -304,7 +304,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
             }
             _mappedPtr = mappedPtr;
 
-            VkMemoryBlock initialBlock = new VkMemoryBlock(
+            VkMemoryBlock initialBlock = new(
                 _memory,
                 0,
                 _totalMemorySize,
@@ -346,7 +346,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
 
                         if (alignedBlockSize != size)
                         {
-                            VkMemoryBlock splitBlock = new VkMemoryBlock(
+                            VkMemoryBlock splitBlock = new(
                                 freeBlock.DeviceMemory,
                                 freeBlock.Offset + size,
                                 freeBlock.Size - size,
@@ -409,7 +409,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                 {
                     ulong blockEnd = _freeBlocks[i + contiguousLength - 1].End;
                     _freeBlocks.RemoveRange(i, contiguousLength);
-                    VkMemoryBlock mergedBlock = new VkMemoryBlock(
+                    VkMemoryBlock mergedBlock = new(
                         Memory,
                         blockStart,
                         blockEnd - blockStart,
@@ -423,7 +423,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
         }
 
 #if DEBUG
-        private List<VkMemoryBlock> _allocatedBlocks = new List<VkMemoryBlock>();
+        private List<VkMemoryBlock> _allocatedBlocks = [];
 
         private void CheckAllocatedBlock(VkMemoryBlock block)
         {

@@ -110,7 +110,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     ///     DepthWriteEnabled = true
     ///     ComparisonKind = DepthComparisonKind.LessEqual
     /// </summary>
-    public static readonly DepthStencilStateDescription DepthOnlyLessEqual = new DepthStencilStateDescription
+    public static readonly DepthStencilStateDescription DepthOnlyLessEqual = new()
     {
         DepthTestEnabled = true,
         DepthWriteEnabled = true,
@@ -125,7 +125,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     ///     DepthWriteEnabled = false
     ///     ComparisonKind = DepthComparisonKind.LessEqual
     /// </summary>
-    public static readonly DepthStencilStateDescription DepthOnlyLessEqualRead = new DepthStencilStateDescription
+    public static readonly DepthStencilStateDescription DepthOnlyLessEqualRead = new()
     {
         DepthTestEnabled = true,
         DepthWriteEnabled = false,
@@ -140,7 +140,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     ///     DepthWriteEnabled = true
     ///     ComparisonKind = DepthComparisonKind.GreaterEqual
     /// </summary>
-    public static readonly DepthStencilStateDescription DepthOnlyGreaterEqual = new DepthStencilStateDescription
+    public static readonly DepthStencilStateDescription DepthOnlyGreaterEqual = new()
     {
         DepthTestEnabled = true,
         DepthWriteEnabled = true,
@@ -155,7 +155,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     ///     DepthWriteEnabled = false
     ///     ComparisonKind = DepthComparisonKind.GreaterEqual
     /// </summary>
-    public static readonly DepthStencilStateDescription DepthOnlyGreaterEqualRead = new DepthStencilStateDescription
+    public static readonly DepthStencilStateDescription DepthOnlyGreaterEqualRead = new()
     {
         DepthTestEnabled = true,
         DepthWriteEnabled = false,
@@ -170,7 +170,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     ///     DepthWriteEnabled = false
     ///     ComparisonKind = DepthComparisonKind.LessEqual
     /// </summary>
-    public static readonly DepthStencilStateDescription Disabled = new DepthStencilStateDescription
+    public static readonly DepthStencilStateDescription Disabled = new()
     {
         DepthTestEnabled = false,
         DepthWriteEnabled = false,

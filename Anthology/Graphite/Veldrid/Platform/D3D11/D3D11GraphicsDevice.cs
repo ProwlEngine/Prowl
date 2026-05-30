@@ -15,7 +15,7 @@ namespace Prowl.Veldrid.D3D11;
 internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 {
     /// <summary>DXGI_DEBUG_ALL - reports live objects from all producers (D3D11, DXGI, etc.).</summary>
-    private static readonly Guid DxgiDebugAll = new Guid("e48ae283-da80-490b-87e6-43e9a9cfda08");
+    private static readonly Guid DxgiDebugAll = new("e48ae283-da80-490b-87e6-43e9a9cfda08");
 
     private ComPtr<IDXGIAdapter> _dxgiAdapter;
     private ComPtr<ID3D11Device> _device;
@@ -28,7 +28,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
     private readonly D3D11Swapchain _mainSwapchain;
     private readonly bool _supportsConcurrentResources;
     private readonly bool _supportsCommandBuffers;
-    private readonly object _immediateContextLock = new object();
+    private readonly object _immediateContextLock = new();
     private readonly BackendInfoD3D11 _d3d11Info;
 
     private unsafe struct SlotState
@@ -41,15 +41,15 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
     }
 
     private SlotState[] _slots;
-    private readonly List<D3D11Buffer> _transientFreePool = new List<D3D11Buffer>();
-    private readonly object _transientFreePoolLock = new object();
+    private readonly List<D3D11Buffer> _transientFreePool = [];
+    private readonly object _transientFreePoolLock = new();
 
-    private readonly object _mappedResourceLock = new object();
+    private readonly object _mappedResourceLock = new();
     private readonly Dictionary<MappedResourceCacheKey, MappedResourceInfo> _mappedResources
-        = new Dictionary<MappedResourceCacheKey, MappedResourceInfo>();
+        = [];
 
-    private readonly object _stagingResourcesLock = new object();
-    private readonly List<D3D11Buffer> _availableStagingBuffers = new List<D3D11Buffer>();
+    private readonly object _stagingResourcesLock = new();
+    private readonly List<D3D11Buffer> _availableStagingBuffers = [];
 
     private readonly Silk.NET.Direct3D11.D3D11 _d3d11Api;
 
@@ -289,7 +289,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
         for (int i = 0; i < _slots.Length; i++)
         {
-            QueryDesc queryDesc = new QueryDesc { Query = Query.Event, MiscFlags = 0 };
+            QueryDesc queryDesc = new() { Query = Query.Event, MiscFlags = 0 };
             ID3D11Query* pQuery;
             SilkMarshal.ThrowHResult(pDevice->CreateQuery(&queryDesc, &pQuery));
 
@@ -299,7 +299,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
                 FenceWrapper = new D3D11Fence(signaled: false),
                 TransientPrimary = (D3D11Buffer)ResourceFactory.CreateBuffer(
                     new BufferDescription(_transientInitialSize, BufferUsage.UniformBuffer | BufferUsage.Dynamic)),
-                TransientOverflow = new List<D3D11Buffer>(),
+                TransientOverflow = [],
                 CurrentFrameId = 0,
             };
         }
@@ -552,7 +552,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
     protected override MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource)
     {
-        MappedResourceCacheKey key = new MappedResourceCacheKey(resource, subresource);
+        MappedResourceCacheKey key = new(resource, subresource);
         lock (_mappedResourceLock)
         {
             if (_mappedResources.TryGetValue(key, out MappedResourceInfo info))
@@ -621,7 +621,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
     protected override void UnmapCore(MappableResource resource, uint subresource)
     {
-        MappedResourceCacheKey key = new MappedResourceCacheKey(resource, subresource);
+        MappedResourceCacheKey key = new(resource, subresource);
         bool commitUnmap;
 
         lock (_mappedResourceLock)
@@ -675,7 +675,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
         if (useUpdateSubresource)
         {
-            Box subregion = new Box
+            Box subregion = new()
             {
                 Left = bufferOffsetInBytes,
                 Top = 0,
@@ -720,7 +720,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         {
             D3D11Buffer staging = GetFreeStagingBuffer(sizeInBytes);
             UpdateBuffer(staging, 0, source, sizeInBytes);
-            Box sourceRegion = new Box
+            Box sourceRegion = new()
             {
                 Left = 0,
                 Top = 0,
@@ -782,7 +782,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         if (useMap)
         {
             uint subresource = texture.CalculateSubresource(mipLevel, arrayLayer);
-            MappedResourceCacheKey key = new MappedResourceCacheKey(texture, subresource);
+            MappedResourceCacheKey key = new(texture, subresource);
             MappedResource map = MapCore(texture, MapMode.Write, subresource);
 
             uint denseRowSize = FormatHelpers.GetRowPitch(width, texture.Format);
@@ -803,7 +803,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         else
         {
             int subresource = D3D11Util.ComputeSubresource(mipLevel, texture.MipLevels, arrayLayer);
-            Box resourceRegion = new Box
+            Box resourceRegion = new()
             {
                 Left = x,
                 Top = y,
@@ -833,8 +833,8 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         return Util.AssertSubtype<Fence, D3D11Fence>(fence).Wait(nanosecondTimeout);
     }
 
-    private readonly object _resetEventsLock = new object();
-    private readonly List<ManualResetEvent[]> _resetEvents = new List<ManualResetEvent[]>();
+    private readonly object _resetEventsLock = new();
+    private readonly List<ManualResetEvent[]> _resetEvents = [];
 
     private ManualResetEvent[] GetResetEventArray(int length)
     {

@@ -22,7 +22,7 @@ internal unsafe static class VulkanUtilUgley
         ImageLayout newLayout)
     {
         Debug.Assert(oldLayout != newLayout);
-        ImageMemoryBarrier barrier = new ImageMemoryBarrier(sType: StructureType.ImageMemoryBarrier)
+        ImageMemoryBarrier barrier = new(sType: StructureType.ImageMemoryBarrier)
         {
             OldLayout = oldLayout,
             NewLayout = newLayout,

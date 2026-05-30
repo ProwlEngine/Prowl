@@ -14,7 +14,7 @@ internal static unsafe class D3D11Util
         if (deviceChild == null) return;
 
         // WKPDID_D3DDebugObjectName = {429b8c22-9188-4b0c-8742-acb0bf85c200}
-        Guid debugNameGuid = new Guid(0x429b8c22, 0x9188, 0x4b0c, 0x87, 0x42, 0xac, 0xb0, 0xbf, 0x85, 0xc2, 0x00);
+        Guid debugNameGuid = new(0x429b8c22, 0x9188, 0x4b0c, 0x87, 0x42, 0xac, 0xb0, 0xbf, 0x85, 0xc2, 0x00);
 
         if (string.IsNullOrEmpty(name))
         {
@@ -41,7 +41,7 @@ internal static unsafe class D3D11Util
         uint layerCount,
         PixelFormat format)
     {
-        ShaderResourceViewDesc srvDesc = new ShaderResourceViewDesc();
+        ShaderResourceViewDesc srvDesc = new();
         srvDesc.Format = D3D11Formats.GetViewFormat(
             D3D11Formats.ToDxgiFormat(format, (tex.Usage & TextureUsage.DepthStencil) != 0));
 

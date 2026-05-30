@@ -36,7 +36,7 @@ internal unsafe class D3D11TextureView : TextureView
 
         if ((d3dTex.Usage & TextureUsage.Storage) == TextureUsage.Storage)
         {
-            UnorderedAccessViewDesc uavDesc = new UnorderedAccessViewDesc();
+            UnorderedAccessViewDesc uavDesc = new();
             uavDesc.Format = D3D11Formats.GetViewFormat(d3dTex.DxgiFormat);
 
             if ((d3dTex.Usage & TextureUsage.Cubemap) == TextureUsage.Cubemap)

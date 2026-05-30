@@ -67,18 +67,18 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private readonly D3D11Sampler[] _vertexBoundSamplers = new D3D11Sampler[MaxCachedSamplers];
     private readonly D3D11Sampler[] _fragmentBoundSamplers = new D3D11Sampler[MaxCachedSamplers];
 
-    private readonly Dictionary<Texture, List<BoundTextureInfo>> _boundSRVs = new Dictionary<Texture, List<BoundTextureInfo>>();
-    private readonly Dictionary<Texture, List<BoundTextureInfo>> _boundUAVs = new Dictionary<Texture, List<BoundTextureInfo>>();
-    private readonly List<List<BoundTextureInfo>> _boundTextureInfoPool = new List<List<BoundTextureInfo>>(20);
+    private readonly Dictionary<Texture, List<BoundTextureInfo>> _boundSRVs = [];
+    private readonly Dictionary<Texture, List<BoundTextureInfo>> _boundUAVs = [];
+    private readonly List<List<BoundTextureInfo>> _boundTextureInfoPool = new(20);
 
     private const int MaxUAVs = 8;
-    private readonly List<(DeviceBuffer, int)> _boundComputeUAVBuffers = new List<(DeviceBuffer, int)>(MaxUAVs);
-    private readonly List<(DeviceBuffer, int)> _boundOMUAVBuffers = new List<(DeviceBuffer, int)>(MaxUAVs);
+    private readonly List<(DeviceBuffer, int)> _boundComputeUAVBuffers = new(MaxUAVs);
+    private readonly List<(DeviceBuffer, int)> _boundOMUAVBuffers = new(MaxUAVs);
 
-    private readonly List<D3D11Buffer> _availableStagingBuffers = new List<D3D11Buffer>();
-    private readonly List<D3D11Buffer> _submittedStagingBuffers = new List<D3D11Buffer>();
+    private readonly List<D3D11Buffer> _availableStagingBuffers = [];
+    private readonly List<D3D11Buffer> _submittedStagingBuffers = [];
 
-    private readonly List<D3D11Swapchain> _referencedSwapchains = new List<D3D11Swapchain>();
+    private readonly List<D3D11Swapchain> _referencedSwapchains = [];
 
     /// <summary>
     /// Helper to get the raw context pointer for calling D3D11 methods.
@@ -886,7 +886,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             return ret;
         }
 
-        return new List<BoundTextureInfo>();
+        return [];
     }
 
     private void BindStorageBufferView(DeviceBufferRange range, int slot, ShaderStages stages)
@@ -1239,7 +1239,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
 
         if (useUpdateSubresource)
         {
-            Box subregion = new Box
+            Box subregion = new()
             {
                 Left = bufferOffsetInBytes,
                 Top = 0,
@@ -1332,7 +1332,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         D3D11Buffer srcD3D11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(source);
         D3D11Buffer dstD3D11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(destination);
 
-        Box region = new Box
+        Box region = new()
         {
             Left = sourceOffset,
             Top = 0,
@@ -1369,7 +1369,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         bool useRegion = srcX != 0 || srcY != 0 || srcZ != 0
             || clampedWidth != source.Width || clampedHeight != source.Height || depth != source.Depth;
 
-        Box region = new Box
+        Box region = new()
         {
             Left = srcX,
             Top = srcY,

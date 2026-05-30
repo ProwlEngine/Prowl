@@ -100,7 +100,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     ///     MaximumLod = uint.MaxValue
     ///     MaximumAnisotropy = 0
     /// </summary>
-    public static readonly SamplerDescription Point = new SamplerDescription
+    public static readonly SamplerDescription Point = new()
     {
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
@@ -124,7 +124,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     ///     MaximumLod = uint.MaxValue
     ///     MaximumAnisotropy = 0
     /// </summary>
-    public static readonly SamplerDescription Linear = new SamplerDescription
+    public static readonly SamplerDescription Linear = new()
     {
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,
@@ -148,7 +148,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     ///     MaximumLod = uint.MaxValue
     ///     MaximumAnisotropy = 4
     /// </summary>
-    public static readonly SamplerDescription Aniso4x = new SamplerDescription
+    public static readonly SamplerDescription Aniso4x = new()
     {
         AddressModeU = SamplerAddressMode.Wrap,
         AddressModeV = SamplerAddressMode.Wrap,

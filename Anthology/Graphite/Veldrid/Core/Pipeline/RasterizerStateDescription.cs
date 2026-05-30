@@ -52,7 +52,7 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     ///     DepthClipEnabled = true
     ///     ScissorTestEnabled = false
     /// </summary>
-    public static readonly RasterizerStateDescription Default = new RasterizerStateDescription
+    public static readonly RasterizerStateDescription Default = new()
     {
         CullMode = FaceCullMode.Back,
         FrontFace = FrontFace.Clockwise,
@@ -69,7 +69,7 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     ///     DepthClipEnabled = true
     ///     ScissorTestEnabled = false
     /// </summary>
-    public static readonly RasterizerStateDescription CullNone = new RasterizerStateDescription
+    public static readonly RasterizerStateDescription CullNone = new()
     {
         CullMode = FaceCullMode.None,
         FrontFace = FrontFace.Clockwise,

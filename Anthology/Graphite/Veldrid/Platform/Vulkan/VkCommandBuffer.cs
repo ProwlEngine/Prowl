@@ -29,7 +29,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private ClearValue[] _clearValues = Array.Empty<ClearValue>();
     private bool[] _validColorClearValues = Array.Empty<bool>();
     private ClearValue? _depthClearValue;
-    private readonly List<VkTexture> _preDrawSampledImages = new List<VkTexture>();
+    private readonly List<VkTexture> _preDrawSampledImages = [];
 
     // Graphics State
     private VkFramebufferBase _currentFramebuffer;
@@ -43,24 +43,24 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private bool _newFramebuffer; // Render pass cycle state
 
     // Resource bind cache: (programKey, setIndex, mergedResourceVersion) -> DescriptorSet
-    private readonly Dictionary<(object, int, uint), DescriptorSet> _resourceBindCache = new();
+    private readonly Dictionary<(object, int, uint), DescriptorSet> _resourceBindCache = [];
 
     // Tracks the VkBuffer handle written into each cached descriptor set's UBO bindings.
     // Key: (programKey, setIndex); Value: backing VkBuffer handles per UBO element.
     // Used to detect transient overflow (allocator switched to a new backing buffer).
-    private readonly Dictionary<(object, int), VkBufferHandle[]> _uboBackingBuffers = new();
+    private readonly Dictionary<(object, int), VkBufferHandle[]> _uboBackingBuffers = [];
 
     private string _name;
 
-    private readonly object _commandBufferListLock = new object();
-    private readonly Queue<Silk.NET.Vulkan.CommandBuffer> _availableCommandBuffers = new Queue<Silk.NET.Vulkan.CommandBuffer>();
-    private readonly List<Silk.NET.Vulkan.CommandBuffer> _submittedCommandBuffers = new List<Silk.NET.Vulkan.CommandBuffer>();
+    private readonly object _commandBufferListLock = new();
+    private readonly Queue<Silk.NET.Vulkan.CommandBuffer> _availableCommandBuffers = new();
+    private readonly List<Silk.NET.Vulkan.CommandBuffer> _submittedCommandBuffers = [];
 
     private StagingResourceInfo _currentStagingInfo;
-    private readonly object _stagingLock = new object();
-    private readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, StagingResourceInfo> _submittedStagingInfos = new Dictionary<Silk.NET.Vulkan.CommandBuffer, StagingResourceInfo>();
-    private readonly List<StagingResourceInfo> _availableStagingInfos = new List<StagingResourceInfo>();
-    private readonly List<VkBuffer> _availableStagingBuffers = new List<VkBuffer>();
+    private readonly object _stagingLock = new();
+    private readonly Dictionary<Silk.NET.Vulkan.CommandBuffer, StagingResourceInfo> _submittedStagingInfos = [];
+    private readonly List<StagingResourceInfo> _availableStagingInfos = [];
+    private readonly List<VkBuffer> _availableStagingBuffers = [];
 
     public CommandPool CommandPool => _pool;
     public Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
@@ -73,7 +73,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         : base(gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
     {
         _gd = gd;
-        CommandPoolCreateInfo poolCI = new CommandPoolCreateInfo
+        CommandPoolCreateInfo poolCI = new()
         {
             SType = StructureType.CommandPoolCreateInfo,
             Flags = CommandPoolCreateFlags.ResetCommandBufferBit,
@@ -97,7 +97,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             }
         }
 
-        CommandBufferAllocateInfo cbAI = new CommandBufferAllocateInfo
+        CommandBufferAllocateInfo cbAI = new()
         {
             SType = StructureType.CommandBufferAllocateInfo,
             CommandPool = _pool,
@@ -171,7 +171,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         _currentStagingInfo = GetStagingResourceInfo();
 
-        CommandBufferBeginInfo beginInfo = new CommandBufferBeginInfo
+        CommandBufferBeginInfo beginInfo = new()
         {
             SType = StructureType.CommandBufferBeginInfo,
             Flags = CommandBufferUsageFlags.OneTimeSubmitBit
@@ -194,14 +194,14 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private protected override void ClearColorTargetCore(uint index, Color clearColor)
     {
-        ClearValue clearValue = new ClearValue
+        ClearValue clearValue = new()
         {
             Color = new ClearColorValue(clearColor.R, clearColor.G, clearColor.B, clearColor.A)
         };
 
         if (_activeRenderPass.Handle != default)
         {
-            ClearAttachment clearAttachment = new ClearAttachment
+            ClearAttachment clearAttachment = new()
             {
                 ColorAttachment = index,
                 AspectMask = ImageAspectFlags.ColorBit,
@@ -209,7 +209,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             };
 
             Texture colorTex = _currentFramebuffer.ColorTargets[(int)index].Target;
-            ClearRect clearRect = new ClearRect
+            ClearRect clearRect = new()
             {
                 BaseArrayLayer = 0,
                 LayerCount = 1,
@@ -228,7 +228,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private protected override void ClearDepthStencilCore(float depth, byte stencil)
     {
-        ClearValue clearValue = new ClearValue
+        ClearValue clearValue = new()
         {
             DepthStencil = new ClearDepthStencilValue(depth, stencil)
         };
@@ -238,7 +238,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             ImageAspectFlags aspect = FormatHelpers.IsStencilFormat(_currentFramebuffer.DepthTarget.Value.Target.Format)
                 ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
                 : ImageAspectFlags.DepthBit;
-            ClearAttachment clearAttachment = new ClearAttachment
+            ClearAttachment clearAttachment = new()
             {
                 AspectMask = aspect,
                 ClearValue = clearValue
@@ -248,7 +248,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             uint renderableHeight = _currentFramebuffer.RenderableHeight;
             if (renderableWidth > 0 && renderableHeight > 0)
             {
-                ClearRect clearRect = new ClearRect
+                ClearRect clearRect = new()
                 {
                     BaseArrayLayer = 0,
                     LayerCount = 1,
@@ -371,7 +371,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             throw new RenderException("Cannot draw: no graphics ShaderProgram or Framebuffer bound.");
         }
 
-        VkPipelineCacheKey key = new VkPipelineCacheKey(
+        VkPipelineCacheKey key = new(
             _framebufferOutputs,
             srcTopology);
 
@@ -442,7 +442,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         ImageAspectFlags aspectFlags = ((source.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil)
             ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
             : ImageAspectFlags.ColorBit;
-        ImageResolve region = new ImageResolve
+        ImageResolve region = new()
         {
             Extent = new Extent3D { Width = source.Width, Height = source.Height, Depth = source.Depth },
             SrcSubresource = new ImageSubresourceLayers { LayerCount = 1, AspectMask = aspectFlags },
@@ -566,7 +566,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             }
         }
 
-        RenderPassBeginInfo renderPassBI = new RenderPassBeginInfo
+        RenderPassBeginInfo renderPassBI = new()
         {
             SType = StructureType.RenderPassBeginInfo,
             RenderArea = new Rect2D(new Offset2D(0, 0), new Extent2D(_currentFramebuffer.RenderableWidth, _currentFramebuffer.RenderableHeight)),
@@ -595,7 +595,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                     {
                         _validColorClearValues[i] = false;
                         ClearValue vkClearValue = _clearValues[i];
-                        Color clearColor = new Color(
+                        Color clearColor = new(
                             vkClearValue.Color.Float32_0,
                             vkClearValue.Color.Float32_1,
                             vkClearValue.Color.Float32_2,
@@ -838,7 +838,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         foreach (ResourceLayoutElementDescription elem in layout.Elements)
         {
-            WriteDescriptorSet write = new WriteDescriptorSet
+            WriteDescriptorSet write = new()
             {
                 SType = StructureType.WriteDescriptorSet,
                 DstSet = dstSet,
@@ -1072,7 +1072,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     {
         if (index == 0 || _gd.Features.MultipleViewports)
         {
-            Rect2D scissor = new Rect2D(new Offset2D((int)x, (int)y), new Extent2D((uint)width, (uint)height));
+            Rect2D scissor = new(new Offset2D((int)x, (int)y), new Extent2D((uint)width, (uint)height));
             if (!scissor.Equals(_scissorRects[index]))
             {
                 _scissorRects[index] = scissor;
@@ -1092,7 +1092,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 ? viewport.Height
                 : -viewport.Height;
 
-            Silk.NET.Vulkan.Viewport vkViewport = new Silk.NET.Vulkan.Viewport
+            Silk.NET.Vulkan.Viewport vkViewport = new()
             {
                 X = viewport.X,
                 Y = vpY,
@@ -1127,7 +1127,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         VkBuffer dstVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(destination);
         _currentStagingInfo.Resources.Add(dstVkBuffer.RefCount);
 
-        BufferCopy region = new BufferCopy
+        BufferCopy region = new()
         {
             SrcOffset = sourceOffset,
             DstOffset = destinationOffset,
@@ -1138,7 +1138,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         bool needToProtectUniform = destination.Usage.HasFlag(BufferUsage.UniformBuffer);
 
-        MemoryBarrier barrier = new MemoryBarrier
+        MemoryBarrier barrier = new()
         {
             SType = StructureType.MemoryBarrier,
             SrcAccessMask = AccessFlags.TransferWriteBit,
@@ -1205,7 +1205,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         if (!sourceIsStaging && !destIsStaging)
         {
-            ImageSubresourceLayers srcSubresource = new ImageSubresourceLayers
+            ImageSubresourceLayers srcSubresource = new()
             {
                 AspectMask = ImageAspectFlags.ColorBit,
                 LayerCount = layerCount,
@@ -1213,7 +1213,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 BaseArrayLayer = srcBaseArrayLayer
             };
 
-            ImageSubresourceLayers dstSubresource = new ImageSubresourceLayers
+            ImageSubresourceLayers dstSubresource = new()
             {
                 AspectMask = ImageAspectFlags.ColorBit,
                 LayerCount = layerCount,
@@ -1221,7 +1221,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 BaseArrayLayer = dstBaseArrayLayer
             };
 
-            ImageCopy region = new ImageCopy
+            ImageCopy region = new()
             {
                 SrcOffset = new Offset3D { X = (int)srcX, Y = (int)srcY, Z = (int)srcZ },
                 DstOffset = new Offset3D { X = (int)dstX, Y = (int)dstY, Z = (int)dstZ },
@@ -1291,7 +1291,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 layerCount,
                 ImageLayout.TransferDstOptimal);
 
-            ImageSubresourceLayers dstSubresource = new ImageSubresourceLayers
+            ImageSubresourceLayers dstSubresource = new()
             {
                 AspectMask = ImageAspectFlags.ColorBit,
                 LayerCount = layerCount,
@@ -1314,7 +1314,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             uint copyWidth = Math.Min(width, mipWidth);
             uint copyheight = Math.Min(height, mipHeight);
 
-            BufferImageCopy regions = new BufferImageCopy
+            BufferImageCopy regions = new()
             {
                 BufferOffset = srcLayout.Offset
                     + (srcZ * depthPitch)
@@ -1375,7 +1375,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 SubresourceLayout dstLayout = dstVkTexture.GetSubresourceLayout(
                     dstVkTexture.CalculateSubresource(dstMipLevel, dstBaseArrayLayer + layer));
 
-                ImageSubresourceLayers srcSubresource = new ImageSubresourceLayers
+                ImageSubresourceLayers srcSubresource = new()
                 {
                     AspectMask = aspect,
                     LayerCount = 1,
@@ -1383,7 +1383,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                     BaseArrayLayer = srcBaseArrayLayer + layer
                 };
 
-                BufferImageCopy region = new BufferImageCopy
+                BufferImageCopy region = new()
                 {
                     BufferRowLength = bufferRowLength,
                     BufferImageHeight = bufferImageHeight,
@@ -1430,7 +1430,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 {
                     for (uint yy = 0; yy < height; yy++)
                     {
-                        BufferCopy region = new BufferCopy
+                        BufferCopy region = new()
                         {
                             SrcOffset = srcLayout.Offset
                                 + srcLayout.DepthPitch * (zz + srcZ)
@@ -1461,7 +1461,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
                 {
                     for (uint row = 0; row < numRows; row++)
                     {
-                        BufferCopy region = new BufferCopy
+                        BufferCopy region = new()
                         {
                             SrcOffset = srcLayout.Offset
                                 + srcLayout.DepthPitch * (zz + srcZ)
@@ -1552,7 +1552,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     [Conditional("DEBUG")]
     private void DebugFullPipelineBarrier()
     {
-        MemoryBarrier memoryBarrier = new MemoryBarrier
+        MemoryBarrier memoryBarrier = new()
         {
             SType = StructureType.MemoryBarrier,
             SrcAccessMask = AccessFlags.IndirectCommandReadBit |
@@ -1638,7 +1638,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         vkCmdDebugMarkerBeginEXT_t func = _gd.MarkerBegin;
         if (func == null) { return; }
 
-        DebugMarkerMarkerInfoEXT markerInfo = new DebugMarkerMarkerInfoEXT { SType = StructureType.DebugMarkerMarkerInfoExt };
+        DebugMarkerMarkerInfoEXT markerInfo = new() { SType = StructureType.DebugMarkerMarkerInfoExt };
 
         int byteCount = Encoding.UTF8.GetByteCount(name);
         byte* utf8Ptr = stackalloc byte[byteCount + 1];
@@ -1666,7 +1666,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         vkCmdDebugMarkerInsertEXT_t func = _gd.MarkerInsert;
         if (func == null) { return; }
 
-        DebugMarkerMarkerInfoEXT markerInfo = new DebugMarkerMarkerInfoEXT { SType = StructureType.DebugMarkerMarkerInfoExt };
+        DebugMarkerMarkerInfoEXT markerInfo = new() { SType = StructureType.DebugMarkerMarkerInfoExt };
 
         int byteCount = Encoding.UTF8.GetByteCount(name);
         byte* utf8Ptr = stackalloc byte[byteCount + 1];
@@ -1704,8 +1704,8 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
     private class StagingResourceInfo
     {
-        public List<VkBuffer> BuffersUsed { get; } = new List<VkBuffer>();
-        public HashSet<ResourceRefCount> Resources { get; } = new HashSet<ResourceRefCount>();
+        public List<VkBuffer> BuffersUsed { get; } = [];
+        public HashSet<ResourceRefCount> Resources { get; } = [];
         public void Clear()
         {
             BuffersUsed.Clear();

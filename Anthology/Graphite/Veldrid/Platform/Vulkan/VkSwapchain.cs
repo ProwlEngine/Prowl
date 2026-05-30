@@ -77,7 +77,7 @@ internal unsafe class VkSwapchain : Swapchain
 
         CreateSwapchain(description.Width, description.Height);
 
-        FenceCreateInfo fenceCI = new FenceCreateInfo
+        FenceCreateInfo fenceCI = new()
         {
             SType = StructureType.FenceCreateInfo,
             Flags = 0
@@ -173,7 +173,7 @@ internal unsafe class VkSwapchain : Swapchain
             ? Format.B8G8R8A8Srgb
             : Format.B8G8R8A8Unorm;
 
-        SurfaceFormatKHR surfaceFormat = new SurfaceFormatKHR();
+        SurfaceFormatKHR surfaceFormat = new();
         if (formats.Length == 1 && formats[0].Format == Format.Undefined)
         {
             surfaceFormat = new SurfaceFormatKHR { ColorSpace = ColorSpaceKHR.SpaceSrgbNonlinearKhr, Format = desiredFormat };
@@ -228,7 +228,7 @@ internal unsafe class VkSwapchain : Swapchain
         uint maxImageCount = surfaceCapabilities.MaxImageCount == 0 ? uint.MaxValue : surfaceCapabilities.MaxImageCount;
         uint imageCount = Math.Min(maxImageCount, surfaceCapabilities.MinImageCount + 1);
 
-        SwapchainCreateInfoKHR swapchainCI = new SwapchainCreateInfoKHR
+        SwapchainCreateInfoKHR swapchainCI = new()
         {
             SType = StructureType.SwapchainCreateInfoKhr,
             Surface = _surface,
@@ -241,7 +241,7 @@ internal unsafe class VkSwapchain : Swapchain
             ImageUsage = ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferDstBit
         };
 
-        FixedArray2<uint> queueFamilyIndices = new FixedArray2<uint>(_gd.GraphicsQueueIndex, _gd.PresentQueueIndex);
+        FixedArray2<uint> queueFamilyIndices = new(_gd.GraphicsQueueIndex, _gd.PresentQueueIndex);
 
         if (_gd.GraphicsQueueIndex != _gd.PresentQueueIndex)
         {

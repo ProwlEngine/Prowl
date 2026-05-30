@@ -22,7 +22,7 @@ internal unsafe class VkSampler : Sampler
         _gd = gd;
         VkFormats.GetFilterParams(description.Filter, out Filter minFilter, out Filter magFilter, out SamplerMipmapMode mipmapMode);
 
-        SamplerCreateInfo samplerCI = new SamplerCreateInfo
+        SamplerCreateInfo samplerCI = new()
         {
             SType = StructureType.SamplerCreateInfo,
             AddressModeU = VkFormats.VdToVkSamplerAddressMode(description.AddressModeU),

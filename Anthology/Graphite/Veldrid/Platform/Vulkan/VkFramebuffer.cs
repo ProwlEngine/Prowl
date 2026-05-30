@@ -13,7 +13,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
     private readonly RenderPass _renderPassNoClearLoad;
     private readonly RenderPass _renderPassNoClear;
     private readonly RenderPass _renderPassClear;
-    private readonly List<ImageView> _attachmentViews = new List<ImageView>();
+    private readonly List<ImageView> _attachmentViews = [];
     private bool _destroyed;
     private string _name;
 
@@ -34,7 +34,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
     {
         _gd = gd;
 
-        RenderPassCreateInfo renderPassCI = new RenderPassCreateInfo
+        RenderPassCreateInfo renderPassCI = new()
         {
             SType = StructureType.RenderPassCreateInfo
         };
@@ -47,7 +47,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         for (int i = 0; i < colorAttachmentCount; i++)
         {
             VkTexture vkColorTex = Util.AssertSubtype<Texture, VkTexture>(ColorTargets[i].Target);
-            AttachmentDescription colorAttachmentDesc = new AttachmentDescription();
+            AttachmentDescription colorAttachmentDesc = new();
             colorAttachmentDesc.Format = vkColorTex.VkFormat;
             colorAttachmentDesc.Samples = vkColorTex.VkSampleCount;
             colorAttachmentDesc.LoadOp = AttachmentLoadOp.Load;
@@ -62,14 +62,14 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             colorAttachmentDesc.FinalLayout = ImageLayout.ColorAttachmentOptimal;
             attachments[attachmentCount++] = colorAttachmentDesc;
 
-            AttachmentReference colorAttachmentRef = new AttachmentReference();
+            AttachmentReference colorAttachmentRef = new();
             colorAttachmentRef.Attachment = (uint)i;
             colorAttachmentRef.Layout = ImageLayout.ColorAttachmentOptimal;
             colorAttachmentRefs[i] = colorAttachmentRef;
         }
 
-        AttachmentDescription depthAttachmentDesc = new AttachmentDescription();
-        AttachmentReference depthAttachmentRef = new AttachmentReference();
+        AttachmentDescription depthAttachmentDesc = new();
+        AttachmentReference depthAttachmentRef = new();
         if (DepthTarget != null)
         {
             VkTexture vkDepthTex = Util.AssertSubtype<Texture, VkTexture>(DepthTarget.Value.Target);
@@ -91,7 +91,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             depthAttachmentRef.Layout = ImageLayout.DepthStencilAttachmentOptimal;
         }
 
-        SubpassDescription subpass = new SubpassDescription();
+        SubpassDescription subpass = new();
         subpass.PipelineBindPoint = PipelineBindPoint.Graphics;
         if (ColorTargets.Count > 0)
         {
@@ -105,7 +105,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             attachments[attachmentCount++] = depthAttachmentDesc;
         }
 
-        SubpassDependency subpassDependency = new SubpassDependency();
+        SubpassDependency subpassDependency = new();
         subpassDependency.SrcSubpass = Silk.NET.Vulkan.Vk.SubpassExternal;
         subpassDependency.SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
         subpassDependency.DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
@@ -160,7 +160,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
 
         _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassClear).CheckResult();
 
-        FramebufferCreateInfo fbCI = new FramebufferCreateInfo
+        FramebufferCreateInfo fbCI = new()
         {
             SType = StructureType.FramebufferCreateInfo
         };
@@ -174,7 +174,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         for (int i = 0; i < colorAttachmentCount; i++)
         {
             VkTexture vkColorTarget = Util.AssertSubtype<Texture, VkTexture>(description.ColorTargets[i].Target);
-            ImageViewCreateInfo imageViewCI = new ImageViewCreateInfo
+            ImageViewCreateInfo imageViewCI = new()
             {
                 SType = StructureType.ImageViewCreateInfo,
                 Image = vkColorTarget.OptimalDeviceImage,
@@ -197,7 +197,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         {
             VkTexture vkDepthTarget = Util.AssertSubtype<Texture, VkTexture>(description.DepthTarget.Value.Target);
             bool hasStencil = FormatHelpers.IsStencilFormat(vkDepthTarget.Format);
-            ImageViewCreateInfo depthViewCI = new ImageViewCreateInfo
+            ImageViewCreateInfo depthViewCI = new()
             {
                 SType = StructureType.ImageViewCreateInfo,
                 Image = vkDepthTarget.OptimalDeviceImage,

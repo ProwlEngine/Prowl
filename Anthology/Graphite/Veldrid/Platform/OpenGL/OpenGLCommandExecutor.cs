@@ -40,8 +40,8 @@ internal unsafe class OpenGLCommandExecutor
     private OpenGLComputeProgram _currentComputeProgram;
 
     private readonly MergedPropertyTable _mergedTable = new();
-    private readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = new();
-    private readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = new();
+    private readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = [];
+    private readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = [];
 
     private bool _graphicsPipelineActive;
     private bool _vertexLayoutFlushed;

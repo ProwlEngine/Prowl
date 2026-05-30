@@ -9,8 +9,8 @@ namespace Prowl.Veldrid.Vk;
 internal class VkDescriptorPoolManager
 {
     private readonly VkGraphicsDevice _gd;
-    private readonly List<PoolInfo> _pools = new List<PoolInfo>();
-    private readonly object _lock = new object();
+    private readonly List<PoolInfo> _pools = [];
+    private readonly object _lock = new();
     private readonly bool _freeDescriptorSets;
 
     /// <summary>Creates a pool manager for long-lived descriptor sets (supports per-set free).</summary>
@@ -50,7 +50,7 @@ internal class VkDescriptorPoolManager
         lock (_lock)
         {
             DescriptorPool pool = GetPool(counts);
-            DescriptorSetAllocateInfo dsAI = new DescriptorSetAllocateInfo
+            DescriptorSetAllocateInfo dsAI = new()
             {
                 SType = StructureType.DescriptorSetAllocateInfo
             };
@@ -118,7 +118,7 @@ internal class VkDescriptorPoolManager
         sizes[6].Type = DescriptorType.StorageBufferDynamic;
         sizes[6].DescriptorCount = descriptorCount;
 
-        DescriptorPoolCreateInfo poolCI = new DescriptorPoolCreateInfo
+        DescriptorPoolCreateInfo poolCI = new()
         {
             SType = StructureType.DescriptorPoolCreateInfo
         };

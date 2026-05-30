@@ -26,7 +26,7 @@ internal unsafe class D3D11Framebuffer : Framebuffer
         if (description.DepthTarget != null)
         {
             D3D11Texture d3dDepthTarget = Util.AssertSubtype<Texture, D3D11Texture>(description.DepthTarget.Value.Target);
-            DepthStencilViewDesc dsvDesc = new DepthStencilViewDesc
+            DepthStencilViewDesc dsvDesc = new()
             {
                 Format = D3D11Formats.GetDepthFormat(d3dDepthTarget.Format),
             };
@@ -71,7 +71,7 @@ internal unsafe class D3D11Framebuffer : Framebuffer
             for (int i = 0; i < RenderTargetViews.Length; i++)
             {
                 D3D11Texture d3dColorTarget = Util.AssertSubtype<Texture, D3D11Texture>(description.ColorTargets[i].Target);
-                RenderTargetViewDesc rtvDesc = new RenderTargetViewDesc
+                RenderTargetViewDesc rtvDesc = new()
                 {
                     Format = D3D11Formats.ToDxgiFormat(d3dColorTarget.Format, false),
                 };
