@@ -3,6 +3,7 @@ using System;
 
 using Silk.NET;
 using Silk.NET.Core.Contexts;
+using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
@@ -12,6 +13,41 @@ namespace Prowl.Veldrid.Samples;
 
 public static class DeviceCreateUtilities
 {
+    const ContextAPI API = ContextAPI.Vulkan;
+    static readonly APIVersion Version = new APIVersion(2, 1);
+    const GraphicsBackend Backend = GraphicsBackend.Vulkan;
+
+
+    public static IWindow CreateWindowAndDevice(Action<GraphicsDevice> load, Action<double> render, Action close, GraphicsDeviceOptions options)
+    {
+        WindowOptions woptions = WindowOptions.Default;
+        woptions.Title = "My Window";
+        woptions.Size = new Vector2D<int>(600, 600);
+        woptions.WindowState = WindowState.Normal;
+        woptions.VideoMode = VideoMode.Default;
+        woptions.API = new GraphicsAPI(API, ContextProfile.Core, ContextFlags.ForwardCompatible, Version);
+        woptions.ShouldSwapAutomatically = false;
+
+        IWindow window = Window.Create(woptions);
+
+        window.Load += () =>
+        {
+            GraphicsDevice device = CreateDevice(window, options, Backend);
+            device.SyncToVerticalBlank = options.SyncToVerticalBlank;
+
+            window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
+
+            load.Invoke(device);
+        };
+
+        window.Render += render;
+        window.Closing += close;
+
+        window.Run();
+
+        return window;
+    }
+
     public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, GraphicsBackend backend)
     {
         if (!window.IsInitialized)

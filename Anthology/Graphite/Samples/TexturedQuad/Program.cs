@@ -9,12 +9,10 @@ namespace Prowl.Veldrid.Samples.TexturedQuad;
 
 public static class Program
 {
-    static IWindow window;
-
     static GraphicsDevice device;
     static CommandBuffer buffer;
     static Mesh quad;
-    static ShaderProgram shader;
+    static GraphicsProgram shader;
     static PropertySet properties;
     static Texture texture;
     static Sampler sampler;
@@ -23,30 +21,20 @@ public static class Program
 
     private static void Main()
     {
-        WindowOptions woptions = WindowOptions.Default;
-        woptions.Title = "My Window";
-        woptions.Size = new Vector2D<int>(600, 600);
-        woptions.WindowState = WindowState.Normal;
-        woptions.VideoMode = VideoMode.Default;
-        woptions.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
-        woptions.ShouldSwapAutomatically = false;
-        window = Window.Create(woptions);
+        GraphicsDeviceOptions options = new()
+        {
+            Debug = false,
+            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false,
+            PreferStandardClipSpaceYDirection = true
+        };
 
-        window.Load += Load;
-        window.Closing += Close;
-
-        window.Run();
+        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options);
     }
 
-    public static void Load()
+    public static void Load(GraphicsDevice newDevice)
     {
-        GraphicsDeviceOptions options = new(
-            debug: false,
-            swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt,
-            syncToVerticalBlank: true);
-
-        device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.OpenGL);
-        device.SyncToVerticalBlank = false;
+        device = newDevice;
 
         tracker = new();
         shader = ShaderLoader.CreateShader(device);
@@ -55,9 +43,6 @@ public static class Program
         buffer = device.ResourceFactory.CreateCommandBuffer();
         properties = new();
         properties.SetTexture("MainTexture", texture, sampler);
-
-        window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
-        window.Render += Render;
     }
 
 

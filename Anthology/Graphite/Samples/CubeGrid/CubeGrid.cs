@@ -24,7 +24,7 @@ public class CubeGrid
 
 
     static Mesh sharedMesh;
-    static ShaderProgram sharedPass;
+    static GraphicsProgram sharedPass;
     static (Texture texture, Sampler sampler) cat;
 
     static Float4x4 view;

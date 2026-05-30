@@ -48,7 +48,7 @@ public static class ShaderLoader
     };
 
 
-    public static ShaderProgram CreateShader(GraphicsDevice device)
+    public static GraphicsProgram CreateShader(GraphicsDevice device)
     {
         SessionDescription sessionDesc = new()
         {
@@ -148,7 +148,7 @@ public static class ShaderLoader
         DumpSpirvHeader("fragment", shaderDesc.Stages[1].ShaderBytes);
 
 
-        return device.ResourceFactory.CreateShaderProgram(shaderDesc);
+        return device.ResourceFactory.CreateGraphicsProgram(shaderDesc);
     }
 
 

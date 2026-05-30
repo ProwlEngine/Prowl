@@ -1,59 +1,39 @@
 using Prowl.Vector;
 
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
-
 
 namespace Prowl.Veldrid.Samples.HelloTriangle;
 
 
 public static class Program
 {
-    static IWindow window;
-
     static GraphicsDevice device;
     static CommandBuffer buffer;
     static Mesh triangle;
-    static ShaderProgram shader;
-    static PropertySet properties;
+    static GraphicsProgram shader;
     static RenderMSTracker tracker;
 
 
     private static void Main()
     {
-        WindowOptions woptions = WindowOptions.Default;
-        woptions.Title = "My Window";
-        woptions.Size = new Vector2D<int>(600, 600);
-        woptions.WindowState = WindowState.Normal;
-        woptions.VideoMode = VideoMode.Default;
-        woptions.API = new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1));
-        woptions.ShouldSwapAutomatically = false;
-        window = Window.Create(woptions);
+        GraphicsDeviceOptions options = new()
+        {
+            Debug = false,
+            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false,
+            PreferStandardClipSpaceYDirection = true
+        };
 
-        window.Load += Load;
-        window.Closing += Close;
-
-        window.Run();
+        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options);
     }
 
-    public static void Load()
+    public static void Load(GraphicsDevice newDevice)
     {
-        GraphicsDeviceOptions options = new(
-            debug: true,
-            swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt,
-            syncToVerticalBlank: true);
-        options.PreferStandardClipSpaceYDirection = true;
-
-        device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.Vulkan);
-        device.SyncToVerticalBlank = false;
+        device = newDevice;
 
         tracker = new();
         shader = ShaderLoader.CreateShader(device);
         triangle = ModelLoader.CreateTriangle(device);
         buffer = device.ResourceFactory.CreateCommandBuffer();
-
-        window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
-        window.Render += Render;
     }
 
 

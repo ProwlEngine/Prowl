@@ -10,7 +10,7 @@ namespace Prowl.Veldrid.Samples.Cube;
 public class Cube
 {
     static Mesh sharedMesh;
-    static ShaderProgram sharedPass;
+    static GraphicsProgram sharedPass;
     static (Texture texture, Sampler sampler) cat;
 
     static Float4x4 view;

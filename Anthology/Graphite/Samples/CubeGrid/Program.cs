@@ -1,9 +1,4 @@
-using System.IO;
-
 using Prowl.Vector;
-
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
 
 
 namespace Prowl.Veldrid.Samples.CubeGrid;
@@ -11,8 +6,6 @@ namespace Prowl.Veldrid.Samples.CubeGrid;
 
 public static class Program
 {
-    static IWindow window;
-
     static GraphicsDevice device;
     static CommandBuffer buffer;
     static RenderMSTracker tracker;
@@ -21,49 +14,33 @@ public static class Program
 
     private static void Main()
     {
-        Window.PrioritizeSdl();
+        GraphicsDeviceOptions options = new()
+        {
+            Debug = false,
+            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = false,
+            PreferStandardClipSpaceYDirection = true
+        };
 
-        WindowOptions woptions = WindowOptions.Default;
-        woptions.Title = "My Window";
-        woptions.Size = new Vector2D<int>(600, 600);
-        woptions.WindowState = WindowState.Normal;
-        woptions.VideoMode = VideoMode.Default;
-        woptions.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
-        woptions.ShouldSwapAutomatically = false;
-        window = Window.Create(woptions);
-
-        var sdl = Silk.NET.SDL.Sdl.GetApi();
-        string basePath = System.Environment.ProcessPath;
-        sdl.VulkanLoadLibrary(Path.Join(basePath, "vulkan/path/relative/to/your/exe/dll.dylib"));
-
-        window.Load += Load;
-        window.Closing += Close;
-
-        window.Run();
+        DeviceCreateUtilities.CreateWindowAndDevice(Load, Render, Close, options);
     }
 
-    public static void Load()
+    public static void Load(GraphicsDevice newDevice)
     {
-        GraphicsDeviceOptions options = new(
-            debug: false,
-            swapchainDepthFormat: PixelFormat.D24_UNorm_S8_UInt,
-            syncToVerticalBlank: true);
-
-        device = DeviceCreateUtilities.CreateDevice(window, options, GraphicsBackend.OpenGL);
-        device.SyncToVerticalBlank = false;
-
         tracker = new();
-        CubeGrid.Create(device);
+
+        device = newDevice;
         buffer = device.ResourceFactory.CreateCommandBuffer();
 
-        window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
-        window.Render += Render;
+        CubeGrid.Create(device);
     }
 
 
     public static void Render(double dt)
     {
         tracker.Begin();
+
+        Frame frame = device.BeginFrame();
 
         buffer.Begin();
         buffer.SetFramebuffer(device.SwapchainFramebuffer);
@@ -72,7 +49,6 @@ public static class Program
         CubeGrid.Draw(time += (float)dt, buffer);
         buffer.End();
 
-        Frame frame = device.BeginFrame();
         frame.SubmitCommands(buffer);
         device.EndFrame(frame);
 
@@ -84,8 +60,9 @@ public static class Program
 
     public static void Close()
     {
-        buffer.Dispose();
         CubeGrid.Dispose();
+
+        buffer.Dispose();
         device.Dispose();
     }
 }
