@@ -19,7 +19,7 @@ public interface IVertexSource
     /// <summary>
     /// Resolve the vertex buffer + offset for the given layout slot.
     /// <paramref name="layoutSlot"/> is the index into the bound shader's
-    /// <see cref="ShaderProgram.VertexLayouts"/>. The full
+    /// <see cref="GraphicsProgram.VertexLayouts"/>. The full
     /// <see cref="VertexLayoutDescription"/> is passed so an implementation
     /// can dispatch on layout element identity (each element's
     /// <see cref="VertexElementDescription.Name"/> is a

@@ -143,7 +143,7 @@ public abstract partial class ResourceFactory
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private void CreateShaderProgram_CheckDescription(ref ShaderDescription description)
+    private void CreateGraphicsProgram_CheckDescription(ref ShaderDescription description)
     {
 #if VALIDATE_USAGE
         ShaderStageDescription[] stages = description.Stages;
@@ -216,7 +216,7 @@ public abstract partial class ResourceFactory
                     if (programResourceLayouts[i].Set == programResourceLayouts[j].Set)
                     {
                         throw new RenderException(
-                            $"Two ResourceLayouts on the ShaderProgram share Set index {programResourceLayouts[i].Set}.");
+                            $"Two ResourceLayouts on the GraphicsProgram share Set index {programResourceLayouts[i].Set}.");
                     }
                 }
 

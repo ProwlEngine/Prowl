@@ -49,7 +49,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     private ID3D11DomainShader* _domainShader;
     private ID3D11PixelShader* _pixelShader;
 
-    private D3D11ShaderProgram _currentShaderProgram;
+    private D3D11GraphicsProgram _currentShaderProgram;
     private D3D11ComputeProgram _currentComputeProgram;
     private string _name;
     private ID3D11Buffer*[] _cbOut = new ID3D11Buffer*[1];
@@ -261,9 +261,9 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
     }
 
-    private protected override void SetShaderCore(ShaderProgram program)
+    private protected override void SetShaderCore(GraphicsProgram program)
     {
-        D3D11ShaderProgram sp = Util.AssertSubtype<ShaderProgram, D3D11ShaderProgram>(program);
+        D3D11GraphicsProgram sp = Util.AssertSubtype<GraphicsProgram, D3D11GraphicsProgram>(program);
         if (_currentShaderProgram == sp) return;
 
         bool msaa = _framebuffer != null
@@ -552,9 +552,9 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     {
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
         {
-            object key = isCompute ? _currentComputeProgram : _currentShaderProgram;
+            ShaderProgram key = isCompute ? _currentComputeProgram : _currentShaderProgram;
 
-            DeviceBufferRange r = GetOrBuildImplicitUboD3D11(key, setIdx, elem.BindingIndex, elem.UniformFields, isCompute);
+            DeviceBufferRange r = GetOrBuildImplicitUboD3D11(key, setIdx, elem.BindingIndex, elem.UniformFields);
 
             return new DeviceBufferRange(
                 Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(r.Buffer), r.Offset, r.SizeInBytes);
@@ -574,21 +574,13 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
     }
 
     private DeviceBufferRange GetOrBuildImplicitUboD3D11(
-        object programKey, uint setIdx, int bindingIndex,
-        UniformBlockField[] fields, bool isCompute)
+        ShaderProgram programKey, uint setIdx, int bindingIndex,
+        UniformBlockField[] fields)
     {
         uint uniformVersion = _mergedTable.UniformVersion;
 
-        if (!isCompute)
-        {
-            var key = new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion);
-            if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
-        }
-        else
-        {
-            var key = new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion);
-            if (_computeUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
-        }
+        UboCacheKey key = new UboCacheKey(programKey, setIdx, bindingIndex, uniformVersion);
+        if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
 
         uint totalSize = 0;
         foreach (UniformBlockField field in fields)
@@ -620,10 +612,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
             System.Buffers.ArrayPool<byte>.Shared.Return(uploadBuf);
         }
 
-        if (!isCompute)
-            _frameUboCache[new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
-        else
-            _computeUboCache[new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
+        _frameUboCache[key] = range;
 
         return range;
     }

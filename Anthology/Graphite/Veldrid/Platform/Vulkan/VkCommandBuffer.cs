@@ -45,12 +45,12 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private bool _newFramebuffer; // Render pass cycle state
 
     // Resource bind cache: (programKey, setIndex, mergedResourceVersion) -> DescriptorSet
-    private readonly Dictionary<(object, int, uint), DescriptorSet> _resourceBindCache = [];
+    private readonly Dictionary<(ShaderProgram, int, uint), DescriptorSet> _resourceBindCache = [];
 
     // Tracks the VkBuffer handle written into each cached descriptor set's UBO bindings.
     // Key: (programKey, setIndex); Value: backing VkBuffer handles per UBO element.
     // Used to detect transient overflow (allocator switched to a new backing buffer).
-    private readonly Dictionary<(object, int), VkBufferHandle[]> _uboBackingBuffers = [];
+    private readonly Dictionary<(ShaderProgram, int), VkBufferHandle[]> _uboBackingBuffers = [];
 
     private string _name;
 
@@ -370,7 +370,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
 
         if (_currentShaderProgram == null || _currentFramebuffer == null)
         {
-            throw new RenderException("Cannot draw: no graphics ShaderProgram or Framebuffer bound.");
+            throw new RenderException("Cannot draw: no graphics GraphicsProgram or Framebuffer bound.");
         }
 
         VkPipelineCacheKey key = new(
@@ -656,12 +656,12 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         _hasResolvedPipeline = false;
     }
 
-    private VkShaderProgram _currentShaderProgram;
+    private VkGraphicsProgram _currentShaderProgram;
     private VkComputeProgram _currentComputeProgram;
 
-    private protected override void SetShaderCore(ShaderProgram program)
+    private protected override void SetShaderCore(GraphicsProgram program)
     {
-        VkShaderProgram sp = Util.AssertSubtype<ShaderProgram, VkShaderProgram>(program);
+        VkGraphicsProgram sp = Util.AssertSubtype<GraphicsProgram, VkGraphicsProgram>(program);
         if (_currentShaderProgram == sp) return;
 
         _currentShaderProgram = sp;
@@ -726,7 +726,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         => (VkTexture)(kind == ResourceKind.TextureReadWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D);
 
     private void BindPropertySets(
-        object programKey,
+        ShaderProgram programKey,
         ResourceLayoutDescription[] resourceLayouts,
         DescriptorSetLayout[] dslLayouts,
         DescriptorResourceCounts[] perSetCounts,
@@ -749,7 +749,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
         {
             ResourceLayoutDescription layout = resourceLayouts[setIdx];
-            (object programKey, int setIdx, uint resourceVersion) cacheKey = (programKey, setIdx, resourceVersion);
+            (ShaderProgram programKey, int setIdx, uint resourceVersion) cacheKey = (programKey, setIdx, resourceVersion);
 
             bool miss = !_resourceBindCache.TryGetValue(cacheKey, out DescriptorSet ds);
             if (!miss && UboBackingBufferChanged(programKey, setIdx, in layout, isCompute, uniformVersion))
@@ -774,7 +774,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     }
 
     private bool UboBackingBufferChanged(
-        object programKey, int setIdx, in ResourceLayoutDescription layout,
+        ShaderProgram programKey, int setIdx, in ResourceLayoutDescription layout,
         bool isCompute, uint uniformVersion)
     {
         if (!_uboBackingBuffers.TryGetValue((programKey, setIdx), out VkBufferHandle[] stored))
@@ -784,7 +784,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         foreach (ResourceLayoutElementDescription elem in layout.Elements)
         {
             if (elem.Kind != ResourceKind.UniformBuffer) continue;
-            DeviceBufferRange range = ResolveUboRange(programKey, (uint)setIdx, in elem, isCompute, uniformVersion);
+            DeviceBufferRange range = ResolveUboRange(programKey, (uint)setIdx, in elem, uniformVersion);
             VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
             if (idx >= stored.Length || stored[idx].Handle != vkBuf.DeviceBuffer.Handle)
                 return true;
@@ -794,7 +794,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     }
 
     private void AppendDynOffsets(
-        object programKey, uint setIdx, in ResourceLayoutDescription layout,
+        ShaderProgram programKey, uint setIdx, in ResourceLayoutDescription layout,
         bool isCompute, uint uniformVersion, uint* dynOffsets, ref int dynOffsetCount)
     {
         const int MaxUbosPerSet = 16;
@@ -804,7 +804,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         foreach (ResourceLayoutElementDescription elem in layout.Elements)
         {
             if (elem.Kind != ResourceKind.UniformBuffer) continue;
-            DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, isCompute, uniformVersion);
+            DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, uniformVersion);
             uboData[uboCount++] = (elem.BindingIndex, range.Offset);
         }
 
@@ -822,7 +822,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     }
 
     private void WriteDescriptorSlot(
-        object programKey, uint setIdx, in ResourceLayoutDescription layout,
+        ShaderProgram programKey, uint setIdx, in ResourceLayoutDescription layout,
         DescriptorSet dstSet, bool isCompute, uint uniformVersion)
     {
         const int MaxElems = 64;
@@ -852,7 +852,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             {
                 case ResourceKind.UniformBuffer:
                     {
-                        DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, isCompute, uniformVersion);
+                        DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, uniformVersion);
                         VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         uboBuffers![uboTrackedIdx++] = vkBuf.DeviceBuffer;
                         bufInfos[bufIdx] = new DescriptorBufferInfo
@@ -948,11 +948,11 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     }
 
     private DeviceBufferRange ResolveUboRange(
-        object programKey, uint setIdx, in ResourceLayoutElementDescription elem,
-        bool isCompute, uint uniformVersion)
+        ShaderProgram programKey, uint setIdx, in ResourceLayoutElementDescription elem,
+        uint uniformVersion)
     {
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
-            return GetOrBuildImplicitUbo(programKey, setIdx, elem.BindingIndex, elem.UniformFields, isCompute, uniformVersion);
+            return GetOrBuildImplicitUbo(programKey, setIdx, elem.BindingIndex, elem.UniformFields, uniformVersion);
 
         if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
             && uboEntry.Kind == PropertyEntryKind.Buffer)
@@ -968,19 +968,11 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     }
 
     private DeviceBufferRange GetOrBuildImplicitUbo(
-        object programKey, uint setIdx, int bindingIndex,
-        UniformBlockField[] fields, bool isCompute, uint uniformVersion)
+        ShaderProgram programKey, uint setIdx, int bindingIndex,
+        UniformBlockField[] fields, uint uniformVersion)
     {
-        if (!isCompute)
-        {
-            var key = new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion);
-            if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
-        }
-        else
-        {
-            var key = new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion);
-            if (_computeUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
-        }
+        UboCacheKey key = new UboCacheKey(programKey, setIdx, bindingIndex, uniformVersion);
+        if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
 
         uint totalSize = 0;
         foreach (UniformBlockField field in fields)
@@ -1012,10 +1004,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             ArrayPool<byte>.Shared.Return(uploadBuf);
         }
 
-        if (!isCompute)
-            _frameUboCache[new UboCacheKey((ShaderProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
-        else
-            _computeUboCache[new ComputeUboCacheKey((ComputeProgram)programKey, setIdx, bindingIndex, uniformVersion)] = range;
+        _frameUboCache[key] = range;
 
         return range;
     }

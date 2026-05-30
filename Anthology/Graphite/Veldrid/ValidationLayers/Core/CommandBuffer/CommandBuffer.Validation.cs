@@ -52,12 +52,12 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private static void SetShader_CheckProgram(ShaderProgram p)
+    private static void SetShader_CheckProgram(GraphicsProgram p)
     {
 #if VALIDATE_USAGE
         if (p == null)
         {
-            throw new RenderException("ShaderProgram passed to SetShader must be non-null.");
+            throw new RenderException("GraphicsProgram passed to SetShader must be non-null.");
         }
 #endif
     }
@@ -395,7 +395,7 @@ public abstract partial class CommandBuffer
 #if VALIDATE_USAGE
         if (_shaderProgram == null)
         {
-            throw new RenderException($"A graphics ShaderProgram must be set in order to issue draw commands.");
+            throw new RenderException($"A graphics GraphicsProgram must be set in order to issue draw commands.");
         }
         if (_framebuffer == null)
         {

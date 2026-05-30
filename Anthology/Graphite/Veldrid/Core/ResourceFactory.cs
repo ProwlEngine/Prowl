@@ -179,27 +179,27 @@ public abstract partial class ResourceFactory
     protected abstract Sampler CreateSamplerCore(ref SamplerDescription description);
 
     /// <summary>
-    /// Creates a new <see cref="ShaderProgram"/>.
+    /// Creates a new <see cref="GraphicsProgram"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="ShaderProgram"/>.</returns>
-    public ShaderProgram CreateShaderProgram(ShaderDescription description) => CreateShaderProgram(ref description);
+    /// <returns>A new <see cref="GraphicsProgram"/>.</returns>
+    public GraphicsProgram CreateGraphicsProgram(ShaderDescription description) => CreateGraphicsProgram(ref description);
 
     /// <summary>
-    /// Creates a new <see cref="ShaderProgram"/>.
+    /// Creates a new <see cref="GraphicsProgram"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>
-    /// <returns>A new <see cref="ShaderProgram"/>.</returns>
-    public ShaderProgram CreateShaderProgram(ref ShaderDescription description)
+    /// <returns>A new <see cref="GraphicsProgram"/>.</returns>
+    public GraphicsProgram CreateGraphicsProgram(ref ShaderDescription description)
     {
-        CreateShaderProgram_CheckDescription(ref description);
-        return CreateShaderProgramCore(ref description);
+        CreateGraphicsProgram_CheckDescription(ref description);
+        return CreateGraphicsProgramCore(ref description);
     }
 
     /// <summary></summary>
     /// <param name="description"></param>
     /// <returns></returns>
-    protected abstract ShaderProgram CreateShaderProgramCore(ref ShaderDescription description);
+    protected abstract GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description);
 
     /// <summary>
     /// Creates a new <see cref="ComputeProgram"/>.

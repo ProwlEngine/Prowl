@@ -18,7 +18,7 @@ namespace Prowl.Veldrid;
 /// NOTE: The use of <see cref="CommandBuffer"/> is not thread-safe. Access to the <see cref="CommandBuffer"/> must be
 /// externally synchronized.
 /// There are some limitations dictating proper usage and ordering of graphics commands. For example, a
-/// <see cref="Framebuffer"/>, <see cref="ShaderProgram"/>, and <see cref="IVertexSource"/> must all be
+/// <see cref="Framebuffer"/>, <see cref="GraphicsProgram"/>, and <see cref="IVertexSource"/> must all be
 /// bound before a call to <see cref="DrawIndexed(uint, uint, int, uint)"/> will succeed.
 /// These limitations are described in each function, where applicable.
 /// <see cref="CommandBuffer"/> instances cannot be executed multiple times per-recording. When executed by a
@@ -32,7 +32,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private readonly uint _structuredBufferAlignment;
 
     private protected Framebuffer _framebuffer;
-    private protected ShaderProgram _shaderProgram;
+    private protected GraphicsProgram _shaderProgram;
     private protected ComputeProgram _computeProgram;
     private protected OutputDescription _framebufferOutputs;
     private protected IVertexSource _currentVertexSource;
@@ -45,18 +45,12 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private readonly Dictionary<PropertySet, (uint uniformV, uint resourceV)> _seenVersions = [];
 
     /// <summary>
-    /// Per-frame cache of allocated transient UBO ranges for graphics (ShaderProgram) draws.
-    /// Cleared at <see cref="Begin"/>. Key: (shader, set, binding, merged uniform version).
-    /// Used by Vk and D3D11 at draw time. OpenGL replay uses a separate cache on the executor.
+    /// Per-frame cache of allocated transient UBO ranges for both graphics draws and compute
+    /// dispatches, keyed on the shared <see cref="ShaderProgram"/> base. Cleared at <see cref="Begin"/>.
+    /// Key: (program, set, binding, merged uniform version). Used by Vk and D3D11 at draw time;
+    /// OpenGL replay uses a separate cache on the executor.
     /// </summary>
     private protected readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = [];
-
-    /// <summary>
-    /// Per-frame cache of allocated transient UBO ranges for compute dispatches (ComputeProgram).
-    /// Separate from <see cref="_frameUboCache"/> because <see cref="ComputeProgram"/> and
-    /// <see cref="ShaderProgram"/> are separate type hierarchies.
-    /// </summary>
-    private protected readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = [];
 
     /// <summary>
     /// Gets whether <see cref="End"/> has been called on this <see cref="CommandBuffer"/> since the last
@@ -84,7 +78,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _mergedTable.Clear();
         _seenVersions.Clear();
         _frameUboCache.Clear();
-        _computeUboCache.Clear();
     }
 
     /// <summary>
@@ -103,21 +96,21 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     public abstract void End();
 
     /// <summary>
-    /// Sets the active graphics <see cref="ShaderProgram"/> used for rendering.
-    /// When drawing, the active <see cref="ShaderProgram"/> must be compatible with the bound
+    /// Sets the active graphics <see cref="GraphicsProgram"/> used for rendering.
+    /// When drawing, the active <see cref="GraphicsProgram"/> must be compatible with the bound
     /// <see cref="Framebuffer"/>, <see cref="PropertySet"/>, and <see cref="DeviceBuffer"/> objects.
-    /// When a new <see cref="ShaderProgram"/> is set, the previously-bound ResourceSets on this
+    /// When a new <see cref="GraphicsProgram"/> is set, the previously-bound ResourceSets on this
     /// <see cref="CommandBuffer"/> become invalidated and must be re-bound.
     /// </summary>
-    /// <param name="program">The new <see cref="ShaderProgram"/> object.</param>
-    public void SetShader(ShaderProgram program)
+    /// <param name="program">The new <see cref="GraphicsProgram"/> object.</param>
+    public void SetShader(GraphicsProgram program)
     {
         SetShader_CheckProgram(program);
         SetShaderCore(program);
         _shaderProgram = program;
     }
 
-    private protected abstract void SetShaderCore(ShaderProgram program);
+    private protected abstract void SetShaderCore(GraphicsProgram program);
 
     /// <summary>
     /// Sets the active <see cref="ComputeProgram"/> used for compute dispatches.
@@ -207,7 +200,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _mergedTable.Clear();     // bump both merged version counters
         _seenVersions.Clear();
         _frameUboCache.Clear();
-        _computeUboCache.Clear();
         ClearPropertiesCore();    // OpenGL emits a ClearPropertiesEntry; Vk/D3D11 no-op
     }
 
@@ -219,8 +211,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Sets the active <see cref="Framebuffer"/> which will be rendered to.
-    /// When drawing, the active <see cref="Framebuffer"/> must be compatible with the active <see cref="ShaderProgram"/>.
-    /// A compatible <see cref="ShaderProgram"/> has the same number of output attachments with matching formats.
+    /// When drawing, the active <see cref="Framebuffer"/> must be compatible with the active <see cref="GraphicsProgram"/>.
+    /// A compatible <see cref="GraphicsProgram"/> has the same number of output attachments with matching formats.
     /// </summary>
     /// <param name="fb">The new <see cref="Framebuffer"/>.</param>
     public void SetFramebuffer(Framebuffer fb)

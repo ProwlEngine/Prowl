@@ -16,7 +16,7 @@ internal unsafe class D3D11ComputeProgram : ComputeProgram
         : base(ref description)
     {
         ShaderStageDescription stage = description.Stage;
-        ComputeBytecode = D3D11ShaderProgram.GetOrCompileBytecode(ref stage);
+        ComputeBytecode = D3D11GraphicsProgram.GetOrCompileBytecode(ref stage);
 
         fixed (byte* pBytecode = ComputeBytecode)
         {

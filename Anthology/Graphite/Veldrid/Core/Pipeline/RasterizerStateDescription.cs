@@ -3,7 +3,7 @@
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// A <see cref="ShaderProgram"/> component describing the properties of the rasterizer.
+/// A <see cref="GraphicsProgram"/> component describing the properties of the rasterizer.
 /// </summary>
 public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription>
 {

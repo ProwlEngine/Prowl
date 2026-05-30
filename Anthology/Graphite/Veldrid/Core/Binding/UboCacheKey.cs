@@ -3,9 +3,9 @@ using System;
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// Cache key for per-command-buffer implicit UBO deduplication.
-/// Keyed by the shader, set index, binding index, and the merged table's uniform version
-/// so that UBO uploads are skipped when uniform state is unchanged between draws.
+/// Cache key for per-command-buffer implicit UBO deduplication, shared by graphics draws and
+/// compute dispatches. Keyed by the program, set index, binding index, and the merged table's
+/// uniform version so that UBO uploads are skipped when uniform state is unchanged.
 /// </summary>
 internal readonly struct UboCacheKey : IEquatable<UboCacheKey>
 {

@@ -1,11 +1,11 @@
 namespace Prowl.Veldrid.Vk;
 
 /// <summary>
-/// Resolved Vulkan pipeline + companion data cached by <see cref="VkShaderProgram"/>'s per-program pipeline cache.
+/// Resolved Vulkan pipeline + companion data cached by <see cref="VkGraphicsProgram"/>'s per-program pipeline cache.
 /// </summary>
 /// <remarks>
 /// <see cref="PipelineLayout"/>, <see cref="ResourceSetCount"/>, and <see cref="DynamicOffsetsCount"/>
-/// are copied from the source <see cref="VkShaderProgram"/> so the draw hot path is a single
+/// are copied from the source <see cref="VkGraphicsProgram"/> so the draw hot path is a single
 /// field read rather than a chained property dereference. They are invariant for the program's
 /// lifetime, so caching them in the entry is safe.
 /// </remarks>

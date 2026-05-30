@@ -7,13 +7,13 @@ using Silk.NET.Vulkan;
 namespace Prowl.Veldrid.Vk;
 
 /// <summary>
-/// Builds a <see cref="VkPipelineCacheEntry"/> from a <see cref="VkShaderProgram"/> and a
+/// Builds a <see cref="VkPipelineCacheEntry"/> from a <see cref="VkGraphicsProgram"/> and a
 /// <see cref="VkPipelineCacheKey"/>. Builds a Vulkan graphics pipeline for the given program /
 /// framebuffer / topology key. Called lazily from the program's per-program cache at draw time.
 /// </summary>
 internal static unsafe class VkPipelineCacheFactory
 {
-    public static VkPipelineCacheEntry Build(VkGraphicsDevice gd, VkShaderProgram program, in VkPipelineCacheKey key)
+    public static VkPipelineCacheEntry Build(VkGraphicsDevice gd, VkGraphicsProgram program, in VkPipelineCacheKey key)
     {
         OutputDescription outputDesc = key.Outputs;
 

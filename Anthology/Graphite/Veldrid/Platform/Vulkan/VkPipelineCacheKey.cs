@@ -3,7 +3,7 @@ using System;
 namespace Prowl.Veldrid.Vk;
 
 /// <summary>
-/// Composite cache key used by <see cref="VkShaderProgram"/>'s per-program pipeline cache to
+/// Composite cache key used by <see cref="VkGraphicsProgram"/>'s per-program pipeline cache to
 /// resolve a graphics <see cref="Silk.NET.Vulkan.Pipeline"/> at draw time.
 /// </summary>
 /// <remarks>

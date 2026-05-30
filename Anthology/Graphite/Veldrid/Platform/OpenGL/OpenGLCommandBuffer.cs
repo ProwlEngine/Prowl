@@ -122,7 +122,7 @@ internal partial class OpenGLCommandBuffer : CommandBuffer
         _currentCommands.SetVertexSource(source);
     }
 
-    private protected override void SetShaderCore(ShaderProgram program)
+    private protected override void SetShaderCore(GraphicsProgram program)
     {
         _currentCommands.SetShader(program);
     }

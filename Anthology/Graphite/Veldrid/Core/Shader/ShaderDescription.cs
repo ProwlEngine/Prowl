@@ -3,7 +3,7 @@ using System;
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// Describes a monolithic <see cref="ShaderProgram"/>, for creation using a <see cref="ResourceFactory"/>.
+/// Describes a monolithic <see cref="GraphicsProgram"/>, for creation using a <see cref="ResourceFactory"/>.
 /// A program bundles every shader stage of a single graphics program plus the pipeline-level state owned by the shader
 /// (blend / depth / rasterizer / vertex layouts / resource layouts).
 /// </summary>

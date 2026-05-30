@@ -17,7 +17,7 @@ internal interface OpenGLCommandEntryList
     void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ);
     void End();
     void SetFramebuffer(Framebuffer fb);
-    void SetShader(ShaderProgram program);
+    void SetShader(GraphicsProgram program);
     void SetComputeShader(ComputeProgram program);
     void SetProperties(PropertySet ps);
     void ClearProperties();

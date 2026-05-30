@@ -29,7 +29,7 @@ internal unsafe class OpenGLCommandExecutor
 
     private Framebuffer _fb;
     private bool _isSwapchainFB;
-    private OpenGLShaderProgram _currentShaderProgram;
+    private OpenGLGraphicsProgram _currentShaderProgram;
     private uint[] _vertexAttribDivisors = Array.Empty<uint>();
     private uint _vertexAttributesBound;
     private readonly Viewport[] _viewports = new Viewport[20];
@@ -45,7 +45,6 @@ internal unsafe class OpenGLCommandExecutor
 
     private readonly MergedPropertyTable _mergedTable = new();
     private readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = [];
-    private readonly Dictionary<ComputeUboCacheKey, DeviceBufferRange> _computeUboCache = [];
 
     private bool _graphicsPipelineActive;
     private bool _vertexLayoutFlushed;
@@ -388,18 +387,10 @@ internal unsafe class OpenGLCommandExecutor
     {
         uint uniformVersion = _mergedTable.UniformVersion;
 
-        if (graphics)
-        {
-            var key = new UboCacheKey(_currentShaderProgram, setIdx, bindingIndex, uniformVersion);
-            if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached))
-                return cached;
-        }
-        else
-        {
-            var key = new ComputeUboCacheKey(_currentComputeProgram, setIdx, bindingIndex, uniformVersion);
-            if (_computeUboCache.TryGetValue(key, out DeviceBufferRange cached))
-                return cached;
-        }
+        ShaderProgram program = graphics ? _currentShaderProgram : _currentComputeProgram;
+        UboCacheKey key = new UboCacheKey(program, setIdx, bindingIndex, uniformVersion);
+        if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached))
+            return cached;
 
         byte[] scratch = ArrayPool<byte>.Shared.Rent((int)blockSize);
         scratch.AsSpan(0, (int)blockSize).Clear();
@@ -419,10 +410,7 @@ internal unsafe class OpenGLCommandExecutor
         }
         ArrayPool<byte>.Shared.Return(scratch);
 
-        if (graphics)
-            _frameUboCache[new UboCacheKey(_currentShaderProgram, setIdx, bindingIndex, uniformVersion)] = range;
-        else
-            _computeUboCache[new ComputeUboCacheKey(_currentComputeProgram, setIdx, bindingIndex, uniformVersion)] = range;
+        _frameUboCache[key] = range;
 
         return range;
     }
@@ -541,7 +529,6 @@ internal unsafe class OpenGLCommandExecutor
     {
         _mergedTable.Clear();
         _frameUboCache.Clear();
-        _computeUboCache.Clear();
     }
 
     private void FlushVertexLayouts()
@@ -716,9 +703,9 @@ internal unsafe class OpenGLCommandExecutor
         _fb = fb;
     }
 
-    public void SetShader(ShaderProgram program)
+    public void SetShader(GraphicsProgram program)
     {
-        OpenGLShaderProgram sp = Util.AssertSubtype<ShaderProgram, OpenGLShaderProgram>(program);
+        OpenGLGraphicsProgram sp = Util.AssertSubtype<GraphicsProgram, OpenGLGraphicsProgram>(program);
         if (_currentShaderProgram == sp && _graphicsPipelineActive) return;
         _currentShaderProgram = sp;
         ActivateGraphicsPipeline();

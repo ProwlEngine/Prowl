@@ -448,7 +448,7 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
         AddEntry(SetFramebufferEntryID, ref entry);
     }
 
-    public void SetShader(ShaderProgram program)
+    public void SetShader(GraphicsProgram program)
     {
         NoAllocSetShaderEntry entry = new(Track(program));
         AddEntry(SetShaderEntryID, ref entry);

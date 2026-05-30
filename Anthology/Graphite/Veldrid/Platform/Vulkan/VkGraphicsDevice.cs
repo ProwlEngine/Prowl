@@ -602,7 +602,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 case VkSampler sampler:
                     SetDebugMarkerName(DebugReportObjectTypeEXT.SamplerExt, sampler.DeviceSampler.Handle, name);
                     break;
-                case VkShaderProgram shaderProgram:
+                case VkGraphicsProgram shaderProgram:
                     foreach (ShaderModule module in shaderProgram.Modules.Values)
                     {
                         SetDebugMarkerName(DebugReportObjectTypeEXT.ShaderModuleExt, module.Handle, name);

@@ -5,7 +5,7 @@ namespace Prowl.Veldrid;
 /// <summary>
 /// The resolved vertex buffer binding for a single layout slot returned from
 /// <see cref="IVertexSource.ResolveSlot"/>. The stride is owned by the bound
-/// <see cref="ShaderProgram"/>'s <see cref="VertexLayoutDescription"/> and is not
+/// <see cref="GraphicsProgram"/>'s <see cref="VertexLayoutDescription"/> and is not
 /// carried on this struct.
 /// </summary>
 public readonly struct VertexBinding : IEquatable<VertexBinding>

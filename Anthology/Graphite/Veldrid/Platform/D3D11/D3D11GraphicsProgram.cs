@@ -7,7 +7,7 @@ using Silk.NET.Direct3D11;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11ShaderProgram : ShaderProgram
+internal unsafe class D3D11GraphicsProgram : GraphicsProgram
 {
     private readonly ID3D11Device* _device;
     private readonly D3D11ResourceCache _cache;
@@ -33,7 +33,7 @@ internal unsafe class D3D11ShaderProgram : ShaderProgram
     private bool _cacheResolved;
     private bool _resolvedMultisampled;
 
-    public D3D11ShaderProgram(ID3D11Device* device, D3D11ResourceCache cache, ref ShaderDescription description)
+    public D3D11GraphicsProgram(ID3D11Device* device, D3D11ResourceCache cache, ref ShaderDescription description)
         : base(ref description)
     {
         _device = device;
@@ -102,7 +102,7 @@ internal unsafe class D3D11ShaderProgram : ShaderProgram
                         break;
                     }
                 default:
-                    throw new RenderException($"Stage {stage} is not valid for a graphics ShaderProgram.");
+                    throw new RenderException($"Stage {stage} is not valid for a graphics GraphicsProgram.");
             }
             _stageHandles[idx] = handle;
         }

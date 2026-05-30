@@ -33,9 +33,9 @@ internal class OpenGLResourceFactory : ResourceFactory
         return new OpenGLSampler(_gd, ref description);
     }
 
-    protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
+    protected override GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description)
     {
-        OpenGLShaderProgram program = new(_gd, ref description);
+        OpenGLGraphicsProgram program = new(_gd, ref description);
         _gd.EnsureResourceInitialized(program);
         return program;
     }

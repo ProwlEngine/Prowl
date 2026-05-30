@@ -9,7 +9,7 @@ using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLShaderProgram : ShaderProgram, OpenGLDeferredResource
+internal unsafe class OpenGLGraphicsProgram : GraphicsProgram, OpenGLDeferredResource
 {
     private const uint GL_INVALID_INDEX = 0xFFFFFFFF;
 
@@ -35,7 +35,7 @@ internal unsafe class OpenGLShaderProgram : ShaderProgram, OpenGLDeferredResourc
 
     public int[] VertexStrides { get; }
 
-    public OpenGLShaderProgram(OpenGLGraphicsDevice gd, ref ShaderDescription description)
+    public OpenGLGraphicsProgram(OpenGLGraphicsDevice gd, ref ShaderDescription description)
         : base(ref description)
     {
         _gd = gd;

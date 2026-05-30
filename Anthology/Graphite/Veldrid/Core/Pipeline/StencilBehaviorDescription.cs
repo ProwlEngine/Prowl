@@ -3,7 +3,7 @@
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// Describes how stencil tests are performed in a <see cref="ShaderProgram"/>'s depth-stencil state.
+/// Describes how stencil tests are performed in a <see cref="GraphicsProgram"/>'s depth-stencil state.
 /// </summary>
 public struct StencilBehaviorDescription : IEquatable<StencilBehaviorDescription>
 {

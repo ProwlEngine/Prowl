@@ -36,9 +36,9 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
         return new D3D11Sampler(_device, ref description);
     }
 
-    protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
+    protected override GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description)
     {
-        return new D3D11ShaderProgram(_device, _cache, ref description);
+        return new D3D11GraphicsProgram(_device, _cache, ref description);
     }
 
     protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)

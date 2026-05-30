@@ -7,7 +7,7 @@ using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 namespace Prowl.Veldrid.OpenGL;
 
 /// <summary>
-/// Static helpers used by <see cref="OpenGLShaderProgram"/> and <see cref="OpenGLComputeProgram"/>
+/// Static helpers used by <see cref="OpenGLGraphicsProgram"/> and <see cref="OpenGLComputeProgram"/>
 /// to bind vertex attribute locations and to build the per-set GL binding tables for a linked
 /// GL program at link time.
 /// </summary>

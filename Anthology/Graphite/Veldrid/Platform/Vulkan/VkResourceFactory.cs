@@ -31,9 +31,9 @@ internal class VkResourceFactory : ResourceFactory
         return new VkSampler(_gd, ref description);
     }
 
-    protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
+    protected override GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description)
     {
-        return new VkShaderProgram(_gd, ref description);
+        return new VkGraphicsProgram(_gd, ref description);
     }
 
     protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)

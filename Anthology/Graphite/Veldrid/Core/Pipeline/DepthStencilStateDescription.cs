@@ -3,7 +3,7 @@
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// A <see cref="ShaderProgram"/> component describing the properties of the depth stencil state.
+/// A <see cref="GraphicsProgram"/> component describing the properties of the depth stencil state.
 /// </summary>
 public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescription>
 {
