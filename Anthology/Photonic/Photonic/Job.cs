@@ -113,6 +113,35 @@ public sealed class Job
         };
     }
 
+    /// <summary>
+    /// Run the edge-avoiding denoiser over every target's converged atlas, then re-dilate the seams.
+    /// No-op unless <see cref="BakeOptions.Denoise"/> is set or the bake never rasterized. Mutates the
+    /// pixel buffers in place using the rasterizer's retained per-texel guides, so call it once after
+    /// the bake has stopped (<see cref="Cancel"/> then <see cref="Wait"/>); reads after this see the
+    /// denoised result.
+    /// </summary>
+    public void Denoise()
+    {
+        if (!_options.Denoise) return;
+        var ws = _workspacesPublic;
+        if (ws is null) return;
+
+        for (int t = 0; t < ws.Length; t++)
+        {
+            var w = ws[t];
+            if (w is null) continue;
+
+            Imaging.LightmapDenoiser.Run(w.Target.PixelsRGB, w.Covered, w.Samples, w.Width, w.Height,
+                _options.DenoiseIterations, _options.DenoiseColorPhi, _options.DenoiseNormalPhi, _options.DenoisePositionScale);
+
+            if (_options.DilatePixels > 0)
+            {
+                var coveredCopy = (bool[])w.Covered.Clone();
+                Imaging.Dilate.Run(w.Target.PixelsRGB, coveredCopy, w.Width, w.Height, _options.DilatePixels);
+            }
+        }
+    }
+
     /// <summary>Current state.</summary>
     public JobStatus Status { get; private set; } = JobStatus.Pending;
 

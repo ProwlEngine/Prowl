@@ -231,11 +231,13 @@ internal static class ConservativeTexelMapper
         float det = Float3.Dot(c0, r0);
         if (System.Math.Abs(det) < 1e-20f) return Float4x4.Identity;
         float invDet = 1f / det;
-        // rows of inverse = cofactors / det; transpose gives columns of inverse-transpose
+        // r0,r1,r2 (scaled) are the ROWS of inverse(W); the normal matrix is inverse-transpose(W),
+        // so they must go in as COLUMNS. The 16-arg Float4x4 ctor is row-major-named, so lay them
+        // out transposed: column k = (r0[k], r1[k], r2[k]).
         return new Float4x4(
-            r0.X * invDet, r0.Y * invDet, r0.Z * invDet, 0,
-            r1.X * invDet, r1.Y * invDet, r1.Z * invDet, 0,
-            r2.X * invDet, r2.Y * invDet, r2.Z * invDet, 0,
+            r0.X * invDet, r1.X * invDet, r2.X * invDet, 0,
+            r0.Y * invDet, r1.Y * invDet, r2.Y * invDet, 0,
+            r0.Z * invDet, r1.Z * invDet, r2.Z * invDet, 0,
             0,             0,             0,             1);
     }
 }

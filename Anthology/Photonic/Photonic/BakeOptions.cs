@@ -118,6 +118,25 @@ public sealed class BakeOptions
     /// <summary>Edge dilation pixels applied after the bake, to prevent bilinear bleed at seams.</summary>
     public int DilatePixels { get; set; } = 2;
 
+    /// <summary>
+    /// Run an edge-avoiding wavelet denoiser over the converged lightmap (before dilation), guided by
+    /// per-texel normal + position so it removes Monte-Carlo noise without bleeding across chart seams
+    /// or geometric / lighting edges. Off by default. Applied once at finalize via <see cref="Job.Denoise"/>.
+    /// </summary>
+    public bool Denoise { get; set; } = false;
+
+    /// <summary>Denoiser a-trous passes; each doubles the kernel reach (1, 2, 4, ...). 5 ~= a 32px effective radius.</summary>
+    public int DenoiseIterations { get; set; } = 5;
+
+    /// <summary>Denoiser radiance edge-stop, relative to local luminance. Higher = smoother (more noise removed, softer shadow edges).</summary>
+    public float DenoiseColorPhi { get; set; } = 0.5f;
+
+    /// <summary>Denoiser normal edge-stop exponent. Higher = sharper preservation of normal discontinuities.</summary>
+    public float DenoiseNormalPhi { get; set; } = 64f;
+
+    /// <summary>Denoiser position bandwidth as a multiple of the per-texel world footprint. Lower = preserves finer spatial detail.</summary>
+    public float DenoisePositionScale { get; set; } = 2f;
+
     /// <summary>Cap on worker threads. -1 = use the runtime default.</summary>
     public int MaxDegreeOfParallelism { get; set; } = -1;
 
