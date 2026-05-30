@@ -71,6 +71,13 @@ namespace Prowl.PaperUI
         /// <summary>Sets a box shadow on the element.</summary>
         public T BoxShadow(BoxShadow shadow) => SetStyleProperty(GuiProp.BoxShadow, shadow);
 
+        /// <summary>
+        /// Blurs whatever is rendered behind this element (frosted glass / backdrop blur), with the
+        /// given radius in pixels. Combine with a translucent <see cref="BackgroundColor"/> for a tint.
+        /// A radius of 0 disables it. Requires a renderer backend with backdrop blur support.
+        /// </summary>
+        public T BackdropBlur(float radius) => SetStyleProperty(GuiProp.BackdropBlur, radius);
+
         #endregion
 
         #region Corner Rounding

@@ -148,17 +148,6 @@ namespace Prowl.PaperUI
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
 
-        /// <summary>
-        /// Gets or sets the text rendering mode.
-        /// Slug mode evaluates glyph curves directly on the GPU for scale-independent text.
-        /// Falls back to Bitmap if the backend does not support float textures.
-        /// </summary>
-        public TextRenderMode TextMode
-        {
-            get => _canvas.TextMode;
-            set => _canvas.TextMode = value;
-        }
-
         public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0.0f) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
 
         public Float2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
@@ -359,6 +348,19 @@ namespace Prowl.PaperUI
                     Prowl.Vector.Color.White);
 
                 _canvas.ClearBrush();
+            }
+
+            // Draw backdrop blur (frosted glass) behind the background. The blurred backdrop is laid
+            // down with a transparent fill so the element's own background color acts as the glass tint.
+            var backdropBlur = (float)data._elementStyle.GetValue(GuiProp.BackdropBlur);
+            if (backdropBlur > 0f)
+            {
+                _canvas.SetBackdropBlur(backdropBlur);
+                if (hasRounding)
+                    _canvas.RoundedRectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W, Prowl.Vector.Color.Transparent);
+                else
+                    _canvas.RectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, Prowl.Vector.Color.Transparent);
+                _canvas.ClearBackdropBlur();
             }
 
             // Draw background (gradient overrides background color)

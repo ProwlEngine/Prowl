@@ -21,6 +21,7 @@ namespace Prowl.PaperUI
         BorderWidth,
         Rounded,
         BoxShadow,
+        BackdropBlur,
         #endregion
 
         #region Layout Properties
@@ -677,6 +678,7 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.BorderWidth] = 0.0f;
             _defaultValues[(int)GuiProp.Rounded] = new Float4(0, 0, 0, 0);
             _defaultValues[(int)GuiProp.BoxShadow] = BoxShadow.None;
+            _defaultValues[(int)GuiProp.BackdropBlur] = 0.0f;
 
             // Image Properties
             _defaultValues[(int)GuiProp.BackgroundImage] = (object?)null;

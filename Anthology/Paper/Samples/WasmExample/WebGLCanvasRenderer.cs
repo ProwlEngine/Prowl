@@ -18,8 +18,8 @@ public class WebGLCanvasRenderer : ICanvasRenderer
     private double[] _scissorBuffer = Array.Empty<double>();
     private double[] _brushBuffer = Array.Empty<double>();
 
-    private const int VERTEX_SIZE = 44; // 20 core + 24 slug
-    private const int DC_INFO_STRIDE = 8; // texId, elemCount, slugCurveTex, slugBandTex, cW, cH, bW, bH
+    private const int VERTEX_SIZE = 20; // 8 position + 8 uv + 4 color
+    private const int DC_INFO_STRIDE = 2; // texId, elemCount
 
     public (int w, int h) GetCanvasSize()
     {
@@ -31,18 +31,6 @@ public class WebGLCanvasRenderer : ICanvasRenderer
         int texId = _nextTextureId++;
         _textureSizes[texId] = ((int)width, (int)height);
         WebGLInterop.CreateTexture(texId, (int)width, (int)height);
-        return texId;
-    }
-
-    public object? CreateFloatTexture(int width, int height, int components, float[] data)
-    {
-        int texId = _nextTextureId++;
-        _textureSizes[texId] = (width, height);
-        // JS interop needs double[] for numeric arrays
-        double[] doubleData = new double[data.Length];
-        for (int i = 0; i < data.Length; i++)
-            doubleData[i] = data[i];
-        WebGLInterop.CreateFloatTexture(texId, width, height, components, doubleData);
         return texId;
     }
 
@@ -86,7 +74,7 @@ public class WebGLCanvasRenderer : ICanvasRenderer
         EnsureSize(ref _scissorBuffer, dcCount * 18);
         EnsureSize(ref _brushBuffer, dcCount * 47);
 
-        // Convert vertices to raw bytes (44 bytes each)
+        // Convert vertices to raw bytes (20 bytes each)
         for (int i = 0; i < vertexCount; i++)
         {
             var v = vertices[i];
@@ -99,12 +87,6 @@ public class WebGLCanvasRenderer : ICanvasRenderer
             _vertexBuffer[offset + 17] = v.g;
             _vertexBuffer[offset + 18] = v.b;
             _vertexBuffer[offset + 19] = v.a;
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 20), v.slugBandScaleX);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 24), v.slugBandScaleY);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 28), v.slugBandOffsetX);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 32), v.slugBandOffsetY);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 36), v.slugPackedBandLoc);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 40), v.slugBandCount);
         }
 
         // Convert indices
@@ -120,12 +102,6 @@ public class WebGLCanvasRenderer : ICanvasRenderer
             int texId = dc.Texture != null ? (int)dc.Texture : 0;
             _drawCallInfoBuffer[di] = texId;
             _drawCallInfoBuffer[di + 1] = dc.ElementCount;
-            _drawCallInfoBuffer[di + 2] = dc.SlugCurveTexture != null ? (int)dc.SlugCurveTexture : 0;
-            _drawCallInfoBuffer[di + 3] = dc.SlugBandTexture != null ? (int)dc.SlugBandTexture : 0;
-            _drawCallInfoBuffer[di + 4] = dc.SlugCurveTexWidth;
-            _drawCallInfoBuffer[di + 5] = dc.SlugCurveTexHeight;
-            _drawCallInfoBuffer[di + 6] = dc.SlugBandTexWidth;
-            _drawCallInfoBuffer[di + 7] = dc.SlugBandTexHeight;
 
             // Scissor
             dc.GetScissor(out var scissorMat, out var scissorExt);

@@ -36,6 +36,12 @@ uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
 
 uniform float dpiScale;           // DPI scale factor (pixels / logical units)
 
+// Backdrop blur
+uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
+uniform vec2 viewportSize;         // framebuffer size in pixels
+uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
+uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
+
 float calculateBrushFactor() {
     if (brushType == 0) return 0.0;
 
@@ -130,7 +136,59 @@ void main()
     edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
 
     vec2 logicalPos = fragPos / dpiScale;
-    finalColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
+    vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
+
+    // Backdrop blur: composite the fill over the blurred scene behind the shape.
+    if (backdropBlurAmount > 0.0) {
+        vec2 uv = fragPos / viewportSize;
+        if (backdropFlipY == 1) uv.y = 1.0 - uv.y;
+        vec3 blurred = texture(backdropTexture, uv).rgb;
+        vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
+        finalColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
+        return;
+    }
+
+    finalColor = fill * edgeAlpha * mask;
+}";
+
+    // Dual Kawase blur shaders (sample texture0, the texture being drawn)
+    public const string BlurDown_FS = @"
+#version 330
+in vec2 fragTexCoord;
+out vec4 finalColor;
+uniform sampler2D texture0;
+uniform vec2 halfpixel;
+uniform float offset;
+void main()
+{
+    vec2 uv = fragTexCoord;
+    vec4 sum = texture(texture0, uv) * 4.0;
+    sum += texture(texture0, uv - halfpixel.xy * offset);
+    sum += texture(texture0, uv + halfpixel.xy * offset);
+    sum += texture(texture0, uv + vec2(halfpixel.x, -halfpixel.y) * offset);
+    sum += texture(texture0, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
+    finalColor = sum / 8.0;
+}";
+
+    public const string BlurUp_FS = @"
+#version 330
+in vec2 fragTexCoord;
+out vec4 finalColor;
+uniform sampler2D texture0;
+uniform vec2 halfpixel;
+uniform float offset;
+void main()
+{
+    vec2 uv = fragTexCoord;
+    vec4 sum = texture(texture0, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);
+    sum += texture(texture0, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += texture(texture0, uv + vec2(0.0, halfpixel.y * 2.0) * offset);
+    sum += texture(texture0, uv + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += texture(texture0, uv + vec2(halfpixel.x * 2.0, 0.0) * offset);
+    sum += texture(texture0, uv + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    sum += texture(texture0, uv + vec2(0.0, -halfpixel.y * 2.0) * offset);
+    sum += texture(texture0, uv + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    finalColor = sum / 12.0;
 }";
 
     public const string Vertex_VS = @"
@@ -166,6 +224,23 @@ void main()
     int _brushTextureMatLoc;
     int _dpiScaleLoc;
 
+    // Backdrop blur
+    public bool SupportsBackdropBlur => true;
+    // Raylib render textures are stored bottom-up; the scene sample needs no extra flip.
+    private const int BackdropFlipY = 0;
+    int _backdropTexLoc;
+    int _viewportSizeLoc;
+    int _backdropBlurAmountLoc;
+    int _backdropFlipYLoc;
+    Shader _blurDown;
+    Shader _blurUp;
+    int _downHalfpixelLoc, _downOffsetLoc;
+    int _upHalfpixelLoc, _upOffsetLoc;
+    const int MaxBlurLevels = 6;
+    RenderTexture2D _sceneRT;
+    RenderTexture2D[] _blurLevels = new RenderTexture2D[MaxBlurLevels];
+    int _rtWidth, _rtHeight;
+
     public RaylibCanvasRenderer()
     {
         // Load shader with scissoring support
@@ -181,6 +256,84 @@ void main()
         _brushParams2Loc = GetShaderLocation(shader, "brushParams2");
         _brushTextureMatLoc = GetShaderLocation(shader, "brushTextureMat");
         _dpiScaleLoc = GetShaderLocation(shader, "dpiScale");
+
+        _backdropTexLoc = GetShaderLocation(shader, "backdropTexture");
+        _viewportSizeLoc = GetShaderLocation(shader, "viewportSize");
+        _backdropBlurAmountLoc = GetShaderLocation(shader, "backdropBlurAmount");
+        _backdropFlipYLoc = GetShaderLocation(shader, "backdropFlipY");
+
+        _blurDown = LoadShaderFromMemory(null, BlurDown_FS);
+        _downHalfpixelLoc = GetShaderLocation(_blurDown, "halfpixel");
+        _downOffsetLoc = GetShaderLocation(_blurDown, "offset");
+        _blurUp = LoadShaderFromMemory(null, BlurUp_FS);
+        _upHalfpixelLoc = GetShaderLocation(_blurUp, "halfpixel");
+        _upOffsetLoc = GetShaderLocation(_blurUp, "offset");
+    }
+
+    private void EnsureTargets(int w, int h)
+    {
+        if (_sceneRT.Id != 0 && _rtWidth == w && _rtHeight == h)
+            return;
+        if (_sceneRT.Id != 0)
+        {
+            UnloadRenderTexture(_sceneRT);
+            for (int i = 0; i < MaxBlurLevels; i++) UnloadRenderTexture(_blurLevels[i]);
+        }
+        _sceneRT = LoadRenderTexture(w, h);
+        SetTextureFilter(_sceneRT.Texture, TextureFilter.Bilinear);
+        for (int i = 0; i < MaxBlurLevels; i++)
+        {
+            int lw = Math.Max(1, w >> (i + 1));
+            int lh = Math.Max(1, h >> (i + 1));
+            _blurLevels[i] = LoadRenderTexture(lw, lh);
+            SetTextureFilter(_blurLevels[i].Texture, TextureFilter.Bilinear);
+        }
+        _rtWidth = w;
+        _rtHeight = h;
+    }
+
+    private static void ComputeBlurParams(float radius, out int iterations, out float offset)
+    {
+        float r = MathF.Max(radius, 2f);
+        iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
+        offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+    }
+
+    // Blurs the scene texture into _blurLevels[0] using dual Kawase. Each pass maps the full
+    // source into the full destination so orientation stays consistent across the chain.
+    private void RenderBackdropBlur(Texture2D sceneTex, float radius)
+    {
+        ComputeBlurParams(radius, out int iterations, out float offset);
+
+        BlurPass(_blurDown, _downHalfpixelLoc, _downOffsetLoc, offset, sceneTex, _blurLevels[0]);
+        for (int i = 0; i < iterations; i++)
+            BlurPass(_blurDown, _downHalfpixelLoc, _downOffsetLoc, offset, _blurLevels[i].Texture, _blurLevels[i + 1]);
+        for (int i = iterations; i > 0; i--)
+            BlurPass(_blurUp, _upHalfpixelLoc, _upOffsetLoc, offset, _blurLevels[i].Texture, _blurLevels[i - 1]);
+    }
+
+    private void BlurPass(Shader sh, int halfpixelLoc, int offsetLoc, float offset, Texture2D src, RenderTexture2D dst)
+    {
+        BeginTextureMode(dst);
+        BeginShaderMode(sh);
+        SetShaderValue(sh, halfpixelLoc, new Float2(0.5f / src.Width, 0.5f / src.Height), ShaderUniformDataType.Vec2);
+        SetShaderValue(sh, offsetLoc, offset, ShaderUniformDataType.Float);
+        // Map the whole source into the whole destination (UVs run 0..1).
+        DrawTexturePro(src,
+            new Rectangle(0, 0, src.Width, src.Height),
+            new Rectangle(0, 0, dst.Texture.Width, dst.Texture.Height),
+            new System.Numerics.Vector2(0, 0), 0f, Raylib_cs.Color.White);
+        EndShaderMode();
+        EndTextureMode();
+    }
+
+    private void SetupCanvasProjection(int w, int h)
+    {
+        Rlgl.MatrixMode(MatrixMode.Projection);
+        Rlgl.LoadIdentity();
+        Rlgl.Ortho(0, w, h, 0, -1, 1);
+        Rlgl.MatrixMode(MatrixMode.ModelView);
+        Rlgl.LoadIdentity();
     }
 
     public object CreateTexture(uint width, uint height)
@@ -254,6 +407,16 @@ void main()
 
         // Set texture transform parameters
         SetShaderValueMatrix(shader, _brushTextureMatLoc, (Float4x4)drawCall.Brush.TextureMatrix);
+
+        // Backdrop blur uniforms
+        float blurAmount = (float)drawCall.Brush.BackdropBlur;
+        SetShaderValue(shader, _backdropBlurAmountLoc, blurAmount, ShaderUniformDataType.Float);
+        if (blurAmount > 0f)
+        {
+            SetShaderValue(shader, _viewportSizeLoc, new Float2(_rtWidth, _rtHeight), ShaderUniformDataType.Vec2);
+            SetShaderValue(shader, _backdropFlipYLoc, BackdropFlipY, ShaderUniformDataType.Int);
+            SetShaderValueTexture(shader, _backdropTexLoc, _blurLevels[0].Texture);
+        }
     }
 
     void SetCustomUniforms(Shader customShader, ShaderUniforms uniforms)
@@ -289,21 +452,41 @@ void main()
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<Prowl.Quill.DrawCall> drawCalls)
     {
-        // Set up orthographic projection for pixel coordinates (framebuffer size)
-        Rlgl.MatrixMode(MatrixMode.Projection);
-        Rlgl.LoadIdentity();
-        Rlgl.Ortho(0, GetRenderWidth(), GetRenderHeight(), 0, -1, 1);
-        Rlgl.MatrixMode(MatrixMode.ModelView);
-        Rlgl.LoadIdentity();
+        int w = GetRenderWidth();
+        int h = GetRenderHeight();
 
+        // If any shape needs a backdrop blur, render the whole canvas into an offscreen scene
+        // target so the blur passes can sample what has been drawn so far, then blit to screen.
+        bool anyBlur = false;
+        foreach (var dc in canvas.DrawCalls)
+            if (dc.Brush.BackdropBlur > 0f) { anyBlur = true; break; }
+
+        if (anyBlur)
+        {
+            EnsureTargets(w, h);
+            BeginTextureMode(_sceneRT);
+            ClearBackground(Raylib_cs.Color.Blank);
+        }
+
+        SetupCanvasProjection(w, h);
         BeginBlendMode(BlendMode.AlphaPremultiply);
-
         Rlgl.DrawRenderBatchActive();
 
         int index = 0;
 
         foreach (var drawCall in canvas.DrawCalls)
         {
+            // Backdrop blur: flush the scene drawn so far, blur it, then resume.
+            if (anyBlur && drawCall.Brush.BackdropBlur > 0f)
+            {
+                Rlgl.DrawRenderBatchActive();
+                EndTextureMode();
+                RenderBackdropBlur(_sceneRT.Texture, (float)drawCall.Brush.BackdropBlur);
+                BeginTextureMode(_sceneRT);
+                SetupCanvasProjection(w, h);
+                BeginBlendMode(BlendMode.AlphaPremultiply);
+            }
+
             // Determine which shader to use
             bool useCustomShader = drawCall.Shader is Shader;
             Shader activeShader = useCustomShader ? (Shader)drawCall.Shader : shader;
@@ -371,9 +554,32 @@ void main()
             EndShaderMode();
         }
         Rlgl.SetTexture(0);
+
+        if (anyBlur)
+        {
+            EndTextureMode();
+            // Blit the scene target to the screen. Negative source height flips the
+            // render texture upright (Raylib stores render textures bottom-up).
+            BeginBlendMode(BlendMode.AlphaPremultiply);
+            DrawTexturePro(_sceneRT.Texture,
+                new Rectangle(0, 0, _sceneRT.Texture.Width, -_sceneRT.Texture.Height),
+                new Rectangle(0, 0, w, h),
+                new System.Numerics.Vector2(0, 0), 0f, Raylib_cs.Color.White);
+            EndBlendMode();
+        }
     }
 
     static System.Numerics.Vector4 ToVec4(System.Drawing.Color color) => new System.Numerics.Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
 
-    public void Dispose() => UnloadShader(shader);
+    public void Dispose()
+    {
+        UnloadShader(shader);
+        UnloadShader(_blurDown);
+        UnloadShader(_blurUp);
+        if (_sceneRT.Id != 0)
+        {
+            UnloadRenderTexture(_sceneRT);
+            for (int i = 0; i < MaxBlurLevels; i++) UnloadRenderTexture(_blurLevels[i]);
+        }
+    }
 }
