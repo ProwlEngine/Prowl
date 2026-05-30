@@ -21,7 +21,7 @@ public static class ModelLoader
             Topology = PrimitiveTopology.TriangleList
         };
 
-        Mesh mesh = new Mesh(device, createInfo);
+        Mesh mesh = new(device, createInfo);
 
         mesh.SetVertexInput([
             // Back face (-Z)

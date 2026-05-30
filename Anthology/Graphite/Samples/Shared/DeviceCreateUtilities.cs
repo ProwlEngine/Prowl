@@ -24,7 +24,7 @@ public static class DeviceCreateUtilities
                 if (window.API.API != ContextAPI.OpenGLES && window.API.API != ContextAPI.OpenGL)
                     throw new Exception("Attempted to make a GL graphics device without an available GL or GLES context");
 
-                OpenGL.OpenGLPlatformInfo glInfo = new OpenGL.OpenGLPlatformInfo(
+                OpenGL.OpenGLPlatformInfo glInfo = new(
                     glContext: window.GLContext!,
                     setSyncToVerticalBlank: sync =>
                     {

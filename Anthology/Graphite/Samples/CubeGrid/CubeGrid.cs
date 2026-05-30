@@ -31,7 +31,7 @@ public unsafe class CubeGrid
     static Float4x4 projection;
 
 
-    static List<CubeInstance> cubes = new();
+    static List<CubeInstance> cubes = [];
 
 
     public static void Create(GraphicsDevice device)
@@ -78,7 +78,7 @@ public unsafe class CubeGrid
 
         projection = Float4x4.CreatePerspectiveFov(1.0472f, 1, 1f, 100);
 
-        Float3 cameraPosition = new Float3(cameraDistance, cameraDistance, cameraDistance);
+        Float3 cameraPosition = new(cameraDistance, cameraDistance, cameraDistance);
         view = Float4x4.CreateLookAt(cameraPosition, Float3.Zero, Float3.UnitY);
     }
 
