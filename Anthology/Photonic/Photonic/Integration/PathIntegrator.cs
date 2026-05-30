@@ -68,7 +68,7 @@ internal sealed class PathIntegrator
         // indirect-only at the texel but full at bounce hits.
         if (_scene.Lights.Count > 0 && _options.IncludeDirectLighting)
         {
-            result += SampleAllLights(position, normal);
+            result += SampleAllLights(position, normal, bakedDirectOnly: true);
         }
 
         if (bounces > 0 && indirectSamples > 0)
@@ -121,7 +121,7 @@ internal sealed class PathIntegrator
             var hit = ClosestHitWorld(ro + n * _options.RayBias, rd, _options.MaxRayDistance);
             if (!hit.Hit)
             {
-                radiance += t * _options.SkyColor;
+                radiance += t * SampleEnvironment(rd);
                 break;
             }
 
@@ -214,7 +214,7 @@ internal sealed class PathIntegrator
                                           SurfelCloud cloud, float surfelNormalThreshold, int surfelMaxNeighbors)
     {
         var hit = ClosestHitWorld(origin + originNormal * _options.RayBias, dir, _options.MaxRayDistance);
-        if (!hit.Hit) return _options.SkyColor;
+        if (!hit.Hit) return SampleEnvironment(dir);
 
         ResolveHitSurface(hit, out Float3 albedo, out Float3 emissive);
         Float3 lo = emissive;
@@ -233,6 +233,63 @@ internal sealed class PathIntegrator
     /// </summary>
     public Float3 ComputeDirectLighting(Float3 position, Float3 normal)
         => SampleAllLights(position, normal);
+
+    /// <summary>
+    /// Direct lighting from baked-direct lights only (<see cref="Scene.Lights.Light.BakeDirect"/>).
+    /// This is what the lightmap stores at the texel; "mixed" lights are excluded here and applied
+    /// in realtime at runtime. Bounced/indirect energy from all lights is still baked elsewhere.
+    /// </summary>
+    public Float3 ComputeBakedDirectLighting(Float3 position, Float3 normal)
+        => SampleAllLights(position, normal, bakedDirectOnly: true);
+
+    /// <summary>Environment radiance for a ray that hit nothing: the optional HDR environment
+    /// callback if set, otherwise the flat <see cref="BakeOptions.SkyColor"/>.</summary>
+    private Float3 SampleEnvironment(Float3 dir)
+        => _options.Environment is not null ? _options.Environment(dir) : _options.SkyColor;
+
+    /// <summary>
+    /// Project the radiance arriving at a probe <paramref name="position"/> from every direction
+    /// into 9-coefficient RGB spherical harmonics. <paramref name="samples"/> uniform-sphere rays
+    /// are traced; each ray's radiance is the hit surface's outgoing radiance (emissive +
+    /// albedo·(baked-direct + indirect bounces)), matching the lightmap's shading convention, or the
+    /// environment on a miss. Used by <see cref="LightmapBaker.BakeProbes"/> to light dynamic objects.
+    /// </summary>
+    public Sh9Rgb IntegrateProbe(Float3 position, int samples, int bounces, ref Sampler rng)
+    {
+        Sh9Rgb sh = default;
+        if (samples <= 0) return sh;
+
+        const float FourPi = 4f * (float)System.Math.PI;
+        for (int s = 0; s < samples; s++)
+        {
+            // Uniform direction over the full sphere (pdf = 1/4π).
+            float u1 = rng.NextFloat(), u2 = rng.NextFloat();
+            float z = 1f - 2f * u1;
+            float r = (float)System.Math.Sqrt(System.Math.Max(0f, 1f - z * z));
+            float phi = 2f * (float)System.Math.PI * u2;
+            Float3 dir = new Float3(r * (float)System.Math.Cos(phi), r * (float)System.Math.Sin(phi), z);
+
+            Float3 li = ProbeIncomingRadiance(position, dir, bounces, ref rng);
+            sh.Accumulate(dir, li, FourPi);
+        }
+        return sh.Scaled(1f / samples);
+    }
+
+    /// <summary>Radiance arriving at a probe along <paramref name="dir"/>: environment on a miss,
+    /// otherwise the hit surface's outgoing radiance under the lightmap shading convention.</summary>
+    private Float3 ProbeIncomingRadiance(Float3 origin, Float3 dir, int bounces, ref Sampler rng)
+    {
+        var hit = ClosestHitWorld(origin, dir, _options.MaxRayDistance);
+        if (!hit.Hit) return SampleEnvironment(dir);
+
+        ResolveHitSurface(hit, out Float3 albedo, out Float3 emissive);
+        Float3 lo = emissive;
+        if (_scene.Lights.Count > 0)
+            lo += albedo * SampleAllLights(hit.Position, hit.Normal, bakedDirectOnly: true);
+        if (bounces > 0)
+            lo += albedo * TracePath(hit.Position, hit.Normal, Float3.One, bounces, ref rng);
+        return lo;
+    }
 
     /// <summary>
     /// Indirect contribution at a surface point: <b>sum</b> of N path traces, each cosine-sampled
@@ -367,7 +424,7 @@ internal sealed class PathIntegrator
                 Hit = hit.Hit,
             });
 
-            if (!hit.Hit) { radiance += t * _options.SkyColor; break; }
+            if (!hit.Hit) { radiance += t * SampleEnvironment(rd); break; }
 
             int blasIdx = _instanceToBlas[hit.InstanceIndex];
             var triRef = _blas[blasIdx].Triangles[hit.TriangleIndex];
@@ -420,12 +477,20 @@ internal sealed class PathIntegrator
         return radiance;
     }
 
-    private Float3 SampleAllLights(Float3 position, Float3 normal)
+    /// <summary>
+    /// Direct lighting at a surface point via next-event estimation. When
+    /// <paramref name="bakedDirectOnly"/> is true, only lights with <see cref="Scene.Lights.Light.BakeDirect"/>
+    /// contribute — used for the lightmap texel itself, so "mixed" lights (BakeDirect=false) leave
+    /// their direct term to the runtime shader. Bounce hits call this with <c>false</c> so every
+    /// light's bounced (indirect) energy is still baked.
+    /// </summary>
+    private Float3 SampleAllLights(Float3 position, Float3 normal, bool bakedDirectOnly = false)
     {
         Float3 sum = Float3.Zero;
         for (int i = 0; i < _scene.Lights.Count; i++)
         {
             var l = _scene.Lights[i];
+            if (bakedDirectOnly && !l.BakeDirect) continue;
             if (!l.Sample(position, out var toLight, out var Li, out float maxDist, _scene.DefaultAttenuation)) continue;
             if (Li.X + Li.Y + Li.Z <= 0) continue;
             float ndotl = Float3.Dot(normal, toLight);

@@ -19,8 +19,18 @@ public sealed class BakeOptions
     /// <summary>Maximum ray distance for visibility tests. Mostly relevant for indirect bounces.</summary>
     public float MaxRayDistance { get; set; } = 1e4f;
 
-    /// <summary>Environment (sky) radiance returned when a ray misses everything.</summary>
+    /// <summary>Environment (sky) radiance returned when a ray misses everything. Used as the
+    /// constant fallback when <see cref="Environment"/> is not set.</summary>
     public Float3 SkyColor { get; set; } = Float3.Zero;
+
+    /// <summary>
+    /// Optional HDR environment: given a normalized ray direction (the direction the ray travels
+    /// into the sky), returns the incoming radiance. Lets callers plug a cubemap/equirect sky as a
+    /// GI source instead of the flat <see cref="SkyColor"/>. When null, <see cref="SkyColor"/> is used.
+    /// <para><b>Thread-safety:</b> invoked concurrently from many bake worker threads; the callback
+    /// must be pure / read-only (e.g. sampling immutable cubemap data).</para>
+    /// </summary>
+    public System.Func<Float3, Float3>? Environment { get; set; }
 
     /// <summary>
     /// When true, indirect bounce directions are drawn from a precomputed 16k-entry

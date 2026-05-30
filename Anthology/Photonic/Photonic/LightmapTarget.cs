@@ -33,6 +33,15 @@ public sealed class LightmapTarget
     /// <summary>Instances whose UV1 maps into this target.</summary>
     public System.Collections.Generic.IReadOnlyList<BakeInstance> Instances => _instances;
 
+    /// <summary>
+    /// Per-texel coverage: 1 where a triangle covers the texel (a real baked value), 0 where the
+    /// texel is empty atlas space or was only filled by the seam-dilation pass. Populated by the
+    /// bake once the rasterise phase completes; empty before then. Length <c>Width*Height</c>,
+    /// row-major (<c>y*Width + x</c>). Useful for runtime seam handling, re-bakes, and debugging.
+    /// </summary>
+    internal byte[]? CoverageMask;
+    public System.ReadOnlySpan<byte> Coverage => CoverageMask;
+
     internal LightmapTarget(string name, int width, int height)
     {
         Name = name;
@@ -62,7 +71,7 @@ public sealed class LightmapTarget
         return inst;
     }
 
-    /// <summary>Returns a fresh HDR snapshot of the current pixel data. Read after the job has succeeded.</summary>
+    /// <summary>Returns a fresh HDR snapshot of the current pixel data (R,G,B interleaved). Read after the job has succeeded.</summary>
     public float[] ReadHDR()
     {
         var copy = new float[PixelsRGB.Length];
@@ -70,7 +79,66 @@ public sealed class LightmapTarget
         return copy;
     }
 
-    /// <summary>Returns 8-bit/channel RGB pixels gamma-encoded with <paramref name="gamma"/>. Optional exposure pre-multiply.</summary>
+    /// <summary>
+    /// HDR snapshot as RGBA float (alpha = 1), length <c>Width*Height*4</c>. This is the correct
+    /// thing to upload to an <c>Rgba16f</c>/<c>Rgba32f</c> lightmap texture: the values stay
+    /// linear HDR so the runtime multiplies them by albedo and tonemaps the whole scene afterward.
+    /// Do NOT use <see cref="ReadLDR"/> for storage — it tonemaps, which is only correct for a preview.
+    /// </summary>
+    public float[] ReadHDRRGBA()
+    {
+        int n = Width * Height;
+        var rgba = new float[n * 4];
+        for (int i = 0; i < n; i++)
+        {
+            rgba[i * 4    ] = PixelsRGB[i * 3    ];
+            rgba[i * 4 + 1] = PixelsRGB[i * 3 + 1];
+            rgba[i * 4 + 2] = PixelsRGB[i * 3 + 2];
+            rgba[i * 4 + 3] = 1f;
+        }
+        return rgba;
+    }
+
+    /// <summary>
+    /// Encode the HDR lightmap as 8-bit RGBM (RGBA8) without tonemapping: a compact lossy HDR
+    /// format for shipped builds. The stored alpha carries a shared multiplier so values up to
+    /// <paramref name="maxRange"/> survive in 8 bits per channel.
+    /// <para>Decode in the shader as <c>rgb * a * maxRange</c> (with the same <paramref name="maxRange"/>).
+    /// Sample the texture in <b>linear</b> space (no sRGB) — the data is linear radiance, not colour.</para>
+    /// </summary>
+    public byte[] ReadRGBM(float maxRange = 8f)
+    {
+        if (maxRange <= 0f) maxRange = 8f;
+        int n = Width * Height;
+        var bytes = new byte[n * 4];
+        float invMax = 1f / maxRange;
+        for (int i = 0; i < n; i++)
+        {
+            float r = System.Math.Max(0f, PixelsRGB[i * 3    ]);
+            float g = System.Math.Max(0f, PixelsRGB[i * 3 + 1]);
+            float b = System.Math.Max(0f, PixelsRGB[i * 3 + 2]);
+
+            // Shared multiplier = brightest channel normalized into [0,1], quantized UP so the
+            // reconstructed value never clips below the original.
+            float m = System.Math.Max(r, System.Math.Max(g, b)) * invMax;
+            m = System.Math.Clamp(m, 1f / 255f, 1f);
+            float a = (float)System.Math.Ceiling(m * 255f) / 255f;
+
+            float inv = 1f / (maxRange * a);
+            bytes[i * 4    ] = (byte)System.Math.Clamp((int)(r * inv * 255f + 0.5f), 0, 255);
+            bytes[i * 4 + 1] = (byte)System.Math.Clamp((int)(g * inv * 255f + 0.5f), 0, 255);
+            bytes[i * 4 + 2] = (byte)System.Math.Clamp((int)(b * inv * 255f + 0.5f), 0, 255);
+            bytes[i * 4 + 3] = (byte)System.Math.Clamp((int)(a * 255f + 0.5f), 0, 255);
+        }
+        return bytes;
+    }
+
+    /// <summary>
+    /// Tonemapped + gamma-encoded 8-bit RGB, for <b>previews only</b>. This bakes in Reinhard
+    /// tonemapping and gamma, which is wrong for storing an actual lightmap (the lightmap must stay
+    /// linear HDR and be tonemapped with the rest of the scene at runtime). For storage use
+    /// <see cref="ReadHDRRGBA"/> (float) or <see cref="ReadRGBM"/> (compact 8-bit HDR).
+    /// </summary>
     public byte[] ReadLDR(float exposure = 1f, float gamma = 1f / 2.2f)
     {
         int n = Width * Height;

@@ -144,6 +144,61 @@ public static class AutoAtlasPacker
     }
 
     /// <summary>
+    /// "Lock atlas": recreate targets and instances from <b>previously-computed</b> placements
+    /// (atlas index + UV offset/scale per mesh) instead of repacking. Use this on a re-bake so each
+    /// renderer keeps the exact same atlas region — its lightmap index and scale/offset stay stable,
+    /// which matters when those values were already persisted on the renderers/scene.
+    /// </summary>
+    /// <param name="baker">The baker that should own the new targets and instances.</param>
+    /// <param name="items">Per-mesh placement: mesh, world transform, target/atlas index, and the
+    /// UV offset/scale into that atlas (as produced by a prior <see cref="Pack"/> /
+    /// <see cref="BakeInstance.UVOffset"/> + <see cref="BakeInstance.UVScale"/>).</param>
+    /// <param name="atlasWidth">Page width in pixels (must match the original bake).</param>
+    /// <param name="atlasHeight">Page height in pixels (must match the original bake).</param>
+    /// <param name="bakeUVLayer">Name of the UV layer to use as the bake layer.</param>
+    public static AutoAtlasResult PackFixed(
+        LightmapBaker baker,
+        System.Collections.Generic.IReadOnlyList<(BakeMesh mesh, Float4x4 transform, int atlasIndex, Float2 uvOffset, Float2 uvScale)> items,
+        int atlasWidth,
+        int atlasHeight,
+        string bakeUVLayer = "UV1")
+    {
+        if (baker is null) throw new System.ArgumentNullException(nameof(baker));
+        if (items is null) throw new System.ArgumentNullException(nameof(items));
+        if (atlasWidth <= 0 || atlasHeight <= 0) throw new System.ArgumentOutOfRangeException(nameof(atlasWidth));
+
+        int n = items.Count;
+        int atlasCount = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (items[i].atlasIndex < 0)
+                throw new System.ArgumentOutOfRangeException(nameof(items), "atlasIndex must be non-negative.");
+            atlasCount = System.Math.Max(atlasCount, items[i].atlasIndex + 1);
+        }
+
+        var targets = new LightmapTarget[atlasCount];
+        for (int a = 0; a < atlasCount; a++)
+            targets[a] = baker.CreateTextureTarget($"LockedAtlas_{a}", atlasWidth, atlasHeight);
+
+        var bakeInstances = new BakeInstance[n];
+        var placements = new (int, int, int, int, int)[n];
+        for (int i = 0; i < n; i++)
+        {
+            var it = items[i];
+            bakeInstances[i] = targets[it.atlasIndex].AddBakeInstance(
+                it.mesh, it.transform, it.uvOffset, it.uvScale, bakeUVLayer);
+            placements[i] = (
+                it.atlasIndex,
+                (int)System.Math.Round(it.uvOffset.X * atlasWidth),
+                (int)System.Math.Round(it.uvOffset.Y * atlasHeight),
+                (int)System.Math.Round(it.uvScale.X * atlasWidth),
+                (int)System.Math.Round(it.uvScale.Y * atlasHeight));
+        }
+
+        return new AutoAtlasResult(targets, bakeInstances, placements);
+    }
+
+    /// <summary>
     /// Largest per-triangle <c>world_area / uv_area</c> ratio across every triangle in the mesh
     /// under the given transform. Returns 0 for empty or fully-degenerate meshes (callers clamp).
     /// </summary>

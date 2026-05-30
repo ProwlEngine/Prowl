@@ -1,4 +1,6 @@
 using Prowl.Vector;
+using Prowl.Photonic.Integration;
+using Prowl.Photonic.Sampling;
 
 namespace Prowl.Photonic;
 
@@ -81,4 +83,71 @@ public sealed class LightmapBaker : System.IDisposable
     public void Cancel() => _job?.Cancel();
 
     public void Dispose() => _job?.Cancel();
+
+    /// <summary>
+    /// Raised for non-fatal bake issues (e.g. a mesh with no normals). Subscribe to surface them in
+    /// an editor log. May fire on the calling thread (scene build) or a worker thread.
+    /// </summary>
+    public static event System.Action<string>? Warning;
+
+    internal static void RaiseWarning(string message) => Warning?.Invoke(message);
+
+    /// <summary>
+    /// Bake light-probe spherical harmonics (9-coefficient RGB, SH-L2) at the given world positions.
+    /// Each probe captures the full directional radiance environment so dynamic (non-lightmapped)
+    /// objects can reconstruct ambient irradiance for any normal (see <see cref="Sh9Rgb.EvaluateIrradiance"/>).
+    ///
+    /// <para>Blocking and synchronous (probe counts are normally modest and this is an editor-time
+    /// operation). Uses the same scene geometry, lights, bounce count, and environment as a lightmap
+    /// bake — the instances added to this baker's targets act as the occluders, so call after the
+    /// scene + targets are set up (<see cref="BakeScene.End"/> must have run).</para>
+    /// </summary>
+    /// <param name="positions">World-space probe positions.</param>
+    /// <param name="samplesPerProbe">Uniform-sphere rays traced per probe. Higher = smoother SH, slower.</param>
+    /// <param name="bounces">Indirect bounces; defaults to <see cref="BakeOptions.Bounces"/> when null.</param>
+    public Sh9Rgb[] BakeProbes(System.Collections.Generic.IReadOnlyList<Float3> positions,
+                               int samplesPerProbe = 256, int? bounces = null)
+    {
+        if (positions is null) throw new System.ArgumentNullException(nameof(positions));
+        if (_scene is null) throw new System.InvalidOperationException("No scene has been begun.");
+        if (!_scene.Ended) throw new System.InvalidOperationException("Scene was not ended (call BakeScene.End()).");
+
+        var result = new Sh9Rgb[positions.Count];
+        if (positions.Count == 0) return result;
+
+        // All instances across all targets act as occluders / bounce surfaces for the probes.
+        var allInstances = new System.Collections.Generic.List<BakeInstance>();
+        for (int t = 0; t < _targets.Count; t++)
+            allInstances.AddRange(_targets[t].Instances);
+        if (allInstances.Count == 0)
+            throw new System.InvalidOperationException(
+                "BakeProbes needs scene geometry: add mesh instances to a target (they act as occluders) before baking probes.");
+
+        var accel = BakeAcceleration.Build(_scene, allInstances.ToArray());
+        var integrator = new PathIntegrator(accel.Tlas, _scene, accel.Instances, accel.Blas,
+                                            accel.InstanceToBlas, accel.ResolvedMats, Options);
+
+        int b = System.Math.Max(0, bounces ?? Options.Bounces);
+        int samples = System.Math.Max(1, samplesPerProbe);
+        ulong baseSeed = Options.Seed ^ 0x5DEECE66D1234567UL;
+
+        var parallelOpts = new System.Threading.Tasks.ParallelOptions
+        {
+            MaxDegreeOfParallelism = Options.MaxDegreeOfParallelism > 0
+                ? Options.MaxDegreeOfParallelism
+                : System.Environment.ProcessorCount,
+        };
+
+        // Snapshot positions to an array for thread-safe indexed access.
+        var pos = new Float3[positions.Count];
+        for (int i = 0; i < pos.Length; i++) pos[i] = positions[i];
+
+        System.Threading.Tasks.Parallel.For(0, pos.Length, parallelOpts, i =>
+        {
+            var rng = new Sampler((ulong)i * 0x9E3779B97F4A7C15UL ^ baseSeed);
+            result[i] = integrator.IntegrateProbe(pos[i], samples, b, ref rng);
+        });
+
+        return result;
+    }
 }

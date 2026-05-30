@@ -19,6 +19,19 @@ public abstract class Light
     /// <summary>Whether this light contributes shadow rays to the bake.</summary>
     public bool CastsShadows { get; set; } = true;
 
+    /// <summary>
+    /// Whether this light's <b>direct</b> contribution is written into the lightmap at the baked
+    /// texel itself. Its <i>indirect</i> (bounced) contribution is always baked regardless.
+    /// <para>
+    /// Set <c>true</c> (default) for fully-baked lights. Set <c>false</c> for "mixed" lights whose
+    /// direct lighting + shadows are applied in realtime by the runtime shader while only their
+    /// bounced GI is baked. Realtime-only lights should simply not be added to the bake scene.
+    /// </para>
+    /// Gated by <see cref="BakeOptions.IncludeDirectLighting"/>: when that master switch is off, no
+    /// light's direct is baked at the texel regardless of this flag.
+    /// </summary>
+    public bool BakeDirect { get; set; } = true;
+
     /// <summary>Indirect-only scale applied during bounce sampling (1.0 = no bias).</summary>
     public float IndirectScale { get; set; } = 1.0f;
 

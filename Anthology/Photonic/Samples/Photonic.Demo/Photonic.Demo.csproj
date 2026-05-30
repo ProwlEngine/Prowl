@@ -25,12 +25,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\ImGuiController.cs">
-      <Link>ImGuiController.cs</Link>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="..\Assets\Sponza\glTF\**\*.*">
       <Link>Assets\Sponza\glTF\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

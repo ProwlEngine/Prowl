@@ -108,8 +108,27 @@ public sealed class BakeMesh
         {
             if (_positions is null) throw new System.InvalidOperationException("AddVertices was never called.");
             var m = new BakeMesh(_name, _positions, _normals!, _uvLayers, _groups);
+
+            // The path tracer orients its sampling hemisphere by the surface normal, so a mesh with
+            // no (all-zero) normals bakes incorrectly. Warn rather than fail.
+            if (AllNormalsZero(_normals!))
+                LightmapBaker.RaiseWarning(
+                    $"BakeMesh '{_name}' has no usable normals (all zero); bake results will be wrong. " +
+                    "Supply per-vertex normals via AddVertices.");
+
             _scene.RegisterMesh(m);
             return m;
+        }
+
+        private static bool AllNormalsZero(Float3[] normals)
+        {
+            if (normals.Length == 0) return false;
+            for (int i = 0; i < normals.Length; i++)
+            {
+                var n = normals[i];
+                if ((float)(n.X * n.X + n.Y * n.Y + n.Z * n.Z) > 1e-12f) return false;
+            }
+            return true;
         }
     }
 }

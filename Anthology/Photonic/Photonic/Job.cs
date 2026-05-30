@@ -192,61 +192,22 @@ public sealed class Job
         try
         {
             _activity = "Build BVH";
-            // 1) Build BLAS per unique mesh -----------------------------------------------------
-            var meshToBlas = new System.Collections.Generic.Dictionary<BakeMesh, int>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
-            var blasList = new System.Collections.Generic.List<Blas>();
-            // collect all instances from all targets so the TLAS sees every potential occluder
+            // Collect all instances from all targets so the TLAS sees every potential occluder.
+            // This array is canonical: hit.InstanceIndex indexes into it.
             var allInstances = new System.Collections.Generic.List<BakeInstance>();
             for (int t = 0; t < _targets.Length; t++)
                 allInstances.AddRange(_targets[t].Instances);
-
-            foreach (var inst in allInstances)
-            {
-                if (!meshToBlas.ContainsKey(inst.Mesh))
-                {
-                    meshToBlas[inst.Mesh] = blasList.Count;
-                    var b = new Blas(inst.Mesh);
-                    b.Build();
-                    blasList.Add(b);
-                }
-            }
-
             var instances = allInstances.ToArray();
-            var blas = blasList.ToArray();
-            var instanceToBlas = new int[instances.Length];
-            for (int i = 0; i < instances.Length; i++) instanceToBlas[i] = meshToBlas[instances[i].Mesh];
-
-            // Pre-resolve materials per (BLAS, material-group) to remove the dictionary lookup from
-            // the per-texel / per-bounce hot path.
-            var resolvedMats = new BakeMaterial?[blas.Length][];
-            for (int bi = 0; bi < blas.Length; bi++)
-            {
-                var groups = blas[bi].Mesh.MaterialGroups;
-                var arr = new BakeMaterial?[groups.Count];
-                for (int g = 0; g < arr.Length; g++) arr[g] = _scene.FindMaterial(groups[g].MaterialName);
-                resolvedMats[bi] = arr;
-            }
 
             _cts.Token.ThrowIfCancellationRequested();
             _activity = "Build TLAS";
 
-            // 2) Build TLAS over instances ------------------------------------------------------
-            var refs = new Tlas.InstanceRef[instances.Length];
-            for (int i = 0; i < instances.Length; i++)
-            {
-                var w = instances[i].WorldTransform;
-                if (!Float4x4.Invert(w, out var inv)) inv = Float4x4.Identity;
-                refs[i] = new Tlas.InstanceRef
-                {
-                    InstanceIndex = i,
-                    BlasIndex = instanceToBlas[i],
-                    WorldFromLocal = w,
-                    LocalFromWorld = inv,
-                    IsIdentity = IsIdentityTransform(w),
-                };
-            }
-            var tlas = new Tlas();
-            tlas.Build(refs, blas);
+            // Build BLAS/TLAS + pre-resolved materials (shared with BakeProbes).
+            var accel = Integration.BakeAcceleration.Build(_scene, instances);
+            var blas = accel.Blas;
+            var instanceToBlas = accel.InstanceToBlas;
+            var resolvedMats = accel.ResolvedMats;
+            var tlas = accel.Tlas;
 
             // 3) For each target: rasterize UV1 to texel samples --------------------------------
             //    Build the workspaces array fully before publishing it. GetTexelInfo (called from
@@ -261,6 +222,16 @@ public sealed class Job
                 RasterizeTarget(workspaces[t], instances);
             }
             _workspacesPublic = workspaces;
+
+            // Publish per-target coverage masks (1 = a triangle covers this texel) for tooling,
+            // runtime seam handling, and re-bakes.
+            for (int t = 0; t < _targets.Length; t++)
+            {
+                var ws = workspaces[t];
+                var mask = new byte[ws.Width * ws.Height];
+                for (int i = 0; i < mask.Length; i++) mask[i] = ws.Covered[i] ? (byte)1 : (byte)0;
+                _targets[t].CoverageMask = mask;
+            }
 
             // 3.5) Surfel cloud (only when the surfel path tracer is active). Generated once
             //      from the same instance set as the TLAS.
@@ -364,7 +335,7 @@ public sealed class Job
                         // the runtime shader multiplies by the texel's diffuse texture.
                         _ = albedo;
                         var direct = (_scene.Lights.Count > 0 && _options.IncludeDirectLighting)
-                            ? integrator.ComputeDirectLighting(s.Position, s.Normal)
+                            ? integrator.ComputeBakedDirectLighting(s.Position, s.Normal)
                             : Float3.Zero;
                         ws.DirectCache![idx] = direct + emissive;
                     }
@@ -578,7 +549,7 @@ public sealed class Job
                             // whether any surfels contributed -- a texel in an empty surfel cell still
                             // gets correct sun lighting, no "interpolation hole" blackouts.
                             if (_options.IncludeDirectLighting)
-                                final += integrator.ComputeDirectLighting(ts.Position, ts.Normal);
+                                final += integrator.ComputeBakedDirectLighting(ts.Position, ts.Normal);
                             pixels[idx * 3    ] = final.X;
                             pixels[idx * 3 + 1] = final.Y;
                             pixels[idx * 3 + 2] = final.Z;
@@ -603,15 +574,6 @@ public sealed class Job
             _iterationCount = iter;
             _iterationComplete?.Invoke(iter);
         }
-    }
-
-    private static bool IsIdentityTransform(Float4x4 m)
-    {
-        const float E = 1e-6f;
-        return System.Math.Abs(m.c0.X - 1) < E && System.Math.Abs(m.c0.Y) < E && System.Math.Abs(m.c0.Z) < E && System.Math.Abs(m.c0.W) < E
-            && System.Math.Abs(m.c1.X) < E && System.Math.Abs(m.c1.Y - 1) < E && System.Math.Abs(m.c1.Z) < E && System.Math.Abs(m.c1.W) < E
-            && System.Math.Abs(m.c2.X) < E && System.Math.Abs(m.c2.Y) < E && System.Math.Abs(m.c2.Z - 1) < E && System.Math.Abs(m.c2.W) < E
-            && System.Math.Abs(m.c3.X) < E && System.Math.Abs(m.c3.Y) < E && System.Math.Abs(m.c3.Z) < E && System.Math.Abs(m.c3.W - 1) < E;
     }
 
     private static void RasterizeTarget(TargetWorkspace ws, BakeInstance[] allInstances)
