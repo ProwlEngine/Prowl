@@ -7,7 +7,7 @@ using Prowl.Vector;
 namespace Prowl.Veldrid.Samples.CubeGrid;
 
 
-public unsafe class CubeGrid
+public class CubeGrid
 {
     public const int CubeCount = 10000;
     public const float SphereRadius = 10f;

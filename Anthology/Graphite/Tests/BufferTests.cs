@@ -469,7 +469,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     [InlineData(BufferUsage.VertexBuffer | BufferUsage.IndexBuffer | BufferUsage.IndirectBuffer)]
     [InlineData(BufferUsage.IndexBuffer | BufferUsage.IndirectBuffer)]
     [InlineData(BufferUsage.Staging)]
-    public unsafe void CopyBuffer_ZeroSize(BufferUsage usage)
+    public void CopyBuffer_ZeroSize(BufferUsage usage)
     {
         DeviceBuffer src = CreateBuffer(1024, usage);
         DeviceBuffer dst = CreateBuffer(1024, usage);

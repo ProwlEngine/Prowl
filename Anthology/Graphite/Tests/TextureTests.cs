@@ -233,7 +233,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Fact]
-    public unsafe void CubeMap_Copy_OneMip()
+    public void CubeMap_Copy_OneMip()
     {
         const uint TexSize = 64;
         const uint MipLevels = 1;
@@ -281,7 +281,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Fact]
-    public unsafe void CubeMap_Copy_FromNonCubeMapWith6ArrayLayers()
+    public void CubeMap_Copy_FromNonCubeMapWith6ArrayLayers()
     {
         const uint TexSize = 64;
         const uint MipLevels = 1;
@@ -851,7 +851,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Fact]
-    public unsafe void MapWrite_ThenMapRead_3D()
+    public void MapWrite_ThenMapRead_3D()
     {
         Texture tex3D = RF.CreateTexture(TextureDescription.Texture3D(
             10, 10, 10, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));
@@ -897,7 +897,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Fact]
-    public unsafe void MapWrite_ThenMapRead_1D()
+    public void MapWrite_ThenMapRead_1D()
     {
         if (!GD.Features.Texture1D) { return; }
 
@@ -920,7 +920,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Fact]
-    public unsafe void Copy_1DTo2D()
+    public void Copy_1DTo2D()
     {
         if (!GD.Features.Texture1D) { return; }
 
@@ -1177,7 +1177,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     [Fact]
-    public unsafe void Map_NonZeroMip_3D()
+    public void Map_NonZeroMip_3D()
     {
         Texture tex3D = RF.CreateTexture(TextureDescription.Texture3D(
             40, 40, 40, 3, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Staging));

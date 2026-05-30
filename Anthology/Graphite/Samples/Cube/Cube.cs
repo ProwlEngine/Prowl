@@ -7,7 +7,7 @@ using Prowl.Vector;
 namespace Prowl.Veldrid.Samples.Cube;
 
 
-public unsafe class Cube
+public class Cube
 {
     static Mesh sharedMesh;
     static ShaderProgram sharedPass;
