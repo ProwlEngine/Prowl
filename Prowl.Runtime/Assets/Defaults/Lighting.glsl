@@ -706,6 +706,39 @@ vec3 CalculateAmbient(vec3 worldNormal)
 }
 
 // ============================================================
+//  Light-probe spherical harmonics (per-object, set by the pipeline for dynamic objects)
+// ============================================================
+
+uniform vec4 prowl_SHAr;
+uniform vec4 prowl_SHAg;
+uniform vec4 prowl_SHAb;
+uniform vec4 prowl_SHBr;
+uniform vec4 prowl_SHBg;
+uniform vec4 prowl_SHBb;
+uniform vec4 prowl_SHC;
+
+// Evaluate per-object SH-L2 (the standard ShadeSH9) -> diffuse irradiance E/pi for a normal.
+vec3 ShadeSH9(vec3 n)
+{
+    vec4 nrm = vec4(n, 1.0);
+    vec3 x;
+    x.r = dot(prowl_SHAr, nrm);
+    x.g = dot(prowl_SHAg, nrm);
+    x.b = dot(prowl_SHAb, nrm);
+
+    vec4 vB = n.xyzz * n.yzzx;   // (xy, yz, z^2, zx)
+    vec3 x1;
+    x1.r = dot(prowl_SHBr, vB);
+    x1.g = dot(prowl_SHBg, vB);
+    x1.b = dot(prowl_SHBb, vB);
+
+    float vC = n.x * n.x - n.y * n.y;
+    vec3 x2 = prowl_SHC.rgb * vC;
+
+    return max(x + x1 + x2, vec3(0.0));
+}
+
+// ============================================================
 //  Fog
 // ============================================================
 

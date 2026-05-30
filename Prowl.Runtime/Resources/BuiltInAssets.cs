@@ -79,7 +79,9 @@ public static class BuiltInAssets
                 () =>
                 {
                     using var stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
-                    var importResult = new AssetImporting.ModelImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true });
+                    // Built-in primitives always get lightmap UV2 so they're lightmappable out of the
+                    // box. The SkyDome is the skybox mesh (never lightmapped), so it's skipped.
+                    var importResult = new AssetImporting.ModelImporter().Import(stream, fileName, new AssetImporting.ModelImporterSettings() { RecalculateNormals = true, GenerateNormals = true, GenerateSmoothNormals = true, CalculateTangentSpace = true, GenerateLightmapUVs = model != DefaultModel.SkyDome });
                     var mesh = importResult.Meshes.Count > 0 ? importResult.Meshes[0] : new Mesh { Name = model.ToString() };
                     mesh.AssetID = GuidForMesh(model);
                     mesh.AssetPath = $"$Default:Mesh/{model}";

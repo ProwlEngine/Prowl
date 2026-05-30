@@ -4,6 +4,7 @@
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
+using Prowl.Editor.Lightmapping;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -21,10 +22,16 @@ public class EnvironmentPanel : DockPanel
     public override string Title => Loc.Get("panel.environment");
     public override string Icon => EditorIcons.Sun;
 
+    private readonly LightmapBakeService _bake = new();
+    private readonly LightmapBakeService.Settings _bakeSettings = new();
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
+
+        // Drive the background bake job (finalizes on the main thread when complete).
+        _bake.Poll();
 
         var scene = Scene.Current;
         if (scene == null)
@@ -42,7 +49,98 @@ public class EnvironmentPanel : DockPanel
             DrawFogSection(paper, "env_fog", font, scene);
             paper.Box("env_sp2").Height(8);
             DrawAmbientSection(paper, "env_amb", font, scene);
+            paper.Box("env_sp3").Height(8);
+            DrawLightmappingSection(paper, "env_lm", font, scene);
         }
+    }
+
+    private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    {
+        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Sun}  Lightmapping").Body(() =>
+        {
+            bool baking = _bake.IsBaking;
+            var s = _bakeSettings;
+
+            Origami.Header(paper, $"{id}_h_res", "Resolution").Underline().Show();
+
+            InspectorRow.Draw(paper, $"{id}_size", "Atlas Size", () =>
+                Origami.IntSlider(paper, $"{id}_size_v", s.AtlasSize,
+                    v => { if (!baking) s.AtlasSize = v; }, 256, 4096).Show());
+
+            InspectorRow.Draw(paper, $"{id}_tpu", "Texels / Unit", () =>
+                Origami.Slider(paper, $"{id}_tpu_v", s.TexelsPerUnit,
+                    v => { if (!baking) s.TexelsPerUnit = v; }, 1f, 100f).Format("F0").Show());
+
+            InspectorRow.Draw(paper, $"{id}_dil", "Padding (Dilate)", () =>
+                Origami.IntSlider(paper, $"{id}_dil_v", s.DilatePixels,
+                    v => { if (!baking) s.DilatePixels = v; }, 0, 16).Show());
+
+            Origami.Header(paper, $"{id}_h_qual", "Quality").Underline().Show();
+
+            InspectorRow.Draw(paper, $"{id}_bnc", "Bounces", () =>
+                Origami.IntSlider(paper, $"{id}_bnc_v", s.Bounces,
+                    v => { if (!baking) s.Bounces = v; }, 0, 8).Show());
+
+            InspectorRow.Draw(paper, $"{id}_smp", "Indirect Samples", () =>
+                Origami.IntSlider(paper, $"{id}_smp_v", s.Samples,
+                    v => { if (!baking) s.Samples = v; }, 1, 1024).Show());
+
+            InspectorRow.Draw(paper, $"{id}_psmp", "Probe Samples", () =>
+                Origami.IntSlider(paper, $"{id}_psmp_v", s.ProbeSamples,
+                    v => { if (!baking) s.ProbeSamples = v; }, 16, 2048).Show());
+
+            InspectorRow.Draw(paper, $"{id}_pt", "Path Tracer", () =>
+                Origami.EnumDropdown(paper, $"{id}_pt_v", s.PathTracer,
+                    v => { if (!baking) s.PathTracer = v; }).Show());
+
+            Origami.Checkbox(paper, $"{id}_dn", s.Denoise,
+                    v => { if (!baking) s.Denoise = v; })
+                .LabelRight("Denoise").Show();
+
+            if (s.Denoise)
+                InspectorRow.Draw(paper, $"{id}_dns", "Denoise Strength", () =>
+                    Origami.Slider(paper, $"{id}_dns_v", s.DenoiseStrength,
+                        v => { if (!baking) s.DenoiseStrength = v; }, 0.05f, 2f).Format("F2").Show());
+
+            Origami.Header(paper, $"{id}_h_env", "Environment").Underline().Show();
+
+            Origami.Checkbox(paper, $"{id}_sky", s.BakeSkyLighting,
+                    v => { if (!baking) s.BakeSkyLighting = v; })
+                .LabelRight("Bake Sky / Ambient as GI").Show();
+
+            Origami.Header(paper, $"{id}_h_adv", "Advanced").Underline().Show();
+
+            Origami.Checkbox(paper, $"{id}_jit", s.JitterRayOrigin,
+                    v => { if (!baking) s.JitterRayOrigin = v; })
+                .LabelRight("Jitter Ray Origin (reduces seams)").Show();
+
+            InspectorRow.Draw(paper, $"{id}_rr", "Russian Roulette", () =>
+                Origami.Slider(paper, $"{id}_rr_v", s.RussianRoulette,
+                    v => { if (!baking) s.RussianRoulette = v; }, 0f, 1f).Format("F2").Show());
+
+            Origami.Checkbox(paper, $"{id}_alb", s.IgnoreAlbedo,
+                    v => { if (!baking) s.IgnoreAlbedo = v; })
+                .LabelRight("Ignore Albedo (debug)").Show();
+
+            paper.Box($"{id}_sp_btn").Height(6);
+
+            if (baking)
+            {
+                paper.Box($"{id}_status").Height(18)
+                    .Text($"{_bake.Status} ({_bake.Progress * 100f:F0}%)", font)
+                    .TextColor(EditorTheme.Ink300).FontSize(10f).Alignment(TextAlignment.MiddleLeft);
+                Origami.Button(paper, $"{id}_cancel", "Cancel", () => _bake.Cancel()).Show();
+            }
+            else
+            {
+                Origami.Button(paper, $"{id}_bake", $"{EditorIcons.Sun}  Bake Lightmaps",
+                    () => _bake.Start(scene, _bakeSettings)).Show();
+
+                if (LightmapBakeService.HasBakedData(scene))
+                    Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear Baked Lighting",
+                        () => _bake.Clear(scene)).Show();
+            }
+        });
     }
 
     private void DrawSkyboxSection(Paper paper, string id, Scribe.FontFile font, Scene scene)

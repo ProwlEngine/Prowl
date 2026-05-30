@@ -179,6 +179,43 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public SkyboxParams Skybox = new();
 
+    /// <summary>Baked lightmaps + light-probe data for this scene, produced by the editor lightmap bake.</summary>
+    public sealed class BakedLightingData
+    {
+        /// <summary>Baked lightmap atlas pages (RGBM-encoded). A renderer's <c>LightmapIndex</c> selects one.</summary>
+        public List<AssetRef<Texture2D>> Lightmaps = new();
+        /// <summary>World-space light-probe positions.</summary>
+        public Float3[] ProbePositions = [];
+        /// <summary>Baked SH per probe, indexed with <see cref="ProbePositions"/>.</summary>
+        public SphericalHarmonicsL2[] ProbeSH = [];
+        /// <summary>Tetrahedralization of the probes: 4 probe indices per tetrahedron.</summary>
+        public int[] ProbeTetrahedra = [];
+        /// <summary>Per-tetra neighbour links: 4 per tetra (across the face opposite vertex i), -1 = hull.</summary>
+        public int[] ProbeTetNeighbours = [];
+
+        public bool HasLightmaps => Lightmaps.Count > 0;
+        public bool HasProbes => ProbeSH.Length > 0;
+    }
+
+    public BakedLightingData BakedLighting = new();
+
+    [NonSerialized] private LightProbeVolume? _probeVolume;
+
+    /// <summary>Runtime probe sampler built from <see cref="BakedLighting"/> (lazy). Null when there are no baked probes.</summary>
+    public LightProbeVolume? ProbeVolume
+    {
+        get
+        {
+            if (_probeVolume == null && BakedLighting.HasProbes)
+                _probeVolume = new LightProbeVolume(BakedLighting.ProbePositions, BakedLighting.ProbeSH,
+                                                    BakedLighting.ProbeTetrahedra, BakedLighting.ProbeTetNeighbours);
+            return _probeVolume;
+        }
+    }
+
+    /// <summary>Drop the cached probe volume so the next access rebuilds it (call after a rebake).</summary>
+    public void InvalidateProbeVolume() => _probeVolume = null;
+
     /// <summary> The number of registered objects. </summary>
     public int Count => _allObj.Count;
 

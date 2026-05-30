@@ -32,23 +32,15 @@ public class EditorModelImporter : AssetImporter
                     CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue,
                     FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue,
                     UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f,
+                    // Off by default (slow; some models ship their own UV2). The importer runs the
+                    // unwrap in its post-process so the baked UV2 is captured before serialization.
+                    GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue,
                 };
             }
 
-            // 1. Import creates live meshes, materials, animations, GO hierarchy
+            // 1. Import creates live meshes, materials, animations, GO hierarchy (+ UV2 if enabled).
             var importer = new ModelImporter();
             var data = importer.Import(new FileInfo(ctx.AbsolutePath), importSettings);
-
-            // 1b. Optionally generate lightmap UVs (UV2) for every mesh. Off by default it's slow
-            // (full unwrap per mesh) and some models ship their own UV2. Done before sub-asset
-            // registration / feature generation / serialization so the baked UV2 is captured.
-            bool generateLightmapUVs = ctx.Settings != null
-                && ctx.Settings.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
-            if (generateLightmapUVs)
-            {
-                for (int i = 0; i < data.Meshes.Count; i++)
-                    LightmapUVGenerator.Generate(data.Meshes[i]);
-            }
 
             // 2. Register sub-assets assigns deterministic GUIDs immediately
             for (int i = 0; i < data.Meshes.Count; i++)

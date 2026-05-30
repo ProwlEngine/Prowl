@@ -744,6 +744,46 @@ public class EditorAssetDatabase : IAssetDatabase
     }
 
     /// <summary>
+    /// Import a file that already exists on disk under Assets/ (e.g. a baked lightmap PNG written by
+    /// the lightmapper), creating/refreshing its metadata + cache, and return its asset GUID. If the
+    /// path is already tracked it's reimported in place (so a re-bake replaces the previous asset).
+    /// </summary>
+    public Guid ImportFile(string relativePath)
+    {
+        relativePath = NormalizePath(relativePath);
+        string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
+        if (!File.Exists(absolutePath)) return Guid.Empty;
+
+        string ext = Path.GetExtension(relativePath);
+        string importerName = ImporterRegistry.GetImporterTypeName(ext);
+        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        var meta = MetaFile.EnsureMeta(absolutePath, importerName, importer?.Version ?? 1, importer?.DefaultSettings());
+
+        // Already tracked at this path -> reimport in place (re-bake replacement).
+        if (_pathToGuid.TryGetValue(relativePath, out var existingGuid) && _guidToEntry.TryGetValue(existingGuid, out var existing))
+        {
+            DisposeAndRemove(existing.Guid);
+            existing.NeedsReimport = true;
+            RunImport(existing);
+            MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            return existing.Guid;
+        }
+
+        var entry = new AssetEntry
+        {
+            Guid = meta.Guid,
+            Path = relativePath,
+            ImporterType = importerName,
+            NeedsReimport = true,
+        };
+        _guidToEntry[meta.Guid] = entry;
+        _pathToGuid[relativePath] = meta.Guid;
+        RunImport(entry);
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        return meta.Guid;
+    }
+
+    /// <summary>
     /// Re-serialize an in-memory asset back to its source file.
     /// </summary>
     public void SaveAsset(EngineObject obj)

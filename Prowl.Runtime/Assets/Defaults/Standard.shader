@@ -45,6 +45,7 @@ Pass "Standard"
 			out vec3 vNormal;
 			out vec3 vTangent;
 			out vec3 vBitangent;
+			out vec2 vLightmapUV2;
 
 			uniform vec2 _Tiling;
 			uniform vec2 _Offset;
@@ -53,6 +54,7 @@ Pass "Standard"
 			{
 				gl_Position = TransformClip(vertexPosition);
 				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
+				vLightmapUV2 = vertexTexCoord1; // raw UV2; scale/offset applied in the fragment
 				worldPos = TransformPosition(vertexPosition);
 				vColor = GetInstanceColor();
 				vNormal = TransformDirection(vertexNormal);
@@ -80,6 +82,7 @@ Pass "Standard"
 			in vec3 vNormal;
 			in vec3 vTangent;
 			in vec3 vBitangent;
+			in vec2 vLightmapUV2;
 
 			uniform sampler2D _MainTex;
 			uniform sampler2D _NormalTex;
@@ -107,7 +110,8 @@ Pass "Standard"
 				    _EmissionIntensity, _MainColor,
 				    _ParallaxMap, _Parallax, _ParallaxSteps,
 				    _TranslucencyMap, _TranslucencyStrength,
-				    _ScatteringPower, _ScatteringDistortion, _ScatteringScale);
+				    _ScatteringPower, _ScatteringDistortion, _ScatteringScale,
+				    vLightmapUV2);
 
 				// Alpha cutout discard below threshold, output fully opaque
 				if (result.a < _AlphaCutoff)

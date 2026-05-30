@@ -28,6 +28,10 @@ public struct ModelImporterSettings
     /// <summary>Uniform scale applied to all vertex positions.</summary>
     public float UnitScale = 1.0f;
 
+    /// <summary>Generate a lightmap UV set (UV2) for every mesh via Prowl.Unwrapper. Off by default
+    /// (it's slow and some models ship their own UV2); the built-in default models force it on.</summary>
+    public bool GenerateLightmapUVs = false;
+
     public ModelImporterSettings() { }
 }
 
@@ -59,8 +63,24 @@ public class ModelImportResult
 public class ModelImporter
 {
     public ModelImportResult Import(FileInfo assetPath, ModelImporterSettings? settings = null)
-        => ClayBackedImporter.Import(assetPath, settings ?? new ModelImporterSettings());
+    {
+        var s = settings ?? new ModelImporterSettings();
+        return PostProcess(ClayBackedImporter.Import(assetPath, s), s);
+    }
 
     public ModelImportResult Import(Stream stream, string virtualPath, ModelImporterSettings? settings = null)
-        => ClayBackedImporter.Import(stream, virtualPath, settings ?? new ModelImporterSettings());
+    {
+        var s = settings ?? new ModelImporterSettings();
+        return PostProcess(ClayBackedImporter.Import(stream, virtualPath, s), s);
+    }
+
+    private static ModelImportResult PostProcess(ModelImportResult result, ModelImporterSettings settings)
+    {
+        // Lightmap UV2 generation lives in the runtime import path so the built-in default models
+        // (parsed via this importer at runtime) get it too, not just editor-imported models.
+        if (settings.GenerateLightmapUVs)
+            for (int i = 0; i < result.Meshes.Count; i++)
+                LightmapUVGenerator.Generate(result.Meshes[i]);
+        return result;
+    }
 }

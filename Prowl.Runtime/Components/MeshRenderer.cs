@@ -29,6 +29,13 @@ public class MeshRenderer : MonoBehaviour
         set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
     }
 
+    /// <summary>Index into <c>Scene.BakedLighting.Lightmaps</c>, or -1 if this renderer isn't
+    /// lightmapped. Assigned by the lightmap bake. Lightmap-static is driven by <c>GameObject.IsStatic</c>.</summary>
+    [HideInInspector] public int LightmapIndex = -1;
+
+    /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
+    [HideInInspector] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
+
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var mesh = Mesh.Res;
@@ -47,6 +54,7 @@ public class MeshRenderer : MonoBehaviour
 
             PropertyState props = new();
             props.SetInt("_ObjectID", InstanceID);
+            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, Transform.Position);
 
             renderables.Add(new MeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,

@@ -14,6 +14,29 @@
 #include "ProwlCG"
 #include "Lighting"
 
+// --- Baked GI, selected per-object by _GIMode ---
+//   0 = realtime ambient (CalculateAmbient), 1 = baked lightmap (RGBM), 2 = light-probe SH.
+// _GIMode is set per-draw by the render pipeline; _Lightmap/_LightmapScaleOffset are per-object
+// (lightmapped statics); the prowl_SH* uniforms (in Lighting) are per-object (probe-lit dynamics).
+uniform int _GIMode;
+uniform sampler2D _Lightmap;
+uniform vec4 _LightmapScaleOffset;
+
+vec3 DecodeRGBM(vec4 rgbm) { return rgbm.rgb * (rgbm.a * 8.0); }
+
+vec3 CalculateGI(vec3 worldNormal, vec2 lightmapUV2)
+{
+    if (_GIMode == 1)
+    {
+        vec2 lmUV = lightmapUV2 * _LightmapScaleOffset.xy + _LightmapScaleOffset.zw;
+        return DecodeRGBM(texture(_Lightmap, lmUV)); // baked irradiance (linear)
+    }
+    if (_GIMode == 2)
+        return ShadeSH9(worldNormal);               // light-probe SH
+
+    return CalculateAmbient(worldNormal) * _AmbientStrength;
+}
+
 // Full Standard PBR surface with POM and translucency support.
 vec4 StandardSurface(
     vec2 uv,
@@ -35,7 +58,8 @@ vec4 StandardSurface(
     float translucencyStrength,
     float scatteringPower,
     float scatteringDistortion,
-    float scatteringScale)
+    float scatteringScale,
+    vec2 lightmapUV2)
 {
     vec2 finalUV = uv;
 
@@ -84,8 +108,8 @@ vec4 StandardSurface(
                                              translucency, scatteringPower,
                                              scatteringDistortion, scatteringScale);
 
-    // --- Ambient + Fog ---
-    vec3 ambientLight = CalculateAmbient(worldNormal) * ao * _AmbientStrength;
+    // --- Ambient / baked GI + Fog ---
+    vec3 ambientLight = CalculateGI(worldNormal, lightmapUV2) * ao;
 
     // Diffuse ambient (non-metals only, metals have no diffuse)
     vec3 diffuseColor = baseColor * (1.0 - metallic);

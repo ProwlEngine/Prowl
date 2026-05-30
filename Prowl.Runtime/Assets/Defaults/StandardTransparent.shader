@@ -93,7 +93,8 @@ Pass "StandardTransparent"
 				    _EmissionIntensity, _MainColor,
 				    _MainTex, 0.0, 0,
 				    _TranslucencyMap, _TranslucencyStrength,
-				    _ScatteringPower, _ScatteringDistortion, _ScatteringScale);
+				    _ScatteringPower, _ScatteringDistortion, _ScatteringScale,
+				    vec2(0.0)); // transparent objects use realtime ambient / SH, not baked lightmaps
 			}
 		}
 	ENDGLSL

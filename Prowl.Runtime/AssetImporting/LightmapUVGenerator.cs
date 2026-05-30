@@ -1,12 +1,14 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 
-using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Unwrapper;
 using Prowl.Vector;
 
-namespace Prowl.Editor.Importers;
+namespace Prowl.Runtime.AssetImporting;
 
 /// <summary>
 /// Generates a second UV set (UV2) suitable for lightmapping by running Prowl.Unwrapper over a
@@ -18,7 +20,7 @@ namespace Prowl.Editor.Importers;
 /// (position, normal, uv, tangent, color, bone data) onto the new vertices. The index buffer keeps
 /// the same length and triangle order, so existing submesh ranges stay valid.</para>
 /// </summary>
-internal static class LightmapUVGenerator
+public static class LightmapUVGenerator
 {
     /// <summary>Unwrap <paramref name="mesh"/> and write the result into its UV2 channel. Best-effort:
     /// on failure (degenerate geometry, etc.) it logs a warning and leaves the mesh unchanged.</summary>
