@@ -63,6 +63,11 @@ uniform vec2 brushParams2;
 uniform mat4 brushTextureMat;
 uniform float dpiScale;
 
+// Backdrop blur
+uniform sampler2D backdropTexture;  // blurred copy of the framebuffer behind the shape
+uniform vec2 viewportSize;          // framebuffer size in pixels, for screen->uv mapping
+uniform float backdropBlurAmount;   // > 0 when the current fill is frosted glass
+
 // Slug textures
 uniform sampler2D slugCurveTexture;
 uniform sampler2D slugBandTexture;
@@ -248,7 +253,77 @@ void main()
     edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
 
     vec2 logicalPos = fragPos / dpiScale;
-    finalColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
+    vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
+
+    // Backdrop blur: composite the fill over the blurred framebuffer behind the shape.
+    if (backdropBlurAmount > 0.0) {
+        vec2 uv = fragPos / viewportSize;
+        uv.y = 1.0 - uv.y;  // framebuffer origin is bottom-left
+        vec3 blurred = texture(backdropTexture, uv).rgb;
+        // fill is premultiplied; over-composite it onto the opaque blurred backdrop
+        vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;
+        finalColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
+        return;
+    }
+
+    finalColor = fill * edgeAlpha * mask;
+}";
+
+        /// <summary>
+        /// Fullscreen-triangle vertex shader for the backdrop blur passes. No vertex buffer needed.
+        /// </summary>
+        public const string BlurVertexShader = @"#version 330
+out vec2 vUV;
+void main()
+{
+    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+    vUV = p;
+    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}";
+
+        /// <summary>
+        /// Dual Kawase downsample pass. Samples the higher-resolution source into a half-size target.
+        /// 'halfpixel' is half a texel of the source; 'offset' scales the sample spread (blur strength).
+        /// </summary>
+        public const string BlurDownsampleShader = @"#version 330
+in vec2 vUV;
+out vec4 frag;
+uniform sampler2D src;
+uniform vec2 halfpixel;
+uniform float offset;
+
+void main()
+{
+    vec4 sum = texture(src, vUV) * 4.0;
+    sum += texture(src, vUV - halfpixel.xy * offset);
+    sum += texture(src, vUV + halfpixel.xy * offset);
+    sum += texture(src, vUV + vec2(halfpixel.x, -halfpixel.y) * offset);
+    sum += texture(src, vUV - vec2(halfpixel.x, -halfpixel.y) * offset);
+    frag = sum / 8.0;
+}";
+
+        /// <summary>
+        /// Dual Kawase upsample pass. Samples the lower-resolution source into a double-size target.
+        /// 'halfpixel' is half a texel of the target; 'offset' scales the sample spread (blur strength).
+        /// </summary>
+        public const string BlurUpsampleShader = @"#version 330
+in vec2 vUV;
+out vec4 frag;
+uniform sampler2D src;
+uniform vec2 halfpixel;
+uniform float offset;
+
+void main()
+{
+    vec4 sum = texture(src, vUV + vec2(-halfpixel.x * 2.0, 0.0) * offset);
+    sum += texture(src, vUV + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += texture(src, vUV + vec2(0.0, halfpixel.y * 2.0) * offset);
+    sum += texture(src, vUV + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += texture(src, vUV + vec2(halfpixel.x * 2.0, 0.0) * offset);
+    sum += texture(src, vUV + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    sum += texture(src, vUV + vec2(0.0, -halfpixel.y * 2.0) * offset);
+    sum += texture(src, vUV + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    frag = sum / 12.0;
 }";
     }
 }

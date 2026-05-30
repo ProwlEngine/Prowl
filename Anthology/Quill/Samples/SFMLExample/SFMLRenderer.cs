@@ -37,6 +37,12 @@ uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
 
 uniform float dpiScale;           // DPI scale factor (pixels / logical units)
 
+// Backdrop blur
+uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
+uniform vec2 viewportSize;         // window size in pixels
+uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
+uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
+
 varying vec2 v_position; // Add this
 
 float calculateBrushFactor(vec2 fragPos) {
@@ -151,7 +157,19 @@ void main()
     // Use world position transformed by texture matrix (convert to logical coords first)
     // If Canvas texture was null, renderer should assign a default white texture, so any sample position is valid
     vec2 logicalPos = fragPos / dpiScale;
-    gl_FragColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
+    vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
+
+    // Backdrop blur: composite the fill over the blurred scene behind the shape.
+    if (backdropBlurAmount > 0.0) {
+        vec2 uv = fragPos / viewportSize;
+        if (backdropFlipY == 1) uv.y = 1.0 - uv.y;
+        vec3 blurred = texture(backdropTexture, uv).rgb;
+        vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
+        gl_FragColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
+        return;
+    }
+
+    gl_FragColor = fill * edgeAlpha * mask;
 }";
 
         private const string VERTEX_SHADER = @"
@@ -171,6 +189,53 @@ void main()
     gl_Position = projection * gl_Vertex;
 }";
 
+        // Dual Kawase blur passes (fragment-only; SFML's default vertex pipeline provides
+        // normalized gl_TexCoord[0]). 'texture' is the source being sampled.
+        private const string BLUR_DOWN_FS = @"
+uniform sampler2D texture;
+uniform vec2 halfpixel;
+uniform float offset;
+void main()
+{
+    vec2 uv = gl_TexCoord[0].xy;
+    vec4 sum = texture2D(texture, uv) * 4.0;
+    sum += texture2D(texture, uv - halfpixel.xy * offset);
+    sum += texture2D(texture, uv + halfpixel.xy * offset);
+    sum += texture2D(texture, uv + vec2(halfpixel.x, -halfpixel.y) * offset);
+    sum += texture2D(texture, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
+    gl_FragColor = sum / 8.0;
+}";
+
+        private const string BLUR_UP_FS = @"
+uniform sampler2D texture;
+uniform vec2 halfpixel;
+uniform float offset;
+void main()
+{
+    vec2 uv = gl_TexCoord[0].xy;
+    vec4 sum = texture2D(texture, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);
+    sum += texture2D(texture, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += texture2D(texture, uv + vec2(0.0, halfpixel.y * 2.0) * offset);
+    sum += texture2D(texture, uv + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;
+    sum += texture2D(texture, uv + vec2(halfpixel.x * 2.0, 0.0) * offset);
+    sum += texture2D(texture, uv + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    sum += texture2D(texture, uv + vec2(0.0, -halfpixel.y * 2.0) * offset);
+    sum += texture2D(texture, uv + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
+    gl_FragColor = sum / 12.0;
+}";
+
+        // Backdrop blur
+        public bool SupportsBackdropBlur => true;
+        // If the frosted glass appears vertically mirrored, flip this to 0.
+        private const int BackdropFlipY = 1;
+        private const int MaxBlurLevels = 6;
+        private Shader _blurDown;
+        private Shader _blurUp;
+        private Texture _captureTex;
+        private RenderTexture[] _blurLevels = new RenderTexture[MaxBlurLevels];
+        private int _fbWidth;
+        private int _fbHeight;
+
         /// <summary>
         /// Initialize the renderer with the window dimensions
         /// </summary>
@@ -187,9 +252,66 @@ void main()
             {
                 _shader = Shader.FromString(VERTEX_SHADER, null, FRAGMENT_SHADER);
                 _shader.SetUniform("texture0", Shader.CurrentTexture);
+
+                _blurDown = Shader.FromString(null, null, BLUR_DOWN_FS);
+                _blurUp = Shader.FromString(null, null, BLUR_UP_FS);
             }
 
             UpdateProjection(width, height);
+        }
+
+        private void EnsureBlurTargets(int w, int h)
+        {
+            if (_captureTex != null && _fbWidth == w && _fbHeight == h && _blurLevels[0] != null)
+                return;
+            _captureTex?.Dispose();
+            for (int i = 0; i < MaxBlurLevels; i++) _blurLevels[i]?.Dispose();
+
+            _captureTex = new Texture((uint)w, (uint)h) { Smooth = true };
+            for (int i = 0; i < MaxBlurLevels; i++)
+            {
+                int lw = Math.Max(1, w >> (i + 1));
+                int lh = Math.Max(1, h >> (i + 1));
+                _blurLevels[i] = new RenderTexture((uint)lw, (uint)lh) { Smooth = true };
+            }
+        }
+
+        private static void ComputeBlurParams(float radius, out int iterations, out float offset)
+        {
+            float r = MathF.Max(radius, 2f);
+            iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
+            offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+        }
+
+        // Blurs the captured scene into _blurLevels[0] using dual Kawase. RenderTexture sources are
+        // flipped vertically when sampled, so we flip their sprite rect to keep orientation uniform.
+        private void RenderBackdropBlur(float radius)
+        {
+            ComputeBlurParams(radius, out int iterations, out float offset);
+
+            BlurPass(_blurDown, _blurLevels[0], _captureTex, false, offset);
+            for (int i = 0; i < iterations; i++)
+                BlurPass(_blurDown, _blurLevels[i + 1], _blurLevels[i].Texture, true, offset);
+            for (int i = iterations; i > 0; i--)
+                BlurPass(_blurUp, _blurLevels[i - 1], _blurLevels[i].Texture, true, offset);
+        }
+
+        private void BlurPass(Shader sh, RenderTexture dst, Texture src, bool srcIsRenderTexture, float offset)
+        {
+            var sprite = new Sprite(src);
+            sprite.Scale = new Vector2f(dst.Size.X / (float)src.Size.X, dst.Size.Y / (float)src.Size.Y);
+            // RenderTexture contents are stored upside down; flip the source rect to present it upright.
+            if (srcIsRenderTexture)
+                sprite.TextureRect = new SFML.Graphics.IntRect(0, (int)src.Size.Y, (int)src.Size.X, -(int)src.Size.Y);
+
+            sh.SetUniform("texture", Shader.CurrentTexture);
+            sh.SetUniform("halfpixel", new Vec2(0.5f / src.Size.X, 0.5f / src.Size.Y));
+            sh.SetUniform("offset", offset);
+
+            dst.Clear(new SFML.Graphics.Color(0, 0, 0, 0));
+            dst.Draw(sprite, new RenderStates(BlendMode.None, Transform.Identity, src, sh));
+            dst.Display();
+            sprite.Dispose();
         }
 
         /// <summary>
@@ -197,6 +319,8 @@ void main()
         /// </summary>
         public void UpdateProjection(int width, int height)
         {
+            _fbWidth = width;
+            _fbHeight = height;
             _projection = new View(new FloatRect(0, 0, width, height));
             
             if (Shader.IsAvailable)
@@ -316,6 +440,14 @@ void main()
             {
                 var drawCall = drawCalls[i];
 
+                // Backdrop blur: capture the window so far and blur it before drawing this shape.
+                if (drawCall.Brush.BackdropBlur > 0f && Shader.IsAvailable)
+                {
+                    EnsureBlurTargets(_fbWidth, _fbHeight);
+                    _captureTex.Update(_window);
+                    RenderBackdropBlur((float)drawCall.Brush.BackdropBlur);
+                }
+
                 // Get texture to use
                 Texture texture = (drawCall.Texture as TextureSFML)?.Handle ?? _defaultTexture;
 
@@ -402,6 +534,16 @@ void main()
 
                         // Set texture transform parameters
                         _shader.SetUniform("brushTextureMat", ToMat4(drawCall.Brush.TextureMatrix));
+
+                        // Backdrop blur uniforms
+                        float blurAmount = (float)drawCall.Brush.BackdropBlur;
+                        _shader.SetUniform("backdropBlurAmount", blurAmount);
+                        if (blurAmount > 0f)
+                        {
+                            _shader.SetUniform("viewportSize", new Vec2(_fbWidth, _fbHeight));
+                            _shader.SetUniform("backdropFlipY", BackdropFlipY);
+                            _shader.SetUniform("backdropTexture", _blurLevels[0].Texture);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -426,6 +568,10 @@ void main()
             _shader?.Dispose();
             _vertexArray?.Dispose();
             _vertexBuffer?.Dispose();
+            _blurDown?.Dispose();
+            _blurUp?.Dispose();
+            _captureTex?.Dispose();
+            for (int i = 0; i < MaxBlurLevels; i++) _blurLevels[i]?.Dispose();
         }
     }
 }

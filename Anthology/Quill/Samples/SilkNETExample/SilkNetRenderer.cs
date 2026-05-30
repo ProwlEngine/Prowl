@@ -38,6 +38,26 @@ namespace SilkExample
         private int _slugCurveTexSizeLocation;
         private int _slugBandTexSizeLocation;
 
+        // Backdrop blur (dual Kawase)
+        private int _backdropTexLocation;
+        private int _viewportSizeLocation;
+        private int _backdropBlurAmountLocation;
+        private uint _blurDownProgram;
+        private uint _blurUpProgram;
+        private int _downSrcLoc, _downHalfpixelLoc, _downOffsetLoc;
+        private int _upSrcLoc, _upHalfpixelLoc, _upOffsetLoc;
+        private uint _blurVao;
+        private uint _blurFbo;
+        private const int MaxBlurLevels = 6;
+        private readonly uint[] _blurTex = new uint[MaxBlurLevels];   // mip pyramid, level 0 is half the viewport
+        private readonly Int2[] _blurSize = new Int2[MaxBlurLevels];
+        private int _fbWidth;
+        private int _fbHeight;
+        private int _blurBaseW;
+        private int _blurBaseH;
+
+        public bool SupportsBackdropBlur => true;
+
         private Float4x4 _projection;
         private TextureSilk _defaultTexture;
         public SilkNetRenderer(GL gl)
@@ -71,9 +91,35 @@ namespace SilkExample
             _gl.DetachShader(_program, fragShader);
             _gl.DeleteShader(vertShader);
             _gl.DeleteShader(fragShader);
-    
+
             // Cache uniform locations
             CacheUniformLocations();
+
+            // Dual Kawase blur programs and shared blur objects
+            _blurDownProgram = BuildBlurProgram(CanvasShaderSource.BlurDownsampleShader);
+            _downSrcLoc = _gl.GetUniformLocation(_blurDownProgram, "src");
+            _downHalfpixelLoc = _gl.GetUniformLocation(_blurDownProgram, "halfpixel");
+            _downOffsetLoc = _gl.GetUniformLocation(_blurDownProgram, "offset");
+            _blurUpProgram = BuildBlurProgram(CanvasShaderSource.BlurUpsampleShader);
+            _upSrcLoc = _gl.GetUniformLocation(_blurUpProgram, "src");
+            _upHalfpixelLoc = _gl.GetUniformLocation(_blurUpProgram, "halfpixel");
+            _upOffsetLoc = _gl.GetUniformLocation(_blurUpProgram, "offset");
+            _blurVao = _gl.GenVertexArray();
+            _blurFbo = _gl.GenFramebuffer();
+        }
+
+        private uint BuildBlurProgram(string fragmentSource)
+        {
+            uint program = _gl.CreateProgram();
+            uint vs = CompileShader(ShaderType.VertexShader, CanvasShaderSource.BlurVertexShader);
+            uint fs = CompileShader(ShaderType.FragmentShader, fragmentSource);
+            _gl.AttachShader(program, vs);
+            _gl.AttachShader(program, fs);
+            _gl.LinkProgram(program);
+            CheckProgramLinking(program);
+            _gl.DeleteShader(vs);
+            _gl.DeleteShader(fs);
+            return program;
         }
         
         private uint CompileShader(ShaderType type, string source)
@@ -111,6 +157,9 @@ namespace SilkExample
             _slugBandTexLocation = _gl.GetUniformLocation(_program, "slugBandTexture");
             _slugCurveTexSizeLocation = _gl.GetUniformLocation(_program, "slugCurveTexSize");
             _slugBandTexSizeLocation = _gl.GetUniformLocation(_program, "slugBandTexSize");
+            _backdropTexLocation = _gl.GetUniformLocation(_program, "backdropTexture");
+            _viewportSizeLocation = _gl.GetUniformLocation(_program, "viewportSize");
+            _backdropBlurAmountLocation = _gl.GetUniformLocation(_program, "backdropBlurAmount");
         }
         
         private void CheckProgramLinking(uint program)
@@ -161,6 +210,8 @@ namespace SilkExample
 
         public void UpdateProjection(int width, int height)
         {
+            _fbWidth = width;
+            _fbHeight = height;
             _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
         }
 
@@ -292,8 +343,103 @@ namespace SilkExample
             }
         }
         
+        private unsafe uint CreateBlurTexture(int w, int h)
+        {
+            uint tex = _gl.GenTexture();
+            _gl.BindTexture(TextureTarget.Texture2D, tex);
+            _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)w, (uint)h, 0, PixelFormat.Rgba, PixelType.UnsignedByte, (void*)0);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            _gl.BindTexture(TextureTarget.Texture2D, 0);
+            return tex;
+        }
+
+        private void EnsureBlurTargets(int baseW, int baseH)
+        {
+            if (_blurTex[0] != 0 && _blurBaseW == baseW && _blurBaseH == baseH)
+                return;
+            for (int i = 0; i < MaxBlurLevels; i++)
+                if (_blurTex[i] != 0) _gl.DeleteTexture(_blurTex[i]);
+
+            for (int i = 0; i < MaxBlurLevels; i++)
+            {
+                int w = Math.Max(1, baseW >> (i + 1));
+                int h = Math.Max(1, baseH >> (i + 1));
+                _blurSize[i] = new Int2(w, h);
+                _blurTex[i] = CreateBlurTexture(w, h);
+            }
+            _blurBaseW = baseW;
+            _blurBaseH = baseH;
+        }
+
+        private static void ComputeBlurParams(float radius, out int iterations, out float offset)
+        {
+            float r = MathF.Max(radius, 2f);
+            iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
+            offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+        }
+
+        /// <summary>
+        /// Captures the framebuffer behind the shape and dual-Kawase blurs it into _blurTex[0],
+        /// leaving it bound on texture unit 3 for the canvas shader composite.
+        /// </summary>
+        private void RenderBackdropBlur(float radius)
+        {
+            EnsureBlurTargets(_fbWidth, _fbHeight);
+            ComputeBlurParams(radius, out int iterations, out float offset);
+
+            _gl.Disable(EnableCap.Blend);
+            _gl.BindVertexArray(_blurVao);
+            _gl.ActiveTexture(TextureUnit.Texture0);
+
+            // Capture default framebuffer into level 0 (half res) via a linear blit.
+            _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _blurFbo);
+            _gl.FramebufferTexture2D(FramebufferTarget.DrawFramebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _blurTex[0], 0);
+            _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+            _gl.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _blurSize[0].X, _blurSize[0].Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
+
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _blurFbo);
+
+            _gl.UseProgram(_blurDownProgram);
+            _gl.Uniform1(_downSrcLoc, 0);
+            _gl.Uniform1(_downOffsetLoc, offset);
+            for (int i = 0; i < iterations; i++)
+                BlurPass(_blurTex[i], _blurTex[i + 1], _blurSize[i + 1], _downHalfpixelLoc, _blurSize[i]);
+
+            _gl.UseProgram(_blurUpProgram);
+            _gl.Uniform1(_upSrcLoc, 0);
+            _gl.Uniform1(_upOffsetLoc, offset);
+            for (int i = iterations; i > 0; i--)
+                BlurPass(_blurTex[i], _blurTex[i - 1], _blurSize[i - 1], _upHalfpixelLoc, _blurSize[i - 1]);
+
+            // Restore state for canvas drawing.
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            _gl.Viewport(0, 0, (uint)_fbWidth, (uint)_fbHeight);
+            _gl.Enable(EnableCap.Blend);
+            _gl.BindVertexArray(_vao);
+
+            _gl.ActiveTexture(TextureUnit.Texture3);
+            _gl.BindTexture(TextureTarget.Texture2D, _blurTex[0]);
+            _gl.ActiveTexture(TextureUnit.Texture0);
+        }
+
+        private void BlurPass(uint srcTex, uint dstTex, Int2 dstSize, int halfpixelLoc, Int2 halfpixelBasis)
+        {
+            _gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, dstTex, 0);
+            _gl.Viewport(0, 0, (uint)dstSize.X, (uint)dstSize.Y);
+            _gl.Uniform2(halfpixelLoc, 0.5f / halfpixelBasis.X, 0.5f / halfpixelBasis.Y);
+            _gl.BindTexture(TextureTarget.Texture2D, srcTex);
+            _gl.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        }
+
         private unsafe void ProcessDrawCall(DrawCall drawCall, int indexOffset, float dpiScale)
         {
+            // Backdrop blur: capture and blur the framebuffer behind this shape first.
+            if (drawCall.Brush.BackdropBlur > 0f)
+                RenderBackdropBlur((float)drawCall.Brush.BackdropBlur);
+
             // Bind texture
             TextureSilk texture = (drawCall.Texture as TextureSilk) ?? _defaultTexture;
             texture.Use(TextureUnit.Texture0);
@@ -331,6 +477,11 @@ namespace SilkExample
                 drawCall.GetScissor(out var scissorMat, out var scissorExt);
                 SetScissorUniforms(scissorMat, scissorExt);
                 SetBrushUniforms(drawCall.Brush);
+
+                // Backdrop blur uniforms (blurred texture bound on unit 3 by RenderBackdropBlur)
+                _gl.Uniform2(_viewportSizeLocation, (float)_fbWidth, (float)_fbHeight);
+                _gl.Uniform1(_backdropTexLocation, 3);
+                _gl.Uniform1(_backdropBlurAmountLocation, (float)drawCall.Brush.BackdropBlur);
 
                 // Bind Slug textures if needed
                 if (drawCall.IsSlug)
@@ -445,6 +596,15 @@ namespace SilkExample
             _gl.DeleteBuffer(_ebo);
             _gl.DeleteVertexArray(_vao);
             _gl.DeleteProgram(_program);
+
+            if (_blurDownProgram != 0) _gl.DeleteProgram(_blurDownProgram);
+            if (_blurUpProgram != 0) _gl.DeleteProgram(_blurUpProgram);
+            if (_blurVao != 0) _gl.DeleteVertexArray(_blurVao);
+            if (_blurFbo != 0) _gl.DeleteFramebuffer(_blurFbo);
+            for (int i = 0; i < MaxBlurLevels; i++)
+                if (_blurTex[i] != 0) { _gl.DeleteTexture(_blurTex[i]); _blurTex[i] = 0; }
+            _blurDownProgram = _blurUpProgram = _blurVao = _blurFbo = 0;
+            _blurBaseW = _blurBaseH = 0;
         }
 
         public void Dispose()

@@ -362,6 +362,14 @@ namespace Prowl.Quill
         public float Feather;
 
         /// <summary>
+        /// Backdrop blur radius in pixels. When greater than zero, any shape filled with this brush
+        /// is composited over a blurred copy of the framebuffer behind it (frosted glass). This is
+        /// orthogonal to <see cref="Type"/>, so it combines with solid, gradient, or textured fills.
+        /// Backends without backdrop blur support ignore it and draw the fill normally.
+        /// </summary>
+        public float BackdropBlur;
+
+        /// <summary>
         /// The texture to apply to shapes, or null for no texture.
         /// </summary>
         public object? Texture;
@@ -389,6 +397,7 @@ namespace Prowl.Quill
                 hash = hash * 31 + Point2.GetHashCode();
                 hash = hash * 31 + CornerRadii.GetHashCode();
                 hash = hash * 31 + Feather.GetHashCode();
+                hash = hash * 31 + BackdropBlur.GetHashCode();
                 hash = hash * 31 + Transform.GetHashCode();
                 hash = hash * 31 + (Texture?.GetHashCode() ?? 0);
                 hash = hash * 31 + TextureTransform.GetHashCode();
@@ -1043,6 +1052,30 @@ namespace Prowl.Quill
         public void ClearBrush()
         {
             _state.brush.Type = BrushType.None;
+            InvalidateDrawState();
+        }
+
+        /// <summary>
+        /// Enables backdrop blur for subsequent fills. Any shape drawn while this is active is
+        /// composited over a blurred copy of the framebuffer behind it, turning the shape into
+        /// frosted glass. The shape's own fill (solid, gradient, or texture) is layered on top as a
+        /// tint, so use a translucent fill for glass. This is orthogonal to the brush, toggled like
+        /// any other draw state, and applies to any fillable shape. Call with 0 (or
+        /// <see cref="ClearBackdropBlur"/>) to disable. Backends without support draw fills normally.
+        /// </summary>
+        /// <param name="radius">The blur radius in pixels. Zero disables backdrop blur.</param>
+        public void SetBackdropBlur(float radius)
+        {
+            _state.brush.BackdropBlur = radius;
+            InvalidateDrawState();
+        }
+
+        /// <summary>
+        /// Disables backdrop blur for subsequent fills.
+        /// </summary>
+        public void ClearBackdropBlur()
+        {
+            _state.brush.BackdropBlur = 0f;
             InvalidateDrawState();
         }
 

@@ -284,7 +284,7 @@ namespace Common
             _canvas.SetBrushTextureTransform(Transform2D.CreateTranslation(0, 0) * Transform2D.CreateScale(128, 128));
 
             // Draw 2D grid for reference
-            DrawGrid(16, 17, 50, Color32.FromArgb(40, 255, 255, 255));
+            DrawGrid(16, 23, 50, Color32.FromArgb(40, 255, 255, 255));
 
             // Draw coordinate system at center
             DrawCoordinateSystem(0, 0, 50);
@@ -326,11 +326,65 @@ namespace Common
             DrawTextDemo(550, 650, 200, 150);
 
             _canvas.ClearBrushTexture();
+
+            // 13. Backdrop Blur Demo (frosted glass over its own shapes)
+            DrawBackdropBlurDemo(50, 850, 700, 200);
+
             // Restore the canvas state
             _canvas.RestoreState();
         }
 
         #region 2D Drawing Demos
+
+        /// <summary>
+        /// Backdrop blur demo: draws colorful shapes, then slides a frosted-glass panel over them
+        /// so the panel blurs whatever is drawn behind it.
+        /// </summary>
+        private void DrawBackdropBlurDemo(float x, float y, float width, float height)
+        {
+            _canvas.SaveState();
+            _canvas.ClearBrushTexture();
+
+            DrawGroupBackground(x, y, width, height, "Backdrop Blur");
+
+            // Content behind the glass: a row of overlapping colored circles and a stripe.
+            Color32[] dots =
+            {
+                Color32.FromArgb(255, 240, 80, 80),
+                Color32.FromArgb(255, 240, 200, 60),
+                Color32.FromArgb(255, 80, 200, 120),
+                Color32.FromArgb(255, 80, 160, 240),
+                Color32.FromArgb(255, 200, 100, 240),
+            };
+            for (int i = 0; i < dots.Length; i++)
+            {
+                float cx = x + 70 + i * 130;
+                float cy = y + height * 0.5f;
+                _canvas.CircleFilled(cx, cy, 55, dots[i]);
+            }
+            _canvas.RectFilled(x + 20, y + height - 45, width - 40, 14, Color32.FromArgb(255, 255, 255, 255));
+
+            // Frosted glass panel sliding horizontally across the shapes.
+            float panelW = 240f;
+            float panelH = height - 60f;
+            float travel = (width - panelW - 40f);
+            float px = x + 20f + (0.5f + 0.5f * MathF.Sin(_time * 0.7f)) * travel;
+            float py = y + 30f;
+
+            // Toggle backdrop blur on, then any shape we fill becomes frosted glass.
+            _canvas.SetBackdropBlur(22f);
+            _canvas.RoundedRectFilled(px, py, panelW, panelH, 22, 22, 22, 22, Color32.FromArgb(40, 255, 255, 255));
+            _canvas.ClearBackdropBlur();
+
+            // Panel border so the glass edge reads clearly.
+            _canvas.BeginPath();
+            _canvas.RoundedRect(px, py, panelW, panelH, 22, 22, 22, 22);
+            _canvas.SetStrokeColor(Color32.FromArgb(110, 255, 255, 255));
+            _canvas.SetStrokeWidth(1.5f);
+            _canvas.Stroke();
+
+            _canvas.RestoreState();
+        }
 
         private void DrawPathOperationsDemo(float x, float y, float width, float height)
         {
