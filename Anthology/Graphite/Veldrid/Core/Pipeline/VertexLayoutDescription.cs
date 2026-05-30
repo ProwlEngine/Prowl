@@ -83,7 +83,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    public bool Equals(VertexLayoutDescription other)
+    public readonly bool Equals(VertexLayoutDescription other)
     {
         return Location.Equals(other.Location)
             && Stride.Equals(other.Stride)
@@ -94,7 +94,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(Location.GetHashCode(), Stride.GetHashCode(), Elements.ArrayHash(), InstanceStepRate.GetHashCode());
     }

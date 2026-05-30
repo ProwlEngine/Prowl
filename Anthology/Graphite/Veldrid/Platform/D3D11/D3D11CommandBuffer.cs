@@ -485,7 +485,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
     }
 
-    private unsafe void BindPropertySlot(
+    private void BindPropertySlot(
         in ResourceLayoutElementDescription elem,
         in ResourceLayoutDescription layout,
         bool isCompute, uint setIdx)
@@ -573,7 +573,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         return new DeviceBufferRange(Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(_gd.NullUniform), 0, 16);
     }
 
-    private unsafe DeviceBufferRange GetOrBuildImplicitUboD3D11(
+    private DeviceBufferRange GetOrBuildImplicitUboD3D11(
         object programKey, uint setIdx, int bindingIndex,
         UniformBlockField[] fields, bool isCompute)
     {

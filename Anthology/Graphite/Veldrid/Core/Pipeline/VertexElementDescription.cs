@@ -46,7 +46,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    public bool Equals(VertexElementDescription other)
+    public readonly bool Equals(VertexElementDescription other)
     {
         return Name == other.Name
             && Format == other.Format
@@ -56,7 +56,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(
             Name,

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Veldrid.Vk;
 
-internal sealed unsafe class VkFrame : Frame
+internal sealed class VkFrame : Frame
 {
     private readonly VkGraphicsDevice _gd;
     private readonly ulong _frameId;

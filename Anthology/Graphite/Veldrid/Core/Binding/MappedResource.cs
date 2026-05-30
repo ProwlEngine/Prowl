@@ -110,7 +110,7 @@ public unsafe struct MappedResourceView<T> where T : struct
     /// </summary>
     /// <param name="index">The index of the value.</param>
     /// <returns>A reference to the value at the given index.</returns>
-    public ref T this[int index]
+    public readonly ref T this[int index]
     {
         get
         {
@@ -130,7 +130,7 @@ public unsafe struct MappedResourceView<T> where T : struct
     /// </summary>
     /// <param name="index">The index of the value.</param>
     /// <returns>A reference to the value at the given index.</returns>
-    public ref T this[uint index]
+    public readonly ref T this[uint index]
     {
         get
         {
@@ -151,7 +151,7 @@ public unsafe struct MappedResourceView<T> where T : struct
     /// <param name="x">The X coordinate.</param>
     /// <param name="y">The Y coordinate.</param>
     /// <returns>A reference to the value at the given coordinates.</returns>
-    public ref T this[int x, int y]
+    public readonly ref T this[int x, int y]
     {
         get
         {
@@ -166,7 +166,7 @@ public unsafe struct MappedResourceView<T> where T : struct
     /// <param name="x">The X coordinate.</param>
     /// <param name="y">The Y coordinate.</param>
     /// <returns>A reference to the value at the given coordinates.</returns>
-    public ref T this[uint x, uint y]
+    public readonly ref T this[uint x, uint y]
     {
         get
         {
@@ -182,7 +182,7 @@ public unsafe struct MappedResourceView<T> where T : struct
     /// <param name="y">The Y coordinate.</param>
     /// <param name="z">The Z coordinate.</param>
     /// <returns>A reference to the value at the given coordinates.</returns>
-    public ref T this[int x, int y, int z]
+    public readonly ref T this[int x, int y, int z]
     {
         get
         {
@@ -201,7 +201,7 @@ public unsafe struct MappedResourceView<T> where T : struct
     /// <param name="y">The Y coordinate.</param>
     /// <param name="z">The Z coordinate.</param>
     /// <returns>A reference to the value at the given coordinates.</returns>
-    public ref T this[uint x, uint y, uint z]
+    public readonly ref T this[uint x, uint y, uint z]
     {
         get
         {

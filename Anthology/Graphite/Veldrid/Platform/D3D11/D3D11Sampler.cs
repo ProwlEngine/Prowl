@@ -38,7 +38,7 @@ internal unsafe class D3D11Sampler : Sampler
         _deviceSampler.Handle = pSampler;
     }
 
-    private static unsafe void SetBorderColor(ref SamplerDesc desc, SamplerBorderColor borderColor)
+    private static void SetBorderColor(ref SamplerDesc desc, SamplerBorderColor borderColor)
     {
         float r, g, b, a;
         switch (borderColor)

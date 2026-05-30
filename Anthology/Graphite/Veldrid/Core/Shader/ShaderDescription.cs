@@ -95,7 +95,7 @@ public struct ShaderDescription : IEquatable<ShaderDescription>
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(
             Stages.ArrayHash(),

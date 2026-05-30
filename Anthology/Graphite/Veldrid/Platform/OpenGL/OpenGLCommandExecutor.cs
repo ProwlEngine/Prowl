@@ -378,7 +378,7 @@ internal unsafe class OpenGLCommandExecutor
         CheckLastError();
     }
 
-    private unsafe DeviceBufferRange GetOrBuildImplicitUboGL(
+    private DeviceBufferRange GetOrBuildImplicitUboGL(
         bool graphics, uint setIdx, int bindingIndex,
         UniformBlockField[] fields, uint blockSize)
     {

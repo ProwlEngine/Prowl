@@ -417,12 +417,12 @@ internal unsafe class D3D11ResourceCache : IDisposable
             return new InputLayoutCacheKey { VertexLayouts = vertexLayouts };
         }
 
-        public bool Equals(InputLayoutCacheKey other)
+        public readonly bool Equals(InputLayoutCacheKey other)
         {
             return Util.ArrayEqualsEquatable(VertexLayouts, other.VertexLayouts);
         }
 
-        public override int GetHashCode()
+        public override readonly int GetHashCode()
         {
             return VertexLayouts.ArrayHash();
         }

@@ -65,7 +65,7 @@ public struct ComputeDescription : IEquatable<ComputeDescription>
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(
             Stage,

@@ -165,7 +165,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     /// </summary>
     /// <param name="other">The instance to compare to.</param>
     /// <returns>True if all elements are equal; false otherswise.</returns>
-    public bool Equals(SamplerDescription other)
+    public readonly bool Equals(SamplerDescription other)
     {
         return AddressModeU == other.AddressModeU
             && AddressModeV == other.AddressModeV

@@ -10,7 +10,7 @@ internal struct FixedArray2<T> where T : struct
 
     public FixedArray2(T first, T second) { First = first; Second = second; }
 
-    public uint Count => 2;
+    public readonly uint Count => 2;
 }
 
 internal struct FixedArray3<T> where T : struct
@@ -21,7 +21,7 @@ internal struct FixedArray3<T> where T : struct
 
     public FixedArray3(T first, T second, T third) { First = first; Second = second; Third = third; }
 
-    public uint Count => 3;
+    public readonly uint Count => 3;
 }
 
 internal struct FixedArray4<T> where T : struct
@@ -33,7 +33,7 @@ internal struct FixedArray4<T> where T : struct
 
     public FixedArray4(T first, T second, T third, T fourth) { First = first; Second = second; Third = third; Fourth = fourth; }
 
-    public uint Count => 4;
+    public readonly uint Count => 4;
 }
 
 internal struct FixedArray5<T> where T : struct
@@ -46,7 +46,7 @@ internal struct FixedArray5<T> where T : struct
 
     public FixedArray5(T first, T second, T third, T fourth, T fifth) { First = first; Second = second; Third = third; Fourth = fourth; Fifth = fifth; }
 
-    public uint Count => 5;
+    public readonly uint Count => 5;
 }
 
 internal struct FixedArray6<T> where T : struct
@@ -60,5 +60,5 @@ internal struct FixedArray6<T> where T : struct
 
     public FixedArray6(T first, T second, T third, T fourth, T fifth, T sixth) { First = first; Second = second; Third = third; Fourth = fourth; Fifth = fifth; Sixth = sixth; }
 
-    public uint Count => 6;
+    public readonly uint Count => 6;
 }

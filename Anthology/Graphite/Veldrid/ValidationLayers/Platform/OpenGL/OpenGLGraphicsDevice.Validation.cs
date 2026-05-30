@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe partial class OpenGLGraphicsDevice
+internal partial class OpenGLGraphicsDevice
 {
     [Conditional("VALIDATE_USAGE")]
     private void ExecutorActiveFrame_CheckActive()

@@ -73,7 +73,7 @@ public struct OutputDescription : IEquatable<OutputDescription>
     /// </summary>
     /// <param name="other">The instance to compare to.</param>
     /// <returns>True if all elements and all array elements are equal; false otherswise.</returns>
-    public bool Equals(OutputDescription other)
+    public readonly bool Equals(OutputDescription other)
     {
         return DepthAttachment.GetValueOrDefault().Equals(other.DepthAttachment.GetValueOrDefault())
             && Util.ArrayEqualsEquatable(ColorAttachments, other.ColorAttachments)

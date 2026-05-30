@@ -112,7 +112,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
     {
     }
 
-    public bool Equals(ResourceLayoutElementDescription other)
+    public readonly bool Equals(ResourceLayoutElementDescription other)
     {
         return Name == other.Name
             && Kind == other.Kind
@@ -123,7 +123,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
             && Util.ArrayEqualsEquatable(UniformFields, other.UniformFields);
     }
 
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(
             Name,

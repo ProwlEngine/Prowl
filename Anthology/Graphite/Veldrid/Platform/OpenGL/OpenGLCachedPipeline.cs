@@ -11,7 +11,7 @@ namespace Prowl.Veldrid.OpenGL;
 /// to bind vertex attribute locations and to build the per-set GL binding tables for a linked
 /// GL program at link time.
 /// </summary>
-internal static unsafe class OpenGLCachedPipeline
+internal static class OpenGLCachedPipeline
 {
     private const uint GL_INVALID_INDEX = 0xFFFFFFFF;
 
@@ -122,17 +122,17 @@ internal struct SetBindingsInfo
         _storageBufferBindings = storageBufferBindings;
     }
 
-    public bool GetTextureBindingInfo(uint slot, out OpenGLTextureBindingSlotInfo binding)
+    public readonly bool GetTextureBindingInfo(uint slot, out OpenGLTextureBindingSlotInfo binding)
     {
         return _textureBindings.TryGetValue(slot, out binding);
     }
 
-    public bool GetUniformBindingForSlot(uint slot, out OpenGLUniformBinding binding)
+    public readonly bool GetUniformBindingForSlot(uint slot, out OpenGLUniformBinding binding)
     {
         return _uniformBindings.TryGetValue(slot, out binding);
     }
 
-    public bool GetStorageBufferBindingForSlot(uint slot, out OpenGLShaderStorageBinding binding)
+    public readonly bool GetStorageBufferBindingForSlot(uint slot, out OpenGLShaderStorageBinding binding)
     {
         return _storageBufferBindings.TryGetValue(slot, out binding);
     }

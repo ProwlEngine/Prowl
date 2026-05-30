@@ -326,7 +326,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             slot.TransientPrimary, slot.TransientOverflow);
     }
 
-    private protected override unsafe void EndFrameCore(Frame frame)
+    private protected override void EndFrameCore(Frame frame)
     {
         uint ringSlot = frame.RingSlot;
         VkFenceHandle slotFence = _slots[ringSlot].Fence;
@@ -1202,7 +1202,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
     }
 
-    protected override unsafe void PlatformDispose()
+    protected override void PlatformDispose()
     {
         if (_slots != null)
         {
@@ -1781,7 +1781,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
 internal unsafe delegate Result vkDebugMarkerSetObjectNameEXT_t(Device device, DebugMarkerObjectNameInfoEXT* pNameInfo);
 internal unsafe delegate void vkCmdDebugMarkerBeginEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer, DebugMarkerMarkerInfoEXT* pMarkerInfo);
-internal unsafe delegate void vkCmdDebugMarkerEndEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer);
+internal delegate void vkCmdDebugMarkerEndEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer);
 internal unsafe delegate void vkCmdDebugMarkerInsertEXT_t(Silk.NET.Vulkan.CommandBuffer commandBuffer, DebugMarkerMarkerInfoEXT* pMarkerInfo);
 
 internal unsafe delegate void vkGetBufferMemoryRequirements2_t(Device device, BufferMemoryRequirementsInfo2KHR* pInfo, MemoryRequirements2KHR* pMemoryRequirements);

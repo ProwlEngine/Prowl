@@ -35,7 +35,7 @@ public struct PixelFormatProperties
     /// </summary>
     /// <param name="count">The <see cref="TextureSampleCount"/> to query.</param>
     /// <returns>True if the sample count is supported; false otherwise.</returns>
-    public bool IsSampleCountSupported(TextureSampleCount count)
+    public readonly bool IsSampleCountSupported(TextureSampleCount count)
     {
         int bit = (int)count;
         return (_sampleCounts & (1 << bit)) != 0;

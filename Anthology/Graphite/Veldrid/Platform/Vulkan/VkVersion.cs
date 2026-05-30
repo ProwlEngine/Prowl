@@ -9,11 +9,11 @@ internal struct VkVersion
         value = major << 22 | minor << 12 | patch;
     }
 
-    public uint Major => value >> 22;
+    public readonly uint Major => value >> 22;
 
-    public uint Minor => (value >> 12) & 0x3ff;
+    public readonly uint Minor => (value >> 12) & 0x3ff;
 
-    public uint Patch => (value >> 22) & 0xfff;
+    public readonly uint Patch => (value >> 22) & 0xfff;
 
     public static implicit operator uint(VkVersion version)
     {

@@ -11,7 +11,7 @@ internal class OpenGLResourceFactory : ResourceFactory
 
     public override GraphicsBackend BackendType => _gd.BackendType;
 
-    public unsafe OpenGLResourceFactory(OpenGLGraphicsDevice gd)
+    public OpenGLResourceFactory(OpenGLGraphicsDevice gd)
         : base(gd.Features)
     {
         _gd = gd;

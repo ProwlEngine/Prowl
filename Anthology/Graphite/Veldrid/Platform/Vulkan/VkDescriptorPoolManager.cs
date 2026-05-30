@@ -33,7 +33,7 @@ internal class VkDescriptorPoolManager
     /// Resets every <c>VkDescriptorPool</c> in this manager, invalidating all previously allocated sets.
     /// Used at frame-begin time to reclaim all sets from the previous frame occupying this ring slot.
     /// </summary>
-    public unsafe void ResetAll()
+    public void ResetAll()
     {
         lock (_lock)
         {

@@ -47,7 +47,7 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     /// </summary>
     /// <param name="other">The instance to compare to.</param>
     /// <returns>True if all array elements are equal; false otherswise.</returns>
-    public bool Equals(ResourceLayoutDescription other)
+    public readonly bool Equals(ResourceLayoutDescription other)
     {
         return Set == other.Set && Util.ArrayEqualsEquatable(Elements, other.Elements);
     }
@@ -56,7 +56,7 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     /// Returns the hash code for this instance.
     /// </summary>
     /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(Set, Elements.ArrayHash());
     }

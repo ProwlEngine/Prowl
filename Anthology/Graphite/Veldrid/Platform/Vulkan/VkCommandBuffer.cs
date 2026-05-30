@@ -723,7 +723,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
     private VkTexture GetMissingTexture(ResourceKind kind)
         => (VkTexture)(kind == ResourceKind.TextureReadWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D);
 
-    private unsafe void BindPropertySets(
+    private void BindPropertySets(
         object programKey,
         ResourceLayoutDescription[] resourceLayouts,
         DescriptorSetLayout[] dslLayouts,
@@ -791,7 +791,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         return false;
     }
 
-    private unsafe void AppendDynOffsets(
+    private void AppendDynOffsets(
         object programKey, uint setIdx, in ResourceLayoutDescription layout,
         bool isCompute, uint uniformVersion, uint* dynOffsets, ref int dynOffsetCount)
     {
@@ -819,7 +819,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             dynOffsets[dynOffsetCount++] = uboData[i].Item2;
     }
 
-    private unsafe void WriteDescriptorSlot(
+    private void WriteDescriptorSlot(
         object programKey, uint setIdx, in ResourceLayoutDescription layout,
         DescriptorSet dstSet, bool isCompute, uint uniformVersion)
     {
@@ -965,7 +965,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         return _gd.CurrentFrame.AllocateTransient(16);
     }
 
-    private unsafe DeviceBufferRange GetOrBuildImplicitUbo(
+    private DeviceBufferRange GetOrBuildImplicitUbo(
         object programKey, uint setIdx, int bindingIndex,
         UniformBlockField[] fields, bool isCompute, uint uniformVersion)
     {

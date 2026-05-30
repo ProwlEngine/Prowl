@@ -63,7 +63,7 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    public bool Equals(ShaderStageDescription other)
+    public readonly bool Equals(ShaderStageDescription other)
     {
         return Stage == other.Stage
             && ShaderBytes == other.ShaderBytes
@@ -74,7 +74,7 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(
             (int)Stage,

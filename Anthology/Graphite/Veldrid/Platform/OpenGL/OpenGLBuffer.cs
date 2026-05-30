@@ -14,9 +14,7 @@ internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
     private bool _disposeRequested;
 
     private string _name;
-    private bool _nameChanged;
-
-    public override string Name { get => _name; set { _name = value; _nameChanged = true; } }
+    public override string Name { get; set; }
 
     public override uint SizeInBytes { get; }
     public override BufferUsage Usage { get; }
@@ -30,24 +28,23 @@ internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
     public OpenGLBuffer(OpenGLGraphicsDevice gd, uint sizeInBytes, BufferUsage usage)
     {
         _gd = gd;
-        SizeInBytes = sizeInBytes;
         _dynamic = (usage & BufferUsage.Dynamic) == BufferUsage.Dynamic;
+
+        SizeInBytes = sizeInBytes;
         Usage = usage;
     }
 
     public void EnsureResourcesCreated()
     {
         if (!Created)
-        {
             CreateGLResources();
-        }
-        if (_nameChanged)
+
+        if (_name != Name)
         {
-            _nameChanged = false;
+            _name = Name;
+
             if (_gd.Extensions.KHR_Debug)
-            {
                 SetObjectLabel(ObjectIdentifier.Buffer, _buffer, _name);
-            }
         }
     }
 

@@ -82,7 +82,7 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     /// </summary>
     /// <param name="other">The instance to compare to.</param>
     /// <returns>True if all elements are equal; false otherswise.</returns>
-    public bool Equals(RasterizerStateDescription other)
+    public readonly bool Equals(RasterizerStateDescription other)
     {
         return CullMode == other.CullMode
             && FrontFace == other.FrontFace
@@ -94,7 +94,7 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     /// Returns the hash code for this instance.
     /// </summary>
     /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
-    public override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         return HashCode.Combine(
             (int)CullMode,

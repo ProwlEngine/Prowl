@@ -95,7 +95,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
     {
     }
 
-    private unsafe D3D11GraphicsDevice(D3D11DeviceOptions options, SwapchainDescription? swapchainDesc, GraphicsDeviceOptions graphicsOptions)
+    private D3D11GraphicsDevice(D3D11DeviceOptions options, SwapchainDescription? swapchainDesc, GraphicsDeviceOptions graphicsOptions)
     {
 #pragma warning disable CS0618
         _d3d11Api = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -282,7 +282,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         return d3D11DeviceOptions;
     }
 
-    private unsafe void InitializeSlots()
+    private void InitializeSlots()
     {
         _slots = new SlotState[_maxFramesInFlight];
         ID3D11Device* pDevice = (ID3D11Device*)_device;
@@ -305,7 +305,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         }
     }
 
-    private protected override unsafe Frame BeginFrameCore(ulong frameId, uint ringSlot)
+    private protected override Frame BeginFrameCore(ulong frameId, uint ringSlot)
     {
         ref SlotState slot = ref _slots[ringSlot];
 
@@ -334,7 +334,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             slot.TransientPrimary, slot.TransientOverflow);
     }
 
-    private protected override unsafe void EndFrameCore(Frame frame)
+    private protected override void EndFrameCore(Frame frame)
     {
         D3D11Frame d3d11Frame = Util.AssertSubtype<Frame, D3D11Frame>(frame);
         d3d11Frame.UnmapActiveBuffer();
@@ -347,7 +347,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         }
     }
 
-    private protected override unsafe bool IsFrameCompleteCore(ulong frameId)
+    private protected override bool IsFrameCompleteCore(ulong frameId)
     {
         uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
         ref SlotState slot = ref _slots[ringSlot];
@@ -370,7 +370,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         return true;
     }
 
-    private protected override unsafe bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout)
+    private protected override bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout)
     {
         uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
         ref SlotState slot = ref _slots[ringSlot];
@@ -405,7 +405,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         return true;
     }
 
-    private unsafe void PollUntilComplete(ID3D11Query* query)
+    private void PollUntilComplete(ID3D11Query* query)
     {
         lock (_immediateContextLock)
         {
@@ -872,7 +872,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
     internal override uint GetStructuredBufferMinOffsetAlignmentCore() => 16;
 
-    protected override unsafe void PlatformDispose()
+    protected override void PlatformDispose()
     {
         if (_slots != null)
         {
@@ -954,7 +954,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         _d3d11Api.Dispose();
     }
 
-    private protected override unsafe void WaitForIdleCore()
+    private protected override void WaitForIdleCore()
     {
         if (_slots == null) return;
 
