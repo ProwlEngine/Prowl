@@ -23,7 +23,7 @@ public abstract class VertexLayoutTests<T> : GraphicsDeviceTestBase<T> where T :
             TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, outTex));
 
-        VertexLayoutDescription vertexLayoutDesc = new VertexLayoutDescription(
+        VertexLayoutDescription vertexLayoutDesc = new(
             0u,
             new VertexElementDescription("A_V3", VertexElementFormat.Float3, firstOffset),
             new VertexElementDescription("B_V4", VertexElementFormat.Float4, secondOffset),

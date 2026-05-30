@@ -35,7 +35,7 @@ public class FormatSizeHelpersTests : IDisposable
         }
     }
 
-    private static HashSet<PixelFormat> CompressedPixelFormats = new HashSet<PixelFormat>() {
+    private static HashSet<PixelFormat> CompressedPixelFormats = [
         PixelFormat.BC1_Rgba_UNorm,
         PixelFormat.BC1_Rgba_UNorm_SRgb,
         PixelFormat.BC1_Rgb_UNorm,
@@ -59,7 +59,7 @@ public class FormatSizeHelpersTests : IDisposable
         PixelFormat.ETC2_R8_G8_B8_A1_UNorm,
         PixelFormat.ETC2_R8_G8_B8_A8_UNorm,
         PixelFormat.ETC2_R8_G8_B8_UNorm,
-    };
+    ];
     private static IEnumerable<PixelFormat> UncompressedPixelFormats
         = System.Enum.GetValues(typeof(PixelFormat)).Cast<PixelFormat>()
             .Where(format => !CompressedPixelFormats.Contains(format));

@@ -61,7 +61,7 @@ public abstract class DisposalTestBase<T> : GraphicsDeviceTestBase<T> where T : 
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     new VertexElementDescription("Position", VertexElementFormat.Float2),
                     new VertexElementDescription("Color_UInt", VertexElementFormat.UInt4))

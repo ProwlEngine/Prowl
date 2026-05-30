@@ -18,7 +18,7 @@ public abstract class PipelineTests<T> : GraphicsDeviceTestBase<T> where T : Gra
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     24,
                     0,

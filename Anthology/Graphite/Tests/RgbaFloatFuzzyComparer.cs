@@ -7,7 +7,7 @@ namespace Prowl.Veldrid.Tests;
 
 internal class ColorFuzzyComparer : IEqualityComparer<Color>
 {
-    public static ColorFuzzyComparer Instance = new ColorFuzzyComparer();
+    public static ColorFuzzyComparer Instance = new();
 
     public bool Equals(Color x, Color y)
     {

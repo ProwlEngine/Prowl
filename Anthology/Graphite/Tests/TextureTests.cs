@@ -160,7 +160,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        var textureView = RF.CreateTextureView(tex);
+        TextureView textureView = RF.CreateTextureView(tex);
         Assert.NotNull(textureView);
     }
 
@@ -193,7 +193,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var subresource = readback.CalculateSubresource((uint)mip, (uint)face);
                 var mipSize = TexSize >> mip;
                 byte expectedColor = (byte)((face + 1) * 42);
-                var map = GD.Map<byte>(readback, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
                 foreach (var x in Enumerable.Range(0, (int)mipSize))
                 {
@@ -228,7 +228,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             }
         }
 
-        var view = RF.CreateTextureView(new TextureViewDescription(tex, 0, 1, 0, 1));
+        TextureView view = RF.CreateTextureView(new TextureViewDescription(tex, 0, 1, 0, 1));
         Assert.NotNull(view);
     }
 
@@ -265,7 +265,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var subresource = dst.CalculateSubresource((uint)mip, (uint)face);
                 var mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
-                var map = GD.Map<byte>(dst, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
 
                 foreach (var x in Enumerable.Range(0, (int)mipSize))
                 {
@@ -307,7 +307,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
-        var readback = GetReadback(dst);
+        Texture readback = GetReadback(dst);
 
         foreach (var mip in Enumerable.Range(0, (int)MipLevels))
         {
@@ -316,7 +316,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var subresource = readback.CalculateSubresource((uint)mip, (uint)face);
                 var mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
-                var map = GD.Map<byte>(readback, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
                 foreach (var x in Enumerable.Range(0, (int)mipSize))
                 {
@@ -370,7 +370,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var subresource = dst.CalculateSubresource(mip, face);
                 var mipSize = (uint)(TexSize / (1 << (int)mip));
                 byte expectedColor = mip == CopiedMip ? (byte)((face + 1) * 42) : (byte)0;
-                var map = GD.Map<byte>(dst, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
                 for (int y = 0; y < mipSize; y++)
                     for (int x = 0; x < mipSize; x++)
                     {
@@ -418,7 +418,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var subresource = dst.CalculateSubresource((uint)mip, (uint)face);
                 var mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
-                var map = GD.Map<byte>(dst, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
 
                 foreach (var x in Enumerable.Range(0, (int)mipSize))
                 {
@@ -472,7 +472,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var subresource = dst.CalculateSubresource(mip, face);
                 var mipSize = (uint)(TexSize / (1 << (int)mip));
                 byte expectedColor = face == CopiedArrayLayer ? (byte)((face + 1) * 42) : (byte)0;
-                var map = GD.Map<byte>(dst, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
                 for (int y = 0; y < mipSize; y++)
                     for (int x = 0; x < mipSize; x++)
                     {
@@ -511,7 +511,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             var subresource = readback.CalculateSubresource(0, (uint)face);
             var mipSize = TexSize;
             byte expectedColor = (byte)((face + 1) * 42);
-            var map = GD.Map<byte>(readback, MapMode.Read, subresource);
+            MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
             foreach (var x in Enumerable.Range(0, (int)mipSize))
             {
@@ -539,7 +539,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var subresource = readback.CalculateSubresource((uint)mip, (uint)face);
                 var mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
-                var map = GD.Map<byte>(readback, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
                 foreach (var x in Enumerable.Range(0, (int)mipSize))
                 {
@@ -579,7 +579,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             var subresource = tex.CalculateSubresource(0, layer);
             byte expectedColor = (byte)(layer * ArrayColorDelta);
-            var map = GD.Map<byte>(tex, MapMode.Read, subresource);
+            MappedResourceView<byte> map = GD.Map<byte>(tex, MapMode.Read, subresource);
             for (int y = 0; y < TexSize; y++)
                 for (int x = 0; x < TexSize; x++)
                 {
@@ -610,7 +610,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             var subresource = tex.CalculateSubresource(0, layer);
             byte expectedColor = (byte)(layer * ArrayColorDelta);
-            var map = GD.Map<byte>(tex, MapMode.Read, subresource);
+            MappedResourceView<byte> map = GD.Map<byte>(tex, MapMode.Read, subresource);
             for (int y = 0; y < TexSize; y++)
                 for (int x = 0; x < TexSize; x++)
                 {
@@ -658,7 +658,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
                 var mipSize = MipLevels >> (int)mip;
                 var subresource = readback.CalculateSubresource(0, layer);
                 byte expectedColor = (byte)(layer * ArrayColorDelta);
-                var map = GD.Map<byte>(readback, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
                 for (int y = 0; y < mipSize; y++)
                     for (int x = 0; x < mipSize; x++)
                     {
@@ -1308,7 +1308,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
             srcWidth, srcHeight, srcDepth, srcMipLevels, srcArrayLayers,
             format, TextureUsage.Staging, srcType));
 
-        TextureDataReaderWriter tdrw = new TextureDataReaderWriter(rBits, gBits, bBits, aBits);
+        TextureDataReaderWriter tdrw = new(rBits, gBits, bBits, aBits);
         byte[] dataArray = tdrw.GetDataArray(srcWidth, srcHeight, srcDepth);
         long rowPitch = srcWidth * tdrw.PixelBytes;
         long depthPitch = rowPitch * srcHeight;
@@ -1468,7 +1468,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
     }
 
     private static readonly FormatProps[] s_allFormatProps =
-    {
+    [
         new FormatProps(PixelFormat.R8_UNorm, 8, 0, 0, 0),
         new FormatProps(PixelFormat.R8_SNorm, 8, 0, 0, 0),
         new FormatProps(PixelFormat.R8_UInt, 8, 0, 0, 0),
@@ -1518,7 +1518,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         new FormatProps(PixelFormat.R10_G10_B10_A2_UInt, 10, 10, 10, 2),
         new FormatProps(PixelFormat.R10_G10_B10_A2_UNorm, 10, 10, 10, 2),
         new FormatProps(PixelFormat.R11_G11_B10_Float, 11, 11, 10, 0)
-    };
+    ];
 
     struct FormatProps
     {

@@ -106,7 +106,7 @@ void main()
         for (uint depth = 0; depth < computeTargetTexture.Depth; depth++)
         {
             float v = FillValue * (depth + 1);
-            Color expectedFillValue = new Color(v, v, v, v);
+            Color expectedFillValue = new(v, v, v, v);
             int notFilledCount = CountTexelsNotFilledAtDepth(GD, computeTargetTexture, expectedFillValue, depth);
 
             Assert.Equal(0, notFilledCount);
@@ -123,7 +123,7 @@ void main()
         ResourceFactory factory = device.ResourceFactory;
 
         // We need to create a staging texture and copy into it.
-        TextureDescription description = new TextureDescription(texture.Width, texture.Height, depth: 1,
+        TextureDescription description = new(texture.Width, texture.Height, depth: 1,
             texture.MipLevels, texture.ArrayLayers,
             texture.Format, TextureUsage.Staging,
             texture.Type, texture.SampleCount);
@@ -258,14 +258,14 @@ void main()
             TextureUsage.Sampled | TextureUsage.Storage | TextureUsage.Cubemap);
         Texture computeOutput = RF.CreateTexture(texDesc);
 
-        Float4[] faceColors = new Float4[] {
+        Float4[] faceColors = [
             new Float4(0 * 42),
             new Float4(1 * 42),
             new Float4(2 * 42),
             new Float4(3 * 42),
             new Float4(4 * 42),
             new Float4(5 * 42)
-        };
+        ];
 
         ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
             new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
@@ -285,7 +285,7 @@ void main()
         { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
-        using (var readback = GetReadback(computeOutput))
+        using (Texture readback = GetReadback(computeOutput))
         {
             for (uint mip = 0; mip < MipLevels; mip++)
             {
@@ -327,14 +327,14 @@ void main()
 
         TextureView computeOutputMipLevel = RF.CreateTextureView(new TextureViewDescription(computeOutput, BoundMipLevel, 1, 0, 1));
 
-        Float4[] faceColors = new Float4[] {
+        Float4[] faceColors = [
             new Float4(0 * 42),
             new Float4(1 * 42),
             new Float4(2 * 42),
             new Float4(3 * 42),
             new Float4(4 * 42),
             new Float4(5 * 42)
-        };
+        ];
 
         ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
             new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
@@ -345,7 +345,7 @@ void main()
             computeLayout,
             32, 32, 1));
 
-        using (var readback = GetReadback(computeOutput))
+        using (Texture readback = GetReadback(computeOutput))
         {
             for (uint mip = 0; mip < MipLevels; mip++)
             {
@@ -374,7 +374,7 @@ void main()
         { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
-        using (var readback = GetReadback(computeOutput))
+        using (Texture readback = GetReadback(computeOutput))
         {
             for (uint mip = 0; mip < MipLevels; mip++)
             {
@@ -382,7 +382,7 @@ void main()
                 {
                     var subresource = readback.CalculateSubresource(mip, face);
                     var mipSize = (uint)(TexSize / (1 << (int)mip));
-                    var expectedColor = mip == BoundMipLevel ? new Color32((byte)faceColors[face].X, (byte)faceColors[face].Y, (byte)faceColors[face].Z, (byte)faceColors[face].Z) : default(Color32);
+                    Color32 expectedColor = mip == BoundMipLevel ? new Color32((byte)faceColors[face].X, (byte)faceColors[face].Y, (byte)faceColors[face].Z, (byte)faceColors[face].Z) : default(Color32);
                     MappedResourceView<Color32> readView = GD.Map<Color32>(readback, MapMode.Read, subresource);
                     for (int y = 0; y < mipSize; y++)
                         for (int x = 0; x < mipSize; x++)

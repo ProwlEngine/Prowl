@@ -386,9 +386,9 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     public void UpdateUniform_Offset_GraphicsDevice(BufferUsage usage)
     {
         DeviceBuffer buffer = CreateBuffer(128, usage);
-        Float4x4 mat1 = new Float4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+        Float4x4 mat1 = new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
         GD.UpdateBuffer(buffer, 0, ref mat1);
-        Float4x4 mat2 = new Float4x4(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
+        Float4x4 mat2 = new(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
         GD.UpdateBuffer(buffer, 64, ref mat2);
 
         DeviceBuffer readback = GetReadback(buffer);
@@ -407,9 +407,9 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         DeviceBuffer buffer = CreateBuffer(128, usage);
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
-        Float4x4 mat1 = new Float4x4(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+        Float4x4 mat1 = new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
         cl.UpdateBuffer(buffer, 0, ref mat1);
-        Float4x4 mat2 = new Float4x4(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
+        Float4x4 mat2 = new(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
         cl.UpdateBuffer(buffer, 64, ref mat2);
         cl.End();
         { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
@@ -446,7 +446,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
             return;
         }
 
-        BufferDescription description = new BufferDescription(64, usage);
+        BufferDescription description = new(64, usage);
         if ((usage & BufferUsage.StructuredBufferReadOnly) != 0 || (usage & BufferUsage.StructuredBufferReadWrite) != 0)
         {
             description.StructureByteStride = 16;

@@ -15,7 +15,7 @@ public abstract class SwapchainTests<T> : GraphicsDeviceTestBase<T> where T : Gr
     [InlineData(null, true)]
     public void Ctor_SetsProperties(PixelFormat? depthFormat, bool syncToVerticalBlank)
     {
-        WindowCreateInfo wci = new WindowCreateInfo
+        WindowCreateInfo wci = new()
         {
             WindowWidth = 100,
             WindowHeight = 100,
@@ -25,7 +25,7 @@ public abstract class SwapchainTests<T> : GraphicsDeviceTestBase<T> where T : Gr
         WindowFlags extra = GD.BackendType == GraphicsBackend.Vulkan ? WindowFlags.Vulkan : WindowFlags.None;
         Sdl2Window window = Startup.CreateWindow(ref wci, extra);
         SwapchainSource source = Startup.GetSwapchainSource(window);
-        SwapchainDescription swapchainDesc = new SwapchainDescription(source, 100, 100, depthFormat, syncToVerticalBlank);
+        SwapchainDescription swapchainDesc = new(source, 100, 100, depthFormat, syncToVerticalBlank);
         Swapchain swapchain = RF.CreateSwapchain(ref swapchainDesc);
 
         if (depthFormat == null)

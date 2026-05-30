@@ -9,7 +9,7 @@ namespace Prowl.Veldrid.Tests;
 
 public static unsafe class TestUtils
 {
-    private static readonly WindowCreateInfo s_defaultWci = new WindowCreateInfo
+    private static readonly WindowCreateInfo s_defaultWci = new()
     {
         WindowWidth = 200,
         WindowHeight = 200,
@@ -59,8 +59,8 @@ public static unsafe class TestUtils
     {
         WindowCreateInfo wci = s_defaultWci;
         window = Startup.CreateWindow(ref wci, WindowFlags.Vulkan);
-        GraphicsDeviceOptions options = new GraphicsDeviceOptions(true, PixelFormat.R16_UNorm, false);
-        SwapchainDescription scDesc = new SwapchainDescription(
+        GraphicsDeviceOptions options = new(true, PixelFormat.R16_UNorm, false);
+        SwapchainDescription scDesc = new(
             Startup.GetSwapchainSource(window),
             (uint)window.Width, (uint)window.Height,
             options.SwapchainDepthFormat,
@@ -122,10 +122,10 @@ public static unsafe class TestUtils
 
         window = Startup.CreateWindow(ref wci, WindowFlags.Opengl);
 
-        SdlContext context = new SdlContext(sdl, window.Handle);
+        SdlContext context = new(sdl, window.Handle);
         context.Create((GLattr.Doublebuffer, 1));
 
-        OpenGLPlatformInfo platformInfo = new OpenGLPlatformInfo(
+        OpenGLPlatformInfo platformInfo = new(
             glContext: context,
             setSyncToVerticalBlank: sync => sdl.GLSetSwapInterval(sync ? 1 : 0));
 
@@ -136,7 +136,7 @@ public static unsafe class TestUtils
 internal sealed class TrackingResourceFactory : ResourceFactory
 {
     private readonly ResourceFactory _inner;
-    private readonly List<IDisposable> _created = new List<IDisposable>();
+    private readonly List<IDisposable> _created = [];
 
     public TrackingResourceFactory(ResourceFactory inner) : base(inner.Features)
     {
@@ -244,7 +244,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
             {
                 layers *= 6;
             }
-            TextureDescription desc = new TextureDescription(
+            TextureDescription desc = new(
                 texture.Width, texture.Height, texture.Depth,
                 texture.MipLevels, layers,
                 texture.Format,

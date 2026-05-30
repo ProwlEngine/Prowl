@@ -67,7 +67,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     new VertexElementDescription("Position", VertexElementFormat.Float2),
                     new VertexElementDescription("Color_UInt", VertexElementFormat.UInt4))
@@ -93,8 +93,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         uint colorNormalizationFactor = 2500;
 
-        UIntVertexAttribsVertex[] vertices = new UIntVertexAttribsVertex[]
-        {
+        UIntVertexAttribsVertex[] vertices =
+        [
             new UIntVertexAttribsVertex
             {
                 Position = new Float2(0.5f, 0.5f),
@@ -135,7 +135,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                     Z = (uint)(0.35f * colorNormalizationFactor),
                 }
             },
-        };
+        ];
 
         DeviceBuffer vb = RF.CreateBuffer(
             new BufferDescription((uint)(Unsafe.SizeOf<UIntVertexAttribsVertex>() * vertices.Length), BufferUsage.VertexBuffer));
@@ -169,7 +169,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 y = framebuffer.Height - y - 1;
             }
 
-            Color expectedColor = new Color(
+            Color expectedColor = new(
                 vertex.Color_Int.X / (float)colorNormalizationFactor,
                 vertex.Color_Int.Y / (float)colorNormalizationFactor,
                 vertex.Color_Int.Z / (float)colorNormalizationFactor,
@@ -202,7 +202,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     new VertexElementDescription("Position", VertexElementFormat.Float2),
                     new VertexElementDescription("Color", VertexElementFormat.UShort4_Norm))
@@ -225,8 +225,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        VertexCPU_UShortNorm[] vertices = new VertexCPU_UShortNorm[]
-        {
+        VertexCPU_UShortNorm[] vertices =
+        [
             new VertexCPU_UShortNorm
             {
                 Position = new Float2(0.5f, 0.5f),
@@ -255,7 +255,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 G = UShortNorm(0.25f),
                 B = UShortNorm(0.35f),
             },
-        };
+        ];
 
         DeviceBuffer vb = RF.CreateBuffer(
             new BufferDescription((uint)(Unsafe.SizeOf<VertexCPU_UShortNorm>() * vertices.Length), BufferUsage.VertexBuffer));
@@ -288,7 +288,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 y = framebuffer.Height - y - 1;
             }
 
-            Color expectedColor = new Color(
+            Color expectedColor = new(
                 vertex.R / (float)ushort.MaxValue,
                 vertex.G / (float)ushort.MaxValue,
                 vertex.B / (float)ushort.MaxValue,
@@ -346,7 +346,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     new VertexElementDescription("Position", VertexElementFormat.Float2),
                     new VertexElementDescription("Color_UInt", VertexElementFormat.UShort4))
@@ -372,8 +372,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         uint colorNormalizationFactor = 2500;
 
-        VertexCPU_UShort[] vertices = new VertexCPU_UShort[]
-        {
+        VertexCPU_UShort[] vertices =
+        [
             new VertexCPU_UShort
             {
                 Position = new Float2(0.5f, 0.5f),
@@ -402,7 +402,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 G = (ushort)(0.2f * colorNormalizationFactor),
                 B = (ushort)(0.35f * colorNormalizationFactor),
             },
-        };
+        ];
 
         DeviceBuffer vb = RF.CreateBuffer(
             new BufferDescription((uint)(Unsafe.SizeOf<UIntVertexAttribsVertex>() * vertices.Length), BufferUsage.VertexBuffer));
@@ -436,7 +436,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 y = framebuffer.Height - y - 1;
             }
 
-            Color expectedColor = new Color(
+            Color expectedColor = new(
                 vertex.R / (float)colorNormalizationFactor,
                 vertex.G / (float)colorNormalizationFactor,
                 vertex.B / (float)colorNormalizationFactor,
@@ -470,7 +470,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     new VertexElementDescription("Position", VertexElementFormat.Float2),
                     new VertexElementDescription("Color_Half", VertexElementFormat.Half4))
@@ -503,8 +503,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         const ushort f16_1250 = 0x64E2; // 1250.0
         const ushort f16_1875 = 0x6753; // 1875.0
 
-        VertexCPU_UShort[] vertices = new VertexCPU_UShort[]
-        {
+        VertexCPU_UShort[] vertices =
+        [
             new VertexCPU_UShort
             {
                 Position = new Float2(0.5f, 0.5f),
@@ -533,10 +533,10 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 G = f16_500,
                 B = f16_875,
             },
-        };
+        ];
 
-        Color[] expectedColors = new[]
-        {
+        Color[] expectedColors =
+        [
             new Color(
                 625.0f / colorNormalizationFactor,
                 1250.0f / colorNormalizationFactor,
@@ -557,7 +557,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 500.0f / colorNormalizationFactor,
                 875.0f / colorNormalizationFactor,
                 1),
-        };
+        ];
 
         DeviceBuffer vb = RF.CreateBuffer(
             new BufferDescription((uint)(Unsafe.SizeOf<UIntVertexAttribsVertex>() * vertices.Length), BufferUsage.VertexBuffer));
@@ -636,7 +636,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ShaderSetDescription shaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     new VertexElementDescription("Position", VertexElementFormat.Float2))
             },
@@ -669,13 +669,13 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
 
-        Float2[] vertices = new Float2[]
-        {
+        Float2[] vertices =
+        [
             new Float2(0.5f, 0.5f),
             new Float2(15.5f, 15.5f),
             new Float2(25.5f, 26.5f),
             new Float2(3.5f, 25.5f),
-        };
+        ];
 
         DeviceBuffer vb = RF.CreateBuffer(
             new BufferDescription((uint)(Unsafe.SizeOf<Float2>() * vertices.Length), BufferUsage.VertexBuffer));
@@ -908,7 +908,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 var subresource = readback.CalculateSubresource((uint)mip, (uint)layer);
                 var mipSize = TexSize >> mip;
                 var expectedColor = (byte)255.0f * ((layer + 1) * sideColorStep);
-                var map = GD.Map<byte>(readback, MapMode.Read, subresource);
+                MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
                 Assert.All(
                     from x in Enumerable.Range(0, (int)mipSize)
@@ -1018,7 +1018,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         ShaderSetDescription quadShaderSet = new ShaderSetDescription(
             new VertexLayoutDescription[]
             {
-                new VertexLayoutDescription(
+                new(
                     0u,
                     new VertexElementDescription("A_V3", VertexElementFormat.Float3),
                     new VertexElementDescription("B_V4", VertexElementFormat.Float4),
@@ -1031,11 +1031,11 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         DeviceBuffer vertexBuffer = RF.CreateBuffer(new BufferDescription(
             (uint)Unsafe.SizeOf<TestVertex>() * 3,
             BufferUsage.VertexBuffer));
-        GD.UpdateBuffer(vertexBuffer, 0, new[] {
+        GD.UpdateBuffer(vertexBuffer, 0, [
             new TestVertex(),
             new TestVertex(),
             new TestVertex()
-        });
+        ]);
 
         // Fill the second target with a known color
         Color[] colors = new Color[target2.Width * target2.Height];
@@ -1124,7 +1124,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Framebuffer framebuffer = RF.CreateFramebuffer(
             new FramebufferDescription(
                 null,
-                new[] { new FramebufferAttachmentDescription(target, targetLayer) }));
+                [new FramebufferAttachmentDescription(target, targetLayer)]));
 
         string setName = "FullScreenTriSampleTexture2D";
         ShaderSetDescription shaderSet = new ShaderSetDescription(
@@ -1194,7 +1194,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Framebuffer framebuffer = RF.CreateFramebuffer(
             new FramebufferDescription(
                 null,
-                new[] { new FramebufferAttachmentDescription(target, (targetLayer * 6) + targetFace) }));
+                [new FramebufferAttachmentDescription(target, (targetLayer * 6) + targetFace)]));
 
         string setName = "FullScreenTriSampleTexture2D";
         ShaderSetDescription shaderSet = new ShaderSetDescription(
@@ -1314,20 +1314,20 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Skip.If(GD.BackendType == GraphicsBackend.Vulkan, "Upstream: Vulkan image layout validation error");
         const uint width = 512;
         const uint height = 512;
-        using var output = RF.CreateTexture(
+        using Texture output = RF.CreateTexture(
             TextureDescription.Texture2D(width, height, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        using var framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, output));
+        using Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, output));
 
         var yMod = GD.IsClipSpaceYInverted ? -1.0f : 1.0f;
-        var vertices = new[]
-        {
+        ColoredVertex[] vertices =
+        [
             new ColoredVertex { Position = new Float2(-1, 1 * yMod), Color = Float4.One },
             new ColoredVertex { Position = new Float2(1, 1 * yMod), Color = Float4.One },
             new ColoredVertex { Position = new Float2(-1, -1 * yMod), Color = Float4.One },
             new ColoredVertex { Position = new Float2(1, -1 * yMod), Color = Float4.One }
-        };
+        ];
         uint vertexSize = (uint)Unsafe.SizeOf<ColoredVertex>();
-        using var buffer = RF.CreateBuffer(new BufferDescription(
+        using DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
             vertexSize * (uint)vertices.Length,
             BufferUsage.StructuredBufferReadOnly,
             vertexSize));
@@ -1340,8 +1340,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         var blendDesc = new BlendStateDescription
         {
             BlendFactor = new Color(0.25f, 0.5f, 0.75f, 1),
-            AttachmentStates = new[]
-            {
+            AttachmentStates =
+            [
                 new BlendAttachmentDescription
                 {
                     BlendEnabled = true,
@@ -1352,7 +1352,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                     DestinationAlphaFactor = BlendFactor.Zero,
                     AlphaFunction = BlendFunction.Add
                 }
-            }
+            ]
         };
         var pipelineDesc = new GraphicsPipelineDescription(
             blendDesc,
@@ -1366,7 +1366,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             framebuffer.OutputDescription);
 
         using (var pipeline1 = RF.CreateGraphicsPipeline(pipelineDesc))
-        using (var cl = RF.CreateCommandBuffer())
+        using (CommandBuffer cl = RF.CreateCommandBuffer())
         {
             cl.Begin();
             cl.SetFramebuffer(framebuffer);
@@ -1379,9 +1379,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             GD.WaitForIdle();
         }
 
-        using (var readback = GetReadback(output))
+        using (Texture readback = GetReadback(output))
         {
-            var readView = GD.Map<Color>(readback, MapMode.Read);
+            MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
             for (uint y = 0; y < height; y++)
                 for (uint x = 0; x < width; x++)
                 {
@@ -1396,7 +1396,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         pipelineDesc.BlendState = blendDesc;
 
         using (var pipeline2 = RF.CreateGraphicsPipeline(pipelineDesc))
-        using (var cl = RF.CreateCommandBuffer())
+        using (CommandBuffer cl = RF.CreateCommandBuffer())
         {
             cl.Begin();
             cl.SetFramebuffer(framebuffer);
@@ -1408,9 +1408,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             GD.WaitForIdle();
         }
 
-        using (var readback = GetReadback(output))
+        using (Texture readback = GetReadback(output))
         {
-            var readView = GD.Map<Color>(readback, MapMode.Read);
+            MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
             for (uint y = 0; y < height; y++)
                 for (uint x = 0; x < width; x++)
                 {
@@ -1425,18 +1425,18 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     {
         Texture output = RF.CreateTexture(
             TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        using var framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, output));
+        using Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, output));
 
         var yMod = GD.IsClipSpaceYInverted ? -1.0f : 1.0f;
-        var vertices = new[]
-        {
+        ColoredVertex[] vertices =
+        [
             new ColoredVertex { Position = new Float2(-1, 1 * yMod), Color = Float4.One },
             new ColoredVertex { Position = new Float2(1, 1 * yMod), Color = Float4.One },
             new ColoredVertex { Position = new Float2(-1, -1 * yMod), Color = Float4.One },
             new ColoredVertex { Position = new Float2(1, -1 * yMod), Color = Float4.One }
-        };
+        ];
         uint vertexSize = (uint)Unsafe.SizeOf<ColoredVertex>();
-        using var buffer = RF.CreateBuffer(new BufferDescription(
+        using DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
             vertexSize * (uint)vertices.Length,
             BufferUsage.StructuredBufferReadOnly,
             vertexSize));
@@ -1448,8 +1448,8 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         var blendDesc = new BlendStateDescription
         {
-            AttachmentStates = new[]
-            {
+            AttachmentStates =
+            [
                 new BlendAttachmentDescription
                 {
                     BlendEnabled = true,
@@ -1460,7 +1460,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                     DestinationAlphaFactor = BlendFactor.Zero,
                     AlphaFunction = BlendFunction.Add,
                 }
-            },
+            ],
         };
 
         var pipelineDesc = new GraphicsPipelineDescription(
@@ -1475,7 +1475,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             framebuffer.OutputDescription);
 
         using (var pipeline1 = RF.CreateGraphicsPipeline(pipelineDesc))
-        using (var cl = RF.CreateCommandBuffer())
+        using (CommandBuffer cl = RF.CreateCommandBuffer())
         {
             cl.Begin();
             cl.SetFramebuffer(framebuffer);
@@ -1488,9 +1488,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             GD.WaitForIdle();
         }
 
-        using (var readback = GetReadback(output))
+        using (Texture readback = GetReadback(output))
         {
-            var readView = GD.Map<Color>(readback, MapMode.Read);
+            MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
             for (uint y = 0; y < output.Height; y++)
                 for (uint x = 0; x < output.Width; x++)
                 {
@@ -1500,13 +1500,13 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
             GD.Unmap(readback);
         }
 
-        foreach (var mask in Enum.GetValues<ColorWriteMask>())
+        foreach (ColorWriteMask mask in Enum.GetValues<ColorWriteMask>())
         {
             blendDesc.AttachmentStates[0].ColorWriteMask = mask;
             pipelineDesc.BlendState = blendDesc;
 
             using (var maskedPipeline = RF.CreateGraphicsPipeline(pipelineDesc))
-            using (var cl = RF.CreateCommandBuffer())
+            using (CommandBuffer cl = RF.CreateCommandBuffer())
             {
                 cl.Begin();
                 cl.SetFramebuffer(framebuffer);
@@ -1519,9 +1519,9 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                 GD.WaitForIdle();
             }
 
-            using (var readback = GetReadback(output))
+            using (Texture readback = GetReadback(output))
             {
-                var readView = GD.Map<Color>(readback, MapMode.Read);
+                MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
                 for (uint y = 0; y < output.Height; y++)
                     for (uint x = 0; x < output.Width; x++)
                     {

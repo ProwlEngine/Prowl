@@ -48,14 +48,14 @@ public class SwapchainRegressionTests
 
     private static void AssertMainSwapchainIsSrgb(GraphicsBackend backend)
     {
-        WindowCreateInfo wci = new WindowCreateInfo
+        WindowCreateInfo wci = new()
         {
             WindowWidth = 200,
             WindowHeight = 200,
             WindowInitialState = WindowState.Hidden,
         };
 
-        GraphicsDeviceOptions options = new GraphicsDeviceOptions(
+        GraphicsDeviceOptions options = new(
             debug: true,
             swapchainDepthFormat: PixelFormat.R16_UNorm,
             syncToVerticalBlank: false,
