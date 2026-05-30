@@ -80,7 +80,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         };
 
         IDXGIFactory* pFactory;
-        var factoryGuid = IDXGIFactory.Guid;
+        Guid factoryGuid = IDXGIFactory.Guid;
         SilkMarshal.ThrowHResult(
             _gd.Adapter->GetParent(&factoryGuid, (void**)&pFactory));
 
@@ -134,7 +134,7 @@ internal unsafe class D3D11Swapchain : Swapchain
 
         // Get the backbuffer from the swapchain
         ID3D11Texture2D* pBackBuffer;
-        var tex2dGuid = ID3D11Texture2D.Guid;
+        Guid tex2dGuid = ID3D11Texture2D.Guid;
         SilkMarshal.ThrowHResult(
             ((IDXGISwapChain*)_dxgiSwapChain)->GetBuffer(0, &tex2dGuid, (void**)&pBackBuffer));
 

@@ -163,7 +163,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
         {
             IDXGIDevice* pDxgiDevice;
-            var dxgiDeviceGuid = IDXGIDevice.Guid;
+            Guid dxgiDeviceGuid = IDXGIDevice.Guid;
             SilkMarshal.ThrowHResult(((IUnknown*)pDevice)->QueryInterface(&dxgiDeviceGuid, (void**)&pDxgiDevice));
 
             IDXGIAdapter* pAdapterOut;
@@ -914,7 +914,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             if (refCount > 0)
             {
                 ID3D11Debug* pDebug;
-                var debugGuid = ID3D11Debug.Guid;
+                Guid debugGuid = ID3D11Debug.Guid;
                 if (((IUnknown*)pRawDevice)->QueryInterface(&debugGuid, (void**)&pDebug) >= 0 && pDebug != null)
                 {
                     pDebug->ReportLiveDeviceObjects(RldoFlags.Summary | RldoFlags.Detail | RldoFlags.IgnoreInternal);
@@ -932,10 +932,10 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
                 using var dxgi = DXGI.GetApi();
 #pragma warning restore CS0618
                 IDXGIDebug1* pDxgiDebug;
-                var dxgiDebugGuid = IDXGIDebug1.Guid;
+                Guid dxgiDebugGuid = IDXGIDebug1.Guid;
                 if (dxgi.GetDebugInterface1(0, &dxgiDebugGuid, (void**)&pDxgiDebug) >= 0 && pDxgiDebug != null)
                 {
-                    var debugAll = DxgiDebugAll;
+                    Guid debugAll = DxgiDebugAll;
                     pDxgiDebug->ReportLiveObjects(debugAll, DebugRloFlags.Summary | DebugRloFlags.IgnoreInternal);
                     pDxgiDebug->Release();
                 }

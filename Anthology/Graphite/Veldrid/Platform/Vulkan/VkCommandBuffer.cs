@@ -747,7 +747,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
         {
             ResourceLayoutDescription layout = resourceLayouts[setIdx];
-            var cacheKey = (programKey, setIdx, resourceVersion);
+            (object programKey, int setIdx, uint resourceVersion) cacheKey = (programKey, setIdx, resourceVersion);
 
             bool miss = !_resourceBindCache.TryGetValue(cacheKey, out DescriptorSet ds);
             if (!miss && UboBackingBufferChanged(programKey, setIdx, in layout, isCompute, uniformVersion))
@@ -809,7 +809,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         // Sort by binding index (Vulkan requires dynamic offsets in binding-number order).
         for (int i = 1; i < uboCount; i++)
         {
-            var key = uboData[i];
+            (int binding, uint offset) key = uboData[i];
             int j = i - 1;
             while (j >= 0 && uboData[j].Item1 > key.Item1) { uboData[j + 1] = uboData[j]; j--; }
             uboData[j + 1] = key;
@@ -1369,7 +1369,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             uint rowPitch = FormatHelpers.GetRowPitch(bufferRowLength, dstVkTexture.Format);
             uint depthPitch = FormatHelpers.GetDepthPitch(rowPitch, bufferImageHeight, dstVkTexture.Format);
 
-            var layers = stackalloc BufferImageCopy[(int)layerCount];
+            BufferImageCopy* layers = stackalloc BufferImageCopy[(int)layerCount];
             for (uint layer = 0; layer < layerCount; layer++)
             {
                 SubresourceLayout dstLayout = dstVkTexture.GetSubresourceLayout(

@@ -12,10 +12,10 @@ internal unsafe class D3D11Buffer : DeviceBuffer
     private readonly ID3D11Device* _device;
     private ComPtr<ID3D11Buffer> _buffer;
     private readonly object _accessViewLock = new object();
-    private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> _srvs
-        = new Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>>();
-    private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs
-        = new Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>>();
+
+    private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> _srvs = [];
+    private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs = [];
+
     private readonly uint _structureByteStride;
     private readonly bool _useTypedHlslBinding;
     private string _name;
@@ -28,6 +28,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
     public override bool IsDisposed => _disposed;
 
     public ID3D11Buffer* Buffer => _buffer;
+
 
     public D3D11Buffer(ID3D11Device* device, uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool useTypedHlslBinding)
     {
@@ -87,9 +88,9 @@ internal unsafe class D3D11Buffer : DeviceBuffer
         {
             _name = value;
             D3D11Util.SetDebugName((ID3D11DeviceChild*)_buffer.Handle, value);
-            foreach (var kvp in _srvs)
+            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> kvp in _srvs)
                 D3D11Util.SetDebugName((ID3D11DeviceChild*)kvp.Value.Handle, value + "_SRV");
-            foreach (var kvp in _uavs)
+            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> kvp in _uavs)
                 D3D11Util.SetDebugName((ID3D11DeviceChild*)kvp.Value.Handle, value + "_UAV");
         }
     }

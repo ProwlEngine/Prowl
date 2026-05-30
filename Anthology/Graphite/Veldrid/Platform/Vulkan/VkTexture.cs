@@ -183,7 +183,7 @@ internal unsafe class VkTexture : Texture
             }
 
             // Use "host cached" memory when available, for better performance of GPU -> CPU transfers
-            var propertyFlags = MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit | MemoryPropertyFlags.HostCachedBit;
+            MemoryPropertyFlags propertyFlags = MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit | MemoryPropertyFlags.HostCachedBit;
             if (!_gd.Vk.TryFindMemoryType(_gd.PhysicalDeviceMemProperties, bufferMemReqs.MemoryTypeBits, propertyFlags, out _))
             {
                 propertyFlags ^= MemoryPropertyFlags.HostCachedBit;

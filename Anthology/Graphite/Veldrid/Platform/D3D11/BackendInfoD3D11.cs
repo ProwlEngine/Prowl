@@ -33,14 +33,5 @@ public unsafe class BackendInfoD3D11
     /// Gets the PCI ID of the hardware device.
     /// </summary>
     public int DeviceId => _gd.DeviceId;
-
-    /// <summary>
-    /// Gets a pointer to the native texture wrapped by the given Prowl.Veldrid Texture. Depending on the instance's TextureType,
-    /// this will be a pointer to an ID3D11Texture1D, an ID3D11Texture2D, or an ID3D11Texture3D.
-    /// </summary>
-    /// <returns>A pointer to the Prowl.Veldrid Texture's underlying ID3D11Texture1D, ID3D11Texture2D, or ID3D11Texture3D. The type
-    /// of this object depends on the parameter's TextureType.</returns>
-    public IntPtr GetTexturePointer(Texture texture)
-        => (nint)Util.AssertSubtype<Texture, D3D11Texture>(texture).DeviceTexture;
 }
 #endif

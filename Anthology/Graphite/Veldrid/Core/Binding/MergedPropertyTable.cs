@@ -43,7 +43,7 @@ internal sealed class MergedPropertyTable
         bool dirtyUniforms = false;
         bool dirtyResources = false;
 
-        foreach (var kv in src.RawEntries)
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in src.RawEntries)
         {
             PropertyEntry entry = kv.Value;
             bool isUniform = entry.Kind == PropertyEntryKind.Uniform;

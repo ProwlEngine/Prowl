@@ -100,7 +100,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         _context.Handle = pDeferredContext;
 
         ID3D11DeviceContext1* pContext1;
-        var ctx1Guid = ID3D11DeviceContext1.Guid;
+        Guid ctx1Guid = ID3D11DeviceContext1.Guid;
 
         if (((IUnknown*)pDeferredContext)->QueryInterface(&ctx1Guid, (void**)&pContext1) >= 0)
         {
@@ -109,7 +109,7 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         }
 
         ID3DUserDefinedAnnotation* pUda;
-        var udaGuid = ID3DUserDefinedAnnotation.Guid;
+        Guid udaGuid = ID3DUserDefinedAnnotation.Guid;
 
         if (((IUnknown*)pDeferredContext)->QueryInterface(&udaGuid, (void**)&pUda) >= 0)
         {
