@@ -473,10 +473,12 @@ public sealed class Job
     }
 
     /// <summary>
-    /// Surfel-mode continuous bake. Each iter: trace one path sample per surfel, accumulate into
-    /// the surfel's own running average. At end of iter, splat surfels onto every covered texel
-    /// via a normal-weighted, distance-weighted kernel using the spatial grid for fast neighbour
-    /// lookups. Optional per-texel direct lighting added on top.
+    /// Surfel-mode continuous bake. Each iter: every surfel casts a few uniform-hemisphere rays and
+    /// projects the radiance arriving along them into its directional SH-L1 accumulator. A ray's
+    /// radiance is one bounce - direct lighting at the hit plus the indirect cached in the cloud
+    /// from previous iterations - so light propagates one surfel-hop per pass and converges to full
+    /// multi-bounce GI. Surfels are then interpolated onto every covered texel, blended in SH space
+    /// and reconstructed for the texel's own normal, with optional per-texel direct lighting on top.
     /// </summary>
     private void IntegrateContinuousSurfel(
         TargetWorkspace[] workspaces, Tlas tlas,
@@ -503,35 +505,55 @@ public sealed class Job
         int samplesPerIter = System.Math.Max(1, _options.SamplesPerIteration);
         int maxNeighbors = System.Math.Max(1, _options.SurfelMaxNeighbors);
         float normalThr = System.Math.Clamp(_options.SurfelNormalThreshold, -1f, 1f);
+        bool doIndirect = bounces > 0;
 
         while (!_cts.IsCancellationRequested)
         {
             int iter = _iterationCount + 1;
-            _activity = $"Surfels iter {iter}: {N} surfels x {samplesPerIter}s x {bounces} bounces";
+            _activity = $"Surfels iter {iter}: {N} surfels x {samplesPerIter}s (progressive multi-bounce)";
             ulong iterMix = (ulong)iter * 0x6A09E667F3BCC908UL;
 
-            // (1) Trace samplesPerIter indirect paths per surfel; fold into its running sum.
-            try
+            if (doIndirect)
             {
-                System.Threading.Tasks.Parallel.For(0, N, parallelOpts, i =>
+                // (1) Gather one bounce per surfel into its SH accumulator. Each ray's radiance is
+                //     direct lighting at its hit plus the indirect already cached in the cloud from
+                //     PREVIOUS iterations (read via the frozen ShEstimate snapshot). So light
+                //     advances one surfel-hop per pass and converges to full multi-bounce GI over
+                //     time -- no deep per-ray paths needed.
+                try
                 {
-                    ref var s = ref surfels[i];
-                    ulong seed = (ulong)i * 0x9E3779B97F4A7C15UL ^ baseSeed ^ iterMix;
-                    var rng = new Sampler(seed);
-                    var ind = integrator.IntegrateIndirect(
-                        s.Position, s.Normal, Float3.One,
-                        samplesPerIter, bounces, ref rng,
-                        jitterWorldRadius: 0f);
-                    s.IndirectSum += ind;
-                    s.SampleCount += samplesPerIter;
-                });
-            }
-            catch (System.OperationCanceledException) { return; }
+                    System.Threading.Tasks.Parallel.For(0, N, parallelOpts, i =>
+                    {
+                        ref var s = ref surfels[i];
+                        ulong seed = (ulong)i * 0x9E3779B97F4A7C15UL ^ baseSeed ^ iterMix;
+                        var rng = new Sampler(seed);
+                        var sh = integrator.IntegrateSurfelRadiance(
+                            s.Position, s.Normal, samplesPerIter, ref rng,
+                            cloud, normalThr, maxNeighbors);
+                        s.ShAccum.Add(sh);
+                        s.SampleCount += samplesPerIter;
+                    });
+                }
+                catch (System.OperationCanceledException) { return; }
 
-            // (2) Interpolate surfels onto every covered texel. For each texel: read the single
-            //     spatial-grid cell it sits in (surfels are pre-registered in every cell their
-            //     influence sphere overlaps, so this catches every surfel that could reach the
-            //     texel). Weight by per-surfel radius falloff: w = (1 - d/R)^2 * dotN.
+                // (2) Publish the refreshed mean. Done as a separate barrier'd pass so the gather
+                //     above only ever reads last iteration's estimate, never a half-written one.
+                try
+                {
+                    System.Threading.Tasks.Parallel.For(0, N, parallelOpts, i =>
+                    {
+                        ref var s = ref surfels[i];
+                        s.ShEstimate = s.SampleCount > 0 ? s.ShAccum.Scaled(1f / s.SampleCount) : default;
+                    });
+                }
+                catch (System.OperationCanceledException) { return; }
+            }
+
+            // (3) Interpolate surfels onto every covered texel. SampleIrradianceOverPi reads the
+            //     single spatial-grid cell the texel sits in (surfels are pre-registered in every
+            //     cell their influence sphere overlaps), blends the nearby surfels in SH space and
+            //     reconstructs irradiance for THIS texel's normal -- so a surfel feeds texels of
+            //     differing orientation without leaking.
             _activity = $"Surfels iter {iter}: interpolate to texels";
             for (int ti = 0; ti < workspaces.Length; ti++)
             {
@@ -543,56 +565,15 @@ public sealed class Job
                 {
                     System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
                     {
-                        System.Span<int> bestIdx = stackalloc int[64];
-                        System.Span<float> bestW  = stackalloc float[64];
-                        System.Span<int> candidateBuf = stackalloc int[1024];
-                        int cap = System.Math.Min(64, maxNeighbors);
-
                         for (int x = 0; x < W; x++)
                         {
                             int idx = y * W + x;
                             if (!ws.Covered[idx]) continue;
                             var ts = ws.Samples[idx];
-                            int kept = 0;
 
-                            int candidateCount = cloud.QueryCell(ts.Position, candidateBuf);
-                            for (int ci = 0; ci < candidateCount; ci++)
-                            {
-                                int sIdx = candidateBuf[ci];
-                                ref var s = ref surfels[sIdx];
-                                if (s.SampleCount <= 0) continue;
-                                float dotN = Float3.Dot(ts.Normal, s.Normal);
-                                if (dotN < normalThr) continue;
-                                var d = s.Position - ts.Position;
-                                float dsq = d.X * d.X + d.Y * d.Y + d.Z * d.Z;
-                                float r = s.Radius;
-                                if (dsq > r * r) continue;
-                                float dist = (float)System.Math.Sqrt(dsq);
-                                float falloff = 1f - dist / r;
-                                float w = dotN * falloff * falloff;
-                                if (w <= 0) continue;
-                                if (kept < cap)
-                                {
-                                    bestIdx[kept] = sIdx; bestW[kept] = w; kept++;
-                                }
-                                else
-                                {
-                                    int worst = 0;
-                                    for (int j = 1; j < cap; j++) if (bestW[j] < bestW[worst]) worst = j;
-                                    if (w > bestW[worst]) { bestIdx[worst] = sIdx; bestW[worst] = w; }
-                                }
-                            }
-
-                            Float3 indirect = Float3.Zero;
-                            float wsum = 0f;
-                            for (int j = 0; j < kept; j++)
-                            {
-                                ref var s = ref surfels[bestIdx[j]];
-                                float w = bestW[j];
-                                indirect += s.IndirectSum * (w / s.SampleCount);
-                                wsum += w;
-                            }
-                            Float3 final = wsum > 0 ? indirect * (1f / wsum) : Float3.Zero;
+                            Float3 final = doIndirect
+                                ? cloud.SampleIrradianceOverPi(ts.Position, ts.Normal, normalThr, maxNeighbors)
+                                : Float3.Zero;
                             // Direct lighting always evaluated per-texel when enabled, regardless of
                             // whether any surfels contributed -- a texel in an empty surfel cell still
                             // gets correct sun lighting, no "interpolation hole" blackouts.
@@ -607,7 +588,7 @@ public sealed class Job
                 catch (System.OperationCanceledException) { return; }
             }
 
-            // (3) Dilate seams (same as the per-texel path).
+            // (4) Dilate seams (same as the per-texel path).
             if (_options.DilatePixels > 0)
             {
                 for (int ti = 0; ti < workspaces.Length; ti++)

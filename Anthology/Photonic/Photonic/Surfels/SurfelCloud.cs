@@ -4,15 +4,16 @@ namespace Prowl.Photonic.Surfels;
 
 /// <summary>
 /// One surfel: a tiny oriented disk sampled on a mesh surface. Holds the world position and
-/// normal, plus a running accumulator for the indirect light it sees. The texel-interpolation
-/// pass blends a small set of nearby surfels (filtered by normal + distance) into each lightmap
-/// texel.
+/// normal, plus a directional (SH-L1) accumulator for the indirect light it sees. The
+/// texel-interpolation pass blends a small set of nearby surfels (filtered by normal + distance)
+/// into each lightmap texel, reconstructing irradiance for the texel's own normal.
 /// </summary>
 /// <remarks>
-/// Fields are exposed as mutable to let the integrator update <see cref="IndirectSum"/> /
-/// <see cref="SampleCount"/> via <c>ref</c> access. External consumers must treat every field
-/// as read-only: rewriting <see cref="Position"/> or <see cref="Radius"/> corrupts the
-/// owning <see cref="SurfelCloud"/>'s spatial grid.
+/// Fields are exposed as mutable to let the integrator update <see cref="ShAccum"/> /
+/// <see cref="SampleCount"/> via <c>ref</c> access, and to let the iteration boundary refresh
+/// <see cref="ShEstimate"/>. External consumers must treat every field as read-only: rewriting
+/// <see cref="Position"/> or <see cref="Radius"/> corrupts the owning <see cref="SurfelCloud"/>'s
+/// spatial grid.
 /// </remarks>
 public struct Surfel
 {
@@ -28,9 +29,15 @@ public struct Surfel
     public int MaterialGroupIndex;
     /// <summary>World-space radius the influence kernel reaches; controls per-surfel falloff. Set at generation; do not rewrite.</summary>
     public float Radius;
-    /// <summary>Running sum of indirect contributions across all iterations. Written by the integrator.</summary>
-    public Float3 IndirectSum;
-    /// <summary>Number of indirect samples folded into <see cref="IndirectSum"/>. Written by the integrator.</summary>
+    /// <summary>Running SH-L1 sum of the radiance arriving over the surfel's hemisphere. Written by the integrator.</summary>
+    public ShL1Rgb ShAccum;
+    /// <summary>
+    /// Mean projection (<see cref="ShAccum"/> / <see cref="SampleCount"/>), refreshed at each
+    /// iteration boundary. This is the stable snapshot that gathers and texel interpolation read,
+    /// so the trace phase never observes a partially-updated accumulator.
+    /// </summary>
+    public ShL1Rgb ShEstimate;
+    /// <summary>Number of indirect samples folded into <see cref="ShAccum"/>. Written by the integrator.</summary>
     public int SampleCount;
 }
 
@@ -141,5 +148,74 @@ public sealed class SurfelCloud
         if (n > buffer.Length) n = buffer.Length;
         for (int k = 0; k < n; k++) buffer[k] = _cellSurfels[start + k];
         return n;
+    }
+
+    /// <summary>
+    /// Gather the indirect irradiance at <paramref name="position"/> for a surface oriented along
+    /// <paramref name="normal"/>, reconstructed from the nearby surfels' SH estimates. Returns
+    /// <c>E / π</c> (cosine-weighted mean incoming radiance) - the same units the per-texel path
+    /// stores, so the runtime applies albedo on top. Returns zero when no surfel reaches the point.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the texel-interpolation pass and by the surfel-to-surfel gather inside the
+    /// integrator, so both reconstruct indirect light the same way. Surfels are weighted by normal
+    /// alignment and distance falloff; the strongest <paramref name="maxNeighbors"/> contributors
+    /// are blended <i>in SH space</i> and only then reconstructed against <paramref name="normal"/>,
+    /// which is what re-projects each surfel's stored radiance onto this surface's orientation.
+    /// Reads <see cref="Surfel.ShEstimate"/>, which is stable during a trace phase.
+    /// </remarks>
+    public Float3 SampleIrradianceOverPi(Float3 position, Float3 normal, float normalThreshold, int maxNeighbors)
+    {
+        System.Span<int> candidates = stackalloc int[256];
+        int count = QueryCell(position, candidates);
+        if (count == 0) return Float3.Zero;
+
+        int cap = maxNeighbors < 1 ? 1 : (maxNeighbors > 64 ? 64 : maxNeighbors);
+        System.Span<int> bestIdx = stackalloc int[64];
+        System.Span<float> bestW = stackalloc float[64];
+        int kept = 0;
+
+        for (int ci = 0; ci < count; ci++)
+        {
+            ref var s = ref Surfels[candidates[ci]];
+            if (s.SampleCount <= 0) continue;
+            float dotN = (float)Float3.Dot(normal, s.Normal);
+            if (dotN < normalThreshold) continue;
+            var d = s.Position - position;
+            float dsq = (float)(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
+            float r = s.Radius;
+            if (dsq > r * r) continue;
+            float dist = (float)System.Math.Sqrt(dsq);
+            float falloff = 1f - dist / r;
+            float w = dotN * falloff * falloff;
+            if (w <= 0) continue;
+
+            if (kept < cap)
+            {
+                bestIdx[kept] = candidates[ci]; bestW[kept] = w; kept++;
+            }
+            else
+            {
+                int worst = 0;
+                for (int j = 1; j < cap; j++) if (bestW[j] < bestW[worst]) worst = j;
+                if (w > bestW[worst]) { bestIdx[worst] = candidates[ci]; bestW[worst] = w; }
+            }
+        }
+        if (kept == 0) return Float3.Zero;
+
+        ShL1Rgb blend = default;
+        float wsum = 0f;
+        for (int j = 0; j < kept; j++)
+        {
+            float w = bestW[j];
+            ref var s = ref Surfels[bestIdx[j]];
+            blend.C0 += s.ShEstimate.C0 * w;
+            blend.Cx += s.ShEstimate.Cx * w;
+            blend.Cy += s.ShEstimate.Cy * w;
+            blend.Cz += s.ShEstimate.Cz * w;
+            wsum += w;
+        }
+        if (wsum <= 0) return Float3.Zero;
+        return blend.Scaled(1f / wsum).IrradianceOverPi(normal);
     }
 }

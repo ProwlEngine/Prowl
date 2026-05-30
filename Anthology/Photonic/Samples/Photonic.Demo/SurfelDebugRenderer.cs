@@ -61,7 +61,22 @@ internal sealed class SurfelDebugRenderer : System.IDisposable
             _instanceScratch[b + 2] = (float)s.Position.Z;
             _instanceScratch[b + 3] = s.Radius * sizeMultiplier;
 
-            Float3 col = new Float3(0.15f, 0.85f, 0.20f);
+            // Colour each surfel by the indirect irradiance it has gathered, reconstructed for its
+            // own normal and Reinhard-tonemapped into [0,1). Un-sampled surfels show a dim grey so
+            // the cloud stays visible before the first iteration folds in.
+            Float3 col;
+            if (s.SampleCount > 0)
+            {
+                Float3 e = s.ShEstimate.IrradianceOverPi(s.Normal);
+                col = new Float3(
+                    (float)(e.X / (1.0 + e.X)),
+                    (float)(e.Y / (1.0 + e.Y)),
+                    (float)(e.Z / (1.0 + e.Z)));
+            }
+            else
+            {
+                col = new Float3(0.12f, 0.12f, 0.14f);
+            }
             _instanceScratch[b + 4] = (float)col.X;
             _instanceScratch[b + 5] = (float)col.Y;
             _instanceScratch[b + 6] = (float)col.Z;

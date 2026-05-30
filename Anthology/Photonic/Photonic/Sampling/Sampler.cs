@@ -87,6 +87,23 @@ internal static class Hemisphere
     }
 
     /// <summary>
+    /// Uniform (solid-angle) hemisphere sample around <paramref name="normal"/>. Sampling PDF is the
+    /// constant 1/(2π). Preferred over cosine sampling when projecting incoming radiance onto a
+    /// spherical-harmonic basis: it avoids the cosθ weighting that would otherwise have to be divided
+    /// back out (and blow up near the horizon), giving a clean, low-variance projection.
+    /// </summary>
+    public static Float3 SampleUniform(Float3 normal, float u1, float u2)
+    {
+        float cosT = u1; // z uniform in [0,1] -> uniform over the hemisphere by solid angle
+        float sinT = (float)System.Math.Sqrt(System.Math.Max(0f, 1f - u1 * u1));
+        float phi = 2f * (float)System.Math.PI * u2;
+        float x = sinT * (float)System.Math.Cos(phi);
+        float y = sinT * (float)System.Math.Sin(phi);
+        BuildOrthonormalBasis(normal, out var t, out var b);
+        return Float3.Normalize(t * x + b * y + normal * cosT);
+    }
+
+    /// <summary>
     /// Frisvad's "Building an orthonormal basis, revisited": no branches, no trig. Produces a
     /// pair (tangent, bitangent) such that (t, b, n) is right-handed and orthonormal.
     /// </summary>

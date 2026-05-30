@@ -2,6 +2,7 @@
 using Prowl.Photonic.Raytracing;
 using Prowl.Photonic.Sampling;
 using Prowl.Photonic.Scene.Lights;
+using Prowl.Photonic.Surfels;
 
 namespace Prowl.Photonic.Integration;
 
@@ -124,29 +125,7 @@ internal sealed class PathIntegrator
                 break;
             }
 
-            int blasIdx = _instanceToBlas[hit.InstanceIndex];
-            var blas = _blas[blasIdx];
-            var triRef = blas.Triangles[hit.TriangleIndex];
-            var mat = _resolvedMats[blasIdx][triRef.MaterialGroupIndex];
-            Float3 hitAlbedo;
-            Float3 hitEmissive = mat is not null ? mat.Emissive : Float3.Zero;
-            if (_options.IgnoreAlbedo)
-            {
-                hitAlbedo = Float3.One;
-            }
-            else
-            {
-                hitAlbedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
-                if (mat is not null && mat.DiffuseTexture is not null
-                    && _instances[hit.InstanceIndex].Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
-                {
-                    var uvA = uvLayer[triRef.I0]; var uvB = uvLayer[triRef.I1]; var uvC = uvLayer[triRef.I2];
-                    float w = 1f - hit.U - hit.V;
-                    Float2 uv = uvA * w + uvB * hit.U + uvC * hit.V;
-                    // Nearest sample on the bounce path: variance averages out across indirect samples.
-                    hitAlbedo = hitAlbedo * mat.DiffuseTexture.SampleNearestRGB(uv.X, uv.Y);
-                }
-            }
+            ResolveHitSurface(hit, out Float3 hitAlbedo, out Float3 hitEmissive);
 
             if (_scene.Lights.Count > 0)
                 radiance += t * hitAlbedo * SampleAllLights(hit.Position, hit.Normal);
@@ -170,6 +149,81 @@ internal sealed class PathIntegrator
             n = hit.Normal;
         }
         return radiance;
+    }
+
+    /// <summary>
+    /// Resolve the diffuse albedo and emissive of a ray hit (material colour x diffuse texel, or
+    /// white when <see cref="BakeOptions.IgnoreAlbedo"/> is set). Shared by <see cref="TracePath"/>
+    /// and the surfel gather so both shade bounce hits identically.
+    /// </summary>
+    private void ResolveHitSurface(HitInfo hit, out Float3 albedo, out Float3 emissive)
+    {
+        int blasIdx = _instanceToBlas[hit.InstanceIndex];
+        var triRef = _blas[blasIdx].Triangles[hit.TriangleIndex];
+        var mat = _resolvedMats[blasIdx][triRef.MaterialGroupIndex];
+        emissive = mat is not null ? mat.Emissive : Float3.Zero;
+        if (_options.IgnoreAlbedo)
+        {
+            albedo = Float3.One;
+            return;
+        }
+        albedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
+        if (mat is not null && mat.DiffuseTexture is not null
+            && _instances[hit.InstanceIndex].Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
+        {
+            var uvA = uvLayer[triRef.I0]; var uvB = uvLayer[triRef.I1]; var uvC = uvLayer[triRef.I2];
+            float w = 1f - (float)hit.U - (float)hit.V;
+            Float2 uv = uvA * w + uvB * (float)hit.U + uvC * (float)hit.V;
+            // Nearest sample on the bounce path: variance averages out across indirect samples.
+            albedo = albedo * mat.DiffuseTexture.SampleNearestRGB(uv.X, uv.Y);
+        }
+    }
+
+    /// <summary>
+    /// One iteration of surfel radiance gathering: cast <paramref name="samples"/> uniform-hemisphere
+    /// rays from a surfel and project the radiance arriving along each into an SH-L1 sum (the caller
+    /// folds the result into the surfel's running accumulator).
+    ///
+    /// The radiance along a ray is a <i>single</i> bounce - direct lighting at the hit surface plus
+    /// the indirect already cached in the surfel cloud from previous iterations
+    /// (<see cref="SurfelCloud.SampleIrradianceOverPi"/>). Because each iteration gathers the previous
+    /// iteration's estimate, light propagates one surfel-hop per pass and converges to a full
+    /// multi-bounce solution over time - cheap "infinite bounce" that needs no deep per-ray paths.
+    /// </summary>
+    public ShL1Rgb IntegrateSurfelRadiance(Float3 position, Float3 normal, int samples, ref Sampler rng,
+                                           SurfelCloud cloud, float surfelNormalThreshold, int surfelMaxNeighbors)
+    {
+        ShL1Rgb sh = default;
+        if (samples <= 0) return sh;
+        for (int s = 0; s < samples; s++)
+        {
+            Float3 dir = Hemisphere.SampleUniform(normal, rng.NextFloat(), rng.NextFloat());
+            Float3 li = SampleIncomingRadiance(position, normal, dir, cloud, surfelNormalThreshold, surfelMaxNeighbors);
+            // Uniform hemisphere PDF = 1/(2π); the projection weight is its reciprocal, 2π.
+            sh.Accumulate(dir, li, 2f * (float)System.Math.PI);
+        }
+        return sh;
+    }
+
+    /// <summary>
+    /// Radiance arriving at a surfel along <paramref name="dir"/>: sky on a miss, otherwise the hit
+    /// surface's outgoing radiance = emissive + albedo x (direct irradiance + cloud-cached indirect).
+    /// Matches <see cref="TracePath"/>'s shading convention so surfel and per-texel modes agree.
+    /// </summary>
+    private Float3 SampleIncomingRadiance(Float3 origin, Float3 originNormal, Float3 dir,
+                                          SurfelCloud cloud, float surfelNormalThreshold, int surfelMaxNeighbors)
+    {
+        var hit = ClosestHitWorld(origin + originNormal * _options.RayBias, dir, _options.MaxRayDistance);
+        if (!hit.Hit) return _options.SkyColor;
+
+        ResolveHitSurface(hit, out Float3 albedo, out Float3 emissive);
+        Float3 lo = emissive;
+        if (_scene.Lights.Count > 0)
+            lo += albedo * SampleAllLights(hit.Position, hit.Normal);
+        // Previous iterations' indirect, re-projected onto the hit normal. Already E/π, so it
+        // combines with the (un-normalised) direct term exactly as a deeper TracePath bounce would.
+        lo += albedo * cloud.SampleIrradianceOverPi(hit.Position, hit.Normal, surfelNormalThreshold, surfelMaxNeighbors);
+        return lo;
     }
 
     /// <summary>
