@@ -1,6 +1,5 @@
 using Silk.NET.Vulkan;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -113,7 +112,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
 
         lock (_lock)
         {
-            if (!TryFindMemoryType(memProperties, memoryTypeBits, flags, out var memoryTypeIndex))
+            if (!_vk.TryFindMemoryType(memProperties, memoryTypeBits, flags, out var memoryTypeIndex))
             {
                 throw new RenderException("No suitable memory type.");
             }
@@ -296,14 +295,12 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
             };
             memoryAI.AllocationSize = _totalMemorySize;
             memoryAI.MemoryTypeIndex = _memoryTypeIndex;
-            Result result = _vk.AllocateMemory(_device, in memoryAI, null, out _memory);
-            CheckResult(result);
+            _vk.AllocateMemory(_device, in memoryAI, null, out _memory).CheckResult();
 
             void* mappedPtr = null;
             if (persistentMapped)
             {
-                result = _vk.MapMemory(_device, _memory, 0, _totalMemorySize, 0, &mappedPtr);
-                CheckResult(result);
+                _vk.MapMemory(_device, _memory, 0, _totalMemorySize, 0, &mappedPtr).CheckResult();
             }
             _mappedPtr = mappedPtr;
 
@@ -479,8 +476,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
     internal IntPtr Map(VkMemoryBlock memoryBlock)
     {
         void* ret;
-        Result result = _vk.MapMemory(_device, memoryBlock.DeviceMemory, memoryBlock.Offset, memoryBlock.Size, 0, &ret);
-        CheckResult(result);
+        _vk.MapMemory(_device, memoryBlock.DeviceMemory, memoryBlock.Offset, memoryBlock.Size, 0, &ret).CheckResult();
         return (IntPtr)ret;
     }
 }

@@ -1,6 +1,5 @@
 using Silk.NET.Vulkan;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
 
 namespace Prowl.Veldrid.Vk;
 

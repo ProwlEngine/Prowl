@@ -1,7 +1,5 @@
 using Silk.NET.Vulkan;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
-
 using System.Diagnostics;
 using System;
 
@@ -100,8 +98,7 @@ internal unsafe class VkTexture : Texture
             }
 
             uint subresourceCount = MipLevels * _actualImageArrayLayers * Depth;
-            Result result = _gd.Vk.CreateImage(gd.Device, in imageCI, null, out _optimalImage);
-            CheckResult(result);
+            _gd.Vk.CreateImage(gd.Device, in imageCI, null, out _optimalImage).CheckResult();
 
             MemoryRequirements memoryRequirements;
             bool prefersDedicatedAllocation;
@@ -133,8 +130,7 @@ internal unsafe class VkTexture : Texture
                 _optimalImage,
                 default);
             _memoryBlock = memoryToken;
-            result = _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset);
-            CheckResult(result);
+            _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
 
             _imageLayouts = new ImageLayout[subresourceCount];
             for (int i = 0; i < _imageLayouts.Length; i++)
@@ -165,8 +161,7 @@ internal unsafe class VkTexture : Texture
             BufferCreateInfo bufferCI = new BufferCreateInfo { SType = StructureType.BufferCreateInfo };
             bufferCI.Usage = BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit;
             bufferCI.Size = stagingSize;
-            Result result = _gd.Vk.CreateBuffer(_gd.Device, in bufferCI, null, out _stagingBuffer);
-            CheckResult(result);
+            _gd.Vk.CreateBuffer(_gd.Device, in bufferCI, null, out _stagingBuffer).CheckResult();
 
             MemoryRequirements bufferMemReqs;
             bool prefersDedicatedAllocation;
@@ -189,7 +184,7 @@ internal unsafe class VkTexture : Texture
 
             // Use "host cached" memory when available, for better performance of GPU -> CPU transfers
             var propertyFlags = MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit | MemoryPropertyFlags.HostCachedBit;
-            if (!TryFindMemoryType(_gd.PhysicalDeviceMemProperties, bufferMemReqs.MemoryTypeBits, propertyFlags, out _))
+            if (!_gd.Vk.TryFindMemoryType(_gd.PhysicalDeviceMemProperties, bufferMemReqs.MemoryTypeBits, propertyFlags, out _))
             {
                 propertyFlags ^= MemoryPropertyFlags.HostCachedBit;
             }
@@ -204,8 +199,7 @@ internal unsafe class VkTexture : Texture
                 default,
                 _stagingBuffer);
 
-            result = _gd.Vk.BindBufferMemory(_gd.Device, _stagingBuffer, _memoryBlock.DeviceMemory, _memoryBlock.Offset);
-            CheckResult(result);
+            _gd.Vk.BindBufferMemory(_gd.Device, _stagingBuffer, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
         }
 
         ClearIfRenderTarget();
@@ -345,8 +339,7 @@ internal unsafe class VkTexture : Texture
             {
                 aspectMask = ImageAspectFlags.ColorBit;
             }
-            VulkanUtil.TransitionImageLayout(
-                _gd.Vk,
+            _gd.Vk.TransitionImageLayout(
                 cb,
                 OptimalDeviceImage,
                 baseMipLevel,
@@ -400,8 +393,7 @@ internal unsafe class VkTexture : Texture
                     {
                         aspectMask = ImageAspectFlags.ColorBit;
                     }
-                    VulkanUtil.TransitionImageLayout(
-                        _gd.Vk,
+                    _gd.Vk.TransitionImageLayout(
                         cb,
                         OptimalDeviceImage,
                         level,

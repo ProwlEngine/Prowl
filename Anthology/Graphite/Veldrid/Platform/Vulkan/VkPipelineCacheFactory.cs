@@ -2,7 +2,6 @@ using Silk.NET.Vulkan;
 
 using Prowl.Vector;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System.Collections.Generic;
 
@@ -254,13 +253,11 @@ internal static unsafe class VkPipelineCacheFactory
         renderPassCI.DependencyCount = 1;
         renderPassCI.PDependencies = &subpassDependency;
 
-        Result rpResult = gd.Vk.CreateRenderPass(gd.Device, in renderPassCI, null, out RenderPass renderPass);
-        CheckResult(rpResult);
+        gd.Vk.CreateRenderPass(gd.Device, in renderPassCI, null, out RenderPass renderPass).CheckResult();
 
         pipelineCI.RenderPass = renderPass;
 
-        Result pipelineResult = gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline);
-        CheckResult(pipelineResult);
+        gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline).CheckResult();
 
         return new VkPipelineCacheEntry(
             pipeline,

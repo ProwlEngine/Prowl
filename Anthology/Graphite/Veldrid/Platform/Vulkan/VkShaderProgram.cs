@@ -1,6 +1,5 @@
 using Silk.NET.Vulkan;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System;
 using System.Collections.Generic;
@@ -95,8 +94,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
             {
                 shaderModuleCI.CodeSize = (UIntPtr)sd.ShaderBytes.Length;
                 shaderModuleCI.PCode = (uint*)codePtr;
-                Result result = _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out ShaderModule module);
-                CheckResult(result);
+                _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out ShaderModule module).CheckResult();
                 _modules[sd.Stage] = module;
                 _entryPoints[sd.Stage] = sd.EntryPoint;
             }
@@ -182,8 +180,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
             BindingCount = (uint)elems.Length,
             PBindings = bindings,
         };
-        Result result = _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out DescriptorSetLayout dsl);
-        CheckResult(result);
+        _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
 
         return (dsl, new DescriptorResourceCounts(
             0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage));
@@ -215,8 +212,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
             SetLayoutCount = setCount,
             PSetLayouts = dslsPtr,
         };
-        Result result = _gd.Vk.CreatePipelineLayout(_gd.Device, in pipelineLayoutCI, null, out PipelineLayout layout);
-        CheckResult(result);
+        _gd.Vk.CreatePipelineLayout(_gd.Device, in pipelineLayoutCI, null, out PipelineLayout layout).CheckResult();
         return layout;
     }
 
@@ -229,8 +225,7 @@ internal unsafe class VkShaderProgram : ShaderProgram
             BindingCount = 0,
             PBindings = null,
         };
-        Result result = _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out _emptyDescriptorSetLayout);
-        CheckResult(result);
+        _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out _emptyDescriptorSetLayout).CheckResult();
         return _emptyDescriptorSetLayout;
     }
 

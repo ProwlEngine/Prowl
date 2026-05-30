@@ -22,11 +22,11 @@ public class BackendInfoVulkan
     private readonly ReadOnlyCollection<string> _instanceExtensions;
     private readonly Lazy<ReadOnlyCollection<ExtensionProperties>> _deviceExtensions;
 
-    internal BackendInfoVulkan(VkGraphicsDevice gd)
+    internal unsafe BackendInfoVulkan(VkGraphicsDevice gd)
     {
         _gd = gd;
-        _instanceLayers = new Lazy<ReadOnlyCollection<string>>(() => new ReadOnlyCollection<string>(VulkanUtil.EnumerateInstanceLayers()));
-        _instanceExtensions = new ReadOnlyCollection<string>(VulkanUtil.GetInstanceExtensions());
+        _instanceLayers = new Lazy<ReadOnlyCollection<string>>(() => new ReadOnlyCollection<string>(_gd.Vk.EnumerateInstanceLayers((LayerProperties*)0)));
+        _instanceExtensions = new ReadOnlyCollection<string>(_gd.Vk.EnumerateInstanceExtensionProperties((byte*)0));
         _deviceExtensions = new Lazy<ReadOnlyCollection<ExtensionProperties>>(EnumerateDeviceExtensions);
     }
 

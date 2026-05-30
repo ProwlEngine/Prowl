@@ -1,6 +1,5 @@
 using Silk.NET.Vulkan;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using System;
 
@@ -43,8 +42,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
         {
             shaderModuleCI.CodeSize = (UIntPtr)stage.ShaderBytes.Length;
             shaderModuleCI.PCode = (uint*)codePtr;
-            Result r = _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out _module);
-            CheckResult(r);
+            _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out _module).CheckResult();
         }
 
         ResourceLayoutDescription[] descs = ResourceLayoutsArray;
@@ -62,8 +60,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
         stageCI.PName = CommonStrings.main;
         pipelineCI.Stage = stageCI;
 
-        Result result = _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline);
-        CheckResult(result);
+        _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();
         DevicePipeline = pipeline;
     }
 
@@ -135,8 +132,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
             BindingCount = (uint)elems.Length,
             PBindings = bindings,
         };
-        Result r = _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out DescriptorSetLayout dsl);
-        CheckResult(r);
+        _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
 
         return (dsl, new DescriptorResourceCounts(0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage));
     }
@@ -163,8 +159,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
             SetLayoutCount = setCount,
             PSetLayouts = dslsPtr,
         };
-        Result r = _gd.Vk.CreatePipelineLayout(_gd.Device, in plCI, null, out PipelineLayout layout);
-        CheckResult(r);
+        _gd.Vk.CreatePipelineLayout(_gd.Device, in plCI, null, out PipelineLayout layout).CheckResult();
         return layout;
     }
 
@@ -177,8 +172,7 @@ internal unsafe class VkComputeProgram : ComputeProgram
             BindingCount = 0,
             PBindings = null,
         };
-        Result r = _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out _emptyDescriptorSetLayout);
-        CheckResult(r);
+        _gd.Vk.CreateDescriptorSetLayout(_gd.Device, in dslCI, null, out _emptyDescriptorSetLayout).CheckResult();
         return _emptyDescriptorSetLayout;
     }
 

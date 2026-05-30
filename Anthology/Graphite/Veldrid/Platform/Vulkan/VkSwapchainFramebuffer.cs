@@ -1,7 +1,5 @@
 using Silk.NET.Vulkan;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
-
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -91,14 +89,12 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
         // Get the images
         uint scImageCount = 0;
-        Result result = _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, null);
-        CheckResult(result);
+        _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, null).CheckResult();
         if (_scImages.Length < scImageCount)
         {
             _scImages = new Image[(int)scImageCount];
         }
-        result = _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, out _scImages[0]);
-        CheckResult(result);
+        _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, out _scImages[0]).CheckResult();
 
         _scImageFormat = surfaceFormat.Format;
         _scExtent = swapchainExtent;

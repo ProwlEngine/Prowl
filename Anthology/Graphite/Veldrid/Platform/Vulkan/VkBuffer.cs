@@ -2,7 +2,6 @@ using System;
 
 using Silk.NET.Vulkan;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
 
 using VkBufferHandle = Silk.NET.Vulkan.Buffer;
 
@@ -62,8 +61,7 @@ internal unsafe class VkBuffer : DeviceBuffer
             Size = sizeInBytes,
             Usage = vkUsage
         };
-        Result result = _gd.Vk.CreateBuffer(gd.Device, in bufferCI, null, out _deviceBuffer);
-        CheckResult(result);
+        _gd.Vk.CreateBuffer(gd.Device, in bufferCI, null, out _deviceBuffer).CheckResult();
 
         bool prefersDedicatedAllocation;
         if (_gd.GetBufferMemoryRequirements2 != null)
@@ -102,7 +100,7 @@ internal unsafe class VkBuffer : DeviceBuffer
         if (isStaging)
         {
             // Use "host cached" memory for staging when available, for better performance of GPU -> CPU transfers
-            var hostCachedAvailable = TryFindMemoryType(
+            var hostCachedAvailable = _gd.Vk.TryFindMemoryType(
                 gd.PhysicalDeviceMemProperties,
                 _bufferMemoryRequirements.MemoryTypeBits,
                 memoryPropertyFlags | MemoryPropertyFlags.HostCachedBit,
@@ -124,8 +122,7 @@ internal unsafe class VkBuffer : DeviceBuffer
             default(Image),
             _deviceBuffer);
         _memory = memoryToken;
-        result = _gd.Vk.BindBufferMemory(gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset);
-        CheckResult(result);
+        _gd.Vk.BindBufferMemory(gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();
 
         RefCount = new ResourceRefCount(DisposeCore);
     }

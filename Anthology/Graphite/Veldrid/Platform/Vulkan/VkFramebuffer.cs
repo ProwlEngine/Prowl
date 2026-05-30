@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Silk.NET.Vulkan;
-using static Prowl.Veldrid.Vk.VulkanUtil;
 using System;
 using System.Diagnostics;
 using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
@@ -119,8 +118,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         renderPassCI.DependencyCount = 1;
         renderPassCI.PDependencies = &subpassDependency;
 
-        Result creationResult = _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassNoClear);
-        CheckResult(creationResult);
+        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassNoClear).CheckResult();
 
         for (int i = 0; i < colorAttachmentCount; i++)
         {
@@ -138,8 +136,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             }
 
         }
-        creationResult = _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassNoClearLoad);
-        CheckResult(creationResult);
+        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassNoClearLoad).CheckResult();
 
 
         // Load version
@@ -161,8 +158,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             attachments[i].InitialLayout = ImageLayout.Undefined;
         }
 
-        creationResult = _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassClear);
-        CheckResult(creationResult);
+        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassClear).CheckResult();
 
         FramebufferCreateInfo fbCI = new FramebufferCreateInfo
         {
@@ -192,8 +188,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
                     1)
             };
             ImageView* dest = (fbAttachments + i);
-            Result result = _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, dest);
-            CheckResult(result);
+            _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, dest).CheckResult();
             _attachmentViews.Add(*dest);
         }
 
@@ -218,8 +213,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
                     1)
             };
             ImageView* dest = (fbAttachments + (fbAttachmentsCount - 1));
-            Result result = _gd.Vk.CreateImageView(_gd.Device, in depthViewCI, null, dest);
-            CheckResult(result);
+            _gd.Vk.CreateImageView(_gd.Device, in depthViewCI, null, dest).CheckResult();
             _attachmentViews.Add(*dest);
         }
 
@@ -252,8 +246,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
         fbCI.Layers = 1;
         fbCI.RenderPass = _renderPassNoClear;
 
-        creationResult = _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out _deviceFramebuffer);
-        CheckResult(creationResult);
+        _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out _deviceFramebuffer).CheckResult();
 
         if (DepthTarget != null)
         {

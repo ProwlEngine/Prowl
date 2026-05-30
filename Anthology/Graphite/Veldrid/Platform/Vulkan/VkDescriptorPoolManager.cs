@@ -57,8 +57,7 @@ internal class VkDescriptorPoolManager
             dsAI.DescriptorSetCount = 1;
             dsAI.PSetLayouts = &setLayout;
             dsAI.DescriptorPool = pool;
-            Result result = _gd.Vk.AllocateDescriptorSets(_gd.Device, in dsAI, out DescriptorSet set);
-            VulkanUtil.CheckResult(result);
+            _gd.Vk.AllocateDescriptorSets(_gd.Device, in dsAI, out DescriptorSet set).CheckResult();
 
             return new DescriptorAllocationToken(set, pool);
         }
@@ -128,8 +127,7 @@ internal class VkDescriptorPoolManager
         poolCI.PPoolSizes = sizes;
         poolCI.PoolSizeCount = poolSizeCount;
 
-        Result result = _gd.Vk.CreateDescriptorPool(_gd.Device, in poolCI, null, out DescriptorPool descriptorPool);
-        VulkanUtil.CheckResult(result);
+        _gd.Vk.CreateDescriptorPool(_gd.Device, in poolCI, null, out DescriptorPool descriptorPool).CheckResult();
 
         return new PoolInfo(descriptorPool, totalSets, descriptorCount);
     }

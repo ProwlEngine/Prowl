@@ -21,8 +21,7 @@ internal unsafe class VkFence : Fence
             SType = StructureType.FenceCreateInfo,
             Flags = signaled ? FenceCreateFlags.SignaledBit : 0
         };
-        Result result = _gd.Vk.CreateFence(_gd.Device, in fenceCI, null, out _fence);
-        VulkanUtil.CheckResult(result);
+        _gd.Vk.CreateFence(_gd.Device, in fenceCI, null, out _fence).CheckResult();
     }
 
     public override void Reset()

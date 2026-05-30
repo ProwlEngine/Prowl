@@ -1,7 +1,6 @@
 using System;
 using System.Buffers;
 using Silk.NET.Vulkan;
-using static Prowl.Veldrid.Vk.VulkanUtil;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -80,8 +79,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             Flags = CommandPoolCreateFlags.ResetCommandBufferBit,
             QueueFamilyIndex = gd.GraphicsQueueIndex
         };
-        Result result = _gd.Vk.CreateCommandPool(_gd.Device, in poolCI, null, out _pool);
-        CheckResult(result);
+        _gd.Vk.CreateCommandPool(_gd.Device, in poolCI, null, out _pool).CheckResult();
 
         _cb = GetNextCommandBuffer();
         RefCount = new ResourceRefCount(DisposeCore);
@@ -94,8 +92,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             if (_availableCommandBuffers.Count > 0)
             {
                 Silk.NET.Vulkan.CommandBuffer cachedCB = _availableCommandBuffers.Dequeue();
-                Result resetResult = _gd.Vk.ResetCommandBuffer(cachedCB, 0);
-                CheckResult(resetResult);
+                _gd.Vk.ResetCommandBuffer(cachedCB, 0).CheckResult();
                 return cachedCB;
             }
         }
@@ -107,8 +104,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
             CommandBufferCount = 1,
             Level = CommandBufferLevel.Primary
         };
-        Result result = _gd.Vk.AllocateCommandBuffers(_gd.Device, in cbAI, out Silk.NET.Vulkan.CommandBuffer cb);
-        CheckResult(result);
+        _gd.Vk.AllocateCommandBuffers(_gd.Device, in cbAI, out Silk.NET.Vulkan.CommandBuffer cb).CheckResult();
         return cb;
     }
 

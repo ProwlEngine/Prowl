@@ -13,8 +13,6 @@ using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Core;
 using Silk.NET.Core.Native;
 
-using static Prowl.Veldrid.Vk.VulkanUtil;
-
 using VkApi = Silk.NET.Vulkan.Vk;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 using VkFenceHandle = Silk.NET.Vulkan.Fence;
@@ -233,8 +231,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             InitialDataSize = 0,
             PInitialData = null,
         };
-        Result pcResult = _vk.CreatePipelineCache(_device, in pcCI, null, out _driverPipelineCache);
-        CheckResult(pcResult);
+        _vk.CreatePipelineCache(_device, in pcCI, null, out _driverPipelineCache).CheckResult();
 
         for (int i = 0; i < SharedCommandPoolCount; i++)
         {
@@ -301,13 +298,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (slot.CurrentFrameId != 0)
         {
             VkFenceHandle fence = slot.Fence;
-            CheckResult(_vk.WaitForFences(_device, 1, in fence, true, ulong.MaxValue));
+            _vk.WaitForFences(_device, 1, in fence, true, ulong.MaxValue).CheckResult();
             ulong completed = slot.CurrentFrameId;
             Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), completed));
         }
 
         VkFenceHandle slotFence = slot.Fence;
-        CheckResult(_vk.ResetFences(_device, 1, in slotFence));
+        _vk.ResetFences(_device, 1, in slotFence).CheckResult();
         slot.FenceWrapper.Reset();
 
         // Return overflow buffers to the free pool and reset transient head
@@ -339,7 +336,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         lock (_graphicsQueueLock)
         {
-            CheckResult(_vk.QueueSubmit(_graphicsQueue, 1, in si, slotFence));
+            _vk.QueueSubmit(_graphicsQueue, 1, in si, slotFence).CheckResult();
             FlushValidationErrors();
         }
     }
@@ -455,13 +452,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         lock (_graphicsQueueLock)
         {
-            Result result = _vk.QueueSubmit(_graphicsQueue, 1, &si, vkFence);
-            CheckResult(result);
+            _vk.QueueSubmit(_graphicsQueue, 1, &si, vkFence).CheckResult();
             FlushValidationErrors();
             if (useExtraFence)
             {
-                result = _vk.QueueSubmit(_graphicsQueue, 0, (SubmitInfo*)null, submissionFence);
-                CheckResult(result);
+                _vk.QueueSubmit(_graphicsQueue, 0, (SubmitInfo*)null, submissionFence).CheckResult();
             }
         }
 
@@ -497,8 +492,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         VkFenceHandle fence = fsi.Fence;
         Silk.NET.Vulkan.CommandBuffer completedCB = fsi.VulkanCommandBuffer;
         fsi.CommandBuffer?.CommandBufferCompleted(completedCB);
-        Result resetResult = _vk.ResetFences(_device, 1, &fence);
-        CheckResult(resetResult);
+        _vk.ResetFences(_device, 1, &fence).CheckResult();
         ReturnSubmissionFence(fence);
         lock (_stagingResourcesLock)
         {
@@ -552,8 +546,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         {
             FenceCreateInfo fenceCI = new FenceCreateInfo(sType: StructureType.FenceCreateInfo);
             VkFenceHandle newFence;
-            Result result = _vk.CreateFence(_device, &fenceCI, null, &newFence);
-            CheckResult(result);
+            _vk.CreateFence(_device, &fenceCI, null, &newFence).CheckResult();
             return newFence;
         }
     }
@@ -653,14 +646,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         utf8Ptr[byteCount] = 0;
 
         nameInfo.PObjectName = utf8Ptr;
-        Result result = _setObjectNameDelegate(_device, &nameInfo);
-        CheckResult(result);
+        _setObjectNameDelegate(_device, &nameInfo).CheckResult();
     }
 
     private void CreateInstance(bool debug, VulkanDeviceOptions options, VkSurfaceSwapchainSource? surface)
     {
-        HashSet<string> availableInstanceLayers = [.. EnumerateInstanceLayers()];
-        HashSet<string> availableInstanceExtensions = [.. GetInstanceExtensions()];
+        HashSet<string> availableInstanceLayers = [.. Vk.EnumerateInstanceLayers((LayerProperties*)0)];
+        HashSet<string> availableInstanceExtensions = [.. Vk.EnumerateInstanceExtensionProperties((byte*)0)];
 
         InstanceCreateInfo instanceCI = new InstanceCreateInfo(sType: StructureType.InstanceCreateInfo);
         ApplicationInfo applicationInfo = new ApplicationInfo(sType: StructureType.ApplicationInfo)
@@ -760,8 +752,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             instanceCI.PpEnabledLayerNames = (byte**)instanceLayers;
         }
 
-        Result result = _vk.CreateInstance(in instanceCI, null, out _instance);
-        CheckResult(result);
+        _vk.CreateInstance(in instanceCI, null, out _instance).CheckResult();
 
         if (debug && debugReportExtensionAvailable)
         {
@@ -790,8 +781,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         if (_vk.TryGetInstanceExtension(_instance, out _extDebugReport))
         {
-            Result result = _extDebugReport.CreateDebugReportCallback(_instance, in debugCallbackCI, null, out _debugCallbackHandle);
-            CheckResult(result);
+            _extDebugReport.CreateDebugReportCallback(_instance, in debugCallbackCI, null, out _debugCallbackHandle).CheckResult();
         }
     }
 
@@ -873,13 +863,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     public ExtensionProperties[] GetDeviceExtensionProperties()
     {
         uint propertyCount = 0;
-        Result result = _vk.EnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, null);
-        CheckResult(result);
+        _vk.EnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, null).CheckResult();
         ExtensionProperties[] props = new ExtensionProperties[(int)propertyCount];
         fixed (ExtensionProperties* properties = props)
         {
-            result = _vk.EnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, properties);
-            CheckResult(result);
+            _vk.EnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, properties).CheckResult();
         }
         return props;
     }
@@ -999,8 +987,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             deviceCreateInfo.EnabledExtensionCount = activeExtensionCount;
             deviceCreateInfo.PpEnabledExtensionNames = (byte**)activeExtensionsPtr;
 
-            Result result = _vk.CreateDevice(_physicalDevice, in deviceCreateInfo, null, out _device);
-            CheckResult(result);
+            _vk.CreateDevice(_physicalDevice, in deviceCreateInfo, null, out _device).CheckResult();
         }
 
         _vk.GetDeviceQueue(_device, _graphicsQueueIndex, 0, out _graphicsQueue);
@@ -1146,8 +1133,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         CommandPoolCreateInfo commandPoolCI = new CommandPoolCreateInfo(sType: StructureType.CommandPoolCreateInfo);
         commandPoolCI.Flags = CommandPoolCreateFlags.ResetCommandBufferBit;
         commandPoolCI.QueueFamilyIndex = _graphicsQueueIndex;
-        Result result = _vk.CreateCommandPool(_device, in commandPoolCI, null, out _graphicsCommandPool);
-        CheckResult(result);
+        _vk.CreateCommandPool(_device, in commandPoolCI, null, out _graphicsCommandPool).CheckResult();
     }
 
     protected override MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource)
@@ -1282,8 +1268,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         _memoryManager.Dispose();
 
-        Result result = _vk.DeviceWaitIdle(_device);
-        CheckResult(result);
+        _vk.DeviceWaitIdle(_device).CheckResult();
+
         _vk.DestroyDevice(_device, null);
         _vk.DestroyInstance(_instance, null);
     }
@@ -1363,7 +1349,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             properties = default(PixelFormatProperties);
             return false;
         }
-        CheckResult(result);
+
+        result.CheckResult();
 
         properties = new PixelFormatProperties(
            vkProps.MaxExtent.Width,
@@ -1454,8 +1441,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         else
         {
             void* mappedPtr;
-            Result result = _vk.MapMemory(Device, buffer.Memory.DeviceMemory, buffer.Memory.Offset, numBytes, 0, &mappedPtr);
-            CheckResult(result);
+            _vk.MapMemory(Device, buffer.Memory.DeviceMemory, buffer.Memory.Offset, numBytes, 0, &mappedPtr).CheckResult();
             return (IntPtr)mappedPtr;
         }
     }
@@ -1589,12 +1575,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     private static bool CheckIsSupported()
     {
-        if (!IsVulkanLoaded())
-        {
-            return false;
-        }
-
         using var vk = VkApi.GetApi();
+
+        if (!vk.IsLoaded())
+            return false;
+
         InstanceCreateInfo instanceCI = new InstanceCreateInfo(sType: StructureType.InstanceCreateInfo);
         ApplicationInfo applicationInfo = new ApplicationInfo(sType: StructureType.ApplicationInfo);
         applicationInfo.ApiVersion = new Version32(1, 0, 0);
@@ -1621,7 +1606,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         vk.DestroyInstance(testInstance, null);
 
-        HashSet<string> instanceExtensions = new HashSet<string>(GetInstanceExtensions());
+        HashSet<string> instanceExtensions = [.. vk.EnumerateInstanceExtensionProperties((byte*)0)];
+
         if (!instanceExtensions.Contains(CommonStrings.VK_KHR_SURFACE_EXTENSION_NAME))
         {
             return false;
@@ -1744,35 +1730,28 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             CommandPoolCreateInfo commandPoolCI = new CommandPoolCreateInfo(sType: StructureType.CommandPoolCreateInfo);
             commandPoolCI.Flags = CommandPoolCreateFlags.TransientBit | CommandPoolCreateFlags.ResetCommandBufferBit;
             commandPoolCI.QueueFamilyIndex = _gd.GraphicsQueueIndex;
-            Result result = _gd._vk.CreateCommandPool(_gd.Device, in commandPoolCI, null, out _pool);
-            CheckResult(result);
+            _gd._vk.CreateCommandPool(_gd.Device, in commandPoolCI, null, out _pool).CheckResult();
 
             CommandBufferAllocateInfo allocateInfo = new CommandBufferAllocateInfo(sType: StructureType.CommandBufferAllocateInfo);
             allocateInfo.CommandBufferCount = 1;
             allocateInfo.Level = CommandBufferLevel.Primary;
             allocateInfo.CommandPool = _pool;
-            Result allocResult;
             fixed (Silk.NET.Vulkan.CommandBuffer* cbPtr = &_cb)
-            {
-                allocResult = _gd._vk.AllocateCommandBuffers(_gd.Device, &allocateInfo, cbPtr);
-            }
-            CheckResult(allocResult);
+                _gd._vk.AllocateCommandBuffers(_gd.Device, &allocateInfo, cbPtr).CheckResult();
         }
 
         public Silk.NET.Vulkan.CommandBuffer BeginNewCommandBuffer()
         {
             CommandBufferBeginInfo beginInfo = new CommandBufferBeginInfo(sType: StructureType.CommandBufferBeginInfo);
             beginInfo.Flags = CommandBufferUsageFlags.OneTimeSubmitBit;
-            Result result = _gd._vk.BeginCommandBuffer(_cb, in beginInfo);
-            CheckResult(result);
+            _gd._vk.BeginCommandBuffer(_cb, in beginInfo).CheckResult();
 
             return _cb;
         }
 
         public void EndAndSubmit(Silk.NET.Vulkan.CommandBuffer cb)
         {
-            Result result = _gd._vk.EndCommandBuffer(cb);
-            CheckResult(result);
+            _gd._vk.EndCommandBuffer(cb).CheckResult();
             _gd.SubmitCommandBuffer(null, cb, 0, null, 0, null, null);
             lock (_gd._stagingResourcesLock)
             {

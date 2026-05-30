@@ -1,7 +1,6 @@
 using System.Linq;
 using Silk.NET.Vulkan;
 using Silk.NET.Core;
-using static Prowl.Veldrid.Vk.VulkanUtil;
 using System;
 using System.Runtime.InteropServices;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
@@ -166,11 +165,9 @@ internal unsafe class VkSwapchain : Swapchain
 
         _currentImageIndex = 0;
         uint surfaceFormatCount = 0;
-        result = _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, null);
-        CheckResult(result);
+        _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, null).CheckResult();
         SurfaceFormatKHR[] formats = new SurfaceFormatKHR[surfaceFormatCount];
-        result = _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, out formats[0]);
-        CheckResult(result);
+        _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, out formats[0]).CheckResult();
 
         Format desiredFormat = _colorSrgb
             ? Format.B8G8R8A8Srgb
@@ -203,11 +200,9 @@ internal unsafe class VkSwapchain : Swapchain
         }
 
         uint presentModeCount = 0;
-        result = _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, null);
-        CheckResult(result);
+        _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, null).CheckResult();
         PresentModeKHR[] presentModes = new PresentModeKHR[presentModeCount];
-        result = _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, out presentModes[0]);
-        CheckResult(result);
+        _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, out presentModes[0]).CheckResult();
 
         PresentModeKHR presentMode = PresentModeKHR.FifoKhr;
 
@@ -267,8 +262,7 @@ internal unsafe class VkSwapchain : Swapchain
         SwapchainKHR oldSwapchain = _deviceSwapchain;
         swapchainCI.OldSwapchain = oldSwapchain;
 
-        result = _gd.KhrSwapchain.CreateSwapchain(_gd.Device, &swapchainCI, null, out _deviceSwapchain);
-        CheckResult(result);
+        _gd.KhrSwapchain.CreateSwapchain(_gd.Device, &swapchainCI, null, out _deviceSwapchain).CheckResult();
         if (oldSwapchain.Handle != default)
         {
             _gd.KhrSwapchain.DestroySwapchain(_gd.Device, oldSwapchain, null);
@@ -300,12 +294,11 @@ internal unsafe class VkSwapchain : Swapchain
 
     private bool QueueSupportsPresent(uint queueFamilyIndex, SurfaceKHR surface)
     {
-        Result result = _gd.KhrSurface.GetPhysicalDeviceSurfaceSupport(
+        _gd.KhrSurface.GetPhysicalDeviceSurfaceSupport(
             _gd.PhysicalDevice,
             queueFamilyIndex,
             surface,
-            out Bool32 supported);
-        CheckResult(result);
+            out Bool32 supported).CheckResult();
         return supported;
     }
 
