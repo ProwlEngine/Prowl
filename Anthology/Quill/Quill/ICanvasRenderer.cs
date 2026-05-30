@@ -42,12 +42,6 @@ namespace Prowl.Quill
         public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls);
 
         /// <summary>
-        /// Creates a float texture for Slug rendering. Returns an opaque texture handle.
-        /// Backends that don't support Slug can return null (default).
-        /// </summary>
-        object? CreateFloatTexture(int width, int height, int components, float[] data) => null;
-
-        /// <summary>
         /// Whether this backend implements backdrop blur (capturing and blurring the framebuffer
         /// behind a shape). When false, backdrop-blur draw calls degrade to flat tinted fills.
         /// </summary>

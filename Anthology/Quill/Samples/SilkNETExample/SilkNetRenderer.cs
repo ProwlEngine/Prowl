@@ -33,10 +33,6 @@ namespace SilkExample
         private int _brushParams2Location;
         private int _brushTextureMatLocation;
         private int _dpiScaleLocation;
-        private int _slugCurveTexLocation;
-        private int _slugBandTexLocation;
-        private int _slugCurveTexSizeLocation;
-        private int _slugBandTexSizeLocation;
 
         // Backdrop blur (dual Kawase)
         private int _backdropTexLocation;
@@ -153,10 +149,6 @@ namespace SilkExample
             _brushParams2Location = _gl.GetUniformLocation(_program, "brushParams2");
             _brushTextureMatLocation = _gl.GetUniformLocation(_program, "brushTextureMat");
             _dpiScaleLocation = _gl.GetUniformLocation(_program, "dpiScale");
-            _slugCurveTexLocation = _gl.GetUniformLocation(_program, "slugCurveTexture");
-            _slugBandTexLocation = _gl.GetUniformLocation(_program, "slugBandTexture");
-            _slugCurveTexSizeLocation = _gl.GetUniformLocation(_program, "slugCurveTexSize");
-            _slugBandTexSizeLocation = _gl.GetUniformLocation(_program, "slugBandTexSize");
             _backdropTexLocation = _gl.GetUniformLocation(_program, "backdropTexture");
             _viewportSizeLocation = _gl.GetUniformLocation(_program, "viewportSize");
             _backdropBlurAmountLocation = _gl.GetUniformLocation(_program, "backdropBlurAmount");
@@ -182,7 +174,7 @@ namespace SilkExample
             _vbo = _gl.GenBuffer();
             _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
 
-            // Define vertex attributes (44-byte vertex: 20 core + 24 slug)
+            // Define vertex attributes (20-byte vertex)
             uint stride = (uint)Vertex.SizeInBytes; // 44
 
             _gl.EnableVertexAttribArray(0); // Position: vec2 at offset 0
@@ -193,12 +185,6 @@ namespace SilkExample
 
             _gl.EnableVertexAttribArray(2); // Color: vec4 ubyte normalized at offset 16
             _gl.VertexAttribPointer(2, 4, VertexAttribPointerType.UnsignedByte, true, stride, (void*)16);
-
-            _gl.EnableVertexAttribArray(3); // Slug band transform: vec4 at offset 20
-            _gl.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, stride, (void*)20);
-
-            _gl.EnableVertexAttribArray(4); // Slug glyph info: vec2 at offset 36
-            _gl.VertexAttribPointer(4, 2, VertexAttribPointerType.Float, false, stride, (void*)36);
 
             // Create element buffer object
             _ebo = _gl.GenBuffer();
@@ -218,40 +204,6 @@ namespace SilkExample
         public object CreateTexture(uint width, uint height)
         {
             return TextureSilk.CreateNew(_gl, width, height);
-        }
-
-        public unsafe object? CreateFloatTexture(int width, int height, int components, float[] data)
-        {
-            uint tex = _gl.GenTexture();
-            _gl.BindTexture(TextureTarget.Texture2D, tex);
-            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
-            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-
-            float[] uploadData;
-            if (components == 2)
-            {
-                uploadData = new float[width * height * 4];
-                for (int i = 0; i < width * height; i++)
-                {
-                    uploadData[i * 4 + 0] = data[i * 2 + 0];
-                    uploadData[i * 4 + 1] = data[i * 2 + 1];
-                }
-            }
-            else
-            {
-                uploadData = data;
-            }
-
-            fixed (float* ptr = uploadData)
-            {
-                _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba32f,
-                    (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.Float, ptr);
-            }
-
-            _gl.BindTexture(TextureTarget.Texture2D, 0);
-            return tex;
         }
 
         public Int2 GetTextureSize(object texture)
@@ -482,23 +434,6 @@ namespace SilkExample
                 _gl.Uniform2(_viewportSizeLocation, (float)_fbWidth, (float)_fbHeight);
                 _gl.Uniform1(_backdropTexLocation, 3);
                 _gl.Uniform1(_backdropBlurAmountLocation, (float)drawCall.Brush.BackdropBlur);
-
-                // Bind Slug textures if needed
-                if (drawCall.IsSlug)
-                {
-                    _gl.ActiveTexture(TextureUnit.Texture1);
-                    _gl.BindTexture(TextureTarget.Texture2D, (uint)drawCall.SlugCurveTexture!);
-                    _gl.Uniform1(_slugCurveTexLocation, 1);
-
-                    _gl.ActiveTexture(TextureUnit.Texture2);
-                    _gl.BindTexture(TextureTarget.Texture2D, (uint)drawCall.SlugBandTexture!);
-                    _gl.Uniform1(_slugBandTexLocation, 2);
-
-                    _gl.Uniform2(_slugCurveTexSizeLocation, (float)drawCall.SlugCurveTexWidth, (float)drawCall.SlugCurveTexHeight);
-                    _gl.Uniform2(_slugBandTexSizeLocation, (float)drawCall.SlugBandTexWidth, (float)drawCall.SlugBandTexHeight);
-
-                    _gl.ActiveTexture(TextureUnit.Texture0);
-                }
             }
 
             // Draw the elements

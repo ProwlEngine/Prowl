@@ -1,5 +1,4 @@
 ﻿using Prowl.Quill.External.LibTessDotNet;
-using Prowl.Quill.Slug;
 using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
@@ -42,17 +41,6 @@ namespace Prowl.Quill
     /// <summary>
     /// Specifies the winding rule used to determine the interior of complex paths.
     /// </summary>
-    /// <summary>
-    /// Text rendering mode: Bitmap (rasterized atlas) or Slug (GPU curve evaluation).
-    /// </summary>
-    public enum TextRenderMode
-    {
-        /// <summary>Rasterize glyphs to a bitmap atlas (default, compatible with all backends).</summary>
-        Bitmap,
-        /// <summary>Evaluate glyph curves directly in the fragment shader using the Slug algorithm. Requires ISlugRenderer support.</summary>
-        Slug
-    }
-
     public enum WindingMode
     {
         /// <summary>
@@ -86,19 +74,6 @@ namespace Prowl.Quill
         internal Transform2D scissor;
         internal Float2 scissorExtent;
         internal int stateHash;
-
-        // Slug texture state - non-null when this draw call contains Slug text
-        /// <summary>Slug curve texture (RGBA32F). Null for non-Slug draw calls.</summary>
-        public object? SlugCurveTexture;
-        /// <summary>Slug band texture (RG32F as RGBA32F). Null for non-Slug draw calls.</summary>
-        public object? SlugBandTexture;
-        /// <summary>Slug curve texture dimensions.</summary>
-        public int SlugCurveTexWidth, SlugCurveTexHeight;
-        /// <summary>Slug band texture dimensions.</summary>
-        public int SlugBandTexWidth, SlugBandTexHeight;
-
-        /// <summary>True if this draw call contains Slug text vertices.</summary>
-        public bool IsSlug => SlugCurveTexture != null;
 
         /// <summary>
         /// Gets the texture from the brush. Returns null if no texture is set.
@@ -214,8 +189,8 @@ namespace Prowl.Quill
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct Vertex
     {
-        // 20 bytes core + 24 bytes slug = 44 bytes
-        public static int SizeInBytes => 44;
+        // 8 bytes position + 8 bytes uv + 4 bytes color = 20 bytes
+        public static int SizeInBytes => 20;
 
         /// <summary>Gets the position of the vertex in screen space.</summary>
         public Float2 Position => new Float2(x, y);
@@ -231,9 +206,9 @@ namespace Prowl.Quill
         public float x;
         /// <summary>The Y position in screen space.</summary>
         public float y;
-        /// <summary>The U texture coordinate (or em-space X for Slug).</summary>
+        /// <summary>The U texture coordinate.</summary>
         public float u;
-        /// <summary>The V texture coordinate (or em-space Y for Slug).</summary>
+        /// <summary>The V texture coordinate.</summary>
         public float v;
         /// <summary>The red color component.</summary>
         public byte r;
@@ -244,21 +219,7 @@ namespace Prowl.Quill
         /// <summary>The alpha (transparency) component.</summary>
         public byte a;
 
-        // ---- Slug fields (24 bytes) - zero for non-Slug vertices ----
-        /// <summary>Slug: band scale X. Zero for non-Slug vertices.</summary>
-        public float slugBandScaleX;
-        /// <summary>Slug: band scale Y.</summary>
-        public float slugBandScaleY;
-        /// <summary>Slug: band offset X.</summary>
-        public float slugBandOffsetX;
-        /// <summary>Slug: band offset Y.</summary>
-        public float slugBandOffsetY;
-        /// <summary>Slug: packed band texture location (texCoordY * 4096 + texCoordX).</summary>
-        public float slugPackedBandLoc;
-        /// <summary>Slug: band count. When > 0, shader uses Slug rendering.</summary>
-        public float slugBandCount;
-
-        /// <summary>Creates a standard (non-Slug) vertex.</summary>
+        /// <summary>Creates a vertex.</summary>
         public Vertex(in Float2 position, in Float2 UV, in Color32 color)
         {
             x = (float)position.X;
@@ -269,33 +230,6 @@ namespace Prowl.Quill
             g = color.G;
             b = color.B;
             a = color.A;
-            slugBandScaleX = 0;
-            slugBandScaleY = 0;
-            slugBandOffsetX = 0;
-            slugBandOffsetY = 0;
-            slugPackedBandLoc = 0;
-            slugBandCount = 0;
-        }
-
-        /// <summary>Creates a Slug text vertex with em-space coords and band data.</summary>
-        public Vertex(in Float2 position, in Float2 emCoord, in Color32 color,
-            float bandScaleX, float bandScaleY, float bandOffsetX, float bandOffsetY,
-            float packedBandLoc, float bandCount)
-        {
-            x = (float)position.X;
-            y = (float)position.Y;
-            u = (float)emCoord.X;
-            v = (float)emCoord.Y;
-            r = color.R;
-            g = color.G;
-            b = color.B;
-            a = color.A;
-            slugBandScaleX = bandScaleX;
-            slugBandScaleY = bandScaleY;
-            slugBandOffsetX = bandOffsetX;
-            slugBandOffsetY = bandOffsetY;
-            slugPackedBandLoc = packedBandLoc;
-            slugBandCount = bandCount;
         }
     }
 
@@ -521,7 +455,6 @@ namespace Prowl.Quill
         private float _globalAlpha;
 
         private TextRenderer _scribeRenderer;
-        private SlugTextRenderer? _slugRenderer;
 
         // Half-pixel offsets (in logical units) for edge-aligned AA.
         private float _pixelWidth = 1.0f;
@@ -555,13 +488,6 @@ namespace Prowl.Quill
         /// Gets the size of one physical pixel in logical units (= 1 / FramebufferScale).
         /// </summary>
         public float PixelFraction => _pixelWidth;
-
-        /// <summary>
-        /// Gets or sets the text rendering mode. Slug mode evaluates glyph curves
-        /// directly on the GPU for scale-independent rendering. Falls back to Bitmap
-        /// if the backend does not support ISlugRenderer.
-        /// </summary>
-        public TextRenderMode TextMode { get; set; } = TextRenderMode.Bitmap;
 
         /// <summary>
         /// Gets the text renderer for drawing text and accessing font functionality.
@@ -678,9 +604,6 @@ namespace Prowl.Quill
                 hash = hash * 31 + _state.scissorExtent.GetHashCode();
                 hash = hash * 31 + _state.scissor.GetHashCode();
                 hash = hash * 31 + _state.brush.ComputeHash();
-                // Include Slug texture identity so Slug and non-Slug draws are separate
-                if (_slugCurveTexture != null)
-                    hash = hash * 31 + _slugCurveTexture.GetHashCode();
                 _currentDrawStateHash = hash;
             }
             _drawStateDirty = false;
@@ -850,28 +773,6 @@ namespace Prowl.Quill
         internal void SetFontTexture(object? texture)
         {
             _state.brush.Texture = texture;
-            InvalidateDrawState();
-        }
-
-        // Slug texture state - stored here and copied into DrawCalls
-        private object? _slugCurveTexture;
-        private object? _slugBandTexture;
-        private int _slugCurveTexW, _slugCurveTexH;
-        private int _slugBandTexW, _slugBandTexH;
-
-        /// <summary>
-        /// Sets the Slug curve/band textures for subsequent Slug draw calls.
-        /// Called by SlugTextRenderer before emitting glyph quads.
-        /// </summary>
-        internal void SetSlugTextures(object? curveTexture, object? bandTexture,
-            int curveW, int curveH, int bandW, int bandH)
-        {
-            _slugCurveTexture = curveTexture;
-            _slugBandTexture = bandTexture;
-            _slugCurveTexW = curveW;
-            _slugCurveTexH = curveH;
-            _slugBandTexW = bandW;
-            _slugBandTexH = bandH;
             InvalidateDrawState();
         }
 
@@ -1268,14 +1169,6 @@ namespace Prowl.Quill
                 if (lastDrawCall.Brush.Uniforms != null)
                     lastDrawCall.Brush.Uniforms = lastDrawCall.Brush.Uniforms.Clone();
                 lastDrawCall.stateHash = currentHash;
-
-                // Copy Slug texture state
-                lastDrawCall.SlugCurveTexture = _slugCurveTexture;
-                lastDrawCall.SlugBandTexture = _slugBandTexture;
-                lastDrawCall.SlugCurveTexWidth = _slugCurveTexW;
-                lastDrawCall.SlugCurveTexHeight = _slugCurveTexH;
-                lastDrawCall.SlugBandTexWidth = _slugBandTexW;
-                lastDrawCall.SlugBandTexHeight = _slugBandTexH;
 
                 _isNewDrawCallRequested = false;
             }
@@ -2627,24 +2520,6 @@ namespace Prowl.Quill
         /// </summary>
         public void DrawText(string text, float x, float y, Color32 color, float pixelSize, FontFile font, float letterSpacing = 0f, Float2? origin = null)
         {
-            if (TextMode == TextRenderMode.Slug)
-            {
-                _slugRenderer ??= new SlugTextRenderer(this);
-
-                Float2 position = new Float2(x, y);
-                float actualPixelSize = pixelSize * _framebufferScale;
-                if (origin.HasValue)
-                {
-                    float actualLetterSpacing = letterSpacing * _framebufferScale;
-                    var textSize = _scribeRenderer.FontEngine.MeasureText(text, actualPixelSize, font, actualLetterSpacing);
-                    position.X -= (textSize.X / _framebufferScale) * origin.Value.X;
-                    position.Y -= (textSize.Y / _framebufferScale) * origin.Value.Y;
-                }
-                _slugRenderer.DrawText(font, text, (float)position.X, (float)position.Y,
-                    color, actualPixelSize, _framebufferScale, _state.transform);
-                return;
-            }
-
             Float2 bitmapPosition = new Float2(x, y);
             float bitmapPixelSize = pixelSize * _framebufferScale;
             float bitmapLetterSpacing = letterSpacing * _framebufferScale;

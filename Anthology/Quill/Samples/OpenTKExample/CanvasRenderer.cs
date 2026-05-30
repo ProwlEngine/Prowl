@@ -40,12 +40,6 @@ namespace OpenTKExample
         private int _fbWidth;
         private int _fbHeight;
 
-        // Slug uniform locations
-        private int _slugCurveTexLoc;
-        private int _slugBandTexLoc;
-        private int _slugCurveTexSizeLoc;
-        private int _slugBandTexSizeLoc;
-
         // Backdrop blur (dual Kawase)
         private int _backdropTexLoc;
         private int _viewportSizeLoc;
@@ -160,10 +154,6 @@ namespace OpenTKExample
             _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
             _brushTextureMatLoc = GL.GetUniformLocation(_shaderProgram, "brushTextureMat");
             _dpiScaleLoc = GL.GetUniformLocation(_shaderProgram, "dpiScale");
-            _slugCurveTexLoc = GL.GetUniformLocation(_shaderProgram, "slugCurveTexture");
-            _slugBandTexLoc = GL.GetUniformLocation(_shaderProgram, "slugBandTexture");
-            _slugCurveTexSizeLoc = GL.GetUniformLocation(_shaderProgram, "slugCurveTexSize");
-            _slugBandTexSizeLoc = GL.GetUniformLocation(_shaderProgram, "slugBandTexSize");
             _backdropTexLoc = GL.GetUniformLocation(_shaderProgram, "backdropTexture");
             _viewportSizeLoc = GL.GetUniformLocation(_shaderProgram, "viewportSize");
             _backdropBlurAmountLoc = GL.GetUniformLocation(_shaderProgram, "backdropBlurAmount");
@@ -247,37 +237,6 @@ namespace OpenTKExample
         public object CreateTexture(uint width, uint height)
         {
             return TextureTK.CreateNew(width, height);
-        }
-
-        public object? CreateFloatTexture(int width, int height, int components, float[] data)
-        {
-            int tex = GL.GenTexture();
-            GL.BindTexture(TextureTarget.Texture2D, tex);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-
-            if (components == 4)
-            {
-                GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba32f,
-                    width, height, 0, PixelFormat.Rgba, PixelType.Float, data);
-            }
-            else if (components == 2)
-            {
-                // Pack RG into RGBA (ZW = 0)
-                float[] rgbaData = new float[width * height * 4];
-                for (int i = 0; i < width * height; i++)
-                {
-                    rgbaData[i * 4 + 0] = data[i * 2 + 0];
-                    rgbaData[i * 4 + 1] = data[i * 2 + 1];
-                }
-                GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba32f,
-                    width, height, 0, PixelFormat.Rgba, PixelType.Float, rgbaData);
-            }
-
-            GL.BindTexture(TextureTarget.Texture2D, 0);
-            return tex;
         }
 
         public Int2 GetTextureSize(object texture)
@@ -422,31 +381,23 @@ namespace OpenTKExample
             // Bind vertex array
             GL.BindVertexArray(_vertexArrayObject);
 
-            // Upload vertex data (44 bytes per vertex: 20 core + 24 slug)
+            // Upload vertex data (20 bytes per vertex)
             GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
             GL.BufferData(BufferTarget.ArrayBuffer, canvas.Vertices.Count * Vertex.SizeInBytes, canvas.Vertices.ToArray(), BufferUsageHint.StreamDraw);
 
-            int stride = Vertex.SizeInBytes; // 44
+            int stride = Vertex.SizeInBytes; // 20
 
             // Position (location 0): vec2 at offset 0
             GL.EnableVertexAttribArray(0);
             GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, stride, 0);
 
-            // TexCoord / EmCoord (location 1): vec2 at offset 8
+            // TexCoord (location 1): vec2 at offset 8
             GL.EnableVertexAttribArray(1);
             GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 8);
 
             // Color (location 2): vec4 ubyte normalized at offset 16
             GL.EnableVertexAttribArray(2);
             GL.VertexAttribPointer(2, 4, VertexAttribPointerType.UnsignedByte, true, stride, 16);
-
-            // Slug band transform (location 3): vec4 at offset 20
-            GL.EnableVertexAttribArray(3);
-            GL.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, stride, 20);
-
-            // Slug glyph info (location 4): vec2 at offset 36
-            GL.EnableVertexAttribArray(4);
-            GL.VertexAttribPointer(4, 2, VertexAttribPointerType.Float, false, stride, 36);
 
             // Upload index data
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
@@ -520,22 +471,6 @@ namespace OpenTKExample
                     GL.Uniform1(_backdropTexLoc, 3);
                     GL.Uniform1(_backdropBlurAmountLoc, (float)drawCall.Brush.BackdropBlur);
 
-                    // Bind Slug textures if this is a Slug draw call
-                    if (drawCall.IsSlug)
-                    {
-                        GL.ActiveTexture(TextureUnit.Texture1);
-                        GL.BindTexture(TextureTarget.Texture2D, (int)drawCall.SlugCurveTexture!);
-                        GL.Uniform1(_slugCurveTexLoc, 1);
-
-                        GL.ActiveTexture(TextureUnit.Texture2);
-                        GL.BindTexture(TextureTarget.Texture2D, (int)drawCall.SlugBandTexture!);
-                        GL.Uniform1(_slugBandTexLoc, 2);
-
-                        GL.Uniform2(_slugCurveTexSizeLoc, (float)drawCall.SlugCurveTexWidth, (float)drawCall.SlugCurveTexHeight);
-                        GL.Uniform2(_slugBandTexSizeLoc, (float)drawCall.SlugBandTexWidth, (float)drawCall.SlugBandTexHeight);
-
-                        GL.ActiveTexture(TextureUnit.Texture0);
-                    }
                 }
 
                 GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
