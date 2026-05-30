@@ -756,7 +756,7 @@ internal unsafe class OpenGLCommandExecutor
             for (uint i = 0; i < blendState.AttachmentStates.Length; i++)
             {
                 BlendAttachmentDescription attachment = blendState.AttachmentStates[i];
-                ColorWriteMask colorMask = attachment.ColorWriteMask.GetOrDefault();
+                ColorWriteMask colorMask = attachment.ColorWriteMask ?? ColorWriteMask.All;
 
                 _gl.ColorMask(
                     i,
@@ -795,7 +795,7 @@ internal unsafe class OpenGLCommandExecutor
         else if (blendState.AttachmentStates.Length > 0)
         {
             BlendAttachmentDescription attachment = blendState.AttachmentStates[0];
-            ColorWriteMask colorMask = attachment.ColorWriteMask.GetOrDefault();
+            ColorWriteMask colorMask = attachment.ColorWriteMask ?? ColorWriteMask.All;
 
             _gl.ColorMask(
                 (colorMask & ColorWriteMask.Red) == ColorWriteMask.Red,

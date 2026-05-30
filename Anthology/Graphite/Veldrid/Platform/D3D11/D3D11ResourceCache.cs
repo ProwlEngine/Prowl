@@ -119,7 +119,7 @@ internal unsafe class D3D11ResourceCache : IDisposable
         {
             BlendAttachmentDescription state = attachmentStates[i];
             d3dBlendStateDesc.RenderTarget[i].BlendEnable = state.BlendEnabled;
-            d3dBlendStateDesc.RenderTarget[i].RenderTargetWriteMask = (byte)D3D11Formats.VdToD3D11ColorWriteEnable(state.ColorWriteMask.GetOrDefault());
+            d3dBlendStateDesc.RenderTarget[i].RenderTargetWriteMask = (byte)D3D11Formats.VdToD3D11ColorWriteEnable(state.ColorWriteMask ?? ColorWriteMask.All);
             d3dBlendStateDesc.RenderTarget[i].SrcBlend = D3D11Formats.VdToD3D11Blend(state.SourceColorFactor);
             d3dBlendStateDesc.RenderTarget[i].DestBlend = D3D11Formats.VdToD3D11Blend(state.DestinationColorFactor);
             d3dBlendStateDesc.RenderTarget[i].BlendOp = D3D11Formats.VdToD3D11BlendOperation(state.ColorFunction);
