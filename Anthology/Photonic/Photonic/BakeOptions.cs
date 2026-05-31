@@ -42,19 +42,6 @@ public sealed class BakeOptions
     public bool UseHemisphereLUT { get; set; } = true;
 
     /// <summary>
-    /// When true, every indirect path sample jitters its ray origin inside the texel's
-    /// world-space footprint. Without this, a texel whose centre lands in an unlucky spot
-    /// (a corner, a contact between surfaces, a sliver near a wall) has every shadow ray fail
-    /// the same way, leaving a stuck-dim pixel surrounded by correctly-lit ones, visible as
-    /// thin dark lines on flat surfaces. Jitter spreads the per-sample origin across the texel
-    /// so the unlucky positions stop dominating.
-    /// </summary>
-    public bool JitterRayOrigin { get; set; } = true;
-
-    /// <summary>Multiplier on the per-texel world radius used for jitter. 1.0 = jitter across the full texel; 0.5 = half.</summary>
-    public float JitterStrength { get; set; } = 1.0f;
-
-    /// <summary>
     /// When true, both the flat material color and the diffuse texture are ignored. Every
     /// surface acts as a white (1, 1, 1) Lambertian. Useful for diagnosing whether visible
     /// lightmap artifacts are caused by texture sampling vs. the path tracer itself.
@@ -70,50 +57,13 @@ public sealed class BakeOptions
     /// </summary>
     public bool IncludeDirectLighting { get; set; } = true;
 
-    /// <summary>Which path tracer to run. <see cref="PathTracerKind.PerTexel"/> traces from every covered atlas pixel; <see cref="PathTracerKind.Surfel"/> traces a low-density surfel cloud instead and interpolates to texels.</summary>
-    public PathTracerKind PathTracer { get; set; } = PathTracerKind.PerTexel;
-
-    /// <summary>Surfel mode: target surfels per square metre of world surface. Higher = more surfels, finer detail, slower bake.</summary>
-    public float SurfelsPerSquareMeter { get; set; } = 2.0f;
-
     /// <summary>
-    /// Surfel mode: per-texel cap on how many of the surfels in the texel's spatial cell are
-    /// blended in. Acts as a budget knob; the actual reach of each surfel is set by its own
-    /// <see cref="Surfels.Surfel.Radius"/>, computed at generation time from triangle area.
+    /// When true, all bake rays (visibility, bounce, and shadow/occlusion) cull back faces, so light
+    /// behaves as it does in a backface-culled rasterizer: it can pass up through a one-sided floor,
+    /// the way Prowl's backface-culled shadows allow. When false the tracer is two-sided (historic
+    /// behavior). The front-face winding is fixed to the renderer's convention by the integrator.
     /// </summary>
-    public int SurfelMaxNeighbors { get; set; } = 8;
-
-    /// <summary>Surfel mode: normal-similarity threshold for accepting a surfel during interpolation. Default 0.85.</summary>
-    public float SurfelNormalThreshold { get; set; } = 0.85f;
-
-    /// <summary>
-    /// Surfel mode: at generation time, reject candidate surfels whose <i>own-orientation</i>
-    /// nearest neighbour is too close. Misaligned-normal surfels are allowed to cluster freely
-    /// (corners, edges) since they're invisible to each other during interpolation anyway. Only
-    /// aligned surfels need even spacing. Cheap normal-aware Poisson disk.
-    /// </summary>
-    public bool SurfelNormalRejection { get; set; } = true;
-
-    /// <summary>Surfel mode: minimum separation between aligned-normal surfels, as a fraction of <see cref="Surfels.Surfel.Radius"/>. 0.6 = aligned surfels must be 60% of a kernel apart.</summary>
-    public float SurfelPoissonRadiusFactor { get; set; } = 0.6f;
-
-    /// <summary>Surfel mode: dot-product threshold above which two surfels count as "aligned" for rejection. 0.85 ~= within 32 degrees.</summary>
-    public float SurfelPoissonAlignThreshold { get; set; } = 0.85f;
-
-    /// <summary>Surfel mode: master toggle for the early-termination heuristics below. Lets you A/B-test the optimisation.</summary>
-    public bool SurfelEarlyTerminate { get; set; } = true;
-
-    /// <summary>Surfel mode: surfels whose pre-computed direct lighting exceeds this luminance are flagged Inactive before any indirect tracing.</summary>
-    public float SurfelDirectLitCutoff { get; set; } = 0.3f;
-
-    /// <summary>Surfel mode: minimum indirect samples a surfel must have before brightness / sky-only checks can deactivate it.</summary>
-    public int SurfelMinSamplesBeforeCheck { get; set; } = 16;
-
-    /// <summary>Surfel mode: if a surfel's running indirect average exceeds this per-channel sum, mark it Inactive. Tames runaway fireflies and converges bright surfels early.</summary>
-    public float SurfelBrightnessCutoff { get; set; } = 6.0f;
-
-    /// <summary>Surfel mode: if a surfel's running indirect average is within this luminance distance of <see cref="SkyColor"/>, deactivate.</summary>
-    public float SurfelSkyDominantCutoff { get; set; } = 0.05f;
+    public bool DoBackfaceCull { get; set; } = false;
 
     /// <summary>Edge dilation pixels applied after the bake, to prevent bilinear bleed at seams.</summary>
     public int DilatePixels { get; set; } = 2;
@@ -127,9 +77,6 @@ public sealed class BakeOptions
 
     /// <summary>Denoiser a-trous passes; each doubles the kernel reach (1, 2, 4, ...). 5 ~= a 32px effective radius.</summary>
     public int DenoiseIterations { get; set; } = 5;
-
-    /// <summary>Denoiser radiance edge-stop, relative to local luminance. Higher = smoother (more noise removed, softer shadow edges).</summary>
-    public float DenoiseColorPhi { get; set; } = 0.5f;
 
     /// <summary>Denoiser normal edge-stop exponent. Higher = sharper preservation of normal discontinuities.</summary>
     public float DenoiseNormalPhi { get; set; } = 64f;
@@ -151,15 +98,6 @@ public sealed class BakeOptions
     /// is called. Caller-side: emulate "one-shot" by polling until satisfied, then cancelling.
     /// </summary>
     public int SamplesPerIteration { get; set; } = 1;
-}
-
-/// <summary>Top-level path tracer architecture.</summary>
-public enum PathTracerKind
-{
-    /// <summary>Trace from every covered texel directly. Simple, predictable, the default.</summary>
-    PerTexel,
-    /// <summary>Trace from a sparse cloud of "surfels" scattered on the mesh surface, then interpolate the surfels' radiance back to texels. Much cheaper for high-resolution atlases; trades local detail for far fewer rays.</summary>
-    Surfel,
 }
 
 /// <summary>Final state of a bake.</summary>

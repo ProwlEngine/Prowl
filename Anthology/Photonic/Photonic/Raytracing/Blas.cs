@@ -404,6 +404,7 @@ internal sealed class Blas
                          Vector256<float> roX, Vector256<float> roY, Vector256<float> roZ,
                          Vector256<float> rdX, Vector256<float> rdY, Vector256<float> rdZ,
                          Vector256<float> tMinV, Vector256<float> tMaxV,
+                         bool cullEnabled, bool keepPositive,
                          out Vector256<float> tOut, out Vector256<float> uOut, out Vector256<float> vOut,
                          out uint hitMask)
     {
@@ -422,9 +423,14 @@ internal sealed class Blas
         var py = rdZ * e2x - rdX * e2z;
         var pz = rdX * e2y - rdY * e2x;
 
-        // det = dot(e1, p)
+        // det = dot(e1, p). Its sign is the triangle's facing relative to the ray; backface culling
+        // keeps only one side. (For a CCW-wound triangle, det > 0 = front-facing.)
         var det = e1x * px + e1y * py + e1z * pz;
-        var validDet = Vector256.GreaterThan(Vector256.Abs(det), Vector256.Create(1e-12f));
+        var eps = Vector256.Create(1e-12f);
+        Vector256<float> validDet;
+        if (!cullEnabled) validDet = Vector256.GreaterThan(Vector256.Abs(det), eps);
+        else if (keepPositive) validDet = Vector256.GreaterThan(det, eps);
+        else validDet = Vector256.LessThan(det, -Vector256.Create(1e-12f));
 
         var invDet = Vector256.Create(1f) / det;
 
@@ -462,7 +468,8 @@ internal sealed class Blas
     /// push far-to-near. Leaves run one SIMD ray-vs-4-triangle per 4-pack.
     /// </summary>
     public bool ClosestHit(Float3 ro, Float3 rd, float tMin, float maxT,
-                           out float t, out float u, out float v, out int triIndex)
+                           out float t, out float u, out float v, out int triIndex,
+                           bool cullEnabled = false, bool keepPositive = false)
     {
         t = maxT; u = v = 0f; triIndex = -1;
         if (Nodes4.Length == 0) return false;
@@ -543,6 +550,7 @@ internal sealed class Blas
                     for (int packStart = cIdx; packStart < cIdx + pCnt; packStart += SimdWidth)
                     {
                         RayTri8(packStart, roX8, roY8, roZ8, rdX8, rdY8, rdZ8, tMinV8, tMaxV8,
+                                cullEnabled, keepPositive,
                                 out var tt, out var uu, out var vv, out uint tHitMask);
                         if (tHitMask == 0) continue;
                         tt.CopyTo(tLanes);
@@ -573,7 +581,8 @@ internal sealed class Blas
     }
 
     /// <summary>Any-hit: return on the first triangle hit closer than <paramref name="maxT"/>.</summary>
-    public bool AnyHit(Float3 ro, Float3 rd, float tMin, float maxT)
+    public bool AnyHit(Float3 ro, Float3 rd, float tMin, float maxT,
+                       bool cullEnabled = false, bool keepPositive = false)
     {
         if (Nodes4.Length == 0) return false;
         // Vector128 broadcasts for inner-node BVH4 AABB tests.
@@ -628,6 +637,7 @@ internal sealed class Blas
                     for (int packStart = cIdx; packStart < cIdx + pCnt; packStart += SimdWidth)
                     {
                         RayTri8(packStart, roX8, roY8, roZ8, rdX8, rdY8, rdZ8, tMinV8, tMaxV8,
+                                cullEnabled, keepPositive,
                                 out _, out _, out _, out uint tHitMask);
                         if (tHitMask != 0) return true;
                     }

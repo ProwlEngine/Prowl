@@ -24,10 +24,13 @@ internal static class LightmapDenoiser
     /// <summary>
     /// Denoise <paramref name="rgb"/> (R,G,B interleaved HDR, length <c>width*height*3</c>) in place.
     /// <paramref name="covered"/> / <paramref name="samples"/> are the rasterizer's per-texel coverage
-    /// + guides (row-major <c>y*width + x</c>). Uncovered texels are left untouched for dilation.
+    /// + guides (row-major <c>y*width + x</c>). There is no radiance edge-stop: taps are weighted only
+    /// by the geometric guides (same surface normal + same plane), so Monte-Carlo noise is averaged out
+    /// regardless of magnitude (shadow edges on a flat surface soften as a result). Uncovered texels are
+    /// left untouched for dilation.
     /// </summary>
     public static void Run(float[] rgb, bool[] covered, TexelSample[] samples, int width, int height,
-                           int iterations, float colorPhi, float normalPhi, float positionScale)
+                           int iterations, float normalPhi, float positionScale)
     {
         if (iterations <= 0) return;
 
@@ -53,7 +56,6 @@ internal static class LightmapDenoiser
 
                     Float3 np = samples[p].Normal;
                     Float3 xp = samples[p].Position;
-                    float lp = Lum(src[p3], src[p3 + 1], src[p3 + 2]);
 
                     float footprint = System.MathF.Max(samples[p].WorldRadius, 1e-4f);
                     // Split spatial proximity into in-plane vs off-plane. The in-plane bandwidth grows
@@ -64,9 +66,6 @@ internal static class LightmapDenoiser
                     float sigmaPerp = footprint * positionScale;
                     float invPar2 = 1f / (2f * sigmaPar * sigmaPar);
                     float invPerp2 = 1f / (2f * sigmaPerp * sigmaPerp);
-                    // Radiance edge-stop is relative to local luminance so it behaves the same in
-                    // bright and dim HDR regions (preserves shadow boundaries either way).
-                    float cPhi = colorPhi * (lp + 1e-2f);
 
                     float sumR = 0f, sumG = 0f, sumB = 0f, wsum = 0f;
                     for (int dy = -2; dy <= 2; dy++)
@@ -89,10 +88,9 @@ internal static class LightmapDenoiser
                         float par2 = System.MathF.Max(0f, Float3.Dot(d, d) - perp * perp); // distance along it
                         float wP = System.MathF.Exp(-par2 * invPar2 - perp * perp * invPerp2);
 
-                        float lq = Lum(src[q3], src[q3 + 1], src[q3 + 2]);
-                        float wC = System.MathF.Exp(-System.MathF.Abs(lp - lq) / cPhi);
-
-                        float w = h * wN * wP * wC;
+                        // No radiance edge-stop: smoothing is driven purely by geometry (same surface +
+                        // same plane), so Monte-Carlo noise is averaged out regardless of its magnitude.
+                        float w = h * wN * wP;
                         sumR += src[q3] * w; sumG += src[q3 + 1] * w; sumB += src[q3 + 2] * w;
                         wsum += w;
                     }
@@ -120,6 +118,4 @@ internal static class LightmapDenoiser
             rgb[p3] = src[p3]; rgb[p3 + 1] = src[p3 + 1]; rgb[p3 + 2] = src[p3 + 2];
         }
     }
-
-    private static float Lum(float r, float g, float b) => 0.2126f * r + 0.7152f * g + 0.0722f * b;
 }

@@ -67,17 +67,6 @@ public sealed class Job
 
     private Rasterization.TargetWorkspace[]? _workspacesPublic;
 
-    private volatile Surfels.SurfelCloud? _surfelCloudPublic;
-
-    /// <summary>
-    /// Live reference to the surfel cloud (populated only when <see cref="BakeOptions.PathTracer"/>
-    /// is <see cref="PathTracerKind.Surfel"/>). Returns null before the cloud has been generated or
-    /// when the per-texel tracer is active. Surfel fields mutate from the worker thread between
-    /// iterations: callers must accept tearing on reads and treat all fields as read-only.
-    /// Exposed as internal; consumers gain access via InternalsVisibleTo.
-    /// </summary>
-    internal Surfels.SurfelCloud? SurfelCloud => _surfelCloudPublic;
-
     /// <summary>
     /// Read back the integrator's recorded data for one texel of the given target. Returns
     /// <see cref="TexelDiagnostic.Valid"/> = false until the rasterise phase has completed,
@@ -132,7 +121,7 @@ public sealed class Job
             if (w is null) continue;
 
             Imaging.LightmapDenoiser.Run(w.Target.PixelsRGB, w.Covered, w.Samples, w.Width, w.Height,
-                _options.DenoiseIterations, _options.DenoiseColorPhi, _options.DenoiseNormalPhi, _options.DenoisePositionScale);
+                _options.DenoiseIterations, _options.DenoiseNormalPhi, _options.DenoisePositionScale);
 
             if (_options.DilatePixels > 0)
             {
@@ -229,14 +218,9 @@ public sealed class Job
             var instances = allInstances.ToArray();
 
             _cts.Token.ThrowIfCancellationRequested();
-            _activity = "Build TLAS";
 
-            // Build BLAS/TLAS + pre-resolved materials (shared with BakeProbes).
+            // Build the merged world-space BLAS + pre-resolved materials (shared with BakeProbes).
             var accel = Integration.BakeAcceleration.Build(_scene, instances);
-            var blas = accel.Blas;
-            var instanceToBlas = accel.InstanceToBlas;
-            var resolvedMats = accel.ResolvedMats;
-            var tlas = accel.Tlas;
 
             // 3) For each target: rasterize UV1 to texel samples --------------------------------
             //    Build the workspaces array fully before publishing it. GetTexelInfo (called from
@@ -262,31 +246,11 @@ public sealed class Job
                 _targets[t].CoverageMask = mask;
             }
 
-            // 3.5) Surfel cloud (only when the surfel path tracer is active). Generated once
-            //      from the same instance set as the TLAS.
-            Surfels.SurfelCloud? surfelCloud = null;
-            if (_options.PathTracer == PathTracerKind.Surfel)
-            {
-                _activity = "Generate surfels";
-                surfelCloud = Surfels.SurfelGenerator.Generate(instances, new Surfels.SurfelGenerationOptions
-                {
-                    SurfelsPerSquareMeter = _options.SurfelsPerSquareMeter,
-                    Seed = _options.Seed,
-                    NormalRejection = _options.SurfelNormalRejection,
-                    PoissonRadiusFactor = _options.SurfelPoissonRadiusFactor,
-                    PoissonAlignThreshold = _options.SurfelPoissonAlignThreshold,
-                });
-                _surfelCloudPublic = surfelCloud;
-            }
-
             // 4) Integrate ----------------------------------------------------------------------
             //    The bake is always progressive: each iteration accumulates SamplesPerIteration
-            //    indirect samples per texel (or per surfel, in surfel mode) and updates the
-            //    atlas. Callers stop the bake via Cancel() when they've seen enough iterations.
-            if (surfelCloud is not null)
-                IntegrateContinuousSurfel(workspaces, tlas, instances, blas, instanceToBlas, resolvedMats, surfelCloud);
-            else
-                IntegrateContinuous(workspaces, tlas, instances, blas, instanceToBlas, resolvedMats);
+            //    indirect samples per texel and updates the atlas. Callers stop the bake via
+            //    Cancel() when they've seen enough iterations.
+            IntegrateContinuous(workspaces, accel);
             _activity = "Cancelled";
             Status = JobStatus.Cancelled;
         }
@@ -310,10 +274,10 @@ public sealed class Job
     /// for every covered texel, so a viewer that polls <see cref="IterationCount"/> can show a
     /// live preview converging.
     /// </summary>
-    private void IntegrateContinuous(TargetWorkspace[] workspaces, Tlas tlas, BakeInstance[] instances,
-                                     Blas[] blas, int[] instanceToBlas, BakeMaterial?[][] resolvedMats)
+    private void IntegrateContinuous(TargetWorkspace[] workspaces, Integration.BakeAcceleration accel)
     {
-        var integrator = new PathIntegrator(tlas, _scene, instances, blas, instanceToBlas, resolvedMats, _options);
+        var integrator = new PathIntegrator(_scene, accel.Blas, accel.MergedMats, _options);
+        var instanceMaterials = accel.InstanceMaterials;
         var parallelOpts = new System.Threading.Tasks.ParallelOptions
         {
             CancellationToken = _cts.Token,
@@ -338,8 +302,7 @@ public sealed class Job
                         int idx = y * W + x;
                         if (!ws.Covered[idx]) continue;
                         var s = ws.Samples[idx];
-                        int blasIdx = instanceToBlas[s.InstanceIndex];
-                        var mat = resolvedMats[blasIdx][s.MaterialGroupIndex];
+                        var mat = instanceMaterials[s.InstanceIndex][s.MaterialGroupIndex];
                         Float3 albedo;
                         Float3 emissive = mat is not null ? mat.Emissive : Float3.Zero;
                         if (_options.IgnoreAlbedo)
@@ -403,38 +366,21 @@ public sealed class Job
                             int idx = y * W + x;
                             if (!ws.Covered[idx]) continue;
                             var s = ws.Samples[idx];
-                            int blasIdx = instanceToBlas[s.InstanceIndex];
-                            var mat = resolvedMats[blasIdx][s.MaterialGroupIndex];
-                            Float3 albedo;
-                            if (_options.IgnoreAlbedo)
-                            {
-                                albedo = Float3.One;
-                            }
-                            else
-                            {
-                                albedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
-                                if (mat is not null && mat.DiffuseTexture is not null)
-                                {
-                                    var samp = mat.DiffuseTexture.SampleLinearRGBA(s.UV0.X, s.UV0.Y);
-                                    albedo = albedo * new Float3(samp.X, samp.Y, samp.Z);
-                                }
-                            }
 
                             // Per-texel-per-iter deterministic seed so paths are reproducible.
                             ulong seed = ((ulong)x * 0x9E3779B97F4A7C15UL ^ ((ulong)y * 0xC6BC279692B5C323UL))
                                        ^ baseSeed ^ iterMix;
                             var rng = new Sampling.Sampler(seed);
 
-                            Float3 ind = integrator.IntegrateIndirect(s.Position, s.Normal, albedo,
-                                                                       samplesPerIter, bounces, ref rng,
-                                                                       jitterWorldRadius: s.WorldRadius);
+                            Float3 ind = integrator.IntegrateIndirect(s.Position, s.Normal, Float3.One,
+                                                                       samplesPerIter, bounces, ref rng);
                             int contributionCount = samplesPerIter;
                             if (x == DebugTexelX && y == DebugTexelY && object.ReferenceEquals(_debugTarget, ws.Target))
                             {
                                 var segs = new System.Collections.Generic.List<DebugSegment>(8);
                                 integrator.RecordDirectShadowRays(s.Position, s.Normal, segs);
                                 var debugRng = new Sampling.Sampler(seed);
-                                integrator.TracePathRecorded(s.Position, s.Normal, Float3.One, bounces, ref debugRng, segs, s.WorldRadius);
+                                integrator.TracePathRecorded(s.Position, s.Normal, Float3.One, bounces, ref debugRng, segs);
                                 PublishDebugSegments(segs);
                             }
                             sums[idx] = sums[idx] + ind;
@@ -472,138 +418,6 @@ public sealed class Job
         }
     }
 
-    /// <summary>
-    /// Surfel-mode continuous bake. Each iter: every surfel casts a few uniform-hemisphere rays and
-    /// projects the radiance arriving along them into its directional SH-L1 accumulator. A ray's
-    /// radiance is one bounce - direct lighting at the hit plus the indirect cached in the cloud
-    /// from previous iterations - so light propagates one surfel-hop per pass and converges to full
-    /// multi-bounce GI. Surfels are then interpolated onto every covered texel, blended in SH space
-    /// and reconstructed for the texel's own normal, with optional per-texel direct lighting on top.
-    /// </summary>
-    private void IntegrateContinuousSurfel(
-        TargetWorkspace[] workspaces, Tlas tlas,
-        BakeInstance[] instances, Blas[] blas, int[] instanceToBlas,
-        BakeMaterial?[][] resolvedMats,
-        Surfels.SurfelCloud cloud)
-    {
-        var integrator = new PathIntegrator(tlas, _scene, instances, blas, instanceToBlas, resolvedMats, _options);
-        var parallelOpts = new System.Threading.Tasks.ParallelOptions
-        {
-            CancellationToken = _cts.Token,
-            MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism > 0
-                ? _options.MaxDegreeOfParallelism : System.Environment.ProcessorCount,
-        };
-
-        var surfels = cloud.Surfels;
-        int N = surfels.Length;
-
-        _activity = $"Surfels: allocate ({N} surfels)";
-        for (int ti = 0; ti < workspaces.Length; ti++) workspaces[ti].AllocateContinuousBuffers();
-
-        ulong baseSeed = _options.Seed;
-        int bounces = System.Math.Max(0, _options.Bounces);
-        int samplesPerIter = System.Math.Max(1, _options.SamplesPerIteration);
-        int maxNeighbors = System.Math.Max(1, _options.SurfelMaxNeighbors);
-        float normalThr = System.Math.Clamp(_options.SurfelNormalThreshold, -1f, 1f);
-        bool doIndirect = bounces > 0;
-
-        while (!_cts.IsCancellationRequested)
-        {
-            int iter = _iterationCount + 1;
-            _activity = $"Surfels iter {iter}: {N} surfels x {samplesPerIter}s (progressive multi-bounce)";
-            ulong iterMix = (ulong)iter * 0x6A09E667F3BCC908UL;
-
-            if (doIndirect)
-            {
-                // (1) Gather one bounce per surfel into its SH accumulator. Each ray's radiance is
-                //     direct lighting at its hit plus the indirect already cached in the cloud from
-                //     PREVIOUS iterations (read via the frozen ShEstimate snapshot). So light
-                //     advances one surfel-hop per pass and converges to full multi-bounce GI over
-                //     time -- no deep per-ray paths needed.
-                try
-                {
-                    System.Threading.Tasks.Parallel.For(0, N, parallelOpts, i =>
-                    {
-                        ref var s = ref surfels[i];
-                        ulong seed = (ulong)i * 0x9E3779B97F4A7C15UL ^ baseSeed ^ iterMix;
-                        var rng = new Sampler(seed);
-                        var sh = integrator.IntegrateSurfelRadiance(
-                            s.Position, s.Normal, samplesPerIter, ref rng,
-                            cloud, normalThr, maxNeighbors);
-                        s.ShAccum.Add(sh);
-                        s.SampleCount += samplesPerIter;
-                    });
-                }
-                catch (System.OperationCanceledException) { return; }
-
-                // (2) Publish the refreshed mean. Done as a separate barrier'd pass so the gather
-                //     above only ever reads last iteration's estimate, never a half-written one.
-                try
-                {
-                    System.Threading.Tasks.Parallel.For(0, N, parallelOpts, i =>
-                    {
-                        ref var s = ref surfels[i];
-                        s.ShEstimate = s.SampleCount > 0 ? s.ShAccum.Scaled(1f / s.SampleCount) : default;
-                    });
-                }
-                catch (System.OperationCanceledException) { return; }
-            }
-
-            // (3) Interpolate surfels onto every covered texel. SampleIrradianceOverPi reads the
-            //     single spatial-grid cell the texel sits in (surfels are pre-registered in every
-            //     cell their influence sphere overlaps), blends the nearby surfels in SH space and
-            //     reconstructs irradiance for THIS texel's normal -- so a surfel feeds texels of
-            //     differing orientation without leaking.
-            _activity = $"Surfels iter {iter}: interpolate to texels";
-            for (int ti = 0; ti < workspaces.Length; ti++)
-            {
-                if (_cts.IsCancellationRequested) return;
-                var ws = workspaces[ti];
-                int W = ws.Width, H = ws.Height;
-                var pixels = ws.Target.PixelsRGB;
-                try
-                {
-                    System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
-                    {
-                        for (int x = 0; x < W; x++)
-                        {
-                            int idx = y * W + x;
-                            if (!ws.Covered[idx]) continue;
-                            var ts = ws.Samples[idx];
-
-                            Float3 final = doIndirect
-                                ? cloud.SampleIrradianceOverPi(ts.Position, ts.Normal, normalThr, maxNeighbors)
-                                : Float3.Zero;
-                            // Direct lighting always evaluated per-texel when enabled, regardless of
-                            // whether any surfels contributed -- a texel in an empty surfel cell still
-                            // gets correct sun lighting, no "interpolation hole" blackouts.
-                            if (_options.IncludeDirectLighting)
-                                final += integrator.ComputeBakedDirectLighting(ts.Position, ts.Normal);
-                            pixels[idx * 3    ] = final.X;
-                            pixels[idx * 3 + 1] = final.Y;
-                            pixels[idx * 3 + 2] = final.Z;
-                        }
-                    });
-                }
-                catch (System.OperationCanceledException) { return; }
-            }
-
-            // (4) Dilate seams (same as the per-texel path).
-            if (_options.DilatePixels > 0)
-            {
-                for (int ti = 0; ti < workspaces.Length; ti++)
-                {
-                    if (_cts.IsCancellationRequested) return;
-                    var ws = workspaces[ti];
-                    var coveredCopy = (bool[])ws.Covered.Clone();
-                    Imaging.Dilate.Run(ws.Target.PixelsRGB, coveredCopy, ws.Width, ws.Height, _options.DilatePixels);
-                }
-            }
-
-            _iterationCount = iter;
-            _iterationComplete?.Invoke(iter);
-        }
-    }
 
     private static void RasterizeTarget(TargetWorkspace ws, BakeInstance[] allInstances)
     {

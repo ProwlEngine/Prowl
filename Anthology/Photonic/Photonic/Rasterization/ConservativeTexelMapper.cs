@@ -57,11 +57,11 @@ internal static class ConservativeTexelMapper
         var NM = NormalMatrix(W);
 
         // Per-texel world radius: how big this triangle's pixels are in world space. Used by the
-        // integrator to scale the jitter offset so it fits inside the texel footprint regardless
-        // of mesh scale or atlas density.
-        var w_v0 = Raytracing.Tlas.Transform(W, v0L, 1f);
-        var w_v1 = Raytracing.Tlas.Transform(W, v1L, 1f);
-        var w_v2 = Raytracing.Tlas.Transform(W, v2L, 1f);
+        // denoiser as the per-texel footprint that scales its position bandwidth, regardless of
+        // mesh scale or atlas density.
+        var w_v0 = Raytracing.RayMath.Transform(W, v0L, 1f);
+        var w_v1 = Raytracing.RayMath.Transform(W, v1L, 1f);
+        var w_v2 = Raytracing.RayMath.Transform(W, v2L, 1f);
         float worldAreaTwice = Float3.Length(Float3.Cross(w_v1 - w_v0, w_v2 - w_v0));
         float pixelAreaTwice = System.Math.Abs(areaTimes2);
         float worldPerPixel = pixelAreaTwice > 1e-12f ? worldAreaTwice / pixelAreaTwice : 0f;
@@ -102,8 +102,8 @@ internal static class ConservativeTexelMapper
             if (Float3.Dot(nL, nL) < 1e-10f) continue; // skip degenerate normal
 
             // to world
-            var pW = Raytracing.Tlas.Transform(W, pL, 1f);
-            var nW = Float3.Normalize(Raytracing.Tlas.Transform(NM, nL, 0f));
+            var pW = Raytracing.RayMath.Transform(W, pL, 1f);
+            var nW = Float3.Normalize(Raytracing.RayMath.Transform(NM, nL, 0f));
 
             var uv0 = uv0_0 * w0 + uv1_0 * w1 + uv2_0 * w2;
 

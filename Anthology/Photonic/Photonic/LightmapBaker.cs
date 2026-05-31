@@ -124,8 +124,7 @@ public sealed class LightmapBaker : System.IDisposable
                 "BakeProbes needs scene geometry: add mesh instances to a target (they act as occluders) before baking probes.");
 
         var accel = BakeAcceleration.Build(_scene, allInstances.ToArray());
-        var integrator = new PathIntegrator(accel.Tlas, _scene, accel.Instances, accel.Blas,
-                                            accel.InstanceToBlas, accel.ResolvedMats, Options);
+        var integrator = new PathIntegrator(_scene, accel.Blas, accel.MergedMats, Options);
 
         int b = System.Math.Max(0, bounces ?? Options.Bounces);
         int samples = System.Math.Max(1, samplesPerProbe);

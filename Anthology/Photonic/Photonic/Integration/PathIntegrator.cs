@@ -2,7 +2,6 @@
 using Prowl.Photonic.Raytracing;
 using Prowl.Photonic.Sampling;
 using Prowl.Photonic.Scene.Lights;
-using Prowl.Photonic.Surfels;
 
 namespace Prowl.Photonic.Integration;
 
@@ -24,19 +23,21 @@ namespace Prowl.Photonic.Integration;
 /// </remarks>
 internal sealed class PathIntegrator
 {
-    private readonly Tlas _tlas;
     private readonly BakeScene _scene;
-    private readonly BakeInstance[] _instances;
-    private readonly Blas[] _blas;
-    private readonly int[] _instanceToBlas;
-    private readonly BakeMaterial?[][] _resolvedMats;
+    private readonly Blas _blas;            // single merged world-space BLAS
+    private readonly BakeMaterial?[] _mats; // resolved material per merged group
     private readonly BakeOptions _options;
+    private readonly bool _cullEnabled;
 
-    public PathIntegrator(Tlas tlas, BakeScene scene, BakeInstance[] instances, Blas[] blas, int[] instanceToBlas,
-                          BakeMaterial?[][] resolvedMats, BakeOptions options)
+    // Prowl renders with WindingOrder.CW (front = clockwise) and culls back faces. With cull=Back the
+    // Blas keep-positive-determinant flag reduces to the front-face winding, which for CW front is
+    // false. Backface culling is hardcoded to this convention so the bake matches Prowl's rasterizer.
+    private const bool ProwlKeepPositiveDet = false;
+
+    public PathIntegrator(BakeScene scene, Blas blas, BakeMaterial?[] mats, BakeOptions options)
     {
-        _tlas = tlas; _scene = scene; _instances = instances; _blas = blas;
-        _instanceToBlas = instanceToBlas; _resolvedMats = resolvedMats; _options = options;
+        _scene = scene; _blas = blas; _mats = mats; _options = options;
+        _cullEnabled = options.DoBackfaceCull;
     }
 
     /// <summary>
@@ -56,8 +57,7 @@ internal sealed class PathIntegrator
     /// only at bounce points.</para>
     /// </remarks>
     public Float3 Integrate(Float3 position, Float3 normal, Float3 albedo, Float3 emissive,
-                            int directSamples, int indirectSamples, int bounces, ref Sampler rng,
-                            float jitterWorldRadius = 0f)
+                            int directSamples, int indirectSamples, int bounces, ref Sampler rng)
     {
         _ = directSamples;
         _ = albedo; // not applied at the texel level; the runtime shader does that.
@@ -74,21 +74,8 @@ internal sealed class PathIntegrator
         if (bounces > 0 && indirectSamples > 0)
         {
             Float3 indirectSum = Float3.Zero;
-            float jitterRadius = (_options.JitterRayOrigin && jitterWorldRadius > 0)
-                ? jitterWorldRadius * _options.JitterStrength : 0f;
-            Float3 T = default, B = default;
-            if (jitterRadius > 0) Hemisphere.BuildOrthonormalBasis(normal, out T, out B);
             for (int s = 0; s < indirectSamples; s++)
-            {
-                Float3 origin = position;
-                if (jitterRadius > 0)
-                {
-                    float ju = rng.NextFloat() - 0.5f;
-                    float jv = rng.NextFloat() - 0.5f;
-                    origin = position + T * (ju * jitterRadius) + B * (jv * jitterRadius);
-                }
-                indirectSum += TracePath(origin, normal, Float3.One, bounces, ref rng);
-            }
+                indirectSum += TracePath(position, normal, Float3.One, bounces, ref rng);
             result += indirectSum * (1f / indirectSamples);
         }
 
@@ -153,14 +140,12 @@ internal sealed class PathIntegrator
 
     /// <summary>
     /// Resolve the diffuse albedo and emissive of a ray hit (material colour x diffuse texel, or
-    /// white when <see cref="BakeOptions.IgnoreAlbedo"/> is set). Shared by <see cref="TracePath"/>
-    /// and the surfel gather so both shade bounce hits identically.
+    /// white when <see cref="BakeOptions.IgnoreAlbedo"/> is set). Reads straight off the merged mesh.
     /// </summary>
     private void ResolveHitSurface(HitInfo hit, out Float3 albedo, out Float3 emissive)
     {
-        int blasIdx = _instanceToBlas[hit.InstanceIndex];
-        var triRef = _blas[blasIdx].Triangles[hit.TriangleIndex];
-        var mat = _resolvedMats[blasIdx][triRef.MaterialGroupIndex];
+        var triRef = _blas.Triangles[hit.TriangleIndex];
+        var mat = _mats[triRef.MaterialGroupIndex];
         emissive = mat is not null ? mat.Emissive : Float3.Zero;
         if (_options.IgnoreAlbedo)
         {
@@ -169,7 +154,7 @@ internal sealed class PathIntegrator
         }
         albedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
         if (mat is not null && mat.DiffuseTexture is not null
-            && _instances[hit.InstanceIndex].Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
+            && _blas.Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
         {
             var uvA = uvLayer[triRef.I0]; var uvB = uvLayer[triRef.I1]; var uvC = uvLayer[triRef.I2];
             float w = 1f - (float)hit.U - (float)hit.V;
@@ -177,53 +162,6 @@ internal sealed class PathIntegrator
             // Nearest sample on the bounce path: variance averages out across indirect samples.
             albedo = albedo * mat.DiffuseTexture.SampleNearestRGB(uv.X, uv.Y);
         }
-    }
-
-    /// <summary>
-    /// One iteration of surfel radiance gathering: cast <paramref name="samples"/> uniform-hemisphere
-    /// rays from a surfel and project the radiance arriving along each into an SH-L1 sum (the caller
-    /// folds the result into the surfel's running accumulator).
-    ///
-    /// The radiance along a ray is a <i>single</i> bounce - direct lighting at the hit surface plus
-    /// the indirect already cached in the surfel cloud from previous iterations
-    /// (<see cref="SurfelCloud.SampleIrradianceOverPi"/>). Because each iteration gathers the previous
-    /// iteration's estimate, light propagates one surfel-hop per pass and converges to a full
-    /// multi-bounce solution over time - cheap "infinite bounce" that needs no deep per-ray paths.
-    /// </summary>
-    public ShL1Rgb IntegrateSurfelRadiance(Float3 position, Float3 normal, int samples, ref Sampler rng,
-                                           SurfelCloud cloud, float surfelNormalThreshold, int surfelMaxNeighbors)
-    {
-        ShL1Rgb sh = default;
-        if (samples <= 0) return sh;
-        for (int s = 0; s < samples; s++)
-        {
-            Float3 dir = Hemisphere.SampleUniform(normal, rng.NextFloat(), rng.NextFloat());
-            Float3 li = SampleIncomingRadiance(position, normal, dir, cloud, surfelNormalThreshold, surfelMaxNeighbors);
-            // Uniform hemisphere PDF = 1/(2π); the projection weight is its reciprocal, 2π.
-            sh.Accumulate(dir, li, 2f * (float)System.Math.PI);
-        }
-        return sh;
-    }
-
-    /// <summary>
-    /// Radiance arriving at a surfel along <paramref name="dir"/>: sky on a miss, otherwise the hit
-    /// surface's outgoing radiance = emissive + albedo x (direct irradiance + cloud-cached indirect).
-    /// Matches <see cref="TracePath"/>'s shading convention so surfel and per-texel modes agree.
-    /// </summary>
-    private Float3 SampleIncomingRadiance(Float3 origin, Float3 originNormal, Float3 dir,
-                                          SurfelCloud cloud, float surfelNormalThreshold, int surfelMaxNeighbors)
-    {
-        var hit = ClosestHitWorld(origin + originNormal * _options.RayBias, dir, _options.MaxRayDistance);
-        if (!hit.Hit) return SampleEnvironment(dir);
-
-        ResolveHitSurface(hit, out Float3 albedo, out Float3 emissive);
-        Float3 lo = emissive;
-        if (_scene.Lights.Count > 0)
-            lo += albedo * SampleAllLights(hit.Position, hit.Normal);
-        // Previous iterations' indirect, re-projected onto the hit normal. Already E/π, so it
-        // combines with the (un-normalised) direct term exactly as a deeper TracePath bounce would.
-        lo += albedo * cloud.SampleIrradianceOverPi(hit.Position, hit.Normal, surfelNormalThreshold, surfelMaxNeighbors);
-        return lo;
     }
 
     /// <summary>
@@ -302,27 +240,13 @@ internal sealed class PathIntegrator
     /// compatibility but ignored.
     /// </summary>
     public Float3 IntegrateIndirect(Float3 position, Float3 normal, Float3 albedo,
-                                    int samples, int bounces, ref Sampler rng,
-                                    float jitterWorldRadius = 0f)
+                                    int samples, int bounces, ref Sampler rng)
     {
         _ = albedo;
         if (samples <= 0 || bounces <= 0) return Float3.Zero;
         Float3 sum = Float3.Zero;
-        float jitterRadius = (_options.JitterRayOrigin && jitterWorldRadius > 0)
-            ? jitterWorldRadius * _options.JitterStrength : 0f;
-        Float3 T = default, B = default;
-        if (jitterRadius > 0) Hemisphere.BuildOrthonormalBasis(normal, out T, out B);
         for (int s = 0; s < samples; s++)
-        {
-            Float3 origin = position;
-            if (jitterRadius > 0)
-            {
-                float ju = rng.NextFloat() - 0.5f;
-                float jv = rng.NextFloat() - 0.5f;
-                origin = position + T * (ju * jitterRadius) + B * (jv * jitterRadius);
-            }
-            sum += TracePath(origin, normal, Float3.One, bounces, ref rng);
-        }
+            sum += TracePath(position, normal, Float3.One, bounces, ref rng);
         return sum;
     }
 
@@ -343,7 +267,7 @@ internal sealed class PathIntegrator
             var ro = position + normal * _options.RayBias;
             bool blocked = false;
             if (l.CastsShadows)
-                blocked = _tlas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias);
+                blocked = _blas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet);
 
             float drawLen = float.IsPositiveInfinity(maxDist) ? 50f : maxDist;
             segs.Add(new DebugSegment
@@ -359,39 +283,14 @@ internal sealed class PathIntegrator
 
     /// <summary>
     /// Trace one path identical to <see cref="TracePath"/>, but append each bounce segment (and
-    /// each per-bounce shadow ray) to <paramref name="segs"/>. <paramref name="jitterWorldRadius"/>
-    /// drives the same ray-origin jitter as <see cref="IntegrateIndirect"/> uses, so the recorded
-    /// rays really match what the integrator does. The radiance is computed and returned but the
-    /// caller usually discards it: this method is for visualisation only.
+    /// each per-bounce shadow ray) to <paramref name="segs"/>. The radiance is computed and returned
+    /// but the caller usually discards it: this method is for visualisation only.
     /// </summary>
     public Float3 TracePathRecorded(Float3 position, Float3 normal, Float3 albedo, int bouncesLeft,
-                                     ref Sampler rng, System.Collections.Generic.List<DebugSegment> segs,
-                                     float jitterWorldRadius = 0f)
+                                     ref Sampler rng, System.Collections.Generic.List<DebugSegment> segs)
     {
         Float3 radiance = Float3.Zero;
-        // Match IntegrateIndirect: jitter the ray-start position within the texel footprint.
-        Float3 jitteredPos = position;
-        float jitterRadius = (_options.JitterRayOrigin && jitterWorldRadius > 0)
-            ? jitterWorldRadius * _options.JitterStrength : 0f;
-        if (jitterRadius > 0)
-        {
-            Hemisphere.BuildOrthonormalBasis(normal, out var Tj, out var Bj);
-            float ju = rng.NextFloat() - 0.5f;
-            float jv = rng.NextFloat() - 0.5f;
-            jitteredPos = position + Tj * (ju * jitterRadius) + Bj * (jv * jitterRadius);
-
-            // A magenta marker line from texel centre to the jittered origin, so the visualiser
-            // shows exactly where the jitter pushed the start point.
-            segs.Add(new DebugSegment
-            {
-                Start = position,
-                End = jitteredPos,
-                BounceIndex = -1,
-                IsShadow = false,
-                Hit = true,
-            });
-        }
-        Float3 ro = jitteredPos;
+        Float3 ro = position;
         Float3 n = normal;
         Float3 t = albedo;
         bool useLUT = _options.UseHemisphereLUT;
@@ -426,9 +325,8 @@ internal sealed class PathIntegrator
 
             if (!hit.Hit) { radiance += t * SampleEnvironment(rd); break; }
 
-            int blasIdx = _instanceToBlas[hit.InstanceIndex];
-            var triRef = _blas[blasIdx].Triangles[hit.TriangleIndex];
-            var mat = _resolvedMats[blasIdx][triRef.MaterialGroupIndex];
+            var triRef = _blas.Triangles[hit.TriangleIndex];
+            var mat = _mats[triRef.MaterialGroupIndex];
             Float3 hitAlbedo;
             if (_options.IgnoreAlbedo)
             {
@@ -438,7 +336,7 @@ internal sealed class PathIntegrator
             {
                 hitAlbedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
                 if (mat is not null && mat.DiffuseTexture is not null
-                    && _instances[hit.InstanceIndex].Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
+                    && _blas.Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
                 {
                     var uvA = uvLayer[triRef.I0]; var uvB = uvLayer[triRef.I1]; var uvC = uvLayer[triRef.I2];
                     float w = 1f - hit.U - hit.V;
@@ -457,7 +355,7 @@ internal sealed class PathIntegrator
                 if (ndotl <= 0) continue;
                 var shadowOrigin = hit.Position + hit.Normal * _options.RayBias;
                 bool blocked = false;
-                if (l.CastsShadows) blocked = _tlas.AnyHit(shadowOrigin, toLight, _options.RayBias, maxDist - 2 * _options.RayBias);
+                if (l.CastsShadows) blocked = _blas.AnyHit(shadowOrigin, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet);
                 float drawLen = float.IsPositiveInfinity(maxDist) ? 50f : maxDist;
                 segs.Add(new DebugSegment
                 {
@@ -499,7 +397,7 @@ internal sealed class PathIntegrator
             if (l.CastsShadows)
             {
                 var ro = position + normal * _options.RayBias;
-                if (_tlas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias))
+                if (_blas.AnyHit(ro, toLight, _options.RayBias, maxDist - 2 * _options.RayBias, _cullEnabled, ProwlKeepPositiveDet))
                     continue;
             }
             sum += Li * ndotl;
@@ -509,18 +407,21 @@ internal sealed class PathIntegrator
 
     public HitInfo ClosestHitWorld(Float3 ro, Float3 rd, float maxT)
     {
-        if (_tlas.ClosestHit(ro, rd, _options.RayBias, maxT, out var hit))
+        var hit = new HitInfo { Distance = maxT };
+        if (_blas.ClosestHit(ro, rd, _options.RayBias, maxT, out float tt, out float uu, out float vv, out int triIdx, _cullEnabled, ProwlKeepPositiveDet))
         {
-            var inst = _instances[hit.InstanceIndex];
-            var blas = _blas[_instanceToBlas[hit.InstanceIndex]];
-            var tri = blas.Triangles[hit.TriangleIndex];
-            var positions = inst.Mesh.Positions;
-            var normals = inst.Mesh.Normals;
-            float w = 1f - hit.U - hit.V;
-            var pLocal = positions[tri.I0] * w + positions[tri.I1] * hit.U + positions[tri.I2] * hit.V;
-            var nLocal = normals[tri.I0]   * w + normals[tri.I1]   * hit.U + normals[tri.I2]   * hit.V;
-            hit.Position = Tlas.Transform(inst.WorldTransform, pLocal, 1f);
-            hit.Normal = Float3.Normalize(Tlas.Transform(inst.WorldTransform, nLocal, 0f));
+            hit.Hit = true;
+            hit.Distance = tt;
+            hit.U = uu; hit.V = vv;
+            hit.TriangleIndex = triIdx;
+
+            // The merged BLAS already holds world-space positions + normals.
+            var tri = _blas.Triangles[triIdx];
+            var positions = _blas.Mesh.Positions;
+            var normals = _blas.Mesh.Normals;
+            float w = 1f - uu - vv;
+            hit.Position = positions[tri.I0] * w + positions[tri.I1] * uu + positions[tri.I2] * vv;
+            hit.Normal = Float3.Normalize(normals[tri.I0] * w + normals[tri.I1] * uu + normals[tri.I2] * vv);
         }
         return hit;
     }

@@ -14,7 +14,7 @@ internal struct TexelSample
     public int InstanceIndex;
     public int MaterialGroupIndex;
     public Float2 UV0;        // material UV at this texel (for diffuse texture sampling)
-    public float WorldRadius; // approximate world-space half-width of this texel's footprint; used as jitter radius
+    public float WorldRadius; // approximate world-space half-width of this texel's footprint; the denoiser's position bandwidth scales with it
     /// <summary>
     /// True when the pixel centre lies strictly inside this triangle (all barycentrics >= 0
     /// without clamping). A "strict" writer beats a "conservative-only" writer when multiple
