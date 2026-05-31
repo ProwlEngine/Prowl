@@ -6,8 +6,9 @@ using Silk.NET.DXGI;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11Framebuffer : Framebuffer
+internal unsafe partial class D3D11Framebuffer : Framebuffer
 {
+    private readonly D3D11GraphicsDevice _gd;
     private string _name;
     private bool _disposed;
     private ComPtr<ID3D11DepthStencilView> _depthStencilView;
@@ -20,9 +21,11 @@ internal unsafe class D3D11Framebuffer : Framebuffer
 
     public override bool IsDisposed => _disposed;
 
-    public D3D11Framebuffer(ID3D11Device* device, ref FramebufferDescription description)
+    public D3D11Framebuffer(D3D11GraphicsDevice gd, ref FramebufferDescription description)
         : base(description.DepthTarget, description.ColorTargets)
     {
+        _gd = gd;
+        ID3D11Device* device = gd.Device;
         if (description.DepthTarget != null)
         {
             D3D11Texture d3dDepthTarget = Util.AssertSubtype<Texture, D3D11Texture>(description.DepthTarget.Value.Target);
@@ -114,6 +117,8 @@ internal unsafe class D3D11Framebuffer : Framebuffer
         {
             RenderTargetViews = Array.Empty<ComPtr<ID3D11RenderTargetView>>();
         }
+
+        _gd.RecordAllocation(AllocBin.Framebuffer, 0);
     }
 
     public override string Name
@@ -143,6 +148,7 @@ internal unsafe class D3D11Framebuffer : Framebuffer
             }
 
             _disposed = true;
+            _gd.RecordFree(AllocBin.Framebuffer, 0);
         }
     }
 }

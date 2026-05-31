@@ -3,16 +3,19 @@ using Silk.NET.Direct3D11;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11Sampler : Sampler
+internal unsafe partial class D3D11Sampler : Sampler
 {
+    private readonly D3D11GraphicsDevice _gd;
     private ComPtr<ID3D11SamplerState> _deviceSampler;
     private string _name;
     private bool _disposed;
 
     public ref ComPtr<ID3D11SamplerState> DeviceSampler => ref _deviceSampler;
 
-    public D3D11Sampler(ID3D11Device* device, ref SamplerDescription description)
+    public D3D11Sampler(D3D11GraphicsDevice gd, ref SamplerDescription description)
     {
+        _gd = gd;
+        ID3D11Device* device = gd.Device;
         ComparisonFunc comparison = description.ComparisonKind == null
             ? ComparisonFunc.Never
             : D3D11Formats.VdToD3D11ComparisonFunc(description.ComparisonKind.Value);
@@ -36,6 +39,8 @@ internal unsafe class D3D11Sampler : Sampler
         SilkMarshal.ThrowHResult(device->CreateSamplerState(in samplerStateDesc, &pSampler));
         _deviceSampler = default;
         _deviceSampler.Handle = pSampler;
+
+        _gd.RecordAllocation(AllocBin.Sampler, 0);
     }
 
     private static void SetBorderColor(ref SamplerDesc desc, SamplerBorderColor borderColor)
@@ -81,6 +86,7 @@ internal unsafe class D3D11Sampler : Sampler
         {
             _deviceSampler.Dispose();
             _disposed = true;
+            _gd.RecordFree(AllocBin.Sampler, 0);
         }
     }
 }

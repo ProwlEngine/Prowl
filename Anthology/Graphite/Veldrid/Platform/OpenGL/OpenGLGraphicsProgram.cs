@@ -9,7 +9,7 @@ using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLGraphicsProgram : GraphicsProgram, OpenGLDeferredResource
+internal unsafe partial class OpenGLGraphicsProgram : GraphicsProgram, OpenGLDeferredResource
 {
     private const uint GL_INVALID_INDEX = 0xFFFFFFFF;
 
@@ -52,6 +52,8 @@ internal unsafe class OpenGLGraphicsProgram : GraphicsProgram, OpenGLDeferredRes
         {
             VertexStrides[i] = (int)VertexLayoutsArray[i].Stride;
         }
+
+        Constructor_RecordShaderAllocation(_stageDescriptions);
     }
 
     public bool Created => _created;
@@ -162,6 +164,7 @@ internal unsafe class OpenGLGraphicsProgram : GraphicsProgram, OpenGLDeferredRes
         {
             _disposeRequested = true;
             _gd.EnqueueDisposal(this);
+            Dispose_RecordShaderFree();
         }
     }
 

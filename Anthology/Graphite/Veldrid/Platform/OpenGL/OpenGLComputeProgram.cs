@@ -8,7 +8,7 @@ using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLComputeProgram : ComputeProgram, OpenGLDeferredResource
+internal unsafe partial class OpenGLComputeProgram : ComputeProgram, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
@@ -36,6 +36,8 @@ internal unsafe class OpenGLComputeProgram : ComputeProgram, OpenGLDeferredResou
         _gd = gd;
         _stageDescription = description.Stage;
         _stagingBlock = gd.StagingMemoryPool.Stage(_stageDescription.ShaderBytes);
+
+        Constructor_RecordShaderAllocation();
     }
 
     public bool Created => _created;
@@ -130,6 +132,7 @@ internal unsafe class OpenGLComputeProgram : ComputeProgram, OpenGLDeferredResou
         {
             _disposeRequested = true;
             _gd.EnqueueDisposal(this);
+            Dispose_RecordShaderFree();
         }
     }
 

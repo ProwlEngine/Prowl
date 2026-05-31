@@ -7,8 +7,9 @@ using Silk.NET.DXGI;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11Texture : Texture
+internal unsafe partial class D3D11Texture : Texture
 {
+    private readonly D3D11GraphicsDevice _gd;
     private readonly ID3D11Device* _device;
     private ComPtr<ID3D11Resource> _deviceTexture;
     private string _name;
@@ -29,9 +30,10 @@ internal unsafe class D3D11Texture : Texture
     public Format DxgiFormat { get; }
     public Format TypelessDxgiFormat { get; }
 
-    public D3D11Texture(ID3D11Device* device, ref TextureDescription description)
+    public D3D11Texture(D3D11GraphicsDevice gd, ref TextureDescription description)
     {
-        _device = device;
+        _gd = gd;
+        _device = gd.Device;
         Width = description.Width;
         Height = description.Height;
         Depth = description.Depth;
@@ -110,7 +112,7 @@ internal unsafe class D3D11Texture : Texture
             };
 
             ID3D11Texture1D* pTex;
-            SilkMarshal.ThrowHResult(device->CreateTexture1D(in desc1D, null, &pTex));
+            SilkMarshal.ThrowHResult(_device->CreateTexture1D(in desc1D, null, &pTex));
             _deviceTexture = default;
             _deviceTexture.Handle = (ID3D11Resource*)pTex;
         }
@@ -131,7 +133,7 @@ internal unsafe class D3D11Texture : Texture
             };
 
             ID3D11Texture2D* pTex;
-            SilkMarshal.ThrowHResult(device->CreateTexture2D(in desc2D, null, &pTex));
+            SilkMarshal.ThrowHResult(_device->CreateTexture2D(in desc2D, null, &pTex));
             _deviceTexture = default;
             _deviceTexture.Handle = (ID3D11Resource*)pTex;
         }
@@ -152,10 +154,12 @@ internal unsafe class D3D11Texture : Texture
             };
 
             ID3D11Texture3D* pTex;
-            SilkMarshal.ThrowHResult(device->CreateTexture3D(in desc3D, null, &pTex));
+            SilkMarshal.ThrowHResult(_device->CreateTexture3D(in desc3D, null, &pTex));
             _deviceTexture = default;
             _deviceTexture.Handle = (ID3D11Resource*)pTex;
         }
+
+        Constructor_RecordAllocation();
     }
 
     public D3D11Texture(ID3D11Texture2D* existingTexture, TextureType type, PixelFormat format)
@@ -216,6 +220,7 @@ internal unsafe class D3D11Texture : Texture
         {
             _deviceTexture.Dispose();
             _disposed = true;
+            DisposeCore_RecordFree();
         }
     }
 }

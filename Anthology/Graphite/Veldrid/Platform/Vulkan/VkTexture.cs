@@ -5,7 +5,7 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkTexture : Texture
+internal unsafe partial class VkTexture : Texture
 {
     private readonly VkGraphicsDevice _gd;
     private readonly Image _optimalImage;
@@ -76,6 +76,7 @@ internal unsafe class VkTexture : Texture
 
         bool isStaging = (Usage & TextureUsage.Staging) == TextureUsage.Staging;
 
+        ulong allocatedSize = 0;
         if (!isStaging)
         {
             ImageCreateInfo imageCI = new() { SType = StructureType.ImageCreateInfo };
@@ -131,6 +132,7 @@ internal unsafe class VkTexture : Texture
                 default);
             _memoryBlock = memoryToken;
             _gd.Vk.BindImageMemory(gd.Device, _optimalImage, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
+            allocatedSize = memoryRequirements.Size;
 
             _imageLayouts = new ImageLayout[subresourceCount];
             for (int i = 0; i < _imageLayouts.Length; i++)
@@ -200,11 +202,14 @@ internal unsafe class VkTexture : Texture
                 _stagingBuffer);
 
             _gd.Vk.BindBufferMemory(_gd.Device, _stagingBuffer, _memoryBlock.DeviceMemory, _memoryBlock.Offset).CheckResult();
+            allocatedSize = bufferMemReqs.Size;
         }
 
         ClearIfRenderTarget();
         TransitionIfSampled();
         RefCount = new ResourceRefCount(RefCountedDispose);
+
+        Constructor_RecordAllocation((long)allocatedSize);
     }
 
     // Used to construct Swapchain textures.
@@ -462,6 +467,8 @@ internal unsafe class VkTexture : Texture
             {
                 _gd.MemoryManager.Free(_memoryBlock);
             }
+
+            DisposeCore_RecordFree();
         }
     }
 

@@ -15,7 +15,7 @@ using Silk.NET.Maths;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11CommandBuffer : CommandBuffer
+internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 {
     private readonly D3D11GraphicsDevice _gd;
     private ComPtr<ID3D11DeviceContext> _context;
@@ -1334,6 +1334,8 @@ internal unsafe class D3D11CommandBuffer : CommandBuffer
         Ctx->CopySubresourceRegion(
             (ID3D11Resource*)dstD3D11Buffer.Buffer, 0, destinationOffset, 0, 0,
             (ID3D11Resource*)srcD3D11Buffer.Buffer, 0, &region);
+
+        _gd.RecordBufferOp(BufferOpBin.Copy, sizeInBytes);
     }
 
     private protected override void CopyTextureCore(

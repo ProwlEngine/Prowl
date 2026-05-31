@@ -6,7 +6,7 @@ using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
+internal unsafe partial class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
@@ -153,6 +153,8 @@ internal unsafe class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
         }
 
         Created = true;
+
+        _gd.RecordAllocation(AllocBin.Framebuffer, 0);
     }
 
     public override void Dispose()
@@ -161,6 +163,7 @@ internal unsafe class OpenGLFramebuffer : Framebuffer, OpenGLDeferredResource
         {
             _disposeRequested = true;
             _gd.EnqueueDisposal(this);
+            _gd.RecordFree(AllocBin.Framebuffer, 0);
         }
     }
 

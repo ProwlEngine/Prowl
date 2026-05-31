@@ -172,6 +172,7 @@ internal partial class OpenGLCommandBuffer : CommandBuffer
         uint sizeInBytes)
     {
         _currentCommands.CopyBuffer(source, sourceOffset, destination, destinationOffset, sizeInBytes);
+        _gd.RecordBufferOp(BufferOpBin.Copy, sizeInBytes);
     }
 
     private protected override void CopyTextureCore(

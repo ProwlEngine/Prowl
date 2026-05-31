@@ -10,7 +10,7 @@ using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkSwapchain : Swapchain
+internal unsafe partial class VkSwapchain : Swapchain
 {
     private readonly VkGraphicsDevice _gd;
     private readonly SurfaceKHR _surface;
@@ -96,6 +96,7 @@ internal unsafe class VkSwapchain : Swapchain
 
     public override void Resize(uint width, uint height)
     {
+        _gd.RecordSwap(SwapBin.Resize, 0);
         RecreateAndReacquire(width, height);
     }
 
@@ -119,6 +120,7 @@ internal unsafe class VkSwapchain : Swapchain
             &imageIndex);
         _currentImageIndex = imageIndex;
         _framebuffer.SetImageIndex(_currentImageIndex);
+        _gd.RecordSwap(SwapBin.Acquire, 0);
         if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
         {
             CreateSwapchain(_framebuffer.Width, _framebuffer.Height);

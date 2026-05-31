@@ -7,8 +7,9 @@ using Silk.NET.Direct3D11;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11GraphicsProgram : GraphicsProgram
+internal unsafe partial class D3D11GraphicsProgram : GraphicsProgram
 {
+    private readonly D3D11GraphicsDevice _gd;
     private readonly ID3D11Device* _device;
     private readonly D3D11ResourceCache _cache;
 
@@ -33,10 +34,11 @@ internal unsafe class D3D11GraphicsProgram : GraphicsProgram
     private bool _cacheResolved;
     private bool _resolvedMultisampled;
 
-    public D3D11GraphicsProgram(ID3D11Device* device, D3D11ResourceCache cache, ref ShaderDescription description)
+    public D3D11GraphicsProgram(D3D11GraphicsDevice gd, D3D11ResourceCache cache, ref ShaderDescription description)
         : base(ref description)
     {
-        _device = device;
+        _gd = gd;
+        _device = gd.Device;
         _cache = cache;
 
         ShaderStageDescription[] stages = description.Stages;
@@ -52,6 +54,8 @@ internal unsafe class D3D11GraphicsProgram : GraphicsProgram
         {
             VertexStridesInts[i] = (int)VertexLayoutsArray[i].Stride;
         }
+
+        Constructor_RecordShaderAllocation(stages);
     }
 
     private void CreateStageShader(ShaderStages stage, byte[] bytecode, int idx)
@@ -261,5 +265,7 @@ internal unsafe class D3D11GraphicsProgram : GraphicsProgram
                 _stageHandles[i].Dispose();
             }
         }
+
+        DisposeCore_RecordShaderFree();
     }
 }

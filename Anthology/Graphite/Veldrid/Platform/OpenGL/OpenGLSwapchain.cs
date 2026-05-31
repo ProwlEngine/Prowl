@@ -2,7 +2,7 @@
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal class OpenGLSwapchain : Swapchain
+internal partial class OpenGLSwapchain : Swapchain
 {
     private readonly OpenGLGraphicsDevice _gd;
     private readonly OpenGLSwapchainFramebuffer _framebuffer;
@@ -26,6 +26,7 @@ internal class OpenGLSwapchain : Swapchain
 
     public override void Resize(uint width, uint height)
     {
+        _gd.RecordSwap(SwapBin.Resize, 0);
         _framebuffer.Resize(width, height);
         _resizeAction?.Invoke(width, height);
     }

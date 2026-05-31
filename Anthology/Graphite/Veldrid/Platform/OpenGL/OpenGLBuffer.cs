@@ -7,7 +7,7 @@ using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
+internal unsafe partial class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
@@ -37,6 +37,8 @@ internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
         Name = _name;
         SizeInBytes = sizeInBytes;
         Usage = usage;
+
+        _gd.RecordBufferAllocation(Usage, SizeInBytes);
     }
 
 
@@ -97,6 +99,7 @@ internal unsafe class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResource
         {
             _disposeRequested = true;
             _gd.EnqueueDisposal(this);
+            _gd.RecordBufferFree(Usage, SizeInBytes);
         }
     }
 

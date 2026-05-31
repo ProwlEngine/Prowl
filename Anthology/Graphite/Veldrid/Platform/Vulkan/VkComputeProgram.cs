@@ -6,7 +6,7 @@ using VkPipelineHandle = Silk.NET.Vulkan.Pipeline;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkComputeProgram : ComputeProgram
+internal unsafe partial class VkComputeProgram : ComputeProgram
 {
     private readonly VkGraphicsDevice _gd;
     private readonly ShaderModule _module;
@@ -58,6 +58,8 @@ internal unsafe class VkComputeProgram : ComputeProgram
 
         _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();
         DevicePipeline = pipeline;
+
+        Constructor_RecordAllocations(stage);
     }
 
     public override string Name
@@ -75,5 +77,6 @@ internal unsafe class VkComputeProgram : ComputeProgram
         _gd.Vk.DestroyPipeline(_gd.Device, DevicePipeline, null);
         _gd.Vk.DestroyShaderModule(_gd.Device, _module, null);
         VkDescriptorLayoutBuilder.Destroy(_gd, DescriptorSetLayouts, _emptyDescriptorSetLayout, PipelineLayout);
+        DisposeCore_RecordFrees();
     }
 }

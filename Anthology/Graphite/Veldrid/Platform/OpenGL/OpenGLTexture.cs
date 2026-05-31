@@ -10,7 +10,7 @@ using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLTexture : Texture, OpenGLDeferredResource
+internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
@@ -89,6 +89,8 @@ internal unsafe class OpenGLTexture : Texture, OpenGLDeferredResource
             Debug.Assert(Type == TextureType.Texture3D);
             TextureTarget = TextureTarget.Texture3D;
         }
+
+        Constructor_RecordAllocation();
     }
 
     public OpenGLTexture(OpenGLGraphicsDevice gd, uint nativeTexture, ref TextureDescription description)
@@ -690,6 +692,7 @@ internal unsafe class OpenGLTexture : Texture, OpenGLDeferredResource
         {
             _disposeRequested = true;
             _gd.EnqueueDisposal(this);
+            DisposeCore_RecordFree();
         }
     }
 

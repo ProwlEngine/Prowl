@@ -17,7 +17,7 @@ using VkImageHandle = Silk.NET.Vulkan.Image;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkCommandBuffer : CommandBuffer
+internal unsafe partial class VkCommandBuffer : CommandBuffer
 {
     private readonly VkGraphicsDevice _gd;
     private CommandPool _pool;
@@ -1126,6 +1126,7 @@ internal unsafe class VkCommandBuffer : CommandBuffer
         };
 
         _gd.Vk.CmdCopyBuffer(_cb, srcVkBuffer.DeviceBuffer, dstVkBuffer.DeviceBuffer, 1, in region);
+        _gd.RecordBufferOp(BufferOpBin.Copy, sizeInBytes);
 
         bool needToProtectUniform = destination.Usage.HasFlag(BufferUsage.UniformBuffer);
 

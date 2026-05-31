@@ -7,7 +7,7 @@ namespace Prowl.Veldrid.Vk;
 /// <see cref="VkGraphicsProgram"/> and <see cref="VkComputeProgram"/>. Both program kinds derive
 /// from different core bases, so this logic is shared by composition rather than inheritance.
 /// </summary>
-internal static unsafe class VkDescriptorLayoutBuilder
+internal static unsafe partial class VkDescriptorLayoutBuilder
 {
     /// <summary>
     /// Creates one descriptor-set layout per declared set (empty layouts fill gaps), the owning
@@ -71,12 +71,18 @@ internal static unsafe class VkDescriptorLayoutBuilder
         gd.Vk.DestroyPipelineLayout(gd.Device, pipelineLayout, null);
 
         if (emptyDescriptorSetLayout.Handle != 0)
+        {
             gd.Vk.DestroyDescriptorSetLayout(gd.Device, emptyDescriptorSetLayout, null);
+            gd.RecordFree(AllocBin.ResourceLayout, 0);
+        }
 
         foreach (DescriptorSetLayout dsl in descriptorSetLayouts)
         {
             if (dsl.Handle != 0 && dsl.Handle != emptyDescriptorSetLayout.Handle)
+            {
                 gd.Vk.DestroyDescriptorSetLayout(gd.Device, dsl, null);
+                gd.RecordFree(AllocBin.ResourceLayout, 0);
+            }
         }
     }
 
@@ -116,6 +122,7 @@ internal static unsafe class VkDescriptorLayoutBuilder
             PBindings = bindings,
         };
         gd.Vk.CreateDescriptorSetLayout(gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
+        gd.RecordAllocation(AllocBin.ResourceLayout, 0);
 
         return (dsl, new DescriptorResourceCounts(0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage));
     }
@@ -159,6 +166,7 @@ internal static unsafe class VkDescriptorLayoutBuilder
             PBindings = null,
         };
         gd.Vk.CreateDescriptorSetLayout(gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
+        gd.RecordAllocation(AllocBin.ResourceLayout, 0);
         return dsl;
     }
 }

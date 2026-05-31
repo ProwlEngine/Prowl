@@ -8,7 +8,7 @@ using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
+internal partial class OpenGLTextureView : TextureView, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
@@ -74,6 +74,8 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
             }
             _needsTextureView = true;
         }
+
+        _gd.RecordAllocation(AllocBin.TextureView, 0);
     }
 
     public SizedInternalFormat GetReadWriteSizedInternalFormat()
@@ -304,6 +306,7 @@ internal class OpenGLTextureView : TextureView, OpenGLDeferredResource
         {
             _disposeRequested = true;
             _gd.EnqueueDisposal(this);
+            _gd.RecordFree(AllocBin.TextureView, 0);
         }
     }
 

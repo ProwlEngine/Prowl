@@ -5,7 +5,7 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkGraphicsProgram : GraphicsProgram
+internal unsafe partial class VkGraphicsProgram : GraphicsProgram
 {
     private readonly VkGraphicsDevice _gd;
     private readonly Dictionary<ShaderStages, ShaderModule> _modules = [];
@@ -62,6 +62,7 @@ internal unsafe class VkGraphicsProgram : GraphicsProgram
 
             entry = VkPipelineCacheFactory.Build(_gd, this, in key);
             _pipelineCache.Add(key, entry);
+            _gd.RecordAllocation(AllocBin.Pipeline, 0);
             return entry;
         }
     }
@@ -101,6 +102,8 @@ internal unsafe class VkGraphicsProgram : GraphicsProgram
 
         (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, TotalDynamicUboCount, _emptyDescriptorSetLayout)
             = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray);
+
+        Constructor_RecordShaderAllocation(stages);
     }
 
     public override string Name
@@ -116,12 +119,14 @@ internal unsafe class VkGraphicsProgram : GraphicsProgram
         if (_disposed) return;
         _disposed = true;
 
+        int pipelineCount = _pipelineCache.Count;
         foreach (VkPipelineCacheEntry entry in _pipelineCache.Values)
         {
             _gd.Vk.DestroyPipeline(_gd.Device, entry.Pipeline, null);
             _gd.Vk.DestroyRenderPass(_gd.Device, entry.CompatRenderPass, null);
         }
         _pipelineCache.Clear();
+        DisposeCore_RecordFrees(pipelineCount);
 
         foreach (ShaderModule m in _modules.Values)
             _gd.Vk.DestroyShaderModule(_gd.Device, m, null);

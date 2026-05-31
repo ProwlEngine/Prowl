@@ -6,7 +6,7 @@ using static Prowl.Veldrid.OpenGL.OpenGLUtil;
 
 namespace Prowl.Veldrid.OpenGL;
 
-internal unsafe class OpenGLSampler : Sampler, OpenGLDeferredResource
+internal unsafe partial class OpenGLSampler : Sampler, OpenGLDeferredResource
 {
     private readonly OpenGLGraphicsDevice _gd;
     private GL _gl => _gd.GL;
@@ -31,6 +31,8 @@ internal unsafe class OpenGLSampler : Sampler, OpenGLDeferredResource
 
         _mipmapState = new InternalSamplerState(this);
         _noMipmapState = new InternalSamplerState(this);
+
+        _gd.RecordAllocation(AllocBin.Sampler, 0);
     }
 
     public bool Created { get; private set; }
@@ -66,6 +68,7 @@ internal unsafe class OpenGLSampler : Sampler, OpenGLDeferredResource
         {
             _disposeRequested = true;
             _gd.EnqueueDisposal(this);
+            _gd.RecordFree(AllocBin.Sampler, 0);
         }
     }
 

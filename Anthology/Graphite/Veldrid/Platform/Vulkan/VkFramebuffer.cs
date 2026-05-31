@@ -8,7 +8,7 @@ using VkFramebufferHandle = Silk.NET.Vulkan.Framebuffer;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkFramebuffer : VkFramebufferBase
+internal unsafe partial class VkFramebuffer : VkFramebufferBase
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkFramebufferHandle _deviceFramebuffer;
@@ -255,6 +255,8 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             AttachmentCount += 1;
         }
         AttachmentCount += (uint)ColorTargets.Count;
+
+        _gd.RecordAllocation(AllocBin.Framebuffer, 0);
     }
 
     public override void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb)
@@ -328,6 +330,7 @@ internal unsafe class VkFramebuffer : VkFramebufferBase
             }
 
             _destroyed = true;
+            _gd.RecordFree(AllocBin.Framebuffer, 0);
         }
     }
 }

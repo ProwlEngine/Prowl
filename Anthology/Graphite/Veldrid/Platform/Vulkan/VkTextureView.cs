@@ -3,7 +3,7 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkTextureView : TextureView
+internal unsafe partial class VkTextureView : TextureView
 {
     private readonly VkGraphicsDevice _gd;
     private readonly ImageView _imageView;
@@ -74,6 +74,8 @@ internal unsafe class VkTextureView : TextureView
 
         _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, out _imageView);
         RefCount = new ResourceRefCount(DisposeCore);
+
+        _gd.RecordAllocation(AllocBin.TextureView, 0);
     }
 
     public override string Name
@@ -97,6 +99,7 @@ internal unsafe class VkTextureView : TextureView
         {
             _destroyed = true;
             _gd.Vk.DestroyImageView(_gd.Device, ImageView, null);
+            _gd.RecordFree(AllocBin.TextureView, 0);
         }
     }
 }

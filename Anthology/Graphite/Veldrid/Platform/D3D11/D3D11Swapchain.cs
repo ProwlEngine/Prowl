@@ -8,7 +8,7 @@ using Silk.NET.DXGI;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11Swapchain : Swapchain
+internal unsafe partial class D3D11Swapchain : Swapchain
 {
     private readonly D3D11GraphicsDevice _gd;
     private readonly PixelFormat? _depthFormat;
@@ -100,6 +100,7 @@ internal unsafe class D3D11Swapchain : Swapchain
 
     public override void Resize(uint width, uint height)
     {
+        _gd.RecordSwap(SwapBin.Resize, 0);
         lock (_referencedCLsLock)
         {
             foreach (D3D11CommandBuffer cl in _referencedCLs)
@@ -145,7 +146,7 @@ internal unsafe class D3D11Swapchain : Swapchain
                 _depthFormat.Value,
                 TextureUsage.DepthStencil,
                 TextureType.Texture2D);
-            _depthTexture = new D3D11Texture(_gd.Device, ref depthDesc);
+            _depthTexture = new D3D11Texture(_gd, ref depthDesc);
         }
 
         _backBufferVdTexture = new D3D11Texture(
@@ -157,7 +158,7 @@ internal unsafe class D3D11Swapchain : Swapchain
         pBackBuffer->Release();
 
         FramebufferDescription desc = new(_depthTexture, _backBufferVdTexture);
-        _framebuffer = new D3D11Framebuffer(_gd.Device, ref desc)
+        _framebuffer = new D3D11Framebuffer(_gd, ref desc)
         {
             Swapchain = this
         };

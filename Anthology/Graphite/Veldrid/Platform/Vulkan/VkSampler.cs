@@ -4,7 +4,7 @@ using VkSamplerHandle = Silk.NET.Vulkan.Sampler;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkSampler : Sampler
+internal unsafe partial class VkSampler : Sampler
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkSamplerHandle _sampler;
@@ -45,6 +45,8 @@ internal unsafe class VkSampler : Sampler
 
         _gd.Vk.CreateSampler(_gd.Device, in samplerCI, null, out _sampler);
         RefCount = new ResourceRefCount(DisposeCore);
+
+        _gd.RecordAllocation(AllocBin.Sampler, 0);
     }
 
     public override string Name
@@ -68,6 +70,7 @@ internal unsafe class VkSampler : Sampler
         {
             _gd.Vk.DestroySampler(_gd.Device, _sampler, null);
             _disposed = true;
+            _gd.RecordFree(AllocBin.Sampler, 0);
         }
     }
 }

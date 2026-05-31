@@ -188,6 +188,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public Frame BeginFrame()
     {
         BeginFrame_CheckNoActive();
+        BeginFrame_SnapshotFrameCounters();
 
         ulong frameId = ++_frameIdCounter;
         uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
@@ -390,7 +391,11 @@ public abstract partial class GraphicsDevice : IDisposable
     /// Swaps the buffers of the given swapchain.
     /// </summary>
     /// <param name="swapchain">The <see cref="Swapchain"/> to swap and present.</param>
-    public void SwapBuffers(Swapchain swapchain) => SwapBuffersCore(swapchain);
+    public void SwapBuffers(Swapchain swapchain)
+    {
+        SwapBuffersCore(swapchain);
+        RecordSwap(SwapBin.Present, 0);
+    }
 
     private protected abstract void SwapBuffersCore(Swapchain swapchain);
 
@@ -464,7 +469,9 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         Map_CheckResource(resource, mode, subresource);
 
-        return MapCore(resource, mode, subresource);
+        MappedResource mapped = MapCore(resource, mode, subresource);
+        RecordBufferOp(BufferOpBin.Map, mapped.SizeInBytes);
+        return mapped;
     }
 
     /// <summary>
@@ -515,6 +522,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void Unmap(MappableResource resource, uint subresource)
     {
         UnmapCore(resource, subresource);
+        RecordBufferOp(BufferOpBin.Unmap, 0);
     }
 
     /// <summary>
@@ -551,6 +559,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         UpdateTexture_CheckParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
         UpdateTextureCore(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
+        RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }
 
     /// <summary>
@@ -794,6 +803,7 @@ public abstract partial class GraphicsDevice : IDisposable
             return;
         }
         UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
+        RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }
 
     private protected abstract void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);

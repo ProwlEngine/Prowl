@@ -7,7 +7,7 @@ using VkBufferHandle = Silk.NET.Vulkan.Buffer;
 
 namespace Prowl.Veldrid.Vk;
 
-internal unsafe class VkBuffer : DeviceBuffer
+internal unsafe partial class VkBuffer : DeviceBuffer
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkBufferHandle _deviceBuffer;
@@ -125,6 +125,8 @@ internal unsafe class VkBuffer : DeviceBuffer
         _gd.Vk.BindBufferMemory(gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();
 
         RefCount = new ResourceRefCount(DisposeCore);
+
+        _gd.RecordBufferAllocation(Usage, SizeInBytes);
     }
 
     public override string Name
@@ -149,6 +151,7 @@ internal unsafe class VkBuffer : DeviceBuffer
             _destroyed = true;
             _gd.Vk.DestroyBuffer(_gd.Device, _deviceBuffer, null);
             _gd.MemoryManager.Free(Memory);
+            _gd.RecordBufferFree(Usage, SizeInBytes);
         }
     }
 }

@@ -7,8 +7,9 @@ using Silk.NET.DXGI;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11Buffer : DeviceBuffer
+internal unsafe partial class D3D11Buffer : DeviceBuffer
 {
+    private readonly D3D11GraphicsDevice _gd;
     private readonly ID3D11Device* _device;
     private ComPtr<ID3D11Buffer> _buffer;
     private readonly object _accessViewLock = new();
@@ -30,9 +31,10 @@ internal unsafe class D3D11Buffer : DeviceBuffer
     public ID3D11Buffer* Buffer => _buffer;
 
 
-    public D3D11Buffer(ID3D11Device* device, uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool useTypedHlslBinding)
+    public D3D11Buffer(D3D11GraphicsDevice gd, uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool useTypedHlslBinding)
     {
-        _device = device;
+        _gd = gd;
+        _device = gd.Device;
         SizeInBytes = sizeInBytes;
         Usage = usage;
         _structureByteStride = structureByteStride;
@@ -76,9 +78,11 @@ internal unsafe class D3D11Buffer : DeviceBuffer
         }
 
         ID3D11Buffer* pBuffer;
-        SilkMarshal.ThrowHResult(device->CreateBuffer(in bd, null, &pBuffer));
+        SilkMarshal.ThrowHResult(_device->CreateBuffer(in bd, null, &pBuffer));
         _buffer = default;
         _buffer.Handle = pBuffer;
+
+        _gd.RecordBufferAllocation(Usage, SizeInBytes);
     }
 
     public override string Name
@@ -109,6 +113,7 @@ internal unsafe class D3D11Buffer : DeviceBuffer
             }
             _buffer.Dispose();
             _disposed = true;
+            _gd.RecordBufferFree(Usage, SizeInBytes);
         }
     }
 

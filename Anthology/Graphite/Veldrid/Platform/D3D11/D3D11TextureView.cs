@@ -6,8 +6,9 @@ using Silk.NET.DXGI;
 
 namespace Prowl.Veldrid.D3D11;
 
-internal unsafe class D3D11TextureView : TextureView
+internal unsafe partial class D3D11TextureView : TextureView
 {
+    private readonly D3D11GraphicsDevice _gd;
     private string _name;
     private bool _disposed;
 
@@ -20,6 +21,7 @@ internal unsafe class D3D11TextureView : TextureView
     public D3D11TextureView(D3D11GraphicsDevice gd, ref TextureViewDescription description)
         : base(ref description)
     {
+        _gd = gd;
         ID3D11Device* device = gd.Device;
         D3D11Texture d3dTex = Util.AssertSubtype<Texture, D3D11Texture>(description.Target);
         ShaderResourceViewDesc srvDesc = D3D11Util.GetSrvDesc(
@@ -91,6 +93,8 @@ internal unsafe class D3D11TextureView : TextureView
             _unorderedAccessView = default;
             _unorderedAccessView.Handle = pUav;
         }
+
+        _gd.RecordAllocation(AllocBin.TextureView, 0);
     }
 
     public override string Name
@@ -115,6 +119,7 @@ internal unsafe class D3D11TextureView : TextureView
             _shaderResourceView.Dispose();
             _unorderedAccessView.Dispose();
             _disposed = true;
+            _gd.RecordFree(AllocBin.TextureView, 0);
         }
     }
 }

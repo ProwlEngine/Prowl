@@ -28,27 +28,27 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
 
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
     {
-        return new D3D11Framebuffer(_device, ref description);
+        return new D3D11Framebuffer(_gd, ref description);
     }
 
     protected override Sampler CreateSamplerCore(ref SamplerDescription description)
     {
-        return new D3D11Sampler(_device, ref description);
+        return new D3D11Sampler(_gd, ref description);
     }
 
     protected override GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description)
     {
-        return new D3D11GraphicsProgram(_device, _cache, ref description);
+        return new D3D11GraphicsProgram(_gd, _cache, ref description);
     }
 
     protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
     {
-        return new D3D11ComputeProgram(_device, ref description);
+        return new D3D11ComputeProgram(_gd, ref description);
     }
 
     protected override Texture CreateTextureCore(ref TextureDescription description)
     {
-        return new D3D11Texture(_device, ref description);
+        return new D3D11Texture(_gd, ref description);
     }
 
     protected override Texture CreateTextureCore(ulong nativeTexture, ref TextureDescription description)
@@ -65,7 +65,7 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
     protected override DeviceBuffer CreateBufferCore(ref BufferDescription description)
     {
         return new D3D11Buffer(
-            _device,
+            _gd,
             description.SizeInBytes,
             description.Usage,
             description.StructureByteStride,

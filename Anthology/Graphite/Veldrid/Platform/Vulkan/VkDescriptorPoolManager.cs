@@ -6,7 +6,7 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Veldrid.Vk;
 
-internal class VkDescriptorPoolManager
+internal partial class VkDescriptorPoolManager
 {
     private readonly VkGraphicsDevice _gd;
     private readonly List<PoolInfo> _pools = [];
@@ -37,6 +37,7 @@ internal class VkDescriptorPoolManager
     {
         lock (_lock)
         {
+            ResetAll_RecordFrees();
             foreach (PoolInfo poolInfo in _pools)
             {
                 _gd.Vk.ResetDescriptorPool(_gd.Device, poolInfo.Pool, 0);
@@ -58,6 +59,7 @@ internal class VkDescriptorPoolManager
             dsAI.PSetLayouts = &setLayout;
             dsAI.DescriptorPool = pool;
             _gd.Vk.AllocateDescriptorSets(_gd.Device, in dsAI, out DescriptorSet set).CheckResult();
+            Allocate_RecordAllocation();
 
             return new DescriptorAllocationToken(set, pool);
         }
@@ -72,6 +74,7 @@ internal class VkDescriptorPoolManager
                 if (poolInfo.Pool.Handle == token.Pool.Handle)
                 {
                     poolInfo.Free(_gd, token, counts);
+                    Free_RecordFree();
                 }
             }
         }
