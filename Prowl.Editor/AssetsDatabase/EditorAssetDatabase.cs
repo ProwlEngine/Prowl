@@ -759,6 +759,19 @@ public class EditorAssetDatabase : IAssetDatabase
         var importer = ImporterRegistry.CreateByTypeName(importerName);
         var meta = MetaFile.EnsureMeta(absolutePath, importerName, importer?.Version ?? 1, importer?.DefaultSettings());
 
+        // If we still track this path under a guid that no longer matches the on-disk .meta, the file
+        // was replaced out-of-band (e.g. the lightmapper deletes + rewrites its whole folder via the
+        // filesystem, bypassing the database, so EnsureMeta minted a fresh guid). The .meta is the
+        // authoritative source after a restart, so drop the stale mapping and re-register under
+        // meta.Guid. Otherwise the reimport-in-place branch below returns the old guid, which the
+        // caller persists (e.g. into the scene's lightmap refs) yet nothing resolves to it on reload.
+        if (_pathToGuid.TryGetValue(relativePath, out var staleGuid) && staleGuid != meta.Guid)
+        {
+            DisposeAndRemove(staleGuid);
+            _guidToEntry.TryRemove(staleGuid, out _);
+            _pathToGuid.Remove(relativePath);
+        }
+
         // Already tracked at this path -> reimport in place (re-bake replacement).
         if (_pathToGuid.TryGetValue(relativePath, out var existingGuid) && _guidToEntry.TryGetValue(existingGuid, out var existing))
         {
