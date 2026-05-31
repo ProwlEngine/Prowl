@@ -1,9 +1,8 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.0.11121.172
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Origami", "Origami\Origami.csproj", "{A1B2C3D4-ORIG-AMI0-0000-000000000001}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Origami", "Origami\Origami.csproj", "{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +10,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{A1B2C3D4-ORIG-AMI0-0000-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A1B2C3D4-ORIG-AMI0-0000-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A1B2C3D4-ORIG-AMI0-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A1B2C3D4-ORIG-AMI0-0000-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
