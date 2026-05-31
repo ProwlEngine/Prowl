@@ -30,7 +30,7 @@ public static class Program
     {
         device = newDevice;
 
-        tracker = new();
+        tracker = new(newDevice);
         shader = ShaderLoader.CreateShader(device);
         triangle = ModelLoader.CreateTriangle(device);
         buffer = device.ResourceFactory.CreateCommandBuffer();

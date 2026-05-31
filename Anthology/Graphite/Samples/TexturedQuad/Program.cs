@@ -36,7 +36,7 @@ public static class Program
     {
         device = newDevice;
 
-        tracker = new();
+        tracker = new(newDevice);
         shader = ShaderLoader.CreateShader(device);
         quad = ModelLoader.CreateQuad(device);
         (texture, sampler) = ImageLoader.Load(device, "Cat_cat.png");

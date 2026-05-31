@@ -28,7 +28,7 @@ public static class Program
     {
         device = newDevice;
 
-        tracker = new();
+        tracker = new(newDevice);
         Cube.Create(device);
         buffer = device.ResourceFactory.CreateCommandBuffer();
     }

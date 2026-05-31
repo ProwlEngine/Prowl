@@ -27,7 +27,7 @@ public static class Program
 
     public static void Load(GraphicsDevice newDevice)
     {
-        tracker = new();
+        tracker = new(newDevice);
 
         device = newDevice;
         buffer = device.ResourceFactory.CreateCommandBuffer();
