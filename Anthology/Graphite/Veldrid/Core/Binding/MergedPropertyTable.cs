@@ -20,27 +20,23 @@ internal sealed class MergedPropertyTable
 {
     public readonly Dictionary<PropertyID, PropertyEntry> Entries = [];
 
-    /// <summary>Incremented when a merge dirtied at least one uniform entry.</summary>
-    public uint UniformVersion;
     /// <summary>Incremented when a merge dirtied at least one resource entry.</summary>
     public uint ResourceVersion;
 
     public void Clear()
     {
         Entries.Clear();
-        unchecked { UniformVersion++; ResourceVersion++; }
+        unchecked { ResourceVersion++; }
     }
 
     /// <summary>
     /// Merges <paramref name="src"/> entries into this table subject to <paramref name="mask"/>.
-    /// Increments <see cref="UniformVersion"/> or <see cref="ResourceVersion"/> at most once per call
-    /// if the respective kind was touched.
+    /// Increments <see cref="ResourceVersion"/> at most once per call if a resource was touched.
     /// </summary>
     public void IngestFrom(PropertySet src, ChangeMask mask)
     {
         if (mask == ChangeMask.None) return;
 
-        bool dirtyUniforms = false;
         bool dirtyResources = false;
 
         foreach (KeyValuePair<PropertyID, PropertyEntry> kv in src.RawEntries)
@@ -53,11 +49,9 @@ internal sealed class MergedPropertyTable
 
             Entries[kv.Key] = entry;
 
-            if (isUniform) dirtyUniforms = true;
-            else dirtyResources = true;
+            if (!isUniform) dirtyResources = true;
         }
 
-        if (dirtyUniforms) unchecked { UniformVersion++; }
         if (dirtyResources) unchecked { ResourceVersion++; }
     }
 }

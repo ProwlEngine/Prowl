@@ -23,6 +23,11 @@ internal unsafe partial class VkComputeProgram : ComputeProgram
     internal readonly int TotalDynamicUboCount;
     internal readonly ResourceRefCount RefCount;
 
+    /// <summary>
+    /// Per-program, cross-frame cache of descriptor sets, content-addressed by their bound resources.
+    /// </summary>
+    internal readonly VkDescriptorSetCache DescriptorCache;
+
     private readonly DescriptorSetLayout _emptyDescriptorSetLayout;
     private bool _disposed;
     private string _name;
@@ -59,6 +64,8 @@ internal unsafe partial class VkComputeProgram : ComputeProgram
         _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();
         DevicePipeline = pipeline;
 
+        DescriptorCache = new VkDescriptorSetCache(_gd);
+
         Constructor_RecordAllocations(stage);
     }
 
@@ -77,6 +84,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram
         _gd.Vk.DestroyPipeline(_gd.Device, DevicePipeline, null);
         _gd.Vk.DestroyShaderModule(_gd.Device, _module, null);
         VkDescriptorLayoutBuilder.Destroy(_gd, DescriptorSetLayouts, _emptyDescriptorSetLayout, PipelineLayout);
+        DescriptorCache.Destroy();
         DisposeCore_RecordFrees();
     }
 }

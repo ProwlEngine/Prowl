@@ -41,16 +41,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>Per-command-buffer merged property table. Vk and D3D11 read this at draw time.</summary>
     private protected readonly MergedPropertyTable _mergedTable = new();
 
-    /// <summary>Tracks the last-seen uniform and resource version for each PropertySet merged via SetProperties.</summary>
-    private readonly Dictionary<PropertySet, (uint uniformV, uint resourceV)> _seenVersions = [];
-
-    /// <summary>
-    /// Per-frame cache of allocated transient UBO ranges for both graphics draws and compute
-    /// dispatches, keyed on the shared <see cref="ShaderProgram"/> base. Cleared at <see cref="Begin"/>.
-    /// Key: (program, set, binding, merged uniform version). Used by Vk and D3D11 at draw time;
-    /// OpenGL replay uses a separate cache on the executor.
-    /// </summary>
-    private protected readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = [];
+    /// <summary>Tracks the last-seen resource version for each PropertySet merged via SetProperties.</summary>
+    private readonly Dictionary<PropertySet, uint> _seenVersions = [];
 
     /// <summary>
     /// Gets whether <see cref="End"/> has been called on this <see cref="CommandBuffer"/> since the last
@@ -77,7 +69,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _currentVertexSource = null;
         _mergedTable.Clear();
         _seenVersions.Clear();
-        _frameUboCache.Clear();
     }
 
     /// <summary>
@@ -159,26 +150,20 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         SetProperties_CheckNonNull(properties);
         ChangeMask mask = ComputeChangeMask(properties);
-        if (mask != ChangeMask.None)
-        {
-            _mergedTable.IngestFrom(properties, mask);
-            _seenVersions[properties] = (properties.UniformVersion, properties.ResourceVersion);
-            SetPropertiesCore(properties);
-        }
+        _mergedTable.IngestFrom(properties, mask);
+        _seenVersions[properties] = properties.ResourceVersion;
+        SetPropertiesCore(properties);
     }
 
+    // Uniform state can no longer be diffed (no uniform version), so uniforms are always re-merged.
+    // Only resources are deduplicated, via the PropertySet's resource version.
     private ChangeMask ComputeChangeMask(PropertySet properties)
     {
-        if (!_seenVersions.TryGetValue(properties, out (uint uniformV, uint resourceV) seen))
+        if (!_seenVersions.TryGetValue(properties, out uint seenResourceV))
             return ChangeMask.Both;
 
-        bool uChanged = seen.uniformV != properties.UniformVersion;
-        bool rChanged = seen.resourceV != properties.ResourceVersion;
-
-        if (uChanged && rChanged) return ChangeMask.Both;
-        if (uChanged) return ChangeMask.Uniforms;
-        if (rChanged) return ChangeMask.Resources;
-        return ChangeMask.None;
+        bool rChanged = seenResourceV != properties.ResourceVersion;
+        return rChanged ? ChangeMask.Both : ChangeMask.Uniforms;
     }
 
     /// <summary>
@@ -190,16 +175,15 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Clears all merged property state. Drops every entry from the merged table and the last-seen-version
-    /// dictionary. Increments both merged-table version counters. Issues no GPU calls.
+    /// dictionary. Bumps the merged-table resource version. Issues no GPU calls.
     /// <para>
     /// <see cref="Begin"/> calls this implicitly before returning.
     /// </para>
     /// </summary>
     public void ClearProperties()
     {
-        _mergedTable.Clear();     // bump both merged version counters
+        _mergedTable.Clear();     // bump merged resource version
         _seenVersions.Clear();
-        _frameUboCache.Clear();
         ClearPropertiesCore();    // OpenGL emits a ClearPropertiesEntry; Vk/D3D11 no-op
     }
 

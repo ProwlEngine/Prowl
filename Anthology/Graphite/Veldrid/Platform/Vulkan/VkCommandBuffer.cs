@@ -33,6 +33,12 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private ClearValue? _depthClearValue;
     private readonly List<VkTexture> _preDrawSampledImages = [];
 
+    // Within-draw dedup of implicit UBO ranges, keyed by (set, binding). Cleared at the top of every
+    // BindPropertySets so identity-building, descriptor writes, and dynamic offsets all resolve the
+    // same transient range for a given UBO in a single draw. Program/uniform state is constant within
+    // a draw, so set+binding is a sufficient key.
+    private readonly Dictionary<(int set, int binding), DeviceBufferRange> _drawUboScratch = [];
+
     // Graphics State
     private VkFramebufferBase _currentFramebuffer;
     private bool _currentFramebufferEverActive;
@@ -43,14 +49,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private uint _currentIndexCount;
 
     private bool _newFramebuffer; // Render pass cycle state
-
-    // Resource bind cache: (programKey, setIndex, mergedResourceVersion) -> DescriptorSet
-    private readonly Dictionary<(ShaderProgram, int, uint), DescriptorSet> _resourceBindCache = [];
-
-    // Tracks the VkBuffer handle written into each cached descriptor set's UBO bindings.
-    // Key: (programKey, setIndex); Value: backing VkBuffer handles per UBO element.
-    // Used to detect transient overflow (allocator switched to a new backing buffer).
-    private readonly Dictionary<(ShaderProgram, int), VkBufferHandle[]> _uboBackingBuffers = [];
 
     private string _name;
 
@@ -182,8 +180,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _commandBufferBegun = true;
 
         ClearCachedState();
-        _resourceBindCache.Clear();
-        _uboBackingBuffers.Clear();
         _currentFramebuffer = null;
         _currentShaderProgram = null;
         _currentResolvedPipeline = default;
@@ -352,6 +348,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         BindPropertySets(
             _currentShaderProgram,
+            _currentShaderProgram.DescriptorCache,
             _currentShaderProgram.ResourceLayoutsArray,
             _currentShaderProgram.DescriptorSetLayouts,
             _currentShaderProgram.PerSetCounts,
@@ -411,6 +408,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         BindPropertySets(
             _currentComputeProgram,
+            _currentComputeProgram.DescriptorCache,
             _currentComputeProgram.ResourceLayoutsArray,
             _currentComputeProgram.DescriptorSetLayouts,
             _currentComputeProgram.PerSetCounts,
@@ -679,11 +677,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private protected override void SetPropertiesCore(PropertySet properties) { }
 
-    private protected override void ClearPropertiesCore()
-    {
-        _resourceBindCache.Clear();
-        _uboBackingBuffers.Clear();
-    }
+    // Descriptor sets are content-addressed in the per-program cache, so clearing properties needs no
+    // invalidation here: the next bind simply resolves a new identity and hits or misses accordingly.
+    private protected override void ClearPropertiesCore() { }
 
     private void TransitionPropertyTextures(bool isCompute)
     {
@@ -727,6 +723,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private void BindPropertySets(
         ShaderProgram programKey,
+        VkDescriptorSetCache cache,
         ResourceLayoutDescription[] resourceLayouts,
         DescriptorSetLayout[] dslLayouts,
         DescriptorResourceCounts[] perSetCounts,
@@ -738,64 +735,94 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         if (setCount == 0) return;
 
-        VkDescriptorPoolManager framePool = _gd.GetFrameDescriptorPool(_gd.CurrentFrame.RingSlot);
-        uint resourceVersion = _mergedTable.ResourceVersion;
-        uint uniformVersion = _mergedTable.UniformVersion;
+        _drawUboScratch.Clear();
+        ulong frameId = _gd.CurrentFrame.FrameId;
 
         DescriptorSet* sets = stackalloc DescriptorSet[(int)setCount];
         uint* dynOffsets = stackalloc uint[totalDynamicUboCount > 0 ? totalDynamicUboCount : 1];
         int dynOffsetCount = 0;
 
+        // setIdx + up to 3 identity words per element (MaxElems = 64 in WriteDescriptorSlot).
+        Span<ulong> identityBuf = stackalloc ulong[1 + 64 * 3];
+
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
         {
             ResourceLayoutDescription layout = resourceLayouts[setIdx];
-            (ShaderProgram programKey, int setIdx, uint resourceVersion) cacheKey = (programKey, setIdx, resourceVersion);
 
-            bool miss = !_resourceBindCache.TryGetValue(cacheKey, out DescriptorSet ds);
-            if (!miss && UboBackingBufferChanged(programKey, setIdx, in layout, isCompute, uniformVersion))
-            {
-                _resourceBindCache.Remove(cacheKey);
-                miss = true;
-            }
+            int idLen = BuildSetIdentity(programKey, setIdx, in layout, isCompute, identityBuf);
+            ReadOnlySpan<ulong> identity = identityBuf[..idLen];
 
-            if (miss)
+            if (!cache.TryGet(identity, frameId, out DescriptorSet ds))
             {
-                DescriptorAllocationToken tok = framePool.Allocate(perSetCounts[setIdx], dslLayouts[setIdx]);
-                ds = tok.Set;
-                WriteDescriptorSlot(programKey, (uint)setIdx, in layout, ds, isCompute, uniformVersion);
-                _resourceBindCache[cacheKey] = ds;
+                ds = cache.Allocate(setIdx, dslLayouts[setIdx], in perSetCounts[setIdx], identity, frameId);
+                WriteDescriptorSlot(programKey, (uint)setIdx, in layout, ds, isCompute);
             }
 
             sets[setIdx] = ds;
-            AppendDynOffsets(programKey, (uint)setIdx, in layout, isCompute, uniformVersion, dynOffsets, ref dynOffsetCount);
+            AppendDynOffsets(programKey, (uint)setIdx, in layout, isCompute, dynOffsets, ref dynOffsetCount);
         }
 
         _gd.Vk.CmdBindDescriptorSets(_cb, bindPoint, pipelineLayout, 0, setCount, sets, (uint)dynOffsetCount, dynOffsets);
     }
 
-    private bool UboBackingBufferChanged(
+    // Builds the content identity of a descriptor set from its resolved resources: the same handles
+    // (and storage-buffer ranges) that WriteDescriptorSlot writes, minus per-draw dynamic UBO offsets.
+    // Identical resources produce an identical key, so the per-program cache reuses the set across frames.
+    // Resolution here is quiet (no OnMissingProperty); the actual write reports missing resources.
+    private int BuildSetIdentity(
         ShaderProgram programKey, int setIdx, in ResourceLayoutDescription layout,
-        bool isCompute, uint uniformVersion)
+        bool isCompute, Span<ulong> dst)
     {
-        if (!_uboBackingBuffers.TryGetValue((programKey, setIdx), out VkBufferHandle[] stored))
-            return false;
+        int n = 0;
+        dst[n++] = (ulong)setIdx;
 
-        int idx = 0;
         foreach (ResourceLayoutElementDescription elem in layout.Elements)
         {
-            if (elem.Kind != ResourceKind.UniformBuffer) continue;
-            DeviceBufferRange range = ResolveUboRange(programKey, (uint)setIdx, in elem, uniformVersion);
-            VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
-            if (idx >= stored.Length || stored[idx].Handle != vkBuf.DeviceBuffer.Handle)
-                return true;
-            idx++;
+            switch (elem.Kind)
+            {
+                case ResourceKind.UniformBuffer:
+                    {
+                        DeviceBufferRange range = ResolveUboRange(programKey, (uint)setIdx, in elem, reportMissing: false);
+                        VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
+                        dst[n++] = vkBuf.DeviceBuffer.Handle;
+                        dst[n++] = range.SizeInBytes;
+                        break;
+                    }
+
+                case ResourceKind.StructuredBufferReadOnly:
+                case ResourceKind.StructuredBufferReadWrite:
+                    {
+                        DeviceBufferRange range = ResolveStructuredRange(in elem, setIdx, reportMissing: false);
+                        VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
+                        dst[n++] = vkBuf.DeviceBuffer.Handle;
+                        dst[n++] = range.Offset;
+                        dst[n++] = range.SizeInBytes;
+                        break;
+                    }
+
+                case ResourceKind.TextureReadOnly:
+                case ResourceKind.TextureReadWrite:
+                    {
+                        VkTextureView view = ResolveTextureView(in elem, isCompute, (uint)setIdx, reportMissing: false);
+                        dst[n++] = view.ImageView.Handle;
+                        break;
+                    }
+
+                case ResourceKind.Sampler:
+                    {
+                        VkSampler sampler = ResolveSampler(in elem, in layout);
+                        dst[n++] = sampler.DeviceSampler.Handle;
+                        break;
+                    }
+            }
         }
-        return false;
+
+        return n;
     }
 
     private void AppendDynOffsets(
         ShaderProgram programKey, uint setIdx, in ResourceLayoutDescription layout,
-        bool isCompute, uint uniformVersion, uint* dynOffsets, ref int dynOffsetCount)
+        bool isCompute, uint* dynOffsets, ref int dynOffsetCount)
     {
         const int MaxUbosPerSet = 16;
         (int binding, uint offset)* uboData = stackalloc (int, uint)[MaxUbosPerSet];
@@ -804,7 +831,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         foreach (ResourceLayoutElementDescription elem in layout.Elements)
         {
             if (elem.Kind != ResourceKind.UniformBuffer) continue;
-            DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, uniformVersion);
+            DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem);
             uboData[uboCount++] = (elem.BindingIndex, range.Offset);
         }
 
@@ -823,20 +850,13 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private void WriteDescriptorSlot(
         ShaderProgram programKey, uint setIdx, in ResourceLayoutDescription layout,
-        DescriptorSet dstSet, bool isCompute, uint uniformVersion)
+        DescriptorSet dstSet, bool isCompute)
     {
         const int MaxElems = 64;
         WriteDescriptorSet* writes = stackalloc WriteDescriptorSet[MaxElems];
         DescriptorBufferInfo* bufInfos = stackalloc DescriptorBufferInfo[MaxElems];
         DescriptorImageInfo* imgInfos = stackalloc DescriptorImageInfo[MaxElems];
         int writeCount = 0, bufIdx = 0, imgIdx = 0;
-
-        int uboCount = 0;
-        foreach (ResourceLayoutElementDescription elem in layout.Elements)
-            if (elem.Kind == ResourceKind.UniformBuffer) uboCount++;
-
-        VkBufferHandle[]? uboBuffers = uboCount > 0 ? new VkBufferHandle[uboCount] : null;
-        int uboTrackedIdx = 0;
 
         foreach (ResourceLayoutElementDescription elem in layout.Elements)
         {
@@ -852,9 +872,8 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             {
                 case ResourceKind.UniformBuffer:
                     {
-                        DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem, uniformVersion);
+                        DeviceBufferRange range = ResolveUboRange(programKey, setIdx, in elem);
                         VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
-                        uboBuffers![uboTrackedIdx++] = vkBuf.DeviceBuffer;
                         bufInfos[bufIdx] = new DescriptorBufferInfo
                         {
                             Buffer = vkBuf.DeviceBuffer,
@@ -869,20 +888,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                 case ResourceKind.StructuredBufferReadOnly:
                 case ResourceKind.StructuredBufferReadWrite:
                     {
-                        DeviceBufferRange range;
-                        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? ssboEntry)
-                            && ssboEntry.Kind == PropertyEntryKind.Buffer)
-                        {
-                            range = ssboEntry.Buffer!.Value;
-                        }
-                        else
-                        {
-                            _gd.OnMissingProperty?.Invoke(
-                                _currentShaderProgram,
-                                null,
-                                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
-                            range = new DeviceBufferRange(_gd.NullStructuredRW, 0, 0);
-                        }
+                        DeviceBufferRange range = ResolveStructuredRange(in elem, (int)setIdx, reportMissing: true);
                         VkBuffer ssboVkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         bufInfos[bufIdx] = new DescriptorBufferInfo
                         {
@@ -942,17 +948,33 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         if (writeCount > 0)
             _gd.Vk.UpdateDescriptorSets(_gd.Device, (uint)writeCount, writes, 0, null);
+    }
 
-        if (uboBuffers != null)
-            _uboBackingBuffers[(programKey, (int)setIdx)] = uboBuffers;
+    private DeviceBufferRange ResolveStructuredRange(
+        in ResourceLayoutElementDescription elem, int setIdx, bool reportMissing)
+    {
+        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? ssboEntry)
+            && ssboEntry.Kind == PropertyEntryKind.Buffer)
+        {
+            return ssboEntry.Buffer!.Value;
+        }
+
+        if (reportMissing)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                _currentShaderProgram,
+                null,
+                elem.Name, elem.Kind, (uint)setIdx, elem.BindingIndex);
+        }
+        return new DeviceBufferRange(_gd.NullStructuredRW, 0, 0);
     }
 
     private DeviceBufferRange ResolveUboRange(
         ShaderProgram programKey, uint setIdx, in ResourceLayoutElementDescription elem,
-        uint uniformVersion)
+        bool reportMissing = true)
     {
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
-            return GetOrBuildImplicitUbo(programKey, setIdx, elem.BindingIndex, elem.UniformFields, uniformVersion);
+            return GetOrBuildImplicitUbo((int)setIdx, elem.BindingIndex, elem.UniformFields);
 
         if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
             && uboEntry.Kind == PropertyEntryKind.Buffer)
@@ -960,19 +982,21 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             return uboEntry.Buffer!.Value;
         }
 
-        _gd.OnMissingProperty?.Invoke(
-            _currentShaderProgram,
-            null,
-            elem.Name, ResourceKind.UniformBuffer, setIdx, elem.BindingIndex);
+        if (reportMissing)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                _currentShaderProgram,
+                null,
+                elem.Name, ResourceKind.UniformBuffer, setIdx, elem.BindingIndex);
+        }
         return _gd.CurrentFrame.AllocateTransient(16);
     }
 
     private DeviceBufferRange GetOrBuildImplicitUbo(
-        ShaderProgram programKey, uint setIdx, int bindingIndex,
-        UniformBlockField[] fields, uint uniformVersion)
+        int setIdx, int bindingIndex, UniformBlockField[] fields)
     {
-        UboCacheKey key = new UboCacheKey(programKey, setIdx, bindingIndex, uniformVersion);
-        if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
+        (int, int) key = (setIdx, bindingIndex);
+        if (_drawUboScratch.TryGetValue(key, out DeviceBufferRange cached)) return cached;
 
         uint totalSize = 0;
         foreach (UniformBlockField field in fields)
@@ -1004,13 +1028,13 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             ArrayPool<byte>.Shared.Return(uploadBuf);
         }
 
-        _frameUboCache[key] = range;
+        _drawUboScratch[key] = range;
 
         return range;
     }
 
     private VkTextureView ResolveTextureView(
-        in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
+        in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx, bool reportMissing = true)
     {
         if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
             && texEntry.Kind == PropertyEntryKind.Texture)
@@ -1021,10 +1045,13 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                 return _gd.GetOrCreateDefaultView((VkTexture)texEntry.Texture);
         }
 
-        _gd.OnMissingProperty?.Invoke(
-            _currentShaderProgram,
-            null,
-            elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+        if (reportMissing)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                _currentShaderProgram,
+                null,
+                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+        }
         return _gd.GetOrCreateDefaultView(GetMissingTexture(elem.Kind));
     }
 

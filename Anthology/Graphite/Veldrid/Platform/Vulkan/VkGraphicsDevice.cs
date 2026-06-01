@@ -63,7 +63,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private const int SharedCommandPoolCount = 4;
     private Stack<SharedCommandPool> _sharedGraphicsCommandPools = new();
     private VkDescriptorPoolManager _descriptorPoolManager;
-    private VkDescriptorPoolManager[] _frameDescriptorPools;
+
+    // Live per-shader descriptor-set caches, swept each frame to enforce the retention window even for
+    // shaders that have stopped rendering. Registration may come from asset-load threads, so guarded.
+    private readonly List<VkDescriptorSetCache> _descriptorSetCaches = [];
+    private readonly object _descriptorSetCachesLock = new();
     private readonly Dictionary<Texture, VkTextureView> _defaultTextureViews = [];
     private readonly object _defaultTextureViewsLock = new();
     private bool _standardValidationSupported;
@@ -128,8 +132,17 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     public VkDeviceMemoryManager MemoryManager => _memoryManager;
     public VkDescriptorPoolManager DescriptorPoolManager => _descriptorPoolManager;
 
-    /// <summary>Returns the per-frame descriptor pool for <paramref name="ringSlot"/>. Reset at each BeginFrame.</summary>
-    public VkDescriptorPoolManager GetFrameDescriptorPool(uint ringSlot) => _frameDescriptorPools[ringSlot];
+    internal void RegisterDescriptorSetCache(VkDescriptorSetCache cache)
+    {
+        lock (_descriptorSetCachesLock)
+            _descriptorSetCaches.Add(cache);
+    }
+
+    internal void UnregisterDescriptorSetCache(VkDescriptorSetCache cache)
+    {
+        lock (_descriptorSetCachesLock)
+            _descriptorSetCaches.Remove(cache);
+    }
 
     /// <summary>
     /// Returns a lazily-created full-range <see cref="VkTextureView"/> for <paramref name="texture"/>.
@@ -266,10 +279,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private void InitializeSlots()
     {
         _slots = new SlotState[_maxFramesInFlight];
-        _frameDescriptorPools = new VkDescriptorPoolManager[_maxFramesInFlight];
         for (uint i = 0; i < _maxFramesInFlight; i++)
         {
-            _frameDescriptorPools[i] = new VkDescriptorPoolManager(this, freeDescriptorSets: false);
             VkFence slotWrapper = new(this, false);
 
             VkBuffer primary = new(this, _transientInitialSize,
@@ -317,8 +328,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             slot.TransientOverflow.Clear();
         }
 
-        // Reset the per-frame descriptor pool for this slot (safe: prior frame's fence was waited above).
-        _frameDescriptorPools[ringSlot].ResetAll();
+        // Age out descriptor sets that have gone unused past the retention window. Safe: anything freed
+        // is older than MaxFramesInFlight frames and therefore already GPU-retired.
+        lock (_descriptorSetCachesLock)
+        {
+            foreach (VkDescriptorSetCache cache in _descriptorSetCaches)
+                cache.Sweep(frameId, _maxFramesInFlight);
+        }
 
         slot.CurrentFrameId = frameId;
 
@@ -1235,10 +1251,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
 
         _descriptorPoolManager.DestroyAll();
-        foreach (VkDescriptorPoolManager pool in _frameDescriptorPools)
-        {
-            pool.DestroyAll();
-        }
         foreach (VkTextureView view in _defaultTextureViews.Values)
             view.Dispose();
         _vk.DestroyCommandPool(_device, _graphicsCommandPool, null);

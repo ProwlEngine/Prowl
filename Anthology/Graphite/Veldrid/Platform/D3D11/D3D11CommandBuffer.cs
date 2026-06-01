@@ -577,11 +577,6 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         ShaderProgram programKey, uint setIdx, int bindingIndex,
         UniformBlockField[] fields)
     {
-        uint uniformVersion = _mergedTable.UniformVersion;
-
-        UboCacheKey key = new UboCacheKey(programKey, setIdx, bindingIndex, uniformVersion);
-        if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached)) return cached;
-
         uint totalSize = 0;
         foreach (UniformBlockField field in fields)
             totalSize = Math.Max(totalSize, field.Offset + field.Size);
@@ -611,8 +606,6 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         {
             System.Buffers.ArrayPool<byte>.Shared.Return(uploadBuf);
         }
-
-        _frameUboCache[key] = range;
 
         return range;
     }

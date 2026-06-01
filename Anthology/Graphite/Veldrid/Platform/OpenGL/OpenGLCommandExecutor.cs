@@ -44,7 +44,6 @@ internal unsafe class OpenGLCommandExecutor
     private OpenGLComputeProgram _currentComputeProgram;
 
     private readonly MergedPropertyTable _mergedTable = new();
-    private readonly Dictionary<UboCacheKey, DeviceBufferRange> _frameUboCache = [];
 
     private bool _graphicsPipelineActive;
     private bool _vertexLayoutFlushed;
@@ -385,13 +384,6 @@ internal unsafe class OpenGLCommandExecutor
         bool graphics, uint setIdx, int bindingIndex,
         UniformBlockField[] fields, uint blockSize)
     {
-        uint uniformVersion = _mergedTable.UniformVersion;
-
-        ShaderProgram program = graphics ? _currentShaderProgram : _currentComputeProgram;
-        UboCacheKey key = new UboCacheKey(program, setIdx, bindingIndex, uniformVersion);
-        if (_frameUboCache.TryGetValue(key, out DeviceBufferRange cached))
-            return cached;
-
         byte[] scratch = ArrayPool<byte>.Shared.Rent((int)blockSize);
         scratch.AsSpan(0, (int)blockSize).Clear();
 
@@ -409,8 +401,6 @@ internal unsafe class OpenGLCommandExecutor
             UpdateBuffer(range.Buffer, range.Offset, (IntPtr)ptr, blockSize);
         }
         ArrayPool<byte>.Shared.Return(scratch);
-
-        _frameUboCache[key] = range;
 
         return range;
     }
@@ -528,7 +518,6 @@ internal unsafe class OpenGLCommandExecutor
     public void ClearProperties()
     {
         _mergedTable.Clear();
-        _frameUboCache.Clear();
     }
 
     private void FlushVertexLayouts()

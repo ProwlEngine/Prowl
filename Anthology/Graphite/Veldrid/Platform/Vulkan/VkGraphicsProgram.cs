@@ -33,6 +33,11 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram
     internal readonly ResourceRefCount RefCount;
 
     /// <summary>
+    /// Per-program, cross-frame cache of descriptor sets, content-addressed by their bound resources.
+    /// </summary>
+    internal readonly VkDescriptorSetCache DescriptorCache;
+
+    /// <summary>
     /// Per-program cache of resolved graphics pipelines, keyed on
     /// <c>(OutputDescription, PrimitiveTopology)</c>. Lookup and factory invocation are guarded by
     /// <see cref="_pipelineCacheLock"/> so <c>vkCreateGraphicsPipelines</c> never runs twice
@@ -103,6 +108,8 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram
         (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, TotalDynamicUboCount, _emptyDescriptorSetLayout)
             = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray);
 
+        DescriptorCache = new VkDescriptorSetCache(_gd);
+
         Constructor_RecordShaderAllocation(stages);
     }
 
@@ -127,6 +134,8 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram
         }
         _pipelineCache.Clear();
         DisposeCore_RecordFrees(pipelineCount);
+
+        DescriptorCache.Destroy();
 
         foreach (ShaderModule m in _modules.Values)
             _gd.Vk.DestroyShaderModule(_gd.Device, m, null);

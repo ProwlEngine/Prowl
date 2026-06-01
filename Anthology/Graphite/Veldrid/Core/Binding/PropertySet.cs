@@ -18,7 +18,6 @@ public sealed partial class PropertySet
 {
     private readonly Dictionary<PropertyID, PropertyEntry> _entries;
 
-    private uint _uniformVersion;
     private uint _resourceVersion;
 
 
@@ -37,21 +36,11 @@ public sealed partial class PropertySet
 
 
     /// <summary>
-    /// Tracked uniform version counter.
-    /// Incremented whenever a uniform buffer property is assigned (SetFloat/Double/Int/Matrix).
-    /// Not incremented if a resource such as a texture, buffer, or sampler is changed
-    /// </summary>
-    public uint UniformVersion => _uniformVersion;
-
-    /// <summary>
     /// Tracked resource version counter. Incremented whenever any resource setter
     /// (<see cref="SetBuffer(PropertyID,DeviceBuffer,bool)"/>, <see cref="SetTexture(PropertyID,Texture,Sampler)"/>,
     /// <see cref="SetSampler(PropertyID,Sampler)"/>) is called.
     /// </summary>
     public uint ResourceVersion => _resourceVersion;
-
-    /// <summary>Sum of <see cref="UniformVersion"/> and <see cref="ResourceVersion"/>.</summary>
-    public uint Version => _uniformVersion + _resourceVersion;
 
     /// <summary>Number of entries currently stored in this set.</summary>
     public int EntryCount => _entries.Count;
@@ -156,12 +145,12 @@ public sealed partial class PropertySet
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Removes all entries from this set and increments both version counters.
+    /// Removes all entries from this set and increments the resource version counter.
     /// </summary>
     public void Clear()
     {
         _entries.Clear();
-        unchecked { _uniformVersion++; _resourceVersion++; }
+        unchecked { _resourceVersion++; }
     }
 
     // ------------------------------------------------------------------
@@ -171,7 +160,6 @@ public sealed partial class PropertySet
     private void WriteUniform<T>(PropertyID key, T value, UniformScalarType type) where T : unmanaged
     {
         GetOrCreate(key).WriteUniform(value, type);
-        unchecked { _uniformVersion++; }
     }
 
     private PropertyEntry GetOrCreate(PropertyID key)
