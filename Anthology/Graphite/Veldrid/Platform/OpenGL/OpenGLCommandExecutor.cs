@@ -43,7 +43,7 @@ internal unsafe class OpenGLCommandExecutor
 
     private OpenGLComputeProgram _currentComputeProgram;
 
-    private readonly MergedPropertyTable _mergedTable = new();
+    private readonly PropertySet _activeProperties = new();
 
     private bool _graphicsPipelineActive;
     private bool _vertexLayoutFlushed;
@@ -290,7 +290,7 @@ internal unsafe class OpenGLCommandExecutor
     private void ResolveIndexBufferForDraw()
     {
         bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
-        System.Diagnostics.Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
+        _currentReplayingBuffer?.Bridge_AssertIndexBufferResolved(has);
 
         _currentReplayingBuffer?.Bridge_CheckIndexBufferUsage(ib);
 
@@ -358,7 +358,7 @@ internal unsafe class OpenGLCommandExecutor
         }
         else
         {
-            if (!_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
+            if (!_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
                 return;
 
             range = entry.Buffer.Value;
@@ -389,7 +389,7 @@ internal unsafe class OpenGLCommandExecutor
 
         foreach (UniformBlockField field in fields)
         {
-            if (!_mergedTable.Entries.TryGetValue(field.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Uniform)
+            if (!_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Uniform)
                 continue;
             Span<byte> src = MemoryMarshal.CreateSpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), 128);
             src.Slice(0, (int)Math.Min(field.Size, (uint)src.Length)).CopyTo(scratch.AsSpan((int)field.Offset));
@@ -410,7 +410,7 @@ internal unsafe class OpenGLCommandExecutor
         if (!GetStorageBufferBindingForSlot(graphics, setIdx, elemIdx, out OpenGLShaderStorageBinding ssBinding))
             return;
 
-        if (!_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
+        if (!_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
         {
             _gd.OnMissingProperty?.Invoke(
                 graphics ? _currentShaderProgram : null,
@@ -442,7 +442,7 @@ internal unsafe class OpenGLCommandExecutor
 
         TextureView? texView = null;
         Sampler? sampler = null;
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? entry) && entry.Kind == PropertyEntryKind.Texture)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? entry) && entry.Kind == PropertyEntryKind.Texture)
         {
             if (entry.TextureView != null)
                 texView = entry.TextureView;
@@ -512,12 +512,12 @@ internal unsafe class OpenGLCommandExecutor
 
     public void SetProperties(PropertySet ps)
     {
-        _mergedTable.IngestFrom(ps, ChangeMask.Both);
+        _activeProperties.ApplyOther(ps);
     }
 
     public void ClearProperties()
     {
-        _mergedTable.Clear();
+        _activeProperties.Clear();
     }
 
     private void FlushVertexLayouts()

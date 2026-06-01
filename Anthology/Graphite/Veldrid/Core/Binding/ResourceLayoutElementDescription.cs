@@ -27,33 +27,34 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
     /// Corresponds to OpenGL/Vulkan binding.
     /// Corresponds to Metal index.
     /// Corresponds to DX11/DX12 register slot within its kind.
-    /// On backends that require combined sampler/texture objects (OpenGL),
-    /// a layout must include both a <see cref="ResourceKind.Sampler"/> and
-    /// a <see cref="ResourceKind.TextureReadOnly"/> element at the same
-    /// <see cref="BindingIndex"/> and <see cref="Name"/>.
     /// </summary>
     public int BindingIndex;
 
     /// <summary>
-    /// Miscellaneous resource options for this element.
+    /// Miscellaneous resource options for this element. 
+    /// At the moment, this can be used to specify if a buffer should read from dynamic offsets.
     /// </summary>
     public ResourceLayoutElementOptions Options;
 
-    // OpenGL-only: overrides the name passed to glGetUniformLocation / glGetUniformBlockIndex.
     /// <summary>
-    /// Optional in-shader name used by the OpenGL backend when resolving this element via
-    /// <c>glGetUniformLocation</c> / <c>glGetUniformBlockIndex</c>. Ignored by other backends.
-    /// When null or empty, the OpenGL backend falls back to <c>ResourceID.ToString(Name)</c>.
+    /// In-shader name used by the OpenGL backend when resolving this element via
+    /// <c>glGetUniformLocation</c> / <c>glGetUniformBlockIndex</c>. 
+    /// Required on OpenGL backends. Ignored by other backends. 
+    /// If no name is specified, name will read from the name this description was created with.
     /// </summary>
     public string GLUniformName;
 
     /// <summary>
     /// Flat list of fields describing the layout of this uniform block. Must be null or empty
     /// unless <see cref="Kind"/> is <see cref="ResourceKind.UniformBuffer"/>. Order is not
-    /// significant; Stage 7 looks fields up by <see cref="UniformBlockField.Name"/>.
+    /// significant. Binder looks fields up by <see cref="UniformBlockField.Name"/> and binds by specified offset/size.
     /// </summary>
     public UniformBlockField[] UniformFields;
 
+
+    /// <summary>
+    /// Constructs an element from name, kind, stages used in, and platform binding index.
+    /// </summary>
     public ResourceLayoutElementDescription(string name, ResourceKind kind, ShaderStages stages, int bindingIndex)
     {
         Name = name;
@@ -61,10 +62,14 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
         Stages = stages;
         BindingIndex = bindingIndex;
         Options = ResourceLayoutElementOptions.None;
-        GLUniformName = null;
-        UniformFields = null;
+        GLUniformName = name;
+        UniformFields = [];
     }
 
+
+    /// <summary>
+    /// Constructs an element from name, kind, stages used in, platform binding index, and additional dynamic binding options.
+    /// </summary>
     public ResourceLayoutElementDescription(string name, ResourceKind kind, ShaderStages stages, int bindingIndex, ResourceLayoutElementOptions options)
     {
         Name = name;
@@ -72,9 +77,10 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
         Stages = stages;
         BindingIndex = bindingIndex;
         Options = options;
-        GLUniformName = null;
-        UniformFields = null;
+        GLUniformName = name;
+        UniformFields = [];
     }
+
 
     /// <summary>
     /// Constructs a fully-specified element including the OpenGL resolve name and per-field UBO metadata.
@@ -97,21 +103,8 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
         UniformFields = uniformFields;
     }
 
-    /// <summary>
-    /// Convenience overload that interns <paramref name="name"/> implicitly.
-    /// </summary>
-    public ResourceLayoutElementDescription(
-        string name,
-        ResourceKind kind,
-        ShaderStages stages,
-        int bindingIndex,
-        ResourceLayoutElementOptions options,
-        string glUniformName,
-        UniformBlockField[] uniformFields)
-        : this((PropertyID)name, kind, stages, bindingIndex, options, glUniformName, uniformFields)
-    {
-    }
 
+    /// <inheritdoc/>
     public readonly bool Equals(ResourceLayoutElementDescription other)
     {
         return Name == other.Name
@@ -123,6 +116,8 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
             && Util.ArrayEqualsEquatable(UniformFields, other.UniformFields);
     }
 
+
+    /// <inheritdoc/>
     public override readonly int GetHashCode()
     {
         return HashCode.Combine(

@@ -10,6 +10,7 @@ public enum MapMode : byte
     /// graphics resource. NOTE: This mode can only be used on resources created with the Staging usage flag.
     /// </summary>
     Read,
+
     /// <summary>
     /// A write-only resource mapping. The mapped data region is writable, and will be transferred into the graphics resource
     /// when <see cref="GraphicsDevice.Unmap(MappableResource, uint)"/> is called. NOTE: upon mapping a buffer with this
@@ -17,6 +18,7 @@ public enum MapMode : byte
     /// contents of a resource.
     /// </summary>
     Write,
+
     /// <summary>
     /// A read-write resource mapping. The mapped data region is both readable and writable. NOTE: this mode can only be used
     /// on resources created with the Staging usage flag.

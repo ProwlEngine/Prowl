@@ -59,8 +59,10 @@ internal static class OpenGLCachedPipeline
             {
                 ResourceLayoutElementDescription resource = resources[i];
                 int bindingIndex = resource.BindingIndex;
+
                 string resourceName = resource.GLUniformName
-                    ?? throw new RenderException("Resource layout element name was not interned.");
+                    ?? throw new RenderException("Resource layout element name was not specified.");
+
                 if (resource.Kind == ResourceKind.UniformBuffer)
                 {
                     uint blockIndex = gl.GetUniformBlockIndex(program, resourceName);

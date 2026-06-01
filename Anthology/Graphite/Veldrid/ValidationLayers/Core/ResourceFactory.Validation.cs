@@ -206,23 +206,7 @@ public abstract partial class ResourceFactory
             }
         }
 
-        ResourceLayoutDescription[] programResourceLayouts = description.ResourceLayouts;
-        if (programResourceLayouts != null)
-        {
-            for (int i = 0; i < programResourceLayouts.Length; i++)
-            {
-                for (int j = i + 1; j < programResourceLayouts.Length; j++)
-                {
-                    if (programResourceLayouts[i].Set == programResourceLayouts[j].Set)
-                    {
-                        throw new RenderException(
-                            $"Two ResourceLayouts on the GraphicsProgram share Set index {programResourceLayouts[i].Set}.");
-                    }
-                }
-
-                ValidateResourceLayoutElements(programResourceLayouts[i]);
-            }
-        }
+        ValidateProgramResourceLayouts(description.ResourceLayouts, nameof(GraphicsProgram));
 
         if (description.VertexLayouts != null)
         {
@@ -272,27 +256,30 @@ public abstract partial class ResourceFactory
                 $"{nameof(ComputeDescription)}.{nameof(ComputeDescription.Stage)} must have Stage == ShaderStages.Compute.");
         }
 
-        ResourceLayoutDescription[] computeResourceLayouts = description.ResourceLayouts;
-        if (computeResourceLayouts != null)
-        {
-            for (int i = 0; i < computeResourceLayouts.Length; i++)
-            {
-                for (int j = i + 1; j < computeResourceLayouts.Length; j++)
-                {
-                    if (computeResourceLayouts[i].Set == computeResourceLayouts[j].Set)
-                    {
-                        throw new RenderException(
-                            $"Two ResourceLayouts on the ComputeProgram share Set index {computeResourceLayouts[i].Set}.");
-                    }
-                }
-
-                ValidateResourceLayoutElements(computeResourceLayouts[i]);
-            }
-        }
+        ValidateProgramResourceLayouts(description.ResourceLayouts, nameof(ComputeProgram));
 #endif
     }
 
 #if VALIDATE_USAGE
+    private static void ValidateProgramResourceLayouts(ResourceLayoutDescription[] layouts, string programType)
+    {
+        if (layouts == null) return;
+
+        for (int i = 0; i < layouts.Length; i++)
+        {
+            for (int j = i + 1; j < layouts.Length; j++)
+            {
+                if (layouts[i].Set == layouts[j].Set)
+                {
+                    throw new RenderException(
+                        $"Two ResourceLayouts on the {programType} share Set index {layouts[i].Set}.");
+                }
+            }
+
+            ValidateResourceLayoutElements(layouts[i]);
+        }
+    }
+
     private static void ValidateResourceLayoutElements(ResourceLayoutDescription layout)
     {
         ResourceLayoutElementDescription[] elements = layout.Elements;

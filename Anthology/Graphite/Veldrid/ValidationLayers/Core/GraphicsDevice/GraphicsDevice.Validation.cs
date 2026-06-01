@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics;
 
 namespace Prowl.Veldrid;
@@ -36,17 +35,6 @@ public abstract partial class GraphicsDevice
         if (_currentFrame == null)
         {
             throw new RenderException("EndFrame called with no active frame. Call BeginFrame first.");
-        }
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
-    private static void EndFrame_CheckFrameNonNull(Frame frame)
-    {
-#if VALIDATE_USAGE
-        if (frame == null)
-        {
-            throw new ArgumentNullException(nameof(frame));
         }
 #endif
     }
@@ -161,11 +149,7 @@ public abstract partial class GraphicsDevice
                 $"{nameof(mipLevel)} ({mipLevel}) must be less than the Texture's mip level count ({texture.MipLevels}).");
         }
 
-        uint effectiveArrayLayers = texture.ArrayLayers;
-        if ((texture.Usage & TextureUsage.Cubemap) != 0)
-        {
-            effectiveArrayLayers *= 6;
-        }
+        uint effectiveArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(texture);
         if (arrayLayer >= effectiveArrayLayers)
         {
             throw new RenderException(

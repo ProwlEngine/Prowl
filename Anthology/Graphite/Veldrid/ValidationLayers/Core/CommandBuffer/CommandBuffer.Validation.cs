@@ -52,40 +52,14 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private static void SetShader_CheckProgram(GraphicsProgram p)
-    {
-#if VALIDATE_USAGE
-        if (p == null)
-        {
-            throw new RenderException("GraphicsProgram passed to SetShader must be non-null.");
-        }
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
-    private static void SetComputeShader_CheckProgram(ComputeProgram p)
-    {
-#if VALIDATE_USAGE
-        if (p == null)
-        {
-            throw new RenderException("ComputeProgram passed to SetComputeShader must be non-null.");
-        }
-#endif
-    }
-
-
-    [Conditional("VALIDATE_USAGE")]
     private void ClearColorTarget_CheckFramebuffer(uint index)
     {
 #if VALIDATE_USAGE
-        if (_framebuffer == null)
-        {
-            throw new RenderException($"Cannot use ClearColorTarget. There is no Framebuffer bound.");
-        }
-        if (_framebuffer.ColorTargets.Count <= index)
+        CheckFramebuffer(nameof(ClearColorTarget));
+        if (_framebuffer!.ColorTargets.Count <= index)
         {
             throw new RenderException(
-                "ClearColorTarget index must be less than the current Framebuffer's color target count.");
+                $"{nameof(ClearColorTarget)} index must be less than the current Framebuffer's color target count.");
         }
 #endif
     }
@@ -94,15 +68,22 @@ public abstract partial class CommandBuffer
     private void ClearDepthStencil_CheckFramebuffer()
     {
 #if VALIDATE_USAGE
-        if (_framebuffer == null)
-        {
-            throw new RenderException($"Cannot use ClearDepthStencil. There is no Framebuffer bound.");
-        }
-        if (_framebuffer.DepthTarget == null)
+        CheckFramebuffer(nameof(ClearDepthStencil));
+        if (_framebuffer!.DepthTarget == null)
         {
             throw new RenderException(
-                "The current Framebuffer has no depth target, so ClearDepthStencil cannot be used.");
+                $"The current Framebuffer has no depth target, so {nameof(ClearDepthStencil)} cannot be used.");
         }
+#endif
+    }
+
+
+    [Conditional("VALIDATE_USAGE")]
+    private void CheckFramebuffer(string name)
+    {
+#if VALIDATE_USAGE
+        if (_framebuffer == null)
+            throw new RenderException($"Cannot use {name}. There is no Framebuffer bound.");
 #endif
     }
 
@@ -185,19 +166,28 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private static void CopyTexture_CheckCompatibilityAll(Texture source, Texture destination, uint effectiveSrcArrayLayers)
+    private static void CopyTexture_CheckDimensionsCompatible(Texture source, Texture destination)
     {
 #if VALIDATE_USAGE
-        uint effectiveDstArrayLayers = (destination.Usage & TextureUsage.Cubemap) != 0
-            ? destination.ArrayLayers * 6
-            : destination.ArrayLayers;
-        if (effectiveSrcArrayLayers != effectiveDstArrayLayers || source.MipLevels != destination.MipLevels
-            || source.SampleCount != destination.SampleCount || source.Width != destination.Width
+        if (source.SampleCount != destination.SampleCount || source.Width != destination.Width
             || source.Height != destination.Height || source.Depth != destination.Depth
             || source.Format != destination.Format)
         {
-            throw new RenderException("Source and destination Textures are not compatible to be copied.");
+            throw new RenderException($"Source and destination Textures are not compatible to be copied in {nameof(CopyTexture)}.");
         }
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void CopyTexture_CheckCompatibilityAll(Texture source, Texture destination, uint effectiveSrcArrayLayers)
+    {
+#if VALIDATE_USAGE
+        uint effectiveDstArrayLayers = GetEffectiveArrayLayers(destination);
+        if (effectiveSrcArrayLayers != effectiveDstArrayLayers || source.MipLevels != destination.MipLevels)
+        {
+            throw new RenderException($"Source and destination Textures are not compatible to be copied in {nameof(CopyTexture)}.");
+        }
+        CopyTexture_CheckDimensionsCompatible(source, destination);
 #endif
     }
 
@@ -205,18 +195,9 @@ public abstract partial class CommandBuffer
     private static void CopyTexture_CheckCompatibilityForSubresource(Texture source, Texture destination, uint mipLevel, uint arrayLayer)
     {
 #if VALIDATE_USAGE
-        uint effectiveSrcArrayLayers = (source.Usage & TextureUsage.Cubemap) != 0
-            ? source.ArrayLayers * 6
-            : source.ArrayLayers;
-        uint effectiveDstArrayLayers = (destination.Usage & TextureUsage.Cubemap) != 0
-            ? destination.ArrayLayers * 6
-            : destination.ArrayLayers;
-        if (source.SampleCount != destination.SampleCount || source.Width != destination.Width
-            || source.Height != destination.Height || source.Depth != destination.Depth
-            || source.Format != destination.Format)
-        {
-            throw new RenderException("Source and destination Textures are not compatible to be copied.");
-        }
+        uint effectiveSrcArrayLayers = GetEffectiveArrayLayers(source);
+        uint effectiveDstArrayLayers = GetEffectiveArrayLayers(destination);
+        CopyTexture_CheckDimensionsCompatible(source, destination);
         if (mipLevel >= source.MipLevels || mipLevel >= destination.MipLevels || arrayLayer >= effectiveSrcArrayLayers || arrayLayer >= effectiveDstArrayLayers)
         {
             throw new RenderException(
@@ -267,9 +248,7 @@ public abstract partial class CommandBuffer
         {
             throw new RenderException($"{nameof(srcMipLevel)} must be less than the number of mip levels in the source Texture.");
         }
-        uint effectiveSrcArrayLayers = (source.Usage & TextureUsage.Cubemap) != 0
-            ? source.ArrayLayers * 6
-            : source.ArrayLayers;
+        uint effectiveSrcArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(source);
         if (srcBaseArrayLayer + layerCount > effectiveSrcArrayLayers)
         {
             throw new RenderException($"An invalid mip range was given for the source Texture.");
@@ -278,14 +257,18 @@ public abstract partial class CommandBuffer
         {
             throw new RenderException($"{nameof(dstMipLevel)} must be less than the number of mip levels in the destination Texture.");
         }
-        uint effectiveDstArrayLayers = (destination.Usage & TextureUsage.Cubemap) != 0
-            ? destination.ArrayLayers * 6
-            : destination.ArrayLayers;
+        uint effectiveDstArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(destination);
         if (dstBaseArrayLayer + layerCount > effectiveDstArrayLayers)
         {
             throw new RenderException($"An invalid mip range was given for the destination Texture.");
         }
 #endif
+    }
+
+    private protected static void DrawIndexed_AssertIndexBufferResolved(bool resolved)
+    {
+        Debug.Assert(resolved,
+            $"Validation in {nameof(DrawIndexed)} must have already trapped a missing index buffer on indexed-draw paths.");
     }
 
     [Conditional("VALIDATE_USAGE")]
@@ -328,33 +311,6 @@ public abstract partial class CommandBuffer
     }
 
     [Conditional("VALIDATE_USAGE")]
-    private static void SetProperties_CheckNonNull(PropertySet properties)
-    {
-#if VALIDATE_USAGE
-        if (properties == null)
-        {
-            throw new ArgumentNullException(nameof(properties),
-                "PropertySet passed to CommandBuffer.SetProperties must be non-null.");
-        }
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
-    private static void CopyBuffer_CheckBuffers(DeviceBuffer source, DeviceBuffer destination)
-    {
-#if VALIDATE_USAGE
-        if (source == null)
-        {
-            throw new ArgumentNullException(nameof(source));
-        }
-        if (destination == null)
-        {
-            throw new ArgumentNullException(nameof(destination));
-        }
-#endif
-    }
-
-    [Conditional("VALIDATE_USAGE")]
     private static void CopyBuffer_CheckRange(
         DeviceBuffer source, uint sourceOffset,
         DeviceBuffer destination, uint destinationOffset,
@@ -377,16 +333,8 @@ public abstract partial class CommandBuffer
     [Conditional("VALIDATE_USAGE")]
     private static void CopyTexture_CheckNotNull(Texture source, Texture destination)
     {
-#if VALIDATE_USAGE
-        if (source == null)
-        {
-            throw new ArgumentNullException(nameof(source));
-        }
-        if (destination == null)
-        {
-            throw new ArgumentNullException(nameof(destination));
-        }
-#endif
+        ValidationHelpers.RequireNotNull(source, nameof(source), nameof(CopyTexture));
+        ValidationHelpers.RequireNotNull(destination, nameof(destination), nameof(CopyTexture));
     }
 
     [Conditional("VALIDATE_USAGE")]

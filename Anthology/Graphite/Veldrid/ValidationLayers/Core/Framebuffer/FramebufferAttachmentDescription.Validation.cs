@@ -8,12 +8,7 @@ public partial struct FramebufferAttachmentDescription
     private static void FramebufferAttachmentDescription_CheckLayerAndMip(Texture target, uint arrayLayer, uint mipLevel)
     {
 #if VALIDATE_USAGE
-        uint effectiveArrayLayers = target.ArrayLayers;
-        if ((target.Usage & TextureUsage.Cubemap) != 0)
-        {
-            effectiveArrayLayers *= 6;
-        }
-
+        uint effectiveArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(target);
         if (arrayLayer >= effectiveArrayLayers)
         {
             throw new RenderException(

@@ -25,10 +25,14 @@ internal sealed class PropertyEntry
     public UniformScalarType UniformType;
     public bool ReadOnly;
 
+
     public unsafe struct UniformPayload
     {
         // 'oh but mah memory usa-' you're not updating a million uniform double4x4's, a few fixed bytes won't hurt you
         public fixed byte _e0[128];
+
+        public ref T As<T>() where T : unmanaged
+            => ref Unsafe.As<byte, T>(ref _e0[0]);
     }
 
     public UniformPayload Uniform;
@@ -39,13 +43,11 @@ internal sealed class PropertyEntry
     public Sampler? Sampler;
 
 
-    public unsafe void WriteUniform<T>(T value, UniformScalarType type) where T : unmanaged
+    public void WriteUniform<T>(T value, UniformScalarType type) where T : unmanaged
     {
         Kind = PropertyEntryKind.Uniform;
         UniformType = type;
-
-        fixed (UniformPayload* uniformPtr = &Uniform)
-            NativeMemory.Copy(&value, uniformPtr, (nuint)sizeof(T));
+        Uniform.As<T>() = value;
     }
 
 

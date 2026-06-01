@@ -243,7 +243,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private void ResolveAndBindIndexBuffer()
     {
         bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
-        Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
+        DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
 
         Format dxgiFmt = D3D11Formats.ToDxgiFormat(fmt);
@@ -560,7 +560,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                 Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(r.Buffer), r.Offset, r.SizeInBytes);
         }
 
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry) && uboEntry.Kind == PropertyEntryKind.Buffer)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry) && uboEntry.Kind == PropertyEntryKind.Buffer)
         {
             return uboEntry.Buffer!.Value;
         }
@@ -590,7 +590,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             Array.Clear(uploadBuf, 0, (int)totalSize);
             foreach (UniformBlockField field in fields)
             {
-                if (_mergedTable.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
                     && uEntry.Kind == PropertyEntryKind.Uniform)
                 {
                     MemoryMarshal.CreateReadOnlySpan(
@@ -613,7 +613,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private DeviceBufferRange ResolveStorageBufferD3D11(
         in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
     {
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? entry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? entry)
             && entry.Kind == PropertyEntryKind.Buffer)
         {
             return entry.Buffer!.Value;
@@ -651,7 +651,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private D3D11TextureView ResolveTextureViewD3D11(
         in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx, bool isReadWrite)
     {
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
             && texEntry.Kind == PropertyEntryKind.Texture)
         {
             if (texEntry.TextureView != null)
@@ -671,7 +671,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private D3D11Sampler ResolveD3D11Sampler(
         in ResourceLayoutElementDescription elem, in ResourceLayoutDescription layout)
     {
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
             && samplerEntry.Kind == PropertyEntryKind.Sampler
             && samplerEntry.Sampler != null)
         {
@@ -683,7 +683,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             if (other.Name == elem.Name
                 && (other.Kind == ResourceKind.TextureReadOnly || other.Kind == ResourceKind.TextureReadWrite))
             {
-                if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
                     && texEntry.Kind == PropertyEntryKind.Texture
                     && texEntry.Sampler != null)
                 {

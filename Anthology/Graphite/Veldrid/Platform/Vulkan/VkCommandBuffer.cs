@@ -326,7 +326,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount);
         _currentIndexCount = indexCount;
-        Debug.Assert(has, "Validation must have already trapped a missing index buffer on indexed-draw paths.");
+        DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
@@ -361,7 +361,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private void ResolveAndBindGraphicsPipeline()
     {
-        PrimitiveTopology srcTopology = _currentVertexSource.Topology;
+        PrimitiveTopology srcTopology = _currentVertexSource!.Topology;
 
         if (_hasResolvedPipeline && _resolvedTopology == srcTopology) return;
 
@@ -371,7 +371,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         }
 
         VkPipelineCacheKey key = new(
-            _framebufferOutputs,
+            _framebufferOutputs!.Value,
             srcTopology);
 
         _currentResolvedPipeline = _currentShaderProgram.GetOrAddPipeline(in key);
@@ -695,7 +695,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                     continue;
 
                 VkTexture tex;
-                if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry entry)
+                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry)
                     && entry.Kind == PropertyEntryKind.Texture)
                 {
                     Texture resolved = entry.Texture ?? entry.TextureView?.Target;
@@ -953,7 +953,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private DeviceBufferRange ResolveStructuredRange(
         in ResourceLayoutElementDescription elem, int setIdx, bool reportMissing)
     {
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? ssboEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? ssboEntry)
             && ssboEntry.Kind == PropertyEntryKind.Buffer)
         {
             return ssboEntry.Buffer!.Value;
@@ -976,7 +976,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
             return GetOrBuildImplicitUbo((int)setIdx, elem.BindingIndex, elem.UniformFields);
 
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
             && uboEntry.Kind == PropertyEntryKind.Buffer)
         {
             return uboEntry.Buffer!.Value;
@@ -1011,7 +1011,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             Array.Clear(uploadBuf, 0, (int)totalSize);
             foreach (UniformBlockField field in fields)
             {
-                if (_mergedTable.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
                     && uEntry.Kind == PropertyEntryKind.Uniform)
                 {
                     ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
@@ -1036,7 +1036,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private VkTextureView ResolveTextureView(
         in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx, bool reportMissing = true)
     {
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
             && texEntry.Kind == PropertyEntryKind.Texture)
         {
             if (texEntry.TextureView != null)
@@ -1059,7 +1059,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         in ResourceLayoutElementDescription elem, in ResourceLayoutDescription layout)
     {
         // Rule 1: explicit SetSampler(name) entry
-        if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
             && samplerEntry.Kind == PropertyEntryKind.Sampler
             && samplerEntry.Sampler != null)
         {
@@ -1072,7 +1072,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             if (other.Name == elem.Name
                 && (other.Kind == ResourceKind.TextureReadOnly || other.Kind == ResourceKind.TextureReadWrite))
             {
-                if (_mergedTable.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
                     && texEntry.Kind == PropertyEntryKind.Texture
                     && texEntry.Sampler != null)
                 {

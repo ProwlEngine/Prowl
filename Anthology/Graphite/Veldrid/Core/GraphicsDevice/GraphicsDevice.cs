@@ -218,7 +218,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <exception cref="RenderException">Thrown if <paramref name="frame"/> is not the currently active frame.</exception>
     public void EndFrame(Frame frame)
     {
-        EndFrame_CheckFrameNonNull(frame);
+        ValidationHelpers.RequireNotNull(frame, nameof(frame), nameof(EndFrame));
         EndFrame_CheckIsActive(frame);
         _currentFrame = null;
         EndFrameCore(frame);

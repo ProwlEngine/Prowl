@@ -40,7 +40,7 @@ public enum ResourceKind : byte
     TextureReadWrite,
 
     /// <summary>
-    /// A <see cref="Prowl.Veldrid.Sampler"/>.
+    /// A <see cref="Veldrid.Sampler"/>.
     /// </summary>
     Sampler,
 }

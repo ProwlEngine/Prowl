@@ -5,13 +5,11 @@ using Prowl.Vector;
 namespace Prowl.Veldrid;
 
 /// <summary>
-/// A mutable, user-owned container of named shader properties (uniform values and GPU resources).
-/// Analogous to Unity's <c>MaterialPropertyBlock</c>. Pass one or more <see cref="PropertySet"/> instances
-/// to <see cref="CommandBuffer.SetProperties"/> before a draw or dispatch; the command buffer merges
-/// them by name and resolves the final bindings at draw time.
+/// A user-owned set of named shader resources and uniforms to bind and upload before or during a draw.
+/// Each PropertySet is applied to a current active set on the command buffer, with the last applied set 
+/// overwriting any previous values with its own.
 /// <para>
-/// <see cref="PropertySet"/> is not thread-safe. External synchronization is required when a set is
-/// accessed from multiple threads.
+/// <see cref="PropertySet"/> is not internally synchronized. Upload at your own risk.
 /// </para>
 /// </summary>
 public sealed partial class PropertySet
@@ -21,9 +19,11 @@ public sealed partial class PropertySet
     private uint _resourceVersion;
 
 
-    public PropertySet()
+    /// <summary>
+    /// Initializes a new, empty PropertySet with a capacity of 0.
+    /// </summary>
+    public PropertySet() : this(0)
     {
-        _entries = [];
     }
 
 
@@ -39,18 +39,17 @@ public sealed partial class PropertySet
     /// Tracked resource version counter. Incremented whenever any resource setter
     /// (<see cref="SetBuffer(PropertyID,DeviceBuffer,bool)"/>, <see cref="SetTexture(PropertyID,Texture,Sampler)"/>,
     /// <see cref="SetSampler(PropertyID,Sampler)"/>) is called.
+    /// Uniform updates (any scalar value) do not increment this.
     /// </summary>
     public uint ResourceVersion => _resourceVersion;
+
 
     /// <summary>Number of entries currently stored in this set.</summary>
     public int EntryCount => _entries.Count;
 
-    /// <summary>Internal read-only view used by <see cref="MergedPropertyTable.IngestFrom"/>.</summary>
-    internal Dictionary<PropertyID, PropertyEntry> RawEntries => _entries;
 
-    // ------------------------------------------------------------------
-    // Uniform setters
-    // ------------------------------------------------------------------
+    internal Dictionary<PropertyID, PropertyEntry> Entries => _entries;
+
 
     /// <summary>Sets a <c>float</c> uniform field.</summary>
     public void SetFloat(PropertyID name, float v) => WriteUniform(name, v, UniformScalarType.Float1);
@@ -84,14 +83,11 @@ public sealed partial class PropertySet
     /// <summary>Sets a <c>double4x4</c> matrix uniform field.</summary>
     public void SetDoubleMatrix(PropertyID name, Double4x4 v) => WriteUniform(name, v, UniformScalarType.Double4x4);
 
-    // ------------------------------------------------------------------
-    // Resource setters
-    // ------------------------------------------------------------------
 
     /// <inheritdoc cref="SetBuffer(PropertyID, DeviceBufferRange, bool)"/>
     public void SetBuffer(PropertyID name, DeviceBuffer buffer, bool readOnly = true)
     {
-        SetBuffer_CheckBuffer(buffer);
+        ValidationHelpers.RequireNotNull(buffer, nameof(buffer), nameof(SetBuffer));
         SetBuffer(name, new DeviceBufferRange(buffer, 0, buffer.SizeInBytes), readOnly);
     }
 
@@ -103,15 +99,16 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBufferRange range, bool readOnly = true)
     {
-        SetBuffer_CheckBuffer(range.Buffer);
+        ValidationHelpers.RequireNotNull(range.Buffer, nameof(range), nameof(SetBuffer));
         GetOrCreate(name).SetBuffer(range, readOnly);
         unchecked { _resourceVersion++; }
     }
 
+
     /// <inheritdoc cref="SetTexture(PropertyID, TextureView, Sampler)"/>
     public void SetTexture(PropertyID name, Texture texture, Sampler? sampler = null)
     {
-        SetTexture_CheckTexture(texture);
+        ValidationHelpers.RequireNotNull(texture, nameof(texture), nameof(SetTexture));
         GetOrCreate(name).SetTexture(texture, null, sampler);
         unchecked { _resourceVersion++; }
     }
@@ -124,10 +121,11 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetTexture(PropertyID name, TextureView view, Sampler? sampler = null)
     {
-        SetTexture_CheckView(view);
+        ValidationHelpers.RequireNotNull(view, nameof(view), nameof(SetTexture));
         GetOrCreate(name).SetTexture(null, view, sampler);
         unchecked { _resourceVersion++; }
     }
+
 
     /// <summary>
     /// Binds a <see cref="Sampler"/> to the named slot independently of any texture. On OpenGL this is
@@ -135,14 +133,11 @@ public sealed partial class PropertySet
     /// </summary>
     public void SetSampler(PropertyID name, Sampler sampler)
     {
-        SetSampler_CheckSampler(sampler);
+        ValidationHelpers.RequireNotNull(sampler, nameof(sampler), nameof(SetSampler));
         GetOrCreate(name).SetSampler(sampler);
         unchecked { _resourceVersion++; }
     }
 
-    // ------------------------------------------------------------------
-    // Whole-set ops
-    // ------------------------------------------------------------------
 
     /// <summary>
     /// Removes all entries from this set and increments the resource version counter.
@@ -153,14 +148,31 @@ public sealed partial class PropertySet
         unchecked { _resourceVersion++; }
     }
 
-    // ------------------------------------------------------------------
-    // Private helpers
-    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Applies another property set's values to this property set. Overwrites any properties in this set with the other set's properties.
+    /// </summary>
+    public void ApplyOther(PropertySet other)
+    {
+        bool dirtyResources = false;
+
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in other.Entries)
+        {
+            PropertyEntry entry = kv.Value;
+            bool isUniform = entry.Kind == PropertyEntryKind.Uniform;
+
+            _entries[kv.Key] = entry;
+
+            if (!isUniform) dirtyResources = true;
+        }
+
+        if (dirtyResources) unchecked { _resourceVersion++; }
+    }
+
 
     private void WriteUniform<T>(PropertyID key, T value, UniformScalarType type) where T : unmanaged
-    {
-        GetOrCreate(key).WriteUniform(value, type);
-    }
+        => GetOrCreate(key).WriteUniform(value, type);
+
 
     private PropertyEntry GetOrCreate(PropertyID key)
     {

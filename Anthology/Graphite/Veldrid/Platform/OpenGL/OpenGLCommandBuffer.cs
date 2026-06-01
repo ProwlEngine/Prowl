@@ -254,6 +254,9 @@ internal partial class OpenGLCommandBuffer : CommandBuffer
     internal void Bridge_CheckIndexBufferUsage(DeviceBuffer buffer)
         => CheckIndexBufferUsage(buffer);
 
+    internal void Bridge_AssertIndexBufferResolved(bool resolved)
+        => DrawIndexed_AssertIndexBufferResolved(resolved);
+
     public override void Dispose()
     {
         _gd.EnqueueDisposal(this);

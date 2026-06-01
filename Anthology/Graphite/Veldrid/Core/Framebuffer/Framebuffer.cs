@@ -36,7 +36,9 @@ public abstract class Framebuffer : DeviceResource, IDisposable
     /// </summary>
     public virtual uint Height { get; }
 
+
     internal Framebuffer() { }
+
 
     internal Framebuffer(
         FramebufferAttachmentDescription? depthTargetDesc,

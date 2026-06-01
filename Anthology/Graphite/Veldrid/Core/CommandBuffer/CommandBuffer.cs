@@ -31,18 +31,17 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private readonly uint _uniformBufferAlignment;
     private readonly uint _structuredBufferAlignment;
 
-    private protected Framebuffer _framebuffer;
-    private protected GraphicsProgram _shaderProgram;
-    private protected ComputeProgram _computeProgram;
-    private protected OutputDescription _framebufferOutputs;
-    private protected IVertexSource _currentVertexSource;
+    private protected Framebuffer? _framebuffer;
+    private protected OutputDescription? _framebufferOutputs;
+
+    private protected GraphicsProgram? _shaderProgram;
+    private protected ComputeProgram? _computeProgram;
+
+    private protected IVertexSource? _currentVertexSource;
 
 
     /// <summary>Per-command-buffer merged property table. Vk and D3D11 read this at draw time.</summary>
-    private protected readonly MergedPropertyTable _mergedTable = new();
-
-    /// <summary>Tracks the last-seen resource version for each PropertySet merged via SetProperties.</summary>
-    private readonly Dictionary<PropertySet, uint> _seenVersions = [];
+    private protected readonly PropertySet _activeProperties = new();
 
     /// <summary>
     /// Gets whether <see cref="End"/> has been called on this <see cref="CommandBuffer"/> since the last
@@ -50,25 +49,23 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// </summary>
     internal bool HasEnded { get; private protected set; }
 
-    internal CommandBuffer(
-        GraphicsDeviceFeatures features,
-        uint uniformAlignment,
-        uint structuredAlignment)
+
+    internal CommandBuffer(GraphicsDeviceFeatures features, uint uniformAlignment, uint structuredAlignment)
     {
         _features = features;
         _uniformBufferAlignment = uniformAlignment;
         _structuredBufferAlignment = structuredAlignment;
     }
 
+
     internal void ClearCachedState()
     {
         _framebuffer = null;
         _shaderProgram = null;
         _computeProgram = null;
-        _framebufferOutputs = default;
+        _framebufferOutputs = null;
         _currentVertexSource = null;
-        _mergedTable.Clear();
-        _seenVersions.Clear();
+        _activeProperties.Clear();
     }
 
     /// <summary>
@@ -96,7 +93,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="program">The new <see cref="GraphicsProgram"/> object.</param>
     public void SetShader(GraphicsProgram program)
     {
-        SetShader_CheckProgram(program);
+        ValidationHelpers.RequireNotNullRender(program, nameof(GraphicsProgram), nameof(SetShader));
         SetShaderCore(program);
         _shaderProgram = program;
     }
@@ -111,7 +108,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="program">The new <see cref="ComputeProgram"/> object.</param>
     public void SetComputeShader(ComputeProgram program)
     {
-        SetComputeShader_CheckProgram(program);
+        ValidationHelpers.RequireNotNullRender(program, nameof(ComputeProgram), nameof(SetComputeShader));
         SetComputeShaderCore(program);
         _computeProgram = program;
     }
@@ -148,27 +145,14 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="properties">The property set to merge into the command buffer state.</param>
     public void SetProperties(PropertySet properties)
     {
-        SetProperties_CheckNonNull(properties);
-        ChangeMask mask = ComputeChangeMask(properties);
-        _mergedTable.IngestFrom(properties, mask);
-        _seenVersions[properties] = properties.ResourceVersion;
+        ValidationHelpers.RequireNotNull(properties, nameof(properties), nameof(SetProperties));
+        _activeProperties.ApplyOther(properties);
         SetPropertiesCore(properties);
-    }
-
-    // Uniform state can no longer be diffed (no uniform version), so uniforms are always re-merged.
-    // Only resources are deduplicated, via the PropertySet's resource version.
-    private ChangeMask ComputeChangeMask(PropertySet properties)
-    {
-        if (!_seenVersions.TryGetValue(properties, out uint seenResourceV))
-            return ChangeMask.Both;
-
-        bool rChanged = seenResourceV != properties.ResourceVersion;
-        return rChanged ? ChangeMask.Both : ChangeMask.Uniforms;
     }
 
     /// <summary>
     /// Performs any backend-specific work when a <see cref="PropertySet"/> is merged into the command buffer.
-    /// The base class has already updated <see cref="_mergedTable"/>. Backends that record deferred commands
+    /// The base class has already updated <see cref="_activeProperties"/>. Backends that record deferred commands
     /// (OpenGL) override this to snapshot entries into the active entry list.
     /// </summary>
     private protected abstract void SetPropertiesCore(PropertySet properties);
@@ -182,8 +166,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// </summary>
     public void ClearProperties()
     {
-        _mergedTable.Clear();     // bump merged resource version
-        _seenVersions.Clear();
+        _activeProperties.Clear();     // bump merged resource version
         ClearPropertiesCore();    // OpenGL emits a ClearPropertiesEntry; Vk/D3D11 no-op
     }
 
@@ -261,12 +244,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// </summary>
     public void SetFullViewports()
     {
-        SetViewport(0, new Viewport(0, 0, _framebuffer.Width, _framebuffer.Height, 0, 1));
+        CheckFramebuffer(nameof(SetFullViewports));
+        SetViewport(0, new Viewport(0, 0, _framebuffer!.Width, _framebuffer.Height, 0, 1));
 
         for (uint index = 1; index < _framebuffer.ColorTargets.Count; index++)
-        {
             SetViewport(index, new Viewport(0, 0, _framebuffer.Width, _framebuffer.Height, 0, 1));
-        }
     }
 
     /// <summary>
@@ -275,7 +257,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="index">The color target index.</param>
     public void SetFullViewport(uint index)
     {
-        SetViewport(index, new Viewport(0, 0, _framebuffer.Width, _framebuffer.Height, 0, 1));
+        CheckFramebuffer(nameof(SetFullViewport));
+        SetViewport(index, new Viewport(0, 0, _framebuffer!.Width, _framebuffer.Height, 0, 1));
     }
 
     /// <summary>
@@ -299,7 +282,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// </summary>
     public void SetFullScissorRects()
     {
-        SetScissorRect(0, 0, 0, _framebuffer.Width, _framebuffer.Height);
+        CheckFramebuffer(nameof(SetFullScissorRects));
+        SetScissorRect(0, 0, 0, _framebuffer!.Width, _framebuffer.Height);
 
         for (uint index = 1; index < _framebuffer.ColorTargets.Count; index++)
         {
@@ -313,7 +297,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="index">The color target index.</param>
     public void SetFullScissorRect(uint index)
     {
-        SetScissorRect(index, 0, 0, _framebuffer.Width, _framebuffer.Height);
+        CheckFramebuffer(nameof(SetFullScissorRect));
+        SetScissorRect(index, 0, 0, _framebuffer!.Width, _framebuffer.Height);
     }
 
     /// <summary>
@@ -651,7 +636,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="sizeInBytes">The number of bytes to copy.</param>
     public void CopyBuffer(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
     {
-        CopyBuffer_CheckBuffers(source, destination);
+        ValidationHelpers.RequireNotNull(source, nameof(source), nameof(CopyBuffer));
+        ValidationHelpers.RequireNotNull(destination, nameof(destination), nameof(CopyBuffer));
         if (sizeInBytes == 0)
         {
             return;
@@ -671,6 +657,13 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected abstract void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes);
 
     /// <summary>
+    /// Returns the number of array layers a <see cref="Texture"/> occupies, accounting for the six faces
+    /// contributed by each layer of a <see cref="TextureUsage.Cubemap"/>.
+    /// </summary>
+    private static uint GetEffectiveArrayLayers(Texture texture)
+        => ValidationHelpers.GetEffectiveArrayLayers(texture);
+
+    /// <summary>
     /// Copies all subresources from one <see cref="Texture"/> to another.
     /// </summary>
     /// <param name="source">The source of Texture data.</param>
@@ -678,9 +671,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     public void CopyTexture(Texture source, Texture destination)
     {
         CopyTexture_CheckNotNull(source, destination);
-        uint effectiveSrcArrayLayers = (source.Usage & TextureUsage.Cubemap) != 0
-            ? source.ArrayLayers * 6
-            : source.ArrayLayers;
+        uint effectiveSrcArrayLayers = GetEffectiveArrayLayers(source);
         CopyTexture_CheckCompatibilityAll(source, destination, effectiveSrcArrayLayers);
 
         for (uint level = 0; level < source.MipLevels; level++)
