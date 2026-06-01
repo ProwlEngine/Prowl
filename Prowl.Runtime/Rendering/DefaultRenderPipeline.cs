@@ -197,7 +197,7 @@ public class DefaultRenderPipeline : RenderPipeline
             }
         }
 
-        HashSet<int> culledRenderableIndices = CullRenderables(renderables, css.WorldFrustum, css.CullingMask);
+        bool[] culledRenderableIndices = CullRenderables(renderables, css.WorldFrustum, css.CullingMask);
 
         RenderStats.AddCamera();
 

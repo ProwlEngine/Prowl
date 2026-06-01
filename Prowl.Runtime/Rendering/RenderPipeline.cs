@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -225,28 +226,29 @@ public abstract class RenderPipeline : EngineObject
         CleanupUnusedModelMatrices();
     }
 
-    public HashSet<int> CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask)
+    /// <summary>
+    /// Returns a per-index "culled" mask (true == culled, skip this renderable) aligned to
+    /// <paramref name="renderables"/>. A bool[] keyed by index is cheaper to allocate than a
+    /// HashSet and turns the per-object membership test in every pass into an O(1) array read
+    /// instead of a hash lookup.
+    /// </summary>
+    public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask)
     {
-        HashSet<int> culledRenderableIndices = [];
+        bool[] culledRenderableIndices = new bool[renderables.Count];
+        int culled = 0;
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
             IRenderable renderable = renderables[renderIndex];
 
-            if (worldFrustum != null && CullRenderable(renderable, worldFrustum.Value))
+            if ((worldFrustum != null && CullRenderable(renderable, worldFrustum.Value))
+                || cullingMask.HasLayer(renderable.GetLayer()) == false)
             {
-                culledRenderableIndices.Add(renderIndex);
-                continue;
-            }
-
-            if (cullingMask.HasLayer(renderable.GetLayer()) == false)
-            {
-                culledRenderableIndices.Add(renderIndex);
-                continue;
+                culledRenderableIndices[renderIndex] = true;
+                culled++;
             }
         }
 
         int collected = renderables.Count;
-        int culled = culledRenderableIndices.Count;
         RenderStats.AddRenderables(collected, culled, collected - culled);
 
         return culledRenderableIndices;
@@ -270,40 +272,69 @@ public abstract class RenderPipeline : EngineObject
     /// FrontToBack: Nearest objects first (optimal for opaque objects - early Z rejection)
     /// BackToFront: Farthest objects first (required for transparent objects - correct alpha blending)
     /// </summary>
-    public List<IRenderable> SortRenderables(IReadOnlyList<IRenderable> renderables, HashSet<int> culledRenderableIndices, Float3 cameraPosition, SortMode mode)
+    // Cached comparators so the per-comparison branch and the per-sort delegate allocation are
+    // paid once at startup instead of every SortRenderables call.
+    private static readonly Comparison<(IRenderable renderable, float distSq)> s_frontToBack =
+        (a, b) => a.distSq.CompareTo(b.distSq);
+    private static readonly Comparison<(IRenderable renderable, float distSq)> s_backToFront =
+        (a, b) => b.distSq.CompareTo(a.distSq);
+
+    // Reused across frames; only one sort is in flight at a time (sequential encode).
+    private readonly List<(IRenderable renderable, float distSq)> _sortPairs = new();
+    private readonly List<IRenderable> _sortResult = new();
+
+    // DrawRenderables scratch, reused across passes (encode is sequential, never re-entrant).
+    private readonly List<RenderBatch> _batches = new();
+    private readonly Dictionary<(ulong, int, Mesh), int> _batchLookup = new();
+    private readonly List<List<int>> _indexListPool = new();
+    private int _indexListRented;
+
+    // Rent a cleared per-batch index list from the pool, growing it only when a frame needs
+    // more distinct batches than any previous frame.
+    private List<int> RentIndexList()
     {
+        List<int> list;
+        if (_indexListRented < _indexListPool.Count)
+        {
+            list = _indexListPool[_indexListRented];
+            list.Clear();
+        }
+        else
+        {
+            list = new List<int>();
+            _indexListPool.Add(list);
+        }
+        _indexListRented++;
+        return list;
+    }
+
+    public List<IRenderable> SortRenderables(IReadOnlyList<IRenderable> renderables, bool[] culledRenderableIndices, Float3 cameraPosition, SortMode mode)
+    {
+        _sortResult.Clear();
         int count = renderables?.Count ?? 0;
         if (count == 0)
-            return new List<IRenderable>();
+            return _sortResult;
 
-        // Preallocate to the maximum possible count to avoid reallocation
-        var pairs = new List<(IRenderable renderable, float distSq)>(count);
+        _sortPairs.Clear();
 
         // Collect only non-culled renderables
         for (int i = 0; i < count; i++)
         {
-            if (culledRenderableIndices != null && culledRenderableIndices.Contains(i))
+            if (culledRenderableIndices != null && culledRenderableIndices[i])
                 continue;
 
             var renderable = renderables[i];
             float distSq = Float3.DistanceSquared(renderable.GetPosition(), cameraPosition);
-            pairs.Add((renderable, distSq));
+            _sortPairs.Add((renderable, distSq));
         }
 
         // Sort by distance squared (avoid sqrt)
-        pairs.Sort((a, b) => mode switch
-        {
-            SortMode.FrontToBack => a.distSq.CompareTo(b.distSq),
-            SortMode.BackToFront => b.distSq.CompareTo(a.distSq),
-            _ => 0
-        });
+        _sortPairs.Sort(mode == SortMode.BackToFront ? s_backToFront : s_frontToBack);
 
-        // Extract sorted renderables into result list
-        var result = new List<IRenderable>(pairs.Count);
-        for (int i = 0; i < pairs.Count; i++)
-            result.Add(pairs[i].renderable);
+        for (int i = 0; i < _sortPairs.Count; i++)
+            _sortResult.Add(_sortPairs[i].renderable);
 
-        return result;
+        return _sortResult;
     }
 
     public void SetupGlobalUniforms(CameraSnapshot css)
@@ -383,20 +414,25 @@ public abstract class RenderPipeline : EngineObject
     /// <param name="currentRT">Currently bound color render target, used for the
     /// GrabTexture handshake (read FB for the blit-into-grab-RT). Pass null if no
     /// pass in this batch will request a grab texture.</param>
-    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, HashSet<int> culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
+    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
     {
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(shaderTag);
         bool hasSortOffsets = false;
 
         // ========== PHASE 1: Build Batches ==========
-        // Group renderables by (material hash, shader pass, mesh) for efficient rendering
-        List<RenderBatch> batches = new();
-        Dictionary<(ulong, int, Mesh), int> batchLookup = new();
+        // Group renderables by (material hash, shader pass, mesh). These two containers plus the
+        // per-batch index lists are reused across calls (encode is sequential, never re-entrant)
+        // so a multi-pass frame doesn't allocate a fresh dictionary + lists for every pass.
+        List<RenderBatch> batches = _batches;
+        Dictionary<(ulong, int, Mesh), int> batchLookup = _batchLookup;
+        batches.Clear();
+        batchLookup.Clear();
+        _indexListRented = 0;
 
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
             // Skip culled objects
-            if (culledRenderableIndices?.Contains(renderIndex) ?? false)
+            if (culledRenderableIndices != null && culledRenderableIndices[renderIndex])
                 continue;
 
             IRenderable renderable = renderables[renderIndex];
@@ -476,6 +512,8 @@ public abstract class RenderPipeline : EngineObject
                     hasSortOffsets |= sortKey != passIndex;
 
                     // Create new batch for this unique material+pass+mesh combination
+                    List<int> indices = RentIndexList();
+                    indices.Add(renderIndex);
                     RenderBatch newBatch = new()
                     {
                         Material = material,
@@ -483,7 +521,7 @@ public abstract class RenderPipeline : EngineObject
                         PassIndex = passIndex,
                         MaterialHash = materialHash,
                         SortKey = sortKey,
-                        RenderableIndices = new() { renderIndex }
+                        RenderableIndices = indices
                     };
                     batchLookup[batchKey] = batches.Count;
                     batches.Add(newBatch);
