@@ -15,6 +15,7 @@ public class MeshRenderable : IRenderable
     private int _layerIndex;
     private PropertyState _properties;
     private int _subMeshIndex;
+    private Float4x4? _worldToObject;
 
     public MeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, PropertyState? propertyBlock = null, int subMeshIndex = -1)
     {
@@ -42,6 +43,10 @@ public class MeshRenderable : IRenderable
         model = _transform;
         instanceData = null;
     }
+
+    // The transform is fixed for this renderable's lifetime (one frame), so invert once and
+    // reuse across every render pass instead of re-inverting per pass.
+    public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => _worldToObject ??= _transform.Invert();
 
     /// <summary>
     /// Get the submesh index for this renderable. -1 means draw the entire mesh (legacy/no submeshes).

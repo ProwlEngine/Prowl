@@ -23,8 +23,7 @@ float InterleavedGradientNoise(vec2 position) {
 vec3 WorldPosFromDepth(float depth, vec2 texCoord) {
     float z = depth * 2.0 - 1.0;
     vec4 clipSpacePosition = vec4(texCoord * 2.0 - 1.0, z, 1.0);
-    mat4 invVP = inverse(PROWL_MATRIX_VP);
-    vec4 worldSpacePosition = invVP * clipSpacePosition;
+    vec4 worldSpacePosition = PROWL_MATRIX_I_VP * clipSpacePosition;
     worldSpacePosition /= worldSpacePosition.w;
     return worldSpacePosition.xyz;
 }

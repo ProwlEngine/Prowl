@@ -26,6 +26,8 @@ public struct GlobalUniformsData
     public Float4x4 prowl_MatP;               // 64 bytes
     public Float4x4 prowl_MatVP;              // 64 bytes
     public Float4x4 prowl_PrevViewProj;       // 64 bytes
+    public Float4x4 prowl_MatIP;              // 64 bytes (inverse projection)
+    public Float4x4 prowl_MatIVP;             // 64 bytes (inverse view-projection)
 
     // Camera parameters
     public Float3 _WorldSpaceCameraPos;       // 12 bytes
@@ -130,6 +132,18 @@ public static class GlobalUniforms
     public static void SetMatrixVP(Float4x4 value)
     {
         s_data.prowl_MatVP = (Float4x4)value;
+        s_isDirty = true;
+    }
+
+    public static void SetMatrixIP(Float4x4 value)
+    {
+        s_data.prowl_MatIP = (Float4x4)value;
+        s_isDirty = true;
+    }
+
+    public static void SetMatrixIVP(Float4x4 value)
+    {
+        s_data.prowl_MatIVP = (Float4x4)value;
         s_isDirty = true;
     }
 

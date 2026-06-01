@@ -88,7 +88,7 @@ Pass "FogMarch"
         vec3 ReconstructWorldRay(vec2 uv)
         {
             vec4 clip = vec4(uv * 2.0 - 1.0, 1.0, 1.0);
-            vec4 viewPos = inverse(PROWL_MATRIX_P) * clip;
+            vec4 viewPos = PROWL_MATRIX_I_P * clip;
             viewPos /= viewPos.w;
             vec3 worldDir = (PROWL_MATRIX_I_V * vec4(viewPos.xyz, 0.0)).xyz;
             return normalize(worldDir);
@@ -109,7 +109,7 @@ Pass "FogMarch"
         float WorldDistFromDepth(vec2 uv, float rawDepth)
         {
             vec4 clip = vec4(uv * 2.0 - 1.0, rawDepth * 2.0 - 1.0, 1.0);
-            vec4 worldPos = inverse(PROWL_MATRIX_VP) * clip;
+            vec4 worldPos = PROWL_MATRIX_I_VP * clip;
             worldPos.xyz /= worldPos.w;
             return distance(worldPos.xyz, _WorldSpaceCameraPos.xyz);
         }

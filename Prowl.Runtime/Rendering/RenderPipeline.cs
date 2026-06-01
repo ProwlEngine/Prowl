@@ -49,6 +49,13 @@ public interface IRenderable
     /// <param name="instanceData">Instance data array for GPU instancing, or null for single-instance rendering</param>
     public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData);
 
+    /// <summary>
+    /// World-to-object matrix (the inverse of the model matrix), bound as <c>prowl_WorldToObject</c>
+    /// for normal transforms. The default inverts on demand; renderables whose transform is fixed
+    /// for the frame should cache the result so it isn't re-inverted once per render pass.
+    /// </summary>
+    public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => model.Invert();
+
     public void GetCullingData(out bool isRenderable, out AABB bounds);
 }
 
@@ -324,10 +331,18 @@ public abstract class RenderPipeline : EngineObject
 
     public void AssignCameraMatrices(Float4x4 view, Float4x4 projection)
     {
+        Float4x4 viewProj = projection * view;
+
         GlobalUniforms.SetMatrixV(view);
         GlobalUniforms.SetMatrixIV(view.Invert());
         GlobalUniforms.SetMatrixP(projection);
-        GlobalUniforms.SetMatrixVP(projection * view);
+        GlobalUniforms.SetMatrixVP(viewProj);
+
+        // Precompute the inverse projection / view-projection so fragment shaders that
+        // reconstruct view/world position from depth (GTAO, SSR, fog, shadow reprojection)
+        // read them from the UBO instead of running a 4x4 inverse() per fragment.
+        GlobalUniforms.SetMatrixIP(projection.Invert());
+        GlobalUniforms.SetMatrixIVP(viewProj.Invert());
 
         // Upload the global uniform buffer
         GlobalUniforms.Upload();
@@ -586,7 +601,7 @@ public abstract class RenderPipeline : EngineObject
                 // they apply last and can't be clobbered by an instance property of the
                 // same name (matches today's order).
                 cmd.SetMatrix("prowl_ObjectToWorld", in model);
-                Float4x4 inv = model.Invert();
+                Float4x4 inv = renderable.GetWorldToObjectMatrix(in model);
                 cmd.SetMatrix("prowl_WorldToObject", in inv);
                 if (updatePreviousMatrices)
                     cmd.SetMatrix("prowl_PrevObjectToWorld", in prevModel);

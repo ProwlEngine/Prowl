@@ -21,6 +21,7 @@ public class SkinnedMeshRenderable : IRenderable
     private PropertyState _properties;
     private int _subMeshIndex;
     private AABB _worldBounds;
+    private Float4x4? _worldToObject;
 
     public SkinnedMeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, AABB worldBounds, PropertyState? propertyBlock = null, int subMeshIndex = -1)
     {
@@ -50,6 +51,10 @@ public class SkinnedMeshRenderable : IRenderable
     }
 
     public int GetSubMeshIndex() => _subMeshIndex;
+
+    // The transform is fixed for this renderable's lifetime (one frame); invert once and reuse
+    // across every render pass instead of re-inverting per pass.
+    public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => _worldToObject ??= _transform.Invert();
 
     public void GetCullingData(out bool isRenderable, out AABB bounds)
     {

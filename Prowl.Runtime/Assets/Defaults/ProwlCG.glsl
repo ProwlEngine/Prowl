@@ -67,7 +67,7 @@ vec3 getNDCFromScreenPos(vec3 screenPos) {
 }
 
 vec3 getViewFromScreenPos(vec3 screenPos) {
-	return projectAndDivide(inverse(PROWL_MATRIX_P), getNDCFromScreenPos(screenPos));
+	return projectAndDivide(PROWL_MATRIX_I_P, getNDCFromScreenPos(screenPos));
 }
 
 vec3 getViewPos(vec2 tc, sampler2D depthSampler) {
