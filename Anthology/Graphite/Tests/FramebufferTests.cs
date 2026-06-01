@@ -53,7 +53,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(fb);
-        Assert.Throws<VeldridException>(() => cl.ClearDepthStencil(1f));
+        Assert.Throws<RenderException>(() => cl.ClearDepthStencil(1f));
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(fb);
-        Assert.Throws<VeldridException>(() => cl.ClearColorTarget(0, Color.Red));
+        Assert.Throws<RenderException>(() => cl.ClearColorTarget(0, Color.Red));
     }
 
     [Fact]
@@ -83,8 +83,8 @@ public abstract class FramebufferTests<T> : GraphicsDeviceTestBase<T> where T : 
         cl.SetFramebuffer(fb);
         cl.ClearColorTarget(0, Color.Red);
         cl.ClearColorTarget(1, Color.Red);
-        Assert.Throws<VeldridException>(() => cl.ClearColorTarget(2, Color.Red));
-        Assert.Throws<VeldridException>(() => cl.ClearColorTarget(3, Color.Red));
+        Assert.Throws<RenderException>(() => cl.ClearColorTarget(2, Color.Red));
+        Assert.Throws<RenderException>(() => cl.ClearColorTarget(3, Color.Red));
     }
 
     [Fact]
@@ -153,25 +153,33 @@ public abstract class SwapchainFramebufferTests<T> : GraphicsDeviceTestBase<T> w
 
 #if TEST_OPENGL
 [Trait("Backend", "OpenGL")]
+[Collection("GPU Tests")]
 public class OpenGLFramebufferTests : FramebufferTests<OpenGLDeviceCreator> { }
 [Trait("Backend", "OpenGL")]
+[Collection("GPU Tests")]
 public class OpenGLSwapchainFramebufferTests : SwapchainFramebufferTests<OpenGLDeviceCreator> { }
 #endif
 #if TEST_OPENGLES
 [Trait("Backend", "OpenGLES")]
+[Collection("GPU Tests")]
 public class OpenGLESFramebufferTests : FramebufferTests<OpenGLESDeviceCreator> { }
 [Trait("Backend", "OpenGLES")]
+[Collection("GPU Tests")]
 public class OpenGLESSwapchainFramebufferTests : SwapchainFramebufferTests<OpenGLESDeviceCreator> { }
 #endif
 #if TEST_VULKAN
 [Trait("Backend", "Vulkan")]
+[Collection("GPU Tests")]
 public class VulkanFramebufferTests : FramebufferTests<VulkanDeviceCreator> { }
 [Trait("Backend", "Vulkan")]
+[Collection("GPU Tests")]
 public class VulkanSwapchainFramebufferTests : SwapchainFramebufferTests<VulkanDeviceCreatorWithMainSwapchain> { }
 #endif
 #if TEST_D3D11
 [Trait("Backend", "D3D11")]
+[Collection("GPU Tests")]
 public class D3D11FramebufferTests : FramebufferTests<D3D11DeviceCreator> { }
 [Trait("Backend", "D3D11")]
+[Collection("GPU Tests")]
 public class D3D11SwapchainFramebufferTests : SwapchainFramebufferTests<D3D11DeviceCreatorWithMainSwapchain> { }
 #endif

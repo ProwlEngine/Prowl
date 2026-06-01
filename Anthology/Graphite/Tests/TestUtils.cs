@@ -1,135 +1,145 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Veldrid.OpenGL;
-
-using Silk.NET.SDL;
+using Silk.NET.Maths;
+using Silk.NET.Windowing;
 
 namespace Prowl.Veldrid.Tests;
 
-public static unsafe class TestUtils
+// Device/window creation for the test suite. The device-creation switch is duplicated from
+// Samples/Shared/DeviceCreateUtilities so the tests exercise the same path the samples do.
+// Most GPU tests run on a headless device (no window/swapchain); only the *WithMainSwapchain
+// creators build a window.
+public static class TestUtils
 {
-    private static readonly WindowCreateInfo s_defaultWci = new()
-    {
-        WindowWidth = 200,
-        WindowHeight = 200,
-        WindowInitialState = WindowState.Hidden,
-    };
+    private static readonly GraphicsDeviceOptions s_headlessOptions = new(true);
+    private static readonly GraphicsDeviceOptions s_swapchainOptions = new(true, PixelFormat.R16_UNorm, false);
 
     public static GraphicsDevice CreateVulkanDevice()
-    {
-        return GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
-    }
+        => GraphicsDevice.CreateVulkan(s_headlessOptions);
 
-    public static void CreateDeviceWithSwapchain(
-        WindowCreateInfo wci,
-        GraphicsDeviceOptions options,
-        GraphicsBackend backend,
-        out Sdl2Window window,
-        out GraphicsDevice gd)
+    public static void CreateVulkanDeviceWithSwapchain(out IWindow window, out GraphicsDevice gd)
     {
-        switch (backend)
-        {
-            case GraphicsBackend.Vulkan:
-                window = Startup.CreateWindow(ref wci, WindowFlags.Vulkan);
-                gd = GraphicsDevice.CreateVulkan(options, new SwapchainDescription(
-                    Startup.GetSwapchainSource(window),
-                    (uint)window.Width, (uint)window.Height,
-                    options.SwapchainDepthFormat, options.SyncToVerticalBlank, options.SwapchainSrgbFormat));
-                break;
-#if TEST_D3D11
-            case GraphicsBackend.Direct3D11:
-                window = Startup.CreateWindow(ref wci);
-                gd = GraphicsDevice.CreateD3D11(options, new SwapchainDescription(
-                    Startup.GetSwapchainSource(window),
-                    (uint)window.Width, (uint)window.Height,
-                    options.SwapchainDepthFormat, options.SyncToVerticalBlank, options.SwapchainSrgbFormat));
-                break;
-#endif
-            case GraphicsBackend.OpenGL:
-            case GraphicsBackend.OpenGLES:
-                CreateOpenGLDeviceCore(backend, options, ref wci, out window, out gd);
-                break;
-            default:
-                throw new System.ArgumentOutOfRangeException(nameof(backend));
-        }
-    }
-
-    public static void CreateVulkanDeviceWithSwapchain(out Sdl2Window window, out GraphicsDevice gd)
-    {
-        WindowCreateInfo wci = s_defaultWci;
-        window = Startup.CreateWindow(ref wci, WindowFlags.Vulkan);
-        GraphicsDeviceOptions options = new(true, PixelFormat.R16_UNorm, false);
-        SwapchainDescription scDesc = new(
-            Startup.GetSwapchainSource(window),
-            (uint)window.Width, (uint)window.Height,
-            options.SwapchainDepthFormat,
-            options.SyncToVerticalBlank,
-            options.SwapchainSrgbFormat);
-        gd = GraphicsDevice.CreateVulkan(options, scDesc);
+        window = CreateWindow(GraphicsBackend.Vulkan);
+        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.Vulkan);
     }
 
 #if TEST_D3D11
     public static GraphicsDevice CreateD3D11Device()
-    {
-        return GraphicsDevice.CreateD3D11(new GraphicsDeviceOptions(true));
-    }
+        => GraphicsDevice.CreateD3D11(s_headlessOptions);
 
-    public static void CreateD3D11DeviceWithSwapchain(out Sdl2Window window, out GraphicsDevice gd)
+    public static void CreateD3D11DeviceWithSwapchain(out IWindow window, out GraphicsDevice gd)
     {
-        WindowCreateInfo wci = s_defaultWci;
-        window = Startup.CreateWindow(ref wci, WindowFlags.None);
-        GraphicsDeviceOptions options = new GraphicsDeviceOptions(true, PixelFormat.R16_UNorm, false);
-        SwapchainDescription scDesc = new SwapchainDescription(
-            Startup.GetSwapchainSource(window),
-            (uint)window.Width, (uint)window.Height,
-            options.SwapchainDepthFormat,
-            options.SyncToVerticalBlank,
-            options.SwapchainSrgbFormat);
-        gd = GraphicsDevice.CreateD3D11(options, scDesc);
+        window = CreateWindow(GraphicsBackend.Direct3D11);
+        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.Direct3D11);
     }
 #endif
 
-    internal static void CreateOpenGLDevice(out Sdl2Window window, out GraphicsDevice gd)
+    internal static void CreateOpenGLDevice(out IWindow window, out GraphicsDevice gd)
     {
-        WindowCreateInfo wci = s_defaultWci;
-        CreateOpenGLDeviceCore(GraphicsBackend.OpenGL, new GraphicsDeviceOptions(true, PixelFormat.R16_UNorm, false), ref wci, out window, out gd);
+        window = CreateWindow(GraphicsBackend.OpenGL);
+        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.OpenGL);
     }
 
-    internal static void CreateOpenGLESDevice(out Sdl2Window window, out GraphicsDevice gd)
+    internal static void CreateOpenGLESDevice(out IWindow window, out GraphicsDevice gd)
     {
-        WindowCreateInfo wci = s_defaultWci;
-        CreateOpenGLDeviceCore(GraphicsBackend.OpenGLES, new GraphicsDeviceOptions(true, PixelFormat.R16_UNorm, false), ref wci, out window, out gd);
+        window = CreateWindow(GraphicsBackend.OpenGLES);
+        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.OpenGLES);
     }
 
-    private static void CreateOpenGLDeviceCore(
-        GraphicsBackend backend,
-        GraphicsDeviceOptions options,
-        ref WindowCreateInfo wci,
-        out Sdl2Window window,
-        out GraphicsDevice gd)
+    // Creates a hidden, initialized window for the given backend. Initialize() performs the
+    // one-time setup the device needs (GL context, Vulkan surface, native handles) without
+    // entering the blocking run loop the samples use.
+    public static IWindow CreateWindow(GraphicsBackend backend)
     {
-        Sdl sdl = Startup.Sdl;
-        bool gles = backend == GraphicsBackend.OpenGLES;
+        WindowOptions options = WindowOptions.Default;
+        options.Title = "Prowl.Veldrid.Tests";
+        options.Size = new Vector2D<int>(200, 200);
+        options.IsVisible = false;
+        options.WindowState = Silk.NET.Windowing.WindowState.Normal;
+        options.ShouldSwapAutomatically = false;
+        options.API = GetApi(backend);
 
-        sdl.GLSetAttribute(GLattr.ContextFlags, (int)(GLcontextFlag.DebugFlag | GLcontextFlag.ForwardCompatibleFlag));
-        sdl.GLSetAttribute(GLattr.ContextProfileMask, (int)(gles ? GLprofile.ES : GLprofile.Core));
-        sdl.GLSetAttribute(GLattr.ContextMajorVersion, gles ? 3 : 4);
-        sdl.GLSetAttribute(GLattr.ContextMinorVersion, gles ? 2 : 3);
-        sdl.GLSetAttribute(GLattr.DepthSize, 16);
-        sdl.GLSetAttribute(GLattr.StencilSize, 0);
-        sdl.GLSetAttribute(GLattr.FramebufferSrgbCapable, options.SwapchainSrgbFormat ? 1 : 0);
+        IWindow window = Window.Create(options);
+        window.Initialize();
+        return window;
+    }
 
-        window = Startup.CreateWindow(ref wci, WindowFlags.Opengl);
+    private static GraphicsAPI GetApi(GraphicsBackend backend) => backend switch
+    {
+        GraphicsBackend.Vulkan =>
+            new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
+        GraphicsBackend.OpenGL =>
+            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 3)),
+        GraphicsBackend.OpenGLES =>
+            new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 2)),
+        GraphicsBackend.Direct3D11 =>
+            new GraphicsAPI(ContextAPI.None, ContextProfile.Core, ContextFlags.Default, new APIVersion(0, 0)),
+        _ => throw new ArgumentOutOfRangeException(nameof(backend))
+    };
 
-        SdlContext context = new(sdl, window.Handle);
-        context.Create((GLattr.Doublebuffer, 1));
+    // Duplicated from Samples/Shared/DeviceCreateUtilities.CreateDevice.
+    public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, GraphicsBackend backend)
+    {
+        if (!window.IsInitialized)
+            throw new InvalidOperationException("Cannot create graphics device with an uninitialized window!");
 
-        OpenGLPlatformInfo platformInfo = new(
-            glContext: context,
-            setSyncToVerticalBlank: sync => sdl.GLSetSwapInterval(sync ? 1 : 0));
+        switch (backend)
+        {
+            case GraphicsBackend.OpenGLES:
+            case GraphicsBackend.OpenGL:
+                if (window.API.API != ContextAPI.OpenGLES && window.API.API != ContextAPI.OpenGL)
+                    throw new InvalidOperationException("Attempted to make a GL graphics device without an available GL or GLES context");
 
-        gd = GraphicsDevice.CreateOpenGL(options, platformInfo, (uint)window.Width, (uint)window.Height);
+                OpenGL.OpenGLPlatformInfo glInfo = new(
+                    glContext: window.GLContext!,
+                    setSyncToVerticalBlank: sync =>
+                    {
+                        window.VSync = sync;
+                        window.GLContext!.SwapInterval(window.VSync ? 1 : 0);
+                    });
+
+                return GraphicsDevice.CreateOpenGL(options, glInfo, (uint)window.Size.X, (uint)window.Size.Y);
+
+            case GraphicsBackend.Direct3D11:
+                if (window.Native!.Win32 == null)
+                    throw new InvalidOperationException("Attempted to make a D3D11 graphics device without a Win32 window!");
+
+                (nint Hwnd, nint HDC, nint HInstance) = window.Native!.Win32!.Value;
+
+                D3D11DeviceOptions d3dOptions = default;
+
+                SwapchainDescription d3dDesc = new()
+                {
+                    DepthFormat = options.SwapchainDepthFormat,
+                    ColorSrgb = options.SwapchainSrgbFormat,
+                    Width = (uint)window.FramebufferSize.X,
+                    Height = (uint)window.FramebufferSize.Y,
+                    SyncToVerticalBlank = options.SyncToVerticalBlank,
+                    Source = SwapchainSource.CreateWin32(Hwnd, HInstance)
+                };
+
+                return GraphicsDevice.CreateD3D11(options, d3dOptions, d3dDesc);
+
+            case GraphicsBackend.Vulkan:
+                if (window.API.API != ContextAPI.Vulkan)
+                    throw new InvalidOperationException("Attempted to make a Vulkan graphics device without an available Vulkan API");
+
+                VulkanDeviceOptions vkOptions = default;
+                SwapchainDescription vkDescription = new()
+                {
+                    DepthFormat = options.SwapchainDepthFormat,
+                    ColorSrgb = options.SwapchainSrgbFormat,
+                    Width = (uint)window.Size.X,
+                    Height = (uint)window.Size.Y,
+                    SyncToVerticalBlank = options.SyncToVerticalBlank,
+                    Source = SwapchainSource.CreateVulkan(window.VkSurface!)
+                };
+
+                return GraphicsDevice.CreateVulkan(options, vkDescription, vkOptions);
+        }
+
+        throw new InvalidOperationException($"Unsupported graphics backend: {backend}");
     }
 }
 
@@ -169,8 +179,8 @@ internal sealed class TrackingResourceFactory : ResourceFactory
     protected override DeviceBuffer CreateBufferCore(ref BufferDescription description)
         => Track(_inner.CreateBuffer(ref description));
 
-    protected override ShaderProgram CreateShaderProgramCore(ref ShaderDescription description)
-        => Track(_inner.CreateShaderProgram(ref description));
+    protected override GraphicsProgram CreateGraphicsProgramCore(ref ShaderDescription description)
+        => Track(_inner.CreateGraphicsProgram(ref description));
 
     protected override ComputeProgram CreateComputeProgramCore(ref ComputeDescription description)
         => Track(_inner.CreateComputeProgram(ref description));
@@ -196,13 +206,13 @@ internal sealed class TrackingResourceFactory : ResourceFactory
 
 public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : GraphicsDeviceCreator
 {
-    private readonly Sdl2Window _window;
+    private readonly IWindow _window;
     private readonly GraphicsDevice _gd;
     private readonly TrackingResourceFactory _factory;
 
     public GraphicsDevice GD => _gd;
     public ResourceFactory RF => _factory;
-    public Sdl2Window Window => _window;
+    public IWindow Window => _window;
 
     public GraphicsDeviceTestBase()
     {
@@ -265,18 +275,18 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         GD.WaitForIdle();
         _factory.DisposeAll();
         GD.Dispose();
-        _window?.Close();
+        _window?.Dispose();
     }
 }
 
 public interface GraphicsDeviceCreator
 {
-    void CreateGraphicsDevice(out Sdl2Window window, out GraphicsDevice gd);
+    void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd);
 }
 
 public class VulkanDeviceCreator : GraphicsDeviceCreator
 {
-    public void CreateGraphicsDevice(out Sdl2Window window, out GraphicsDevice gd)
+    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
     {
         window = null;
         gd = TestUtils.CreateVulkanDevice();
@@ -285,7 +295,7 @@ public class VulkanDeviceCreator : GraphicsDeviceCreator
 
 public class VulkanDeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
 {
-    public void CreateGraphicsDevice(out Sdl2Window window, out GraphicsDevice gd)
+    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
     {
         TestUtils.CreateVulkanDeviceWithSwapchain(out window, out gd);
     }
@@ -294,7 +304,7 @@ public class VulkanDeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
 #if TEST_D3D11
 public class D3D11DeviceCreator : GraphicsDeviceCreator
 {
-    public void CreateGraphicsDevice(out Sdl2Window window, out GraphicsDevice gd)
+    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
     {
         window = null;
         gd = TestUtils.CreateD3D11Device();
@@ -303,7 +313,7 @@ public class D3D11DeviceCreator : GraphicsDeviceCreator
 
 public class D3D11DeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
 {
-    public void CreateGraphicsDevice(out Sdl2Window window, out GraphicsDevice gd)
+    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
     {
         TestUtils.CreateD3D11DeviceWithSwapchain(out window, out gd);
     }
@@ -312,7 +322,7 @@ public class D3D11DeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
 
 public class OpenGLDeviceCreator : GraphicsDeviceCreator
 {
-    public void CreateGraphicsDevice(out Sdl2Window window, out GraphicsDevice gd)
+    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
     {
         TestUtils.CreateOpenGLDevice(out window, out gd);
     }
@@ -320,7 +330,7 @@ public class OpenGLDeviceCreator : GraphicsDeviceCreator
 
 public class OpenGLESDeviceCreator : GraphicsDeviceCreator
 {
-    public void CreateGraphicsDevice(out Sdl2Window window, out GraphicsDevice gd)
+    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
     {
         TestUtils.CreateOpenGLESDevice(out window, out gd);
     }

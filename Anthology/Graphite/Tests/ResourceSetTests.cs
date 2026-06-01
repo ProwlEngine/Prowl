@@ -14,7 +14,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         DeviceBuffer ub = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout,
                 ub));
@@ -30,7 +30,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
         Texture t = RF.CreateTexture(TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         TextureView tv = RF.CreateTextureView(t);
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tv));
         });
@@ -44,7 +44,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         DeviceBuffer readOnlyBuffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.UniformBuffer));
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, readOnlyBuffer));
         });
@@ -60,22 +60,22 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         DeviceBuffer ub = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub));
         });
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub, ub));
         });
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub, ub, ub, ub));
         });
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout, ub, ub, ub, ub, ub));
         });
@@ -89,13 +89,13 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.UniformBuffer));
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout,
                 new DeviceBufferRange(buffer, GD.UniformBufferMinOffsetAlignment - 1, 256)));
         });
 
-        Assert.Throws<VeldridException>(() =>
+        Assert.Throws<RenderException>(() =>
         {
             RF.CreateResourceSet(new ResourceSetDescription(layout,
                 new DeviceBufferRange(buffer, GD.UniformBufferMinOffsetAlignment + 1, 256)));
@@ -114,7 +114,7 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
-        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(0, rs));
+        Assert.Throws<RenderException>(() => cl.SetGraphicsResourceSet(0, rs));
         cl.End();
     }
 
@@ -154,9 +154,9 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetPipeline(pipeline);
-        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(1, set));
-        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(2, set));
-        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(3, set));
+        Assert.Throws<RenderException>(() => cl.SetGraphicsResourceSet(1, set));
+        Assert.Throws<RenderException>(() => cl.SetGraphicsResourceSet(2, set));
+        Assert.Throws<RenderException>(() => cl.SetGraphicsResourceSet(3, set));
         cl.End();
     }
 
@@ -209,8 +209,8 @@ public abstract class ResourceSetTests<T> : GraphicsDeviceTestBase<T> where T : 
         cl.Begin();
         cl.SetPipeline(pipeline);
         cl.SetGraphicsResourceSet(0, set);
-        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(0, set2)); // Wrong type
-        Assert.Throws<VeldridException>(() => cl.SetGraphicsResourceSet(0, set3)); // Wrong count
+        Assert.Throws<RenderException>(() => cl.SetGraphicsResourceSet(0, set2)); // Wrong type
+        Assert.Throws<RenderException>(() => cl.SetGraphicsResourceSet(0, set3)); // Wrong count
         cl.End();
     }
 }

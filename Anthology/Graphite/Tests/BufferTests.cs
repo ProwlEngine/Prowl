@@ -107,9 +107,9 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     public void Map_WrongFlags_Throws()
     {
         DeviceBuffer buffer = CreateBuffer(1024, BufferUsage.VertexBuffer);
-        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.Read));
-        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.Write));
-        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.ReadWrite));
+        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.Read));
+        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.Write));
+        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.ReadWrite));
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
         MappedResourceView<int> view = GD.Map<int>(buffer, MapMode.ReadWrite);
         int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
-        Assert.Throws<VeldridException>(() => GD.UpdateBuffer(buffer, 0, data));
+        Assert.Throws<RenderException>(() => GD.UpdateBuffer(buffer, 0, data));
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         }
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
         MappedResource map = GD.Map(buffer, MapMode.Read);
-        Assert.Throws<VeldridException>(() => GD.Map(buffer, MapMode.Write));
+        Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.Write));
     }
 
     [Fact]
@@ -279,8 +279,8 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     {
         DeviceBuffer dynamic = RF.CreateBuffer(
             new BufferDescription(1024, BufferUsage.Dynamic | BufferUsage.UniformBuffer));
-        Assert.Throws<VeldridException>(() => GD.Map(dynamic, MapMode.Read));
-        Assert.Throws<VeldridException>(() => GD.Map(dynamic, MapMode.ReadWrite));
+        Assert.Throws<RenderException>(() => GD.Map(dynamic, MapMode.Read));
+        Assert.Throws<RenderException>(() => GD.Map(dynamic, MapMode.ReadWrite));
     }
 
     [Fact]
@@ -559,17 +559,21 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
 #if TEST_OPENGL
 [Trait("Backend", "OpenGL")]
+[Collection("GPU Tests")]
 public class OpenGLBufferTests : BufferTestBase<OpenGLDeviceCreator> { }
 #endif
 #if TEST_OPENGLES
 [Trait("Backend", "OpenGLES")]
+[Collection("GPU Tests")]
 public class OpenGLESBufferTests : BufferTestBase<OpenGLESDeviceCreator> { }
 #endif
 #if TEST_VULKAN
 [Trait("Backend", "Vulkan")]
+[Collection("GPU Tests")]
 public class VulkanBufferTests : BufferTestBase<VulkanDeviceCreator> { }
 #endif
 #if TEST_D3D11
 [Trait("Backend", "D3D11")]
+[Collection("GPU Tests")]
 public class D3D11BufferTests : BufferTestBase<D3D11DeviceCreator> { }
 #endif

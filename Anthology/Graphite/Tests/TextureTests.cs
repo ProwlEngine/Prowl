@@ -1541,17 +1541,21 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
 #if TEST_VULKAN
 [Trait("Backend", "Vulkan")]
+[Collection("GPU Tests")]
 public class VulkanTextureTests : TextureTestBase<VulkanDeviceCreator> { }
 #endif
 #if TEST_D3D11
 [Trait("Backend", "D3D11")]
+[Collection("GPU Tests")]
 public class D3D11TextureTests : TextureTestBase<D3D11DeviceCreator> { }
 #endif
 #if TEST_OPENGL
 [Trait("Backend", "OpenGL")]
+[Collection("GPU Tests")]
 public class OpenGLTextureTests : TextureTestBase<OpenGLDeviceCreator> { }
 #endif
 #if TEST_OPENGLES
 [Trait("Backend", "OpenGLES")]
+[Collection("GPU Tests")]
 public class OpenGLESTextureTests : TextureTestBase<OpenGLESDeviceCreator> { }
 #endif

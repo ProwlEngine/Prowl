@@ -77,6 +77,6 @@ public class FormatSizeHelpersTests : IDisposable
     [MemberData(nameof(CompressedPixelFormatMemberData))]
     public void GetSizeInBytes_ThrowsForAllCompressedPixelFormats(PixelFormat format)
     {
-        Assert.ThrowsAny<VeldridException>(() => FormatSizeHelpers.GetSizeInBytes(format));
+        Assert.ThrowsAny<RenderException>(() => FormatSizeHelpers.GetSizeInBytes(format));
     }
 }
