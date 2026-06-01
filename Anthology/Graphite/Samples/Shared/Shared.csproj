@@ -7,6 +7,7 @@
 
     <ItemGroup>
         <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
+
         <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
         <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
         <PackageReference Include="Silk.NET.Input" Version="2.22.0" />

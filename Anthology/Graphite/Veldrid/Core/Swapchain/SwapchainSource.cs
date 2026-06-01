@@ -14,8 +14,14 @@ public abstract class SwapchainSource
 {
     internal SwapchainSource() { }
 
+    /// <summary>
+    /// Creates a Win32 swapchain source for Direct3D 11 from an hwnd and hinstance pointer.
+    /// </summary>
     public static SwapchainSource CreateWin32(IntPtr hwnd, IntPtr hinstance) => new Win32SwapchainSource(hwnd, hinstance);
 
+    /// <summary>
+    /// Creates a Vulkan swapchain source from an <see cref="IVkSurface"/> interface, typically acquired from a Silk.NET window.
+    /// </summary>
     public static SwapchainSource CreateVulkan(IVkSurface surface)
         => new VkSurfaceSwapchainSource(surface);
 }

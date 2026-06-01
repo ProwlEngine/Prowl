@@ -243,7 +243,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             independentBlend: true,
             structuredBuffer: featureLevel >= D3DFeatureLevel.Level110,
             subsetTextureView: true,
-            CommandBufferDebugMarkers: featureLevel >= D3DFeatureLevel.Level111,
+            commandBufferDebugMarkers: featureLevel >= D3DFeatureLevel.Level111,
             bufferRangeBinding: featureLevel >= D3DFeatureLevel.Level111,
             shaderFloat64: doublesData.DoublePrecisionFloatShaderOps);
 

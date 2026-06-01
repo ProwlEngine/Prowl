@@ -223,7 +223,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             independentBlend: _physicalDeviceFeatures.IndependentBlend,
             structuredBuffer: true,
             subsetTextureView: true,
-            CommandBufferDebugMarkers: _debugMarkerEnabled,
+            commandBufferDebugMarkers: _debugMarkerEnabled,
             bufferRangeBinding: true,
             shaderFloat64: _physicalDeviceFeatures.ShaderFloat64);
 

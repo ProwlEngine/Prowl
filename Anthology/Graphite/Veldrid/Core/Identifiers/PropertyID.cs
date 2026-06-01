@@ -42,20 +42,36 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
     /// </summary>
     public static implicit operator PropertyID(string name) => Intern(name);
 
-    public bool Equals(PropertyID other) => Value == other.Value;
-    public override bool Equals(object? obj) => obj is PropertyID o && Equals(o);
-    public override int GetHashCode() => Value;
-    public static bool operator ==(PropertyID a, PropertyID b) => a.Value == b.Value;
-    public static bool operator !=(PropertyID a, PropertyID b) => a.Value != b.Value;
+    /// <inheritdoc/>
+    public bool Equals(PropertyID other)
+        => Value == other.Value;
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+        => obj is PropertyID o && Equals(o);
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+        => Value;
+
+    /// <inheritdoc/>
+    public static bool operator ==(PropertyID a, PropertyID b)
+        => a.Value == b.Value;
+
+    /// <inheritdoc/>
+    public static bool operator !=(PropertyID a, PropertyID b)
+        => a.Value != b.Value;
 
     /// <summary>
     /// Hot-path safe. Does not touch the interner. Use the static <see cref="ToString(PropertyID)"/>
     /// overload to retrieve the original interned string.
     /// </summary>
-    public override string ToString() => $"ResourceID({Value})";
+    public override string ToString()
+        => $"ResourceID({Value})";
 
     /// <summary>
     /// <see cref="IFormattable"/> conformance. Format and provider are ignored.
     /// </summary>
-    public string ToString(string? format, IFormatProvider? formatProvider) => ToString();
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => ToString();
 }

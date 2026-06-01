@@ -10,7 +10,7 @@ using VkApi = Silk.NET.Vulkan.Vk;
 namespace Prowl.Veldrid.Vk;
 
 
-public static class VkApiExtensions
+internal static class VkApiExtensions
 {
     private static volatile bool s_isLoaded;
 

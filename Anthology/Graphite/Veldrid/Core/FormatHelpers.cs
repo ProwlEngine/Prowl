@@ -130,7 +130,7 @@ internal static class FormatHelpers
                 return blocksPerRow * blockSizeInBytes;
 
             default:
-                return width * FormatSizeHelpers.GetSizeInBytes(format);
+                return width * format.GetSizeInBytes();
         }
     }
 
@@ -224,7 +224,7 @@ internal static class FormatHelpers
         }
         else
         {
-            blockSizeInBytes = FormatSizeHelpers.GetSizeInBytes(format);
+            blockSizeInBytes = format.GetSizeInBytes();
         }
 
         return width * height * depth * blockSizeInBytes;

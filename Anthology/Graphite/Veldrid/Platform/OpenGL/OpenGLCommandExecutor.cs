@@ -581,7 +581,7 @@ internal unsafe class OpenGLCommandExecutor
                     _vertexAttribDivisors[actualSlot] = stepRate;
                 }
 
-                offset += FormatSizeHelpers.GetSizeInBytes(element.Format);
+                offset += element.Format.GetSizeInBytes();
 
                 if (actualSlot + 1 > highestAttribBound)
                     highestAttribBound = actualSlot + 1;
@@ -1207,7 +1207,7 @@ internal unsafe class OpenGLCommandExecutor
         uint unpackAlignment = 4;
         if (!isCompressed)
         {
-            unpackAlignment = FormatSizeHelpers.GetSizeInBytes(glTex.Format);
+            unpackAlignment = glTex.Format.GetSizeInBytes();
         }
         if (unpackAlignment < 4)
         {
@@ -1591,7 +1591,7 @@ internal unsafe class OpenGLCommandExecutor
         }
         else
         {
-            uint pixelSize = FormatSizeHelpers.GetSizeInBytes(srcGLTexture.Format);
+            uint pixelSize = srcGLTexture.Format.GetSizeInBytes();
             packAlignment = pixelSize;
             depthSliceSize = width * height * pixelSize;
             sizeInBytes = depthSliceSize * depth;

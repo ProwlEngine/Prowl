@@ -69,29 +69,6 @@ internal static class Util
         return left.HasValue == right.HasValue;
     }
 
-    internal static bool ArrayEquals<T>(T[] left, T[] right) where T : class
-    {
-        if (left == null || right == null)
-        {
-            return left == right;
-        }
-
-        if (left.Length != right.Length)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < left.Length; i++)
-        {
-            if (!ReferenceEquals(left[i], right[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     internal static bool ArrayEqualsEquatable<T>(T[] left, T[] right) where T : struct, IEquatable<T>
     {
         if (left == null || right == null)
@@ -225,7 +202,7 @@ internal static class Util
         PixelFormat format)
     {
         uint blockSize = FormatHelpers.IsCompressedFormat(format) ? 4u : 1u;
-        uint blockSizeInBytes = blockSize > 1 ? FormatHelpers.GetBlockSizeInBytes(format) : FormatSizeHelpers.GetSizeInBytes(format);
+        uint blockSizeInBytes = blockSize > 1 ? FormatHelpers.GetBlockSizeInBytes(format) : format.GetSizeInBytes();
         uint compressedSrcX = srcX / blockSize;
         uint compressedSrcY = srcY / blockSize;
         uint compressedDstX = dstX / blockSize;
@@ -265,53 +242,6 @@ internal static class Util
     internal static T[] ShallowClone<T>(T[] array)
     {
         return (T[])array.Clone();
-    }
-
-    public static DeviceBufferRange GetBufferRange(BindableResource resource, uint additionalOffset)
-    {
-        if (resource is DeviceBufferRange range)
-        {
-            return new DeviceBufferRange(range.Buffer, range.Offset + additionalOffset, range.SizeInBytes);
-        }
-        else
-        {
-            DeviceBuffer buffer = (DeviceBuffer)resource;
-            return new DeviceBufferRange(buffer, additionalOffset, buffer.SizeInBytes);
-        }
-    }
-
-    public static bool GetDeviceBuffer(BindableResource resource, out DeviceBuffer buffer)
-    {
-        if (resource is DeviceBuffer db)
-        {
-            buffer = db;
-            return true;
-        }
-        else if (resource is DeviceBufferRange range)
-        {
-            buffer = range.Buffer;
-            return true;
-        }
-
-        buffer = null;
-        return false;
-    }
-
-    internal static TextureView GetTextureView(GraphicsDevice gd, BindableResource resource)
-    {
-        if (resource is TextureView view)
-        {
-            return view;
-        }
-        else if (resource is Texture tex)
-        {
-            return tex.GetFullTextureView(gd);
-        }
-        else
-        {
-            throw new RenderException(
-                $"Unexpected resource type. Expected Texture or TextureView but found {resource.GetType().Name}");
-        }
     }
 
     internal static void PackIntPtr(IntPtr sourcePtr, out uint low, out uint high)

@@ -39,7 +39,7 @@ public readonly struct VertexBinding : IEquatable<VertexBinding>
         => ReferenceEquals(Buffer, other.Buffer) && Offset == other.Offset;
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) => obj is VertexBinding o && Equals(o);
+    public override bool Equals(object? obj) => obj is VertexBinding o && Equals(o);
 
     /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(Buffer, Offset);

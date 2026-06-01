@@ -31,7 +31,7 @@ public class FormatSizeHelpersTests : IDisposable
     {
         foreach (VertexElementFormat format in System.Enum.GetValues(typeof(VertexElementFormat)))
         {
-            Assert.True(0 < FormatSizeHelpers.GetSizeInBytes(format));
+            Assert.True(0 < format.GetSizeInBytes());
         }
     }
 
@@ -70,13 +70,13 @@ public class FormatSizeHelpersTests : IDisposable
     [MemberData(nameof(UncompressedPixelFormatMemberData))]
     public void GetSizeInBytes_DefinedForAllNonCompressedPixelFormats(PixelFormat format)
     {
-        Assert.True(0 < FormatSizeHelpers.GetSizeInBytes(format));
+        Assert.True(0 < format.GetSizeInBytes());
     }
 
     [Theory]
     [MemberData(nameof(CompressedPixelFormatMemberData))]
     public void GetSizeInBytes_ThrowsForAllCompressedPixelFormats(PixelFormat format)
     {
-        Assert.ThrowsAny<RenderException>(() => FormatSizeHelpers.GetSizeInBytes(format));
+        Assert.ThrowsAny<RenderException>(() => format.GetSizeInBytes());
     }
 }

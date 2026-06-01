@@ -65,7 +65,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
         uint computedStride = 0;
         for (int i = 0; i < elements.Length; i++)
         {
-            uint elementSize = FormatSizeHelpers.GetSizeInBytes(elements[i].Format);
+            uint elementSize = elements[i].Format.GetSizeInBytes();
             if (elements[i].Offset != 0)
             {
                 computedStride = elements[i].Offset + elementSize;

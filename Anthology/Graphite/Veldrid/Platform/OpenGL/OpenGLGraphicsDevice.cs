@@ -258,7 +258,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             independentBlend: _extensions.IndependentBlend,
             structuredBuffer: _extensions.StorageBuffers,
             subsetTextureView: _extensions.ARB_TextureView,
-            CommandBufferDebugMarkers: _extensions.KHR_Debug || _extensions.EXT_DebugMarker,
+            commandBufferDebugMarkers: _extensions.KHR_Debug || _extensions.EXT_DebugMarker,
             bufferRangeBinding: _extensions.ARB_uniform_buffer_object,
             shaderFloat64: _extensions.ARB_GpuShaderFp64);
 
@@ -1277,7 +1277,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         uint packAlignment = 4;
                         if (!isCompressed)
                         {
-                            packAlignment = FormatSizeHelpers.GetSizeInBytes(texture.Format);
+                            packAlignment = texture.Format.GetSizeInBytes();
                         }
 
                         if (packAlignment < 4)

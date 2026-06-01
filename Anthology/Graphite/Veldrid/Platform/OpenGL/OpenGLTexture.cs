@@ -666,7 +666,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
             _gl.BindBuffer(BufferTargetARB.CopyWriteBuffer, _pbos[subresource]);
             CheckLastError();
 
-            uint dataSize = Width * Height * FormatSizeHelpers.GetSizeInBytes(Format);
+            uint dataSize = Width * Height * Format.GetSizeInBytes();
             _gl.BufferData(
                 BufferTargetARB.CopyWriteBuffer,
                 (UIntPtr)dataSize,

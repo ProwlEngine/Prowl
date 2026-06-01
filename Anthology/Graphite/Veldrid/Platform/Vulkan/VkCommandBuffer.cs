@@ -1325,7 +1325,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             uint compressedX = srcX / blockSize;
             uint compressedY = srcY / blockSize;
             uint blockSizeInBytes = blockSize == 1
-                ? FormatSizeHelpers.GetSizeInBytes(srcVkTexture.Format)
+                ? srcVkTexture.Format.GetSizeInBytes()
                 : FormatHelpers.GetBlockSizeInBytes(srcVkTexture.Format);
             uint rowPitch = FormatHelpers.GetRowPitch(bufferRowLength, srcVkTexture.Format);
             uint depthPitch = FormatHelpers.GetDepthPitch(rowPitch, bufferImageHeight, srcVkTexture.Format);
@@ -1383,7 +1383,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             uint compressedDstX = dstX / blockSize;
             uint compressedDstY = dstY / blockSize;
             uint blockSizeInBytes = blockSize == 1
-                ? FormatSizeHelpers.GetSizeInBytes(dstVkTexture.Format)
+                ? dstVkTexture.Format.GetSizeInBytes()
                 : FormatHelpers.GetBlockSizeInBytes(dstVkTexture.Format);
             uint rowPitch = FormatHelpers.GetRowPitch(bufferRowLength, dstVkTexture.Format);
             uint depthPitch = FormatHelpers.GetDepthPitch(rowPitch, bufferImageHeight, dstVkTexture.Format);
@@ -1444,7 +1444,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             uint zLimit = Math.Max(depth, layerCount);
             if (!FormatHelpers.IsCompressedFormat(source.Format))
             {
-                uint pixelSize = FormatSizeHelpers.GetSizeInBytes(srcVkTexture.Format);
+                uint pixelSize = srcVkTexture.Format.GetSizeInBytes();
                 for (uint zz = 0; zz < zLimit; zz++)
                 {
                     for (uint yy = 0; yy < height; yy++)

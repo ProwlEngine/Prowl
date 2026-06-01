@@ -228,7 +228,7 @@ public abstract partial class ResourceFactory
                             $"Vertex element \"{elementDesc.Name}\" has an explicit offset which overlaps with the previous element.");
                     }
 
-                    minOffset = elementDesc.Offset + FormatSizeHelpers.GetSizeInBytes(elementDesc.Format);
+                    minOffset = elementDesc.Offset + elementDesc.Format.GetSizeInBytes();
                     hasExplicitLayout |= elementDesc.Offset != 0;
                 }
 

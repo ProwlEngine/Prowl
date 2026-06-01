@@ -2,7 +2,7 @@
 
 namespace Prowl.Veldrid;
 
-public static class FormatSizeHelpers
+internal static class FormatSizeHelpers
 {
     /// <summary>
     /// Given a pixel format, returns the number of bytes required to store
@@ -12,7 +12,7 @@ public static class FormatSizeHelpers
     /// </summary>
     /// <param name="format">An uncompressed pixel format</param>
     /// <returns>The number of bytes required to store a single pixel in the given format</returns>
-    public static uint GetSizeInBytes(PixelFormat format)
+    public static uint GetSizeInBytes(this PixelFormat format)
     {
         switch (format)
         {
@@ -101,7 +101,7 @@ public static class FormatSizeHelpers
     /// </summary>
     /// <param name="format">A vertex element format</param>
     /// <returns>The number of bytes required to store an element in the given format</returns>
-    public static uint GetSizeInBytes(VertexElementFormat format)
+    public static uint GetSizeInBytes(this VertexElementFormat format)
     {
         switch (format)
         {

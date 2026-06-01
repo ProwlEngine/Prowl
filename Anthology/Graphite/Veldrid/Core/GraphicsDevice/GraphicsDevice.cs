@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -404,7 +405,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// This is equivalent to <see cref="MainSwapchain"/>.<see cref="Swapchain.Framebuffer"/>.
     /// If this GraphicsDevice was created without a main Swapchain, then this returns null.
     /// </summary>
-    public Framebuffer SwapchainFramebuffer => MainSwapchain?.Framebuffer;
+    public Framebuffer? SwapchainFramebuffer => MainSwapchain?.Framebuffer;
 
     /// <summary>
     /// Notifies this instance that the main window has been resized. This causes the <see cref="SwapchainFramebuffer"/> to
@@ -929,11 +930,15 @@ public abstract partial class GraphicsDevice : IDisposable
     public Texture NullTextureRW2D { get; private set; }
 
     /// <summary>
-    /// Gets a 1x1 black transparent <see cref="Texture"/> used as the fallback when a
-    /// <see cref="ResourceKind.TextureReadOnly"/> slot has no matching entry in the merged property table.
+    /// Gets a 16-byte length <see cref="DeviceBuffer"/> used as the fallback when a
+    /// <see cref="ResourceKind.UniformBuffer"/> slot has no matching entry in the merged property table.
     /// </summary>
     public DeviceBuffer NullUniform { get; private set; }
 
+    /// <summary>
+    /// Gets a 16-byte length <see cref="DeviceBuffer"/> used as the fallback when a 
+    /// <see cref="ResourceKind.StructuredBufferReadOnly"/> slot has no matching entry in the merged property table.
+    /// </summary>
     public DeviceBuffer NullStructured
     {
         get
@@ -949,6 +954,10 @@ public abstract partial class GraphicsDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets a 16-byte length <see cref="DeviceBuffer"/> used as the fallback when a 
+    /// <see cref="ResourceKind.StructuredBufferReadWrite"/> slot has no matching entry in the merged property table.
+    /// </summary>
     public DeviceBuffer NullStructuredRW
     {
         get
@@ -1027,7 +1036,11 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     /// <param name="info">If successful, this will contain the <see cref="BackendInfoD3D11"/> for this instance.</param>
     /// <returns>True if this is a D3D11 GraphicsDevice and the operation was successful. False otherwise.</returns>
-    public virtual bool GetD3D11Info(out BackendInfoD3D11 info) { info = null; return false; }
+    public virtual bool GetD3D11Info([NotNullWhen(true)] out BackendInfoD3D11? info)
+    {
+        info = null;
+        return false;
+    }
 
     /// <summary>
     /// Gets a <see cref="BackendInfoD3D11"/> for this instance. This method will only succeed if this is a D3D11
@@ -1036,10 +1049,8 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <returns>The <see cref="BackendInfoD3D11"/> for this instance.</returns>
     public BackendInfoD3D11 GetD3D11Info()
     {
-        if (!GetD3D11Info(out BackendInfoD3D11 info))
-        {
+        if (!GetD3D11Info(out BackendInfoD3D11? info))
             throw new RenderException($"{nameof(GetD3D11Info)} can only be used on a D3D11 GraphicsDevice.");
-        }
 
         return info;
     }
@@ -1052,7 +1063,11 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     /// <param name="info">If successful, this will contain the <see cref="BackendInfoVulkan"/> for this instance.</param>
     /// <returns>True if this is a Vulkan GraphicsDevice and the operation was successful. False otherwise.</returns>
-    public virtual bool GetVulkanInfo(out BackendInfoVulkan info) { info = null; return false; }
+    public virtual bool GetVulkanInfo([NotNullWhen(true)] out BackendInfoVulkan? info)
+    {
+        info = null;
+        return false;
+    }
 
     /// <summary>
     /// Gets a <see cref="BackendInfoVulkan"/> for this instance. This method will only succeed if this is a Vulkan
@@ -1061,10 +1076,8 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <returns>The <see cref="BackendInfoVulkan"/> for this instance.</returns>
     public BackendInfoVulkan GetVulkanInfo()
     {
-        if (!GetVulkanInfo(out BackendInfoVulkan info))
-        {
+        if (!GetVulkanInfo(out BackendInfoVulkan? info))
             throw new RenderException($"{nameof(GetVulkanInfo)} can only be used on a Vulkan GraphicsDevice.");
-        }
 
         return info;
     }
@@ -1077,7 +1090,11 @@ public abstract partial class GraphicsDevice : IDisposable
     /// </summary>
     /// <param name="info">If successful, this will contain the <see cref="BackendInfoOpenGL"/> for this instance.</param>
     /// <returns>True if this is an OpenGL GraphicsDevice and the operation was successful. False otherwise.</returns>
-    public virtual bool GetOpenGLInfo(out BackendInfoOpenGL info) { info = null; return false; }
+    public virtual bool GetOpenGLInfo([NotNullWhen(true)] out BackendInfoOpenGL? info)
+    {
+        info = null;
+        return false;
+    }
 
     /// <summary>
     /// Gets a <see cref="BackendInfoOpenGL"/> for this instance. This method will only succeed if this is an OpenGL
@@ -1086,7 +1103,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <returns>The <see cref="BackendInfoOpenGL"/> for this instance.</returns>
     public BackendInfoOpenGL GetOpenGLInfo()
     {
-        if (!GetOpenGLInfo(out BackendInfoOpenGL info))
+        if (!GetOpenGLInfo(out BackendInfoOpenGL? info))
         {
             throw new RenderException($"{nameof(GetOpenGLInfo)} can only be used on an OpenGL GraphicsDevice.");
         }

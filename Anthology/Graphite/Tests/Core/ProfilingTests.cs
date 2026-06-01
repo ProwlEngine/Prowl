@@ -83,7 +83,7 @@ public class ProfilingTests
     [Theory]
     [InlineData(AllocBin.DeviceBuffer, 0)]
     [InlineData(AllocBin.Texture, 1)]
-    [InlineData(AllocBin.PropertySet, 8)]
+    [InlineData(AllocBin.ResourceSet, 8)]
     public void AllocBin_HasStableOrdinals(AllocBin bin, int expectedOrdinal)
     {
         // The bin->array-index mapping relies on these ordinals staying fixed.

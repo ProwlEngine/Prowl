@@ -6,6 +6,8 @@ using Prowl.Veldrid.Vk;
 
 using Silk.NET.Vulkan;
 
+using static System.Net.WebRequestMethods;
+
 using VkImageLayout = Silk.NET.Vulkan.ImageLayout;
 
 namespace Prowl.Veldrid;
@@ -65,10 +67,19 @@ public class BackendInfoVulkan
     /// </summary>
     public string DriverInfo => _gd.DriverInfo;
 
+    /// <summary>
+    /// A marshaled list of all the Vulkan instance layers available, such as attachable validation or debug layers (<see href="https://docs.vulkan.org/guide/latest/layers.html"/>)
+    /// </summary>
     public ReadOnlyCollection<string> AvailableInstanceLayers => _instanceLayers.Value;
 
+    /// <summary>
+    /// A marshaled list of all the Vulkan instance extensions available, such as platform surface extensions (<see href="https://docs.vulkan.org/spec/latest/chapters/extensions.html"/>)
+    /// </summary>
     public ReadOnlyCollection<string> AvailableInstanceExtensions => _instanceExtensions;
 
+    /// <summary>
+    /// A marshaled list of all the vulkan device extensions available.
+    /// </summary>
     public ReadOnlyCollection<ExtensionProperties> AvailableDeviceExtensions => _deviceExtensions.Value;
 
     /// <summary>
@@ -132,17 +143,30 @@ public class BackendInfoVulkan
         return new ReadOnlyCollection<ExtensionProperties>(veldridProps);
     }
 
+    /// <summary>
+    /// A description for a physical device-specific extension functionality, such as raytracing or mesh shaders.
+    /// </summary>
     public readonly struct ExtensionProperties
     {
+        /// <summary>
+        /// The name of the extension, such as VK_KHR_swapchain, VK_KHR_ray_tracing_pipeline
+        /// </summary>
         public readonly string Name;
+
+        /// <summary>
+        /// The implemented spec version of this extension.
+        /// </summary>
         public readonly uint SpecVersion;
 
-        public ExtensionProperties(string name, uint specVersion)
+
+        internal ExtensionProperties(string name, uint specVersion)
         {
             Name = name ?? throw new ArgumentNullException(nameof(name));
             SpecVersion = specVersion;
         }
 
+
+        /// <inheritdoc/>
         public override string ToString()
         {
             return Name;

@@ -13,7 +13,7 @@ public readonly struct ProfileCounter
     /// <summary>Bytes moved this frame, or resident bytes for a gauge.</summary>
     public readonly long Bytes;
 
-    public ProfileCounter(long count, long bytes)
+    internal ProfileCounter(long count, long bytes)
     {
         Count = count;
         Bytes = bytes;

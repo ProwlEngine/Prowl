@@ -36,13 +36,23 @@ public readonly struct UniformBlockField : IEquatable<UniformBlockField>
     {
     }
 
+    /// <inheritdoc/>
     public bool Equals(UniformBlockField other)
         => Name == other.Name && Offset == other.Offset && Size == other.Size && Type == other.Type;
 
-    public override bool Equals(object? obj) => obj is UniformBlockField o && Equals(o);
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+        => obj is UniformBlockField o && Equals(o);
 
-    public override int GetHashCode() => HashCode.Combine(Name, Offset, Size, (int)Type);
+    /// <inheritdoc/>
+    public override int GetHashCode()
+        => HashCode.Combine(Name, Offset, Size, (int)Type);
 
-    public static bool operator ==(UniformBlockField a, UniformBlockField b) => a.Equals(b);
-    public static bool operator !=(UniformBlockField a, UniformBlockField b) => !a.Equals(b);
+    /// <inheritdoc/>
+    public static bool operator ==(UniformBlockField a, UniformBlockField b)
+        => a.Equals(b);
+
+    /// <inheritdoc/>
+    public static bool operator !=(UniformBlockField a, UniformBlockField b)
+        => !a.Equals(b);
 }

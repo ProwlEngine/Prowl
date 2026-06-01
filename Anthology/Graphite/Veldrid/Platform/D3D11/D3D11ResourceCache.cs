@@ -346,7 +346,7 @@ internal unsafe class D3D11ResourceCache : IDisposable
                     InstanceDataStepRate = stepRate,
                 };
 
-                currentOffset += (int)FormatSizeHelpers.GetSizeInBytes(desc.Format);
+                currentOffset += (int)desc.Format.GetSizeInBytes();
                 element += 1;
             }
         }

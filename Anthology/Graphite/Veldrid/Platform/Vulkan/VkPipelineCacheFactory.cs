@@ -149,7 +149,7 @@ internal static unsafe class VkPipelineCacheFactory
                 };
 
                 targetIndex += 1;
-                currentOffset += FormatSizeHelpers.GetSizeInBytes(inputElement.Format);
+                currentOffset += inputElement.Format.GetSizeInBytes();
             }
         }
 

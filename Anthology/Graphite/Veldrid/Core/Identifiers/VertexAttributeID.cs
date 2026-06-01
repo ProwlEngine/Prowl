@@ -40,22 +40,39 @@ public readonly struct VertexAttributeID : IEquatable<VertexAttributeID>, IForma
     /// <summary>
     /// Implicit string-to-ID conversion. Equivalent to <see cref="Intern(string)"/>.
     /// </summary>
-    public static implicit operator VertexAttributeID(string name) => Intern(name);
+    public static implicit operator VertexAttributeID(string name)
+        => Intern(name);
 
-    public bool Equals(VertexAttributeID other) => Value == other.Value;
-    public override bool Equals(object? obj) => obj is VertexAttributeID o && Equals(o);
-    public override int GetHashCode() => Value;
-    public static bool operator ==(VertexAttributeID a, VertexAttributeID b) => a.Value == b.Value;
-    public static bool operator !=(VertexAttributeID a, VertexAttributeID b) => a.Value != b.Value;
+    /// <inheritdoc/>
+    public bool Equals(VertexAttributeID other)
+        => Value == other.Value;
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+        => obj is VertexAttributeID o && Equals(o);
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+        => Value;
+
+    /// <inheritdoc/>
+    public static bool operator ==(VertexAttributeID a, VertexAttributeID b)
+        => a.Value == b.Value;
+
+    /// <inheritdoc/>
+    public static bool operator !=(VertexAttributeID a, VertexAttributeID b)
+        => a.Value != b.Value;
 
     /// <summary>
     /// Hot-path safe. Does not touch the interner. Use the static <see cref="ToString(VertexAttributeID)"/>
     /// overload to retrieve the original interned string.
     /// </summary>
-    public override string ToString() => $"VertexAttributeID({Value})";
+    public override string ToString()
+        => $"VertexAttributeID({Value})";
 
     /// <summary>
     /// <see cref="IFormattable"/> conformance. Format and provider are ignored.
     /// </summary>
-    public string ToString(string? format, IFormatProvider? formatProvider) => ToString();
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => ToString();
 }

@@ -16,7 +16,7 @@ internal partial class VkDescriptorPoolManager
 #if PROFILE_USAGE
         _profiledLiveSets++;
 #endif
-        _gd.RecordAllocation(AllocBin.PropertySet, 0);
+        _gd.RecordAllocation(AllocBin.ResourceSet, 0);
     }
 
     [Conditional("PROFILE_USAGE")]
@@ -25,7 +25,7 @@ internal partial class VkDescriptorPoolManager
 #if PROFILE_USAGE
         _profiledLiveSets--;
 #endif
-        _gd.RecordFree(AllocBin.PropertySet, 0);
+        _gd.RecordFree(AllocBin.ResourceSet, 0);
     }
 
     [Conditional("PROFILE_USAGE")]
@@ -33,7 +33,7 @@ internal partial class VkDescriptorPoolManager
     {
 #if PROFILE_USAGE
         for (long i = 0; i < _profiledLiveSets; i++)
-            _gd.RecordFree(AllocBin.PropertySet, 0);
+            _gd.RecordFree(AllocBin.ResourceSet, 0);
         _profiledLiveSets = 0;
 #endif
     }

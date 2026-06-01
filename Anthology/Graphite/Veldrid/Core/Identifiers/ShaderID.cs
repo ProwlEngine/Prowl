@@ -28,7 +28,8 @@ public readonly struct ShaderID : IEquatable<ShaderID>, IFormattable
     /// Returns the ID for <paramref name="name"/>, minting one if this is the first time
     /// this string has been seen.
     /// </summary>
-    public static ShaderID Intern(string name) => s_interner.Intern(name);
+    public static ShaderID Intern(string name)
+        => s_interner.Intern(name);
 
     /// <summary>
     /// Slow reverse lookup. Returns the original string for <paramref name="id"/>, or
@@ -40,22 +41,39 @@ public readonly struct ShaderID : IEquatable<ShaderID>, IFormattable
     /// <summary>
     /// Implicit string-to-ID conversion. Equivalent to <see cref="Intern(string)"/>.
     /// </summary>
-    public static implicit operator ShaderID(string name) => Intern(name);
+    public static implicit operator ShaderID(string name)
+        => Intern(name);
 
-    public bool Equals(ShaderID other) => Value == other.Value;
-    public override bool Equals(object? obj) => obj is ShaderID o && Equals(o);
-    public override int GetHashCode() => Value;
-    public static bool operator ==(ShaderID a, ShaderID b) => a.Value == b.Value;
-    public static bool operator !=(ShaderID a, ShaderID b) => a.Value != b.Value;
+    /// <inheritdoc/>
+    public bool Equals(ShaderID other)
+        => Value == other.Value;
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj)
+        => obj is ShaderID o && Equals(o);
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+        => Value;
+
+    /// <inheritdoc/>
+    public static bool operator ==(ShaderID a, ShaderID b)
+        => a.Value == b.Value;
+
+    /// <inheritdoc/>
+    public static bool operator !=(ShaderID a, ShaderID b)
+        => a.Value != b.Value;
 
     /// <summary>
     /// Hot-path safe. Does not touch the interner. Use the static <see cref="ToString(ShaderID)"/>
     /// overload to retrieve the original interned string.
     /// </summary>
-    public override string ToString() => $"ShaderID({Value})";
+    public override string ToString()
+        => $"ShaderID({Value})";
 
     /// <summary>
     /// <see cref="IFormattable"/> conformance. Format and provider are ignored.
     /// </summary>
-    public string ToString(string? format, IFormatProvider? formatProvider) => ToString();
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => ToString();
 }

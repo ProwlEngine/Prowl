@@ -30,13 +30,13 @@ public class GraphicsDeviceFeatures
     /// <summary>
     /// Indicates whether a non-zero "vertexStart" value can be used in
     /// <see cref="CommandBuffer.Draw(uint, uint, uint, uint)"/> and
-    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, uint, int, uint)"/>.
+    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, int, uint)"/>.
     /// </summary>
     public bool DrawBaseVertex { get; }
     /// <summary>
     /// Indicates whether a non-zero "instanceStart" value can be used in
     /// <see cref="CommandBuffer.Draw(uint, uint, uint, uint)"/> and
-    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, uint, int, uint)"/>.
+    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, int, uint)"/>.
     /// </summary>
     public bool DrawBaseInstance { get; }
     /// <summary>
@@ -108,7 +108,7 @@ public class GraphicsDeviceFeatures
         bool independentBlend,
         bool structuredBuffer,
         bool subsetTextureView,
-        bool CommandBufferDebugMarkers,
+        bool commandBufferDebugMarkers,
         bool bufferRangeBinding,
         bool shaderFloat64)
     {
@@ -127,7 +127,7 @@ public class GraphicsDeviceFeatures
         IndependentBlend = independentBlend;
         StructuredBuffer = structuredBuffer;
         SubsetTextureView = subsetTextureView;
-        CommandBufferDebugMarkers = CommandBufferDebugMarkers;
+        CommandBufferDebugMarkers = commandBufferDebugMarkers;
         BufferRangeBinding = bufferRangeBinding;
         ShaderFloat64 = shaderFloat64;
     }
