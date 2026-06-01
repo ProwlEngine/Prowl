@@ -21,6 +21,18 @@ public class PaperRenderer : ICanvasRenderer
     private Texture2D _defaultTexture;
 
     private Float4x4 _projection;
+    private int _fbWidth;
+    private int _fbHeight;
+
+    // Backdrop blur (dual Kawase, shares the UI shader's BlurDown/BlurUp passes)
+    public bool SupportsBackdropBlur => true;
+    // If the frosted glass appears vertically mirrored, flip this to 0.
+    private const int BackdropFlipY = 1;
+    private const int BlurDownPass = 1;
+    private const int BlurUpPass = 2;
+    private const int MaxBlurLevels = 6;
+    private Resources.Material _blurMat;
+    private readonly List<RenderTexture> _tempBlurRTs = new();
 
     public void Initialize(int width, int height)
     {
@@ -29,19 +41,15 @@ public class PaperRenderer : ICanvasRenderer
         _vertexBuffer = Graphics.CreateBuffer<byte>(BufferType.VertexBuffer, Array.Empty<byte>(), true);
         _elementBuffer = Graphics.CreateBuffer<uint>(BufferType.ElementsBuffer, Array.Empty<uint>(), true);
 
-        // Vertex format matches Quill's Vertex struct (44 bytes):
+        // Vertex format matches Quill's Vertex struct (20 bytes):
         //   0: Float2     position     (offset 0)
         //   1: Float2     UV           (offset 8)
         //   2: UByte4     color        (offset 16, normalized)
-        //   3: Float4     slug band    (offset 20)
-        //   4: Float2     slug glyph   (offset 36)
         var vertexFormat = new VertexFormat(
         [
             new((VertexFormat.VertexSemantic)0, VertexFormat.VertexType.Float, 2, 0),
             new((VertexFormat.VertexSemantic)1, VertexFormat.VertexType.Float, 2, 0),
             new((VertexFormat.VertexSemantic)2, VertexFormat.VertexType.UnsignedByte, 4, 0, true),
-            new((VertexFormat.VertexSemantic)3, VertexFormat.VertexType.Float, 4, 0),
-            new((VertexFormat.VertexSemantic)4, VertexFormat.VertexType.Float, 2, 0),
         ]);
 
         _vertexArrayObject = Graphics.CreateVertexArray(vertexFormat, _vertexBuffer, _elementBuffer);
@@ -54,6 +62,8 @@ public class PaperRenderer : ICanvasRenderer
 
     public void UpdateProjection(int width, int height)
     {
+        _fbWidth = width;
+        _fbHeight = height;
         _projection = Float4x4.CreateOrthoOffCenter(0, width, height, 0, -1, 1);
     }
 
@@ -94,36 +104,6 @@ public class PaperRenderer : ICanvasRenderer
         return tex;
     }
 
-    public object? CreateFloatTexture(int width, int height, int components, float[] data)
-    {
-        var tex = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Float4);
-
-        // Set nearest filtering and clamp-to-edge for data textures
-        Graphics.SetTextureFilters(tex.Handle, TextureMin.Nearest, TextureMag.Nearest);
-        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
-
-        // Expand 2-component data to RGBA (Quill slug textures use RG channels)
-        float[] uploadData;
-        if (components == 2)
-        {
-            uploadData = new float[width * height * 4];
-            for (int i = 0; i < width * height; i++)
-            {
-                uploadData[i * 4 + 0] = data[i * 2 + 0];
-                uploadData[i * 4 + 1] = data[i * 2 + 1];
-                // G and A stay 0
-            }
-        }
-        else
-        {
-            uploadData = data;
-        }
-
-        tex.SetData<float>(new Memory<float>(uploadData));
-        return tex;
-    }
-
     public Int2 GetTextureSize(object texture)
     {
         if (texture is not Texture2D tex) throw new ArgumentException("Invalid texture type");
@@ -152,14 +132,17 @@ public class PaperRenderer : ICanvasRenderer
             CullFace = RasterizerState.PolyFace.None,
         };
 
+        _blurMat ??= new Resources.Material(Shader.LoadDefault(DefaultShader.UI));
+
         using var cmd = Graphics.GetCommandBuffer("Paper UI");
 
         cmd.SetRasterState(state);
         cmd.SetShader(_shaderProgram);
         cmd.SetMatrix("projection", in _projection);
         cmd.SetFloat("dpiScale", dpiScale);
+        cmd.SetTexture("backdropTexture", _defaultTexture);
 
-        // Upload raw Vertex data (44 bytes per vertex)
+        // Upload raw Vertex data (20 bytes per vertex)
         if (canvas.Vertices.Count > 0)
         {
             var vertices = canvas.Vertices.ToArray();
@@ -176,6 +159,25 @@ public class PaperRenderer : ICanvasRenderer
         int indexOffset = 0;
         foreach (DrawCall drawCall in drawCalls)
         {
+            // Backdrop blur: capture the framebuffer behind this shape, blur it, then restore
+            // the UI render state so the shape composites over the blurred backdrop.
+            float blurAmount = (float)drawCall.Brush.BackdropBlur;
+            if (blurAmount > 0f)
+            {
+                RenderTexture blurred = RenderBackdropBlur(cmd, blurAmount);
+
+                cmd.SetRenderTarget(null);
+                cmd.SetViewport(0, 0, (uint)_fbWidth, (uint)_fbHeight);
+                cmd.SetRasterState(state);
+                cmd.SetShader(_shaderProgram);
+                cmd.SetMatrix("projection", in _projection);
+                cmd.SetFloat("dpiScale", dpiScale);
+                cmd.SetTexture("backdropTexture", blurred.MainTexture);
+                cmd.SetVector("viewportSize", new Float2(_fbWidth, _fbHeight));
+                cmd.SetInt("backdropFlipY", BackdropFlipY);
+            }
+            cmd.SetFloat("backdropBlurAmount", blurAmount);
+
             // Texture
             Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
             cmd.SetTexture("texture0", texture);
@@ -199,26 +201,75 @@ public class PaperRenderer : ICanvasRenderer
             Float4x4 brushTexMat = drawCall.Brush.TextureMatrix;
             cmd.SetMatrix("brushTextureMat", in brushTexMat);
 
-            // Slug textures (GPU text rendering)
-            if (drawCall.IsSlug)
-            {
-                if (drawCall.SlugCurveTexture is Texture2D curveTex)
-                    cmd.SetTexture("slugCurveTexture", curveTex);
-                if (drawCall.SlugBandTexture is Texture2D bandTex)
-                    cmd.SetTexture("slugBandTexture", bandTex);
-
-                cmd.SetVector("slugCurveTexSize",
-                    new Float2(drawCall.SlugCurveTexWidth, drawCall.SlugCurveTexHeight));
-                cmd.SetVector("slugBandTexSize",
-                    new Float2(drawCall.SlugBandTexWidth, drawCall.SlugBandTexHeight));
-            }
-
             cmd.DrawIndexed(_vertexArrayObject, Topology.Triangles, (uint)drawCall.ElementCount, (uint)indexOffset, 0, true);
             indexOffset += drawCall.ElementCount;
         }
 
         Graphics.Submit(cmd);
+
+        // Release pooled blur targets now that the command buffer has been submitted.
+        if (_tempBlurRTs.Count > 0)
+        {
+            foreach (RenderTexture rt in _tempBlurRTs)
+                RenderTexture.ReleaseTemporaryRT(rt);
+            _tempBlurRTs.Clear();
+        }
     }
 
-    public void Dispose() => Cleanup();
+    /// <summary>
+    /// Maps a pixel blur radius onto a number of dual Kawase iterations plus a continuous sample
+    /// offset so the effective blur scales smoothly with radius even as the iteration count steps.
+    /// </summary>
+    private static void ComputeBlurParams(float radius, out int iterations, out float offset)
+    {
+        float r = MathF.Max(radius, 2f);
+        iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
+        offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+    }
+
+    /// <summary>
+    /// Captures the current backbuffer into a half-res target and dual-Kawase blurs it, returning
+    /// the blurred render texture (sampled by the UI shader's backdrop composite). Temporary
+    /// targets are tracked and released after the command buffer is submitted.
+    /// </summary>
+    private RenderTexture RenderBackdropBlur(CommandBuffer cmd, float radius)
+    {
+        ComputeBlurParams(radius, out int iterations, out float offset);
+
+        int w = Math.Max(1, _fbWidth / 2);
+        int h = Math.Max(1, _fbHeight / 2);
+
+        // Capture the backbuffer (read) into a half-res render texture (draw) via a linear blit.
+        RenderTexture capture = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Color4b]);
+        _tempBlurRTs.Add(capture);
+        cmd.SetRenderTargets(capture.frameBuffer, null);
+        cmd.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, w, h, ClearFlags.Color, BlitFilter.Linear);
+
+        _blurMat.SetFloat("_Offset", offset);
+
+        var chain = new List<RenderTexture> { capture };
+        RenderTexture current = capture;
+        for (int i = 0; i < iterations; i++)
+        {
+            w = Math.Max(1, w / 2);
+            h = Math.Max(1, h / 2);
+            RenderTexture down = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Color4b]);
+            _tempBlurRTs.Add(down);
+            cmd.Blit(current, down, _blurMat, BlurDownPass);
+            chain.Add(down);
+            current = down;
+        }
+
+        for (int i = chain.Count - 1; i > 0; i--)
+            cmd.Blit(chain[i], chain[i - 1], _blurMat, BlurUpPass);
+
+        return chain[0];
+    }
+
+    public void Dispose()
+    {
+        Cleanup();
+        _blurMat?.Dispose();
+        _blurMat = null;
+    }
 }

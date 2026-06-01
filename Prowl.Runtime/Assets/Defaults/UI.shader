@@ -24,24 +24,18 @@ Pass "UI"
         layout (location = 0) in vec2 aPosition;
         layout (location = 1) in vec2 aTexCoord;
         layout (location = 2) in vec4 aColor;
-        layout (location = 3) in vec4 aSlugBand;
-        layout (location = 4) in vec2 aSlugGlyphInfo;
 
         uniform mat4 projection;
 
         out vec2 fragTexCoord;
         out vec4 fragColor;
         out vec2 fragPos;
-        out vec4 fragSlugBand;
-        flat out vec2 fragSlugGlyph;
 
         void main()
         {
             fragTexCoord = aTexCoord;
             fragColor = aColor;
             fragPos = aPosition;
-            fragSlugBand = aSlugBand;
-            fragSlugGlyph = aSlugGlyphInfo;
             gl_Position = projection * vec4(aPosition, 0.0, 1.0);
         }
     }
@@ -51,8 +45,6 @@ Pass "UI"
         in vec2 fragTexCoord;
         in vec4 fragColor;
         in vec2 fragPos;
-        in vec4 fragSlugBand;
-        flat in vec2 fragSlugGlyph;
 
         out vec4 finalColor;
 
@@ -70,115 +62,11 @@ Pass "UI"
         uniform mat4 brushTextureMat;
         uniform float dpiScale;
 
-        // Slug textures
-        uniform sampler2D slugCurveTexture;
-        uniform sampler2D slugBandTexture;
-        uniform vec2 slugCurveTexSize;
-        uniform vec2 slugBandTexSize;
-
-        // ============== Slug functions ==============
-
-        vec2 SlugFetchBand(float absTexelIndex) {
-            float tx = mod(absTexelIndex, slugBandTexSize.x);
-            float ty = floor(absTexelIndex / slugBandTexSize.x);
-            vec2 uv = (vec2(tx, ty) + 0.5) / slugBandTexSize;
-            return texture(slugBandTexture, uv).rg;
-        }
-
-        vec4 SlugFetchCurve(vec2 curveLoc) {
-            vec2 uv = (curveLoc + 0.5) / slugCurveTexSize;
-            return texture(slugCurveTexture, uv);
-        }
-
-        vec2 SlugCalcRootEligibility(float y1, float y2, float y3) {
-            float s0 = (y1 > 0.0) ? 1.0 : 0.0;
-            float s1 = (y2 > 0.0) ? 1.0 : 0.0;
-            float s2 = (y3 > 0.0) ? 1.0 : 0.0;
-            float ns0 = 1.0 - s0, ns1 = 1.0 - s1, ns2 = 1.0 - s2;
-            float root1 = clamp(s0*ns1*ns2 + ns0*s1*ns2 + s0*s1*ns2 + s0*ns1*s2, 0.0, 1.0);
-            float root2 = clamp(ns0*s1*ns2 + ns0*ns1*s2 + s0*ns1*s2 + ns0*s1*s2, 0.0, 1.0);
-            return vec2(root1, root2);
-        }
-
-        vec2 SlugSolveHorizPoly(vec4 p12, vec2 p3) {
-            vec2 a = p12.xy - p12.zw * 2.0 + p3;
-            vec2 b = p12.xy - p12.zw;
-            float ra = 1.0 / a.y;
-            float rb = 0.5 / b.y;
-            float d = sqrt(max(b.y * b.y - a.y * p12.y, 0.0));
-            float t1 = (b.y - d) * ra;
-            float t2 = (b.y + d) * ra;
-            if (abs(a.y) < 0.0001) { t1 = p12.y * rb; t2 = t1; }
-            return vec2(
-                (a.x * t1 - b.x * 2.0) * t1 + p12.x,
-                (a.x * t2 - b.x * 2.0) * t2 + p12.x);
-        }
-
-        vec2 SlugSolveVertPoly(vec4 p12, vec2 p3) {
-            vec2 a = p12.xy - p12.zw * 2.0 + p3;
-            vec2 b = p12.xy - p12.zw;
-            float ra = 1.0 / a.x;
-            float rb = 0.5 / b.x;
-            float d = sqrt(max(b.x * b.x - a.x * p12.x, 0.0));
-            float t1 = (b.x - d) * ra;
-            float t2 = (b.x + d) * ra;
-            if (abs(a.x) < 0.0001) { t1 = p12.x * rb; t2 = t1; }
-            return vec2(
-                (a.y * t1 - b.y * 2.0) * t1 + p12.y,
-                (a.y * t2 - b.y * 2.0) * t2 + p12.y);
-        }
-
-        float SlugRender(vec2 renderCoord, vec4 bandTransform, vec2 glyphTexInfo) {
-            float glyTexPackedXY = glyphTexInfo.x;
-            float glyphBandTexX  = mod(glyTexPackedXY, slugBandTexSize.x);
-            float glyphBandTexY  = floor(glyTexPackedXY / slugBandTexSize.x);
-            float bandCount      = glyphTexInfo.y;
-            float bandMax        = bandCount - 1.0;
-
-            vec2 emsPerPixel = fwidth(renderCoord);
-            vec2 pixelsPerEm = 1.0 / max(emsPerPixel, vec2(0.0001, 0.0001));
-
-            vec2 bandPos   = renderCoord * bandTransform.xy + bandTransform.zw;
-            float bandIndexY = clamp(floor(bandPos.y), 0.0, bandMax);
-            float bandIndexX = clamp(floor(bandPos.x), 0.0, bandMax);
-
-            float glyphBaseTexel = glyphBandTexY * slugBandTexSize.x + glyphBandTexX;
-
-            float xcov = 0.0, xwgt = 0.0;
-            vec2 hBH = SlugFetchBand(glyphBaseTexel + bandIndexY);
-            for (float ci = 0.0; ci < hBH.r; ci += 1.0) {
-                vec2 cLoc = SlugFetchBand(hBH.g + ci);
-                vec4 p12 = SlugFetchCurve(cLoc) - vec4(renderCoord, renderCoord);
-                vec2 p3  = SlugFetchCurve(vec2(cLoc.x + 1.0, cLoc.y)).xy - renderCoord;
-                if (max(max(p12.x, p12.z), p3.x) * pixelsPerEm.x < -0.5) break;
-                vec2 elig = SlugCalcRootEligibility(p12.y, p12.w, p3.y);
-                if (elig.x + elig.y > 0.0) {
-                    vec2 r = SlugSolveHorizPoly(p12, p3) * pixelsPerEm.x;
-                    if (elig.x > 0.5) { xcov += clamp(r.x+0.5, 0.0, 1.0); xwgt = max(xwgt, clamp(1.0-abs(r.x)*2.0, 0.0, 1.0)); }
-                    if (elig.y > 0.5) { xcov -= clamp(r.y+0.5, 0.0, 1.0); xwgt = max(xwgt, clamp(1.0-abs(r.y)*2.0, 0.0, 1.0)); }
-                }
-            }
-
-            float ycov = 0.0, ywgt = 0.0;
-            vec2 vBH = SlugFetchBand(glyphBaseTexel + bandCount + bandIndexX);
-            for (float vi = 0.0; vi < vBH.r; vi += 1.0) {
-                vec2 cLoc = SlugFetchBand(vBH.g + vi);
-                vec4 p12 = SlugFetchCurve(cLoc) - vec4(renderCoord, renderCoord);
-                vec2 p3  = SlugFetchCurve(vec2(cLoc.x + 1.0, cLoc.y)).xy - renderCoord;
-                if (max(max(p12.y, p12.w), p3.y) * pixelsPerEm.y < -0.5) break;
-                vec2 elig = SlugCalcRootEligibility(p12.x, p12.z, p3.x);
-                if (elig.x + elig.y > 0.0) {
-                    vec2 r = SlugSolveVertPoly(p12, p3) * pixelsPerEm.y;
-                    if (elig.x > 0.5) { ycov -= clamp(r.x+0.5, 0.0, 1.0); ywgt = max(ywgt, clamp(1.0-abs(r.x)*2.0, 0.0, 1.0)); }
-                    if (elig.y > 0.5) { ycov += clamp(r.y+0.5, 0.0, 1.0); ywgt = max(ywgt, clamp(1.0-abs(r.y)*2.0, 0.0, 1.0)); }
-                }
-            }
-
-            float coverage = max(
-                abs(xcov * xwgt + ycov * ywgt) / max(xwgt + ywgt, 0.0001),
-                min(abs(xcov), abs(ycov)));
-            return clamp(coverage, 0.0, 1.0);
-        }
+        // Backdrop blur
+        uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
+        uniform vec2 viewportSize;         // framebuffer size in pixels
+        uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
+        uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
 
         // ============== Canvas functions ==============
 
@@ -230,13 +118,6 @@ Pass "UI"
                 color = mix(brushColor1, brushColor2, factor);
             }
 
-            // Slug mode: bandCount > 0
-            if (fragSlugGlyph.y > 0.0) {
-                float coverage = SlugRender(fragTexCoord, fragSlugBand, fragSlugGlyph);
-                finalColor = vec4(color.rgb * coverage, coverage * color.a) * mask;
-                return;
-            }
-
             // Bitmap text mode: UV.x >= 2.0
             if (fragTexCoord.x >= 2.0) {
                 finalColor = color * texture(texture0, fragTexCoord - vec2(2.0)) * mask;
@@ -251,7 +132,124 @@ Pass "UI"
 
             float dpi = max(dpiScale, 0.001);
             vec2 logicalPos = fragPos / dpi;
-            finalColor = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy) * edgeAlpha * mask;
+            vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
+
+            // Backdrop blur: composite the fill over the blurred scene behind the shape.
+            if (backdropBlurAmount > 0.0) {
+                vec2 uv = fragPos / viewportSize;
+                if (backdropFlipY == 1) uv.y = 1.0 - uv.y;
+                vec3 blurred = texture(backdropTexture, uv).rgb;
+                vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
+                finalColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
+                return;
+            }
+
+            finalColor = fill * edgeAlpha * mask;
+        }
+    }
+
+    ENDGLSL
+}
+
+Pass "BlurDown"
+{
+    Tags { "RenderOrder" = "Opaque" }
+
+    Blend Off
+    ZTest Off
+    ZWrite Off
+    Cull Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        uniform sampler2D _MainTex;
+        uniform float _Offset;
+
+        layout(location = 0) out vec4 FragColor;
+
+        in vec2 TexCoords;
+
+        void main()
+        {
+            vec2 halfpixel = (0.5 / vec2(textureSize(_MainTex, 0))) * _Offset;
+
+            vec4 sum = texture(_MainTex, TexCoords) * 4.0;
+            sum += texture(_MainTex, TexCoords - halfpixel);
+            sum += texture(_MainTex, TexCoords + halfpixel);
+            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x, -halfpixel.y));
+            sum += texture(_MainTex, TexCoords - vec2(halfpixel.x, -halfpixel.y));
+
+            FragColor = sum / 8.0;
+        }
+    }
+
+    ENDGLSL
+}
+
+Pass "BlurUp"
+{
+    Tags { "RenderOrder" = "Opaque" }
+
+    Blend Off
+    ZTest Off
+    ZWrite Off
+    Cull Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            TexCoords = vertexTexCoord;
+            gl_Position = vec4(vertexPosition, 1.0);
+        }
+    }
+
+    Fragment
+    {
+        uniform sampler2D _MainTex;
+        uniform float _Offset;
+
+        layout(location = 0) out vec4 FragColor;
+
+        in vec2 TexCoords;
+
+        void main()
+        {
+            vec2 halfpixel = (0.5 / vec2(textureSize(_MainTex, 0))) * _Offset;
+
+            vec4 sum = texture(_MainTex, TexCoords + vec2(-halfpixel.x * 2.0, 0.0));
+            sum += texture(_MainTex, TexCoords + vec2(-halfpixel.x, halfpixel.y)) * 2.0;
+            sum += texture(_MainTex, TexCoords + vec2(0.0, halfpixel.y * 2.0));
+            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x, halfpixel.y)) * 2.0;
+            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x * 2.0, 0.0));
+            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x, -halfpixel.y)) * 2.0;
+            sum += texture(_MainTex, TexCoords + vec2(0.0, -halfpixel.y * 2.0));
+            sum += texture(_MainTex, TexCoords + vec2(-halfpixel.x, -halfpixel.y)) * 2.0;
+
+            FragColor = sum / 12.0;
         }
     }
 
