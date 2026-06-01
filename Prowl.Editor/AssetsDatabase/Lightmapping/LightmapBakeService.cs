@@ -25,100 +25,82 @@ namespace Prowl.Editor.Lightmapping;
 /// </summary>
 public sealed class LightmapBakeService
 {
-    public sealed class Settings
-    {
-        // Atlas / resolution
-        public int AtlasSize = 1024;
-        public float TexelsPerUnit = 20f;
-        public int DilatePixels = 2;       // edge dilation to stop bilinear bleed at seams
-
-        // Quality
-        public int Bounces = 2;
-        public int Samples = 64;           // progressive indirect iterations before finalize
-        public int ProbeSamples = 256;
-        public PathTracerKind PathTracer = PathTracerKind.PerTexel;
-        public bool JitterRayOrigin = true;
-        public float RussianRoulette = 0f; // 0 = off
-
-        // Edge-avoiding denoiser (runs once at finalize). Strength maps to the radiance edge-stop:
-        // higher removes more noise but softens shadow edges.
-        public bool Denoise = false;
-        public float DenoiseStrength = 0.5f;
-
-        // Environment as a GI source: feed the scene's ambient colour in as ray-miss (sky) radiance.
-        // Off keeps the previous behaviour (black sky, lights-only GI).
-        public bool BakeSkyLighting = false;
-
-        // Debug: bake every surface as white Lambertian (isolates light/GI from albedo issues).
-        public bool IgnoreAlbedo = false;
-    }
-
     private LightmapBaker? _baker;
     private Job? _job;
     private AutoAtlasResult? _atlas;
     private readonly List<object> _renderers = new();    // MeshRenderer / SkinnedMeshRenderer, parallel to _atlas placements
     private readonly Dictionary<Guid, BakeTexture?> _texCache = new(); // diffuse albedo, deduped per texture asset
+    private int _bakeTexCounter;                                       // unique names for Photonic textures (its registry is name-keyed)
     private List<Float3> _probePositions = new();
     private Scene? _scene;
-    private Settings _settings = new();
+    private Scene.LightmapBakeSettings _settings = new();
     private int _targetIterations;
+
+    // TEMP perf diagnostics
+    private System.Diagnostics.Stopwatch? _iterTimer;
+    private double _lastIterMs;
+    private int _lastIterCount;
+    private bool _statsReported;
 
     public bool IsBaking => _job != null;
     public float Progress { get; private set; }
     public string Status { get; private set; } = "Idle";
 
     /// <summary>Begin a bake of <paramref name="scene"/>. Returns false (with a logged reason) if there's nothing to bake.</summary>
-    public bool Start(Scene scene, Settings settings)
+    public bool Start(Scene scene, Scene.LightmapBakeSettings settings)
     {
         if (IsBaking) return false;
         _scene = scene;
         _settings = settings;
         _renderers.Clear();
         _texCache.Clear();
+        _bakeTexCounter = 0;
         _probePositions = new();
 
         var baker = new LightmapBaker();
         baker.Options.Bounces = settings.Bounces;
         baker.Options.SamplesPerIteration = 1;
         baker.Options.IncludeDirectLighting = true;
-        baker.Options.PathTracer = settings.PathTracer;
+        baker.Options.DoBackfaceCull = settings.DoBackfaceCull;
         baker.Options.DilatePixels = settings.DilatePixels;
-        baker.Options.JitterRayOrigin = settings.JitterRayOrigin;
         baker.Options.RussianRoulette = settings.RussianRoulette;
         baker.Options.IgnoreAlbedo = settings.IgnoreAlbedo;
         baker.Options.Denoise = settings.Denoise;
-        baker.Options.DenoiseColorPhi = settings.DenoiseStrength;
+        baker.Options.DenoiseIterations = Math.Max(1, settings.DenoiseRadius);
         if (settings.BakeSkyLighting)
             baker.Options.SkyColor = SceneSkyRadiance(scene);
 
         var bake = baker.BeginScene(scene.Name ?? "Scene");
 
-        // --- Gather lightmap-static renderers -> BakeMesh + world transform. ---
+        // --- Gather static renderers. Meshes with a usable lightmap UV (UV2, or UV0 as a fallback)
+        // get their own lightmap; the rest are added as occluders so they still cast shadows and
+        // bounce colour into lightmaps + probes (all static geometry contributes to the bake). ---
         var meshes = new List<(BakeMesh mesh, Float4x4 transform)>();
+        var occluders = new List<(BakeMesh mesh, Float4x4 transform)>();
         int matCounter = 0;
+        int meshKey = 0;
         foreach (var go in scene.AllObjects)
         {
-            if (!go.IsStatic) continue;
+            if (!go.IsStatic || !go.EnabledInHierarchy) continue;
 
-            var mr = go.GetComponent<MeshRenderer>();
-            if (mr != null && TryBuildBakeMesh(bake, mr.Mesh.Res, mr.Materials, $"r{_renderers.Count}", ref matCounter, out var bm))
-            {
-                meshes.Add((bm, go.Transform.LocalToWorldMatrix));
-                _renderers.Add(mr);
+            Mesh? mesh;
+            List<AssetRef<Material>> mats;
+            object renderer;
+            if (go.GetComponent<MeshRenderer>() is { } mr) { mesh = mr.Mesh.Res; mats = mr.Materials; renderer = mr; }
+            else if (go.GetComponent<SkinnedMeshRenderer>() is { } smr) { mesh = smr.SharedMesh.Res; mats = smr.Materials; renderer = smr; }
+            else continue;
+
+            if (!TryBuildBakeMesh(bake, mesh, mats, $"r{meshKey++}", ref matCounter, out var bm, out bool hasLightmapUV))
                 continue;
-            }
 
-            var smr = go.GetComponent<SkinnedMeshRenderer>();
-            if (smr != null && TryBuildBakeMesh(bake, smr.SharedMesh.Res, smr.Materials, $"r{_renderers.Count}", ref matCounter, out var bm2))
-            {
-                meshes.Add((bm2, go.Transform.LocalToWorldMatrix));
-                _renderers.Add(smr);
-            }
+            var xform = go.Transform.LocalToWorldMatrix;
+            if (hasLightmapUV) { meshes.Add((bm, xform)); _renderers.Add(renderer); }
+            else occluders.Add((bm, xform));
         }
 
         if (meshes.Count == 0)
         {
-            Runtime.Debug.LogWarning("[Lightmap] No lightmap-static renderers with UV2 to bake. Mark objects Static and enable 'Generate Lightmap UVs' on their models.");
+            Runtime.Debug.LogWarning("[Lightmap] No static renderers with UVs to lightmap. Mark objects Static (UV2 is used if present, otherwise the primary UVs).");
             return false;
         }
 
@@ -126,18 +108,24 @@ public sealed class LightmapBakeService
         foreach (var go in scene.AllObjects)
         {
             var light = go.GetComponent<Light>();
-            if (light == null || light.BakeMode == LightBakeMode.Realtime) continue;
+            if (light == null || !light.EnabledInHierarchy || light.BakeMode == LightBakeMode.Realtime) continue;
             AddLight(bake, light);
         }
 
         // --- Pack atlases. ---
         _atlas = AutoAtlasPacker.Pack(baker, meshes, settings.AtlasSize, settings.AtlasSize, settings.TexelsPerUnit, padding: 2, bakeUVLayer: "UV1");
 
+        // --- Occluders: present in the ray-traced scene (shadows + colour bounce) but never written
+        // into an atlas page. ReceivesLighting=false keeps them out of rasterization. ---
+        if (_atlas.Targets.Length > 0)
+            foreach (var (om, ox) in occluders)
+                _atlas.Targets[0].AddBakeInstance(om, ox).ReceivesLighting = false;
+
         // --- Probes. ---
         foreach (var go in scene.AllObjects)
         {
             var grp = go.GetComponent<LightProbeGroup>();
-            if (grp != null) _probePositions.AddRange(grp.GetWorldPositions());
+            if (grp != null && grp.EnabledInHierarchy) _probePositions.AddRange(grp.GetWorldPositions());
         }
 
         bake.End();
@@ -146,6 +134,12 @@ public sealed class LightmapBakeService
         _job = baker.Start();
         Progress = 0f;
         Status = "Baking…";
+
+        // TEMP perf diagnostics: scene/atlas shape so we can compare against the demo.
+        _iterTimer = System.Diagnostics.Stopwatch.StartNew();
+        _lastIterMs = 0; _lastIterCount = 0; _statsReported = false;
+        Runtime.Debug.Log($"[LM perf] lightmapped={meshes.Count} occluders={occluders.Count} atlasPages={_atlas.Targets.Length} " +
+            $"atlasSize={settings.AtlasSize} texels/unit={settings.TexelsPerUnit} bounces={settings.Bounces} targetSamples={settings.Samples} threads={System.Environment.ProcessorCount}");
         return true;
     }
 
@@ -164,6 +158,31 @@ public sealed class LightmapBakeService
 
         Progress = Math.Clamp(_job.IterationCount / (float)_targetIterations, 0f, 1f);
         Status = $"Baking… {_job.IterationCount}/{_targetIterations}";
+
+        // TEMP perf diagnostics: covered-texel count (once) + ms per iteration.
+        if (_atlas != null && _iterTimer != null && _job.IterationCount > _lastIterCount)
+        {
+            if (!_statsReported)
+            {
+                long covered = 0, total = 0;
+                foreach (var t in _atlas.Targets)
+                {
+                    var cov = t.Coverage;
+                    for (int i = 0; i < cov.Length; i++) if (cov[i] != 0) covered++;
+                    total += (long)t.Width * t.Height;
+                }
+                if (total > 0)
+                {
+                    Runtime.Debug.Log($"[LM perf] coveredTexels={covered:N0}/{total:N0} ({100.0 * covered / total:F0}% over {_atlas.Targets.Length} page(s)) — each iteration shoots ~{covered:N0} primary rays x {_settings.Bounces} bounces");
+                    _statsReported = true;
+                }
+            }
+            double now = _iterTimer.Elapsed.TotalMilliseconds;
+            int it = _job.IterationCount;
+            double msPerIter = (now - _lastIterMs) / Math.Max(1, it - _lastIterCount);
+            Runtime.Debug.Log($"[LM perf] iter {it}: {msPerIter:F0} ms/iter");
+            _lastIterMs = now; _lastIterCount = it;
+        }
 
         if (_job.IterationCount >= _targetIterations)
             FinalizeBake();
@@ -317,23 +336,28 @@ public sealed class LightmapBakeService
     // ---- helpers ----
 
     private bool TryBuildBakeMesh(BakeScene bake, Mesh? mesh, List<AssetRef<Material>> materials,
-                                  string nameKey, ref int matCounter, out BakeMesh result)
+                                  string nameKey, ref int matCounter, out BakeMesh result, out bool hasLightmapUV)
     {
         result = null!;
-        if (mesh == null || !mesh.HasUV2 || mesh.VertexCount == 0)
-        {
-            if (mesh != null && !mesh.HasUV2)
-                Runtime.Debug.LogWarning($"[Lightmap] Mesh '{mesh.Name}' has no UV2; skipped. Enable 'Generate Lightmap UVs' on its model.");
-            return false;
-        }
+        hasLightmapUV = false;
+        if (mesh == null || mesh.VertexCount == 0) return false;
+
+        // Lightmap UV: prefer the dedicated UV2 set (generated at import), fall back to the primary
+        // UVs as a fallback. A mesh with no UVs at all still builds (as an occluder); zeros fill the
+        // unused layers.
+        Float2[]? lmUV = mesh.HasUV2 ? mesh.UV2 : (mesh.HasUV ? mesh.UV : null);
+        hasLightmapUV = lmUV != null;
+        Float2[] uv0 = mesh.HasUV ? mesh.UV : (lmUV ?? new Float2[mesh.VertexCount]);
+        Float2[] uv1 = lmUV ?? new Float2[mesh.VertexCount];
 
         var builder = bake.BeginMesh($"{nameKey}_{mesh.Name}")
             .AddVertices(mesh.Vertices, mesh.Normals)
-            .AddUVLayer("UV0", mesh.HasUV ? mesh.UV : mesh.UV2)
-            .AddUVLayer("UV1", mesh.UV2);
+            .AddUVLayer("UV0", uv0)
+            .AddUVLayer("UV1", uv1);
 
         uint[] indices = mesh.Indices;
         int subCount = mesh.SubMeshCount;
+
         for (int s = 0; s < subCount; s++)
         {
             var sub = mesh.GetSubMesh(s);
@@ -378,14 +402,17 @@ public sealed class LightmapBakeService
         Guid key = tex.AssetID;
         if (key != Guid.Empty && _texCache.TryGetValue(key, out var cached)) return cached;
 
-        BakeTexture? result = TryLoadFromFile(bake, tex) ?? TryReadback(bake, tex);
+        // Photonic keys textures by name and rejects duplicates, so give each one a unique name
+        // (Texture2D names aren't unique — many default to "New Texture").
+        string name = $"albedo_{_bakeTexCounter++}";
+        BakeTexture? result = TryLoadFromFile(bake, tex, name) ?? TryReadback(bake, tex, name);
         if (key != Guid.Empty) _texCache[key] = result;
         return result;
     }
 
     // Exact path: load the source image file (sRGB, gamma 2.2). Flipped to match the runtime's
     // Texture2D.FromImage flip so the bake samples the same texels the runtime does.
-    private static BakeTexture? TryLoadFromFile(BakeScene bake, Texture2D tex)
+    private static BakeTexture? TryLoadFromFile(BakeScene bake, Texture2D tex, string name)
     {
         string? rel = tex.AssetPath;
         if (string.IsNullOrEmpty(rel) || rel.Contains('#') || Project.Current == null) return null; // embedded sub-asset -> no file
@@ -399,13 +426,13 @@ public sealed class LightmapBakeService
             img.Flip();
             byte[]? rgba = img.GetPixels().ToByteArray(PixelMapping.RGBA);
             if (rgba == null) return null;
-            return bake.CreateTextureRGBA(tex.Name ?? rel, (int)img.Width, (int)img.Height, rgba, 2.2f);
+            return bake.CreateTextureRGBA(name, (int)img.Width, (int)img.Height, rgba, 2.2f);
         }
         catch { return null; }
     }
 
     // Fallback for embedded/generated textures: read back the GPU pixels (RGBA8 or RGBA16).
-    private static BakeTexture? TryReadback(BakeScene bake, Texture2D tex)
+    private static BakeTexture? TryReadback(BakeScene bake, Texture2D tex, string name)
     {
         int w = (int)tex.Width, h = (int)tex.Height;
         if (w <= 0 || h <= 0) return null;
@@ -426,7 +453,7 @@ public sealed class LightmapBakeService
             else return null; // unsupported albedo format -> flat colour
         }
         catch { return null; }
-        return bake.CreateTextureRGBA(tex.Name ?? "tex", w, h, rgba, 2.2f);
+        return bake.CreateTextureRGBA(name, w, h, rgba, 2.2f);
     }
 
     private static void AddLight(BakeScene bake, Light light)

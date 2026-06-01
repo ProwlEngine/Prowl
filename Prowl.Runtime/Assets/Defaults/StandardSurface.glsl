@@ -21,14 +21,18 @@
 uniform int _GIMode;
 uniform sampler2D _Lightmap;
 uniform vec4 _LightmapScaleOffset;
+// Which UV set the lightmap was baked into: 1 = UV2 (dedicated), 0 = UV0 (primary, fallback for
+// meshes without UV2). Matches LightmapBakeService's per-mesh fallback.
+uniform int _LightmapUV;
 
 vec3 DecodeRGBM(vec4 rgbm) { return rgbm.rgb * (rgbm.a * 8.0); }
 
-vec3 CalculateGI(vec3 worldNormal, vec2 lightmapUV2)
+vec3 CalculateGI(vec3 worldNormal, vec2 lightmapUV2, vec2 uv0)
 {
     if (_GIMode == 1)
     {
-        vec2 lmUV = lightmapUV2 * _LightmapScaleOffset.xy + _LightmapScaleOffset.zw;
+        vec2 base = (_LightmapUV == 1) ? lightmapUV2 : uv0;
+        vec2 lmUV = base * _LightmapScaleOffset.xy + _LightmapScaleOffset.zw;
         return DecodeRGBM(texture(_Lightmap, lmUV)); // baked irradiance (linear)
     }
     if (_GIMode == 2)
@@ -109,7 +113,7 @@ vec4 StandardSurface(
                                              scatteringDistortion, scatteringScale);
 
     // --- Ambient / baked GI + Fog ---
-    vec3 ambientLight = CalculateGI(worldNormal, lightmapUV2) * ao;
+    vec3 ambientLight = CalculateGI(worldNormal, lightmapUV2, uv) * ao;
 
     // Diffuse ambient (non-metals only, metals have no diffuse)
     vec3 diffuseColor = baseColor * (1.0 - metallic);

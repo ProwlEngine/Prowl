@@ -23,7 +23,6 @@ public class EnvironmentPanel : DockPanel
     public override string Icon => EditorIcons.Sun;
 
     private readonly LightmapBakeService _bake = new();
-    private readonly LightmapBakeService.Settings _bakeSettings = new();
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -59,67 +58,65 @@ public class EnvironmentPanel : DockPanel
         Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Sun}  Lightmapping").Body(() =>
         {
             bool baking = _bake.IsBaking;
-            var s = _bakeSettings;
+            var s = scene.LightmapBake;
+            // The settings live on the scene, so each edit dirties it for the next save.
+            void Touch() => EditorSceneManager.IsDirty = true;
 
             Origami.Header(paper, $"{id}_h_res", "Resolution").Underline().Show();
 
             InspectorRow.Draw(paper, $"{id}_size", "Atlas Size", () =>
                 Origami.IntSlider(paper, $"{id}_size_v", s.AtlasSize,
-                    v => { if (!baking) s.AtlasSize = v; }, 256, 4096).Show());
+                    v => { if (!baking) { s.AtlasSize = v; Touch(); } }, 256, 4096).Show());
 
             InspectorRow.Draw(paper, $"{id}_tpu", "Texels / Unit", () =>
                 Origami.Slider(paper, $"{id}_tpu_v", s.TexelsPerUnit,
-                    v => { if (!baking) s.TexelsPerUnit = v; }, 1f, 100f).Format("F0").Show());
+                    v => { if (!baking) { s.TexelsPerUnit = v; Touch(); } }, 1f, 100f).Format("F0").Show());
 
             InspectorRow.Draw(paper, $"{id}_dil", "Padding (Dilate)", () =>
                 Origami.IntSlider(paper, $"{id}_dil_v", s.DilatePixels,
-                    v => { if (!baking) s.DilatePixels = v; }, 0, 16).Show());
+                    v => { if (!baking) { s.DilatePixels = v; Touch(); } }, 0, 16).Show());
 
             Origami.Header(paper, $"{id}_h_qual", "Quality").Underline().Show();
 
             InspectorRow.Draw(paper, $"{id}_bnc", "Bounces", () =>
                 Origami.IntSlider(paper, $"{id}_bnc_v", s.Bounces,
-                    v => { if (!baking) s.Bounces = v; }, 0, 8).Show());
+                    v => { if (!baking) { s.Bounces = v; Touch(); } }, 0, 8).Show());
 
             InspectorRow.Draw(paper, $"{id}_smp", "Indirect Samples", () =>
                 Origami.IntSlider(paper, $"{id}_smp_v", s.Samples,
-                    v => { if (!baking) s.Samples = v; }, 1, 1024).Show());
+                    v => { if (!baking) { s.Samples = v; Touch(); } }, 1, 1024).Show());
 
             InspectorRow.Draw(paper, $"{id}_psmp", "Probe Samples", () =>
                 Origami.IntSlider(paper, $"{id}_psmp_v", s.ProbeSamples,
-                    v => { if (!baking) s.ProbeSamples = v; }, 16, 2048).Show());
+                    v => { if (!baking) { s.ProbeSamples = v; Touch(); } }, 16, 2048).Show());
 
-            InspectorRow.Draw(paper, $"{id}_pt", "Path Tracer", () =>
-                Origami.EnumDropdown(paper, $"{id}_pt_v", s.PathTracer,
-                    v => { if (!baking) s.PathTracer = v; }).Show());
+            Origami.Checkbox(paper, $"{id}_cull", s.DoBackfaceCull,
+                    v => { if (!baking) { s.DoBackfaceCull = v; Touch(); } })
+                .LabelRight("Backface Cull (match Prowl rendering)").Show();
 
             Origami.Checkbox(paper, $"{id}_dn", s.Denoise,
-                    v => { if (!baking) s.Denoise = v; })
+                    v => { if (!baking) { s.Denoise = v; Touch(); } })
                 .LabelRight("Denoise").Show();
 
             if (s.Denoise)
-                InspectorRow.Draw(paper, $"{id}_dns", "Denoise Strength", () =>
-                    Origami.Slider(paper, $"{id}_dns_v", s.DenoiseStrength,
-                        v => { if (!baking) s.DenoiseStrength = v; }, 0.05f, 2f).Format("F2").Show());
+                InspectorRow.Draw(paper, $"{id}_dnr", "Denoise Radius", () =>
+                    Origami.IntSlider(paper, $"{id}_dnr_v", s.DenoiseRadius,
+                        v => { if (!baking) { s.DenoiseRadius = v; Touch(); } }, 1, 8).Show());
 
             Origami.Header(paper, $"{id}_h_env", "Environment").Underline().Show();
 
             Origami.Checkbox(paper, $"{id}_sky", s.BakeSkyLighting,
-                    v => { if (!baking) s.BakeSkyLighting = v; })
+                    v => { if (!baking) { s.BakeSkyLighting = v; Touch(); } })
                 .LabelRight("Bake Sky / Ambient as GI").Show();
 
             Origami.Header(paper, $"{id}_h_adv", "Advanced").Underline().Show();
 
-            Origami.Checkbox(paper, $"{id}_jit", s.JitterRayOrigin,
-                    v => { if (!baking) s.JitterRayOrigin = v; })
-                .LabelRight("Jitter Ray Origin (reduces seams)").Show();
-
             InspectorRow.Draw(paper, $"{id}_rr", "Russian Roulette", () =>
                 Origami.Slider(paper, $"{id}_rr_v", s.RussianRoulette,
-                    v => { if (!baking) s.RussianRoulette = v; }, 0f, 1f).Format("F2").Show());
+                    v => { if (!baking) { s.RussianRoulette = v; Touch(); } }, 0f, 1f).Format("F2").Show());
 
             Origami.Checkbox(paper, $"{id}_alb", s.IgnoreAlbedo,
-                    v => { if (!baking) s.IgnoreAlbedo = v; })
+                    v => { if (!baking) { s.IgnoreAlbedo = v; Touch(); } })
                 .LabelRight("Ignore Albedo (debug)").Show();
 
             paper.Box($"{id}_sp_btn").Height(6);
@@ -134,7 +131,7 @@ public class EnvironmentPanel : DockPanel
             else
             {
                 Origami.Button(paper, $"{id}_bake", $"{EditorIcons.Sun}  Bake Lightmaps",
-                    () => _bake.Start(scene, _bakeSettings)).Show();
+                    () => _bake.Start(scene, scene.LightmapBake)).Show();
 
                 if (LightmapBakeService.HasBakedData(scene))
                     Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear Baked Lighting",

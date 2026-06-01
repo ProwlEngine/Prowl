@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Prowl.Vector;
@@ -175,40 +176,33 @@ public static class ProbeTetrahedralizer
         return neighbours;
     }
 
-    // Orient3D: positive when d is below the plane of (a,b,c) in right-handed terms.
+    // Orient3D: positive when d is below the plane of (a,b,c) in right-handed terms. Delegates to the
+    // exact-sign predicate (same determinant, but robust), so winding decisions never mis-sign.
     private static double Orient3D(Double3 a, Double3 b, Double3 c, Double3 dp)
     {
-        Double3 ad = a - dp, bd = b - dp, cd = c - dp;
-        return ad.X * (bd.Y * cd.Z - bd.Z * cd.Y)
-             - ad.Y * (bd.X * cd.Z - bd.Z * cd.X)
-             + ad.Z * (bd.X * cd.Y - bd.Y * cd.X);
+        Span<double> sa = stackalloc double[] { a.X, a.Y, a.Z };
+        Span<double> sb = stackalloc double[] { b.X, b.Y, b.Z };
+        Span<double> sc = stackalloc double[] { c.X, c.Y, c.Z };
+        Span<double> sd = stackalloc double[] { dp.X, dp.Y, dp.Z };
+        return RobustPredicates.Orient3D(sa, sb, sc, sd);
     }
 
-    // InSphere: true if p lies strictly inside the circumsphere of (a,b,c,d). Uses the standard
-    // 4x4 lifted determinant, sign-corrected by the tetra orientation.
+    // True if p lies strictly inside the circumsphere of (a,b,c,d). Uses the exact-sign in-sphere
+    // predicate so cospherical / near-cospherical inputs (regular grids) decide consistently
+    // and the Bowyer-Watson cavity stays valid. A plain-double lifted determinant here mis-signed at
+    // grid coordinate magnitudes and collapsed the whole tetrahedralization to zero tets.
     private static bool InCircumsphere(Double3 a, Double3 b, Double3 c, Double3 d, Double3 p)
     {
         double orient = Orient3D(a, b, c, d);
-        if (System.Math.Abs(orient) < 1e-18) return false;
+        if (orient == 0.0) return false; // degenerate (flat) base tetrahedron
 
-        Double3 ap = a - p, bp = b - p, cp = c - p, dp = d - p;
-        double a2 = Dot(ap, ap), b2 = Dot(bp, bp), c2 = Dot(cp, cp), d2 = Dot(dp, dp);
-
-        // 4x4 determinant of [ap.x ap.y ap.z a2; ...] expanded.
-        double det =
-              a2 * Det3(bp, cp, dp)
-            - b2 * Det3(ap, cp, dp)
-            + c2 * Det3(ap, bp, dp)
-            - d2 * Det3(ap, bp, cp);
-
-        // Sign convention: with positive orientation, det > 0 means inside.
-        return orient > 0 ? det > 0 : det < 0;
+        Span<double> sa = stackalloc double[] { a.X, a.Y, a.Z };
+        Span<double> sb = stackalloc double[] { b.X, b.Y, b.Z };
+        Span<double> sc = stackalloc double[] { c.X, c.Y, c.Z };
+        Span<double> sd = stackalloc double[] { d.X, d.Y, d.Z };
+        Span<double> sp = stackalloc double[] { p.X, p.Y, p.Z };
+        double s = RobustPredicates.InSphere(sa, sb, sc, sd, sp);
+        // insphere is +ve when p is inside given a positive-orientation base; flip for negative.
+        return orient > 0 ? s > 0.0 : s < 0.0;
     }
-
-    private static double Det3(Double3 a, Double3 b, Double3 c)
-        => a.X * (b.Y * c.Z - b.Z * c.Y)
-         - a.Y * (b.X * c.Z - b.Z * c.X)
-         + a.Z * (b.X * c.Y - b.Y * c.X);
-
-    private static double Dot(Double3 a, Double3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 }

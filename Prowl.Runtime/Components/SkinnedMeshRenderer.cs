@@ -274,7 +274,8 @@ public class SkinnedMeshRenderer : MonoBehaviour
             PropertyState props = new();
             props.SetInt("_ObjectID", InstanceID);
             props.SetColor("_MainColor", MainColor);
-            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, Transform.Position);
+            Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
+            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
             if (_boneTexture != null)
             {
                 props.SetTexture("boneMatrixTexture", _boneTexture);

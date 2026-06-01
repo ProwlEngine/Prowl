@@ -8,8 +8,8 @@ namespace Prowl.Runtime.Rendering;
 /// <summary>
 /// Runtime light-probe sampler. Built from a baked set of probe positions + SH and a precomputed
 /// tetrahedralization (tetra vertex indices + per-face neighbour links, produced by the editor's
-/// bake). <see cref="SampleSH"/> locates the tetrahedron containing a world position by walking the
-/// neighbour graph, then barycentric-blends the four corner probes' SH — Unity's light-probe model.
+/// bake). <see cref="SampleSH"/> locates the tetrahedron containing a world position, then
+/// barycentric-blends the four corner probes' SH; points outside the hull fall back to a nearby blend.
 /// </summary>
 public sealed class LightProbeVolume
 {
@@ -38,41 +38,35 @@ public sealed class LightProbeVolume
     public SphericalHarmonicsL2 SampleSH(Float3 worldPos)
     {
         if (_sh.Length == 0) return default;
-        if (_tetCount == 0) return _sh[NearestProbe(worldPos)];
+        if (_tetCount == 0) return BlendNearest(worldPos);
 
-        int tet = (_lastTet >= 0 && _lastTet < _tetCount) ? _lastTet : 0;
-        // Bounded walk: hop across the most-negative barycentric face toward the containing tet.
-        for (int step = 0; step < _tetCount + 8; step++)
+        const float inside = -1e-4f; // small slack so a point on a shared face is "inside" both tets
+
+        // Frame coherence: a renderer is usually still inside the tet it sampled last frame.
+        if (_lastTet >= 0 && _lastTet < _tetCount &&
+            ComputeBarycentric(_lastTet, worldPos, out float lb0, out float lb1, out float lb2, out float lb3) &&
+            lb0 >= inside && lb1 >= inside && lb2 >= inside && lb3 >= inside)
+            return BlendTet(_lastTet, lb0, lb1, lb2, lb3);
+
+        // Find the tetrahedron containing the point by direct scan. A neighbour walk would be faster,
+        // but the Delaunay output of a near-regular probe grid contains zero-volume (coplanar) tets:
+        // the input degeneracies the tetrahedralizer's jitter breaks collapse back to flat tets on the
+        // real positions. Those corrupt a walk (it lands on one and stops), so we scan and let
+        // ComputeBarycentric reject the degenerate ones. O(tets) per sample, fine for probe-count sets.
+        for (int t = 0; t < _tetCount; t++)
         {
-            Barycentric(tet, worldPos, out float b0, out float b1, out float b2, out float b3);
-
-            int face = -1;
-            float worst = -1e-5f;
-            if (b0 < worst) { worst = b0; face = 0; }
-            if (b1 < worst) { worst = b1; face = 1; }
-            if (b2 < worst) { worst = b2; face = 2; }
-            if (b3 < worst) { worst = b3; face = 3; }
-
-            if (face == -1)
+            if (ComputeBarycentric(t, worldPos, out float b0, out float b1, out float b2, out float b3) &&
+                b0 >= inside && b1 >= inside && b2 >= inside && b3 >= inside)
             {
-                _lastTet = tet;
-                return BlendTet(tet, b0, b1, b2, b3);
+                _lastTet = t;
+                return BlendTet(t, b0, b1, b2, b3);
             }
-
-            int nb = _neighbours[tet * 4 + face];
-            if (nb < 0)
-            {
-                // Outside the hull through this face: clamp the barycentrics to this boundary tet.
-                _lastTet = tet;
-                if (b0 < 0) b0 = 0; if (b1 < 0) b1 = 0; if (b2 < 0) b2 = 0; if (b3 < 0) b3 = 0;
-                float s = b0 + b1 + b2 + b3;
-                if (s <= 1e-12f) return _sh[NearestProbe(worldPos)];
-                float inv = 1f / s;
-                return BlendTet(tet, b0 * inv, b1 * inv, b2 * inv, b3 * inv);
-            }
-            tet = nb;
         }
-        return _sh[NearestProbe(worldPos)];
+
+        // Outside the probe hull: smooth inverse-distance blend of the nearest probes. (Clamping to a
+        // single boundary tet instead is continuous at the hull but flips between faces as an object
+        // moves just outside it - worse for objects sitting next to, but outside, the probe volume.)
+        return BlendNearest(worldPos);
     }
 
     private SphericalHarmonicsL2 BlendTet(int tet, float b0, float b1, float b2, float b3)
@@ -86,8 +80,14 @@ public sealed class LightProbeVolume
         return SphericalHarmonicsL2.Blend(probes, w);
     }
 
-    /// <summary>Barycentric coords of <paramref name="p"/> in tetra <paramref name="tet"/> (b0 = corner 0, etc.).</summary>
-    private void Barycentric(int tet, Float3 p, out float b0, out float b1, out float b2, out float b3)
+    /// <summary>
+    /// Barycentric coords of <paramref name="p"/> in tetra <paramref name="tet"/> (b0 = corner 0, etc.).
+    /// Returns false only when the tetrahedron is degenerate (near-zero volume) - the grid
+    /// tetrahedralization can emit zero-volume slivers on the real positions - so the caller skips it.
+    /// The coordinates are output even when <paramref name="p"/> is outside the tet (some negative), so
+    /// the caller can both test containment and find the nearest boundary tet for extrapolation.
+    /// </summary>
+    private bool ComputeBarycentric(int tet, Float3 p, out float b0, out float b1, out float b2, out float b3)
     {
         int o = tet * 4;
         Float3 a = _positions[_tetra[o]];
@@ -96,14 +96,16 @@ public sealed class LightProbeVolume
         Float3 v3 = _positions[_tetra[o + 3]] - a;
         Float3 vp = p - a;
 
-        // Solve [v1 v2 v3] * (b1,b2,b3)^T = vp  via Cramer's rule.
+        b0 = b1 = b2 = b3 = 0f;
+        // Solve [v1 v2 v3] * (b1,b2,b3)^T = vp via Cramer's rule.
         float d = Det(v1, v2, v3);
-        if (System.Math.Abs(d) < 1e-20f) { b0 = 1; b1 = b2 = b3 = 0; return; }
+        if (System.Math.Abs(d) < 1e-12f) return false; // degenerate / coplanar tet
         float inv = 1f / d;
         b1 = Det(vp, v2, v3) * inv;
         b2 = Det(v1, vp, v3) * inv;
         b3 = Det(v1, v2, vp) * inv;
         b0 = 1f - b1 - b2 - b3;
+        return true;
     }
 
     private static float Det(Float3 a, Float3 b, Float3 c)
@@ -111,15 +113,45 @@ public sealed class LightProbeVolume
                  - a.Y * (b.X * c.Z - b.Z * c.X)
                  + a.Z * (b.X * c.Y - b.Y * c.X));
 
-    private int NearestProbe(Float3 p)
+    // Smooth fallback for points the tetrahedral walk can't serve: too few probes to tetrahedralize,
+    // a layout the tetrahedralizer degenerated on (e.g. a near-regular grid), or a point outside the
+    // hull. Inverse-distance-weighted blend of the nearest few probes, so the result still
+    // interpolates between neighbours instead of snapping to a single probe.
+    private const int FallbackBlendCount = 4;
+
+    private SphericalHarmonicsL2 BlendNearest(Float3 p)
     {
-        int best = 0; float bestD = float.MaxValue;
-        for (int i = 0; i < _positions.Length; i++)
+        int count = _positions.Length;
+        if (count == 0) return default;
+
+        int k = System.Math.Min(FallbackBlendCount, count);
+        System.Span<int> idx = stackalloc int[FallbackBlendCount];
+        System.Span<float> dist2 = stackalloc float[FallbackBlendCount];
+        for (int j = 0; j < k; j++) { idx[j] = -1; dist2[j] = float.MaxValue; }
+
+        // Keep the k smallest squared distances via insertion into the small sorted buffer.
+        for (int i = 0; i < count; i++)
         {
             Float3 d = _positions[i] - p;
             float dsq = (float)(d.X * d.X + d.Y * d.Y + d.Z * d.Z);
-            if (dsq < bestD) { bestD = dsq; best = i; }
+            if (dsq >= dist2[k - 1]) continue;
+            int j = k - 1;
+            while (j > 0 && dist2[j - 1] > dsq) { dist2[j] = dist2[j - 1]; idx[j] = idx[j - 1]; j--; }
+            dist2[j] = dsq; idx[j] = i;
         }
-        return best;
+
+        System.Span<SphericalHarmonicsL2> probes = stackalloc SphericalHarmonicsL2[FallbackBlendCount];
+        System.Span<float> w = stackalloc float[FallbackBlendCount];
+        float wsum = 0f;
+        for (int j = 0; j < k; j++)
+        {
+            probes[j] = _sh[idx[j]];
+            w[j] = 1f / (dist2[j] + 1e-6f); // inverse-distance-squared; nearest dominates, neighbours add the gradient
+            wsum += w[j];
+        }
+        float inv = wsum > 0f ? 1f / wsum : 0f;
+        for (int j = 0; j < k; j++) w[j] *= inv; // normalize: Blend is a plain weighted sum
+
+        return SphericalHarmonicsL2.Blend(probes.Slice(0, k), w.Slice(0, k));
     }
 }

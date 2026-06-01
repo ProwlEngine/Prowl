@@ -199,6 +199,38 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public BakedLightingData BakedLighting = new();
 
+    /// <summary>
+    /// Per-scene lightmapper configuration, edited in the editor's Environment panel and consumed by
+    /// the bake. Persisted with the scene (it's a public field) so a bake's settings survive editor
+    /// reloads.
+    /// </summary>
+    public sealed class LightmapBakeSettings
+    {
+        // Atlas / resolution
+        public int AtlasSize = 1024;
+        public float TexelsPerUnit = 20f;
+        public int DilatePixels = 2;          // edge dilation to stop bilinear bleed at seams
+
+        // Quality
+        public int Bounces = 2;
+        public int Samples = 64;              // progressive indirect iterations before finalize
+        public int ProbeSamples = 256;
+        public bool DoBackfaceCull = false;   // cull back faces on all bake rays (matches Prowl's backface-culled rendering)
+        public float RussianRoulette = 0f;    // 0 = off
+
+        // Edge-avoiding denoiser (runs once at finalize); geometry-guided only.
+        public bool Denoise = false;
+        public int DenoiseRadius = 5;         // a-trous pass count; each step ~doubles the smoothing reach (~2^N texels)
+
+        // Feed the scene's ambient colour in as ray-miss (sky) radiance.
+        public bool BakeSkyLighting = false;
+
+        // Debug: bake every surface as a white Lambertian (isolates light/GI from albedo).
+        public bool IgnoreAlbedo = false;
+    }
+
+    public LightmapBakeSettings LightmapBake = new();
+
     [NonSerialized] private LightProbeVolume? _probeVolume;
 
     /// <summary>Runtime probe sampler built from <see cref="BakedLighting"/> (lazy). Null when there are no baked probes.</summary>

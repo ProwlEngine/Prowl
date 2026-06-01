@@ -54,7 +54,8 @@ public class MeshRenderer : MonoBehaviour
 
             PropertyState props = new();
             props.SetInt("_ObjectID", InstanceID);
-            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, Transform.Position);
+            Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
+            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
 
             renderables.Add(new MeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,
