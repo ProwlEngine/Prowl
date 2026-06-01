@@ -38,9 +38,9 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
     /// <summary>Blur radius applied to reflections. Higher = softer reflections.</summary>
     public float BlurRadius = 1.0f;
 
-    /// <summary>Resolution scale for ray marching. 0.5 = half resolution (better performance).</summary>
-    [Range(0.1f, 1.0f)]
-    public float ResolutionScale = 1.0f;
+    /// <summary>Resolution the rays are marched / resolved / blurred at. Lower = faster; the
+    /// reflection is bilinearly upsampled when composited over the full-resolution scene.</summary>
+    public EffectResolution Resolution = EffectResolution.Full;
 
     // Private fields
     private Material _mat;
@@ -52,10 +52,10 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         // Lazy initialize material
         _mat ??= new Material(Shader.LoadDefault(DefaultShader.SSR));
 
-        // Calculate scaled resolution
-        ResolutionScale = Maths.Clamp(ResolutionScale, 0.1f, 1.0f);
-        int width = (int)(context.Width * ResolutionScale);
-        int height = (int)(context.Height * ResolutionScale);
+        // Calculate scaled resolution for the march/resolve/blur passes (composite is full-res)
+        float scale = Resolution.Scale();
+        int width = Maths.Max(1, (int)(context.Width * scale));
+        int height = Maths.Max(1, (int)(context.Height * scale));
 
         // Allocate temporary render textures
         RenderTexture reflectionDataRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Short4]);

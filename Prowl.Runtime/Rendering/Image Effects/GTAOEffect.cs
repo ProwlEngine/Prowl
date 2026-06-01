@@ -9,6 +9,25 @@ using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime.Rendering;
 
+/// <summary>Render-resolution scale shared by screen-space effects that can run at reduced
+/// resolution and upsample (GTAO, SSR).</summary>
+public enum EffectResolution
+{
+    Full,
+    Half,
+    Quarter
+}
+
+internal static class EffectResolutionExtensions
+{
+    public static float Scale(this EffectResolution res) => res switch
+    {
+        EffectResolution.Half => 0.5f,
+        EffectResolution.Quarter => 0.25f,
+        _ => 1.0f,
+    };
+}
+
 /// <summary>
 /// Ground-Truth Ambient Occlusion (GTAO) effect for realistic ambient occlusion.
 /// Based on "Practical Realtime Strategies for Accurate Indirect Occlusion" by Activision.
@@ -35,8 +54,9 @@ public sealed class GTAOEffect : ImageEffect
     /// <summary>Blur radius for denoising. 0 = no blur (noisy but sharp), higher = smoother but less detailed.</summary>
     public float BlurRadius = 1.0f;
 
-    /// <summary>Resolution scale for AO calculation. 1.0 = full resolution, 0.5 = half resolution (better performance).</summary>
-    public float ResolutionScale = 1.0f;
+    /// <summary>Resolution the AO is computed at. Lower = faster; the result is bilinearly upsampled
+    /// at composite so the scene image itself stays full resolution.</summary>
+    public EffectResolution Resolution = EffectResolution.Full;
 
     // Private fields
     private Material _mat;
@@ -48,9 +68,10 @@ public sealed class GTAOEffect : ImageEffect
         // Lazy initialize material
         _mat ??= new Material(Shader.LoadDefault(DefaultShader.GTAO));
 
-        // Calculate scaled resolution
-        int width = (int)(context.Width * ResolutionScale);
-        int height = (int)(context.Height * ResolutionScale);
+        // Calculate scaled resolution for the AO + blur passes (composite stays full-res below)
+        float scale = Resolution.Scale();
+        int width = Maths.Max(1, (int)(context.Width * scale));
+        int height = Maths.Max(1, (int)(context.Height * scale));
 
         // Allocate temporary render textures
         RenderTexture aoRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
@@ -87,10 +108,11 @@ public sealed class GTAOEffect : ImageEffect
             cmd.Blit(blurTempRT, aoRT, _mat, 1);
         }
 
-        // Pass 2: Composite - Apply AO to scene
+        // Pass 2: Composite - Apply AO to scene. Runs at FULL resolution so the scene color is
+        // sampled crisp; the (possibly lower-res) AO is bilinearly upsampled via _AOTex.
         _mat.SetTexture("_AOTex", aoRT.MainTexture);
         _mat.SetFloat("_Intensity", Intensity);
-        var temp = RenderTexture.GetTemporaryRT(width, height, false, [context.SceneColor.MainTexture.ImageFormat]);
+        var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
         cmd.Blit(context.SceneColor, temp, _mat, 2);
         cmd.Blit(temp, context.SceneColor, null, 0);
         Graphics.Submit(cmd);
