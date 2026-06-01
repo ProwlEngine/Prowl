@@ -26,6 +26,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
     // Appearance Settings
 
     /// <summary>Overall intensity of reflections. 0 = no reflections, 1 = full strength.</summary>
+    [Range(0.0f, 1.0f)]
     public float Intensity = 1.0f;
 
     /// <summary>How much reflections fade near screen edges. Higher = sharper fade.</summary>
@@ -38,6 +39,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
     public float BlurRadius = 1.0f;
 
     /// <summary>Resolution scale for ray marching. 0.5 = half resolution (better performance).</summary>
+    [Range(0.1f, 1.0f)]
     public float ResolutionScale = 1.0f;
 
     // Private fields
@@ -51,6 +53,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         _mat ??= new Material(Shader.LoadDefault(DefaultShader.SSR));
 
         // Calculate scaled resolution
+        ResolutionScale = Maths.Clamp(ResolutionScale, 0.1f, 1.0f);
         int width = (int)(context.Width * ResolutionScale);
         int height = (int)(context.Height * ResolutionScale);
 
