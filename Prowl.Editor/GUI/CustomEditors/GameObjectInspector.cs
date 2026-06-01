@@ -81,7 +81,17 @@ public static class GameObjectInspector
                 .Show();
 
             Origami.Checkbox(paper, "gi_static", go.IsStatic,
-                v => { Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x); go.IsStatic = v; })
+                v =>
+                {
+                    Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x);
+                    go.IsStatic = v;
+
+                    // Offer to cascade the change to the whole subtree.
+                    if (go.ChildCount > 0)
+                        Origami.Confirm("Apply to Children?",
+                            $"Also set Static = {v} on all child objects of \"{go.Name}\"?",
+                            () => ApplyStaticToChildren(go, v));
+                })
                 .LabelRight(Loc.Get("inspector.static")).Show();
         }
 
@@ -137,6 +147,17 @@ public static class GameObjectInspector
                         }
                     }, layerNames.ToArray())
                     .Show());
+        }
+    }
+
+    /// <summary>Set <see cref="GameObject.IsStatic"/> on every descendant of <paramref name="go"/> (recorded for undo).</summary>
+    private static void ApplyStaticToChildren(GameObject go, bool value)
+    {
+        foreach (var child in go.GetChildrenDeep())
+        {
+            if (child.IsStatic == value) continue;
+            Undo.RecordGameObjectChange(child, "Toggle Static", child.IsStatic, value, (g, x) => g.IsStatic = x);
+            child.IsStatic = value;
         }
     }
 
