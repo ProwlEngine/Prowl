@@ -58,6 +58,12 @@ Pass "CalculateGTAO"
             vec3 sHorizonV = getViewPos(sTexCoord, sDepth) - viewPos;
 
             float sLenV = sdot(sHorizonV);
+            // Reject samples that reconstruct to essentially the same view position as the center.
+            // On large flat / distant surfaces, depth-buffer precision makes neighbours collapse
+            // together; the resulting near-zero horizon vector is pure quantization noise, not real
+            // occlusion. Scale the threshold with view depth since depth precision worsens with distance.
+            float minLen = 0.0015 * abs(viewPos.z);
+            if (sLenV < minLen * minLen) return;
             float sNormV = inversesqrt(sLenV);
 
             float sHorizonCos = dot(sHorizonV, viewDir) * sNormV;
@@ -80,6 +86,10 @@ Pass "CalculateGTAO"
 
             float radius = _Radius * saturate(0.25 + viewDistance * rcp(64.0));
             vec2 sRadius = rSampleCount * radius * norm * diagonal2(PROWL_MATRIX_P);
+            // Floor the per-sample step so consecutive samples are at least ~1.5 texels apart in the
+            // (full-res) depth buffer. Without this, distant/flat surfaces sample sub-texel and the
+            // horizon estimate degenerates into depth-precision noise.
+            sRadius = max(sRadius, vec2(1.5) / _ScreenParams.xy);
             vec2 falloff = sqr(radius * vec2(1.0, 4.0));
 
             float visibility = 0.0;
