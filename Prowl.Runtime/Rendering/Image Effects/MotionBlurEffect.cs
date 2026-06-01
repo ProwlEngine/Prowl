@@ -17,13 +17,11 @@ namespace Prowl.Runtime.Rendering;
 /// and object motion blur. Uses depth-aware weighting to reduce background
 /// bleeding through foreground objects.
 ///
-/// Requires DepthTextureMode.MotionVectors to be enabled (automatically done
-/// if TAAEffect is active, or can be set manually on the camera).
+/// Motion vectors come from the unified prepass (always produced).
 /// </summary>
 public sealed class MotionBlurEffect : ImageEffect
 {
     public override RenderStage Stage => RenderStage.PostProcess;
-    public override DepthTextureMode RequiredDepthTextureMode => DepthTextureMode.MotionVectors;
 
     /// <summary>Blur intensity multiplier. 1.0 = physically correct, higher = exaggerated.</summary>
     public float Intensity = 1.0f;
@@ -46,7 +44,7 @@ public sealed class MotionBlurEffect : ImageEffect
         _mat.SetFloat("_MaxBlurRadius", Math.Max(1.0f, MaxBlurRadius));
 
         if (context.MotionVectors != null)
-            _mat.SetTexture("_MotionVectorsTex", context.MotionVectors.MainTexture);
+            _mat.SetTexture("_MotionVectorsTex", context.MotionVectors);
         _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
 
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false,

@@ -162,11 +162,6 @@ public class DefaultRenderPipeline : RenderPipeline
         // (user disabled them, removed them from Camera.Effects, or hot-swapped).
         camera.UpdateImageEffectLifecycle(allEffects);
 
-        // Gather DepthTextureMode requirements from all active effects
-        DepthTextureMode depthMode = DepthTextureMode.None;
-        foreach (var effect in allEffects)
-            depthMode |= effect.RequiredDepthTextureMode;
-
         RenderTexture target = camera.UpdateRenderData();
 
         // =======================================================
@@ -176,7 +171,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // =======================================================
         // 2. Camera snapshot and global uniforms
-        CameraSnapshot css = new(camera, depthMode);
+        CameraSnapshot css = new(camera);
         SetupGlobalUniforms(css);
 
         // =======================================================
@@ -254,31 +249,38 @@ public class DefaultRenderPipeline : RenderPipeline
             isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b,
         ]);
 
-        // Depth + normals prepass RT
-        RenderTexture depthPrepass = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
+        // Unified prepass RT. One MRT pass writes everything depth-based effects need:
+        //   depth attachment      = scene depth
+        //   color 0 (Color4b)     = view-space normals
+        //   color 1 (Short4)      = motion vectors (.rg) + roughness (.b) + metallic (.a)
+        RenderTexture prepass = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
             TextureImageFormat.Color4b,
+            TextureImageFormat.Short4,
         ]);
 
         // ─── Pre-pass + opaque CB ───
         var mainCmd = Graphics.GetCommandBuffer("ColorPass");
 
-        // Depth+normals
-        mainCmd.SetRenderTarget(depthPrepass.frameBuffer);
-        mainCmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0.5f, 0.5f, 1.0f, 1.0f));
-        DrawRenderables(mainCmd, renderables, "LightMode", "DepthNormals", new ViewerData(css), culledRenderableIndices, false);
+        // Single MRT prepass: depth + view-space normals + motion + roughness/metallic.
+        // Cleared to zero so sky/background reads zero motion (and the unwritten normal/material
+        // is only ever sampled by effects that gate on depth < 1, so its value there is moot).
+        // updatePreviousMatrices = true so prowl_PrevObjectToWorld is bound per object for motion.
+        mainCmd.SetRenderTarget(prepass.frameBuffer);
+        mainCmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0, 0, 0, 0));
+        DrawRenderables(mainCmd, renderables, "LightMode", "Prepass", new ViewerData(css), culledRenderableIndices, true);
 
-        // Expose depth + normals as globals AFTER the depth-normals draws have been
-        // encoded into mainCmd. Using cmd.SetGlobalTexture (not the static directly)
-        // means the executor mutates the global at the right point in submit order
-        // setting the static here would expose depthPrepass.InternalDepth as a sampler
-        // input while the same texture is still the bound FBO depth attachment for
-        // the depth-normals draws above (GL undefined behavior).
-        mainCmd.SetGlobalTexture("_CameraDepthTexture", depthPrepass.InternalDepth);
-        mainCmd.SetGlobalTexture("_CameraNormalsTexture", depthPrepass.InternalTextures[0]);
+        // Expose depth + normals + motion as globals AFTER the prepass draws have been encoded
+        // into mainCmd. Using cmd.SetGlobalTexture (not the static directly) means the executor
+        // mutates the global at the right point in submit order setting the static here would
+        // expose the textures as sampler inputs while they are still bound FBO attachments for
+        // the prepass draws above (GL undefined behavior).
+        mainCmd.SetGlobalTexture("_CameraDepthTexture", prepass.InternalDepth);
+        mainCmd.SetGlobalTexture("_CameraNormalsTexture", prepass.InternalTextures[0]);
+        mainCmd.SetGlobalTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
 
         // Copy depth from prepass into colorRT so the opaque pass can ZTest LEqual against it.
-        mainCmd.SetRenderTargets(colorRT.frameBuffer, depthPrepass.frameBuffer);
-        mainCmd.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
+        mainCmd.SetRenderTargets(colorRT.frameBuffer, prepass.frameBuffer);
+        mainCmd.BlitFramebuffer(0, 0, prepass.Width, prepass.Height,
                                  0, 0, colorRT.Width, colorRT.Height,
                                  ClearFlags.Depth, BlitFilter.Nearest);
 
@@ -326,64 +328,9 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderStats.BeginColorPass();
         DrawRenderables(mainCmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
 
-        // Motion vectors pass
-        //
-        // GlobalUniforms is a single GPU UBO. Every "AssignCameraMatrices + Upload"
-        // pair changes that one buffer's contents synchronously. If we encoded the
-        // motion-vectors draws into mainCmd along with the prior opaques, ALL of
-        // them would execute against whatever the GPU buffer holds at mainCmd's
-        // single Submit point i.e. the LAST matrices we wrote, which is the
-        // restored jittered set. Motion vectors would silently read jittered VP.
-        //
-        // Fix: flush mainCmd to GL BEFORE we change matrices, do the matrix swap
-        // (which uploads the new values to the now-static GPU buffer), then start
-        // a fresh CB for the motion vectors draws. Same dance on the way back.
-        RenderTexture motionVectorsRT = null;
-        if (css.DepthTextureMode.HasFlag(DepthTextureMode.MotionVectors))
-        {
-            motionVectorsRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-                TextureImageFormat.Short2,
-            ]);
-
-            mainCmd.SetRenderTargets(motionVectorsRT.frameBuffer, depthPrepass.frameBuffer);
-            mainCmd.BlitFramebuffer(0, 0, depthPrepass.Width, depthPrepass.Height,
-                                    0, 0, motionVectorsRT.Width, motionVectorsRT.Height,
-                                    ClearFlags.Depth, BlitFilter.Nearest);
-
-            // Flush the opaque pass with the current (jittered) matrices in the UBO
-            // before we overwrite them with unjittered values.
-            Graphics.Submit(mainCmd);
-
-            Float4x4 prevVP = css.HasPreviousViewProj
-                ? css.PreviousViewProj
-                : css.NonJitteredProjection * css.View;
-
-            AssignCameraMatrices(css.View, css.NonJitteredProjection);
-            GlobalUniforms.SetPrevViewProj(prevVP);
-            GlobalUniforms.Upload();
-
-            // New CB for the motion vectors draws, which will run against unjittered.
-            mainCmd = Graphics.GetCommandBuffer("MotionVectors");
-            mainCmd.SetRenderTarget(motionVectorsRT.frameBuffer);
-            mainCmd.SetViewport(0, 0, (uint)motionVectorsRT.Width, (uint)motionVectorsRT.Height);
-            mainCmd.ClearRenderTarget(ClearFlags.Color, new Color(0, 0, 0, 0));
-
-            DrawRenderables(mainCmd, renderables, "LightMode", "MotionVectors", new ViewerData(css), culledRenderableIndices, true);
-
-            // Flush motion vectors before restoring jittered matrices for subsequent
-            // passes (transparents, image effects).
-            Graphics.Submit(mainCmd);
-
-            PropertyState.SetGlobalTexture("_CameraMotionVectorsTexture", motionVectorsRT.MainTexture);
-
-            AssignCameraMatrices(css.View, css.Projection);
-
-            mainCmd = Graphics.GetCommandBuffer("PostMotionVectors");
-            mainCmd.SetRenderTarget(colorRT.frameBuffer);
-            mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
-        }
-
-        // Submit so image effects see all the rendering above.
+        // Submit so image effects see all the rendering above. Motion vectors were already
+        // produced jitter-free in the unified prepass (via PROWL_MATRIX_VP_NONJITTERED), so no
+        // separate pass or mid-frame matrix swap is needed here.
         Graphics.Submit(mainCmd);
 
         // ─── AfterOpaques image effects ───
@@ -393,8 +340,8 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             var afterContext = new RenderContext
             {
-                DepthNormals = depthPrepass,
-                MotionVectors = motionVectorsRT,
+                DepthNormals = prepass,
+                MotionVectors = prepass.InternalTextures[1],
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
@@ -421,8 +368,8 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             var postContext = new RenderContext
             {
-                DepthNormals = depthPrepass,
-                MotionVectors = motionVectorsRT,
+                DepthNormals = prepass,
+                MotionVectors = prepass.InternalTextures[1],
                 SceneColor = colorRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
@@ -465,10 +412,8 @@ public class DefaultRenderPipeline : RenderPipeline
             effect.OnPostRender(camera);
 
         // Cleanup
-        RenderTexture.ReleaseTemporaryRT(depthPrepass);
+        RenderTexture.ReleaseTemporaryRT(prepass);
         RenderTexture.ReleaseTemporaryRT(colorRT);
-        if (motionVectorsRT != null)
-            RenderTexture.ReleaseTemporaryRT(motionVectorsRT);
     }
 
     private static void UploadFogUniforms(Scene scene)

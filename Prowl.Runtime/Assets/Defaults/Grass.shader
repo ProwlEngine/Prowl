@@ -192,10 +192,11 @@ Pass "Grass"
 	ENDGLSL
 }
 
-Pass "GrassDepthNormals"
+Pass "GrassPrepass"
 {
-    Tags { "LightMode" = "DepthNormals" }
+    Tags { "LightMode" = "Prepass" }
     Cull Off
+    ZWrite On
 
 	GLSLPROGRAM
 
@@ -294,6 +295,7 @@ Pass "GrassDepthNormals"
             #include "ProwlCG"
 
 			layout (location = 0) out vec4 normalOut;
+			layout (location = 1) out vec4 motionRM;
             in vec3 vNormal;
             in vec2 texCoord0;
 
@@ -308,6 +310,10 @@ Pass "GrassDepthNormals"
 
                 vec3 n = normalize(vNormal) * (gl_FrontFacing ? 1.0 : -1.0);
                 normalOut = EncodeViewNormal(n);
+
+                // Grass is procedurally wind-animated with no stable previous position, so motion
+                // stays zero (it was absent from the motion buffer before). Diffuse: roughness 1, metallic 0.
+                motionRM = vec4(0.0, 0.0, 1.0, 0.0);
 			}
 		}
 	ENDGLSL

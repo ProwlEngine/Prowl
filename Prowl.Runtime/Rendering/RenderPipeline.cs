@@ -136,7 +136,7 @@ public abstract class RenderPipeline : EngineObject
         return s_blitMaterial!;
     }
 
-    public struct CameraSnapshot(Camera camera, DepthTextureMode depthTextureMode)
+    public struct CameraSnapshot(Camera camera)
     {
         public Scene Scene = camera.Scene;
 
@@ -158,7 +158,6 @@ public abstract class RenderPipeline : EngineObject
         public Float4x4 PreviousViewProj = camera.PreviousViewProjectionMatrix;
         public bool HasPreviousViewProj = camera.HasPreviousViewProjectionMatrix;
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
-        public DepthTextureMode DepthTextureMode = depthTextureMode;
     }
 
     public HashSet<int> ActiveObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }
@@ -342,7 +341,15 @@ public abstract class RenderPipeline : EngineObject
         // Set View Rect
         //buffer.SetViewports((int)(camera.Viewrect.x * target.Width), (int)(camera.Viewrect.y * target.Height), (int)(camera.Viewrect.width * target.Width), (int)(camera.Viewrect.height * target.Height), 0, 1000);
 
-        GlobalUniforms.SetPrevViewProj(css.PreviousViewProj);
+        // Previous-frame VP for motion vectors (jitter-free). Fall back to the current
+        // non-jittered VP on the first frame so motion reads zero instead of garbage.
+        GlobalUniforms.SetPrevViewProj(css.HasPreviousViewProj
+            ? css.PreviousViewProj
+            : css.NonJitteredProjection * css.View);
+
+        // Current-frame VP without TAA jitter, so the prepass can compute motion vectors
+        // jitter-free while still rasterizing with the jittered projection.
+        GlobalUniforms.SetMatrixVPNonJittered(css.NonJitteredProjection * css.View);
 
         // Setup Default Uniforms for this frame
         // Camera

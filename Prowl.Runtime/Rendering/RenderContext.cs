@@ -14,11 +14,13 @@ namespace Prowl.Runtime.Rendering;
 /// </summary>
 public sealed class RenderContext : IDisposable
 {
-    /// <summary>Depth + normals from the pre-pass. InternalDepth = depth, InternalTextures[0] = view-space normals.</summary>
+    /// <summary>Unified prepass. InternalDepth = depth, InternalTextures[0] = view-space normals,
+    /// InternalTextures[1] = motion (.rg) + roughness (.b) + metallic (.a).</summary>
     public RenderTexture DepthNormals { get; set; }
 
-    /// <summary>Per-pixel screen-space motion vectors (RG16F). Null when DepthTextureMode.MotionVectors is not set.</summary>
-    public RenderTexture MotionVectors { get; set; }
+    /// <summary>Per-pixel screen-space motion vectors in .rg (roughness/metallic packed in .ba).
+    /// This is attachment 1 of the unified prepass and is always produced.</summary>
+    public Texture2D MotionVectors { get; set; }
 
     /// <summary>The scene color buffer (forward-rendered opaques + skybox).</summary>
     public RenderTexture SceneColor { get; set; }

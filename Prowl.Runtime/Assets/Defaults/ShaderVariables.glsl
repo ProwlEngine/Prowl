@@ -19,6 +19,7 @@ layout(std140) uniform GlobalUniforms
     mat4 prowl_PrevViewProj;
     mat4 prowl_MatIP;
     mat4 prowl_MatIVP;
+    mat4 prowl_MatVP_NonJittered;
 
     // Camera parameters
     vec3 _WorldSpaceCameraPos;
@@ -49,6 +50,7 @@ uniform int _ObjectID;
 #define PROWL_MATRIX_VP prowl_MatVP
 #define PROWL_MATRIX_I_P prowl_MatIP
 #define PROWL_MATRIX_I_VP prowl_MatIVP
+#define PROWL_MATRIX_VP_NONJITTERED prowl_MatVP_NonJittered
 #define PROWL_MATRIX_M prowl_ObjectToWorld
 #define PROWL_MATRIX_M_PREVIOUS prowl_PrevObjectToWorld
 

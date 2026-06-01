@@ -123,10 +123,11 @@ Pass "Standard"
 	ENDGLSL
 }
 
-Pass "DepthNormals"
+Pass "Prepass"
 {
-    Tags { "LightMode" = "DepthNormals" }
+    Tags { "LightMode" = "Prepass" }
     Cull Back
+    ZWrite On
 
 	GLSLPROGRAM
 
@@ -139,13 +140,15 @@ Pass "DepthNormals"
 			out vec3 vTangent;
 			out vec3 vBitangent;
 			out vec2 texCoord0;
+			out vec4 vCurrClipNJ;
+			out vec4 vPrevClip;
 
 			uniform vec2 _Tiling;
 			uniform vec2 _Offset;
 
 			void main()
 			{
-				gl_Position = TransformClip(vertexPosition);
+				gl_Position = TransformClip(vertexPosition); // jittered, for raster + depth
 				vNormal = TransformDirection(vertexNormal);
 #ifdef HAS_TANGENTS
 				vTangent = TransformDirection(vertexTangent.xyz);
@@ -156,6 +159,12 @@ Pass "DepthNormals"
 				}
 #endif
 				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
+
+				// Jitter-free current + previous clip positions for motion vectors.
+				vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
+				vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * worldPos;
+				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
+				vPrevClip = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
 			}
 		}
 
@@ -164,14 +173,18 @@ Pass "DepthNormals"
             #include "ProwlCG"
 
 			layout (location = 0) out vec4 normalOut;
+			layout (location = 1) out vec4 motionRM;
 
 			in vec3 vNormal;
 			in vec3 vTangent;
 			in vec3 vBitangent;
 			in vec2 texCoord0;
+			in vec4 vCurrClipNJ;
+			in vec4 vPrevClip;
 
 			uniform sampler2D _NormalTex;
 			uniform sampler2D _MainTex;
+			uniform sampler2D _SurfaceTex;
 			uniform vec4 _MainColor;
 			uniform float _AlphaCutoff;
 
@@ -186,77 +199,15 @@ Pass "DepthNormals"
 
                 vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
 				normalOut = EncodeViewNormal(worldNormal);
+
+				// Motion vectors (jitter-free) + packed roughness/metallic (_SurfaceTex G/B).
+				vec2 currNDC = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;
+				vec2 prevNDC = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;
+				vec4 surface = texture(_SurfaceTex, texCoord0);
+				motionRM = vec4(currNDC - prevNDC, surface.g, surface.b);
 			}
 		}
 	ENDGLSL
-}
-
-Pass "MotionVectors"
-{
-    Tags { "LightMode" = "MotionVectors" }
-
-    Blend Off
-    Cull Back
-    ZTest LEqual
-    ZWrite Off
-
-    GLSLPROGRAM
-
-        Vertex
-        {
-            #include "ProwlCG"
-            #include "VertexAttributes"
-
-            out vec4 vClipPos;
-            out vec4 vPrevClipPos;
-            out vec2 texCoord0;
-
-            uniform vec2 _Tiling;
-            uniform vec2 _Offset;
-
-            void main()
-            {
-                vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
-                vClipPos = PROWL_MATRIX_VP * worldPos;
-                gl_Position = vClipPos;
-
-                vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
-                vPrevClipPos = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
-
-                texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
-            }
-        }
-
-        Fragment
-        {
-            #include "ProwlCG"
-
-            layout(location = 0) out vec4 OutputColor;
-
-            in vec4 vClipPos;
-            in vec4 vPrevClipPos;
-            in vec2 texCoord0;
-
-            uniform sampler2D _MainTex;
-            uniform vec4 _MainColor;
-            uniform float _AlphaCutoff;
-
-            void main()
-            {
-                if (_AlphaCutoff > 0.0)
-                {
-                    float alpha = texture(_MainTex, texCoord0).a * _MainColor.a;
-                    if (alpha < _AlphaCutoff) discard;
-                }
-
-                vec2 currentNDC = (vClipPos.xy / vClipPos.w) * 0.5 + 0.5;
-                vec2 previousNDC = (vPrevClipPos.xy / vPrevClipPos.w) * 0.5 + 0.5;
-                vec2 motion = currentNDC - previousNDC;
-
-                OutputColor = vec4(motion, 0.0, 1.0);
-            }
-        }
-    ENDGLSL
 }
 
 Pass "StandardShadow"

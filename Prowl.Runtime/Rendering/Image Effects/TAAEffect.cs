@@ -19,7 +19,7 @@ namespace Prowl.Runtime.Rendering;
 ///
 /// Usage:
 ///   1. Add TAAEffect to Camera.Effects.
-///   2. The effect automatically enables DepthTextureMode.MotionVectors on the camera.
+///   2. Motion vectors are always produced by the unified prepass.
 ///   3. OnPreCull applies the sub-pixel jitter to the camera's ProjectionMatrix
 ///      while NonJitteredProjectionMatrix stays clean.
 ///   4. OnRenderEffect resolves the jittered frame against the reprojected history.
@@ -27,7 +27,6 @@ namespace Prowl.Runtime.Rendering;
 public sealed class TAAEffect : ImageEffect
 {
     public override RenderStage Stage => RenderStage.PostProcess;
-    public override DepthTextureMode RequiredDepthTextureMode => DepthTextureMode.MotionVectors;
 
     /// <summary>How much of the history to keep (0..0.99). Higher = smoother but ghosts more.</summary>
     public float BlendFactor = 0.95f;
@@ -129,7 +128,7 @@ public sealed class TAAEffect : ImageEffect
         // Bind motion vectors and depth — these are globals set by the pipeline,
         // but the shader uses its own uniform names so we must bind explicitly.
         if (context.MotionVectors != null)
-            _mat.SetTexture("_MotionVectorsTex", context.MotionVectors.MainTexture);
+            _mat.SetTexture("_MotionVectorsTex", context.MotionVectors);
         _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
 
         using var cmd = Graphics.GetCommandBuffer("TAA");

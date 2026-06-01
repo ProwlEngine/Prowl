@@ -510,10 +510,11 @@ Pass "TerrainShadow"
     ENDGLSL
 }
 
-Pass "TerrainDepthNormals"
+Pass "TerrainPrepass"
 {
-    Tags { "LightMode" = "DepthNormals" }
+    Tags { "LightMode" = "Prepass" }
     Cull Back
+    ZWrite On
 
     GLSLPROGRAM
 
@@ -524,6 +525,8 @@ Pass "TerrainDepthNormals"
 
             out vec3 worldNormal;
             out vec2 texCoord0;
+            out vec4 vCurrClipNJ;
+            out vec4 vPrevClip;
 
             uniform sampler2D _Heightmap;
             uniform float _TerrainSize;
@@ -593,10 +596,18 @@ Pass "TerrainDepthNormals"
                 worldNormal = normalize((_TerrainLocalToWorld * vec4(localNormal, 0.0)).xyz);
 
                 gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
+
+                // Static terrain: only the camera moves, so previous world position is identical.
+                vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * vec4(worldPosition, 1.0);
+                vPrevClip = PROWL_MATRIX_VP_PREVIOUS * vec4(worldPosition, 1.0);
 #else
                 gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
                 worldNormal = normalize((PROWL_MATRIX_M * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
                 texCoord0 = vertexTexCoord0;
+
+                vec4 wp = PROWL_MATRIX_M * vec4(vertexPosition, 1.0);
+                vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * wp;
+                vPrevClip = PROWL_MATRIX_VP_PREVIOUS * (PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0));
 #endif
             }
         }
@@ -606,8 +617,11 @@ Pass "TerrainDepthNormals"
             #include "ProwlCG"
 
             layout (location = 0) out vec4 normalOut;
+            layout (location = 1) out vec4 motionRM;
             in vec3 worldNormal;
             in vec2 texCoord0;
+            in vec4 vCurrClipNJ;
+            in vec4 vPrevClip;
 
             uniform sampler2D _HolesMap;
             uniform int _HasHoles;
@@ -617,6 +631,12 @@ Pass "TerrainDepthNormals"
                 if (_HasHoles > 0 && texture(_HolesMap, texCoord0).r < 0.5)
                     discard;
                 normalOut = EncodeViewNormal(worldNormal);
+
+                // Motion vectors (jitter-free). Terrain has no per-pixel material textures here,
+                // so pack a diffuse default: roughness 1, metallic 0.
+                vec2 currNDC = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;
+                vec2 prevNDC = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;
+                motionRM = vec4(currNDC - prevNDC, 1.0, 0.0);
             }
         }
     ENDGLSL

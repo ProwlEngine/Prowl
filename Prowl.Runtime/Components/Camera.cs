@@ -31,13 +31,6 @@ public abstract class ImageEffect
     public virtual bool TransformsToLDR { get; } = false;
 
     /// <summary>
-    /// Depth texture modes this effect requires. The pipeline gathers these from all
-    /// active effects to determine which passes to run (e.g. motion vectors).
-    /// Override to declare requirements instead of setting camera.DepthTextureMode manually.
-    /// </summary>
-    public virtual DepthTextureMode RequiredDepthTextureMode => DepthTextureMode.None;
-
-    /// <summary>
     /// Called during rendering with access to render targets.
     /// </summary>
     public virtual void OnRenderEffect(RenderContext context) { }
@@ -65,20 +58,6 @@ public enum CameraClearFlags
     SolidColor,
     Depth,
     Skybox,
-}
-
-[Flags]
-public enum DepthTextureMode
-{
-    None = 0,
-    /// <summary>
-    /// When enabled rendering will draw a Pre-Depth pass before the main rendering pass.
-    /// This can improve overdrawing and sorting issues, but can be slower on some hardware and some cases.
-    /// This also enables the _CameraDepthTexture shader property.
-    /// </summary>
-    Depth = 1, // _CameraDepthTexture
-    //Normal = 2, // _CameraNormalsTexture
-    MotionVectors = 4, // _CameraMotionVectorsTexture
 }
 
 [AddComponentMenu("Rendering/Camera")]

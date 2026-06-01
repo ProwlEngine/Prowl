@@ -3,8 +3,8 @@
 //
 // Surface shader type the main "lit or unlit 3D object" genre. Covers Lit PBR,
 // Lit Basic (Lambert / Blinn-Phong), and Unlit via the Lighting dropdown on the
-// master node. Emits three passes: Standard (forward lit), DepthNormals (depth +
-// normals prepass for post-effects), Shadow (shadow caster).
+// master node. Emits three passes: Standard (forward lit), Prepass (unified depth +
+// normals + motion vectors + packed material for post-effects), Shadow (shadow caster).
 //
 // This file is the concrete home of all the vertex/fragment emission logic that
 // used to live in ShaderGraphCompiler now it lives on the shader type that
@@ -591,12 +591,13 @@ internal sealed class SurfaceStandardPass : IShaderPass
 }
 
 // ===============================================================================
-// DepthNormals pass depth-only + view-space normals, skipped for transparent.
+// Prepass unified depth + view-space normals + motion vectors (+ packed material),
+// skipped for transparent. Tagged "Prepass" and drawn once by the pipeline.
 // ===============================================================================
 
 internal sealed class SurfaceDepthNormalsPass : IShaderPass
 {
-    public string Name => "DepthNormals";
+    public string Name => "Prepass";
     public ShaderPassRole Role => ShaderPassRole.DepthPrepass;
 
     public string EmitPass(MasterNodeBase masterBase, ShaderGraph graph, PassEmitSharedState shared)
@@ -609,15 +610,16 @@ internal sealed class SurfaceDepthNormalsPass : IShaderPass
         var depth = shared.Scratch.TryGetValue(SurfaceDepthHelper.ScratchKey, out var d) ? d as SurfaceDepthHelper : null;
 
         var sb = new StringBuilder();
-        sb.AppendLine("Pass \"DepthNormals\"");
+        sb.AppendLine("Pass \"Prepass\"");
         sb.AppendLine("{");
-        sb.AppendLine("    Tags { \"LightMode\" = \"DepthNormals\" }");
+        sb.AppendLine("    Tags { \"LightMode\" = \"Prepass\" }");
         sb.AppendLine($"    Cull {ShaderGraphEmit.CullKeyword(graph.RenderSettings.Cull)}");
+        sb.AppendLine("    ZWrite On");
         sb.AppendLine();
         sb.AppendLine("    GLSLPROGRAM");
 
-        SurfaceDepthPassEmit.EmitVertexStage(sb, depth);
-        SurfaceDepthPassEmit.EmitFragmentStage(sb, depth, emitNormalOut: true);
+        SurfaceDepthPassEmit.EmitVertexStage(sb, depth, emitMotion: true);
+        SurfaceDepthPassEmit.EmitFragmentStage(sb, depth, emitNormalOut: true, emitMotion: true);
 
         sb.AppendLine("    ENDGLSL");
         sb.AppendLine("}");
@@ -671,7 +673,7 @@ internal sealed class SurfaceShadowPass : IShaderPass
 
 internal static class SurfaceDepthPassEmit
 {
-    public static void EmitVertexStage(StringBuilder sb, SurfaceDepthHelper? depth)
+    public static void EmitVertexStage(StringBuilder sb, SurfaceDepthHelper? depth, bool emitMotion = false)
     {
         bool needsVertOffset = depth?.NeedsVertexOffset == true;
         bool needsNormalOut  = true;
@@ -695,6 +697,11 @@ internal static class SurfaceDepthPassEmit
         }
 
         if (needsNormalOut) sb.AppendLine("        out vec3 vNormal;");
+        if (emitMotion)
+        {
+            sb.AppendLine("        out vec4 vCurrClipNJ;");
+            sb.AppendLine("        out vec4 vPrevClip;");
+        }
         foreach (var (n, t) in forwardVaryings) sb.AppendLine($"        out {t} {n};");
 
         sb.AppendLine();
@@ -711,6 +718,12 @@ internal static class SurfaceDepthPassEmit
             sb.AppendLine("            gl_Position = TransformClip(vertexPosition);");
         }
         if (needsNormalOut) sb.AppendLine("            vNormal = TransformDirection(vertexNormal);");
+        if (emitMotion)
+        {
+            string posExpr = needsVertOffset ? "_vertPos" : "vertexPosition";
+            sb.AppendLine($"            vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * (GetModelMatrix() * vec4({posExpr}, 1.0));");
+            sb.AppendLine($"            vPrevClip = PROWL_MATRIX_VP_PREVIOUS * (PROWL_MATRIX_M_PREVIOUS * vec4({posExpr}, 1.0));");
+        }
         foreach (var (n, _) in forwardVaryings)
         {
             switch (n)
@@ -728,7 +741,7 @@ internal static class SurfaceDepthPassEmit
         sb.AppendLine("    }");
     }
 
-    public static void EmitFragmentStage(StringBuilder sb, SurfaceDepthHelper? depth, bool emitNormalOut)
+    public static void EmitFragmentStage(StringBuilder sb, SurfaceDepthHelper? depth, bool emitNormalOut, bool emitMotion = false)
     {
         bool doDiscard = depth?.NeedsAlphaDiscard == true && depth.AlphaCtx != null;
 
@@ -753,6 +766,12 @@ internal static class SurfaceDepthPassEmit
             sb.AppendLine("        layout (location = 0) out vec4 normalOut;");
             sb.AppendLine("        in vec3 vNormal;");
         }
+        if (emitMotion)
+        {
+            sb.AppendLine("        layout (location = 1) out vec4 motionRM;");
+            sb.AppendLine("        in vec4 vCurrClipNJ;");
+            sb.AppendLine("        in vec4 vPrevClip;");
+        }
 
         sb.AppendLine();
         sb.AppendLine("        void main()");
@@ -769,6 +788,15 @@ internal static class SurfaceDepthPassEmit
             sb.AppendLine("            normalOut = EncodeViewNormal(normalize(vNormal));");
         else
             sb.AppendLine("            gl_FragDepth = gl_FragCoord.z;");
+
+        if (emitMotion)
+        {
+            sb.AppendLine("            vec2 _mvCurr = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;");
+            sb.AppendLine("            vec2 _mvPrev = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;");
+            // Graph surfaces don't yet feed roughness/metallic into the prepass slice; pack a
+            // neutral diffuse default (rough, non-metal) until that slice is wired in.
+            sb.AppendLine("            motionRM = vec4(_mvCurr - _mvPrev, 1.0, 0.0);");
+        }
 
         sb.AppendLine("        }");
         sb.AppendLine("    }");
