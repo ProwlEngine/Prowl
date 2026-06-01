@@ -75,7 +75,7 @@ internal static class ClayBackedImporter
         flags &= ~PostProcessFlags.GenerateSmoothNormals;
         flags &= ~PostProcessFlags.GenerateNormals;
 
-        // FlipUVs: glTF stores UVs with V=0 at the top of the texture (D3D / Unity convention).
+        // FlipUVs: glTF stores UVs with V=0 at the top of the texture (top-left origin convention).
         // FBX and OBJ store V=0 at the bottom (OpenGL convention) which is what Prowl's shaders
         // expect post-import. So only flip when the source is glTF/GLB/VRM - flipping FBX or OBJ
         // would invert UVs and ship textures upside down.

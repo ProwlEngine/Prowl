@@ -129,7 +129,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public bool CompareTag(string otherTag) => _go.CompareTag(otherTag);
 
     #region Component API
-    // This is used to make the Component API more similar to Unity's, Its generally recommended to use the GameObject instead
+    // Convenience component-access API mirrored onto the behaviour; it's generally recommended to use the GameObject instead
     /// <inheritdoc cref="GameObject.AddComponent{T}"/>"
     public T AddComponent<T>() where T : MonoBehaviour, new() => (T)AddComponent(typeof(T));
     /// <inheritdoc cref="GameObject.AddComponent(Type)"/>"

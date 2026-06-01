@@ -15,7 +15,7 @@ public enum ShadowQuality
 }
 
 /// <summary>
-/// How a light participates in lightmap baking (mirrors Unity's LightmapBakeType).
+/// How a light participates in lightmap baking.
 /// </summary>
 public enum LightBakeMode
 {

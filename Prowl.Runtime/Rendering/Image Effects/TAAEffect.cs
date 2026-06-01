@@ -15,7 +15,7 @@ namespace Prowl.Runtime.Rendering;
 /// Temporal Anti-Aliasing image effect.
 /// Jitters the camera projection matrix each frame using a Halton sequence and
 /// accumulates samples over time, using motion vectors to reproject the previous
-/// frame's result. Similar to Unity's ImageEffect-style TAA.
+/// frame's result.
 ///
 /// Usage:
 ///   1. Add TAAEffect to Camera.Effects.

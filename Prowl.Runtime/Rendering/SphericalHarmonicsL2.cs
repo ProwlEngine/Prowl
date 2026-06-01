@@ -74,7 +74,7 @@ public struct SphericalHarmonicsL2
 
     /// <summary>
     /// Fold the cosine-lobe + basis constants into the coefficients and pack them into the 7
-    /// vec4 the shader's <c>ShadeSH9</c> consumes (standard Unity-style packing). The shader then
+    /// vec4 the shader's <c>ShadeSH9</c> consumes (the standard 7-vec4 SH packing). The shader then
     /// reconstructs the same E/π as <see cref="Evaluate"/>.
     /// </summary>
     public readonly Packed ToShaderCoefficients()

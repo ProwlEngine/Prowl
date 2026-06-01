@@ -10,7 +10,7 @@ namespace Prowl.Runtime;
 /// <summary>
 /// A set of light-probe sample points (local space). The lightmap bake samples baked SH at every
 /// group's world positions, tetrahedralizes them, and stores the result on the scene; dynamic
-/// objects then read interpolated SH from <c>Scene.ProbeVolume</c>. Mirrors Unity's LightProbeGroup.
+/// objects then read interpolated SH from <c>Scene.ProbeVolume</c>.
 /// </summary>
 [AddComponentMenu("Rendering/Light Probe Group")]
 [ComponentIcon("")] // Lightbulb
