@@ -133,7 +133,7 @@ public class TerrainSceneEditor : ISceneViewEditor
             });
     }
 
-    public bool OnSceneInput(Camera camera, Scene scene, Ray mouseRay, Float2 mousePos, bool viewportHovered)
+    public bool OnSceneInput(Camera camera, Scene scene, Rect viewport, Ray mouseRay, Float2 mousePos, bool viewportHovered)
     {
         if (_terrain == null || _useTransformTool)
         {

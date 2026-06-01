@@ -32,10 +32,11 @@ public interface ISceneViewEditor
     /// </summary>
     /// <param name="camera">The editor camera</param>
     /// <param name="scene">The active scene</param>
+    /// <param name="viewport">Viewport rect in viewport-local pixels (Min at 0,0). Pass to <c>Handles</c>.</param>
     /// <param name="mouseRay">Ray from mouse position into the scene</param>
     /// <param name="mousePos">Mouse position in viewport-local pixels</param>
     /// <param name="viewportHovered">Whether the mouse is over the viewport</param>
-    bool OnSceneInput(Camera camera, Scene scene, Ray mouseRay, Float2 mousePos, bool viewportHovered);
+    bool OnSceneInput(Camera camera, Scene scene, Rect viewport, Ray mouseRay, Float2 mousePos, bool viewportHovered);
 
     /// <summary>
     /// Draw 2D overlays in the scene viewport foreground (e.g. brush indicators, handles).

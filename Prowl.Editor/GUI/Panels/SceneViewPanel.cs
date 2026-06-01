@@ -206,7 +206,8 @@ public class SceneViewPanel : DockPanel
                 Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
                 // Use Paper's hover state which respects overlays/popups, not just bounds
                 bool hovered = paper.IsParentHovered;
-                sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, mouseRay, mouseLocal, hovered);
+                Rect viewport = new Rect(0, 0, (float)viewSize.X, (float)viewSize.Y);
+                sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, viewport, mouseRay, mouseLocal, hovered);
             }
         }
 
