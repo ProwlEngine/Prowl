@@ -155,7 +155,7 @@ public class DirectionalLight : Light
 
                 Frustum frustum = Frustum.FromMatrix(proj * view);
 
-                System.Collections.Generic.HashSet<int> culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
+                bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
 
                 // Upload this cascade's matrices BEFORE its CB encodes draws. Each
                 // cascade is its own submitted CB so all four don't get batched and

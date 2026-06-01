@@ -118,6 +118,25 @@ public unsafe class GraphicsTexture : IDisposable
         Graphics.GL.TexParameter(Target, GLEnum.TextureMagFilter, (int)magFilter);
     }
 
+    /// <summary>
+    /// Enable or disable hardware depth comparison sampling. When enabled, a matching
+    /// <c>sampler2DShadow</c> in a shader does the depth test in fixed-function hardware
+    /// (with LINEAR filtering this gives free 2x2 PCF). Only valid on depth textures.
+    /// </summary>
+    public void SetCompareMode(bool enabled)
+    {
+        Bind(false);
+        if (enabled)
+        {
+            Graphics.GL.TexParameter(Target, GLEnum.TextureCompareMode, (int)GLEnum.CompareRefToTexture);
+            Graphics.GL.TexParameter(Target, GLEnum.TextureCompareFunc, (int)GLEnum.Lequal);
+        }
+        else
+        {
+            Graphics.GL.TexParameter(Target, GLEnum.TextureCompareMode, (int)GLEnum.None);
+        }
+    }
+
     public void GetTexImage(int level, void* ptr)
     {
         Bind(false);

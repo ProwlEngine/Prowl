@@ -37,7 +37,7 @@ vec3 WorldPosFromDepth(float depth, vec2 texCoord) {
 //   shadowQuality: 0 = hard shadows, 1 = soft shadows
 //   shadowStrength: Multiplier for shadow intensity
 float SampleShadowPCF(
-    sampler2D shadowAtlas,
+    sampler2DShadow shadowAtlas,
     vec2 atlasCoords,
     vec2 shadowMin,
     vec2 shadowMax,
@@ -45,32 +45,35 @@ float SampleShadowPCF(
     float shadowQuality,
     float shadowStrength)
 {
-    float shadow = 0.0;
-    vec2 atlasSize = vec2(textureSize(shadowAtlas, 0));
-    vec2 texelSize = vec2(1.0) / atlasSize;
+    // Hardware depth comparison (GL_COMPARE_REF_TO_TEXTURE + GL_LEQUAL): texture() returns the
+    // filtered fraction that is LIT (currentDepth <= storedDepth). With LINEAR filtering on the
+    // atlas each fetch is a hardware 2x2 PCF tap, so even the hard path is bilinearly filtered.
+    float lit;
 
     // Check shadow quality: 0 = Hard, 1 = Soft
     if (shadowQuality < 0.5) {
-        // Hard shadows - single sample
-        float closestDepth = texture(shadowAtlas, atlasCoords).r;
-        shadow = currentDepth > closestDepth ? 1.0 : 0.0;
+        // Hard shadows - single hardware-compared (2x2) sample
+        lit = texture(shadowAtlas, vec3(atlasCoords, currentDepth));
     } else {
-        // Soft shadows - Poisson Disk PCF with random rotation
+        // Soft shadows - rotated Poisson disk, each tap a hardware 2x2 comparison
+        vec2 texelSize = vec2(1.0) / vec2(textureSize(shadowAtlas, 0));
         float filterRadius = 1.5;
         float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185;
         float s = sin(randomRotation);
         float c = cos(randomRotation);
         mat2 rotationMatrix = mat2(c, -s, s, c);
 
+        vec2 texelScale = texelSize * filterRadius;
+        lit = 0.0;
         for(int i = 0; i < 8; i++) {
-            vec2 offset = rotationMatrix * POISSON_DISK_8[i] * texelSize * filterRadius;
+            vec2 offset = (rotationMatrix * POISSON_DISK_8[i]) * texelScale;
             vec2 sampleCoords = clamp(atlasCoords + offset, shadowMin, shadowMax);
-            float pcfDepth = texture(shadowAtlas, sampleCoords).r;
-            shadow += currentDepth > pcfDepth ? 1.0 : 0.0;
+            lit += texture(shadowAtlas, vec3(sampleCoords, currentDepth));
         }
-        shadow /= 8.0;
+        lit /= 8.0;
     }
 
+    float shadow = 1.0 - lit;       // fraction occluded
     return shadow * shadowStrength;
 }
 
@@ -82,7 +85,9 @@ float SampleShadowPCF(
 // Returns: Combined bias value
 float CalculateSlopeBias(vec3 worldNormal, vec3 lightDirection, float baseBias) {
     float cosTheta = clamp(dot(normalize(worldNormal), normalize(lightDirection)), 0.0, 1.0);
-    float slopeScaleBias = baseBias * tan(acos(cosTheta));
+    // tan(acos(cosTheta)) == sin/cos, without the two transcendentals.
+    float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
+    float slopeScaleBias = baseBias * (sinTheta / max(cosTheta, 1e-4));
     slopeScaleBias = clamp(slopeScaleBias, 0.0, baseBias * 2.0);
     return baseBias + slopeScaleBias;
 }

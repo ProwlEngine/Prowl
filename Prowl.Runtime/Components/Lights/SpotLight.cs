@@ -105,7 +105,7 @@ public class SpotLight : Light
             Float3 right = Transform.Right;
             Float3 up = Transform.Up;
 
-            System.Collections.Generic.HashSet<int> culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
+            bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
             pipeline.AssignCameraMatrices(view, proj);
 
             using var cmd = Graphics.GetCommandBuffer("SpotLightShadow");

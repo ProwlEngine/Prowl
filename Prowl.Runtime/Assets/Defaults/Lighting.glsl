@@ -35,8 +35,9 @@ uniform float _DirectionalLightShadowQuality;
 #define MAX_SHADOW_CASTERS 4
 #endif
 
-// Shadow atlas
-uniform sampler2D _ShadowAtlas;
+// Shadow atlas (hardware depth-compare sampler; the atlas depth texture has
+// GL_TEXTURE_COMPARE_MODE enabled so texture() does the PCF comparison)
+uniform sampler2DShadow _ShadowAtlas;
 uniform vec2 _ShadowAtlasSize;
 
 // Directional cascade shadows (one directional light)
@@ -102,21 +103,24 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
 {
     if (_CascadeCount == 0) return 0.0;
 
-    float worldDistance = distance(worldPos, _WorldSpaceCameraPos.xyz) * 2.0;
+    // Compare squared distance against squared cascade splits to avoid the per-fragment sqrt.
+    // worldDistance was distance(...) * 2.0, so the squared form is dot(d,d) * 4.0.
+    vec3 toCamera = worldPos - _WorldSpaceCameraPos.xyz;
+    float worldDistSq = dot(toCamera, toCamera) * 4.0;
 
     mat4 cascadeMatrix;
     vec4 cascadeParams;
 
-    if (_CascadeCount >= 1 && worldDistance <= _CascadeAtlasParams0.w) {
+    if (_CascadeCount >= 1 && worldDistSq <= _CascadeAtlasParams0.w * _CascadeAtlasParams0.w) {
         cascadeMatrix = _CascadeShadowMatrix0;
         cascadeParams = _CascadeAtlasParams0;
-    } else if (_CascadeCount >= 2 && worldDistance <= _CascadeAtlasParams1.w) {
+    } else if (_CascadeCount >= 2 && worldDistSq <= _CascadeAtlasParams1.w * _CascadeAtlasParams1.w) {
         cascadeMatrix = _CascadeShadowMatrix1;
         cascadeParams = _CascadeAtlasParams1;
-    } else if (_CascadeCount >= 3 && worldDistance <= _CascadeAtlasParams2.w) {
+    } else if (_CascadeCount >= 3 && worldDistSq <= _CascadeAtlasParams2.w * _CascadeAtlasParams2.w) {
         cascadeMatrix = _CascadeShadowMatrix2;
         cascadeParams = _CascadeAtlasParams2;
-    } else if (_CascadeCount >= 4 && worldDistance <= _CascadeAtlasParams3.w) {
+    } else if (_CascadeCount >= 4 && worldDistSq <= _CascadeAtlasParams3.w * _CascadeAtlasParams3.w) {
         cascadeMatrix = _CascadeShadowMatrix3;
         cascadeParams = _CascadeAtlasParams3;
     } else {
@@ -227,9 +231,11 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 vie
     float dist = sqrt(dist2);
     vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
 
-    // Spot pre-check: if outside the outer cone the smoothstep returns 0 anyway.
+    // Spot pre-check: if outside the outer cone the smoothstep returns 0 anyway. The axis cosine
+    // is reused below for the cone falloff, so normalize the direction only once.
+    float spotAxisCos = 0.0;
     if (L.Type == 2) {
-        float spotAxisCos = dot(normalize(L.Direction), -lightDir);
+        spotAxisCos = dot(normalize(L.Direction), -lightDir);
         if (spotAxisCos <= L.SpotCos) return vec3(0.0);
     }
 
@@ -248,10 +254,8 @@ vec3 EvaluateLocalLight(LightSample L, vec3 worldPos, vec3 worldNormal, vec3 vie
     float invSqr = 1.0 / max(dist2, 0.01);     // 1/d^2 with origin guard
     float attenuation = invSqr * window;
 
-    if (L.Type == 2) {
-        float lightAngleCos = dot(normalize(L.Direction), -lightDir);
-        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, lightAngleCos);
-    }
+    if (L.Type == 2)
+        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, spotAxisCos);
 
     if (attenuation <= 0.0001) return vec3(0.0);
 
@@ -303,8 +307,9 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
     float dist = sqrt(dist2);
     vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
 
+    float spotAxisCos = 0.0;
     if (L.Type == 2) {
-        float spotAxisCos = dot(normalize(L.Direction), -lightDir);
+        spotAxisCos = dot(normalize(L.Direction), -lightDir);
         if (spotAxisCos <= L.SpotCos) return vec3(0.0);
     }
 
@@ -319,10 +324,8 @@ vec3 EvaluateLocalLightAniso(LightSample L, vec3 worldPos, vec3 worldNormal, vec
     float invSqr = 1.0 / max(dist2, 0.01);
     float attenuation = invSqr * window;
 
-    if (L.Type == 2) {
-        float lightAngleCos = dot(normalize(L.Direction), -lightDir);
-        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, lightAngleCos);
-    }
+    if (L.Type == 2)
+        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, spotAxisCos);
 
     if (attenuation <= 0.0001) return vec3(0.0);
 
@@ -545,8 +548,9 @@ vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNorma
     float dist = sqrt(dist2);
     vec3 lightDir = -lightToPixel * (1.0 / max(dist, 1e-6));
 
+    float spotAxisCos = 0.0;
     if (L.Type == 2) {
-        float spotAxisCos = dot(normalize(L.Direction), -lightDir);
+        spotAxisCos = dot(normalize(L.Direction), -lightDir);
         if (spotAxisCos <= L.SpotCos) return vec3(0.0);
     }
 
@@ -557,30 +561,30 @@ vec3 EvaluateLocalLightTranslucent(LightSample L, vec3 worldPos, vec3 worldNorma
     float invSqr = 1.0 / max(dist2, 0.01);
     float attenuation = invSqr * window;
 
-    if (L.Type == 2) {
-        float lightAngleCos = dot(normalize(L.Direction), -lightDir);
-        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, lightAngleCos);
-    }
+    if (L.Type == 2)
+        attenuation *= smoothstep(L.SpotCos, L.InnerSpotCos, spotAxisCos);
 
     if (attenuation <= 0.0001) return vec3(0.0);
 
-    float shadowFactor;
-#ifdef SG_NO_SHADOWS
-    shadowFactor = 1.0;
-#else
-    float shadow = 0.0;
-    if (L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
-        if (L.Type == 1) shadow = SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal);
-        else shadow = SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
+    float NdotL = dot(worldNormal, lightDir);
+
+    // Only sample the shadow atlas when something will actually use it: the front-lit PBR
+    // term (NdotL > 0) or the translucency term. A back-facing opaque fragment skips the
+    // full PCF tap set entirely.
+    float shadowFactor = 1.0;
+#ifndef SG_NO_SHADOWS
+    if ((NdotL > 0.0 || translucency > 0.0) && L.ShadowEnabled != 0 && L.ShadowSlot >= 0) {
+        float shadow = (L.Type == 1)
+            ? SamplePointShadow(L, L.ShadowSlot, worldPos, worldNormal)
+            : SampleSpotShadow(L, L.ShadowSlot, worldPos, worldNormal);
+        shadowFactor = 1.0 - shadow;
     }
-    shadowFactor = 1.0 - shadow;
 #endif
 
     vec3 radiance = L.Color * (L.Intensity * 8.0) * attenuation;
     vec3 result = vec3(0.0);
 
     // PBR (front-lit only)
-    float NdotL = dot(worldNormal, lightDir);
     if (NdotL > 0.0) {
         vec3 halfDir = normalize(lightDir + viewDir);
         float NdotV = abs(dot(worldNormal, viewDir));

@@ -41,6 +41,12 @@ public static class ShadowAtlas
 
         atlas ??= new RenderTexture(size, size, true, []);
 
+        // Sample the atlas through hardware depth comparison: a sampler2DShadow in the lighting
+        // shaders then gets fixed-function 2x2 PCF (with LINEAR filtering) instead of the manual
+        // per-tap compare. Set once on the depth attachment after creation.
+        atlas.InternalDepth.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+        atlas.InternalDepth.SetDepthCompareMode(true);
+
         // Initialize with one large free rectangle covering the entire atlas
         freeRects.Clear();
         freeRects.Add(new FreeRect(0, 0, size, size));

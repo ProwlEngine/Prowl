@@ -168,6 +168,13 @@ public sealed class Texture2D : Texture, ISerializable
     }
 
     /// <summary>
+    /// Enable hardware depth-comparison sampling on this (depth) texture, so a
+    /// <c>sampler2DShadow</c> uniform performs the depth test in fixed-function hardware.
+    /// Pair with LINEAR filtering for free 2x2 PCF.
+    /// </summary>
+    public void SetDepthCompareMode(bool enabled) => Graphics.SetTextureCompareMode(Handle, enabled);
+
+    /// <summary>
     /// Recreates this <see cref="Texture2D"/>'s image with a new size,
     /// resizing the <see cref="Texture2D"/> but losing the image data.
     /// </summary>

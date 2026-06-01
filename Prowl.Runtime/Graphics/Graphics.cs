@@ -290,6 +290,7 @@ public static unsafe class Graphics
     public static void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => EncodeOneOp(c => c.EncodeSetTextureWrap(texture, 1, wrap), "Texture.SetWrapT");
     public static void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => EncodeOneOp(c => c.EncodeSetTextureWrap(texture, 2, wrap), "Texture.SetWrapR");
     public static void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => EncodeOneOp(c => c.EncodeSetTextureFilters(texture, min, mag), "Texture.SetFilters");
+    public static void SetTextureCompareMode(GraphicsTexture texture, bool enabled) => EncodeOneOp(c => c.EncodeSetTextureCompareMode(texture, enabled), "Texture.SetCompareMode");
     public static void GenerateMipmap(GraphicsTexture texture) => EncodeOneOp(c => c.GenerateMipmap(texture), "Texture.GenerateMipmap");
 
     /// <summary>Synchronous texture read-back. Blocks until the destination is filled.</summary>

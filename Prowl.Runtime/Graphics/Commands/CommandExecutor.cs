@@ -536,6 +536,13 @@ internal sealed class CommandExecutor
                     tex.SetTextureFilters(min, mag);
                     break;
                 }
+                case CommandOpcode.SetTextureCompareMode:
+                {
+                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    bool enabled = ReadU8(stream, ref pos) != 0;
+                    tex.SetCompareMode(enabled);
+                    break;
+                }
                 case CommandOpcode.GetTextureData:
                 {
                     var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;

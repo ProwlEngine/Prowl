@@ -105,7 +105,7 @@ public class PointLight : Light
             Float3 right = Float3.Normalize(Float3.Cross(up, forward));
             ViewerData viewerData = new ViewerData(lightPos, forward, right, up);
 
-            System.Collections.Generic.HashSet<int> culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
+            bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
 
             // Push this face's view/proj into the global UBO BEFORE the face CB
             // encodes draws otherwise all six faces would batch into one CB and

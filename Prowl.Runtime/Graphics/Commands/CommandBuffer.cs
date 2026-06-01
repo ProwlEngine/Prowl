@@ -709,6 +709,13 @@ public sealed class CommandBuffer : IDisposable
         Write((byte)mag);
     }
 
+    internal void EncodeSetTextureCompareMode(GraphicsTexture tex, bool enabled)
+    {
+        WriteHeader(CommandOpcode.SetTextureCompareMode);
+        Write(PushObject(tex));
+        Write((byte)(enabled ? 1 : 0));
+    }
+
     /// <summary>Read a texture's pixels back. Caller MUST use SubmitAndWait the
     /// destination buffer is only filled when the op runs on the render thread.</summary>
     internal void EncodeGetTextureData(GraphicsTexture tex, int mip, byte[] destination)

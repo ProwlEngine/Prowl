@@ -154,8 +154,8 @@ Pass "FogMarch"
             GetAtlasCoordinates(projCoords, cascadeParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
 
             float currentDepth = projCoords.z - max(_DirectionalLightShadowBias, 0.0005);
-            float closestDepth = texture(_ShadowAtlas, atlasCoords).r;
-            return (currentDepth > closestDepth ? 1.0 : 0.0) * _DirectionalLightShadowStrength;
+            float lit = texture(_ShadowAtlas, vec3(atlasCoords, currentDepth));
+            return (1.0 - lit) * _DirectionalLightShadowStrength;
         }
 
         float VolPointShadow(LightSample L, int shadowSlot, vec3 worldPos)
@@ -181,8 +181,8 @@ Pass "FogMarch"
             GetAtlasCoordinates(projCoords, faceParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
 
             float currentDepth = projCoords.z - max(L.ShadowBias, 0.0005);
-            float closestDepth = texture(_ShadowAtlas, atlasCoords).r;
-            return (currentDepth > closestDepth ? 1.0 : 0.0) * L.ShadowStrength;
+            float lit = texture(_ShadowAtlas, vec3(atlasCoords, currentDepth));
+            return (1.0 - lit) * L.ShadowStrength;
         }
 
         float VolSpotShadow(LightSample L, int shadowSlot, vec3 worldPos)
@@ -200,8 +200,8 @@ Pass "FogMarch"
             GetAtlasCoordinates(projCoords, atlasParams, _ShadowAtlasSize.x, atlasCoords, shadowMin, shadowMax);
 
             float currentDepth = projCoords.z - max(L.ShadowBias, 0.0005);
-            float closestDepth = texture(_ShadowAtlas, atlasCoords).r;
-            return (currentDepth > closestDepth ? 1.0 : 0.0) * L.ShadowStrength;
+            float lit = texture(_ShadowAtlas, vec3(atlasCoords, currentDepth));
+            return (1.0 - lit) * L.ShadowStrength;
         }
 
         float SpotAttenuation(LightSample L, vec3 lightDir)
