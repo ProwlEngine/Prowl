@@ -1,6 +1,6 @@
 namespace Prowl.Veldrid.Vk;
 
-internal struct DescriptorResourceCounts
+internal readonly struct DescriptorResourceCounts
 {
     public readonly uint UniformBufferCount;
     public readonly uint UniformBufferDynamicCount;

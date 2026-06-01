@@ -2,7 +2,7 @@
 
 namespace Prowl.Veldrid;
 
-internal struct MappedResourceCacheKey : IEquatable<MappedResourceCacheKey>
+internal readonly struct MappedResourceCacheKey : IEquatable<MappedResourceCacheKey>
 {
     public readonly MappableResource Resource;
     public readonly uint Subresource;
@@ -13,14 +13,13 @@ internal struct MappedResourceCacheKey : IEquatable<MappedResourceCacheKey>
         Subresource = subresource;
     }
 
+
     public readonly bool Equals(MappedResourceCacheKey other)
-    {
-        return Resource.Equals(other.Resource)
-            && Subresource.Equals(other.Subresource);
-    }
+        => Resource.Equals(other.Resource) && Subresource.Equals(other.Subresource);
 
     public override readonly int GetHashCode()
-    {
-        return HashCode.Combine(Resource.GetHashCode(), Subresource.GetHashCode());
-    }
+        => HashCode.Combine(Resource.GetHashCode(), Subresource.GetHashCode());
+
+    public override readonly bool Equals(object? obj)
+        => obj is MappedResourceCacheKey key && Equals(key);
 }

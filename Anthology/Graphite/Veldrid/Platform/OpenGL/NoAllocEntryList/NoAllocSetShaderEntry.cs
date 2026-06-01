@@ -1,6 +1,6 @@
 namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocSetShaderEntry
+internal readonly struct NoAllocSetShaderEntry
 {
     public readonly Tracked<GraphicsProgram> Program;
 

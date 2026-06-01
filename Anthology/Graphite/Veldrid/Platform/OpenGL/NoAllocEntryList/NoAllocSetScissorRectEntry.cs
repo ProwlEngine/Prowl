@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocSetScissorRectEntry
+internal readonly struct NoAllocSetScissorRectEntry
 {
     public readonly uint Index;
     public readonly uint X;

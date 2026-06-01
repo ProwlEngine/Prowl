@@ -6,34 +6,40 @@ namespace Prowl.Veldrid;
 /// <summary>
 /// A structure describing the layout of a mapped <see cref="MappableResource"/> object.
 /// </summary>
-public struct MappedResource
+public readonly struct MappedResource
 {
     /// <summary>
     /// The resource which has been mapped.
     /// </summary>
     public readonly MappableResource Resource;
+
     /// <summary>
     /// Identifies the <see cref="MapMode"/> that was used to map the resource.
     /// </summary>
     public readonly MapMode Mode;
+
     /// <summary>
     /// A pointer to the start of the mapped data region.
     /// </summary>
     public readonly IntPtr Data;
+
     /// <summary>
     /// The total size, in bytes, of the mapped data region.
     /// </summary>
     public readonly uint SizeInBytes;
+
     /// <summary>
     /// For mapped <see cref="Texture"/> resources, this is the subresource which is mapped.
     /// For <see cref="DeviceBuffer"/> resources, this field has no meaning.
     /// </summary>
     public readonly uint Subresource;
+
     /// <summary>
     /// For mapped <see cref="Texture"/> resources, this is the number of bytes between each row of texels.
     /// For <see cref="DeviceBuffer"/> resources, this field has no meaning.
     /// </summary>
     public readonly uint RowPitch;
+
     /// <summary>
     /// For mapped <see cref="Texture"/> resources, this is the number of bytes between each depth slice of a 3D Texture.
     /// For <see cref="DeviceBuffer"/> resources or 2D Textures, this field has no meaning.
@@ -76,7 +82,7 @@ public struct MappedResource
 /// mapped resource.
 /// </summary>
 /// <typeparam name="T">The blittable value type which mapped data is viewed as.</typeparam>
-public unsafe struct MappedResourceView<T> where T : struct
+public readonly unsafe struct MappedResourceView<T> where T : struct
 {
     private static readonly int s_sizeofT = Unsafe.SizeOf<T>();
 

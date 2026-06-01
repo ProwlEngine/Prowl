@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocSetFramebufferEntry
+internal readonly struct NoAllocSetFramebufferEntry
 {
     public readonly Tracked<Framebuffer> Framebuffer;
 

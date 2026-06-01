@@ -112,7 +112,7 @@ internal unsafe class TextureDataReaderWriter
     }
 }
 
-internal struct WidePixel : IEquatable<WidePixel>
+internal readonly struct WidePixel : IEquatable<WidePixel>
 {
     public readonly ulong? R;
     public readonly ulong? G;

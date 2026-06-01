@@ -2,7 +2,7 @@
 
 namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocClearColorTargetEntry
+internal readonly struct NoAllocClearColorTargetEntry
 {
     public readonly uint Index;
     public readonly Color ClearColor;

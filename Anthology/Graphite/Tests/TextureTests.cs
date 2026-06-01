@@ -1520,7 +1520,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         new FormatProps(PixelFormat.R11_G11_B10_Float, 11, 11, 10, 0)
     ];
 
-    struct FormatProps
+    readonly struct FormatProps
     {
         public readonly PixelFormat Format;
         public readonly int RedBits;

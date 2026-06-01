@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocCopyBufferEntry
+internal readonly struct NoAllocCopyBufferEntry
 {
     public readonly Tracked<DeviceBuffer> Source;
     public readonly uint SourceOffset;

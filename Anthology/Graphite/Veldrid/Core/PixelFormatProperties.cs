@@ -5,7 +5,7 @@
 /// <see cref="TextureType"/>, and <see cref="TextureUsage"/> by a <see cref="GraphicsDevice"/>.
 /// See <see cref="GraphicsDevice.GetPixelFormatSupport(PixelFormat, TextureType, TextureUsage, out PixelFormatProperties)"/>.
 /// </summary>
-public struct PixelFormatProperties
+public readonly struct PixelFormatProperties
 {
     /// <summary>
     /// The maximum supported width.

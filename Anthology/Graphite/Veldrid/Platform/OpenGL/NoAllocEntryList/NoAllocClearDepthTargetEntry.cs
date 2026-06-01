@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocClearDepthTargetEntry
+internal readonly struct NoAllocClearDepthTargetEntry
 {
     public readonly float Depth;
     public readonly byte Stencil;

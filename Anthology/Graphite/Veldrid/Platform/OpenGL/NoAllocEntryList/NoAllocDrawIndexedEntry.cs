@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocDrawIndexedEntry
+internal readonly struct NoAllocDrawIndexedEntry
 {
     public readonly uint InstanceCount;
     public readonly uint IndexStart;

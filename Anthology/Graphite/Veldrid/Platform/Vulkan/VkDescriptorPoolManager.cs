@@ -226,7 +226,7 @@ internal partial class VkDescriptorPoolManager
     }
 }
 
-internal struct DescriptorAllocationToken
+internal readonly struct DescriptorAllocationToken
 {
     public readonly DescriptorSet Set;
     public readonly DescriptorPool Pool;

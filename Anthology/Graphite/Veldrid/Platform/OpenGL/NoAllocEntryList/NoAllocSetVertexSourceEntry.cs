@@ -1,6 +1,6 @@
 namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocSetVertexSourceEntry
+internal readonly struct NoAllocSetVertexSourceEntry
 {
     public readonly Tracked<IVertexSource> Source;
 

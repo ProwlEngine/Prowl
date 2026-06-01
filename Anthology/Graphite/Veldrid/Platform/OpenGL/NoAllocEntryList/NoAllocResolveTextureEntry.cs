@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocResolveTextureEntry
+internal readonly struct NoAllocResolveTextureEntry
 {
     public readonly Tracked<Texture> Source;
     public readonly Tracked<Texture> Destination;

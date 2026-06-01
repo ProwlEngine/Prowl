@@ -106,7 +106,7 @@ internal static class OpenGLCachedPipeline
     }
 }
 
-internal struct SetBindingsInfo
+internal readonly struct SetBindingsInfo
 {
     private readonly Dictionary<uint, OpenGLUniformBinding> _uniformBindings;
     private readonly Dictionary<uint, OpenGLTextureBindingSlotInfo> _textureBindings;

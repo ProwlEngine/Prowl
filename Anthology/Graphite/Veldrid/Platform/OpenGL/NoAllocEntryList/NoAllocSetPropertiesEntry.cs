@@ -1,6 +1,6 @@
 namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocSetPropertiesEntry
+internal readonly struct NoAllocSetPropertiesEntry
 {
     public readonly Tracked<PropertySet> Properties;
 

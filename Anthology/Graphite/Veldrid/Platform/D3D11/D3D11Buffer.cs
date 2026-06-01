@@ -201,7 +201,7 @@ internal unsafe partial class D3D11Buffer : DeviceBuffer
         return result;
     }
 
-    private struct OffsetSizePair : IEquatable<OffsetSizePair>
+    private readonly struct OffsetSizePair : IEquatable<OffsetSizePair>
     {
         public readonly uint Offset;
         public readonly uint Size;

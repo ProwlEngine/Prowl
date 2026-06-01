@@ -3,7 +3,7 @@
 /// <summary>
 /// Represents a single output of a <see cref="Framebuffer"/>. May be a color or depth attachment.
 /// </summary>
-public struct FramebufferAttachment
+public readonly struct FramebufferAttachment
 {
     /// <summary>
     /// The target <see cref="Texture"/> which will be rendered to.

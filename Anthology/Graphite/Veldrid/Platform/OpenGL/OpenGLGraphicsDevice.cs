@@ -1667,7 +1667,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         SetActiveFrame,
     }
 
-    private unsafe struct ExecutionThreadWorkItem
+    private readonly unsafe struct ExecutionThreadWorkItem
     {
         public readonly WorkItemType Type;
         public readonly object? Object0;

@@ -632,7 +632,7 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
 /// A handle for an object stored in some List.
 /// </summary>
 /// <typeparam name="T">The type of object to track.</typeparam>
-internal struct Tracked<T> where T : class
+internal readonly struct Tracked<T> where T : class
 {
     private readonly int _index;
 

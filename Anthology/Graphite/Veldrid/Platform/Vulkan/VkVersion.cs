@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.Vk;
 
-internal struct VkVersion
+internal readonly struct VkVersion
 {
     private readonly uint value;
 

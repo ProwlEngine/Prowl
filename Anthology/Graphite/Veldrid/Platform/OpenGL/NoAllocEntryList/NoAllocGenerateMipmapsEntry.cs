@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Veldrid.OpenGL.NoAllocEntryList;
 
-internal struct NoAllocGenerateMipmapsEntry
+internal readonly struct NoAllocGenerateMipmapsEntry
 {
     public readonly Tracked<Texture> Texture;
 
