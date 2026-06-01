@@ -235,37 +235,42 @@ public sealed class SceneLightSystem : IDisposable
     /// </summary>
     public void UploadGlobalUniforms()
     {
-        UploadBVHTextures();
-        UploadDirectionalLight();
-        UploadLocalShadowSlots();
+        // All of these are global-uniform writes. Routing each through its own one-op
+        // CommandBuffer (the PropertyState.SetGlobalX helpers) meant ~80-100 rent/submit
+        // cycles per camera per frame. Encode them all into a single buffer and submit once.
+        using var cmd = Graphics.GetCommandBuffer("LightUniforms");
+        UploadBVHTextures(cmd);
+        UploadDirectionalLight(cmd);
+        UploadLocalShadowSlots(cmd);
+        Graphics.Submit(cmd);
     }
 
-    private void UploadBVHTextures()
+    private void UploadBVHTextures(CommandBuffer cmd)
     {
         // Textures may be null when neither tree has been populated yet. Pass them through as-is;
         // the shader only samples them when its corresponding _*LightRoot >= 0 (which we set to
         // -1 here for empty trees). Sizes default to 0 and the root index to -1, both of which
         // make the traversal a no-op.
         if (_staticTex.LightDataTexture != null)
-            PropertyState.SetGlobalTexture("_StaticLightData", _staticTex.LightDataTexture);
+            cmd.SetGlobalTexture("_StaticLightData", _staticTex.LightDataTexture);
         if (_staticTex.NodeDataTexture != null)
-            PropertyState.SetGlobalTexture("_StaticLightNodes", _staticTex.NodeDataTexture);
+            cmd.SetGlobalTexture("_StaticLightNodes", _staticTex.NodeDataTexture);
         if (_dynamicTex.LightDataTexture != null)
-            PropertyState.SetGlobalTexture("_DynamicLightData", _dynamicTex.LightDataTexture);
+            cmd.SetGlobalTexture("_DynamicLightData", _dynamicTex.LightDataTexture);
         if (_dynamicTex.NodeDataTexture != null)
-            PropertyState.SetGlobalTexture("_DynamicLightNodes", _dynamicTex.NodeDataTexture);
+            cmd.SetGlobalTexture("_DynamicLightNodes", _dynamicTex.NodeDataTexture);
 
-        PropertyState.SetGlobalInt("_StaticLightTexSize", _staticTex.LightTextureSize);
-        PropertyState.SetGlobalInt("_StaticLightTexShift", Log2(_staticTex.LightTextureSize));
-        PropertyState.SetGlobalInt("_StaticNodeTexSize", _staticTex.NodeTextureSize);
-        PropertyState.SetGlobalInt("_StaticNodeTexShift", Log2(_staticTex.NodeTextureSize));
-        PropertyState.SetGlobalInt("_DynamicLightTexSize", _dynamicTex.LightTextureSize);
-        PropertyState.SetGlobalInt("_DynamicLightTexShift", Log2(_dynamicTex.LightTextureSize));
-        PropertyState.SetGlobalInt("_DynamicNodeTexSize", _dynamicTex.NodeTextureSize);
-        PropertyState.SetGlobalInt("_DynamicNodeTexShift", Log2(_dynamicTex.NodeTextureSize));
+        cmd.SetGlobalInt("_StaticLightTexSize", _staticTex.LightTextureSize);
+        cmd.SetGlobalInt("_StaticLightTexShift", Log2(_staticTex.LightTextureSize));
+        cmd.SetGlobalInt("_StaticNodeTexSize", _staticTex.NodeTextureSize);
+        cmd.SetGlobalInt("_StaticNodeTexShift", Log2(_staticTex.NodeTextureSize));
+        cmd.SetGlobalInt("_DynamicLightTexSize", _dynamicTex.LightTextureSize);
+        cmd.SetGlobalInt("_DynamicLightTexShift", Log2(_dynamicTex.LightTextureSize));
+        cmd.SetGlobalInt("_DynamicNodeTexSize", _dynamicTex.NodeTextureSize);
+        cmd.SetGlobalInt("_DynamicNodeTexShift", Log2(_dynamicTex.NodeTextureSize));
 
-        PropertyState.SetGlobalInt("_StaticLightRoot", _staticTex.RootNode);
-        PropertyState.SetGlobalInt("_DynamicLightRoot", _dynamicTex.RootNode);
+        cmd.SetGlobalInt("_StaticLightRoot", _staticTex.RootNode);
+        cmd.SetGlobalInt("_DynamicLightRoot", _dynamicTex.RootNode);
     }
 
     /// <summary>log2 of a power of 2; returns 0 for size &lt;= 1.</summary>
@@ -276,57 +281,72 @@ public sealed class SceneLightSystem : IDisposable
         return n;
     }
 
-    private void UploadDirectionalLight()
+    private void UploadDirectionalLight(CommandBuffer cmd)
     {
         if (_directional == null)
         {
-            PropertyState.SetGlobalInt("_DirectionalLightEnabled", 0);
-            PropertyState.SetGlobalVector("_DirectionalLightDirection", Float3.Zero);
-            PropertyState.SetGlobalVector("_DirectionalLightColor", Float3.Zero);
-            PropertyState.SetGlobalFloat("_DirectionalLightIntensity", 0f);
-            PropertyState.SetGlobalInt("_DirectionalLightShadowEnabled", 0);
-            PropertyState.SetGlobalInt("_CascadeCount", 0);
+            cmd.SetGlobalInt("_DirectionalLightEnabled", 0);
+            cmd.SetGlobalVector("_DirectionalLightDirection", Float3.Zero);
+            cmd.SetGlobalVector("_DirectionalLightColor", Float3.Zero);
+            cmd.SetGlobalFloat("_DirectionalLightIntensity", 0f);
+            cmd.SetGlobalInt("_DirectionalLightShadowEnabled", 0);
+            cmd.SetGlobalInt("_CascadeCount", 0);
             return;
         }
 
         var data = _directional.GetForwardLightData();
         // Direct lighting wants the raw direction; intensity applies the same * 8 scaling the
         // legacy ForwardLightManager did so existing scenes look identical at low light counts.
-        PropertyState.SetGlobalInt("_DirectionalLightEnabled", 1);
-        PropertyState.SetGlobalVector("_DirectionalLightDirection", data.Direction);
-        PropertyState.SetGlobalVector("_DirectionalLightColor", data.Color);
-        PropertyState.SetGlobalFloat("_DirectionalLightIntensity", data.Intensity);
-        PropertyState.SetGlobalInt("_DirectionalLightShadowEnabled", data.ShadowEnabled ? 1 : 0);
-        PropertyState.SetGlobalFloat("_DirectionalLightShadowBias", data.ShadowBias);
-        PropertyState.SetGlobalFloat("_DirectionalLightShadowNormalBias", data.ShadowNormalBias);
-        PropertyState.SetGlobalFloat("_DirectionalLightShadowStrength", data.ShadowStrength);
-        PropertyState.SetGlobalFloat("_DirectionalLightShadowQuality", data.ShadowQuality);
+        cmd.SetGlobalInt("_DirectionalLightEnabled", 1);
+        cmd.SetGlobalVector("_DirectionalLightDirection", data.Direction);
+        cmd.SetGlobalVector("_DirectionalLightColor", data.Color);
+        cmd.SetGlobalFloat("_DirectionalLightIntensity", data.Intensity);
+        cmd.SetGlobalInt("_DirectionalLightShadowEnabled", data.ShadowEnabled ? 1 : 0);
+        cmd.SetGlobalFloat("_DirectionalLightShadowBias", data.ShadowBias);
+        cmd.SetGlobalFloat("_DirectionalLightShadowNormalBias", data.ShadowNormalBias);
+        cmd.SetGlobalFloat("_DirectionalLightShadowStrength", data.ShadowStrength);
+        cmd.SetGlobalFloat("_DirectionalLightShadowQuality", data.ShadowQuality);
 
-        PropertyState.SetGlobalInt("_CascadeCount", data.ShadowEnabled ? data.CascadeCount : 0);
+        cmd.SetGlobalInt("_CascadeCount", data.ShadowEnabled ? data.CascadeCount : 0);
         if (data.CascadeShadowMatrices != null && data.CascadeAtlasParams != null)
         {
             for (int c = 0; c < 4; c++)
             {
-                PropertyState.SetGlobalMatrix($"_CascadeShadowMatrix{c}",
+                cmd.SetGlobalMatrix($"_CascadeShadowMatrix{c}",
                     c < data.CascadeCount ? data.CascadeShadowMatrices[c] : Float4x4.Identity);
-                PropertyState.SetGlobalVector($"_CascadeAtlasParams{c}",
+                cmd.SetGlobalVector($"_CascadeAtlasParams{c}",
                     c < data.CascadeCount ? data.CascadeAtlasParams[c] : Float4.Zero);
             }
         }
     }
 
-    private void UploadLocalShadowSlots()
+    // What occupied each shadow slot last frame (0 = empty, 1 = point, 2 = spot). Lets us clear
+    // only the slots that actually held data instead of resetting all MaxShadowCasters*7 uniforms
+    // every frame.
+    private readonly int[] _slotKind = new int[MaxShadowCasters];
+
+    private void UploadLocalShadowSlots(CommandBuffer cmd)
     {
-        // Reset the spot atlas params so unused slots fall through (atlas params .z <= 0).
+        // Clear only the slots that held data last frame so any stale matrices a shader could
+        // index fall through (spot atlas params .z <= 0). Slots reused this frame are overwritten
+        // below; slots that were never written keep their default-zero GPU state.
         for (int i = 0; i < MaxShadowCasters; i++)
         {
-            PropertyState.SetGlobalMatrix($"_SpotShadowMatrices[{i}]", Float4x4.Identity);
-            PropertyState.SetGlobalVector($"_SpotShadowAtlasParams[{i}]", Float4.Zero);
-        }
-        for (int i = 0; i < MaxShadowCasters * 6; i++)
-        {
-            PropertyState.SetGlobalMatrix($"_PointShadowMatrices[{i}]", Float4x4.Identity);
-            PropertyState.SetGlobalVector($"_PointShadowFaceParams[{i}]", Float4.Zero);
+            if (_slotKind[i] == 1)
+            {
+                for (int f = 0; f < 6; f++)
+                {
+                    int idx = i * 6 + f;
+                    cmd.SetGlobalMatrix($"_PointShadowMatrices[{idx}]", Float4x4.Identity);
+                    cmd.SetGlobalVector($"_PointShadowFaceParams[{idx}]", Float4.Zero);
+                }
+            }
+            else if (_slotKind[i] == 2)
+            {
+                cmd.SetGlobalMatrix($"_SpotShadowMatrices[{i}]", Float4x4.Identity);
+                cmd.SetGlobalVector($"_SpotShadowAtlasParams[{i}]", Float4.Zero);
+            }
+            _slotKind[i] = 0;
         }
 
         for (int i = 0; i < _shadowCasters.Count && i < MaxShadowCasters; i++)
@@ -342,15 +362,17 @@ public sealed class SceneLightSystem : IDisposable
                     for (int f = 0; f < 6; f++)
                     {
                         int idx = slot * 6 + f;
-                        PropertyState.SetGlobalMatrix($"_PointShadowMatrices[{idx}]", data.PointShadowMatrices[f]);
-                        PropertyState.SetGlobalVector($"_PointShadowFaceParams[{idx}]", data.PointShadowFaceParams[f]);
+                        cmd.SetGlobalMatrix($"_PointShadowMatrices[{idx}]", data.PointShadowMatrices[f]);
+                        cmd.SetGlobalVector($"_PointShadowFaceParams[{idx}]", data.PointShadowFaceParams[f]);
                     }
+                    _slotKind[slot] = 1;
                 }
             }
             else if (data.Type == LightType.Spot)
             {
-                PropertyState.SetGlobalMatrix($"_SpotShadowMatrices[{slot}]", data.SpotShadowMatrix);
-                PropertyState.SetGlobalVector($"_SpotShadowAtlasParams[{slot}]", data.SpotShadowAtlasParams);
+                cmd.SetGlobalMatrix($"_SpotShadowMatrices[{slot}]", data.SpotShadowMatrix);
+                cmd.SetGlobalVector($"_SpotShadowAtlasParams[{slot}]", data.SpotShadowAtlasParams);
+                _slotKind[slot] = 2;
             }
         }
 
@@ -358,8 +380,8 @@ public sealed class SceneLightSystem : IDisposable
         var shadowAtlas = ShadowAtlas.GetAtlas();
         if (shadowAtlas != null)
         {
-            PropertyState.SetGlobalTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
-            PropertyState.SetGlobalVector("_ShadowAtlasSize", new Float2(shadowAtlas.Width, shadowAtlas.Height));
+            cmd.SetGlobalTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
+            cmd.SetGlobalVector("_ShadowAtlasSize", new Float2(shadowAtlas.Width, shadowAtlas.Height));
         }
     }
 
