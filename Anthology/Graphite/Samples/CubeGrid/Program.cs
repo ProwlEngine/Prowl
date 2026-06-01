@@ -52,9 +52,9 @@ public static class Program
         frame.SubmitCommands(buffer);
         device.EndFrame(frame);
 
-        device.SwapBuffers();
-
         tracker.End(dt);
+
+        device.SwapBuffers();
     }
 
 

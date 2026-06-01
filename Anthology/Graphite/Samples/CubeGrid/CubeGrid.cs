@@ -9,7 +9,7 @@ namespace Prowl.Veldrid.Samples.CubeGrid;
 
 public class CubeGrid
 {
-    public const int CubeCount = 5000;
+    public const int CubeCount = 10000;
     public const float SphereRadius = 10f;
 
 
@@ -82,28 +82,22 @@ public class CubeGrid
         view = Float4x4.CreateLookAt(cameraPosition, Float3.Zero, Float3.UnitY);
     }
 
-    static bool firstUpdate = false;
-
     public static void Draw(float time, CommandBuffer buffer)
     {
         Float4x4 viewProj = projection * view;
 
         buffer.SetShader(sharedPass);
-        buffer.SetVertexSource(sharedMesh);
 
         foreach (CubeInstance cube in cubes)
         {
+            buffer.SetVertexSource(sharedMesh);
             float angle = cube.PhaseOffset + time * cube.Speed;
             Quaternion spin = Quaternion.AngleAxis(angle, cube.Axis);
 
-            if (firstUpdate == false)
-            {
-                Float4x4 model = Float4x4.CreateTRS(cube.Position, spin, Float3.One);
-                Float4x4 mvp = viewProj * model;
+            Float4x4 model = Float4x4.CreateTRS(cube.Position, spin, Float3.One);
+            Float4x4 mvp = viewProj * model;
 
-                cube.Properties.SetMatrix("MatrixMVP", mvp);
-                firstUpdate = true;
-            }
+            cube.Properties.SetMatrix("MatrixMVP", mvp);
 
             buffer.SetProperties(cube.Properties);
             buffer.DrawIndexed();

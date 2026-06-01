@@ -37,6 +37,13 @@ public class RenderMSTracker
         sw.Stop();
         smoothedDelta += ((float)sw.Elapsed.TotalMilliseconds - smoothedDelta) * smoothing;
 
+        if (fpsTime >= 1)
+        {
+            fpsTime = 0;
+            Console.WriteLine($"Rolling Render MS: {smoothedDelta}. (FPS - not accounting swapchain/windowing): {1000.0f / smoothedDelta}");
+        }
+
+        /*
         string text = $"Rolling Render MS: {smoothedDelta}. (FPS - not accounting swapchain/windowing): {1000.0f / smoothedDelta}\n";
 
         ProfileSnapshot snapshot = gd.GetProfile();
@@ -49,6 +56,7 @@ public class RenderMSTracker
         text += LogBin("Swaps", snapshot.Swaps);
 
         Update(text);
+        */
     }
 
 
