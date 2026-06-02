@@ -1,0 +1,13 @@
+<Project>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../Veldrid/Prowl.Veldrid.csproj" />
+    </ItemGroup>
+</Project>

@@ -13,8 +13,6 @@
         <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
 
         <PackageReference Include="Prowl.Slang" Version="0.3.1" />
-
-        <ProjectReference Include="../../Veldrid/Prowl.Veldrid.csproj" />
     </ItemGroup>
 
 </Project>

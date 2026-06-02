@@ -3,8 +3,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
-        <Nullable>disable</Nullable>
-        <UseArtifactsOutput>true</UseArtifactsOutput>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <!-- Centralized package versions -->
@@ -17,10 +16,5 @@
         <ExcludeVulkan>false</ExcludeVulkan>
         <ExcludeD3D11>false</ExcludeD3D11>
         <ExcludeOpenGL>false</ExcludeOpenGL>
-    </PropertyGroup>
-
-    <PropertyGroup>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
     </PropertyGroup>
 </Project>
