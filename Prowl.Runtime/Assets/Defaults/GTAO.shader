@@ -39,7 +39,9 @@ Pass "CalculateGTAO"
         uniform int _DirectionSamples;
         uniform float _Radius;
         uniform float _Intensity;
-        uniform vec2 _NoiseScale;
+        uniform sampler2D _Noise;
+        uniform vec2 _NoiseScale;   // ao-res / noise-res, tiles the blue noise 1:1 per pixel
+        uniform vec2 _JitterOffset; // per-frame Halton offset so temporal accumulation converges
 
         in vec2 TexCoords;
 
@@ -154,8 +156,9 @@ Pass "CalculateGTAO"
             vec4 normalData = texture(_CameraNormalsTexture, TexCoords);
             vec3 viewNormal = normalize(normalData.xyz * 2.0 - 1.0);
 
-            // Generate temporal dither pattern
-            vec2 noise = hash2(TexCoords * _NoiseScale + _Time.x);
+            // Blue-noise dither (R channel of the built-in noise texture), scrolled each frame by a
+            // Halton offset so temporal accumulation converges. .r drives the slice angle, .g the step.
+            vec2 noise = texture(_Noise, TexCoords * _NoiseScale + _JitterOffset).rg;
 
             // Calculate GTAO
             float ao = CalculateGTAO(TexCoords, viewPos, viewNormal, noise);
@@ -291,6 +294,73 @@ Pass "Composite"
             finalColor *= ao;
 
             fragColor = vec4(finalColor, sceneColor.a);
+        }
+    }
+    ENDGLSL
+}
+
+Pass "Temporal"
+{
+    Tags { "RenderOrder" = "Opaque" }
+    Blend Off
+    ZTest Off
+    ZWrite Off
+    Cull Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            gl_Position = vec4(vertexPosition, 1.0);
+            TexCoords = vertexTexCoord;
+        }
+    }
+
+    Fragment
+    {
+        #include "ProwlCG"
+
+        uniform sampler2D _MainTex;        // current-frame AO
+        uniform sampler2D _PreviousBuffer; // accumulated AO history
+        uniform sampler2D _CameraMotionVectorsTexture; // .rg motion
+        uniform float _TResponse;
+
+        in vec2 TexCoords;
+
+        layout(location = 0) out vec4 fragColor;
+
+        void main()
+        {
+            float current = texture(_MainTex, TexCoords).r;
+
+            vec2 velocity = texture(_CameraMotionVectorsTexture, TexCoords).rg;
+            vec2 prevUV = TexCoords - velocity;
+
+            // Neighbourhood clamp: bound the history to the 3x3 range of the current AO so it can't
+            // ghost where geometry/occlusion changed.
+            vec2 texel = 1.0 / vec2(textureSize(_MainTex, 0));
+            float mn = current, mx = current;
+            for (int x = -1; x <= 1; x++)
+            for (int y = -1; y <= 1; y++)
+            {
+                float s = texture(_MainTex, TexCoords + texel * vec2(float(x), float(y))).r;
+                mn = min(mn, s); mx = max(mx, s);
+            }
+
+            float previous = clamp(texture(_PreviousBuffer, prevUV).r, mn, mx);
+
+            // Drop history on disocclusion (reprojected off-screen).
+            float response = (prevUV.x < 0.0 || prevUV.x > 1.0 || prevUV.y < 0.0 || prevUV.y > 1.0) ? 0.0 : _TResponse;
+
+            float ao = mix(current, previous, response);
+            fragColor = vec4(vec3(ao), 1.0);
         }
     }
     ENDGLSL
