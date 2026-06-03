@@ -738,7 +738,20 @@ internal sealed class CommandExecutor
         if (flags.HasFlag(ClearFlags.Color)) mask |= ClearBufferMask.ColorBufferBit;
         if (flags.HasFlag(ClearFlags.Depth)) mask |= ClearBufferMask.DepthBufferBit;
         if (flags.HasFlag(ClearFlags.Stencil)) mask |= ClearBufferMask.StencilBufferBit;
-        if (mask != 0) Graphics.GL.Clear(mask);
+        if (mask == 0) return;
+
+        // glClear(DEPTH/STENCIL) is gated by the depth-write mask / stencil-write mask. If a
+        // prior pass left writes disabled, the clear is silently skipped. Force the masks on
+        // for the clear, then restore the cached raster state.
+        bool clearDepth = flags.HasFlag(ClearFlags.Depth);
+        bool clearStencil = flags.HasFlag(ClearFlags.Stencil);
+        if (clearDepth) Graphics.GL.DepthMask(true);
+        if (clearStencil) Graphics.GL.StencilMask(0xFF);
+
+        Graphics.GL.Clear(mask);
+
+        if (clearDepth) Graphics.GL.DepthMask(_raster.DepthWrite);
+        if (clearStencil) Graphics.GL.StencilMask((uint)_raster.StencilWriteMask);
     }
 
     private void DoBlit(int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh,
