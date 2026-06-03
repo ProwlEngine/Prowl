@@ -27,6 +27,7 @@ public partial class PropertyState
     [SerializeField] internal Dictionary<string, Float4x4[]> _matrixArr = [];
     [SerializeField] internal Dictionary<string, AssetRef<Texture2D>> _textures = [];
     [SerializeField] internal Dictionary<string, AssetRef<Texture3D>> _textures3D = [];
+    [SerializeField] internal Dictionary<string, AssetRef<Cubemap>> _texturesCube = [];
     [SerializeField] internal Dictionary<string, GraphicsBuffer> _buffers = [];
     [SerializeField] internal Dictionary<string, uint> _bufferBindings = [];
 
@@ -44,6 +45,7 @@ public partial class PropertyState
         _matrixArr = new(clone._matrixArr);
         _textures = new(clone._textures);
         _textures3D = new(clone._textures3D);
+        _texturesCube = new(clone._texturesCube);
         _buffers = new(clone._buffers);
         _bufferBindings = new(clone._bufferBindings);
     }
@@ -100,6 +102,8 @@ public partial class PropertyState
     public void SetTexture(string name, AssetRef<Texture2D> value) => _textures[name] = value;
     public void SetTexture3D(string name, Texture3D value) => _textures3D[name] = new AssetRef<Texture3D>(value);
     public void SetTexture3D(string name, AssetRef<Texture3D> value) => _textures3D[name] = value;
+    public void SetTextureCube(string name, Cubemap value) => _texturesCube[name] = new AssetRef<Cubemap>(value);
+    public void SetTextureCube(string name, AssetRef<Cubemap> value) => _texturesCube[name] = value;
     public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
         _buffers[name] = value;
@@ -121,6 +125,7 @@ public partial class PropertyState
         foreach (var k in _matrices.Keys)   yield return k;
         foreach (var k in _textures.Keys)   yield return k;
         foreach (var k in _textures3D.Keys) yield return k;
+        foreach (var k in _texturesCube.Keys) yield return k;
     }
 
     /// <summary>Drop the entry for <paramref name="name"/> from every type bucket.
@@ -139,6 +144,7 @@ public partial class PropertyState
         _matrixArr.Remove(name);
         _textures.Remove(name);
         _textures3D.Remove(name);
+        _texturesCube.Remove(name);
         _buffers.Remove(name);
         _bufferBindings.Remove(name);
     }
@@ -154,6 +160,7 @@ public partial class PropertyState
     public bool HasMatrix(string name) => _matrices.ContainsKey(name);
     public bool HasTexture(string name) => _textures.ContainsKey(name);
     public bool HasTexture3D(string name) => _textures3D.ContainsKey(name);
+    public bool HasTextureCube(string name) => _texturesCube.ContainsKey(name);
 
     public Color GetColor(string name) => _colors.TryGetValue(name, out Color value) ? value : Color.White;
     public Float2 GetVector2(string name) => _vectors2.TryGetValue(name, out Float2 value) ? value : Float2.Zero;
@@ -166,6 +173,8 @@ public partial class PropertyState
     public AssetRef<Texture2D> GetTextureRef(string name) => _textures.TryGetValue(name, out var value) ? value : default;
     public Texture3D? GetTexture3D(string name) => _textures3D.TryGetValue(name, out var value) ? value.Res : null;
     public AssetRef<Texture3D> GetTexture3DRef(string name) => _textures3D.TryGetValue(name, out var value) ? value : default;
+    public Cubemap? GetTextureCube(string name) => _texturesCube.TryGetValue(name, out var value) ? value.Res : null;
+    public AssetRef<Cubemap> GetTextureCubeRef(string name) => _texturesCube.TryGetValue(name, out var value) ? value : default;
     public GraphicsBuffer GetBuffer(string name) => _buffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
     public uint GetBufferBinding(string name) => _bufferBindings.TryGetValue(name, out uint value) ? value : 0;
 
@@ -174,6 +183,7 @@ public partial class PropertyState
     {
         _textures.Clear();
         _textures3D.Clear();
+        _texturesCube.Clear();
         _matrices.Clear();
         _matrixArr.Clear();
         _ints.Clear();
@@ -208,6 +218,8 @@ public partial class PropertyState
             _textures[item.Key] = item.Value;
         foreach (KeyValuePair<string, AssetRef<Texture3D>> item in properties._textures3D)
             _textures3D[item.Key] = item.Value;
+        foreach (KeyValuePair<string, AssetRef<Cubemap>> item in properties._texturesCube)
+            _texturesCube[item.Key] = item.Value;
         foreach (KeyValuePair<string, GraphicsBuffer> item in properties._buffers)
             _buffers[item.Key] = item.Value;
         foreach (KeyValuePair<string, uint> item in properties._bufferBindings)
@@ -229,6 +241,7 @@ public partial class PropertyState
     internal static Dictionary<string, System.Numerics.Matrix4x4[]> s_globalMatrixArr = [];
     internal static Dictionary<string, Texture2D> s_globalTextures = [];
     internal static Dictionary<string, Texture3D> s_globalTextures3D = [];
+    internal static Dictionary<string, Cubemap> s_globalTexturesCube = [];
     internal static Dictionary<string, GraphicsBuffer> s_globalBuffers = [];
     internal static Dictionary<string, uint> s_globalBufferBindings = [];
 
@@ -285,6 +298,11 @@ public partial class PropertyState
         using var cmd = Graphics.GetCommandBuffer("SetGlobalTexture3D");
         cmd.SetGlobalTexture3D(name, value); Graphics.Submit(cmd);
     }
+    public static void SetGlobalTextureCube(string name, Cubemap? value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalTextureCube");
+        cmd.SetGlobalTextureCube(name, value); Graphics.Submit(cmd);
+    }
     public static void SetGlobalBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
     {
         using var cmd = Graphics.GetCommandBuffer("SetGlobalBuffer");
@@ -300,6 +318,7 @@ public partial class PropertyState
     {
         s_globalTextures.Clear();
         s_globalTextures3D.Clear();
+        s_globalTexturesCube.Clear();
         s_globalMatrices.Clear();
         s_globalInts.Clear();
         s_globalFloats.Clear();
@@ -322,6 +341,7 @@ public partial class PropertyState
     public static Float4x4 GetGlobalMatrix(string name) => s_globalMatrices.TryGetValue(name, out Float4x4 value) ? value : Float4x4.Identity;
     public static Texture2D? GetGlobalTexture(string name) => s_globalTextures.TryGetValue(name, out Texture2D value) ? value : null;
     public static Texture3D? GetGlobalTexture3D(string name) => s_globalTextures3D.TryGetValue(name, out Texture3D value) ? value : null;
+    public static Cubemap? GetGlobalTextureCube(string name) => s_globalTexturesCube.TryGetValue(name, out Cubemap value) ? value : null;
     public static GraphicsBuffer GetGlobalBuffer(string name) => s_globalBuffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
     public static uint GetGlobalBufferBinding(string name) => s_globalBufferBindings.TryGetValue(name, out uint value) ? value : 0;
 
