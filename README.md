@@ -92,8 +92,11 @@ Please keep in mind that Prowl is incredibly new and under very active developme
 
 -   **Graphics Rendering:**
     - OpenGL Backend via [Silk.NET](https://github.com/dotnet/Silk.NET)
+	- Dedicated Render Thread
     - Extensible Render Pipeline (Custom Pipelines Supported)
-    - Forward-Lit Pipeline with Depth + Normals Pre-Pass
+    - Forward-Lit Pipeline with Thin G-Buffer Pre-Pass (Depth, Normals, Motion, Roughness, Metallic)
+	- Custom UV-Unwrapper and Lightmapper
+	- Baked Light Probes
     - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
     - Node-Based **Shader Graph**
         - 150+ nodes across 14 categories (Math, Vector, Color, UV, Geometry, Scene Data, Lighting, Noise, Post-Effect, Utility, …)
@@ -122,6 +125,7 @@ Please keep in mind that Prowl is incredibly new and under very active developme
         - FXAA (Fast Approximate Anti-Aliasing)
 		- TAA (Temporal Anti-Aliasing)
         - Ground-Truth Ambient Occlusion (GTAO)
+		- Stochastic Screen Space Reflections (SSR)
         - Bokeh Depth of Field
         - Volumetric Fog
         - Cinematic Effects (grain, vignette, chromatic aberration)
@@ -146,6 +150,7 @@ Please keep in mind that Prowl is incredibly new and under very active developme
     - Custom Importers via Attributes
     - Sub-Assets with Deterministic GUIDs
     - Forward & Reverse Dependency Tracking
+	- Threaded Asset Loading
     - Supported Formats:
         - Models: GLTF, GLB, OBJ (Custom Importer, FBX Planned)
         - Textures: PNG, JPG, BMP, TGA, PSD, HDR, DDS, EXR (via Magick.NET)
