@@ -610,6 +610,9 @@ internal sealed class CommandExecutor
                 {
                     var vao = (GraphicsVertexArray)objects[ReadU16(stream, ref pos)]!;
                     vao.CreateGLObject();
+                    // CreateGLObject binds the new VAO to configure it then leaves GL on
+                    // VAO 0. Sync the mirror so the next BindVAO doesn't skip as redundant.
+                    _lastBoundVAO = 0;
                     break;
                 }
                 case CommandOpcode.DisposeVertexArray:
@@ -628,6 +631,10 @@ internal sealed class CommandExecutor
                 {
                     var fb = (GraphicsFrameBuffer)objects[ReadU16(stream, ref pos)]!;
                     fb.CreateGLObject();
+                    // CreateGLObject binds the new FBO to attach textures then leaves GL on
+                    // FBO 0. Sync the mirrors so the next ApplyRenderTarget doesn't skip.
+                    _lastDrawFb = 0;
+                    _lastReadFb = 0;
                     break;
                 }
                 case CommandOpcode.DisposeFramebuffer:
