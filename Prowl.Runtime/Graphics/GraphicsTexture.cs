@@ -32,6 +32,7 @@ public unsafe class GraphicsTexture : IDisposable
         {
             TextureType.Texture2D => TextureTarget.Texture2D,
             TextureType.Texture3D => TextureTarget.Texture3D,
+            TextureType.TextureCubeMap => TextureTarget.TextureCubeMap,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
         GetTextureFormatEnums(format, out PixelInternalFormat, out PixelType, out PixelFormat);
@@ -141,6 +142,14 @@ public unsafe class GraphicsTexture : IDisposable
     {
         Bind(false);
         Graphics.GL.GetTexImage(Target, level, PixelFormat, PixelType, ptr);
+    }
+
+    /// <summary>Read back one cubemap face's mip level. <paramref name="face"/> is 0..5 in
+    /// GL order (+X, -X, +Y, -Y, +Z, -Z).</summary>
+    public void GetTexImageFace(int face, int level, void* ptr)
+    {
+        Bind(false);
+        Graphics.GL.GetTexImage(TextureTarget.TextureCubeMapPositiveX + face, level, PixelFormat, PixelType, ptr);
     }
 
     public bool IsDisposed { get; protected set; }

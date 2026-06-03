@@ -121,6 +121,11 @@ public static unsafe class Graphics
 
         GL.Enable(EnableCap.LineSmooth);
 
+        // Seamless cubemap filtering removes the visible face seams when sampling a
+        // cubemap with linear/trilinear filtering. Required for clean reflection-probe
+        // and prefiltered-environment sampling.
+        GL.Enable(EnableCap.TextureCubeMapSeamless);
+
         MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
         MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
         MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
@@ -301,6 +306,14 @@ public static unsafe class Graphics
         SubmitAndWait(cmd);
     }
 
+    /// <summary>Synchronous read-back of one cubemap face's mip level. Blocks until filled.</summary>
+    public static void GetTexImageCubeFace(GraphicsTexture texture, int face, int mip, byte[] destination)
+    {
+        using var cmd = GetCommandBuffer("Texture.GetTexImageCubeFace");
+        cmd.EncodeGetTextureCubeFaceData(texture, face, mip, destination);
+        SubmitAndWait(cmd);
+    }
+
     public static unsafe void TexImage2D(GraphicsTexture texture, int mip, uint width, uint height, int border, void* data)
     {
         int size = data != null ? (int)(width * height * BytesPerPixel(texture)) : 0;
@@ -317,6 +330,17 @@ public static unsafe class Graphics
         var span = new ReadOnlySpan<byte>(data, size);
         using var cmd = GetCommandBuffer("Texture.TexSubImage2D");
         cmd.EncodeUpdateTexture2D(texture, mip, x, y, width, height, span);
+        Submit(cmd);
+    }
+
+    /// <summary>Allocate (and optionally upload) one face of a cubemap at a mip level.
+    /// <paramref name="face"/> is 0..5 in GL order (+X, -X, +Y, -Y, +Z, -Z).</summary>
+    public static unsafe void TexImageCubeFace(GraphicsTexture texture, int face, int mip, uint size, void* data)
+    {
+        int byteSize = data != null ? (int)(size * size * BytesPerPixel(texture)) : 0;
+        ReadOnlySpan<byte> span = data != null ? new ReadOnlySpan<byte>(data, byteSize) : ReadOnlySpan<byte>.Empty;
+        using var cmd = GetCommandBuffer("Texture.TexImageCubeFace");
+        cmd.EncodeAllocateTextureCubeFace(texture, face, mip, size, span);
         Submit(cmd);
     }
 

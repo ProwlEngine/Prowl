@@ -12,6 +12,18 @@ public unsafe class GraphicsFrameBuffer
     {
         public GraphicsTexture Texture;
         public bool IsDepth;
+
+        /// <summary>When true, the attachment binds a single cubemap face (selected by
+        /// <see cref="CubeFace"/>) instead of a 2D texture. Used for rendering into a
+        /// reflection-probe cubemap face.</summary>
+        public bool IsCubeFace;
+
+        /// <summary>Cubemap face index 0..5 (GL order +X,-X,+Y,-Y,+Z,-Z). Only read when
+        /// <see cref="IsCubeFace"/> is true.</summary>
+        public int CubeFace;
+
+        /// <summary>Mip level of the texture/face to attach. Defaults to 0 (full 2D RTs).</summary>
+        public int MipLevel;
     }
 
     public uint Handle { get; internal set; }
@@ -71,13 +83,17 @@ public unsafe class GraphicsFrameBuffer
         {
             for (int i = 0; i < numTextures; i++)
             {
-                if (!_attachments[i].IsDepth)
+                ref readonly Attachment a = ref _attachments[i];
+                if (!a.IsDepth)
                 {
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, _attachments[i].Texture!.Target, _attachments[i].Texture!.Handle, 0);
+                    TextureTarget colorTarget = a.IsCubeFace
+                        ? TextureTarget.TextureCubeMapPositiveX + a.CubeFace
+                        : a.Texture!.Target;
+                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, colorTarget, a.Texture!.Handle, a.MipLevel);
                 }
                 else
                 {
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, _attachments[i].Texture!.Handle, 0);
+                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, a.Texture!.Handle, a.MipLevel);
                 }
             }
             Graphics.GL.DrawBuffers((uint)numTextures, buffers);

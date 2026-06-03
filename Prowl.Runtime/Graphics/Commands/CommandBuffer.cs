@@ -304,6 +304,13 @@ public sealed class CommandBuffer : IDisposable
         Write(PushObject(tex));
     }
 
+    public void SetGlobalTextureCube(string name, Cubemap? tex)
+    {
+        WriteHeader(CommandOpcode.SetGlobalTextureCube);
+        Write(InternName(name));
+        Write(PushObject(tex));
+    }
+
     public void ClearAllGlobals()
     {
         WriteHeader(CommandOpcode.ClearAllGlobals);
@@ -655,6 +662,19 @@ public sealed class CommandBuffer : IDisposable
         Write(in r);
     }
 
+    /// <summary>Allocate (and optionally upload) one face of a cubemap at a mip level.
+    /// <paramref name="face"/> is 0..5 in GL order (+X, -X, +Y, -Y, +Z, -Z).</summary>
+    internal void EncodeAllocateTextureCubeFace(GraphicsTexture tex, int face, int mip, uint size, ReadOnlySpan<byte> data)
+    {
+        WriteHeader(CommandOpcode.AllocateTextureCubeFace);
+        Write(PushObject(tex));
+        Write(face);
+        Write(mip);
+        Write(size);
+        var r = _store.Park(data);
+        Write(in r);
+    }
+
     internal void EncodeAllocateTexture3D(GraphicsTexture tex, int mip, uint width, uint height, uint depth, ReadOnlySpan<byte> data)
     {
         WriteHeader(CommandOpcode.AllocateTexture3D);
@@ -722,6 +742,17 @@ public sealed class CommandBuffer : IDisposable
     {
         WriteHeader(CommandOpcode.GetTextureData);
         Write(PushObject(tex));
+        Write(mip);
+        Write(PushObject(destination));
+    }
+
+    /// <summary>Read one cubemap face's mip back into <paramref name="destination"/>.
+    /// Caller MUST use SubmitAndWait.</summary>
+    internal void EncodeGetTextureCubeFaceData(GraphicsTexture tex, int face, int mip, byte[] destination)
+    {
+        WriteHeader(CommandOpcode.GetTextureCubeFaceData);
+        Write(PushObject(tex));
+        Write(face);
         Write(mip);
         Write(PushObject(destination));
     }

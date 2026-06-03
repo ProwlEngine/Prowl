@@ -118,6 +118,7 @@ internal static class PropertyApply
         WalkBuffers(PropertyState.s_globalBuffers, PropertyState.s_globalBufferBindings, p);
         WalkGlobalTextures(PropertyState.s_globalTextures, p, exec);
         WalkGlobalTextures3D(PropertyState.s_globalTextures3D, p, exec);
+        WalkGlobalTexturesCube(PropertyState.s_globalTexturesCube, p, exec);
     }
 
     public static void ApplyMaterial(PropertyState state, GraphicsProgram p, CommandExecutor exec)
@@ -133,6 +134,7 @@ internal static class PropertyApply
         WalkBuffers(state._buffers, state._bufferBindings, p);
         WalkAssetTextures(state._textures, p, exec);
         WalkAssetTextures3D(state._textures3D, p, exec);
+        WalkAssetTexturesCube(state._texturesCube, p, exec);
     }
 
     public static void ApplyInstance(PropertyState state, GraphicsProgram p, CommandExecutor exec)
@@ -298,6 +300,26 @@ internal static class PropertyApply
         foreach (var kv in d)
         {
             var tex = kv.Value.Res;
+            if (!tex.IsValid()) continue;
+            BindTexUniform(p, kv.Key, tex.Handle, exec);
+        }
+    }
+
+    private static void WalkAssetTexturesCube(Dictionary<string, AssetRef<Cubemap>> d, GraphicsProgram p, CommandExecutor exec)
+    {
+        foreach (var kv in d)
+        {
+            var tex = kv.Value.Res;
+            if (!tex.IsValid()) continue;
+            BindTexUniform(p, kv.Key, tex.Handle, exec);
+        }
+    }
+
+    private static void WalkGlobalTexturesCube(Dictionary<string, Cubemap> d, GraphicsProgram p, CommandExecutor exec)
+    {
+        foreach (var kv in d)
+        {
+            var tex = kv.Value;
             if (!tex.IsValid()) continue;
             BindTexUniform(p, kv.Key, tex.Handle, exec);
         }

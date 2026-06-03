@@ -50,6 +50,7 @@ internal enum CommandOpcode : ushort
     SetGlobalMatrices,
     SetGlobalBuffer,
     SetGlobalTexture3D,
+    SetGlobalTextureCube,
     ClearAllGlobals,
 
     // Per-uniform sugar (applied immediately against the bound shader)
@@ -84,12 +85,14 @@ internal enum CommandOpcode : ushort
     CreateTexture,
     AllocateTexture2D,
     AllocateTexture3D,
+    AllocateTextureCubeFace,
     UpdateTexture3D,
     SetTextureWrap,
     SetTextureFiltersOp,
     SetTextureCompareMode,
     GetTextureData,
     GetTextureDataPtr,
+    GetTextureCubeFaceData,
     DisposeTexture,
     CreateVertexArrayOp,
     DisposeVertexArray,

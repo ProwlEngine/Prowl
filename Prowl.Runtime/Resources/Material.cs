@@ -161,6 +161,8 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetTexture(string name, Texture2D value)  { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
     public void SetTexture(string name, AssetRef<Texture2D> value) { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
     public void SetTexture3D(string name, Texture3D value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+    public void SetTextureCube(string name, Cubemap value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
+    public void SetTextureCube(string name, AssetRef<Cubemap> value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
 
     /// <summary>Forget the user override for <paramref name="name"/> next sync
     /// will refill it from the shader's current default. Useful for an inspector

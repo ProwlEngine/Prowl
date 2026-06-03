@@ -98,9 +98,7 @@ public abstract class Texture : EngineObject
     /// </summary>
     public static bool IsTextureTypeMipmappable(TextureType textureType)
     {
-        return textureType == TextureType.Texture2D || textureType == TextureType.Texture3D;
-        //return textureType == TextureType.Texture1D || textureType == TextureType.Texture2D || textureType == TextureType.Texture3D
-        //    || textureType == TextureType.Texture1DArray || textureType == TextureType.Texture2DArray
-        //    || textureType == TextureType.TextureCubeMap || textureType == TextureType.TextureCubeMapArray;
+        return textureType == TextureType.Texture2D || textureType == TextureType.Texture3D
+            || textureType == TextureType.TextureCubeMap;
     }
 }

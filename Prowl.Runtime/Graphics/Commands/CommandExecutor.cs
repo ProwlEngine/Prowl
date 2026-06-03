@@ -268,6 +268,14 @@ internal sealed class CommandExecutor
                     else PropertyState.s_globalTextures3D.Remove(name);
                     break;
                 }
+                case CommandOpcode.SetGlobalTextureCube:
+                {
+                    string name = (string)objects[ReadU16(stream, ref pos)]!;
+                    var tex = (Cubemap?)objects[ReadU16(stream, ref pos)];
+                    if (tex != null) PropertyState.s_globalTexturesCube[name] = tex;
+                    else PropertyState.s_globalTexturesCube.Remove(name);
+                    break;
+                }
                 case CommandOpcode.ClearAllGlobals:
                 {
                     PropertyState.ClearGlobalsInternal();
@@ -474,6 +482,28 @@ internal sealed class CommandExecutor
                     }
                     break;
                 }
+                case CommandOpcode.AllocateTextureCubeFace:
+                {
+                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    int face = ReadI32(stream, ref pos);
+                    int mip = ReadI32(stream, ref pos);
+                    uint size = ReadU32(stream, ref pos);
+                    var data = ReadBlob<byte>(stream, ref pos, store);
+                    var faceTarget = TextureTarget.TextureCubeMapPositiveX + face;
+                    unsafe
+                    {
+                        if (data.Length > 0)
+                        {
+                            fixed (byte* p = data)
+                                tex.TexImage2D(faceTarget, mip, size, size, 0, p);
+                        }
+                        else
+                        {
+                            tex.TexImage2D(faceTarget, mip, size, size, 0, null);
+                        }
+                    }
+                    break;
+                }
                 case CommandOpcode.AllocateTexture3D:
                 {
                     var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
@@ -552,6 +582,19 @@ internal sealed class CommandExecutor
                     {
                         fixed (byte* p = destination)
                             tex.GetTexImage(mip, p);
+                    }
+                    break;
+                }
+                case CommandOpcode.GetTextureCubeFaceData:
+                {
+                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    int face = ReadI32(stream, ref pos);
+                    int mip = ReadI32(stream, ref pos);
+                    var destination = (byte[])objects[ReadU16(stream, ref pos)]!;
+                    unsafe
+                    {
+                        fixed (byte* p = destination)
+                            tex.GetTexImageFace(face, mip, p);
                     }
                     break;
                 }
