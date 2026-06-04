@@ -11,7 +11,7 @@
     <!-- Package metadata -->
     <PackageId>Prowl.Clay</PackageId>
     <Title>Prowl.Clay</Title>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <Authors>Wulferis</Authors>
     <Company>Prowl Engine</Company>
     <Description>3D model importing library for the Prowl Game Engine. Loads glTF2 / GLB / VRM, OBJ, and FBX (binary + ASCII) into a read-only Model graph with a configurable post-process pipeline (triangulation, tangent generation, bone limiting, coordinate conversion, mesh optimization).</Description>
