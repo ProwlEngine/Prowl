@@ -153,13 +153,15 @@ internal static class GltfAnimationMapper
             binding.Times.AddRange(times);
 
             // De-interleave: per-key value (cubic spline keeps in/out tangents adjacent).
+            // glTF morph weights are 0-1; scale to 0-100 so blend-shape weight curves share the
+            // same unit across formats (FBX DeformPercent and BlendShapeFrame.Weight are 0-100).
             float[] shapeValues = new float[times.Length * stride];
             for (int k = 0; k < times.Length; k++)
             {
                 for (int t = 0; t < stride; t++)
                 {
                     int srcOff = (k * stride + t) * totalPerKey + shape;
-                    shapeValues[k * stride + t] = flatValues[srcOff];
+                    shapeValues[k * stride + t] = flatValues[srcOff] * 100f;
                 }
             }
             binding.Values.AddRange(shapeValues);

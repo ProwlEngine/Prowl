@@ -26,19 +26,21 @@ internal static class FbxAnimationMapper
     /// <summary>FBX time unit: 1 second = 46186158000 KTime ticks.</summary>
     private const double KTimePerSecond = 46186158000.0;
 
-    public static void MapAll(FbxDocument doc, FbxModelMapper.ModelMapping modelMapping, IntermediateScene scene, ImportContext ctx)
+    public static void MapAll(FbxDocument doc, FbxModelMapper.ModelMapping modelMapping, IntermediateScene scene, ImportContext ctx,
+        Dictionary<long, FbxBlendShapeMapper.ChannelTarget> blendShapeChannels)
     {
         // Walk every AnimationStack. Each becomes one IntermediateAnimation.
         foreach (var stack in doc.Objects.Values)
         {
             if (stack.ObjectType != "AnimationStack") continue;
-            var anim = BuildClip(stack, doc, modelMapping, ctx);
+            var anim = BuildClip(stack, doc, modelMapping, blendShapeChannels, ctx);
             if (anim is null || anim.Bindings.Count == 0) continue;
             scene.Animations.Add(anim);
         }
     }
 
-    private static IntermediateAnimation? BuildClip(FbxObject stack, FbxDocument doc, FbxModelMapper.ModelMapping modelMapping, ImportContext ctx)
+    private static IntermediateAnimation? BuildClip(FbxObject stack, FbxDocument doc, FbxModelMapper.ModelMapping modelMapping,
+        Dictionary<long, FbxBlendShapeMapper.ChannelTarget> blendShapeChannels, ImportContext ctx)
     {
         var clip = new IntermediateAnimation { Name = string.IsNullOrEmpty(stack.Name) ? $"Take_{stack.Id}" : stack.Name };
 
@@ -65,7 +67,7 @@ internal static class FbxAnimationMapper
                 if (c.Type != "OO") continue;
                 if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
                 if (src.ObjectType != "AnimationCurveNode") continue;
-                BuildBindingsFromCurveNode(src, doc, modelMapping, clip, ctx);
+                BuildBindingsFromCurveNode(src, doc, modelMapping, blendShapeChannels, clip, ctx);
             }
         }
 
@@ -80,27 +82,46 @@ internal static class FbxAnimationMapper
 
     private static void BuildBindingsFromCurveNode(
         FbxObject curveNode, FbxDocument doc, FbxModelMapper.ModelMapping modelMapping,
+        Dictionary<long, FbxBlendShapeMapper.ChannelTarget> blendShapeChannels,
         IntermediateAnimation clip, ImportContext ctx)
     {
-        // Find the target Model + property name via OP (CurveNode -> Model with property = "Lcl Translation" etc.)
+        // The curve node connects to its target via OP. The target is either a Model (transform
+        // channels) or a BlendShapeChannel deformer (DeformPercent = blend-shape weight).
         string property = string.Empty;
         IntermediateNode? targetNode = null;
         long targetFbxId = 0;
+        FbxObject? targetObj = null;
         if (doc.ConnectionsBySource.TryGetValue(curveNode.Id, out var curveOut))
         {
             foreach (var c in curveOut)
             {
                 if (c.Type != "OP") continue;
                 if (!doc.Objects.TryGetValue(c.Destination, out var dst)) continue;
-                if (dst.ObjectType != "Model") continue;
-                if (modelMapping.NodesByFbxId.TryGetValue(dst.Id, out targetNode))
+
+                if (dst.ObjectType == "Model" && modelMapping.NodesByFbxId.TryGetValue(dst.Id, out targetNode))
                 {
                     property = c.Property;
                     targetFbxId = dst.Id;
+                    targetObj = dst;
+                    break;
+                }
+                if (dst.ObjectType == "Deformer" && dst.Subtype == "BlendShapeChannel")
+                {
+                    property = c.Property;
+                    targetObj = dst;
                     break;
                 }
             }
         }
+        if (targetObj is null) return;
+
+        // Blend-shape weight channel (DeformPercent on a BlendShapeChannel).
+        if (targetObj.ObjectType == "Deformer")
+        {
+            EmitBlendShapeWeightBinding(targetObj, curveNode, doc, modelMapping, blendShapeChannels, clip);
+            return;
+        }
+
         if (targetNode is null || property.Length == 0) return;
 
         AnimatedProperty prowlProp = property switch
@@ -111,7 +132,7 @@ internal static class FbxAnimationMapper
             _ => default, // unmapped
         };
         if (property != "Lcl Translation" && property != "Lcl Rotation" && property != "Lcl Scaling")
-            return; // BlendShape weights handled separately by FbxBlendShapeMapper
+            return; // unsupported Model property
 
         // Collect the (X/Y/Z) child curves via OP (Curve -> CurveNode with property "d|X" etc.).
         var curveX = ResolveScalarCurve(curveNode, doc, "d|X");
@@ -146,24 +167,84 @@ internal static class FbxAnimationMapper
             if (c.Type != "OP" || c.Property != propertyName) continue;
             if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
             if (src.ObjectType != "AnimationCurve") continue;
+            return ReadScalarCurve(src);
+        }
+        return null;
+    }
 
-            var keyTimeNode = src.Node.FindChild("KeyTime");
-            var keyValueNode = src.Node.FindChild("KeyValueFloat");
-            if (keyTimeNode is null || keyValueNode is null) return null;
-            if (keyTimeNode.Properties.Count == 0 || keyValueNode.Properties.Count == 0) return null;
+    /// <summary>Resolves the first AnimationCurve attached to a CurveNode, regardless of property name.</summary>
+    private static ScalarCurve? ResolveFirstScalarCurve(FbxObject curveNode, FbxDocument doc)
+    {
+        if (!doc.ConnectionsByDestination.TryGetValue(curveNode.Id, out var inConns)) return null;
+        foreach (var c in inConns)
+        {
+            if (c.Type != "OP") continue;
+            if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+            if (src.ObjectType != "AnimationCurve") continue;
+            var curve = ReadScalarCurve(src);
+            if (curve is not null) return curve;
+        }
+        return null;
+    }
 
-            // KeyTime is i64 KTime ticks; KeyValueFloat is f32 per key.
-            long[] times = keyTimeNode.Properties[0].LongArrayValue
-                          ?? Array.Empty<long>();
-            float[] values = keyValueNode.Properties[0].FloatArrayValue
-                          ?? keyValueNode.Properties[0].AsFloatArray();
-            if (times.Length == 0 || values.Length == 0) return null;
-            int len = Math.Min(times.Length, values.Length);
-            float[] timesS = new float[len];
-            for (int i = 0; i < len; i++) timesS[i] = (float)(times[i] / KTimePerSecond);
-            float[] vals = new float[len];
-            Array.Copy(values, vals, len);
-            return new ScalarCurve(timesS, vals);
+    private static ScalarCurve? ReadScalarCurve(FbxObject animCurve)
+    {
+        var keyTimeNode = animCurve.Node.FindChild("KeyTime");
+        var keyValueNode = animCurve.Node.FindChild("KeyValueFloat");
+        if (keyTimeNode is null || keyValueNode is null) return null;
+        if (keyTimeNode.Properties.Count == 0 || keyValueNode.Properties.Count == 0) return null;
+
+        // KeyTime is i64 KTime ticks; KeyValueFloat is f32 per key.
+        long[] times = keyTimeNode.Properties[0].LongArrayValue ?? Array.Empty<long>();
+        float[] values = keyValueNode.Properties[0].FloatArrayValue ?? keyValueNode.Properties[0].AsFloatArray();
+        if (times.Length == 0 || values.Length == 0) return null;
+        int len = Math.Min(times.Length, values.Length);
+        float[] timesS = new float[len];
+        for (int i = 0; i < len; i++) timesS[i] = (float)(times[i] / KTimePerSecond);
+        float[] vals = new float[len];
+        Array.Copy(values, vals, len);
+        return new ScalarCurve(timesS, vals);
+    }
+
+    /// <summary>
+    /// Emits a <see cref="AnimatedProperty.BlendShapeWeight"/> binding from a DeformPercent curve on a
+    /// BlendShapeChannel. FBX DeformPercent is already 0-100, matching the blend-shape frame weights.
+    /// </summary>
+    private static void EmitBlendShapeWeightBinding(
+        FbxObject channel, FbxObject curveNode, FbxDocument doc, FbxModelMapper.ModelMapping modelMapping,
+        Dictionary<long, FbxBlendShapeMapper.ChannelTarget> blendShapeChannels, IntermediateAnimation clip)
+    {
+        if (!blendShapeChannels.TryGetValue(channel.Id, out var target)) return;
+
+        IntermediateNode? node = ResolveNodeForGeometry(target.GeometryId, doc, modelMapping);
+        if (node is null) return;
+
+        ScalarCurve? curve = ResolveScalarCurve(curveNode, doc, "d|DeformPercent") ?? ResolveFirstScalarCurve(curveNode, doc);
+        if (curve is null || curve.Times.Length == 0) return;
+
+        var binding = new IntermediateAnimationBinding
+        {
+            TargetNode = node,
+            Property = AnimatedProperty.BlendShapeWeight,
+            SubIndex = target.BlendShapeIndex,
+            Interpolation = AnimationInterpolation.Linear,
+            Dimension = 1,
+        };
+        binding.Times.AddRange(curve.Times);
+        binding.Values.AddRange(curve.Values);
+        clip.Bindings.Add(binding);
+    }
+
+    /// <summary>Finds the model node that references a geometry (Geometry --OO--&gt; Model).</summary>
+    private static IntermediateNode? ResolveNodeForGeometry(long geometryId, FbxDocument doc, FbxModelMapper.ModelMapping modelMapping)
+    {
+        if (!doc.ConnectionsBySource.TryGetValue(geometryId, out var outConns)) return null;
+        foreach (var c in outConns)
+        {
+            if (c.Type != "OO") continue;
+            if (!doc.Objects.TryGetValue(c.Destination, out var dst)) continue;
+            if (dst.ObjectType != "Model") continue;
+            if (modelMapping.NodesByFbxId.TryGetValue(dst.Id, out var node)) return node;
         }
         return null;
     }

@@ -129,8 +129,8 @@ internal sealed class FbxFormat : IModelFormat
         // 5. Deformers (skinning + blend shapes) + animations. These all rely on the FBX-vertex
         //    -> intermediate-vertex expansion table that FbxMeshMapper built.
         FbxSkinMapper.MapAll(doc, meshMapping, modelMapping, scene, context);
-        FbxBlendShapeMapper.MapAll(doc, meshMapping, scene, context);
-        FbxAnimationMapper.MapAll(doc, modelMapping, scene, context);
+        var blendShapeChannels = FbxBlendShapeMapper.MapAll(doc, meshMapping, scene, context);
+        FbxAnimationMapper.MapAll(doc, modelMapping, scene, context, blendShapeChannels);
 
         return scene;
     }

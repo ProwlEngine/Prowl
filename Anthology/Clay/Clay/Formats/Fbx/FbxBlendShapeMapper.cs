@@ -21,8 +21,19 @@ namespace Prowl.Clay.Formats.Fbx;
 /// </remarks>
 internal static class FbxBlendShapeMapper
 {
-    public static void MapAll(FbxDocument doc, FbxMeshMapper.MeshMapping meshMapping, IntermediateScene scene, ImportContext ctx)
+    /// <summary>
+    /// Resolves a <c>BlendShapeChannel</c> deformer to the geometry it animates and the channel's
+    /// position within that geometry's blend-shape list. Used by the animation mapper to turn a
+    /// <c>DeformPercent</c> curve into a <see cref="AnimatedProperty.BlendShapeWeight"/> binding.
+    /// </summary>
+    internal readonly record struct ChannelTarget(long GeometryId, int BlendShapeIndex);
+
+    public static Dictionary<long, ChannelTarget> MapAll(FbxDocument doc, FbxMeshMapper.MeshMapping meshMapping, IntermediateScene scene, ImportContext ctx)
     {
+        // channelId -> (geometry, index of this channel's blend shape within the geometry).
+        var channelTargets = new Dictionary<long, ChannelTarget>();
+        var perGeometryCount = new Dictionary<long, int>();
+
         foreach (var bs in doc.Objects.Values)
         {
             if (bs.ObjectType != "Deformer" || bs.Subtype != "BlendShape") continue;
@@ -48,12 +59,22 @@ internal static class FbxBlendShapeMapper
                 if (c.Type != "OO") continue;
                 if (!doc.Objects.TryGetValue(c.Source, out var channel)) continue;
                 if (channel.ObjectType != "Deformer" || channel.Subtype != "BlendShapeChannel") continue;
-                MapChannel(channel, doc, geoMapping, scene, ctx);
+
+                // The channel's index must match the order blend shapes are appended to the mesh,
+                // so it's only advanced when MapChannel actually produces a blend shape.
+                if (MapChannel(channel, doc, geoMapping, scene, ctx))
+                {
+                    perGeometryCount.TryGetValue(geometry.Id, out int idx);
+                    channelTargets[channel.Id] = new ChannelTarget(geometry.Id, idx);
+                    perGeometryCount[geometry.Id] = idx + 1;
+                }
             }
         }
+
+        return channelTargets;
     }
 
-    private static void MapChannel(FbxObject channel, FbxDocument doc, FbxMeshMapper.GeometryMapping geoMapping, IntermediateScene scene, ImportContext ctx)
+    private static bool MapChannel(FbxObject channel, FbxDocument doc, FbxMeshMapper.GeometryMapping geoMapping, IntermediateScene scene, ImportContext ctx)
     {
         // Each channel -> one or more ShapeGeometry. Most files have exactly one shape per channel
         // (binary morph: 0% rest, 100% shape). Multi-shape channels are progressive morphs - we
@@ -69,7 +90,7 @@ internal static class FbxBlendShapeMapper
                     shapes.Add(src);
             }
         }
-        if (shapes.Count == 0) return;
+        if (shapes.Count == 0) return false;
 
         // Optional FullWeights: parallel to shapes, gives the activation weight (0-100) per shape.
         double[]? fullWeights = channel.Node.FindChild("FullWeights")?.Properties.ElementAtOrDefault(0)?.AsDoubleArray();
@@ -148,10 +169,15 @@ internal static class FbxBlendShapeMapper
         }
 
         // Attach the blend shapes to every affected mesh.
+        bool added = false;
         for (int m = 0; m < geoMapping.MeshCount; m++)
         {
             if (blendShapes[m].Frames.Count > 0)
+            {
                 scene.Meshes[geoMapping.FirstMeshIndex + m].BlendShapes.Add(blendShapes[m]);
+                added = true;
+            }
         }
+        return added;
     }
 }
