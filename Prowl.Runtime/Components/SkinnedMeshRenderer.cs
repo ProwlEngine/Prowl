@@ -57,6 +57,61 @@ public class SkinnedMeshRenderer : MonoBehaviour
     [System.NonSerialized] private Texture2D? _boneTexture;
     [System.NonSerialized] private int _boneTextureSize; // number of bones the texture was allocated for
 
+    /// <summary>
+    /// Per-blend-shape weights (0-100). Length tracks the mesh's blend-shape count.
+    /// Serialized so hand-posed weights persist; animation drives these at runtime.
+    /// </summary>
+    [SerializeField, HideInInspector]
+    private float[]? _blendShapeWeights;
+
+    // Active-morph-layer weight texture (rebuilt per frame from current weights): one texel per
+    // active layer = (layerIndex, weight, 0, 0). Reused across frames.
+    [System.NonSerialized] private Texture2D? _morphWeightTexture;
+    [System.NonSerialized] private int _morphWeightCapacity;
+    [System.NonSerialized] private Float4[]? _morphWeightData; // reused upload buffer, sized to capacity
+    [System.NonSerialized] private readonly List<Float4> _activeMorphLayers = new();
+
+    /// <summary>Number of blend shapes on the shared mesh (0 if none).</summary>
+    public int BlendShapeCount => SharedMesh.Res?.BlendShapeCount ?? 0;
+
+    /// <summary>Index of a blend shape by name, or -1 if not found.</summary>
+    public int GetBlendShapeIndex(string name) => SharedMesh.Res?.GetBlendShapeIndex(name) ?? -1;
+
+    /// <summary>The blend shape's name, or empty if out of range.</summary>
+    public string GetBlendShapeName(int index) => SharedMesh.Res?.GetBlendShapeName(index) ?? string.Empty;
+
+    /// <summary>Get a blend-shape weight (0-100). Returns 0 for invalid indices.</summary>
+    public float GetBlendShapeWeight(int index)
+    {
+        if (_blendShapeWeights == null || index < 0 || index >= _blendShapeWeights.Length) return 0f;
+        return _blendShapeWeights[index];
+    }
+
+    /// <summary>Set a blend-shape weight (0-100, may exceed for over/under-shooting morphs).</summary>
+    public void SetBlendShapeWeight(int index, float weight)
+    {
+        int count = BlendShapeCount;
+        if (index < 0 || index >= count) return;
+        EnsureWeightsArray(count);
+        _blendShapeWeights![index] = weight;
+    }
+
+    /// <summary>Set a blend-shape weight by name.</summary>
+    public void SetBlendShapeWeight(string name, float weight)
+    {
+        int index = GetBlendShapeIndex(name);
+        if (index >= 0) SetBlendShapeWeight(index, weight);
+    }
+
+    private void EnsureWeightsArray(int count)
+    {
+        if (_blendShapeWeights != null && _blendShapeWeights.Length == count) return;
+        var resized = new float[count];
+        if (_blendShapeWeights != null)
+            Array.Copy(_blendShapeWeights, resized, Math.Min(_blendShapeWeights.Length, count));
+        _blendShapeWeights = resized;
+    }
+
     /// <summary>Get the resolved root bone Transform.</summary>
     public Transform? RootBone
     {
@@ -189,6 +244,11 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _boneTexture?.Dispose();
         _boneTexture = null;
         _boneTextureSize = 0;
+
+        _morphWeightTexture?.Dispose();
+        _morphWeightTexture = null;
+        _morphWeightCapacity = 0;
+        _morphWeightData = null;
     }
 
     /// <summary>
@@ -230,6 +290,127 @@ public class SkinnedMeshRenderer : MonoBehaviour
         }
     }
 
+    // Set by PrepareBlendShapes each frame; consumed by ApplyBlendShapeProps per submesh.
+    [System.NonSerialized] private bool _morphReady;
+    [System.NonSerialized] private int _morphActiveCount;
+
+    /// <summary>
+    /// Once per frame: builds the mesh's static delta textures (first use), resolves the current
+    /// weights into active morph layers, and uploads the per-renderer weight texture. Cheap when idle.
+    /// </summary>
+    private void PrepareBlendShapes(Mesh mesh)
+    {
+        _morphReady = false;
+        _morphActiveCount = 0;
+
+        int shapeCount = mesh.BlendShapeCount;
+        EnsureWeightsArray(shapeCount);
+
+        // Skip all morph work (including building the delta textures) while every weight is zero,
+        // so un-morphed meshes cost no VRAM or per-frame upload. The shader loop is a no-op then.
+        bool anyActive = false;
+        for (int s = 0; s < shapeCount; s++)
+            if (MathF.Abs(_blendShapeWeights![s]) >= 1e-4f) { anyActive = true; break; }
+        if (!anyActive)
+            return;
+
+        mesh.EnsureMorphTextures();
+        if (mesh.MorphPositionTexture == null)
+            return; // Morph textures unavailable (e.g. data too large) shader loop stays a no-op.
+
+        // Resolve weights -> active (layer, weight) pairs, interpolating between frames by weight.
+        _activeMorphLayers.Clear();
+        for (int s = 0; s < shapeCount; s++)
+        {
+            float w = _blendShapeWeights![s];
+            if (MathF.Abs(w) < 1e-4f) continue;
+
+            int frameCount = mesh.GetBlendShapeFrameCount(s);
+            if (frameCount <= 0) continue;
+
+            if (frameCount == 1)
+            {
+                float fw = mesh.GetBlendShapeFrameWeight(s, 0);
+                AddMorphLayer(mesh.GetMorphLayerIndex(s, 0), fw != 0f ? w / fw : 0f);
+                continue;
+            }
+
+            float first = mesh.GetBlendShapeFrameWeight(s, 0);
+            float last = mesh.GetBlendShapeFrameWeight(s, frameCount - 1);
+            if (w <= first)
+            {
+                AddMorphLayer(mesh.GetMorphLayerIndex(s, 0), first != 0f ? w / first : 0f);
+            }
+            else if (w >= last)
+            {
+                AddMorphLayer(mesh.GetMorphLayerIndex(s, frameCount - 1), 1f);
+            }
+            else
+            {
+                int i = 0;
+                while (i < frameCount - 1 && mesh.GetBlendShapeFrameWeight(s, i + 1) <= w) i++;
+                float a = mesh.GetBlendShapeFrameWeight(s, i);
+                float b = mesh.GetBlendShapeFrameWeight(s, i + 1);
+                float t = b > a ? (w - a) / (b - a) : 0f;
+                AddMorphLayer(mesh.GetMorphLayerIndex(s, i), 1f - t);
+                AddMorphLayer(mesh.GetMorphLayerIndex(s, i + 1), t);
+            }
+        }
+
+        _morphActiveCount = _activeMorphLayers.Count;
+        UploadMorphWeightTexture();
+        _morphReady = true;
+    }
+
+    /// <summary>Binds the morph uniforms onto a submesh's <see cref="PropertyState"/>. Cheap dictionary writes.</summary>
+    private void ApplyBlendShapeProps(Mesh mesh, PropertyState props)
+    {
+        if (!_morphReady)
+        {
+            props.SetInt("morphActiveCount", 0);
+            return;
+        }
+
+        Texture2D posTex = mesh.MorphPositionTexture!;
+        props.SetTexture("morphPositionTexture", posTex);
+        props.SetTexture("morphNormalTexture", mesh.MorphNormalTexture ?? posTex);
+        props.SetTexture("morphTangentTexture", mesh.MorphTangentTexture ?? posTex);
+        props.SetTexture("morphWeightTexture", _morphWeightTexture!);
+        props.SetInt("morphActiveCount", _morphActiveCount);
+        props.SetInt("morphTexWidth", mesh.MorphTexWidth);
+        props.SetInt("morphVertexCount", mesh.VertexCount);
+        props.SetInt("morphHasNormals", mesh.MorphHasNormals ? 1 : 0);
+        props.SetInt("morphHasTangents", mesh.MorphHasTangents ? 1 : 0);
+    }
+
+    private void AddMorphLayer(int layer, float weight)
+    {
+        if (MathF.Abs(weight) < 1e-5f) return;
+        _activeMorphLayers.Add(new Float4(layer, weight, 0f, 0f));
+    }
+
+    private void UploadMorphWeightTexture()
+    {
+        int count = Math.Max(1, _activeMorphLayers.Count); // keep a valid 1-wide texture even when idle
+        if (_morphWeightTexture == null || _morphWeightCapacity < count)
+        {
+            _morphWeightTexture?.Dispose();
+            _morphWeightTexture = new Texture2D((uint)count, 1, false, TextureImageFormat.Float4);
+            _morphWeightTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
+            Graphics.SetWrapS(_morphWeightTexture.Handle, TextureWrap.ClampToEdge);
+            Graphics.SetWrapT(_morphWeightTexture.Handle, TextureWrap.ClampToEdge);
+            _morphWeightCapacity = count;
+            _morphWeightData = new Float4[count];
+        }
+
+        // Pack into the reusable buffer (sized to the texture). The tail beyond the active count is
+        // never sampled (the shader loops only over morphActiveCount), so stale tail data is fine.
+        var data = _morphWeightData!;
+        for (int i = 0; i < _activeMorphLayers.Count; i++)
+            data[i] = _activeMorphLayers[i];
+        _morphWeightTexture!.SetData<Float4>(data.AsMemory(0, _morphWeightCapacity), 0, 0, (uint)_morphWeightCapacity, 1);
+    }
+
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var mesh = SharedMesh.Res;
@@ -259,6 +440,10 @@ public class SkinnedMeshRenderer : MonoBehaviour
         // Compute world-space bounds from bone positions (cheap, avoids culling issues)
         AABB worldBounds = ComputeSkinnedBounds(mesh);
 
+        // Resolve blend-shape weights -> active morph layers + weight texture (once per frame).
+        if (mesh.HasBlendShapes)
+            PrepareBlendShapes(mesh);
+
         // Render each submesh with its material
         int subCount = mesh.SubMeshCount;
         for (int s = 0; s < subCount; s++)
@@ -281,6 +466,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
                 props.SetTexture("boneMatrixTexture", _boneTexture);
                 props.SetInt("boneCount", _skinMatrices?.Length ?? 0);
             }
+
+            if (mesh.HasBlendShapes)
+                ApplyBlendShapeProps(mesh, props);
 
             renderables.Add(new SkinnedMeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,

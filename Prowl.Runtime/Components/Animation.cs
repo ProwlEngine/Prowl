@@ -42,6 +42,13 @@ public class AnimationComponent : MonoBehaviour
     // Bone path → Transform lookup (cached on first use)
     [System.NonSerialized] private Dictionary<string, Transform>? _boneCache;
 
+    // Renderer-path → SkinnedMeshRenderer lookup for blend-shape tracks (cached on first use)
+    [System.NonSerialized] private Dictionary<string, SkinnedMeshRenderer?>? _blendShapeTargets;
+
+    // The root the bone cache (and blend-shape paths) are resolved against. A blend-shape track
+    // path of "" targets this root itself (e.g. a single-mesh model whose root is the mesh node).
+    [System.NonSerialized] private Transform? _boneCacheRoot;
+
     // Set when PlayAutomatically wanted to start but the clip was still streaming in (async
     // loading); Update starts it once the clip arrives.
     [System.NonSerialized] private bool _pendingAutoPlay;
@@ -49,6 +56,7 @@ public class AnimationComponent : MonoBehaviour
     public override void OnEnable()
     {
         _boneCache = null; // Force rebuild on enable
+        _blendShapeTargets = null;
 
         if (PlayAutomatically)
         {
@@ -171,6 +179,29 @@ public class AnimationComponent : MonoBehaviour
             bone.LocalRotation = rot;
             bone.LocalScale = scale;
         }
+
+        ApplyBlendShapes(clip, time);
+    }
+
+    private void ApplyBlendShapes(AnimationClip clip, float time)
+    {
+        if (clip.BlendShapes.Count == 0) return;
+        _blendShapeTargets ??= new Dictionary<string, SkinnedMeshRenderer?>();
+
+        foreach (var track in clip.BlendShapes)
+        {
+            if (!_blendShapeTargets.TryGetValue(track.Path, out SkinnedMeshRenderer? smr))
+            {
+                // Resolve the renderer once. An empty path targets the cache root itself; otherwise
+                // look it up via the bone-path cache (same relative-path convention).
+                Transform? target = string.IsNullOrEmpty(track.Path)
+                    ? _boneCacheRoot
+                    : (_boneCache != null && _boneCache.TryGetValue(track.Path, out Transform? t) ? t : null);
+                smr = target?.GameObject.GetComponent<SkinnedMeshRenderer>();
+                _blendShapeTargets[track.Path] = smr;
+            }
+            smr?.SetBlendShapeWeight(track.ShapeName, track.EvaluateAt(time));
+        }
     }
 
     private void EnsureBoneCache()
@@ -181,6 +212,7 @@ public class AnimationComponent : MonoBehaviour
         // Find the correct search root try ancestors until bone paths resolve.
         // This handles reparenting (model placed under another GO).
         Transform root = FindBoneCacheRoot();
+        _boneCacheRoot = root;
 
         // Cache all descendants by their relative path from root (excluding root's name)
         foreach (var child in root.GameObject.Children)

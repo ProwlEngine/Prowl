@@ -31,6 +31,9 @@ public sealed class AnimationClip : EngineObject, ISerializable
 
     public List<AnimBone> Bones { get; private set; } = [];
 
+    /// <summary>Blend-shape weight tracks. Each targets a renderer (by path) and a named blend shape.</summary>
+    public List<BlendShapeAnim> BlendShapes { get; private set; } = [];
+
     private Dictionary<string, AnimBone> _boneMap = [];
 
     public void AddBone(AnimBone bone)
@@ -38,6 +41,8 @@ public sealed class AnimationClip : EngineObject, ISerializable
         Bones.Add(bone);
         _boneMap[bone.BoneName] = bone;
     }
+
+    public void AddBlendShape(BlendShapeAnim blendShape) => BlendShapes.Add(blendShape);
 
     public AnimBone? GetBone(string name)
     {
@@ -119,6 +124,20 @@ public sealed class AnimationClip : EngineObject, ISerializable
 
             _boneMap = Bones.ToDictionary(b => b.BoneName);
         }
+
+        EchoObject? bsList = value.Get("BlendShapes");
+        if (bsList != null)
+        {
+            foreach (EchoObject bsProp in bsList.List)
+            {
+                BlendShapes.Add(new BlendShapeAnim
+                {
+                    Path = bsProp.Get("Path")?.StringValue ?? "",
+                    ShapeName = bsProp.Get("ShapeName")?.StringValue ?? "",
+                    Weight = Serializer.Deserialize<AnimationCurve>(bsProp.Get("Weight"), ctx),
+                });
+            }
+        }
     }
 
     public void Serialize(ref EchoObject value, SerializationContext ctx)
@@ -151,8 +170,32 @@ public sealed class AnimationClip : EngineObject, ISerializable
             boneList.ListAdd(boneProp);
         }
         value.Add("Bones", boneList);
+
+        var bsList = EchoObject.NewList();
+        foreach (BlendShapeAnim bs in BlendShapes)
+        {
+            var bsProp = EchoObject.NewCompound();
+            bsProp.Add("Path", new EchoObject(bs.Path));
+            bsProp.Add("ShapeName", new EchoObject(bs.ShapeName));
+            bsProp.Add("Weight", Serializer.Serialize(bs.Weight, ctx));
+            bsList.ListAdd(bsProp);
+        }
+        value.Add("BlendShapes", bsList);
     }
 
+
+    /// <summary>
+    /// A blend-shape weight track. <see cref="Path"/> is the renderer GameObject's path relative to the
+    /// animation root; <see cref="ShapeName"/> selects the blend shape on that renderer's mesh.
+    /// </summary>
+    public class BlendShapeAnim
+    {
+        public string Path = string.Empty;
+        public string ShapeName = string.Empty;
+        public AnimationCurve Weight;
+
+        public float EvaluateAt(float time) => Weight?.Evaluate(time) ?? 0f;
+    }
 
     /// <summary>Per-bone animation data with separate curves for each transform component.</summary>
     public class AnimBone

@@ -22,6 +22,8 @@ using PMesh = Prowl.Runtime.Resources.Mesh;
 using PMaterial = Prowl.Runtime.Resources.Material;
 using PAnim = Prowl.Runtime.AnimationClip;
 using PCurve = Prowl.Runtime.AnimationCurve;
+using PBlendShape = Prowl.Runtime.Resources.BlendShape;
+using PBlendShapeFrame = Prowl.Runtime.Resources.BlendShapeFrame;
 
 namespace Prowl.Runtime.AssetImporting;
 
@@ -181,6 +183,14 @@ internal static class ClayBackedImporter
                     : (boneTransforms.Length > 0 ? boneTransforms[0] : null);
                 smr.SetBones(boneTransforms, rootBoneTransform);
             }
+            else if (mesh.HasBlendShapes)
+            {
+                // Morph-only mesh (no skin): a SkinnedMeshRenderer still owns the blend-shape
+                // weights. No bones to wire skinning stays disabled in-shader.
+                var smr = go.AddComponent<SkinnedMeshRenderer>();
+                smr.SharedMesh = new AssetRef<PMesh>(mesh);
+                smr.Materials = matRefs;
+            }
             else
             {
                 var mr = go.AddComponent<MeshRenderer>();
@@ -279,6 +289,31 @@ internal static class ClayBackedImporter
             }
             dst.BoneIndices = indices4;
             dst.BoneWeights = weights4;
+        }
+
+        // Blend shapes (morph targets). Clay already expands sparse deltas to full vertex count and
+        // remaps them through vertex dedup, so the delta arrays line up 1:1 with dst.Vertices.
+        if (src.BlendShapes is { Length: > 0 })
+        {
+            var shapes = new PBlendShape[src.BlendShapes.Length];
+            for (int i = 0; i < src.BlendShapes.Length; i++)
+            {
+                var cb = src.BlendShapes[i];
+                var frames = new PBlendShapeFrame[cb.Frames.Length];
+                for (int f = 0; f < cb.Frames.Length; f++)
+                {
+                    var cf = cb.Frames[f];
+                    frames[f] = new PBlendShapeFrame
+                    {
+                        Weight = cf.Weight,
+                        DeltaVertices = cf.DeltaVertices,
+                        DeltaNormals = cf.DeltaNormals,
+                        DeltaTangents = cf.DeltaTangents,
+                    };
+                }
+                shapes[i] = new PBlendShape { Name = cb.Name ?? $"BlendShape{i}", Frames = frames };
+            }
+            dst.BlendShapes = shapes;
         }
 
         dst.Indices = src.Indices;
@@ -436,11 +471,19 @@ internal static class ClayBackedImporter
             Wrap = AnimationWrapMode.Loop,
         };
 
-        // Bin bindings by target node -> AnimBone.
+        // Bin bindings by target node -> AnimBone. Blend-shape weight channels are handled
+        // separately (they target a renderer + named shape, not a bone transform).
         var boneByNode = new Dictionary<int, PAnim.AnimBone>();
         foreach (var b in src.Bindings)
         {
             if (b.NodeIndex < 0 || b.NodeIndex >= nodeGOs.Length) continue;
+
+            if (b.Property == AnimatedProperty.BlendShapeWeight)
+            {
+                ApplyBlendShapeBinding(b, clayModel, nodeGOs, rootGO, clip);
+                continue;
+            }
+
             var targetGO = nodeGOs[b.NodeIndex];
             string bonePath = Transform.GetRelativePath(targetGO.Transform, rootGO.Transform);
             if (!boneByNode.TryGetValue(b.NodeIndex, out var bone))
@@ -483,8 +526,33 @@ internal static class ClayBackedImporter
                 bone.ScaleY = SampleComponent(curve, component: 1);
                 bone.ScaleZ = SampleComponent(curve, component: 2);
                 break;
-            // BlendShapeWeight / Visibility: not handled by Prowl's AnimBone yet.
+            // Visibility: not handled by Prowl yet. BlendShapeWeight is handled separately
+            // (see ApplyBlendShapeBinding) since it targets a renderer + named shape, not a bone.
         }
+    }
+
+    /// <summary>
+    /// Converts a Clay BlendShapeWeight binding into a Prowl <see cref="PAnim.BlendShapeAnim"/>.
+    /// Resolves the renderer path and the blend-shape name. Clay normalizes weight curves to the
+    /// 0-100 scale (matching <c>SetBlendShapeWeight</c> and the frame weights), so no scaling here.
+    /// </summary>
+    private static void ApplyBlendShapeBinding(ClayBinding binding, Clay.Model clayModel, GameObject[] nodeGOs, GameObject rootGO, PAnim clip)
+    {
+        var node = clayModel.Nodes[binding.NodeIndex];
+        if (node.MeshIndex < 0 || node.MeshIndex >= clayModel.Meshes.Count) return;
+
+        var clayMesh = clayModel.Meshes[node.MeshIndex];
+        if (binding.SubIndex < 0 || binding.SubIndex >= clayMesh.BlendShapes.Length) return;
+
+        string shapeName = clayMesh.BlendShapes[binding.SubIndex].Name ?? $"BlendShape{binding.SubIndex}";
+        string path = Transform.GetRelativePath(nodeGOs[binding.NodeIndex].Transform, rootGO.Transform);
+
+        clip.AddBlendShape(new PAnim.BlendShapeAnim
+        {
+            Path = path,
+            ShapeName = shapeName,
+            Weight = SampleComponent(binding.Curve, 0),
+        });
     }
 
     /// <summary>

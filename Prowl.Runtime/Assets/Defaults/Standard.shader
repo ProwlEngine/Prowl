@@ -57,9 +57,9 @@ Pass "Standard"
 				vLightmapUV2 = vertexTexCoord1; // raw UV2; scale/offset applied in the fragment
 				worldPos = TransformPosition(vertexPosition);
 				vColor = GetInstanceColor();
-				vNormal = TransformDirection(vertexNormal);
+				vNormal = TransformDirection(GetMorphedNormal(vertexNormal));
 #ifdef HAS_TANGENTS
-				vTangent = TransformDirection(vertexTangent.xyz);
+				vTangent = TransformDirection(GetMorphedTangent(vertexTangent.xyz));
 				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				// Guard against degenerate tangent frames (parallel normal/tangent)
 				if (dot(vBitangent, vBitangent) < 0.000001) {
@@ -149,9 +149,9 @@ Pass "Prepass"
 			void main()
 			{
 				gl_Position = TransformClip(vertexPosition); // jittered, for raster + depth
-				vNormal = TransformDirection(vertexNormal);
+				vNormal = TransformDirection(GetMorphedNormal(vertexNormal));
 #ifdef HAS_TANGENTS
-				vTangent = TransformDirection(vertexTangent.xyz);
+				vTangent = TransformDirection(GetMorphedTangent(vertexTangent.xyz));
 				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
 				if (dot(vBitangent, vBitangent) < 0.000001) {
 					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));

@@ -126,6 +126,71 @@
 #endif
 
 // =============================================================
+//  Blend Shapes (Morph Targets)
+//  Per-mesh delta textures (RGBA32F) hold one "layer" per blend-shape frame.
+//  Deltas are laid out linearly as idx = layer * morphVertexCount + gl_VertexID
+//  and tiled into 2D: (idx % morphTexWidth, idx / morphTexWidth).
+//  The renderer uploads only the ACTIVE layers (non-zero weight) into
+//  morphWeightTexture, one texel each: (layerIndex, weight, 0, 0).
+//  Morphing is applied to the rest-pose vertex BEFORE skinning.
+// =============================================================
+
+#ifdef BLENDSHAPES
+		uniform sampler2D morphPositionTexture;
+		uniform sampler2D morphNormalTexture;
+		uniform sampler2D morphTangentTexture;
+		uniform sampler2D morphWeightTexture;
+		uniform int morphActiveCount;
+		uniform int morphTexWidth;
+		uniform int morphVertexCount;
+		uniform int morphHasNormals;
+		uniform int morphHasTangents;
+
+		vec3 SampleMorphDelta(sampler2D tex, int layer)
+		{
+			int idx = layer * morphVertexCount + gl_VertexID;
+			return texelFetch(tex, ivec2(idx % morphTexWidth, idx / morphTexWidth), 0).xyz;
+		}
+
+		vec3 GetMorphedPosition(vec3 position)
+		{
+			for (int i = 0; i < morphActiveCount; i++)
+			{
+				vec2 lw = texelFetch(morphWeightTexture, ivec2(i, 0), 0).xy;
+				position += SampleMorphDelta(morphPositionTexture, int(lw.x)) * lw.y;
+			}
+			return position;
+		}
+
+		vec3 GetMorphedNormal(vec3 normal)
+		{
+			if (morphHasNormals == 0) return normal;
+			for (int i = 0; i < morphActiveCount; i++)
+			{
+				vec2 lw = texelFetch(morphWeightTexture, ivec2(i, 0), 0).xy;
+				normal += SampleMorphDelta(morphNormalTexture, int(lw.x)) * lw.y;
+			}
+			return normal;
+		}
+
+		vec3 GetMorphedTangent(vec3 tangent)
+		{
+			if (morphHasTangents == 0) return tangent;
+			for (int i = 0; i < morphActiveCount; i++)
+			{
+				vec2 lw = texelFetch(morphWeightTexture, ivec2(i, 0), 0).xy;
+				tangent += SampleMorphDelta(morphTangentTexture, int(lw.x)) * lw.y;
+			}
+			return tangent;
+		}
+#else
+		// No-op passthroughs so shaders can call these unconditionally.
+		vec3 GetMorphedPosition(vec3 position) { return position; }
+		vec3 GetMorphedNormal(vec3 normal) { return normal; }
+		vec3 GetMorphedTangent(vec3 tangent) { return tangent; }
+#endif
+
+// =============================================================
 //  Vertex Utilities
 //  Helper functions that handle instancing + skinning so shaders
 //  don't need to repeat the same boilerplate.
@@ -160,9 +225,10 @@ mat4 GetMVPMatrix()
 #endif
 }
 
-// Transform a position to world space (applies skinning if active, then model matrix).
+// Transform a position to world space (applies morph, then skinning if active, then model matrix).
 vec3 TransformPosition(vec3 position)
 {
+	position = GetMorphedPosition(position);
 	mat4 model = GetModelMatrix();
 #ifdef SKINNED
 	return (model * GetSkinnedPosition(position)).xyz;
@@ -171,9 +237,10 @@ vec3 TransformPosition(vec3 position)
 #endif
 }
 
-// Transform a position to clip space (applies skinning if active, then MVP matrix).
+// Transform a position to clip space (applies morph, then skinning if active, then MVP matrix).
 vec4 TransformClip(vec3 position)
 {
+	position = GetMorphedPosition(position);
 	mat4 mvp = GetMVPMatrix();
 #ifdef SKINNED
 	return mvp * GetSkinnedPosition(position);

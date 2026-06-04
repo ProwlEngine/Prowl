@@ -575,6 +575,7 @@ public abstract class RenderPipeline : EngineObject
             material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
             material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
             material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
+            material.SetKeyword("BLENDSHAPES", mesh.HasBlendShapes);
 
             ShaderPass pass = material.Shader.GetPass(passIndex);
             if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variantNullable) || variantNullable == null)
@@ -710,6 +711,7 @@ public abstract class RenderPipeline : EngineObject
         material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
         material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
         material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
+        material.SetKeyword("BLENDSHAPES", false); // per-instance morph weights aren't supported
         material.SetKeyword("GPU_INSTANCING", true);
 
         Shaders.ShaderPass pass = material.Shader.GetPass(passIndex);

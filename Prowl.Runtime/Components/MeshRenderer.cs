@@ -54,6 +54,11 @@ public class MeshRenderer : MonoBehaviour
 
             PropertyState props = new();
             props.SetInt("_ObjectID", InstanceID);
+            // A blend-shape mesh forces the BLENDSHAPES shader variant (keyword is mesh-derived).
+            // MeshRenderer doesn't drive morph weights, so pin the morph loop to a no-op rather than
+            // inherit a stale count from a previous skinned draw using the same program.
+            if (mesh.HasBlendShapes)
+                props.SetInt("morphActiveCount", 0);
             Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
             LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
 

@@ -33,6 +33,29 @@ public struct SubMeshDescriptor
     }
 }
 
+/// <summary>
+/// A named morph target (blend shape). Holds one or more <see cref="BlendShapeFrame"/>s; a single
+/// frame is the common case (glTF), multiple frames describe a progressive morph (FBX). Per-vertex
+/// deltas are added to the base mesh, weighted by the renderer's blend-shape weight.
+/// </summary>
+public sealed class BlendShape
+{
+    public string Name = string.Empty;
+    public BlendShapeFrame[] Frames = Array.Empty<BlendShapeFrame>();
+}
+
+/// <summary>
+/// One frame of a <see cref="BlendShape"/>. <see cref="Weight"/> is the weight (0-100) at which this
+/// frame is fully applied. Delta arrays are parallel to the mesh's vertices; normals/tangents are optional.
+/// </summary>
+public sealed class BlendShapeFrame
+{
+    public float Weight = 100f;
+    public Float3[] DeltaVertices = Array.Empty<Float3>();
+    public Float3[]? DeltaNormals;
+    public Float3[]? DeltaTangents;
+}
+
 [CreateAssetMenu("Mesh", Extension = ".mesh", Order = 4)]
 public class Mesh : EngineObject, ISerializable
 {
@@ -107,6 +130,9 @@ public class Mesh : EngineObject, ISerializable
                 uv = null;
                 uv2 = null;
                 indices = null;
+                // Blend-shape deltas are indexed by vertex; a vertex-count change invalidates them.
+                _blendShapes = Array.Empty<BlendShape>();
+                _morphDirty = true;
             }
         }
     }
@@ -184,6 +210,166 @@ public class Mesh : EngineObject, ISerializable
 
     public Float4x4[]? BindPoses;
     public string[]? BoneNames;
+
+    // ─────────────────────── Blend shapes (morph targets) ───────────────────────
+    private BlendShape[] _blendShapes = Array.Empty<BlendShape>();
+
+    // GPU morph delta textures, built lazily from _blendShapes. Each "layer" is one
+    // BlendShapeFrame; deltas are laid out linearly as idx = layer * vertexCount + vertexID
+    // and tiled into a 2D RGBA32F texture (width capped to MaxTextureSize).
+    private Texture2D? _morphPosTex, _morphNrmTex, _morphTanTex;
+    private int[] _morphLayerOffsets = Array.Empty<int>(); // per-shape starting layer
+    private int _morphLayerCount;
+    private int _morphTexWidth;
+    private bool _morphDirty = true;
+
+    /// <summary>The blend shapes (morph targets) on this mesh.</summary>
+    public BlendShape[] BlendShapes
+    {
+        get => _blendShapes;
+        set { _blendShapes = value ?? Array.Empty<BlendShape>(); _morphDirty = true; }
+    }
+
+    public bool HasBlendShapes => _blendShapes.Length > 0;
+    public int BlendShapeCount => _blendShapes.Length;
+
+    public string GetBlendShapeName(int index) =>
+        (index >= 0 && index < _blendShapes.Length) ? _blendShapes[index].Name : string.Empty;
+
+    /// <summary>Index of the blend shape with the given name, or -1 if not found.</summary>
+    public int GetBlendShapeIndex(string name)
+    {
+        for (int i = 0; i < _blendShapes.Length; i++)
+            if (_blendShapes[i].Name == name) return i;
+        return -1;
+    }
+
+    public int GetBlendShapeFrameCount(int shapeIndex) =>
+        (shapeIndex >= 0 && shapeIndex < _blendShapes.Length) ? _blendShapes[shapeIndex].Frames.Length : 0;
+
+    public float GetBlendShapeFrameWeight(int shapeIndex, int frameIndex)
+    {
+        if (shapeIndex < 0 || shapeIndex >= _blendShapes.Length) return 0f;
+        var frames = _blendShapes[shapeIndex].Frames;
+        return (frameIndex >= 0 && frameIndex < frames.Length) ? frames[frameIndex].Weight : 0f;
+    }
+
+    // GPU morph resources (valid after EnsureMorphTextures).
+    public Texture2D? MorphPositionTexture => _morphPosTex;
+    public Texture2D? MorphNormalTexture => _morphNrmTex;
+    public Texture2D? MorphTangentTexture => _morphTanTex;
+    public bool MorphHasNormals => _morphNrmTex != null;
+    public bool MorphHasTangents => _morphTanTex != null;
+    public int MorphLayerCount => _morphLayerCount;
+    public int MorphTexWidth => _morphTexWidth;
+
+    /// <summary>Global morph-texture layer (row block) for a given shape's frame.</summary>
+    public int GetMorphLayerIndex(int shapeIndex, int frameIndex) => _morphLayerOffsets[shapeIndex] + frameIndex;
+
+    /// <summary>Builds the GPU morph delta textures from the blend-shape data if dirty. Cheap no-op otherwise.</summary>
+    public void EnsureMorphTextures()
+    {
+        if (!_morphDirty) return;
+        BuildMorphTextures();
+    }
+
+    private void BuildMorphTextures()
+    {
+        _morphDirty = false;
+        DisposeMorphTextures();
+        _morphLayerCount = 0;
+
+        if (_blendShapes.Length == 0 || vertices == null || vertices.Length == 0)
+            return;
+
+        int vtx = vertices.Length;
+
+        // Flatten frames into layers and record per-shape offsets.
+        _morphLayerOffsets = new int[_blendShapes.Length];
+        int layers = 0;
+        bool anyNormals = false, anyTangents = false;
+        for (int s = 0; s < _blendShapes.Length; s++)
+        {
+            _morphLayerOffsets[s] = layers;
+            var frames = _blendShapes[s].Frames;
+            layers += frames.Length;
+            foreach (var f in frames)
+            {
+                if (f.DeltaNormals != null) anyNormals = true;
+                if (f.DeltaTangents != null) anyTangents = true;
+            }
+        }
+        if (layers == 0) return;
+
+        int maxTex = Graphics.MaxTextureSize;
+        int width = Math.Min(vtx, maxTex);
+        long total = (long)layers * vtx;
+        int height = (int)((total + width - 1) / width);
+        if (height > maxTex)
+        {
+            Debug.LogError($"[Mesh] Blend-shape morph data ({layers} layers x {vtx} verts) exceeds the max texture size ({maxTex}); morphs disabled for '{Name}'.");
+            return;
+        }
+
+        _morphLayerCount = layers;
+        _morphTexWidth = width;
+
+        int texels = width * height;
+        var pos = new Float4[texels];
+        var nrm = anyNormals ? new Float4[texels] : null;
+        var tan = anyTangents ? new Float4[texels] : null;
+
+        for (int s = 0; s < _blendShapes.Length; s++)
+        {
+            var frames = _blendShapes[s].Frames;
+            for (int fi = 0; fi < frames.Length; fi++)
+            {
+                var f = frames[fi];
+                long baseIdx = (long)(_morphLayerOffsets[s] + fi) * vtx;
+
+                var dv = f.DeltaVertices;
+                int count = Math.Min(vtx, dv.Length);
+                for (int v = 0; v < count; v++)
+                    pos[(int)(baseIdx + v)] = new Float4(dv[v].X, dv[v].Y, dv[v].Z, 0f);
+
+                if (nrm != null && f.DeltaNormals != null)
+                {
+                    var dn = f.DeltaNormals;
+                    int cn = Math.Min(vtx, dn.Length);
+                    for (int v = 0; v < cn; v++)
+                        nrm[(int)(baseIdx + v)] = new Float4(dn[v].X, dn[v].Y, dn[v].Z, 0f);
+                }
+                if (tan != null && f.DeltaTangents != null)
+                {
+                    var dt = f.DeltaTangents;
+                    int ct = Math.Min(vtx, dt.Length);
+                    for (int v = 0; v < ct; v++)
+                        tan[(int)(baseIdx + v)] = new Float4(dt[v].X, dt[v].Y, dt[v].Z, 0f);
+                }
+            }
+        }
+
+        _morphPosTex = CreateMorphTexture(width, height, pos);
+        if (nrm != null) _morphNrmTex = CreateMorphTexture(width, height, nrm);
+        if (tan != null) _morphTanTex = CreateMorphTexture(width, height, tan);
+    }
+
+    private static Texture2D CreateMorphTexture(int width, int height, Float4[] data)
+    {
+        var tex = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Float4);
+        tex.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
+        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
+        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
+        tex.SetData<Float4>(data.AsMemory());
+        return tex;
+    }
+
+    private void DisposeMorphTextures()
+    {
+        _morphPosTex?.Dispose(); _morphPosTex = null;
+        _morphNrmTex?.Dispose(); _morphNrmTex = null;
+        _morphTanTex?.Dispose(); _morphTanTex = null;
+    }
 
     // Submesh support: each submesh defines a range within the shared index buffer
     private List<SubMeshDescriptor> _subMeshes = new();
@@ -1153,6 +1339,10 @@ public class Mesh : EngineObject, ISerializable
         instanceBuffer?.Dispose();
         instanceBuffer = null;
         instanceBufferCapacity = 0;
+
+        // Morph delta textures will be rebuilt from CPU blend-shape data on next use.
+        DisposeMorphTextures();
+        _morphDirty = true;
     }
 
     private T ReadVertexData<T>(T value)
@@ -1455,6 +1645,26 @@ public class Mesh : EngineObject, ISerializable
                 writer.Write((int)sub.Topology);
             }
 
+            // Blend shapes (written after submeshes; older meshes simply lack this trailing block)
+            writer.Write(_blendShapes.Length);
+            foreach (var bs in _blendShapes)
+            {
+                writer.Write(bs.Name ?? string.Empty);
+                writer.Write(bs.Frames.Length);
+                foreach (var f in bs.Frames)
+                {
+                    writer.Write(f.Weight);
+                    bool hasN = f.DeltaNormals != null;
+                    bool hasT = f.DeltaTangents != null;
+                    writer.Write(hasN);
+                    writer.Write(hasT);
+                    writer.Write(f.DeltaVertices.Length);
+                    foreach (var d in f.DeltaVertices) { writer.Write(d.X); writer.Write(d.Y); writer.Write(d.Z); }
+                    if (hasN) foreach (var d in f.DeltaNormals) { writer.Write(d.X); writer.Write(d.Y); writer.Write(d.Z); }
+                    if (hasT) foreach (var d in f.DeltaTangents) { writer.Write(d.X); writer.Write(d.Y); writer.Write(d.Z); }
+                }
+            }
+
             compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
             compoundTag.Add("MeshType", new EchoObject((int)meshTopology));
             compoundTag.Add("MeshIndexFormat", new EchoObject((int)indexFormat));
@@ -1619,6 +1829,50 @@ public class Mesh : EngineObject, ISerializable
                     }
                 }
                 catch { /* Old format without submeshes ignore */ }
+            }
+
+            // Blend shapes (trailing block; absent in meshes serialized before morph support)
+            _blendShapes = Array.Empty<BlendShape>();
+            if (reader.BaseStream.Position < reader.BaseStream.Length)
+            {
+                try
+                {
+                    int bsCount = reader.ReadInt32();
+                    var list = new BlendShape[bsCount];
+                    for (int i = 0; i < bsCount; i++)
+                    {
+                        var bs = new BlendShape { Name = reader.ReadString() };
+                        int frameCount = reader.ReadInt32();
+                        bs.Frames = new BlendShapeFrame[frameCount];
+                        for (int fi = 0; fi < frameCount; fi++)
+                        {
+                            var f = new BlendShapeFrame { Weight = reader.ReadSingle() };
+                            bool hasN = reader.ReadBoolean();
+                            bool hasT = reader.ReadBoolean();
+                            int dvCount = reader.ReadInt32();
+                            f.DeltaVertices = new Float3[dvCount];
+                            for (int v = 0; v < dvCount; v++)
+                                f.DeltaVertices[v] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                            if (hasN)
+                            {
+                                f.DeltaNormals = new Float3[dvCount];
+                                for (int v = 0; v < dvCount; v++)
+                                    f.DeltaNormals[v] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                            }
+                            if (hasT)
+                            {
+                                f.DeltaTangents = new Float3[dvCount];
+                                for (int v = 0; v < dvCount; v++)
+                                    f.DeltaTangents[v] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                            }
+                            bs.Frames[fi] = f;
+                        }
+                        list[i] = bs;
+                    }
+                    _blendShapes = list;
+                    _morphDirty = true;
+                }
+                catch { /* Old format without blend shapes ignore */ }
             }
 
             changed = true;
