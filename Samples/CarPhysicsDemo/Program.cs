@@ -29,6 +29,7 @@ public sealed class CarPhysicsGame : Game
 
     public override void Initialize()
     {
+
         DrawGizmos = true;
         scene = new Scene();
 
@@ -51,9 +52,8 @@ public sealed class CarPhysicsGame : Game
 
         camera.Effects =
         [
-            new GTAOEffect(),
             new TAAEffect(),
-            new BloomEffect(),
+            //new BloomEffect(),
             new TonemapperEffect(),
         ];
 
@@ -189,7 +189,7 @@ public sealed class CarPhysicsGame : Game
 
         // Add rigidbody
         Rigidbody3D carRigidbody = carGO.AddComponent<Rigidbody3D>();
-        carRigidbody.Mass = 100.0f; // Heavy car
+        carRigidbody.Mass = 1000.0f; // Heavy car
         carRigidbody.LinearDamping = 0.0001f;
         carRigidbody.AngularDamping = 0.0001f;
 
@@ -203,10 +203,10 @@ public sealed class CarPhysicsGame : Game
         scene.Add(carGO);
 
         // Create 4 wheels as children
-        CreateWheel("FrontLeft", new Float3(-1.0f, -0.5f, 1.5f), carGO, true);
-        CreateWheel("FrontRight", new Float3(1.0f, -0.5f, 1.5f), carGO, true);
-        CreateWheel("RearLeft", new Float3(-1.0f, -0.5f, -1.5f), carGO, false);
-        CreateWheel("RearRight", new Float3(1.0f, -0.5f, -1.5f), carGO, false);
+        CreateWheel("FrontLeft", new Float3(-1.0f, -0.25f, 1.5f), carGO, true);
+        CreateWheel("FrontRight", new Float3(1.0f, -0.25f, 1.5f), carGO, true);
+        CreateWheel("RearLeft", new Float3(-1.0f, -0.25f, -1.5f), carGO, false);
+        CreateWheel("RearRight", new Float3(1.0f, -0.25f, -1.5f), carGO, false);
     }
 
     private void CreateWheel(string name, Float3 localPosition, GameObject parent, bool isFront)
@@ -216,21 +216,27 @@ public sealed class CarPhysicsGame : Game
         wheel.Transform.LocalPosition = localPosition;
 
         // Visual representation of wheel
-        //MeshRenderer wheelRenderer = wheel.AddComponent<MeshRenderer>();
-        //wheelRenderer.Mesh = Mesh.CreateCylinder(0.4f, 0.3f, 16);
-        //wheelRenderer.Material = standardMaterial;
-        //wheelRenderer.MainColor = new Color(0.2f, 0.2f, 0.2f, 1.0f); // Dark wheels
+        GameObject visual = new("Visual");
+        visual.Transform.Parent = wheel.Transform;
+        visual.Transform.LocalPosition = new Float3(0, 0, 0);
+        visual.Transform.LocalEulerAngles = new Float3(0, 0, 0);
+        GameObject visualMesh = new("VisualMesh");
+        visualMesh.Transform.Parent = visual.Transform;
+        visualMesh.Transform.LocalPosition = new Float3(0, 0, 0);
+        visualMesh.Transform.LocalEulerAngles = new Float3(0, 0, 90);
 
-        // Rotate cylinder to align with wheel direction
-        //wheel.Transform.LocalEulerAngles = new Float3(0, 0, 90);
+        MeshRenderer wheelRenderer = visualMesh.AddComponent<MeshRenderer>();
+        wheelRenderer.Mesh = Mesh.CreateCylinder(0.5f, 0.3f, 16);
+        wheelRenderer.Material = standardMaterial;
 
         // Add wheel collider
         WheelCollider wheelCollider = wheel.AddComponent<WheelCollider>();
         wheelCollider.Radius = 0.5f;
         wheelCollider.Width = 0.3f;
-        wheelCollider.SuspensionDistance = 0.5f;
-        wheelCollider.SidewaysFriction = 2.0f;
-        wheelCollider.ForwardFriction = 6.0f;
+        wheelCollider.SuspensionDistance = 0.25f;
+        wheelCollider.SidewaysFriction = 1.2f;
+        wheelCollider.ForwardFriction = 1.5f;
+        wheelCollider.visualTransform = visual.Transform;
 
         //const float dampingFrac = 0.8f;
         //const float springFrac = 0.45f;
@@ -255,6 +261,8 @@ public sealed class CarPhysicsGame : Game
 
     public override void EndUpdate()
     {
+        //Time.FixedDeltaTime = Time.DeltaTime;
+
         //// Reset car if R is pressed
         //if (Input.GetKeyDown(KeyCode.R))
         //{
@@ -330,8 +338,8 @@ public class CarController : MonoBehaviour
     public List<WheelCollider> rearWheels = new();
 
     public float MaxSteerAngle = 30.0f; // degrees
-    public float MotorTorque = 3500.0f;
-    public float BrakeTorque = 2000.0f;
+    public float MotorTorque = 1500.0f;
+    public float BrakeTorque = 1000.0f;
 
     private Rigidbody3D? rigidbody;
 
@@ -389,8 +397,8 @@ public class CarController : MonoBehaviour
         foreach (var wheel in frontWheels)
         {
             if (wheel == null || !wheel.IsValid()) continue;
-            wheel.MotorTorque = 0f;
-            wheel.BrakeTorque = brakeT;
+            wheel.MotorTorque = drive;
+            //wheel.BrakeTorque = brakeT;
         }
         foreach (var wheel in rearWheels)
         {

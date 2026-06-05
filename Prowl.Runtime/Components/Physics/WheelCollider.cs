@@ -54,6 +54,11 @@ public sealed class WheelCollider : MonoBehaviour
     /// <summary>Brake torque in N*m opposing the wheel spin this step. Set by a controller each frame.</summary>
     public float BrakeTorque;
 
+    /// <summary>Optional visual wheel transform. When set it is placed at the wheel centre and rotated
+    /// for steering (about the suspension axis) and spin (about the axle) each frame. Keep this separate
+    /// from the WheelCollider's own GameObject, which marks the fixed suspension mount used by physics.</summary>
+    public Transform visualTransform;
+
     // Runtime state
     private Rigidbody3D rb;
     private int wheelCount = 1;
@@ -130,6 +135,18 @@ public sealed class WheelCollider : MonoBehaviour
             GameObject.Scene.Physics.PreStep -= OnPreStep;
             GameObject.Scene.Physics.PostStep -= OnPostStep;
         }
+    }
+
+    public override void Update()
+    {
+        if (visualTransform == null) return;
+
+        // The mount transform (this GameObject) gives the base wheel frame: up = suspension axis,
+        // right = axle. Steer rotates about the suspension axis, spin rotates about the axle.
+        Quaternion steer = Quaternion.AxisAngle(Float3.UnitY, SteerAngle);
+        Quaternion spin = Quaternion.AxisAngle(Float3.UnitX, wheelRotation);
+        visualTransform.Rotation = Transform.Rotation * steer * spin;
+        visualTransform.Position = GetWheelCenter();
     }
 
     /// <summary>Re-resolves the rigidbody and counts sibling wheels (for auto sprung-mass). Call after

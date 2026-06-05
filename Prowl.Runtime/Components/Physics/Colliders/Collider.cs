@@ -86,8 +86,25 @@ public abstract class Collider : MonoBehaviour
         int layer = GameObject.LayerIndex;
         _attachedBody = GameObject.Scene.Physics.GetOrCreateStaticRigidBody(layer);
         RegisterShapes();
-        _lastTransformVersion = Transform.Version;
+        _lastTransformVersion = ComputeWorldTransformVersion();
         _lastLayer = layer;
+    }
+
+    /// <summary>
+    /// A version that changes whenever this transform OR any ancestor changes, so static colliders
+    /// follow their parents. Transform.Version alone only tracks local edits, so moving a parent would
+    /// not re-register a child collider's world-space shapes.
+    /// </summary>
+    private uint ComputeWorldTransformVersion()
+    {
+        uint v = 17;
+        Transform t = Transform;
+        while (t != null)
+        {
+            v = v * 31 + t.Version;
+            t = t.Parent;
+        }
+        return v;
     }
 
     /// <summary>
@@ -334,7 +351,7 @@ public abstract class Collider : MonoBehaviour
         // Only track transform and layer changes if we're attached to the static rigidbody
         if (_attachedRigidbody3D == null && _attachedBody != null)
         {
-            bool transformChanged = Transform.Version != _lastTransformVersion;
+            bool transformChanged = ComputeWorldTransformVersion() != _lastTransformVersion;
             bool layerChanged = GameObject.LayerIndex != _lastLayer;
 
             // Check if the transform or layer has changed
