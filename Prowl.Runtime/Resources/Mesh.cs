@@ -1057,12 +1057,12 @@ public class Mesh : EngineObject, ISerializable
             }
 
             indices.Add((uint)top1);
-            indices.Add((uint)bottom1);
             indices.Add((uint)top2);
+            indices.Add((uint)bottom1);
 
             indices.Add((uint)bottom1);
-            indices.Add((uint)bottom2);
             indices.Add((uint)top2);
+            indices.Add((uint)bottom2);
         }
 
         // Create the indices for the top and bottom circles
@@ -1075,13 +1075,13 @@ public class Mesh : EngineObject, ISerializable
 
             // Top circle
             indices.Add((uint)top1);
-            indices.Add((uint)top2);
             indices.Add((uint)topCenterIndex);
+            indices.Add((uint)top2);
 
             // Bottom circle
             indices.Add((uint)bottom2);
-            indices.Add((uint)bottom1);
             indices.Add((uint)bottomCenterIndex);
+            indices.Add((uint)bottom1);
         }
 
         mesh.vertices = [.. vertices];
