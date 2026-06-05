@@ -55,6 +55,11 @@ public abstract class Game
         System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
 
+        // A bare standalone game is always "playing" so gameplay (component lifecycle, FixedUpdate,
+        // physics stepping) runs. The editor overrides this back to false in its own Initialize and
+        // drives play/pause itself. Set before Window.Load -> Initialize so that override wins.
+        Application.IsPlaying = true;
+
         InitializeWindow(title, width, height);
 
         Window.Load += () =>
