@@ -186,6 +186,10 @@ public sealed class TreeBuilder
     private Func<TreeNode, bool>? _isPinged;
     private Func<float>? _pingAlpha;
 
+    // Optional sink: each Show() fills this with the resolved expanded state per node id, so callers
+    // (e.g. a hierarchy panel doing drag-drop) can know whether a node is currently expanded.
+    private Dictionary<string, bool>? _expandStateSink;
+
     // Empty state
     private string? _emptyMessage;
 
@@ -289,6 +293,9 @@ public sealed class TreeBuilder
     /// <summary>Returns the current ping alpha (0..1) for fade animation.</summary>
     public TreeBuilder PingAlpha(Func<float> getter) { _pingAlpha = getter; return this; }
 
+    /// <summary>Provide a dictionary that Show() fills with each node's resolved expanded state (by node id).</summary>
+    public TreeBuilder ExpandStateSink(Dictionary<string, bool> sink) { _expandStateSink = sink; return this; }
+
     // ── Empty state ───────────────────────────────────────────────────
 
     /// <summary>Message shown when the node list is empty.</summary>
@@ -363,6 +370,9 @@ public sealed class TreeBuilder
                         isExpanded = isExpandable && _paper.GetElementStorage(
                             stateHandle, expKey, node.DefaultExpanded);
                     }
+
+                    if (_expandStateSink != null)
+                        _expandStateSink[node.Id] = isExpanded;
 
                     bool isSelected = _isSelected?.Invoke(node) ?? false;
                     bool isPinged = _isPinged?.Invoke(node) ?? false;
