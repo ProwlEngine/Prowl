@@ -58,7 +58,6 @@ public sealed class WheelCollider : MonoBehaviour
     private Rigidbody3D rb;
     private int wheelCount = 1;
     private bool counted;
-    private JVector _groundUp; // suspension up axis for the sweep post-filter
     private float displacement;        // suspension compression, 0..suspensionDistance
     private bool onFloor;
     private float angularVelocity;     // wheel spin (rad/s)
@@ -176,56 +175,41 @@ public sealed class WheelCollider : MonoBehaviour
         JVector sweepDir = -up;
         float maxLambda = suspensionDistance + 1e-4f;
 
-        // The post-filter (AcceptGround) keeps only ground-like hits, so the sweep skips walls and the
-        // degenerate zero-normal overlap you get when the cylinder is buried in geometry, and keeps
-        // searching for the floor underneath. This is why driving into a wall no longer launches the car.
-        _groundUp = up;
         bool hit = world.DynamicTree.SweepCastCylinder(
             radius, width * 0.5f, cylOrient, mount, sweepDir, maxLambda,
-            SweepFilter, AcceptGround,
+            SweepFilter, null,
             out IDynamicTreeProxy proxy, out _, out _, out JVector normal, out float lambda);
 
-        RigidBody ground;
-        float travel;       // how far the wheel centre drops before contact (sweep-equivalent)
-        Float3 contactN;
-
-        if (hit && proxy is RigidBodyShape rbs)
+        if (!hit || proxy is not RigidBodyShape rbs)
         {
-            ground = rbs.RigidBody;
-            travel = lambda;
-            JVector.NormalizeInPlace(ref normal);
-            contactN = ToF(normal);
-        }
-        else
-        {
-            // Nothing ground-like was hit (cylinder buried in a wall, or overlapping the ground at full
-            // compression). A thin ray down the suspension axis can't catch a side wall, so it recovers
-            // the real ground directly below.
-            float rayLen = suspensionDistance + radius + 1e-4f;
-            bool rhit = world.DynamicTree.RayCast(mount, sweepDir, SweepFilter, null,
-                out IDynamicTreeProxy rproxy, out JVector rnormal, out float rlambda);
-
-            if (!rhit || rproxy is not RigidBodyShape rrbs || rlambda > rayLen || JVector.Dot(rnormal, up) <= 0.0f)
-            {
-                onFloor = false;
-                groundBody = null;
-                displacement = 0.0f;
-                return;
-            }
-
-            ground = rrbs.RigidBody;
-            travel = rlambda - radius; // the cylinder would stop one radius before the ray's ground hit
-            contactN = Float3.Normalize(ToF(rnormal));
+            onFloor = false;
+            groundBody = null;
+            displacement = 0.0f;
+            return;
         }
 
         onFloor = true;
-        groundBody = ground;
+        groundBody = rbs.RigidBody;
 
-        travel = Maths.Clamp(travel, 0.0f, suspensionDistance);
-        displacement = Maths.Clamp(suspensionDistance - travel, 0.0f, suspensionDistance);
-        contactNormal = contactN;
+        // lambda = distance travelled down before contact; compression is the remaining travel.
+        lambda = Maths.Clamp(lambda, 0.0f, suspensionDistance);
+        displacement = Maths.Clamp(suspensionDistance - lambda, 0.0f, suspensionDistance);
 
-        Float3 restedCenter = ToF(mount) - upF * travel;
+        // A degenerate (overlapping) sweep returns a zero normal; fall back to the suspension axis.
+        Float3 n = ToF(normal);
+        if (Float3.LengthSquared(n) > 1e-6f)
+        {
+            JVector.NormalizeInPlace(ref normal);
+            n = ToF(normal);
+        }
+        else n = upF;
+        // A grazing/edge hit can report a near-horizontal normal; treating it as the suspension axis
+        // keeps the load from collapsing to zero for a frame (which causes support-loss bobbing). We
+        // still respond to the hit, just hold the wheel up instead of dropping it.
+        if (Float3.Dot(n, upF) < 0.1f) n = upF;
+        contactNormal = n;
+
+        Float3 restedCenter = ToF(mount) - upF * lambda;
         contactPoint = restedCenter - upF * radius;
         JVector contact = ToJ(contactPoint);
 
@@ -358,15 +342,6 @@ public sealed class WheelCollider : MonoBehaviour
         if (proxy is not RigidBodyShape rbs) return false;
         if (rb?._body == null) return false;
         return rbs.RigidBody != rb._body; // ignore the vehicle's own body
-    }
-
-    // Sweep post-filter: accept only ground-like hits. Rejecting walls (near-horizontal normals) and
-    // the zero-normal overlap case lets the sweep keep searching past them for the actual floor.
-    private bool AcceptGround(DynamicTree.SweepCastResult res)
-    {
-        float len2 = res.Normal.LengthSquared();
-        if (len2 < 1e-6f) return false; // degenerate overlap (buried in geometry)
-        return JVector.Dot(res.Normal, _groundUp) > 0.4f * Maths.Sqrt(len2); // within ~66 deg of up
     }
 
     private static JVector ToJ(Float3 v) => new(v.X, v.Y, v.Z);
