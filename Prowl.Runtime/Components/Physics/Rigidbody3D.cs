@@ -227,8 +227,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public Float3 LinearVelocity
     {
-        get => new(_body.Velocity.X, _body.Velocity.Y, _body.Velocity.Z);
-        set => _body.Velocity = new(value.X, value.Y, value.Z);
+        get => _body == null ? Float3.Zero : new(_body.Velocity.X, _body.Velocity.Y, _body.Velocity.Z);
+        set { EnsureBody(); if (_body != null) _body.Velocity = new(value.X, value.Y, value.Z); }
     }
 
     /// <summary>
@@ -236,8 +236,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public Float3 AngularVelocity
     {
-        get => new(_body.AngularVelocity.X, _body.AngularVelocity.Y, _body.AngularVelocity.Z);
-        set => _body.AngularVelocity = new(value.X, value.Y, value.Z);
+        get => _body == null ? Float3.Zero : new(_body.AngularVelocity.X, _body.AngularVelocity.Y, _body.AngularVelocity.Z);
+        set { EnsureBody(); if (_body != null) _body.AngularVelocity = new(value.X, value.Y, value.Z); }
     }
 
     /// <summary>
@@ -245,8 +245,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public Float3 Torque
     {
-        get => new(_body.Torque.X, _body.Torque.Y, _body.Torque.Z);
-        set => _body.Torque = new JVector(value.X, value.Y, value.Z);
+        get => _body == null ? Float3.Zero : new(_body.Torque.X, _body.Torque.Y, _body.Torque.Z);
+        set { EnsureBody(); if (_body != null) _body.Torque = new JVector(value.X, value.Y, value.Z); }
     }
 
     /// <summary>
@@ -271,6 +271,18 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     [SerializeIgnore]
     internal RigidBody _body;
+
+    /// <summary>
+    /// Ensures the underlying Jitter body exists. Body creation normally happens in OnEnable, but
+    /// game code can touch a rigidbody (e.g. set velocity or add a force) in the same frame it is
+    /// added, before OnEnable runs create it on demand so those calls don't hit a null body.
+    /// </summary>
+    private void EnsureBody()
+    {
+        if (_body != null && !_body.Handle.IsZero) return;
+        World? world = GameObject?.Scene?.Physics?.World;
+        if (world != null) CreateBody(world);
+    }
 
     public RigidBody CreateBody(World world)
     {
@@ -477,12 +489,14 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public void AddForce(Float3 velocity)
     {
-        _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z));
+        EnsureBody();
+        if (_body != null) _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z));
     }
 
     public void AddForceAtPosition(Float3 velocity, Float3 worldPosition)
     {
-        _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z), new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z));
+        EnsureBody();
+        if (_body != null) _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z), new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z));
     }
 
     public void AddTorque(Float3 torque)
