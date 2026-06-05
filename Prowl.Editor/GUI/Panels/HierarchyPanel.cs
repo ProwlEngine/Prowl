@@ -48,6 +48,9 @@ public class HierarchyPanel : DockPanel
 
     // IDs of nodes that need force-expanding (parents of pinged GOs)
     private readonly HashSet<string> _forceExpandedIds = new();
+    // Filled by the tree each frame with each node's resolved expanded state, so drag-drop can turn a
+    // "below" drop on an expanded node into a "first child" drop (where its first child visually sits).
+    private readonly Dictionary<string, bool> _expandState = new();
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -347,6 +350,7 @@ public class HierarchyPanel : DockPanel
                     })
                     .IsPinged(n => _pingedGameObjects.Contains((GameObject)n.UserData!) && Selection.PingedGuid != Guid.Empty)
                     .PingAlpha(() => Selection.GetPingAlpha())
+                    .ExpandStateSink(_expandState)
                     .EmptyMessage(Loc.Get("hierarchy.scene_empty"))
                     .Show();
 
@@ -400,7 +404,12 @@ public class HierarchyPanel : DockPanel
                         else
                             dropPos = DropPosition.Into;
 
-                        ProcessGODrop(goDrop, _dragHoverTarget, _dragHoverTargetId, dropPos);
+                        // The gap under an expanded node is visually its first-child slot, so drop
+                        // there as child index 0 instead of as a sibling after the node.
+                        if (dropPos == DropPosition.Below && IsTargetExpanded(_dragHoverTarget, _dragHoverTargetId))
+                            ProcessGODrop(goDrop, _dragHoverTarget, _dragHoverTargetId, DropPosition.Into, 0);
+                        else
+                            ProcessGODrop(goDrop, _dragHoverTarget, _dragHoverTargetId, dropPos);
                     }
                     else if (bgHovered)
                     {
@@ -482,7 +491,7 @@ public class HierarchyPanel : DockPanel
         if (DragDrop.IsDragging && _dragHoverTargetId == goId)
         {
             if (_dragHoverNormalizedY < 0.25f) dropInd = TreeDropPosition.Above;
-            else if (_dragHoverNormalizedY > 0.75f) dropInd = TreeDropPosition.Below;
+            else if (_dragHoverNormalizedY > 0.75f) dropInd = IsTargetExpanded(go, goId) ? TreeDropPosition.IntoFirst : TreeDropPosition.Below;
             else dropInd = TreeDropPosition.Into;
         }
 
@@ -517,7 +526,11 @@ public class HierarchyPanel : DockPanel
     //  Drag & Drop for reparenting/reordering
     // ================================================================
 
-    private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos)
+    // True when the target node is expanded and actually has children (its first-child slot is visible).
+    private bool IsTargetExpanded(GameObject target, string targetId)
+        => target.Children.Count > 0 && _expandState.TryGetValue(targetId, out var e) && e;
+
+    private void ProcessGODrop(GameObjectDragPayload goDrop, GameObject target, string targetId, DropPosition dropPos, int insertIndex = -1)
     {
         var targetParent = target.Parent;
         bool targetIsRoot = targetParent == null || !targetParent.IsValid();
@@ -553,6 +566,8 @@ public class HierarchyPanel : DockPanel
                         continue;
                     }
                     dragged.SetParent(target);
+                    if (insertIndex >= 0)
+                        dragged.SetSiblingIndex(insertIndex);
                     break;
 
                 case DropPosition.Above:
