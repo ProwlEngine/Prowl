@@ -11,7 +11,7 @@
     <!-- Package metadata -->
     <PackageId>Prowl.Photonic</PackageId>
     <Title>Prowl.Photonic</Title>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Wulferis</Authors>
     <Company>Prowl Engine</Company>
     <Description>CPU lightmap baker for the Prowl Game Engine. Imperative builder API: direct + indirect path-traced lighting baked to per-instance UV1 atlas pages. BVH4 + AVX2 SIMD acceleration, progressive accumulation, and a sparse surfel-based GI option for high-density atlases.</Description>

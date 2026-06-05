@@ -13,8 +13,6 @@ namespace Prowl.Photonic;
 /// <see cref="GetCoefficients"/> to read them out for GPU upload, or <see cref="EvaluateIrradiance"/>
 /// to reconstruct <c>E/π</c> for a given normal on the CPU (same units the lightmap stores, so a
 /// Lambert surface multiplies by albedo at runtime).</para>
-/// <para>L2 matches Unity's light probes; the extra band over L1 captures stronger directional
-/// occlusion/gradients in the ambient field.</para>
 /// </remarks>
 public struct Sh9Rgb
 {
