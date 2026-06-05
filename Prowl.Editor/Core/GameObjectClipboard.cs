@@ -78,7 +78,8 @@ public static class GameObjectClipboard
                 go.Name = UniqueNames.ForGameObjectSibling(go.Name, parent, scene);
                 scene.Add(go);
                 if (parent != null)
-                    go.SetParent(parent);
+                    // Keep the deserialized local transform (see Duplicate); don't preserve world pos.
+                    go.SetParent(parent, worldPositionStays: false);
                 results.Add(go);
             }
 
@@ -122,7 +123,9 @@ public static class GameObjectClipboard
                 clone.Name = UniqueNames.ForGameObjectSibling(source.Name, source.Parent, scene);
                 scene.Add(clone);
                 if (source.Parent != null)
-                    clone.SetParent(source.Parent);
+                    // Keep the clone's copied local transform; don't preserve world position (the
+                    // clone is briefly a root, so that path would reinterpret its local pos as world).
+                    clone.SetParent(source.Parent, worldPositionStays: false);
                 results.Add(clone);
             }
             catch (Exception ex)
