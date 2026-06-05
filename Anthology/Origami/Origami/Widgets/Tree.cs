@@ -93,7 +93,9 @@ public enum TreeDropPosition
 {
     Above,
     Into,
-    Below
+    Below,
+    /// <summary>Drop as the node's first child (index 0). Shown as an indented line at the child slot.</summary>
+    IntoFirst
 }
 
 /// <summary>Event args for tree node interactions.</summary>
@@ -433,15 +435,6 @@ public sealed class TreeBuilder
 
         var accentColor = _theme.Primary.C400;
 
-        // Drop indicator above
-        if (node.DropIndicator == TreeDropPosition.Above)
-        {
-            _paper.Box($"{rowId}_drop_above")
-                .Height(3).Margin(indent + _theme.Metrics.SpacingLarge, _theme.Metrics.Spacing, 0, 0)
-                .Rounded(_theme.Metrics.SmallRounding)
-                .BackgroundColor(accentColor);
-        }
-
         bool isDropInto = node.DropIndicator == TreeDropPosition.Into;
         Color rowBg = isSelected ? accentColor
             : isDropInto ? Color.FromArgb(60, accentColor.R, accentColor.G, accentColor.B)
@@ -531,6 +524,31 @@ public sealed class TreeBuilder
             });
         }
 
+        // Drop indicator (Above / Below / IntoFirst). Drawn as a canvas overlay in post-layout so it
+        // never adds layout height the way an inline box would. An inline indicator pushes the row,
+        // which moves it out from under the cursor and causes hover/indicator flicker.
+        if (node.DropIndicator is TreeDropPosition.Above or TreeDropPosition.Below or TreeDropPosition.IntoFirst)
+        {
+            var indPos = node.DropIndicator.Value;
+            row.OnPostLayout((handle, rect) =>
+            {
+                _paper.Draw(ref handle, (canvas, r) =>
+                {
+                    // IntoFirst points at the node's first-child slot, so indent one more level.
+                    float left = indent + _theme.Metrics.SpacingLarge
+                        + (indPos == TreeDropPosition.IntoFirst ? _indentSize : 0f);
+                    float h = 3f;
+                    float x = (float)r.Min.X + left;
+                    float w = (float)r.Size.X - left - _theme.Metrics.Spacing;
+                    float y = indPos == TreeDropPosition.Above
+                        ? (float)r.Min.Y
+                        : (float)r.Min.Y + (float)r.Size.Y - h;
+                    float rad = _theme.Metrics.SmallRounding;
+                    canvas.RoundedRectFilled(x, y, w, h, rad, rad, rad, rad, accentColor);
+                });
+            });
+        }
+
         using (row.Enter())
         {
             // ---- Expand arrow ----
@@ -597,14 +615,6 @@ public sealed class TreeBuilder
             }
         }
 
-        // Drop indicator below
-        if (node.DropIndicator == TreeDropPosition.Below)
-        {
-            _paper.Box($"{rowId}_drop_below")
-                .Height(3).Margin(indent + _theme.Metrics.SpacingLarge, _theme.Metrics.Spacing, 0, 0)
-                .Rounded(_theme.Metrics.SmallRounding)
-                .BackgroundColor(accentColor);
-        }
     }
 
     private void DrawDefaultContent(Prowl.Scribe.FontFile? font, OrigamiRamp ink,
