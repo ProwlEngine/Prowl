@@ -420,6 +420,14 @@ public static class PropertyGridRenderer
             return;
         }
 
+        // 1b. Host fallback (e.g. the editor's AssetRef / EngineObject editors). DrawField does this
+        // for top-level fields; element controls must too, or list/array/dictionary entries of those
+        // types render as a dead read-only label. The label is empty because the caller (collection /
+        // dictionary row) already draws the index/key label.
+        if (config.FallbackFieldDrawer != null &&
+            config.FallbackFieldDrawer(paper, id, "", fieldType, value, onChange, depth))
+            return;
+
         // 2. Enums
         if (fieldType.IsEnum)
         {
