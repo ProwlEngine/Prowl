@@ -51,7 +51,8 @@ public sealed class CarPhysicsGame : Game
 
         camera.Effects =
         [
-            new FXAAEffect(),
+            new GTAOEffect(),
+            new TAAEffect(),
             new BloomEffect(),
             new TonemapperEffect(),
         ];
@@ -71,8 +72,8 @@ public sealed class CarPhysicsGame : Game
         // Setup third-person camera
         thirdPersonCamera = cam.AddComponent<ThirdPersonCamera>();
         thirdPersonCamera.Target = carGO;
-        thirdPersonCamera.Distance = 10f;
-        thirdPersonCamera.Height = 3f;
+        thirdPersonCamera.Distance = 15f;
+        thirdPersonCamera.Height = 10f;
         thirdPersonCamera.Smoothness = 5f;
 
         Scene.Load(scene);
@@ -226,11 +227,10 @@ public sealed class CarPhysicsGame : Game
         // Add wheel collider
         WheelCollider wheelCollider = wheel.AddComponent<WheelCollider>();
         wheelCollider.Radius = 0.5f;
-        wheelCollider.SuspensionTravel = 0.5f;
-        wheelCollider.SideFriction = 2.0f;
+        wheelCollider.Width = 0.3f;
+        wheelCollider.SuspensionDistance = 0.5f;
+        wheelCollider.SidewaysFriction = 2.0f;
         wheelCollider.ForwardFriction = 6.0f;
-
-        wheelCollider.AdjustWheelValues();
 
         //const float dampingFrac = 0.8f;
         //const float springFrac = 0.45f;
@@ -331,7 +331,7 @@ public class CarController : MonoBehaviour
 
     public float MaxSteerAngle = 30.0f; // degrees
     public float MotorTorque = 3500.0f;
-    public float BrakeTorque = 100.0f;
+    public float BrakeTorque = 2000.0f;
 
     private Rigidbody3D? rigidbody;
 
@@ -378,42 +378,25 @@ public class CarController : MonoBehaviour
         // Apply steering to front wheels
         float steerAngle = (float)(steering * MaxSteerAngle * Maths.PI / 180.0);
         foreach (var wheel in frontWheels)
-        {
             if (wheel != null && wheel.IsValid())
-            {
                 wheel.SteerAngle = steerAngle;
-            }
-        }
 
-        // Apply motor torque to rear wheels
-        float motorTorque = (float)(throttle * MotorTorque);
+        // Drive torque on the rear wheels, brake torque on all wheels. These are continuous
+        // values consumed each physics step, so set them every frame (including back to zero).
+        float drive = throttle * MotorTorque;
+        float brakeT = brake ? BrakeTorque : 0f;
+
+        foreach (var wheel in frontWheels)
+        {
+            if (wheel == null || !wheel.IsValid()) continue;
+            wheel.MotorTorque = 0f;
+            wheel.BrakeTorque = brakeT;
+        }
         foreach (var wheel in rearWheels)
         {
-            if (wheel != null && wheel.IsValid())
-            {
-                wheel.AddTorque(motorTorque * (float)Time.DeltaTime);
-            }
+            if (wheel == null || !wheel.IsValid()) continue;
+            wheel.MotorTorque = drive;
+            wheel.BrakeTorque = brakeT;
         }
-
-        // Apply brake to all wheels
-        if (brake)
-        {
-            foreach (var wheel in frontWheels)
-            {
-                if (wheel != null && wheel.IsValid())
-                {
-                    wheel.AddTorque(-wheel.AngularVelocity * (float)BrakeTorque * (float)Time.DeltaTime);
-                }
-            }
-            foreach (var wheel in rearWheels)
-            {
-                if (wheel != null && wheel.IsValid())
-                {
-                    wheel.AddTorque(-wheel.AngularVelocity * (float)BrakeTorque * (float)Time.DeltaTime);
-                }
-            }
-        }
-
-        // Note: Wheel adjustment is called automatically by WheelCollider.AdjustWheelValues() on setup
     }
 }
