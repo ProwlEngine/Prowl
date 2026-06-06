@@ -57,6 +57,7 @@ internal sealed class UIRenderTree
             it.Owner = null!; it.Canvas = null!;
             it.Mesh = null!;  it.Material = null!;
             it.Props.Clear();
+            it.ScissorPixels = null;
             _freeItems.Push(it);
         }
         _items.Clear();

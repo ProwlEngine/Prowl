@@ -237,14 +237,13 @@ public class GameCanvas : MonoBehaviour
         }
 
         int dfs = 0;
-        BuildRecursive(GameObject, rootRect, UIContext.Default, ref dfs);
+        BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, ref dfs);
         Tree.SortHierarchical();
 
         _isDirty = false;
         _aggregateDirty = UIDirtyFlags.None;
     }
 
-    /// <summary>NEW: extracted from the old DrawGUI (lines 172–187 of the pre-refactor file).</summary>
     private Rect ComputeRootRect()
     {
         float rawW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
@@ -254,7 +253,7 @@ public class GameCanvas : MonoBehaviour
         return new Rect(0, 0, screenW, screenH);
     }
 
-    private void BuildRecursive(GameObject parent, Rect parentRect, UIContext ctx, ref int dfsIndex)
+    private void BuildRecursive(GameObject parent, Rect parentRect, UIContext ctx, Rect? canvasScissor, ref int dfsIndex)
     {
         foreach (GameObject child in parent.Children)
         {
@@ -275,46 +274,109 @@ public class GameCanvas : MonoBehaviour
             if (child.RectTransform is { } rt)
                 childRect = rt.ComputeRect(parentRect);
 
+            // ---- RectMask: intersect parent scissor with this rect, drop if fully outside. ----
+            Rect? childScissor = canvasScissor;
+            RectMask? rectMask = child.GetComponent<RectMask>();
+            if (rectMask != null && rectMask.EnabledInHierarchy)
+            {
+                Rect mr = rectMask.GetClipRectInCanvasPixels();
+                childScissor = canvasScissor is null ? mr : IntersectRect(canvasScissor.Value, mr);
+                // Empty scissor → whole subtree contributes nothing. Skip it.
+                if (childScissor!.Value.Size.X <= 0f || childScissor.Value.Size.Y <= 0f)
+                    continue;
+            }
+
+            // Per-item scissor culling: if the layout rect doesn't intersect the active scissor, skip the GameObject.
+            if (childScissor is { } cs && !RectsIntersect(cs, childRect))
+            {
+                // Children sit inside this rect by construction, so we can prune the whole subtree.
+                continue;
+            }
+
+            bool wroteMask = false;
+
+
             // (Re)bake every UIBehaviour that produces geometry, then add a UIRenderItem.
             foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
             {
                 if (!ui.EnabledInHierarchy) continue;
 
-                bool needsBake = ui.CachedMesh is null
-                              || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0;
-
-                if (needsBake)
-                {
-                    ui.CachedMesh ??= new Mesh();
-                    UIMeshBuilder builder = UIMeshBuilder.Rent();
-                    try
-                    {
-                        ui.GenerateMesh(builder, childCtx);
-                        if (builder.IsEmpty)      ui.CachedMesh = null;
-                        else                      builder.Bake(ui.CachedMesh);
-                    }
-                    finally { UIMeshBuilder.Return(builder); }
-                    ui.DirtyFlags &= ~UIDirtyFlags.Vertices;
-                }
-
+                EnsureBaked(ui, childCtx);
                 if (ui.CachedMesh is { } mesh)
                 {
-                    UIRenderItem item = Tree.RentItem();
-                    item.Initialize(
-                        owner:    ui,
-                        canvas:   this,
-                        mesh:     mesh,
-                        material: ui.GetMaterial(),
-                        model:    BuildItemModel(ui),
-                        sortKey:  (SortOrder << 24) | dfsIndex++,
-                        surface:  UIRenderTree.ToSurface(RenderMode));
-                    Tree.Add(item);
+                    EmitItem(ui, mesh, dfsIndex++, childScissor);
                 }
             }
 
-            BuildRecursive(child, childRect, childCtx, ref dfsIndex);
+            BuildRecursive(child, childRect, childCtx, childScissor, ref dfsIndex);
+
         }
     }
+
+    private static void EnsureBaked(UIBehaviour ui, in UIContext childCtx)
+    {
+        bool needsBake = ui.CachedMesh is null
+                      || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0;
+        if (!needsBake) return;
+
+        ui.CachedMesh ??= new Mesh();
+        UIMeshBuilder builder = UIMeshBuilder.Rent();
+        try
+        {
+            ui.GenerateMesh(builder, childCtx);
+            if (builder.IsEmpty)      ui.CachedMesh = null;
+            else                      builder.Bake(ui.CachedMesh);
+        }
+        finally { UIMeshBuilder.Return(builder); }
+        ui.DirtyFlags &= ~UIDirtyFlags.Vertices;
+    }
+
+    private void EmitItem(UIBehaviour ui, Mesh mesh, int dfsIndex, Rect? canvasScissor)
+    {
+        UIRenderItem item = Tree.RentItem();
+        item.Initialize(
+            owner:    ui,
+            canvas:   this,
+            mesh:     mesh,
+            material: ui.GetMaterial(),
+            model:    BuildItemModel(ui),
+            sortKey:  (SortOrder << 24) | dfsIndex,
+            surface:  UIRenderTree.ToSurface(RenderMode),
+            scissor:  ConvertScissorToFramebufferPixels(canvasScissor));
+        Tree.Add(item);
+    }
+
+    /// <summary>
+    /// Converts a canvas-design-pixel rect into GL framebuffer pixels (origin at bottom-left,
+    /// pixel units). For Overlay/Camera modes the conversion is just a uniform scale by
+    /// <see cref="ScaleFactor"/>; for WorldSpace there's no meaningful screen-space scissor
+    /// so we return null.
+    /// </summary>
+    private Float4? ConvertScissorToFramebufferPixels(Rect? canvasRect)
+    {
+        if (canvasRect is null || RenderMode == RenderMode.WorldSpace) return null;
+        Rect r = canvasRect.Value;
+        float s = Maths.Max(ScaleFactor, 0.001f);
+        float x = r.Min.X * s;
+        float y = r.Min.Y * s;
+        float w = r.Size.X * s;
+        float h = r.Size.Y * s;
+        return new Float4(x, y, w, h);
+    }
+
+    private static Rect IntersectRect(Rect a, Rect b)
+    {
+        float minX = MathF.Max(a.Min.X, b.Min.X);
+        float minY = MathF.Max(a.Min.Y, b.Min.Y);
+        float maxX = MathF.Min(a.Max.X, b.Max.X);
+        float maxY = MathF.Min(a.Max.Y, b.Max.Y);
+        if (maxX < minX) maxX = minX;
+        if (maxY < minY) maxY = minY;
+        return new Rect(minX, minY, maxX, maxY);
+    }
+
+    private static bool RectsIntersect(Rect a, Rect b)
+        => a.Max.X > b.Min.X && b.Max.X > a.Min.X && a.Max.Y > b.Min.Y && b.Max.Y > a.Min.Y;
 
     /// <summary>
     /// Base canvas → world transform without per-element pivot / rotation / scale. Per-mode:
@@ -323,10 +385,7 @@ public class GameCanvas : MonoBehaviour
     /// </summary>
     /// <remarks>
     /// Exposed so the scene-view editor and gizmos stay in sync with the actual rendering by
-    /// consuming the same matrix — duplicating this math is what produced the previous
-    /// ".855 / ScaleFactor" mis-alignment between gizmos and the rendered overlay.
-    /// <see cref="ScaleFactor"/> is recomputed inside <see cref="RebuildIfDirty"/>, so callers
-    /// that need an up-to-date value should call that first.
+    /// consuming the same matrix.
     /// </remarks>
     public Float4x4 CanvasToWorld => RenderMode switch
     {
@@ -345,25 +404,7 @@ public class GameCanvas : MonoBehaviour
 
     /// <summary>
     /// Builds the canvas-design-pixel space matrix that places a RectTransform's pivot-centered
-    /// mesh into the canvas frame, threading <b>parent rotation and scale</b> down the chain
-    /// (Unity behavior).
-    ///
-    /// Convention: a <see cref="UIBehaviour"/>'s mesh is built in <b>element-local pixel space</b>
-    /// (+X right, +Y up), with the element's pivot at the origin (0, 0). This function:
-    ///   1. places the element's pivot at its layout position in canvas-design pixels
-    ///      (computed from <see cref="RectTransform.ComputedRect"/> + <see cref="RectTransform.Pivot"/>),
-    ///      applying the element's own <see cref="Transform.LocalRotation"/> /
-    ///      <see cref="Transform.LocalScale"/> around that pivot.
-    ///   2. walks every ancestor <see cref="RectTransform"/> up to (but not including) the canvas
-    ///      itself, applying each parent's rotation and scale around the parent's pivot so the
-    ///      element inherits the parent's frame — i.e. rotating a parent rotates its children
-    ///      around the parent's pivot, and scaling a parent moves children outward while
-    ///      enlarging their meshes.
-    ///
-    /// Note: <see cref="RectTransform.LocalToWorldMatrix"/> is intentionally <b>not</b> used here.
-    /// It treats <see cref="RectTransform.AnchoredPosition"/> as a TRS translation, but the real
-    /// layout — anchors, pivot, SizeDelta, AnchoredPosition — is already baked into
-    /// <see cref="RectTransform.ComputedRect"/> by the layout pass.
+    /// mesh into the canvas frame, threading <b>parent rotation and scale</b> down the chain.
     /// </summary>
     internal Float4x4 BuildRectModel(RectTransform rt)
     {
@@ -381,10 +422,6 @@ public class GameCanvas : MonoBehaviour
             rt.LocalRotation,
             rt.LocalScale);
 
-        // Walk up ancestor RectTransforms (stop at this canvas's own RectTransform): each one
-        // contributes a "rotate/scale around its pivot" wrap, in canvas-axis-aligned space.
-        // The ComputedRects are laid out as if every ancestor were at identity rotation/scale,
-        // so threading those rotations/scales here reproduces Unity's parent inheritance.
         RectTransform? canvasRT = GameObject.RectTransform;
         GameObject? cur = rt.GameObject.Parent;
         while (cur != null)
@@ -397,7 +434,6 @@ public class GameCanvas : MonoBehaviour
             float pPivotY = pcr.Min.Y + prt.Pivot.Y * pcr.Size.Y;
             Float3 pPivot = new Float3(pPivotX, pPivotY, 0);
 
-            // T(pivot) * R * S * T(-pivot): rotate/scale around the parent's axis-aligned pivot.
             Float4x4 wrap = Float4x4.CreateTRS(pPivot, prt.LocalRotation, prt.LocalScale)
                           * Float4x4.CreateTranslation(-pPivot);
             model = wrap * model;

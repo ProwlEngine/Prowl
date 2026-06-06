@@ -10,19 +10,6 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor;
 
-/// <summary>
-/// Picks the topmost <see cref="UIBehaviour"/>-bearing GameObject under a scene-view ray.
-/// Walks every active <see cref="GameCanvas"/> in the scene, intersects the ray with each
-/// canvas's plane (built via <see cref="GameCanvas.CanvasToWorld"/> so it agrees with the
-/// rendered UI), and returns the on-top hit by canvas <c>SortOrder</c>, then ray distance,
-/// then DFS index — the same precedence <c>BuildRecursive</c> uses to assign render order.
-/// </summary>
-/// <remarks>
-/// Callers should push <see cref="GameCanvas.ScreenSizeOverride"/> to the rendering surface
-/// size before calling, so <see cref="GameCanvas.RebuildIfDirty"/> here lays the canvas out
-/// against the same size the pipeline will use. <see cref="UISceneEditor"/> and
-/// <see cref="Panels.SceneViewPanel"/> both do this around their hit-test paths.
-/// </remarks>
 internal static class UIPicker
 {
     /// <summary>Result of a successful pick.</summary>
@@ -79,7 +66,7 @@ internal static class UIPicker
             int dfs = 0;
             GameObject? localHit = null;
             int localDfs = -1;
-            WalkRecurse(canvas, canvas.GameObject, pt, ref dfs, ref localHit, ref localDfs);
+            WalkRecurse(canvas, canvas.GameObject, pt, scissor: null, ref dfs, ref localHit, ref localDfs);
             if (localHit == null) continue;
 
             bool wins =
@@ -102,15 +89,25 @@ internal static class UIPicker
         return true;
     }
 
-    // Mirrors GameCanvas.BuildRecursive: visit children in order, count one DFS step per
-    // drawable UIBehaviour (so the dfs index matches what the renderer uses for SortKey),
-    // descend after the parent's behaviours so children draw on top of their parent.
-    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
+    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, Rect? scissor, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
     {
         foreach (GameObject child in parent.Children)
         {
             if (!child.EnabledInHierarchy) continue;
             if (child.GetComponent<GameCanvas>() != null) continue; // nested canvas owns its own tree
+
+            // ---- RectMask: intersect parent scissor; bail if pointer is outside the clip. ----
+            Rect? childScissor = scissor;
+            RectMask? rectMask = child.GetComponent<RectMask>();
+            if (rectMask != null && rectMask.EnabledInHierarchy)
+            {
+                Rect mr = rectMask.GetClipRectInCanvasPixels();
+                childScissor = scissor is null ? mr : UIRaycaster.IntersectRect(scissor.Value, mr);
+                if (childScissor.Value.Size.X <= 0f || childScissor.Value.Size.Y <= 0f) continue;
+            }
+            if (childScissor is { } cs && !UIRaycaster.RectContainsPoint(cs, pt))
+                continue;
+
 
             RectTransform? rt = child.RectTransform;
             if (rt != null)
@@ -120,6 +117,8 @@ internal static class UIPicker
                 foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
                 {
                     if (!ui.EnabledInHierarchy) continue;
+
+                    if (ui is RectMask) continue;
                     if (inside)
                     {
                         bestGO = child;
@@ -129,7 +128,7 @@ internal static class UIPicker
                 }
             }
 
-            WalkRecurse(canvas, child, pt, ref dfs, ref bestGO, ref bestDfs);
+            WalkRecurse(canvas, child, pt, childScissor, ref dfs, ref bestGO, ref bestDfs);
         }
     }
 }

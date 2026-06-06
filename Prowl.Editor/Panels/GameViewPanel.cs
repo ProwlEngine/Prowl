@@ -14,6 +14,9 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
+// Aliased to avoid clashing with Prowl.PaperUI.TextAlignment used elsewhere in this file.
+using UIEventSystem = Prowl.Runtime.UI.UIEventSystem;
+
 using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.Panels;
@@ -27,6 +30,8 @@ public class GameViewPanel : DockPanel
     private RenderTexture? _rt;
     private int _resolutionIndex = 0;
     private bool _showStats;
+
+    private Rect _displayAbsRect;
 
     private static readonly (string name, int w, int h)[] Resolutions =
     {
@@ -66,8 +71,8 @@ public class GameViewPanel : DockPanel
 
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
-            DrawToolbar(paper, font, width, panelWidth: width, panelHeight: height - ToolbarHeight);
-            DrawGameView(paper, font, width, height - ToolbarHeight);
+            DrawToolbar(paper, font, width, panelWidth: width, panelHeight: height - EditorTheme.RowHeight);
+            DrawGameView(paper, font, width, height - EditorTheme.RowHeight);
         }
     }
 
@@ -104,129 +109,194 @@ public class GameViewPanel : DockPanel
     {
         using (paper.Box("gv_game").Enter())
         {
-                paper.Box("gv_no_scene")
-                .Size(width, height)
-                .BackgroundColor(Color.FromArgb(255, 20, 20, 22))
-                .Text("No scene loaded", font)
-                .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
-            return;
-        }
-
-        // Determine render size
-        var (_, targetW, targetH) = Resolutions[_resolutionIndex];
-        int rtW, rtH;
-        if (targetW == 0 || targetH == 0)
-        {
-            // Free match panel size
-            rtW = (int)MathF.Max(1, width);
-            rtH = (int)MathF.Max(1, height);
-        }
-        else
-        {
-            rtW = targetW;
-            rtH = targetH;
-        }
-
-        EnsureRT(rtW, rtH);
-
-        // Renderables are now collected inside pipeline.Render() per-camera with context
-        var cameras = scene.ActiveObjects
-            .SelectMany(go => go.GetComponentsInChildren<Camera>())
-            .Where(c => !c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave))
-            .OrderBy(c => c.Depth)
-            .ToList();
-
-        foreach (var cam in cameras)
-        {
-            var origTarget = cam.Target;
-            cam.Target = _rt;
-            cam.UpdateRenderData();
-
-            var pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
-            pipeline.Render(cam, new RenderingData());
-
-            cam.Target = origTarget;
-        }
-
-        using (paper.Box("gv_container")
-                   .PositionType(PositionType.SelfDirected)
-                   .Position(0, ToolbarHeight)
-                   .Enter())
-        {
-
-            // Display the RT centered with letterboxing
-            if (_rt != null && _rt.MainTexture != null)
+            var scene = Scene.Current;
+            if (scene == null)
             {
-                float aspect = rtW / (float)rtH;
-                float panelAspect = width / height;
-                float displayW, displayH, offsetX, offsetY;
+                paper.Box("gv_no_scene")
+                    .Size(width, height)
+                    .BackgroundColor(Color.FromArgb(255, 20, 20, 22))
+                    .Text("No scene loaded", font)
+                    .TextColor(EditorTheme.Ink300)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
+                return;
+            }
 
+            // Determine render size
+            var (_, targetW, targetH) = Resolutions[_resolutionIndex];
+            int rtW, rtH;
+            if (targetW == 0 || targetH == 0)
+            {
+                // Free match panel size
+                rtW = (int)MathF.Max(1, width);
+                rtH = (int)MathF.Max(1, height);
+            }
+            else if (targetW < 0 && targetH < 0)
+            {
+                // Aspect ratio mode - fit panel with given ratio
+                float aspect = (float)(-targetW) / (-targetH);
+                float panelAspect = width / height;
                 if (aspect > panelAspect)
                 {
-                    displayW = width;
-                    displayH = width / aspect;
-                    offsetX = 0;
-                    offsetY = (height - displayH) / 2;
+                    rtW = (int)MathF.Max(1, width);
+                    rtH = (int)MathF.Max(1, width / aspect);
                 }
                 else
                 {
-                    displayH = height;
-                    displayW = height * aspect;
-                    offsetX = (width - displayW) / 2;
-                    offsetY = 0;
+                    rtH = (int)MathF.Max(1, height);
+                    rtW = (int)MathF.Max(1, height * aspect);
                 }
-
-                // Letterbox bars
-                if (offsetY > 0)
-                {
-                    paper.Box("gv_bar_top")
-                        .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, offsetY)
-                        .BackgroundColor(Color.Black);
-                    paper.Box("gv_bar_bot")
-                        .PositionType(PositionType.SelfDirected).Position(0, offsetY + displayH).Size(width, offsetY)
-                        .BackgroundColor(Color.Black);
-                }
-
-                if (offsetX > 0)
-                {
-                    paper.Box("gv_bar_left")
-                        .PositionType(PositionType.SelfDirected).Position(0, 0).Size(offsetX, height)
-                        .BackgroundColor(Color.Black);
-                    paper.Box("gv_bar_right")
-                        .PositionType(PositionType.SelfDirected).Position(offsetX + displayW, 0).Size(offsetX, height)
-                        .BackgroundColor(Color.Black);
-                }
-
-                // Game view
-                paper.Box("gv_display")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(offsetX, offsetY).Size(displayW, displayH)
-                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        float rx = (float)r.Min.X;
-                        float ry = (float)r.Min.Y;
-                        float rw = (float)r.Size.X;
-                        float rh = (float)r.Size.Y;
-
-                        // Flip Y
-                        canvas.SetBrushTexture(_rt.MainTexture);
-                        canvas.SetBrushTextureTransform(
-                            Transform2D.CreateTranslation(rx, ry + rh) *
-                            Transform2D.CreateScale(rw, -rh));
-                        canvas.RectFilled(rx, ry, rw, rh, new Prowl.Vector.Color32(255, 255, 255, 255));
-                        canvas.ClearBrushTexture();
-                    }));
-
-                // Game view is focused when hovered play-mode input is routed here
-                GameViewInputHandler.IsGameViewFocused = paper.IsParentHovered;
             }
             else
             {
-                paper.Box("gv_black")
-                    .Size(width, height)
-                    .BackgroundColor(Color.Black);
+                rtW = targetW;
+                rtH = targetH;
             }
+
+            EnsureRT(rtW, rtH);
+
+            // Renderables are now collected inside pipeline.Render() per-camera with context
+            var cameras = scene.ActiveObjects
+                .SelectMany(go => go.GetComponentsInChildren<Camera>())
+                .Where(c => !c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave))
+                .OrderBy(c => c.Depth)
+                .ToList();
+
+            RenderStats.BeginFrame();
+            foreach (var cam in cameras)
+            {
+                var origTarget = cam.Target;
+                cam.Target = _rt;
+                cam.UpdateRenderData();
+
+                var pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
+                pipeline.Render(cam, new RenderingData());
+
+                cam.Target = origTarget;
+            }
+            RenderStats.EndFrame();
+
+            using (paper.Box("gv_container")
+                       .Enter())
+            {
+
+                // Display the RT centered with letterboxing
+                if (_rt != null && _rt.MainTexture != null)
+                {
+                    float aspect = rtW / (float)rtH;
+                    float panelAspect = width / height;
+                    float displayW, displayH, offsetX, offsetY;
+
+                    if (aspect > panelAspect)
+                    {
+                        displayW = width;
+                        displayH = width / aspect;
+                        offsetX = 0;
+                        offsetY = (height - displayH) / 2;
+                    }
+                    else
+                    {
+                        displayH = height;
+                        displayW = height * aspect;
+                        offsetX = (width - displayW) / 2;
+                        offsetY = 0;
+                    }
+
+                    // Letterbox bars
+                    if (offsetY > 0)
+                    {
+                        paper.Box("gv_bar_top")
+                            .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, offsetY)
+                            .BackgroundColor(Color.Black);
+                        paper.Box("gv_bar_bot")
+                            .PositionType(PositionType.SelfDirected).Position(0, offsetY + displayH).Size(width, offsetY)
+                            .BackgroundColor(Color.Black);
+                    }
+                    if (offsetX > 0)
+                    {
+                        paper.Box("gv_bar_left")
+                            .PositionType(PositionType.SelfDirected).Position(0, 0).Size(offsetX, height)
+                            .BackgroundColor(Color.Black);
+                        paper.Box("gv_bar_right")
+                            .PositionType(PositionType.SelfDirected).Position(offsetX + displayW, 0).Size(offsetX, height)
+                            .BackgroundColor(Color.Black);
+                    }
+
+                    bool playing = Application.IsPlaying;
+                    var capturedRT = _rt;
+
+                    // Game view
+                    paper.Box("gv_display")
+                        .PositionType(PositionType.SelfDirected)
+                        .Position(offsetX, offsetY).Size(displayW, displayH)
+                        .OnPostLayout((handle, rect) =>
+                        {
+                            // Cache the absolute paper-coord rect for next frame's UI hit-test.
+                            _displayAbsRect = rect;
+                            paper.Draw(ref handle, (canvas, r) =>
+                            {
+                                if (capturedRT?.MainTexture == null) return;
+                                float rx = (float)r.Min.X;
+                                float ry = (float)r.Min.Y;
+                                float rw = (float)r.Size.X;
+                                float rh = (float)r.Size.Y;
+                                float round = EditorTheme.Roundness;
+
+                                // Draw RT with rounded corners and flipped Y
+                                canvas.SetBrushTexture(capturedRT.MainTexture);
+                                canvas.SetBrushTextureTransform(
+                                    Transform2D.CreateTranslation(rx, ry + rh) *
+                                    Transform2D.CreateScale(rw, -rh));
+                                canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, Color.White);
+                                canvas.ClearBrushTexture();
+
+                                // Purple border stroke
+                                canvas.RoundedRect(rx, ry, rw, rh, round, round, round, round);
+                                canvas.SetStrokeColor(playing ? EditorTheme.Purple500 : EditorTheme.Ink200);
+                                canvas.SetStrokeWidth(playing ? 2f : 1f);
+                                canvas.Stroke();
+                            });
+                        });
+
+                    // Game view is focused when hovered play-mode input is routed here
+                    bool hovered = paper.IsParentHovered;
+                    GameViewInputHandler.IsGameViewFocused = hovered;
+
+                    // Route UI input from this panel into Prowl's UIEventSystem. We rescale
+                    // the paper-space cursor into the RT's pixel space so a click on the
+                    // letterboxed view maps to the same coords the canvas was laid out at —
+                    // the renderer pushed the RT size as GameCanvas.ScreenSizeOverride, and
+                    // UIEventSystem will push the same value while picking.
+                    if (_displayAbsRect.Size.X > 0 && _displayAbsRect.Size.Y > 0)
+                    {
+                        Float2 origin = new((float)_displayAbsRect.Min.X, (float)_displayAbsRect.Min.Y);
+                        Float2 size = new((float)_displayAbsRect.Size.X, (float)_displayAbsRect.Size.Y);
+                        Float2 local = paper.PointerPos - origin;
+                        Float2 inRT = new(local.X * (rtW / size.X), local.Y * (rtH / size.Y));
+                        bool inside = local.X >= 0 && local.Y >= 0 && local.X <= size.X && local.Y <= size.Y;
+
+                        UIEventSystem.Viewport = new UIEventSystem.HostViewport
+                        {
+                            ReferenceSize = new Float2(rtW, rtH),
+                            PointerPosition = inRT,
+                            ReceivesInput = hovered && inside,
+                        };
+                    }
+                    else
+                    {
+                        UIEventSystem.Viewport = null;
+                    }
+
+                    if (_showStats)
+                        DrawStats(paper, font, offsetX + displayW, offsetY, displayW);
+                }
+                else
+                {
+                    paper.Box("gv_black")
+                        .Size(width, height)
+                        .BackgroundColor(Color.Black);
+                }
+            }
+
         }
     }
 
@@ -327,25 +397,11 @@ public class GameViewPanel : DockPanel
         return n.ToString();
     }
 
-    private void EnsureGamePaper(int w, int h)
-    {
-        if (_gamePaperRenderer == null)
-        {
-            _gamePaperRenderer = new PaperRenderer();
-            _gamePaperRenderer.Initialize(w, h);
-        }
-
-        if (_gamePaper == null)
-            _gamePaper = new Paper(_gamePaperRenderer, w, h, new Prowl.Quill.FontAtlasSettings());
-        else
-            _gamePaper.SetResolution(w, h);
-    }
-
     private void EnsureRT(int w, int h)
     {
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
         _rt?.Dispose();
-        _rt = new RenderTexture(w, h, true, new[] { TextureImageFormat.Color4b });
+        _rt = new RenderTexture(Math.Min(w, Graphics.MaxTextureSize), Math.Min(h, Graphics.MaxTextureSize), true, new[] { TextureImageFormat.Color4b });
     }
 
     private void InitRT(float windowWidth, float windowHeight)
@@ -357,6 +413,22 @@ public class GameViewPanel : DockPanel
             // Free match panel size
             rtW = (int)MathF.Max(1, windowWidth);
             rtH = (int)MathF.Max(1, windowHeight);
+        }
+        else if (targetW < 0 && targetH < 0)
+        {
+            // Aspect ratio mode - fit panel with given ratio
+            float aspect = (float)(-targetW) / (-targetH);
+            float panelAspect = windowWidth / windowHeight;
+            if (aspect > panelAspect)
+            {
+                rtW = (int)MathF.Max(1, windowWidth);
+                rtH = (int)MathF.Max(1, windowWidth / aspect);
+            }
+            else
+            {
+                rtH = (int)MathF.Max(1, windowHeight);
+                rtW = (int)MathF.Max(1, windowHeight * aspect);
+            }
         }
         else
         {

@@ -107,6 +107,232 @@ public sealed class UIMeshBuilder
     }
 
     /// <summary>
+    /// Tiles a texture across <paramref name="outer"/> using tiles of <paramref name="tileSize"/>
+    /// in design pixels. Partial tiles at the right/top edges get UV-clipped so the texture
+    /// is never visually stretched. Falls back to a single quad if the tile size is invalid.
+    /// </summary>
+    public void AddTiled(Rect outer, Float2 tileSize, Color tint)
+    {
+        if (tileSize.X <= 0 || tileSize.Y <= 0)
+        {
+            AddQuad(outer, tint, Float2.Zero, Float2.One);
+            return;
+        }
+
+        int tilesX = (int)MathF.Ceiling(outer.Size.X / tileSize.X);
+        int tilesY = (int)MathF.Ceiling(outer.Size.Y / tileSize.Y);
+        if (tilesX <= 0 || tilesY <= 0) return;
+
+        for (int ty = 0; ty < tilesY; ty++)
+        {
+            float y0 = outer.Min.Y + ty * tileSize.Y;
+            float y1 = MathF.Min(y0 + tileSize.Y, outer.Max.Y);
+            float v1 = (y1 - y0) / tileSize.Y;
+            for (int tx = 0; tx < tilesX; tx++)
+            {
+                float x0 = outer.Min.X + tx * tileSize.X;
+                float x1 = MathF.Min(x0 + tileSize.X, outer.Max.X);
+                float u1 = (x1 - x0) / tileSize.X;
+                AddQuad(new Rect(x0, y0, x1, y1), tint, Float2.Zero, new Float2(u1, v1));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Emits a triangle fan that fills a fraction of <paramref name="r"/> per Unity's Image
+    /// fill modes. Horizontal/Vertical clip the rect on one axis; Radial90/180/360 sweep an
+    /// arc from a corner / edge-midpoint / center. <paramref name="amount"/> is clamped to
+    /// [0,1]. UV is mapped 1:1 to the original rect so the texture appears un-stretched.
+    /// </summary>
+    public void AddFilled(Rect r, Color tint, UI.FillMethod method, int origin, float amount, bool clockwise)
+    {
+        amount = Maths.Clamp(amount, 0f, 1f);
+        if (amount <= 0f) return;
+        if (amount >= 1f) { AddQuad(r, tint, Float2.Zero, Float2.One); return; }
+
+        if (method == UI.FillMethod.Horizontal || method == UI.FillMethod.Vertical)
+        {
+            AddFilledLinear(r, tint, method, origin, amount);
+            return;
+        }
+        AddFilledRadial(r, tint, method, origin, amount, clockwise);
+    }
+
+    private void AddFilledLinear(Rect r, Color tint, UI.FillMethod method, int origin, float amount)
+    {
+        if (method == UI.FillMethod.Horizontal)
+        {
+            float w = r.Size.X * amount;
+            if (origin == 0) // Left
+            {
+                AddQuad(new Rect(r.Min.X, r.Min.Y, r.Min.X + w, r.Max.Y), tint,
+                        Float2.Zero, new Float2(amount, 1f));
+            }
+            else // Right
+            {
+                AddQuad(new Rect(r.Max.X - w, r.Min.Y, r.Max.X, r.Max.Y), tint,
+                        new Float2(1f - amount, 0f), Float2.One);
+            }
+        }
+        else // Vertical
+        {
+            float h = r.Size.Y * amount;
+            if (origin == 0) // Bottom (+Y up: Min.Y is the bottom edge)
+            {
+                AddQuad(new Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y + h), tint,
+                        Float2.Zero, new Float2(1f, amount));
+            }
+            else // Top
+            {
+                AddQuad(new Rect(r.Min.X, r.Max.Y - h, r.Max.X, r.Max.Y), tint,
+                        new Float2(0f, 1f - amount), Float2.One);
+            }
+        }
+    }
+
+    private void AddFilledRadial(Rect r, Color tint, UI.FillMethod method, int origin, float amount, bool clockwise)
+    {
+        Float2 pivot;
+        float startAngle;
+        float totalAngle;
+
+        // All angles use math convention (Y-up): 0 = +X, PI/2 = +Y. Default sweep is CCW (counter-clockwise)
+        // and the `clockwise` flag negates the direction.
+        switch (method)
+        {
+            case UI.FillMethod.Radial90:
+                totalAngle = MathF.PI * 0.5f;
+                switch (origin)
+                {
+                    case 0: pivot = new Float2(r.Min.X, r.Min.Y); startAngle = 0f; break;                  // BottomLeft
+                    case 1: pivot = new Float2(r.Min.X, r.Max.Y); startAngle = -MathF.PI * 0.5f; break;   // TopLeft
+                    case 2: pivot = new Float2(r.Max.X, r.Max.Y); startAngle = MathF.PI; break;           // TopRight
+                    case 3: pivot = new Float2(r.Max.X, r.Min.Y); startAngle = MathF.PI * 0.5f; break;    // BottomRight
+                    default: return;
+                }
+                break;
+            case UI.FillMethod.Radial180:
+                totalAngle = MathF.PI;
+                switch (origin)
+                {
+                    case 0: pivot = new Float2((r.Min.X + r.Max.X) * 0.5f, r.Min.Y); startAngle = 0f; break;                 // Bottom
+                    case 1: pivot = new Float2(r.Min.X, (r.Min.Y + r.Max.Y) * 0.5f); startAngle = -MathF.PI * 0.5f; break;  // Left
+                    case 2: pivot = new Float2((r.Min.X + r.Max.X) * 0.5f, r.Max.Y); startAngle = MathF.PI; break;          // Top
+                    case 3: pivot = new Float2(r.Max.X, (r.Min.Y + r.Max.Y) * 0.5f); startAngle = MathF.PI * 0.5f; break;   // Right
+                    default: return;
+                }
+                break;
+            case UI.FillMethod.Radial360:
+                totalAngle = MathF.PI * 2f;
+                pivot = (r.Min + r.Max) * 0.5f;
+                switch (origin)
+                {
+                    case 0: startAngle = -MathF.PI * 0.5f; break; // Bottom
+                    case 1: startAngle = 0f; break;               // Right
+                    case 2: startAngle = MathF.PI * 0.5f; break;  // Top
+                    case 3: startAngle = MathF.PI; break;         // Left
+                    default: return;
+                }
+                break;
+            default: return;
+        }
+
+        // For bounded wedges (Radial90/180), `startAngle` sits at one edge of the wedge so the
+        // default CCW sweep walks inward. To go clockwise we have to start at the *other* edge,
+        // otherwise the first ray immediately exits the rect. (For Radial360 totalAngle is 2π,
+        // so this shift is angle-equivalent and harmless.)
+        if (clockwise) startAngle += totalAngle;
+
+        float sweep = totalAngle * amount;
+        float dir = clockwise ? -1f : 1f;
+        const float twoPi = MathF.PI * 2f;
+        const float eps = 1e-4f;
+
+        // The rect's perimeter is piecewise-linear, so a geometrically exact fan only needs the
+        // two sweep endpoints plus each rect corner that lies strictly inside the wedge — that's
+        // what prevents the corners from being shaved off by a diagonal triangle edge.
+        Span<float> stops = stackalloc float[6];
+        int stopCount = 0;
+        stops[stopCount++] = 0f;
+
+        Span<Float2> corners = stackalloc Float2[]
+        {
+            new Float2(r.Min.X, r.Min.Y),
+            new Float2(r.Max.X, r.Min.Y),
+            new Float2(r.Max.X, r.Max.Y),
+            new Float2(r.Min.X, r.Max.Y),
+        };
+        for (int i = 0; i < 4; i++)
+        {
+            Float2 v = corners[i] - pivot;
+            if (MathF.Abs(v.X) < eps && MathF.Abs(v.Y) < eps) continue; // pivot sits on this corner
+            float rel = (MathF.Atan2(v.Y, v.X) - startAngle) * dir;
+            rel -= twoPi * MathF.Floor(rel / twoPi); // normalize to [0, 2*PI)
+            if (rel > eps && rel < sweep - eps)
+                stops[stopCount++] = rel;
+        }
+        stops[stopCount++] = sweep;
+
+        // Insertion sort (≤ 6 entries).
+        for (int i = 1; i < stopCount; i++)
+        {
+            float v = stops[i];
+            int j = i - 1;
+            while (j >= 0 && stops[j] > v) { stops[j + 1] = stops[j]; j--; }
+            stops[j + 1] = v;
+        }
+
+        var c = (Color32)tint;
+        Float2 invSize = new Float2(1f / r.Size.X, 1f / r.Size.Y);
+
+        uint pivotIdx = (uint)_verts.Count;
+        _verts.Add(new Float3(pivot.X, pivot.Y, 0f));
+        _uvs.Add(new Float2((pivot.X - r.Min.X) * invSize.X, (pivot.Y - r.Min.Y) * invSize.Y));
+        _colors.Add(c);
+
+        uint firstPerim = (uint)_verts.Count;
+        for (int i = 0; i < stopCount; i++)
+        {
+            float a = startAngle + dir * stops[i];
+            Float2 p = RayToRectEdge(pivot, a, r);
+            _verts.Add(new Float3(p.X, p.Y, 0f));
+            _uvs.Add(new Float2((p.X - r.Min.X) * invSize.X, (p.Y - r.Min.Y) * invSize.Y));
+            _colors.Add(c);
+        }
+
+        // Flip winding when sweeping clockwise so triangles keep the same orientation as AddQuad.
+        for (int i = 0; i < stopCount - 1; i++)
+        {
+            _indices.Add(pivotIdx);
+            if (clockwise)
+            {
+                _indices.Add(firstPerim + (uint)i + 1);
+                _indices.Add(firstPerim + (uint)i);
+            }
+            else
+            {
+                _indices.Add(firstPerim + (uint)i);
+                _indices.Add(firstPerim + (uint)i + 1);
+            }
+        }
+    }
+
+    // Intersect a ray from an interior/edge point of <paramref name="r"/> with the rect's edges.
+    private static Float2 RayToRectEdge(Float2 origin, float angle, Rect r)
+    {
+        float cx = MathF.Cos(angle);
+        float cy = MathF.Sin(angle);
+        float tx = float.PositiveInfinity;
+        float ty = float.PositiveInfinity;
+        if (cx > 1e-6f)       tx = (r.Max.X - origin.X) / cx;
+        else if (cx < -1e-6f) tx = (r.Min.X - origin.X) / cx;
+        if (cy > 1e-6f)       ty = (r.Max.Y - origin.Y) / cy;
+        else if (cy < -1e-6f) ty = (r.Min.Y - origin.Y) / cy;
+        float t = MathF.Min(tx, ty);
+        return new Float2(origin.X + cx * t, origin.Y + cy * t);
+    }
+
+    /// <summary>
     /// Adds a nine-slice quad: <paramref name="outer"/> is the on-screen rectangle,
     /// <paramref name="inner"/> is the unstretched center region in *pixel* offsets
     /// from the outer rect's edges (left, top, right, bottom). UV space is 0–1 for
@@ -143,6 +369,167 @@ public sealed class UIMeshBuilder
                     new Float2(us[col + 1], vs[row + 1]));
         }
     }
+
+    // ---------- Rounded-corner clipping ----------
+
+    // Reusable buffers for the source snapshot taken by ClipToRoundedRect. Cleared on each call.
+    private static readonly List<Float3>  s_clipSrcVerts   = new(64);
+    private static readonly List<Float2>  s_clipSrcUVs     = new(64);
+    private static readonly List<Color32> s_clipSrcColors  = new(64);
+    private static readonly List<uint>    s_clipSrcIndices = new(96);
+
+    /// <summary>
+    /// Intersects the currently-accumulated geometry with a rounded rectangle (Sutherland–Hodgman
+    /// against a CCW polygon that has <paramref name="cornerSegments"/> straight edges per corner arc).
+    /// Each source triangle is clipped independently; per-vertex UVs and colors are linearly
+    /// interpolated at the clip intersections so any fill mode (sliced / tiled / filled) keeps its
+    /// shading. Triangles fully inside take a fast path; triangles fully outside are dropped.
+    /// </summary>
+    public void ClipToRoundedRect(Rect rect, float radius, int cornerSegments = 6)
+    {
+        radius = MathF.Min(radius, MathF.Min(rect.Size.X, rect.Size.Y) * 0.5f);
+        if (radius <= 0.5f || _indices.Count == 0) return;
+
+        int clipCount = 4 * (cornerSegments + 1);
+        Span<Float2> clip = stackalloc Float2[clipCount];
+        BuildRoundedRectClipPolygon(rect, radius, cornerSegments, clip);
+
+        // Snapshot current geometry; we re-emit clipped triangles into the (cleared) builder.
+        s_clipSrcVerts.Clear();   s_clipSrcVerts.AddRange(_verts);
+        s_clipSrcUVs.Clear();     s_clipSrcUVs.AddRange(_uvs);
+        s_clipSrcColors.Clear();  s_clipSrcColors.AddRange(_colors);
+        s_clipSrcIndices.Clear(); s_clipSrcIndices.AddRange(_indices);
+        _verts.Clear(); _uvs.Clear(); _colors.Clear(); _indices.Clear();
+
+        // Double-buffered workspace for S-H. A triangle clipped against `clipCount` edges has at most
+        // (3 + clipCount) vertices, so 48 covers cornerSegments up to 11.
+        const int Cap = 48;
+        Span<Float3> pA = stackalloc Float3[Cap], pB = stackalloc Float3[Cap];
+        Span<Float2> uA = stackalloc Float2[Cap], uB = stackalloc Float2[Cap];
+        Span<Color32> cA = stackalloc Color32[Cap], cB = stackalloc Color32[Cap];
+
+        int triCount = s_clipSrcIndices.Count;
+        for (int t = 0; t < triCount; t += 3)
+        {
+            int i0 = (int)s_clipSrcIndices[t];
+            int i1 = (int)s_clipSrcIndices[t + 1];
+            int i2 = (int)s_clipSrcIndices[t + 2];
+
+            pA[0] = s_clipSrcVerts[i0]; uA[0] = s_clipSrcUVs[i0]; cA[0] = s_clipSrcColors[i0];
+            pA[1] = s_clipSrcVerts[i1]; uA[1] = s_clipSrcUVs[i1]; cA[1] = s_clipSrcColors[i1];
+            pA[2] = s_clipSrcVerts[i2]; uA[2] = s_clipSrcUVs[i2]; cA[2] = s_clipSrcColors[i2];
+            int polyCount = 3;
+
+            Span<Float3> inP = pA, outP = pB;
+            Span<Float2> inU = uA, outU = uB;
+            Span<Color32> inC = cA, outC = cB;
+
+            for (int e = 0; e < clipCount; e++)
+            {
+                if (polyCount == 0) break;
+                Float2 ea = clip[e];
+                Float2 eb = clip[(e + 1) % clipCount];
+                float edx = eb.X - ea.X;
+                float edy = eb.Y - ea.Y;
+
+                int outCount = 0;
+                int prev = polyCount - 1;
+                // Signed area (= 2D cross) of (edge, prev-vertex). ≥ 0 means prev is on the inside of the CCW edge.
+                float prevS = edx * (inP[prev].Y - ea.Y) - edy * (inP[prev].X - ea.X);
+                bool prevIn = prevS >= 0f;
+
+                for (int i = 0; i < polyCount; i++)
+                {
+                    float curS = edx * (inP[i].Y - ea.Y) - edy * (inP[i].X - ea.X);
+                    bool curIn = curS >= 0f;
+
+                    if (curIn)
+                    {
+                        if (!prevIn)
+                        {
+                            float ti = prevS / (prevS - curS);
+                            outP[outCount] = LerpFloat3(inP[prev], inP[i], ti);
+                            outU[outCount] = LerpFloat2(inU[prev], inU[i], ti);
+                            outC[outCount] = LerpColor32(inC[prev], inC[i], ti);
+                            outCount++;
+                        }
+                        outP[outCount] = inP[i];
+                        outU[outCount] = inU[i];
+                        outC[outCount] = inC[i];
+                        outCount++;
+                    }
+                    else if (prevIn)
+                    {
+                        float ti = prevS / (prevS - curS);
+                        outP[outCount] = LerpFloat3(inP[prev], inP[i], ti);
+                        outU[outCount] = LerpFloat2(inU[prev], inU[i], ti);
+                        outC[outCount] = LerpColor32(inC[prev], inC[i], ti);
+                        outCount++;
+                    }
+                    prev = i;
+                    prevS = curS;
+                    prevIn = curIn;
+                }
+
+                polyCount = outCount;
+                var tmpP = inP; inP = outP; outP = tmpP;
+                var tmpU = inU; inU = outU; outU = tmpU;
+                var tmpC = inC; inC = outC; outC = tmpC;
+            }
+
+            if (polyCount < 3) continue;
+
+            uint baseIdx = (uint)_verts.Count;
+            for (int i = 0; i < polyCount; i++)
+            {
+                _verts.Add(inP[i]);
+                _uvs.Add(inU[i]);
+                _colors.Add(inC[i]);
+            }
+            // Fan-triangulate the convex clipped polygon. Winding follows the source triangle (CCW).
+            for (int i = 1; i < polyCount - 1; i++)
+            {
+                _indices.Add(baseIdx);
+                _indices.Add(baseIdx + (uint)i);
+                _indices.Add(baseIdx + (uint)i + 1);
+            }
+        }
+    }
+
+    private static void BuildRoundedRectClipPolygon(Rect rect, float radius, int segments, Span<Float2> output)
+    {
+        // Traverse CCW (Y-up): bottom-right arc → up to TR arc → left to TL arc → down to BL arc.
+        // Each arc emits `segments + 1` points; the straight edges of the rect are the chords
+        // between consecutive arcs (polygon-edges between the last point of one and the first of the next).
+        int idx = 0;
+        AppendArc(output, ref idx, new Float2(rect.Max.X - radius, rect.Min.Y + radius), radius, -MathF.PI * 0.5f, segments); // BR
+        AppendArc(output, ref idx, new Float2(rect.Max.X - radius, rect.Max.Y - radius), radius, 0f, segments);                // TR
+        AppendArc(output, ref idx, new Float2(rect.Min.X + radius, rect.Max.Y - radius), radius, MathF.PI * 0.5f, segments);   // TL
+        AppendArc(output, ref idx, new Float2(rect.Min.X + radius, rect.Min.Y + radius), radius, MathF.PI, segments);          // BL
+    }
+
+    private static void AppendArc(Span<Float2> dst, ref int idx, Float2 center, float radius, float startAngle, int segments)
+    {
+        float step = MathF.PI * 0.5f / segments;
+        for (int s = 0; s <= segments; s++)
+        {
+            float a = startAngle + step * s;
+            dst[idx++] = new Float2(center.X + MathF.Cos(a) * radius, center.Y + MathF.Sin(a) * radius);
+        }
+    }
+
+    private static Float3 LerpFloat3(in Float3 a, in Float3 b, float t)
+        => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t);
+
+    private static Float2 LerpFloat2(in Float2 a, in Float2 b, float t)
+        => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t);
+
+    private static Color32 LerpColor32(Color32 a, Color32 b, float t)
+        => new(
+            (byte)(a.R + (b.R - a.R) * t),
+            (byte)(a.G + (b.G - a.G) * t),
+            (byte)(a.B + (b.B - a.B) * t),
+            (byte)(a.A + (b.A - a.A) * t));
 
     // ---------- Bake / Reset ----------
 

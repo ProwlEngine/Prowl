@@ -37,6 +37,9 @@ internal sealed class UIRenderItem : IRenderable
     public uint   LastTransformVersion;          // (matrix-only refresh)
     public UIDirtyFlags PropertyCacheState;      // tracks whether Props needs repopulating
 
+    // -------- Mask state (set by the canvas during BuildRecursive) --------
+    public Float4?    ScissorPixels;             // (x, y, w, h) in framebuffer pixels — null = no scissor
+
     // ============================================================
     // IRenderable implementation
     // ============================================================
@@ -88,7 +91,7 @@ internal sealed class UIRenderItem : IRenderable
     /// <see cref="UIMeshBuilder.Bake"/> has produced a fresh mesh.
     /// </summary>
     internal void Initialize(UIBehaviour owner, GameCanvas canvas, Mesh mesh, Material material,
-                             Float4x4 model, int sortKey, UISurface surface)
+                             Float4x4 model, int sortKey, UISurface surface, Float4? scissor = null)
     {
         Owner = owner; Canvas = canvas;
         Mesh = mesh; Material = material;
@@ -97,6 +100,7 @@ internal sealed class UIRenderItem : IRenderable
         Surface = surface;
         LastTransformVersion = owner.Transform.Version;
         PropertyCacheState = UIDirtyFlags.All;   // forces first GetRenderingData to populate
+        ScissorPixels = scissor;
     }
 
     /// <summary>

@@ -199,19 +199,13 @@ public static class GameObjectInspector
             Origami.Float3Field(paper, "gi_scale_vf", scale, v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; }).Show());
     }
 
-    /// <summary>
-    /// Anchor presets arranged as a 4x4 grid, mirroring Unity's RectTransform popup:
-    /// the inner 3x3 are fixed-corner anchors, the outer row/column are stretch presets,
-    /// and the bottom-right corner is "stretch all". Item is (AnchorMin, AnchorMax).
-    /// Anchor space is +Y up, so the visually-top row uses Y=1 and the bottom row Y=0.
-    /// </summary>
     private static readonly (Float2 min, Float2 max)[,] AnchorPresets = new (Float2, Float2)[4, 4]
     {
-        // Row 0: top fixed (TL, TC, TR) + horizontal-stretch top  — Y=1 (+Y up)
+        // Row 0: top fixed (TopLeft, TopCenter, TopRight) + horizontal-stretch top
         { (new(0f, 1f), new(0f, 1f)),     (new(0.5f, 1f), new(0.5f, 1f)),     (new(1f, 1f), new(1f, 1f)),     (new(0f, 1f), new(1f, 1f)) },
-        // Row 1: middle fixed (ML, MC, MR) + horizontal-stretch middle
+        // Row 1: middle fixed (MidLeft, MidCenter, MidRight) + horizontal-stretch middle
         { (new(0f, 0.5f), new(0f, 0.5f)), (new(0.5f, 0.5f), new(0.5f, 0.5f)), (new(1f, 0.5f), new(1f, 0.5f)), (new(0f, 0.5f), new(1f, 0.5f)) },
-        // Row 2: bottom fixed (BL, BC, BR) + horizontal-stretch bottom  — Y=0 (+Y up)
+        // Row 2: bottom fixed (BottomLeft, BottomCenter, BottomRight) + horizontal-stretch bottom
         { (new(0f, 0f), new(0f, 0f)),     (new(0.5f, 0f), new(0.5f, 0f)),     (new(1f, 0f), new(1f, 0f)),     (new(0f, 0f), new(1f, 0f)) },
         // Row 3: vertical-stretch (left, center, right) + stretch-all
         { (new(0f, 0f), new(0f, 1f)),     (new(0.5f, 0f), new(0.5f, 1f)),     (new(1f, 0f), new(1f, 1f)),     (new(0f, 0f), new(1f, 1f)) },

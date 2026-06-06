@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -9,9 +11,36 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.UI;
 
+/// <summary>How a <see cref="UIImage"/> stretches its texture across the rect.</summary>
+public enum ImageType
+{
+    /// <summary>The texture is stretched to fit the whole rect (the default).</summary>
+    Simple,
+    /// <summary>The four <see cref="UIImage.Border"/> regions stay unstretched; only the middle scales.</summary>
+    Sliced,
+    /// <summary>The texture repeats across the rect at its native size (scaled by <see cref="UIImage.PixelsPerUnit"/>).</summary>
+    Tiled,
+    /// <summary>Only a portion of the texture is drawn, controlled by <see cref="UIImage.FillAmount"/>.</summary>
+    Filled,
+}
+
+/// <summary>Geometry pattern used by <see cref="ImageType.Filled"/>. Origin values map per-method (see FillOrigin*).</summary>
+public enum FillMethod
+{
+    /// <summary>Linear wipe left↔right. Origin: 0=Left, 1=Right.</summary>
+    Horizontal,
+    /// <summary>Linear wipe bottom↔top. Origin: 0=Bottom, 1=Top.</summary>
+    Vertical,
+    /// <summary>Quarter-circle wipe from a corner. Origin: 0=BL, 1=TL, 2=TR, 3=BR.</summary>
+    Radial90,
+    /// <summary>Semicircle wipe from an edge midpoint. Origin: 0=Bottom, 1=Left, 2=Top, 3=Right.</summary>
+    Radial180,
+    /// <summary>Full circle wipe from the rect center. Origin: 0=Bottom, 1=Right, 2=Top, 3=Left.</summary>
+    Radial360,
+}
+
 /// <summary>
 /// Displays a colored rectangle or a <see cref="Texture2D"/> sprite in the UI.
-/// Analogous to Unity's <c>Image</c> component.
 /// </summary>
 /// <remarks>
 /// Expects the parent GameObject to have a <see cref="RectTransform"/>.
@@ -65,12 +94,68 @@ public class UIImage : UIBehaviour
         set => SetField(ref _preserveAspect, value, UIDirtyFlags.Vertices);
     }
 
-    /// <summary>Corner radius for rounded rectangles (in pixels). 0 = sharp corners.</summary>
+    /// <summary>Corner radius for rounded rectangles (in pixels). 0 = sharp corners. Only honored when <see cref="Type"/> is <see cref="ImageType.Simple"/>.</summary>
     [SerializeField] private float _cornerRadius;
     public float CornerRadius
     {
         get => _cornerRadius;
         set => SetField(ref _cornerRadius, value, UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>How the texture is mapped to the rect. See <see cref="ImageType"/>.</summary>
+    [SerializeField] private ImageType _type = ImageType.Simple;
+    public ImageType Type
+    {
+        get => _type;
+        set => SetField(ref _type, value, UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>Source-texture border in pixels (L, T, R, B). Used by <see cref="ImageType.Sliced"/> and <see cref="ImageType.Tiled"/> to keep edges un-stretched.</summary>
+    [SerializeField] private Float4 _border;
+    public Float4 Border
+    {
+        get => _border;
+        set => SetField(ref _border, value, UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>Pixels-per-unit divisor applied to <see cref="Border"/> and tile size. Higher values shrink borders/tiles on-screen.</summary>
+    [SerializeField] private float _pixelsPerUnit = 1f;
+    public float PixelsPerUnit
+    {
+        get => _pixelsPerUnit;
+        set => SetField(ref _pixelsPerUnit, value, UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>Fill geometry used when <see cref="Type"/> is <see cref="ImageType.Filled"/>.</summary>
+    [SerializeField] private FillMethod _fillMethod = FillMethod.Radial360;
+    public FillMethod FillMethod
+    {
+        get => _fillMethod;
+        set => SetField(ref _fillMethod, value, UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>Origin selector for <see cref="ImageType.Filled"/>; meaning depends on <see cref="FillMethod"/>.</summary>
+    [SerializeField] private int _fillOrigin;
+    public int FillOrigin
+    {
+        get => _fillOrigin;
+        set => SetField(ref _fillOrigin, value, UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>How much of the rect to draw in <see cref="ImageType.Filled"/> mode (0..1).</summary>
+    [SerializeField] private float _fillAmount = 1f;
+    public float FillAmount
+    {
+        get => _fillAmount;
+        set => SetField(ref _fillAmount, Maths.Clamp(value, 0f, 1f), UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>For radial <see cref="FillMethod"/>s, sweep clockwise from the origin instead of the default counter-clockwise.</summary>
+    [SerializeField] private bool _fillClockwise;
+    public bool FillClockwise
+    {
+        get => _fillClockwise;
+        set => SetField(ref _fillClockwise, value, UIDirtyFlags.Vertices);
     }
 
     /// <summary>
@@ -106,11 +191,72 @@ public class UIImage : UIBehaviour
             (1f - pivot.Y) * h);
 
         Color tinted = Color * new Color(1, 1, 1, ctx.Alpha);
+
+        switch (_type)
+        {
+            case ImageType.Sliced:
+                EmitSliced(b, local, tinted);
+                break;
+            case ImageType.Tiled:
+                EmitTiled(b, local, tinted);
+                break;
+            case ImageType.Filled:
+                b.AddFilled(local, tinted, _fillMethod, _fillOrigin, _fillAmount, _fillClockwise);
+                break;
+            default:
+                if (CornerRadius > 0)
+                    b.AddRoundedRect(local, CornerRadius, tinted);
+                else
+                    // UV (0,0) at the rect's bottom-left, (1,1) at its top-right (+Y up).
+                    b.AddQuad(local, tinted, Float2.Zero, Float2.One);
+                return;
+        }
+
+        // Simple already emits a rounded mesh directly via AddRoundedRect; other fill modes need a
+        // post-process clip pass to round their corners.
         if (CornerRadius > 0)
-            b.AddRoundedRect(local, CornerRadius, tinted);
-        else
-            // UV (0,0) at the rect's bottom-left, (1,1) at its top-right (+Y up).
+            b.ClipToRoundedRect(local, CornerRadius);
+    }
+
+    private void EmitSliced(UIMeshBuilder b, Rect local, Color tinted)
+    {
+        float ppu = _pixelsPerUnit > 0 ? _pixelsPerUnit : 1f;
+        // Pixel borders are in source-texture pixels; divide by PPU to get screen pixels and
+        // clamp so opposite borders never overlap (which would invert the center quad).
+        float bl = _border.X / ppu, bt = _border.Y / ppu, br = _border.Z / ppu, bb = _border.W / ppu;
+        float maxX = local.Size.X * 0.5f, maxY = local.Size.Y * 0.5f;
+        bl = MathF.Min(bl, maxX); br = MathF.Min(br, maxX);
+        bt = MathF.Min(bt, maxY); bb = MathF.Min(bb, maxY);
+
+        Float4 uv = ComputeUVBorder();
+        b.AddNineSlice(local, new Float4(bl, bt, br, bb), uv, tinted);
+    }
+
+    private void EmitTiled(UIMeshBuilder b, Rect local, Color tinted)
+    {
+        // Tile size in screen pixels: source texture native size scaled by 1/PPU. If no texture
+        // is set we fall back to the rect itself so the image just stretches like Simple.
+        Texture2D? tex = _texture;
+        if (tex is null || tex.Width == 0 || tex.Height == 0)
+        {
             b.AddQuad(local, tinted, Float2.Zero, Float2.One);
+            return;
+        }
+
+        float ppu = _pixelsPerUnit > 0 ? _pixelsPerUnit : 1f;
+        Float2 tileSize = new Float2(tex.Width / ppu, tex.Height / ppu);
+        b.AddTiled(local, tileSize, tinted);
+    }
+
+    private Float4 ComputeUVBorder()
+    {
+        Texture2D? tex = _texture;
+        if (tex is null || tex.Width == 0 || tex.Height == 0) return Float4.Zero;
+        return new Float4(
+            _border.X / tex.Width,
+            _border.Y / tex.Height,
+            _border.Z / tex.Width,
+            _border.W / tex.Height);
     }
 
     public override void PopulateProperties(PropertyState p, in UIContext _)

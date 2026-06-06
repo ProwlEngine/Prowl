@@ -52,6 +52,11 @@ public static unsafe class Graphics
     private static RasterizerState.StencilOp stencilFailOp = RasterizerState.StencilOp.Keep;
     private static RasterizerState.StencilOp stencilZFailOp = RasterizerState.StencilOp.Keep;
 
+    // Scissor cache
+    private static bool scissorEnabled = false;
+    private static int scissorX, scissorY;
+    private static uint scissorW, scissorH;
+
     private static GraphicsFrameBuffer? currentFramebuffer = null;
     private static GraphicsFrameBuffer? currentReadFramebuffer = null;
     private static GraphicsFrameBuffer? currentDrawFramebuffer = null;
@@ -95,6 +100,27 @@ public static unsafe class Graphics
     }
 
     public static void Viewport(int x, int y, uint width, uint height) => GL.Viewport(x, y, width, height);
+
+    public static void SetScissor(int x, int y, uint width, uint height)
+    {
+        if (!scissorEnabled)
+        {
+            GL.Enable(EnableCap.ScissorTest);
+            scissorEnabled = true;
+        }
+        if (scissorX != x || scissorY != y || scissorW != width || scissorH != height)
+        {
+            GL.Scissor(x, y, width, height);
+            scissorX = x; scissorY = y; scissorW = width; scissorH = height;
+        }
+    }
+
+    public static void DisableScissor()
+    {
+        if (!scissorEnabled) return;
+        GL.Disable(EnableCap.ScissorTest);
+        scissorEnabled = false;
+    }
 
     public static void Clear(float r, float g, float b, float a, ClearFlags v)
     {
@@ -269,6 +295,10 @@ public static unsafe class Graphics
         stencilPassOp = RasterizerState.StencilOp.Keep;
         stencilFailOp = RasterizerState.StencilOp.Keep;
         stencilZFailOp = RasterizerState.StencilOp.Keep;
+
+        GL.Disable(EnableCap.ScissorTest);
+        scissorEnabled = false;
+        scissorX = scissorY = 0; scissorW = scissorH = 0;
     }
 
     // Helper method to combine program ID and string hash into a unique ulong key

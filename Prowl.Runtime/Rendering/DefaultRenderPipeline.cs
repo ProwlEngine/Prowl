@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
+using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.PaperUI;
@@ -164,7 +165,9 @@ public class DefaultRenderPipeline : RenderPipeline
                 }
             }
 
-            DrawRenderables(s_uiTmp, "RenderOrder", "UI", new ViewerData(css), null, false);
+            DrawUIItems(s_uiTmp, new ViewerData(css));
+
+            Graphics.DisableScissor();
 
             if (!data.IsSceneView)
             {
@@ -175,6 +178,102 @@ public class DefaultRenderPipeline : RenderPipeline
         finally
         {
             GameCanvas.ScreenSizeOverride = prevOverride;
+        }
+    }
+
+    private void DrawUIItems(List<IRenderable> items, ViewerData viewer)
+    {
+        if (items.Count == 0) return;
+
+        // Track previous shader/material so we don't re-bind on every item when neighbours share them.
+        // Materials *can* repeat across UI items (default GameUI), and per-frame uniforms are cheap to skip.
+        Material? boundMaterial = null;
+        GraphicsProgram? boundVariant = null;
+        ShaderPass? boundPass = null;
+        int materialTexSlot = 0;
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            var item = (UIRenderItem)items[i];
+            Material material = item.Material;
+            if (material == null || material.Shader.IsNotValid()) continue;
+
+            item.GetRenderingData(viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out _);
+            if (mesh == null || mesh.VertexCount <= 0) continue;
+
+            // Find the UI pass for this material. UI materials are expected to have a single matching pass.
+            ShaderPass? pass = null;
+            int passIndex = -1;
+            foreach (ShaderPass p in material.Shader.Passes)
+            {
+                passIndex++;
+                if (p.HasTag("RenderOrder", "UI")) { pass = p; break; }
+            }
+            if (pass == null) continue;
+
+            // ---------- Material / shader binding (when changed) ----------
+            if (!ReferenceEquals(material, boundMaterial) || !ReferenceEquals(pass, boundPass))
+            {
+                // UI meshes have a consistent vertex layout (pos + uv + color32); enabling these keywords
+                // unconditionally is correct for every current UI behaviour and avoids per-item keyword churn.
+                material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
+                material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
+                material.SetKeyword("HAS_UV", mesh.HasUV);
+                material.SetKeyword("HAS_UV2", mesh.HasUV2);
+                material.SetKeyword("HAS_COLORS", mesh.HasColors || mesh.HasColors32);
+                material.SetKeyword("HAS_BONEINDICES", false);
+                material.SetKeyword("HAS_BONEWEIGHTS", false);
+                material.SetKeyword("SKINNED", false);
+
+                if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variant) || variant == null)
+                    continue;
+                boundVariant = variant;
+                boundMaterial = material;
+                boundPass = pass;
+
+                GraphicsBuffer? globals = GlobalUniforms.GetBuffer();
+                if (globals != null)
+                    Graphics.BindUniformBuffer(boundVariant, "GlobalUniforms", globals, 0);
+
+                materialTexSlot = 0;
+                PropertyState.ApplyGlobals(boundVariant, boundVariant.uniformCache, ref materialTexSlot);
+                PropertyState.ApplyMaterialUniformsWithDefaults(material._properties, material.Shader!, boundVariant, ref materialTexSlot);
+
+                // pass.State is the material's intended depth/blend/cull baseline. Stencil bits in
+                // pass.State are ignored — we override below per item.
+                Graphics.SetState(pass.State);
+            }
+
+            // ---------- Per-item scissor ----------
+            if (item.ScissorPixels is { } sp)
+            {
+                int x = (int)MathF.Floor(sp.X);
+                int y = (int)MathF.Floor(sp.Y);
+                int w = Math.Max(0, (int)MathF.Ceiling(sp.X + sp.Z) - x);
+                int h = Math.Max(0, (int)MathF.Ceiling(sp.Y + sp.W) - y);
+                Graphics.SetScissor(x, y, (uint)w, (uint)h);
+            }
+            else
+            {
+                Graphics.DisableScissor();
+            }
+
+            // ---------- Per-item uniforms + draw ----------
+            int instTexSlot = materialTexSlot;
+            PropertyState.ApplyInstanceUniforms(properties, boundVariant!, ref instTexSlot);
+
+            var fModel = (Float4x4)model;
+            Graphics.SetUniformMatrix(boundVariant!, "prowl_ObjectToWorld", false, fModel);
+            Graphics.SetUniformMatrix(boundVariant!, "prowl_WorldToObject", false, fModel.Invert());
+
+            mesh.Upload();
+            unsafe
+            {
+                Graphics.BindVertexArray(mesh.VertexArrayObject);
+                Graphics.DrawIndexed(mesh.MeshTopology, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
+                Graphics.BindVertexArray(null);
+            }
+            RenderStats.AddBatch();
         }
     }
 
@@ -334,7 +433,9 @@ public class DefaultRenderPipeline : RenderPipeline
         UploadAmbientUniforms(css.Scene);
 
         // =======================================================
-        // 7. Create main color render target
+        // 7. Create main color render target.
+        // Stencil is requested so UI Mask components can write/test against the buffer; we get an
+        // 8-bit stencil slot for free as part of the packed Depth24Stencil8 format.
         RenderTexture colorRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
             isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b,
         ]);

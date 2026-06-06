@@ -198,6 +198,17 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<UIImage>();
     }
 
+
+    [CreateGameObjectMenu("UI/Button", Icon = EditorIcons.MobileButton, Order = 52)]
+    static void CreateUIButton(GameObject? parent)
+    {
+        var go = NewUIElement("Button", parent);
+        go.RectTransform!.SizeDelta = new Float2(100f, 100f);
+        var image = go.AddComponent<UIImage>();
+        var button = go.AddComponent<UIButton>();
+        button.TargetGraphic = image;
+    }
+
     [CreateGameObjectMenu("UI/Panel", Icon = EditorIcons.WindowMaximize, Order = 53)]
     static void CreateUIPanel(GameObject? parent)
     {
@@ -219,6 +230,14 @@ internal static class DefaultGameObjectCreators
     {
         var go = HierarchyPanel.CreateGameObject("World Canvas", parent);
         go.AddComponent<WorldCanvas>();
+    }
+
+    [CreateGameObjectMenu("UI/Rect Mask", Icon = EditorIcons.Square, Order = 56)]
+    static void CreateUIRectMask(GameObject? parent)
+    {
+        var go = NewUIElement("Rect Mask", parent);
+        go.RectTransform!.SizeDelta = new Float2(200f, 200f);
+        go.AddComponent<RectMask>();
     }
 
     /// <summary>

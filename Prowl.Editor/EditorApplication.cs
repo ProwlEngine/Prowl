@@ -388,6 +388,9 @@ public class EditorApplication : Game
         // Reset per-frame state
         GameViewInputHandler.IsGameViewFocused = false;
 
+        // Keeps the editor view outside of UI input's reach, to prevent false positives when clicking around
+        Runtime.UI.UIEventSystem.Viewport = new Runtime.UI.UIEventSystem.HostViewport { ReceivesInput = false };
+
         float w = paper.ScreenRect.Size.X;
         float h = paper.ScreenRect.Size.Y;
 

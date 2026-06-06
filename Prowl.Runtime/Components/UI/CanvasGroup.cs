@@ -5,15 +5,6 @@ using Prowl.Echo;
 
 namespace Prowl.Runtime.UI;
 
-/// <summary>
-/// Controls the alpha, interactivity, and raycast blocking of all child UI elements.
-/// Analogous to Unity's <c>CanvasGroup</c>.
-/// </summary>
-/// <remarks>
-/// Attach a <see cref="CanvasGroup"/> to any GameObject in the UI hierarchy.
-/// The <see cref="GameCanvas"/> will apply this group's settings to the
-/// <see cref="UIContext"/> before building child elements.
-/// </remarks>
 public class CanvasGroup : UIBehaviour
 {
     /// <summary>Opacity multiplier applied to all child elements (0 = transparent, 1 = opaque).</summary>
@@ -31,12 +22,6 @@ public class CanvasGroup : UIBehaviour
         }
     }
 
-    /// <summary>
-    /// Walks the GameObject subtree rooted at this component and marks every
-    /// <see cref="UIBehaviour"/> with the given flags. Stops at any nested
-    /// <see cref="GameCanvas"/> or <see cref="CanvasGroup"/> with
-    /// <see cref="IgnoreParentGroups"/> set, which form their own context.
-    /// </summary>
     private void MarkDescendantsDirty(UIDirtyFlags flags)
     {
         WalkAndDirty(GameObject, flags, isRoot: true);
@@ -47,6 +32,7 @@ public class CanvasGroup : UIBehaviour
             {
                 // Don't descend into a nested canvas — it owns its own dirty state.
                 if (go.GetComponent<GameCanvas>() != null) return;
+
                 // A nested CanvasGroup that ignores parents starts a fresh context.
                 CanvasGroup? nested = go.GetComponent<CanvasGroup>();
                 if (nested is { IgnoreParentGroups: true }) return;
