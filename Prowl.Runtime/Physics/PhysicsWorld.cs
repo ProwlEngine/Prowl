@@ -99,6 +99,13 @@ public class PhysicsWorld
     /// </summary>
     public event Action<float> PostStep;
 
+    /// <summary>
+    /// Event triggered before each physics substep, with the substep duration (FixedDeltaTime / Substep).
+    /// Use this for sub-stepped force/impulse models (e.g. vehicle tyres) that need the body's
+    /// re-integrated velocity each substep.
+    /// </summary>
+    public event Action<float> PreSubStep;
+
     public PhysicsWorld()
     {
         World = new World();
@@ -115,6 +122,7 @@ public class PhysicsWorld
         // Hook up physics step events
         World.PreStep += OnPreStep;
         World.PostStep += OnPostStep;
+        World.PreSubStep += OnPreSubStep;
     }
 
     /// <summary>
@@ -145,6 +153,11 @@ public class PhysicsWorld
     private void OnPreStep(float deltaTime)
     {
         PreStep?.Invoke(deltaTime);
+    }
+
+    private void OnPreSubStep(float deltaTime)
+    {
+        PreSubStep?.Invoke(deltaTime);
     }
 
     private void OnPostStep(float deltaTime)
