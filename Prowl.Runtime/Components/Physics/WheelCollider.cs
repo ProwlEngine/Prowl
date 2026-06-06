@@ -12,11 +12,21 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+/// <summary>Ground-detection method for a <see cref="WheelCollider"/>.</summary>
+public enum WheelCastType
+{
+    /// <summary>A grid of downward rays across the wheel face. Stable contact, rides over bumps/kerbs.</summary>
+    Raycast,
+    /// <summary>A convex cylinder sweep down the suspension axis. Handles narrow gaps, slightly noisier contact.</summary>
+    Sweep,
+}
+
 /// <summary>
-/// A volumetric raycast-vehicle wheel. Instead of a thin ray, it sweeps a cylinder (the wheel
-/// volume) down the suspension axis each physics step, so it can't tunnel through edges or fall
-/// into cracks and it produces a stable contact normal. Suspension is a spring/damper tuned from a
-/// natural frequency, and grip uses a saturating slip model clamped to a friction circle.
+/// A raycast-vehicle wheel. Ground contact is found either by a grid of rays across the wheel face
+/// (<see cref="WheelCastType.Raycast"/>, the default, stable and rides over bumps/kerbs) or by sweeping
+/// the wheel cylinder down the suspension axis (<see cref="WheelCastType.Sweep"/>, volumetric but with a
+/// noisier contact). Suspension is a spring/damper tuned from a natural frequency, grip uses a saturating
+/// slip model clamped to a friction circle, and a fully compressed wheel depenetrates out of the surface.
 ///
 /// The wheel applies forces to the parent <see cref="Rigidbody3D"/>; it does not add a collision
 /// shape of its own. Place the wheel GameObject so its position marks the top of the suspension
@@ -29,6 +39,13 @@ public sealed class WheelCollider : MonoBehaviour
     // Geometry
     [SerializeField] private float radius = 0.35f;
     [SerializeField] private float width = 0.25f;
+    [SerializeField] private float camber = 0.0f; // wheel tilt in degrees about the forward axis (auto-mirrored per side)
+
+    // Ground detection
+    [SerializeField] private WheelCastType castType = WheelCastType.Raycast;
+    [SerializeField] private int forwardRayCount = 9; // raycast grid: rays along the wheel length (odd keeps a centre ray)
+    [SerializeField] private int sideRayCount = 3;    // raycast grid: scan planes across the wheel width
+    [SerializeField] private bool depenetrate = true; // push out of objects when the suspension bottoms out
 
     // Suspension
     [SerializeField] private float suspensionDistance = 0.3f;
@@ -40,10 +57,11 @@ public sealed class WheelCollider : MonoBehaviour
     [SerializeField] private float forwardFriction = 1.6f;       // longitudinal grip coefficient
     [SerializeField] private float sidewaysFriction = 1.8f;      // lateral grip coefficient
     [SerializeField] private float gripSaturationSpeed = 4.0f;   // slip speed (m/s) at which grip saturates
+    [SerializeField] private float dragTorque = 30.0f;          // rolling resistance (N*m) so the wheel/car comes to rest
 
     // Wheel spin
     [SerializeField] private float wheelMass = 15.0f;            // for spin inertia I = 0.5*m*r^2
-    [SerializeField] private float maxAngularVelocity = 250.0f;
+    //[SerializeField] private float maxAngularVelocity = 250.0f;
 
     /// <summary>Steering angle in radians (rotation about the suspension axis). Set by a controller.</summary>
     public float SteerAngle;
@@ -59,23 +77,38 @@ public sealed class WheelCollider : MonoBehaviour
     /// from the WheelCollider's own GameObject, which marks the fixed suspension mount used by physics.</summary>
     public Transform visualTransform;
 
+    private int _dbgCounter;
+
     // Runtime state
     private Rigidbody3D rb;
     private int wheelCount = 1;
     private bool counted;
     private float displacement;        // suspension compression, 0..suspensionDistance
+    private float _side = 1.0f;         // +1 right, -1 left; mirrors camber so a single angle works on both sides
     private bool onFloor;
     private float angularVelocity;     // wheel spin (rad/s)
     private float wheelRotation;       // accumulated spin (rad), for visuals
-    private float frictionTorque;      // ground reaction torque on the wheel this step
-    private float rollingAngVel;       // spin that matches ground speed (pure rolling)
     private Float3 contactPoint;
     private Float3 contactNormal = Float3.UnitY;
     private RigidBody groundBody;
 
+    // Per-step cache (set in PreStep, used by the per-substep friction/spin in PreSubStep).
+    private JVector _contactJ, _mountJ, _upJ, _planeFwd, _planeLeft;
+    private float _springK, _damperC, _damperCap;
+    private float _fLong, _fLat; // last tyre forces, for gizmos
+
     // Public configuration
     public float Radius { get => radius; set => radius = Maths.Max(0.01f, value); }
     public float Width { get => width; set => width = Maths.Max(0.01f, value); }
+    /// <summary>Wheel camber in degrees (tilt about the forward axis). Auto-mirrored for left/right wheels.</summary>
+    public float Camber { get => camber; set => camber = value; }
+    public WheelCastType CastType { get => castType; set => castType = value; }
+    /// <summary>Raycast grid: number of rays along the wheel length. Odd keeps a centre ray.</summary>
+    public int ForwardRayCount { get => forwardRayCount; set => forwardRayCount = Maths.Max(1, value); }
+    /// <summary>Raycast grid: number of scan planes across the wheel width.</summary>
+    public int SideRayCount { get => sideRayCount; set => sideRayCount = Maths.Max(1, value); }
+    /// <summary>Push the wheel (and chassis) out along the contact normal when the suspension bottoms out against an object.</summary>
+    public bool Depenetrate { get => depenetrate; set => depenetrate = value; }
     public float SuspensionDistance { get => suspensionDistance; set => suspensionDistance = Maths.Max(0.0f, value); }
     public float SuspensionFrequency { get => suspensionFrequency; set => suspensionFrequency = Maths.Max(0.1f, value); }
     public float SuspensionDampingRatio { get => suspensionDampingRatio; set => suspensionDampingRatio = Maths.Max(0.0f, value); }
@@ -84,8 +117,10 @@ public sealed class WheelCollider : MonoBehaviour
     public float ForwardFriction { get => forwardFriction; set => forwardFriction = Maths.Max(0.0f, value); }
     public float SidewaysFriction { get => sidewaysFriction; set => sidewaysFriction = Maths.Max(0.0f, value); }
     public float GripSaturationSpeed { get => gripSaturationSpeed; set => gripSaturationSpeed = Maths.Max(0.1f, value); }
+    /// <summary>Rolling resistance torque (N*m). Brakes the wheel toward rest so the car doesn't coast on perturbations.</summary>
+    public float DragTorque { get => dragTorque; set => dragTorque = Maths.Max(0.0f, value); }
     public float WheelMass { get => wheelMass; set => wheelMass = Maths.Max(0.01f, value); }
-    public float MaxAngularVelocity { get => maxAngularVelocity; set => maxAngularVelocity = Maths.Max(0.0f, value); }
+    //public float MaxAngularVelocity { get => maxAngularVelocity; set => maxAngularVelocity = Maths.Max(0.0f, value); }
 
     // Public state
     public bool IsGrounded => onFloor;
@@ -101,6 +136,8 @@ public sealed class WheelCollider : MonoBehaviour
     {
         radius = Maths.Max(0.01f, radius);
         width = Maths.Max(0.01f, width);
+        forwardRayCount = Maths.Max(1, forwardRayCount);
+        sideRayCount = Maths.Max(1, sideRayCount);
         suspensionDistance = Maths.Max(0.0f, suspensionDistance);
         suspensionFrequency = Maths.Max(0.1f, suspensionFrequency);
         suspensionDampingRatio = Maths.Max(0.0f, suspensionDampingRatio);
@@ -108,8 +145,9 @@ public sealed class WheelCollider : MonoBehaviour
         forwardFriction = Maths.Max(0.0f, forwardFriction);
         sidewaysFriction = Maths.Max(0.0f, sidewaysFriction);
         gripSaturationSpeed = Maths.Max(0.1f, gripSaturationSpeed);
+        dragTorque = Maths.Max(0.0f, dragTorque);
         wheelMass = Maths.Max(0.01f, wheelMass);
-        maxAngularVelocity = Maths.Max(0.0f, maxAngularVelocity);
+        //maxAngularVelocity = Maths.Max(0.0f, maxAngularVelocity);
     }
 
     public override void OnEnable()
@@ -124,8 +162,10 @@ public sealed class WheelCollider : MonoBehaviour
         Recalculate();
         counted = false; // recount on the first physics step, once all sibling wheels exist
 
+        // PreStep: ground sweep + suspension (once/step). PreSubStep: friction + spin, run each physics
+        // substep against the body's re-integrated velocity (smoother/stabler than once per step).
         GameObject.Scene.Physics.PreStep += OnPreStep;
-        GameObject.Scene.Physics.PostStep += OnPostStep;
+        GameObject.Scene.Physics.PreSubStep += OnPreSubStep;
     }
 
     public override void OnDisable()
@@ -133,7 +173,7 @@ public sealed class WheelCollider : MonoBehaviour
         if (GameObject?.Scene?.Physics != null)
         {
             GameObject.Scene.Physics.PreStep -= OnPreStep;
-            GameObject.Scene.Physics.PostStep -= OnPostStep;
+            GameObject.Scene.Physics.PreSubStep -= OnPreSubStep;
         }
     }
 
@@ -142,10 +182,11 @@ public sealed class WheelCollider : MonoBehaviour
         if (visualTransform == null) return;
 
         // The mount transform (this GameObject) gives the base wheel frame: up = suspension axis,
-        // right = axle. Steer rotates about the suspension axis, spin rotates about the axle.
+        // right = axle. Steer rotates about the suspension axis, camber tilts about forward, spin about the axle.
         Quaternion steer = Quaternion.AxisAngle(Float3.UnitY, SteerAngle);
+        Quaternion camberQ = Quaternion.AxisAngle(Float3.UnitZ, CamberRadians());
         Quaternion spin = Quaternion.AxisAngle(Float3.UnitX, wheelRotation);
-        visualTransform.Rotation = Transform.Rotation * steer * spin;
+        visualTransform.Rotation = Transform.Rotation * steer * camberQ * spin;
         visualTransform.Position = GetWheelCenter();
     }
 
@@ -185,19 +226,24 @@ public sealed class WheelCollider : MonoBehaviour
         fwd = JVector.Cross(axle, up);
         JVector.NormalizeInPlace(ref fwd);
 
-        // Volumetric contact: sweep the wheel cylinder down the suspension axis over the travel
-        // range. The cylinder's height axis (local Y) is aligned to the axle.
+        // Camber tilts the wheel (its axle) about the forward axis; the suspension axis stays vertical.
+        // Mirror it per side so one positive angle leans the tops of both wheels the same way.
+        _side = Float3.Dot(Transform.Position - ToF(car.Position), ToF(axle)) >= 0.0f ? 1.0f : -1.0f;
+        axle = ApplyCamber(axle, fwd);
+
+        // Ground detection. Raycast = a stable grid of rays across the wheel face; Sweep = the volumetric
+        // cylinder cast. Both report a raw compression (which can exceed the travel when the wheel is jammed
+        // into something, driving depenetration) plus a processed contact normal and point.
         JVector mount = ToJ(Transform.Position);
-        JQuaternion cylOrient = JQuaternion.CreateFromToRotation(JVector.UnitY, axle);
-        JVector sweepDir = -up;
-        float maxLambda = suspensionDistance + 1e-4f;
 
-        bool hit = world.DynamicTree.SweepCastCylinder(
-            radius, width * 0.5f, cylOrient, mount, sweepDir, maxLambda,
-            SweepFilter, null,
-            out IDynamicTreeProxy proxy, out _, out _, out JVector normal, out float lambda);
+        float rawCompression;
+        Float3 outNormal, outPoint;
+        RigidBody gb;
+        bool grounded = castType == WheelCastType.Sweep
+            ? CastSweep(world, mount, up, upF, axle, out rawCompression, out outNormal, out outPoint, out gb)
+            : CastRaycastGrid(world, mount, up, upF, fwd, axle, out rawCompression, out outNormal, out outPoint, out gb);
 
-        if (!hit || proxy is not RigidBodyShape rbs)
+        if (!grounded)
         {
             onFloor = false;
             groundBody = null;
@@ -206,63 +252,24 @@ public sealed class WheelCollider : MonoBehaviour
         }
 
         onFloor = true;
-        groundBody = rbs.RigidBody;
-
-        // lambda = distance travelled down before contact; compression is the remaining travel.
-        lambda = Maths.Clamp(lambda, 0.0f, suspensionDistance);
-        displacement = Maths.Clamp(suspensionDistance - lambda, 0.0f, suspensionDistance);
-
-        // A degenerate (overlapping) sweep returns a zero normal; fall back to the suspension axis.
-        Float3 n = ToF(normal);
-        if (Float3.LengthSquared(n) > 1e-6f)
-        {
-            JVector.NormalizeInPlace(ref normal);
-            n = ToF(normal);
-        }
-        else n = upF;
-        // A grazing/edge hit can report a near-horizontal normal; treating it as the suspension axis
-        // keeps the load from collapsing to zero for a frame (which causes support-loss bobbing). We
-        // still respond to the hit, just hold the wheel up instead of dropping it.
-        if (Float3.Dot(n, upF) < 0.1f) n = upF;
-        contactNormal = n;
-
-        Float3 restedCenter = ToF(mount) - upF * lambda;
-        contactPoint = restedCenter - upF * radius;
+        groundBody = gb;
+        displacement = Maths.Clamp(rawCompression, 0.0f, suspensionDistance);
+        float penetration = Maths.Max(0.0f, rawCompression - suspensionDistance);
+        contactNormal = outNormal;
+        contactPoint = outPoint;
         JVector contact = ToJ(contactPoint);
 
-        // Relative velocity of the chassis contact point (car minus ground body). Used for both the
-        // suspension damper and tyre friction. It comes straight from the solver, so it doesn't
-        // amplify sweep noise the way a frame-differenced compression rate would.
-        JVector vRel = car.Velocity + JVector.Cross(car.AngularVelocity, contact - car.Position);
-        if (groundBody != null && groundBody.MotionType != MotionType.Static)
-            vRel -= groundBody.Velocity + JVector.Cross(groundBody.AngularVelocity, contact - groundBody.Position);
-
-        // Suspension (spring + damper, tuned from a natural frequency). The damper acts on the real
-        // contact-point velocity along the suspension axis, so it stays stable at any step size and
-        // can't pump energy in the way a lagged finite-difference damper can.
+        // Suspension constants. The spring and damper themselves are evaluated every substep in
+        // OnPreSubStep (not once here), so the whole wheel - suspension included - is consistently
+        // sub-stepped. A once-per-step spring is effectively a lagged explicit spring and pumps energy
+        // into pitch (the growing pendulum); per-substep keeps it conservative.
         float sMass = sprungMass > 0.0f ? sprungMass : (float)rb.Mass / wheelCount;
         float omega = 2.0f * Maths.PI * suspensionFrequency;
-        float springK = sMass * omega * omega;
-        float damperC = 2.0f * suspensionDampingRatio * sMass * omega;
+        _springK = sMass * omega * omega;
+        _damperC = 2.0f * suspensionDampingRatio * sMass * omega;
+        _damperCap = _springK * suspensionDistance;
 
-        float suspVelUp = (float)JVector.Dot(vRel, up); // + = extending, - = compressing
-        float springForce = springK * displacement;
-
-        // Cap the damper force at the spring's full-compression force. A wheel far from the COM sees
-        // a huge contact-point velocity when the chassis rotates even slightly; without this cap the
-        // damper turns that into an enormous force, which spins the chassis faster (more contact-point
-        // velocity) and runs away. Capping keeps the damper dissipative without injecting energy.
-        float damperForce = -damperC * suspVelUp;
-        float damperCap = springK * suspensionDistance;
-        damperForce = Maths.Clamp(damperForce, -damperCap, damperCap);
-
-        float load = springForce + damperForce;
-        load *= Maths.Max(0.0f, Float3.Dot(contactNormal, upF)); // taper on slopes
-        if (load < 0.0f) load = 0.0f;
-
-        JVector suspensionForce = load * up;
-
-        // Tyre friction (saturating slip, friction-circle clamp).
+        // Friction-plane basis (perpendicular to the contact normal).
         JVector cn = ToJ(contactNormal);
         JVector planeFwd = fwd - cn * JVector.Dot(fwd, cn);
         if (planeFwd.LengthSquared() < 1e-8f) planeFwd = fwd;
@@ -270,87 +277,106 @@ public sealed class WheelCollider : MonoBehaviour
         JVector planeLeft = JVector.Cross(cn, planeFwd);
         JVector.NormalizeInPlace(ref planeLeft);
 
-        float vFwd = JVector.Dot(vRel, planeFwd);
-        float vLat = JVector.Dot(vRel, planeLeft);
+        _mountJ = mount;
+        _upJ = up;
+        _contactJ = contact;
+        _planeFwd = planeFwd;
+        _planeLeft = planeLeft;
 
-        float rimSpeed = angularVelocity * radius;
-        float longSlip = vFwd - rimSpeed; // contact faster than rim => braking reaction
-        rollingAngVel = vFwd / radius;
-
-        float maxLong = forwardFriction * load;
-        float maxLat = sidewaysFriction * load;
-
-        float fLong = -Maths.Clamp(longSlip / gripSaturationSpeed, -1.0f, 1.0f) * maxLong;
-        float fLat = -Maths.Clamp(vLat / gripSaturationSpeed, -1.0f, 1.0f) * maxLat;
-
-        // Friction circle: the combined force can't exceed the available grip ellipse.
-        float ex = maxLong > 0.0f ? fLong / maxLong : 0.0f;
-        float ey = maxLat > 0.0f ? fLat / maxLat : 0.0f;
-        float e = Maths.Sqrt(ex * ex + ey * ey);
-        if (e > 1.0f) { fLong /= e; fLat /= e; }
-
-        JVector frictionForce = fLong * planeFwd + fLat * planeLeft;
-
-        // Reaction torque on the wheel spin from the longitudinal ground force.
-        frictionTorque = -fLong * radius;
-
-        // Auto force-application point: apply the tyre forces at the centre-of-mass height (along the
-        // suspension axis, at the wheel's horizontal position) instead of way down at the contact.
-        // This zeroes the vertical lever of the horizontal friction force so the car can't tip over,
-        // while the suspension's roll/pitch restoring is preserved (that comes from the wheels'
-        // horizontal spread, which is unchanged). No manual "force app point" tuning needed.
-        float appHeight = Maths.Max(0.0f, (float)JVector.Dot(car.Position - contact, up));
-        JVector forcePoint = contact + up * appHeight;
-
-        JVector total = suspensionForce + frictionForce;
-        car.AddForce(total, forcePoint);
-        car.SetActivationState(true);
-
-        if (groundBody != null && groundBody.MotionType != MotionType.Static)
-        {
-            // Newton's third law reaction goes to the ground at the real contact point. Clamp it so a
-            // heavy vehicle can't launch small dynamic bodies.
-            const float maxOtherAcc = 500.0f;
-            float maxOtherForce = maxOtherAcc * (float)groundBody.Mass;
-            JVector reaction = total;
-            if (reaction.LengthSquared() > maxOtherForce * maxOtherForce)
-                reaction *= maxOtherForce / reaction.Length();
-            groundBody.SetActivationState(true);
-            groundBody.AddForce(-reaction, contact);
-        }
+        // Suspension bottomed out and the wheel is inside the surface: push it back out.
+        if (depenetrate && penetration > 0.0f)
+            ApplyDepenetration(car, penetration, ToJ(contactNormal), contact, timeStep);
     }
 
-    private void OnPostStep(float timeStep)
+    // Tyre friction + wheel spin, run once per physics substep against the body's re-integrated
+    // velocity. Same saturating-slip / friction-circle model as before, just sub-stepped and applied
+    // as impulses (force * substep dt) so it stays consistent with the body's motion.
+    private void OnPreSubStep(float dt)
     {
-        if (rb?._body == null || timeStep <= 0.0f) return;
+        if (rb?._body == null || dt <= 0.0f) return;
 
-        float dt = timeStep;
+        RigidBody car = rb._body;
         float inertia = 0.5f * wheelMass * radius * radius;
         if (inertia <= 1e-6f) inertia = 1e-6f;
 
-        float orig = angularVelocity;
+        float frictionTorque = 0.0f;
 
-        // Ground reaction drives the spin toward pure rolling.
         if (onFloor)
         {
-            angularVelocity += frictionTorque * dt / inertia;
-            frictionTorque = 0.0f;
+            // ---- Suspension (per substep, at the mount along its own axis) ----
+            // Track the compression across the substep and re-evaluate the spring + damper here so the
+            // spring isn't lagged (a lagged spring pumps energy into pitch). Measured and applied at the
+            // mount along the same axis, so it's conservative (spring) and dissipative (damper).
+            float suspVelUp = (float)Double3.Dot(ContactVel(car, D(_mountJ)), D(_upJ)); // + extending, - compressing
+            float damperForce = Maths.Clamp(-_damperC * suspVelUp, -_damperCap, _damperCap);
+            float load = _springK * displacement + damperForce; // displacement is the steady swept compression
+            if (load < 0.0f) load = 0.0f;
 
-            // Don't let the reaction overshoot the rolling speed (prevents jitter/oscillation).
-            if ((orig > rollingAngVel && angularVelocity < rollingAngVel) ||
-                (orig < rollingAngVel && angularVelocity > rollingAngVel))
-                angularVelocity = rollingAngVel;
+            JVector suspImpulse = _upJ * (load * dt);
+            car.ApplyImpulse(suspImpulse, _mountJ);
+            car.SetActivationState(true);
+            if (groundBody != null && groundBody.MotionType != MotionType.Static)
+                groundBody.ApplyImpulse(-suspImpulse, _contactJ);
+
+            // ---- Tyre friction at the COM-height point (measured there too, so it's dissipative) ----
+            JVector cn = ToJ(contactNormal);
+            double ah = Double3.Dot(D(car.Position) - D(_contactJ), D(cn));
+            if (ah < 0.0) ah = 0.0;
+            JVector forcePoint = _contactJ + cn * (float)ah;
+
+            Double3 vRel = ContactVel(car, D(forcePoint));
+            float vFwd = (float)Double3.Dot(vRel, D(_planeFwd));
+            float vLat = (float)Double3.Dot(vRel, D(_planeLeft));
+
+            float maxLong = forwardFriction * load;
+            float maxLat = sidewaysFriction * load;
+
+            float rimSpeed = angularVelocity * radius;
+            float longSlip = vFwd - rimSpeed;
+
+            float fLong = -Maths.Clamp(longSlip / gripSaturationSpeed, -1.0f, 1.0f) * maxLong;
+            float fLat = -Maths.Clamp(vLat / gripSaturationSpeed, -1.0f, 1.0f) * maxLat;
+
+            float ex = maxLong > 0.0f ? fLong / maxLong : 0.0f;
+            float ey = maxLat > 0.0f ? fLat / maxLat : 0.0f;
+            float e = Maths.Sqrt(ex * ex + ey * ey);
+            if (e > 1.0f) { fLong /= e; fLat /= e; }
+
+            frictionTorque = -fLong * radius;
+
+            _fLong = fLong; _fLat = fLat;
+
+            JVector frictionForce = _planeFwd * fLong + _planeLeft * fLat;
+            car.ApplyImpulse(frictionForce * dt, forcePoint);
+            car.SetActivationState(true);
+
+            if (groundBody != null && groundBody.MotionType != MotionType.Static)
+            {
+                float maxImp = 500.0f * (float)groundBody.Mass * dt;
+                JVector imp = frictionForce * dt;
+                if (imp.LengthSquared() > maxImp * maxImp) imp *= maxImp / imp.Length();
+                groundBody.SetActivationState(true);
+                groundBody.ApplyImpulse(-imp, _contactJ);
+            }
         }
+        else _fLong = _fLat = 0.0f;
 
-        // Drive torque (can spin the wheel past the rolling speed, i.e. wheelspin).
+        // Spin integration. Only the friction reaction torque acts on the spin (no hard snap to the
+        // rolling speed), so the wheel carries its own angular momentum like a flywheel: spin it up and
+        // it keeps spinning, and the grip-limited friction transfers that momentum to the car. The
+        // friction reaction alone pulls the spin toward rolling, and sub-stepping keeps it stable.
+        if (onFloor)
+            angularVelocity += frictionTorque * dt / inertia;
+
         angularVelocity += MotorTorque * dt / inertia;
 
-        // Brake torque opposes the spin and can't reverse it.
-        float brakeDelta = BrakeTorque * dt / inertia;
+        // Brake + rolling resistance (drag only while grounded). Rolling resistance is what brings a
+        // coasting wheel - and the car - to rest, so it doesn't drift forever on tiny perturbations.
+        float brakeDelta = (BrakeTorque + (onFloor ? dragTorque : 0.0f)) * dt / inertia;
         if (Maths.Abs(angularVelocity) <= brakeDelta) angularVelocity = 0.0f;
         else angularVelocity -= (angularVelocity > 0.0f ? 1.0f : -1.0f) * brakeDelta;
 
-        angularVelocity = Maths.Clamp(angularVelocity, -maxAngularVelocity, maxAngularVelocity);
+        //angularVelocity = Maths.Clamp(angularVelocity, -maxAngularVelocity, maxAngularVelocity);
         wheelRotation += angularVelocity * dt;
     }
 
@@ -361,8 +387,164 @@ public sealed class WheelCollider : MonoBehaviour
         return rbs.RigidBody != rb._body; // ignore the vehicle's own body
     }
 
+    private float CamberRadians() => camber * (Maths.PI / 180.0f) * _side;
+
+    // Tilt the axle about the forward axis by the (side-mirrored) camber angle.
+    private JVector ApplyCamber(JVector axle, JVector fwd)
+    {
+        if (camber == 0.0f) return axle;
+        JVector tilted = JVector.Transform(axle, JMatrix.CreateRotationMatrix(fwd, CamberRadians()));
+        JVector.NormalizeInPlace(ref tilted);
+        return tilted;
+    }
+
     private static JVector ToJ(Float3 v) => new(v.X, v.Y, v.Z);
     private static Float3 ToF(JVector v) => new(v.X, v.Y, v.Z);
+    private static Double3 D(JVector v) => new(v.X, v.Y, v.Z);
+
+    /// <summary>Contact-point velocity (chassis minus moving ground) in double precision. It's a
+    /// difference of world-space positions crossed with angular velocity, which loses float precision
+    /// (worse away from the origin); doing it in double keeps the slip/damper readings clean.</summary>
+    private Double3 ContactVel(RigidBody car, Double3 contactD)
+    {
+        Double3 v = D(car.Velocity) + Double3.Cross(D(car.AngularVelocity), contactD - D(car.Position));
+        if (groundBody != null && groundBody.MotionType != MotionType.Static)
+            v -= D(groundBody.Velocity) + Double3.Cross(D(groundBody.AngularVelocity), contactD - D(groundBody.Position));
+        return v;
+    }
+
+    // Grid of downward rays across the wheel face. Each ray's hit is turned into an equivalent spring
+    // compression using the wheel's curvature at that forward offset (a point further along the tyre sits
+    // higher on the round profile), and the deepest contact wins - so the wheel rides up over bumps and
+    // kerbs. Rays are analytic, so the reported compression is stable, unlike the cylinder sweep's GJK
+    // time-of-impact. The returned compression can exceed the suspension travel (penetration) to drive
+    // depenetration, and the contact normal is the average of all hits (smoother than any single ray).
+    private bool CastRaycastGrid(World world, JVector mount, JVector up, Float3 upF, JVector fwd, JVector axle,
+        out float rawCompression, out Float3 outNormal, out Float3 outPoint, out RigidBody outGround)
+    {
+        rawCompression = 0.0f;
+        outNormal = upF;
+        outPoint = ToF(mount);
+        outGround = null;
+
+        int lat = Maths.Max(1, sideRayCount);
+        int lon = Maths.Max(1, forwardRayCount);
+        float halfW = width * 0.5f;
+        float stepX = lat == 1 ? 0.0f : width / (lat - 1);
+        float stepY = lon == 1 ? 0.0f : radius * 2.0f / (lon - 1);
+
+        float bestC = float.NegativeInfinity;
+        float weightSum = 0.0f;
+        float compSum = 0.0f;
+        Float3 pointSum = new(0.0f, 0.0f, 0.0f);
+        Float3 normalSum = new(0.0f, 0.0f, 0.0f);
+
+        for (int xi = 0; xi < lat; xi++)
+        {
+            float x = lat == 1 ? 0.0f : -halfW + stepX * xi;
+            for (int yi = 0; yi < lon; yi++)
+            {
+                float y = lon == 1 ? 0.0f : -radius + stepY * yi;
+                float curvature = Maths.Sqrt(Maths.Max(0.0f, radius * radius - y * y));
+                JVector origin = mount + fwd * y + axle * x;
+                float maxDist = suspensionDistance + curvature + 1e-4f;
+
+                if (!world.DynamicTree.RayCast(origin, -up, SweepFilter, null,
+                        out IDynamicTreeProxy proxy, out JVector n, out float dist))
+                    continue;
+                if (proxy is not RigidBodyShape rbs || dist > maxDist) continue;
+
+                // curvature lifts the equivalent ground contact to the tyre surface at this offset.
+                float c = suspensionDistance + curvature - dist;
+                if (c <= 0.0f) continue; // ray has a gap to the ground, not in contact
+
+                Float3 nf = ToF(n);
+                if (Float3.LengthSquared(nf) > 1e-6f) nf = Float3.Normalize(nf);
+                else nf = upF;
+                if (Float3.Dot(nf, upF) < 0.1f) nf = upF;
+
+                // Weighted average of all contacting rays (compression, point, normal), weighting deeper
+                // rays by closeness^5.
+                float c2 = c * c;
+                float w = c2 * c2 * c;
+                weightSum += w;
+                compSum += c * w;
+                pointSum += (ToF(origin) - upF * dist) * w;
+                normalSum += nf * w;
+
+                if (c > bestC) { bestC = c; outGround = rbs.RigidBody; }
+            }
+        }
+
+        if (weightSum <= 0.0f) return false;
+
+        float inv = 1.0f / weightSum;
+        rawCompression = compSum * inv;
+        outPoint = pointSum * inv;
+        if (Float3.LengthSquared(normalSum) > 1e-6f) outNormal = Float3.Normalize(normalSum);
+        return true;
+    }
+
+    // Volumetric contact: sweep the wheel cylinder (height axis aligned to the axle) down the suspension
+    // axis. Can't tunnel through edges or drop into cracks narrower than the tyre, at the cost of a noisier
+    // GJK contact than the raycast grid. A sweep can't report penetration, so it never drives depenetration.
+    private bool CastSweep(World world, JVector mount, JVector up, Float3 upF, JVector axle,
+        out float rawCompression, out Float3 outNormal, out Float3 outPoint, out RigidBody outGround)
+    {
+        rawCompression = 0.0f;
+        outNormal = upF;
+        outPoint = ToF(mount);
+        outGround = null;
+
+        JQuaternion cylOrient = JQuaternion.CreateFromToRotation(JVector.UnitY, axle);
+        float maxLambda = suspensionDistance + 1e-4f;
+
+        bool hit = world.DynamicTree.SweepCastCylinder(
+            radius, width * 0.5f, cylOrient, mount, -up, maxLambda,
+            SweepFilter, null,
+            out IDynamicTreeProxy proxy, out _, out _, out JVector normal, out float lambda);
+
+        if (!hit || proxy is not RigidBodyShape rbs) return false;
+
+        lambda = Maths.Clamp(lambda, 0.0f, suspensionDistance);
+        rawCompression = suspensionDistance - lambda;
+        outGround = rbs.RigidBody;
+
+        Float3 nf = ToF(normal);
+        if (Float3.LengthSquared(nf) > 1e-6f) nf = Float3.Normalize(nf);
+        else nf = upF;
+        if (Float3.Dot(nf, upF) < 0.1f) nf = upF;
+        outNormal = nf;
+
+        outPoint = ToF(mount) - upF * (lambda + radius);
+        return true;
+    }
+
+    // Penalty contact for when the suspension is fully compressed and the wheel is still inside an object
+    // (a kerb, a hard landing). Pushes the chassis - and a dynamic ground body - apart along the contact
+    // normal, scaled by penetration depth plus a closing-speed term, so the rigid wheel doesn't sink in.
+    private void ApplyDepenetration(RigidBody car, float penetration, JVector normal, JVector point, float dt)
+    {
+        Double3 nD = D(normal);
+        Double3 relVel = D(car.Velocity);
+        if (groundBody != null && groundBody.MotionType != MotionType.Static)
+            relVel -= D(groundBody.Velocity);
+        float contactVel = (float)Double3.Dot(relVel, nD); // < 0 closing, > 0 separating
+
+        float f = (float)rb.Mass / wheelCount * 9.81f / radius; // weight-per-wheel scaled by radius
+        float j = penetration * f * 12.0f * dt
+                + -contactVel * dt * f * (contactVel < 0.0f ? 0.8f : 3.0f);
+        if (j <= 0.0f) return;
+
+        JVector impulse = normal * j;
+        car.ApplyImpulse(impulse, _mountJ);
+        car.SetActivationState(true);
+        if (groundBody != null && groundBody.MotionType != MotionType.Static)
+        {
+            groundBody.SetActivationState(true);
+            groundBody.ApplyImpulse(-impulse, point);
+        }
+    }
 
     public override void DrawGizmos()
     {
@@ -373,6 +555,7 @@ public sealed class WheelCollider : MonoBehaviour
         JVector fwdJ = JVector.Transform(ToJ(Transform.Forward), JMatrix.CreateRotationMatrix(ToJ(up), SteerAngle));
         JVector axleJ = JVector.Cross(ToJ(up), fwdJ);
         JVector.NormalizeInPlace(ref axleJ);
+        axleJ = ApplyCamber(axleJ, fwdJ);
 
         Float3 axle = ToF(axleJ);
         Float3 r1 = Float3.Normalize(ToF(fwdJ));
@@ -384,19 +567,37 @@ public sealed class WheelCollider : MonoBehaviour
 
         Color color = onFloor ? new Color(0f, 1f, 0f, 1f) : new Color(1f, 0.5f, 0f, 1f);
 
-        // Cylinder: a circle on each wheel face plus four struts joining them.
         Debug.DrawWireCircle(leftC, axle, radius, color, 24);
         Debug.DrawWireCircle(rightC, axle, radius, color, 24);
+
+        // Spinning spokes (one red) so the wheel's spin is visible. If they don't turn, it isn't spinning.
         for (int i = 0; i < 4; i++)
         {
-            float a = i * (Maths.PI * 0.5f);
+            float a = i * (Maths.PI * 0.5f) + wheelRotation;
             Float3 dir = r1 * Maths.Cos(a) + r2 * Maths.Sin(a);
-            Debug.DrawLine(leftC + dir * radius, rightC + dir * radius, color);
+            Color sc = i == 0 ? new Color(1f, 0f, 0f, 1f) : color;
+            Debug.DrawLine(leftC + dir * radius, rightC + dir * radius, sc);
+            Debug.DrawLine(center, center + dir * radius, sc);
         }
 
-        // Suspension travel line + contact normal.
+        // Suspension travel line (yellow).
         Debug.DrawLine(Transform.Position, Transform.Position - up * suspensionDistance, new Color(1f, 1f, 0f, 1f));
+
         if (onFloor)
-            Debug.DrawLine(contactPoint, contactPoint + contactNormal * 0.25f, new Color(0f, 0.6f, 1f, 1f));
+        {
+            DrawCross(contactPoint, 0.06f, new Color(1f, 1f, 1f, 1f));               // contact point (white)
+            Debug.DrawLine(contactPoint, contactPoint + contactNormal * 0.3f, new Color(0f, 0.8f, 1f, 1f));   // normal (cyan)
+            Debug.DrawLine(contactPoint, contactPoint + ToF(_planeFwd) * 0.4f, new Color(0.2f, 0.4f, 1f, 1f)); // roll dir (blue)
+            Debug.DrawLine(contactPoint, contactPoint + ToF(_planeLeft) * 0.3f, new Color(1f, 0f, 1f, 1f));    // lateral (magenta)
+            Debug.DrawLine(contactPoint, contactPoint + ToF(_planeFwd) * (_fLong * 0.002f), new Color(1f, 1f, 0f, 1f));   // long force (yellow)
+            Debug.DrawLine(contactPoint, contactPoint + ToF(_planeLeft) * (_fLat * 0.002f), new Color(1f, 0.5f, 0f, 1f)); // lat force (orange)
+        }
+    }
+
+    private static void DrawCross(Float3 p, float s, Color c)
+    {
+        Debug.DrawLine(p - new Float3(s, 0, 0), p + new Float3(s, 0, 0), c);
+        Debug.DrawLine(p - new Float3(0, s, 0), p + new Float3(0, s, 0), c);
+        Debug.DrawLine(p - new Float3(0, 0, s), p + new Float3(0, 0, s), c);
     }
 }

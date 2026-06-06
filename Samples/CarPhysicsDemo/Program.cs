@@ -235,8 +235,10 @@ public sealed class CarPhysicsGame : Game
         wheelCollider.Width = 0.3f;
         wheelCollider.SuspensionDistance = 0.25f;
         wheelCollider.SidewaysFriction = 1.2f;
-        wheelCollider.ForwardFriction = 1.5f;
+        wheelCollider.ForwardFriction = 2.5f;
+        wheelCollider.GripSaturationSpeed = 4f;
         wheelCollider.visualTransform = visual.Transform;
+        wheelCollider.DebugLog = false;
 
         //const float dampingFrac = 0.8f;
         //const float springFrac = 0.45f;
@@ -278,6 +280,50 @@ public sealed class CarPhysicsGame : Game
         //
         //    Debug.Log("Car reset");
         //}
+        // Shoot cube with left mouse button
+        if (Input.GetMouseButton(0))
+        {
+            if(Time.FrameCount % 100 == 0) // Limit shooting rate
+                ShootCube();
+        }
+    }
+
+    Mesh cubeShootMesh = null;
+    int shootCounter = 0;
+    GameObject lastShot = null;
+    private void ShootCube()
+    {
+        // Create a cube at camera position
+        GameObject cube = new("Shot Cube");
+        lastShot = cube;
+        cube.Transform.Position = cameraGO.Transform.Position + cameraGO.Transform.Forward * 2.0f;
+
+        MeshRenderer cubeRenderer = cube.AddComponent<MeshRenderer>();
+        cubeShootMesh = cubeShootMesh.IsNotValid() ? Mesh.CreateCube(new Float3(0.5f, 0.5f, 0.5f)) : cubeShootMesh;
+        cubeRenderer.Mesh = cubeShootMesh;
+        cubeRenderer.Material = standardMaterial;
+
+        Rigidbody3D cubeRb = cube.AddComponent<Rigidbody3D>();
+        cubeRb.Mass = 250f;
+        cubeRb.EnableSpeculativeContacts = true;
+
+        BoxCollider cubeCollider = cube.AddComponent<BoxCollider>();
+        cubeCollider.Size = new Float3(0.5f, 0.5f, 0.5f);
+
+        //var light = cube.AddComponent<PointLight>();
+        //light.ShadowQuality = ShadowQuality.Soft;
+        //light.Intensity = 32;
+        //light.Color = new Color(RNG.Shared.NextDouble(), RNG.Shared.NextDouble(), RNG.Shared.NextDouble(), 1f);
+        //light.Transform.Rotation = cameraGO.Transform.Rotation;
+
+        scene.Add(cube);
+
+        // Add velocity in the direction the camera is facing
+        cubeRb.LinearVelocity = cameraGO.Transform.Forward * 5.0f;
+
+
+        shootCounter++;
+        Debug.Log($"Shot cube #{shootCounter} with mass {25f}");
     }
 }
 
@@ -338,9 +384,25 @@ public class CarController : MonoBehaviour
     public List<WheelCollider> rearWheels = new();
 
     public float MaxSteerAngle = 30.0f; // degrees
-    public float MotorTorque = 1500.0f;
-    public float BrakeTorque = 1000.0f;
 
+    // Engine
+    public float MaxEngineTorque = 320.0f; // N*m at the peak of the curve
+    public float IdleRPM = 900.0f;
+    public float MaxRPM = 6500.0f;
+
+    // Gearbox. Wheel torque = engineTorque * gearRatio * finalDrive. High ratio (1st) = lots of torque,
+    // low top speed (engine redlines early); low ratio (top) = less torque, high speed.
+    public float[] GearRatios = { 3.6f, 2.2f, 1.5f, 1.15f, 0.9f };
+    public float ReverseRatio = 3.6f;
+    public float FinalDrive = 3.7f;
+    public float ShiftUpRPM = 6000.0f;
+    public float ShiftDownRPM = 2600.0f;
+    public float DrivetrainEfficiency = 0.9f;
+
+    public float BrakeTorque = 2000.0f;
+
+    private int currentGear = 1; // -1 reverse, 0 neutral, 1..N forward
+    private float engineRPM;
     private Rigidbody3D? rigidbody;
 
     public override void OnEnable()
@@ -348,63 +410,104 @@ public class CarController : MonoBehaviour
         rigidbody = GetComponent<Rigidbody3D>();
     }
 
-    //private void AdjustAllWheels()
-    //{
-    //    if (wheelsAdjusted) return;
-    //    wheelsAdjusted = true;
-    //
-    //    foreach (var wheel in frontWheels)
-    //    {
-    //        if (wheel != null && wheel.IsValid())
-    //            wheel.AdjustWheelValues();
-    //    }
-    //    foreach (var wheel in rearWheels)
-    //    {
-    //        if (wheel != null && wheel.IsValid())
-    //            wheel.AdjustWheelValues();
-    //    }
-    //}
 
     public override void Update()
     {
         if (rigidbody == null) return;
 
-        //// Adjust wheels on first update
-        //AdjustAllWheels();
-
-        // Get input
         float steering = 0;
-        float throttle = 0;
-        bool brake = false;
-
         if (Input.GetKey(KeyCode.A)) steering = -1;
         if (Input.GetKey(KeyCode.D)) steering = 1;
-        if (Input.GetKey(KeyCode.W)) throttle = 1;
-        if (Input.GetKey(KeyCode.S)) throttle = -1;
-        if (Input.GetKey(KeyCode.Space)) brake = true;
+        bool accel = Input.GetKey(KeyCode.W);
+        bool decel = Input.GetKey(KeyCode.S);
+        bool handbrake = Input.GetKey(KeyCode.Space);
 
-        // Apply steering to front wheels
+        // Steering on the front wheels.
         float steerAngle = (float)(steering * MaxSteerAngle * Maths.PI / 180.0);
         foreach (var wheel in frontWheels)
             if (wheel != null && wheel.IsValid())
                 wheel.SteerAngle = steerAngle;
 
-        // Drive torque on the rear wheels, brake torque on all wheels. These are continuous
-        // values consumed each physics step, so set them every frame (including back to zero).
-        float drive = throttle * MotorTorque;
-        float brakeT = brake ? BrakeTorque : 0f;
+        float forwardSpeed = Float3.Dot(rigidbody.LinearVelocity, Transform.Forward);
+
+        // Throttle / brake / reverse. S brakes while rolling forward, then selects reverse once stopped.
+        float throttle = 0.0f;
+        bool braking = false;
+        if (accel)
+        {
+            if (currentGear < 1) SetGear(1);
+            throttle = 1.0f;
+        }
+        else if (decel)
+        {
+            if (forwardSpeed > 0.5f) braking = true;
+            else { if (currentGear >= 0) SetGear(-1); throttle = 1.0f; }
+        }
+        else if (currentGear < 0 && Maths.Abs(forwardSpeed) < 0.5f) SetGear(1);
+
+        // Average driven-wheel spin -> engine RPM through the current gear.
+        float avgAV = 0.0f; int driven = 0;
+        foreach (var wheel in rearWheels)
+            if (wheel != null && wheel.IsValid()) { avgAV += wheel.AngularVelocity; driven++; }
+        if (driven > 0) avgAV /= driven;
+
+        float ratio = GearRatio(currentGear) * FinalDrive;
+        engineRPM = EngineRPMFor(avgAV, ratio);
+
+        // Automatic gearbox for the forward gears, then refresh ratio/RPM after any shift.
+        if (currentGear >= 1)
+        {
+            if (engineRPM > ShiftUpRPM && currentGear < GearRatios.Length) SetGear(currentGear + 1);
+            else if (engineRPM < ShiftDownRPM && currentGear > 1) SetGear(currentGear - 1);
+            ratio = GearRatio(currentGear) * FinalDrive;
+            engineRPM = EngineRPMFor(avgAV, ratio);
+        }
+
+        // Engine torque (from the curve) through the gearbox to the driven wheels.
+        float engineTorque = MaxEngineTorque * EngineTorqueFactor(engineRPM) * throttle;
+        float driveTorque = engineTorque * ratio * DrivetrainEfficiency;
+        float perWheel = driven > 0 ? driveTorque / driven : 0.0f;
+
+        float brakeT = braking ? BrakeTorque : 0.0f;
+        float handbrakeT = handbrake ? BrakeTorque : 0.0f;
 
         foreach (var wheel in frontWheels)
         {
             if (wheel == null || !wheel.IsValid()) continue;
-            wheel.MotorTorque = drive;
-            //wheel.BrakeTorque = brakeT;
+            wheel.MotorTorque = 0.0f;
+            wheel.BrakeTorque = brakeT;
         }
         foreach (var wheel in rearWheels)
         {
             if (wheel == null || !wheel.IsValid()) continue;
-            wheel.MotorTorque = drive;
-            wheel.BrakeTorque = brakeT;
+            wheel.MotorTorque = perWheel;
+            wheel.BrakeTorque = brakeT + handbrakeT;
         }
+
+        if (Time.FrameCount % 30 == 0)
+            Debug.Log($"Gear {(currentGear < 0 ? "R" : currentGear.ToString())}  {engineRPM:F0} rpm  {forwardSpeed * 3.6f:F0} km/h");
+    }
+
+    private float GearRatio(int gear) => gear == 0 ? 0.0f : gear < 0 ? -ReverseRatio : GearRatios[gear - 1];
+
+    private float EngineRPMFor(float wheelAngularVelocity, float ratio)
+    {
+        float wheelRPM = wheelAngularVelocity * 60.0f / (2.0f * Maths.PI);
+        return Maths.Clamp(Maths.Abs(wheelRPM * ratio), IdleRPM, MaxRPM);
+    }
+
+    private void SetGear(int gear)
+    {
+        if (gear == currentGear) return;
+        currentGear = gear;
+        Debug.Log($"Shift -> {(currentGear < 0 ? "Reverse" : currentGear == 0 ? "Neutral" : "Gear " + currentGear)}");
+    }
+
+    private float EngineTorqueFactor(float rpm)
+    {
+        float t = Maths.Clamp(rpm / MaxRPM, 0.0f, 1.0f);
+        // Smooth curve peaking near 60% of redline, tapering toward idle and redline.
+        float f = 1.0f - 1.25f * (t - 0.6f) * (t - 0.6f);
+        return Maths.Clamp(f, 0.2f, 1.0f);
     }
 }
