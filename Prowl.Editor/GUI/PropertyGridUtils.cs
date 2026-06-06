@@ -27,6 +27,17 @@ public static class PropertyGridUtils
             .Show();
     }
 
+    /// <summary>Draw a property grid editing several objects at once (shared fields only; differing
+    /// values are flagged as mixed and edits apply to every target).</summary>
+    public static void DrawMulti(Paper paper, string id, IReadOnlyList<object> targets, Action<object>? onChanged = null, int depth = 0)
+    {
+        Origami.PropertyGrid(paper, id, targets, EditorApplication.PropertyGridConfig)
+            .OnChanged(onChanged ?? (_ => { }))
+            .Overrides(OverriddenFields)
+            .Depth(depth)
+            .Show();
+    }
+
     /// <summary>Draw a single field with label and control. Routes through the editor's PropertyEditorRegistry.</summary>
     public static void DrawField(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth = 0)

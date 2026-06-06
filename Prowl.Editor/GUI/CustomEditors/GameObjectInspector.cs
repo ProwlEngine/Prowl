@@ -49,6 +49,176 @@ public static class GameObjectInspector
     }
 
     // ================================================================
+    //  Multi-object inspector
+    // ================================================================
+
+    /// <summary>
+    /// Draws the inspector for several GameObjects at once. Shows the transform and the components whose
+    /// type is present on every selected object; fields that differ across the selection are flagged as
+    /// mixed, and edits apply to all.
+    /// </summary>
+    public static void DrawMulti(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
+    {
+        if (gos.Count == 1) { Draw(paper, font, gos[0]); return; }
+
+        DrawMultiHeader(paper, font, gos);
+        Origami.Separator(paper, "gim_sep_header").Show();
+        DrawMultiTransform(paper, font, gos);
+        Origami.Separator(paper, "gim_sep_transform").Show();
+        DrawMultiComponents(paper, font, gos);
+
+        paper.Box("gim_bottom_pad").Height(20);
+    }
+
+    private static string MixLabel(string label, bool mixed) => mixed ? $"{label}  (mixed)" : label;
+
+    private static void DrawMultiHeader(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
+    {
+        using (paper.Row("gim_header").Height(EditorTheme.RowHeight).Margin(0, 6).RowBetween(6).Enter())
+        {
+            paper.Box("gim_icon").Margin(6, 6, 0, 6).FontSize(EditorTheme.FontSize * 1.5f).Width(UnitValue.Auto).Text(EditorIcons.Cubes, font);
+
+            bool allEnabled = gos.All(g => g.Enabled);
+            Origami.Checkbox(paper, "gim_enabled", allEnabled,
+                v => Undo.ApplyGameObjectChanges(gos, "Toggle Enabled", g => g.Enabled, (g, x) => g.Enabled = x, v))
+                .NoLabel().Show();
+
+            paper.Box("gim_count").Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                .IsNotInteractable()
+                .Text($"{gos.Count} {Loc.Get("inspector.objects_selected")}", font)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+            bool allStatic = gos.All(g => g.IsStatic);
+            Origami.Checkbox(paper, "gim_static", allStatic,
+                v => Undo.ApplyGameObjectChanges(gos, "Toggle Static", g => g.IsStatic, (g, x) => g.IsStatic = x, v))
+                .LabelRight(Loc.Get("inspector.static")).Show();
+        }
+
+        using (paper.Row("gim_tag_layer").Height(22).RowBetween(6).Enter())
+        {
+            var tagNames = TagLayerManager.tags.ToArray();
+            bool tagMixed = gos.Select(g => g.Tag).Distinct().Count() > 1;
+            int tagIdx = tagMixed ? -1 : Math.Max(0, TagLayerManager.tags.IndexOf(gos[0].Tag));
+
+            DrawInlineLabeled(paper, "gim_tag_row", MixLabel(Loc.Get("inspector.tag"), tagMixed), font, () =>
+                Origami.Dropdown(paper, "gim_tag", tagIdx,
+                    v =>
+                    {
+                        if (v >= 0 && v < tagNames.Length)
+                            Undo.ApplyGameObjectChanges(gos, "Change Tag", g => g.Tag, (g, x) => g.Tag = x, tagNames[v]);
+                    }, tagNames).Show());
+
+            var allLayers = TagLayerManager.layers;
+            var layerNames = new List<string>();
+            var layerIndices = new List<int>();
+            for (int i = 0; i < allLayers.Length; i++)
+                if (!string.IsNullOrEmpty(allLayers[i])) { layerNames.Add(allLayers[i]); layerIndices.Add(i); }
+
+            bool layerMixed = gos.Select(g => g.LayerIndex).Distinct().Count() > 1;
+            int selLayer = layerMixed ? -1 : layerIndices.IndexOf(gos[0].LayerIndex);
+
+            DrawInlineLabeled(paper, "gim_layer_row", MixLabel(Loc.Get("inspector.layer"), layerMixed), font, () =>
+                Origami.Dropdown(paper, "gim_layer", selLayer,
+                    v =>
+                    {
+                        if (v >= 0 && v < layerIndices.Count)
+                            Undo.ApplyGameObjectChanges(gos, "Change Layer", g => g.LayerIndex, (g, x) => g.LayerIndex = x, layerIndices[v]);
+                    }, layerNames.ToArray()).Show());
+        }
+    }
+
+    private static void DrawMultiTransform(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
+    {
+        paper.Box("gim_transform_header").Height(22).ChildLeft(8)
+            .Text($"{EditorIcons.ArrowsUpDownLeftRight}  {Loc.Get("inspector.transform")}", font)
+            .TextColor(EditorTheme.Ink500)
+            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+
+        var t0 = gos[0].Transform;
+
+        bool posMixed = gos.Any(g => !g.Transform.LocalPosition.Equals(t0.LocalPosition));
+        InspectorRow.Draw(paper, "gim_pos", MixLabel(Loc.Get("inspector.position"), posMixed), () =>
+            Origami.Float3Field(paper, "gim_pos_vf", t0.LocalPosition, v =>
+                Undo.ApplyGameObjectChanges(gos, "Change Position", g => g.Transform.LocalPosition, (g, x) => g.Transform.LocalPosition = x, v, coalesce: true)).Show());
+
+        bool rotMixed = gos.Any(g => !g.Transform.LocalEulerAngles.Equals(t0.LocalEulerAngles));
+        InspectorRow.Draw(paper, "gim_rot", MixLabel(Loc.Get("inspector.rotation"), rotMixed), () =>
+            Origami.Float3Field(paper, "gim_rot_vf", t0.LocalEulerAngles, v =>
+                Undo.ApplyGameObjectChanges(gos, "Change Rotation", g => g.Transform.LocalEulerAngles, (g, x) => g.Transform.LocalEulerAngles = x, v, coalesce: true)).Show());
+
+        bool scaleMixed = gos.Any(g => !g.Transform.LocalScale.Equals(t0.LocalScale));
+        InspectorRow.Draw(paper, "gim_scale", MixLabel(Loc.Get("inspector.scale"), scaleMixed), () =>
+            Origami.Float3Field(paper, "gim_scale_vf", t0.LocalScale, v =>
+                Undo.ApplyGameObjectChanges(gos, "Change Scale", g => g.Transform.LocalScale, (g, x) => g.Transform.LocalScale = x, v, coalesce: true)).Show());
+    }
+
+    private static void DrawMultiComponents(Paper paper, Prowl.Scribe.FontFile font, IReadOnlyList<GameObject> gos)
+    {
+        // Component types in the first object's order, kept only if present on every selected object.
+        var orderedTypes = new List<Type>();
+        foreach (var c in gos[0].GetComponents<MonoBehaviour>())
+        {
+            if (c.HideFlags.HasFlag(HideFlags.Hide)) continue;
+            var ct = c.GetType();
+            if (!orderedTypes.Contains(ct)) orderedTypes.Add(ct);
+        }
+
+        foreach (var type in orderedTypes)
+        {
+            var instances = new List<object>(gos.Count);
+            bool onAll = true;
+            foreach (var go in gos)
+            {
+                MonoBehaviour? match = null;
+                foreach (var c in go.GetComponents<MonoBehaviour>())
+                {
+                    if (c.HideFlags.HasFlag(HideFlags.Hide)) continue;
+                    if (c.GetType() == type) { match = c; break; }
+                }
+                if (match == null) { onAll = false; break; }
+                instances.Add(match);
+            }
+            if (!onAll) continue;
+
+            string compId = $"gim_comp_{type.Name}";
+            string icon = GetComponentIcon((MonoBehaviour)instances[0]);
+
+            using (paper.Row($"{compId}_header")
+                .Height(24).BackgroundColor(EditorTheme.Neutral300).Rounded(3).ChildLeft(4).RowBetween(4).Enter())
+            {
+                bool allEn = instances.All(o => ((MonoBehaviour)o).Enabled);
+                Origami.Checkbox(paper, $"{compId}_en", allEn,
+                    v =>
+                    {
+                        var actions = new List<(Action, Action)>(instances.Count);
+                        foreach (var o in instances)
+                        {
+                            var c = (MonoBehaviour)o;
+                            var cid = c.Identifier;
+                            bool old = c.Enabled;
+                            actions.Add((() => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = old; x.OnValidate(); } },
+                                        () => { var x = Undo.FindComponent(cid); if (x != null) { x.Enabled = v; x.OnValidate(); } }));
+                            c.Enabled = v; c.OnValidate();
+                        }
+                        Undo.RegisterActionGroup("Toggle Component", actions);
+                    })
+                    .NoLabel().Show();
+
+                paper.Box($"{compId}_label")
+                    .Height(24)
+                    .Text($"{icon}  {type.Name}", font)
+                    .TextColor(EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+            }
+
+            // Reflection-based multi grid (custom single-target editors are bypassed in multi mode).
+            PropertyGridUtils.DrawMulti(paper, compId, instances);
+
+            Origami.Separator(paper, $"{compId}_sep").Show();
+        }
+    }
+
+    // ================================================================
     //  Header: Name, Enabled, Tag, Layer
     // ================================================================
 

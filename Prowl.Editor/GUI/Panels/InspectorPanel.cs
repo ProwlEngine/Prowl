@@ -107,7 +107,11 @@ public class InspectorPanel : DockPanel
             // Draw based on type GameObject has its own header
             if (active is GameObject gameObject)
             {
-                GameObjectInspector.Draw(paper, font, gameObject);
+                var gos = Selection.GetSelected<GameObject>().ToList();
+                if (gos.Count > 1)
+                    GameObjectInspector.DrawMulti(paper, font, gos);
+                else
+                    GameObjectInspector.Draw(paper, font, gameObject);
             }
             else
             {
@@ -124,8 +128,8 @@ public class InspectorPanel : DockPanel
                     DrawGenericInspector(paper, font, active);
             }
 
-            // Multi-selection summary
-            if (Selection.Count > 1)
+            // Multi-selection summary (GameObjects already get a full multi-object inspector above)
+            if (Selection.Count > 1 && active is not GameObject)
             {
                                 Origami.Header(paper, "insp_h_multi", Loc.Get("inspector.selection")).Underline().Show();
                 Origami.Label(paper, "insp_multi_count", $"{Selection.Count} {Loc.Get("inspector.objects_selected")}").Show();
