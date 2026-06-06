@@ -238,7 +238,6 @@ public sealed class CarPhysicsGame : Game
         wheelCollider.ForwardFriction = 2.5f;
         wheelCollider.GripSaturationSpeed = 4f;
         wheelCollider.visualTransform = visual.Transform;
-        wheelCollider.DebugLog = false;
 
         //const float dampingFrac = 0.8f;
         //const float springFrac = 0.45f;
