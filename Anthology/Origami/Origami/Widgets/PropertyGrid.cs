@@ -190,7 +190,7 @@ public sealed class PropertyGridBuilder
 {
     private readonly Paper _paper;
     private readonly string _id;
-    private readonly object _target;
+    private readonly IReadOnlyList<object> _targets;
     private readonly PropertyGridConfig _config;
 
     private Action<object>? _onChange;
@@ -201,7 +201,15 @@ public sealed class PropertyGridBuilder
     {
         _paper = paper;
         _id = id;
-        _target = target;
+        _targets = new[] { target };
+        _config = config;
+    }
+
+    internal PropertyGridBuilder(Paper paper, string id, IReadOnlyList<object> targets, PropertyGridConfig config)
+    {
+        _paper = paper;
+        _id = id;
+        _targets = targets;
         _config = config;
     }
 
@@ -217,7 +225,7 @@ public sealed class PropertyGridBuilder
     /// <summary>Render the property grid.</summary>
     public void Show()
     {
-        PropertyGridRenderer.Draw(_paper, _id, _target, _config, _onChange, _overrides, _depth);
+        PropertyGridRenderer.DrawTargets(_paper, _id, _targets, _config, _onChange, _overrides, _depth);
     }
 }
 
@@ -231,26 +239,50 @@ public static class PropertyGridRenderer
     [ThreadStatic] private static object? _rootTarget;
     [ThreadStatic] private static PropertyGridConfig? _activeConfig;
 
+    /// <summary>
+    /// True while the field currently being drawn has differing values across a multi-object selection.
+    /// FieldDrawers may read this to render a "mixed" placeholder; the grid also marks it visually.
+    /// </summary>
+    [ThreadStatic] public static bool IsMixedField;
+
+    /// <summary>Single-target entry point.</summary>
     public static void Draw(Paper paper, string id, object target, PropertyGridConfig config,
         Action<object>? onChange, HashSet<string>? overrides, int depth)
     {
         if (target == null) return;
+        DrawTargets(paper, id, new[] { target }, config, onChange, overrides, depth);
+    }
+
+    /// <summary>
+    /// Multi-target entry point. Draws the fields common to every target; a field whose value differs
+    /// across targets is flagged as mixed, and every edit is applied to all targets. Fields that don't
+    /// exist (by name and type) on every target are omitted.
+    /// </summary>
+    public static void DrawTargets(Paper paper, string id, IReadOnlyList<object> targets, PropertyGridConfig config,
+        Action<object>? onChange, HashSet<string>? overrides, int depth)
+    {
+        if (targets == null || targets.Count == 0) return;
         if (depth > config.MaxDepth) return;
+
+        object representative = targets[0];
+        if (representative == null) return;
 
         var m = Origami.Current.Metrics;
         bool isRoot = depth == 0;
+        bool multi = targets.Count > 1;
 
         if (isRoot)
         {
-            _rootTarget = target;
+            _rootTarget = representative;
             _activeConfig = config;
-            config.OnBeginRoot?.Invoke(target);
+            for (int t = 0; t < targets.Count; t++)
+                if (targets[t] != null) config.OnBeginRoot?.Invoke(targets[t]);
         }
 
         using (paper.Column($"{id}_root").ColBetween(m.SpacingMedium).Height(UnitValue.Auto).Enter())
         {
-            var type = target.GetType();
-            var fields = GetSerializableFields(type);
+            var type = representative.GetType();
+            var fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
 
             var buttonMethods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                 .Where(m2 => m2.GetCustomAttributes().Any(a => a.GetType().Name == "ButtonAttribute") && m2.GetParameters().Length == 0)
@@ -265,17 +297,20 @@ public static class PropertyGridRenderer
                 bool skip = false;
                 bool handled = false;
 
-                // Pre-draw attribute handlers
+                // Pre-draw attribute handlers (operate on the representative)
                 foreach (var attr in attrs)
                 {
                     var handler = config.Handlers.GetHandler(attr.GetType());
-                    if (handler != null && !handler.OnBeforeDraw(paper, fieldId, attr, field, target, depth))
+                    if (handler != null && !handler.OnBeforeDraw(paper, fieldId, attr, field, representative, depth))
                     {
                         skip = true;
                         break;
                     }
                 }
                 if (skip) continue;
+
+                bool isMixed = multi && IsFieldMixed(targets, field);
+                Action<object?> applyAll = v => SetFieldOnAllAndNotify(config, field, targets, v, onChange);
 
                 // Attribute-driven draw replacement
                 foreach (var attr in attrs)
@@ -284,35 +319,32 @@ public static class PropertyGridRenderer
                     if (handler != null)
                     {
                         string label = FormatFieldName(field.Name);
-                        if (handler.OnDraw(paper, fieldId, label, attr, field, target,
-                            v => SetFieldAndNotify(config, field, target, v, onChange), depth))
-                        {
-                            handled = true;
-                            break;
-                        }
+                        IsMixedField = isMixed;
+                        bool h = handler.OnDraw(paper, fieldId, label, attr, field, representative, applyAll, depth);
+                        IsMixedField = false;
+                        if (h) { handled = true; break; }
                     }
                 }
 
                 if (!handled)
                 {
-                    var value = field.GetValue(target);
+                    var value = field.GetValue(representative);
                     var fieldType = field.FieldType;
                     string label = FormatFieldName(field.Name);
                     bool isOverridden = overrides?.Contains(field.Name) ?? false;
 
-                    DrawField(paper, fieldId, label, fieldType, value, config,
-                        v => SetFieldAndNotify(config, field, target, v, onChange), depth, isOverridden);
+                    DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isOverridden, isMixed);
                 }
 
                 // Post-draw attribute handlers
                 foreach (var attr in attrs)
                 {
                     var handler = config.Handlers.GetHandler(attr.GetType());
-                    handler?.OnAfterDraw(paper, fieldId, attr, field, target, depth);
+                    handler?.OnAfterDraw(paper, fieldId, attr, field, representative, depth);
                 }
             }
 
-            // [Button] methods
+            // [Button] methods (invoked on every target)
             foreach (var method in buttonMethods)
             {
                 var btnAttr = method.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
@@ -320,8 +352,12 @@ public static class PropertyGridRenderer
                 string label = (labelProp?.GetValue(btnAttr) as string) ?? FormatFieldName(method.Name);
                 Origami.Button(paper, $"{id}_btn_{method.Name}", label, () =>
                 {
-                    try { method.Invoke(target, null); }
-                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Button error: {ex.Message}"); }
+                    for (int t = 0; t < targets.Count; t++)
+                    {
+                        if (targets[t] == null) continue;
+                        try { method.Invoke(targets[t], null); }
+                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Button error: {ex.Message}"); }
+                    }
                 }).Show();
             }
         }
@@ -336,7 +372,7 @@ public static class PropertyGridRenderer
     // ── DrawField (public for external callers like MaterialPropertyDrawer) ──
 
     public static void DrawField(Paper paper, string id, string label, Type fieldType,
-        object? value, PropertyGridConfig config, Action<object?> onChange, int depth, bool isOverridden = false)
+        object? value, PropertyGridConfig config, Action<object?> onChange, int depth, bool isOverridden = false, bool isMixed = false)
     {
         // Notify host before drawing
         config.OnBeforeDrawField?.Invoke(fieldType, value);
@@ -362,13 +398,19 @@ public static class PropertyGridRenderer
                 paper.Box($"{id}_ov").Width(3).Height(m.RowHeight)
                     .BackgroundColor(theme.Primary.C400).Rounded(m.SmallRounding);
             }
+            else if (isMixed)
+            {
+                // Amber bar marks a field whose value differs across the multi-object selection.
+                paper.Box($"{id}_mx").Width(3).Height(m.RowHeight)
+                    .BackgroundColor(theme.Amber.C400).Rounded(m.SmallRounding);
+            }
 
             if (font != null && !string.IsNullOrEmpty(label))
             {
                 bool isNumeric = IsNumericType(fieldType);
                 var lbl = paper.Box($"{id}_lbl")
                     .Width(m.LabelWidth).Height(m.RowHeight).Padding(m.PaddingSmall, 0, 0, 0)
-                    .Text(label, font).TextColor(ink.C500)
+                    .Text(label, font).TextColor(isMixed ? theme.Amber.C400 : ink.C500)
                     .FontSize(m.FontSize);
 
                 if (isNumeric && !Origami.IsReadOnly)
@@ -402,7 +444,9 @@ public static class PropertyGridRenderer
 
             using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
             {
+                IsMixedField = isMixed;
                 DrawFieldControl(paper, $"{id}_v", fieldType, value, config, onChange, depth);
+                IsMixedField = false;
             }
         }
     }
@@ -793,12 +837,73 @@ public static class PropertyGridRenderer
 
     // ── Helpers ───────────────────────────────────────────────
 
-    private static void SetFieldAndNotify(PropertyGridConfig config, FieldInfo field,
-        object target, object? value, Action<object>? rootOnChange)
+    // Apply an edited field value to every target (resolving the field per target type so it works even
+    // when the selection is a mix of types that share the field), then notify each.
+    private static void SetFieldOnAllAndNotify(PropertyGridConfig config, FieldInfo field,
+        IReadOnlyList<object> targets, object? value, Action<object>? rootOnChange)
     {
-        field.SetValue(target, value);
-        if (_rootTarget != null) config.OnFieldChanged?.Invoke(_rootTarget);
-        rootOnChange?.Invoke(target);
+        for (int i = 0; i < targets.Count; i++)
+        {
+            var t = targets[i];
+            if (t == null) continue;
+            var f = t.GetType() == field.DeclaringType ? field : ResolveField(t.GetType(), field.Name);
+            if (f == null) continue;
+            try { f.SetValue(t, value); } catch { continue; }
+            config.OnFieldChanged?.Invoke(t);
+        }
+        rootOnChange?.Invoke(targets[0]);
+    }
+
+    /// <summary>The serializable fields shared (by name and type) across every target.</summary>
+    public static FieldInfo[] CommonSerializableFields(IReadOnlyList<object> targets)
+    {
+        var rep = GetSerializableFields(targets[0].GetType());
+        if (targets.Count == 1) return rep;
+
+        var result = new List<FieldInfo>(rep.Length);
+        foreach (var f in rep)
+        {
+            bool inAll = true;
+            for (int i = 1; i < targets.Count; i++)
+            {
+                if (targets[i] == null) { inAll = false; break; }
+                var tf = ResolveField(targets[i].GetType(), f.Name);
+                if (tf == null || tf.FieldType != f.FieldType) { inAll = false; break; }
+            }
+            if (inAll) result.Add(f);
+        }
+        return result.ToArray();
+    }
+
+    private static FieldInfo? ResolveField(Type type, string name)
+    {
+        foreach (var f in GetSerializableFields(type))
+            if (f.Name == name) return f;
+        return null;
+    }
+
+    private static bool IsFieldMixed(IReadOnlyList<object> targets, FieldInfo repField)
+    {
+        object? first = null;
+        bool got = false;
+        for (int i = 0; i < targets.Count; i++)
+        {
+            var t = targets[i];
+            if (t == null) continue;
+            var f = ResolveField(t.GetType(), repField.Name);
+            if (f == null) continue;
+            var v = f.GetValue(t);
+            if (!got) { first = v; got = true; }
+            else if (!ValuesEqual(first, v)) return true;
+        }
+        return false;
+    }
+
+    private static bool ValuesEqual(object? a, object? b)
+    {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.Equals(b);
     }
 
     /// <summary>Convert "myFieldName" to "My Field Name".</summary>

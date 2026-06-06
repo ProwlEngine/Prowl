@@ -382,6 +382,11 @@ public static class Origami
     public static PropertyGridBuilder PropertyGrid(PaperUI.Paper paper, string id, object target, PropertyGridConfig config)
         => new PropertyGridBuilder(paper, id, target, config);
 
+    /// <summary>Create a property grid builder editing several objects at once. Fields shared by every
+    /// target are shown; differing values are flagged as mixed and edits apply to all.</summary>
+    public static PropertyGridBuilder PropertyGrid(PaperUI.Paper paper, string id, System.Collections.Generic.IReadOnlyList<object> targets, PropertyGridConfig config)
+        => new PropertyGridBuilder(paper, id, targets, config);
+
     // ── File dialog helpers ──────────────────────────────────
 
     /// <summary>Open a file dialog.</summary>
