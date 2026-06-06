@@ -137,6 +137,10 @@ public static class Undo
     // Immediate action records accumulated this frame (RegisterAction calls)
     private static readonly List<(string description, UndoRecord record)> _pendingActions = new();
 
+    // Pre-grouped action steps accumulated this frame (RegisterActionGroup calls). Each is ONE undo step
+    // holding many records, so editing N selected objects collapses into a single user-visible step.
+    private static readonly List<(UndoStep step, bool coalesce)> _pendingActionGroups = new();
+
     // Deferred created/destroy objects serialized at FlushFrame so components added after registration are captured
     private static readonly List<(GameObject go, string description, bool isCreate)> _pendingStructural = new();
 
@@ -253,6 +257,49 @@ public static class Undo
 
         // Can't coalesce push as normal action but mark as coalescable
         _pendingActions.Add((description, new ActionRecord(undo, redo)));
+    }
+
+    /// <summary>
+    /// Register several undo/redo actions as ONE undo step (so editing many selected objects in a single
+    /// interaction collapses to a single undo). When <paramref name="coalesce"/> is true the step merges
+    /// with the previous step if it has the same description and record count within the coalesce window
+    /// (for continuous edits like dragging a multi-object transform field).
+    /// </summary>
+    public static void RegisterActionGroup(string description, IReadOnlyList<(Action undo, Action redo)> actions, bool coalesce = false)
+    {
+        if (Application.IsPlaying) return;
+        if (actions == null || actions.Count == 0) return;
+
+        var records = new List<UndoRecord>(actions.Count);
+        foreach (var (u, r) in actions) records.Add(new ActionRecord(u, r));
+        _pendingActionGroups.Add((new UndoStep(description, records, isCoalescable: false), coalesce));
+    }
+
+    /// <summary>
+    /// Apply a value to every given GameObject and record the change as a single grouped undo step.
+    /// Captures each object's current value as the undo state, then writes the new value. Mirrors
+    /// <see cref="RecordGameObjectChange"/> but batched across a multi-object selection.
+    /// </summary>
+    public static void ApplyGameObjectChanges<T>(IReadOnlyList<GameObject> gos, string description,
+        Func<GameObject, T> get, Action<GameObject, T> set, T newValue, bool coalesce = false)
+    {
+        if (Application.IsPlaying)
+        {
+            foreach (var go in gos) set(go, newValue);
+            return;
+        }
+
+        var actions = new List<(Action undo, Action redo)>(gos.Count);
+        foreach (var go in gos)
+        {
+            Guid id = go.Identifier;
+            T oldV = get(go);
+            T captured = newValue;
+            actions.Add((() => { var g = FindGO(id); if (g != null) set(g, oldV); },
+                         () => { var g = FindGO(id); if (g != null) set(g, captured); }));
+            set(go, newValue);
+        }
+        RegisterActionGroup(description, actions, coalesce);
     }
 
     // ================================================================
@@ -589,6 +636,7 @@ public static class Undo
         _redoStack.Clear();
         _pendingSnapshots.Clear();
         _pendingActions.Clear();
+        _pendingActionGroups.Clear();
         _pendingStructural.Clear();
         _isContinuous = false;
         _continuousStartState = null;
@@ -611,7 +659,16 @@ public static class Undo
 
         // Flush action records FIRST as separate steps (never merge with property changes)
         // Each action is its own undo step (Add Component, Toggle Enabled, Reparent, etc.)
-        bool hasActions = _pendingActions.Count > 0;
+        bool hasActions = _pendingActions.Count > 0 || _pendingActionGroups.Count > 0;
+
+        // Grouped actions push as a single multi-record step (coalescing continuous edits).
+        foreach (var (step, coalesce) in _pendingActionGroups)
+        {
+            if (coalesce && TryCoalesceActionGroup(step)) { _redoStack.Clear(); continue; }
+            PushStep(step);
+        }
+        _pendingActionGroups.Clear();
+
         foreach (var (desc, record) in _pendingActions)
             PushStep(new UndoStep(desc, [record], isCoalescable: false));
         _pendingActions.Clear();
@@ -694,6 +751,26 @@ public static class Undo
         for (int i = 0; i < newRecords.Count; i++)
             ((PropertyRecord)prev.Records[i]).AfterState = newRecords[i].AfterState;
         prev.Timestamp = now;
+        return true;
+    }
+
+    /// <summary>Merge a grouped action step into the previous step when it matches (continuous edits).</summary>
+    private static bool TryCoalesceActionGroup(UndoStep step)
+    {
+        if (_undoStack.Count == 0) return false;
+
+        var prev = _undoStack[^1];
+        if (prev.Description != step.Description) return false;
+        if (prev.Records.Count != step.Records.Count) return false;
+        if (Environment.TickCount64 - prev.Timestamp > CoalesceWindowMs) return false;
+
+        for (int i = 0; i < prev.Records.Count; i++)
+            if (prev.Records[i] is not ActionRecord || step.Records[i] is not ActionRecord) return false;
+
+        // Keep each original undo, adopt the latest redo.
+        for (int i = 0; i < prev.Records.Count; i++)
+            prev.Records[i] = new ActionRecord(((ActionRecord)prev.Records[i]).UndoAction, ((ActionRecord)step.Records[i]).RedoAction);
+        prev.Timestamp = Environment.TickCount64;
         return true;
     }
 
