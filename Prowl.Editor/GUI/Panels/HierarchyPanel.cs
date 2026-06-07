@@ -808,7 +808,14 @@ public class HierarchyPanel : DockPanel
         CreateGameObjectMenuRegistry.BuildMenu(builder, parent);
     }
 
-    internal static GameObject CreateGameObject(string name, GameObject? parent)
+    /// <summary>
+    /// Creates a GameObject in the current scene and registers it for undo.
+    /// </summary>
+    /// <param name="select">When true, the new object becomes the current selection.</param>
+    /// <param name="beginRename">When true, the inline rename overlay opens on the new object.
+    /// Pass false for objects created as a side effect (e.g. an auto-generated parent Canvas)
+    /// so they don't steal selection / rename focus from the object the user actually asked for.</param>
+    internal static GameObject CreateGameObject(string name, GameObject? parent, bool select = true, bool beginRename = true)
     {
         var scene = Scene.Current;
         if (scene == null) return new GameObject(name);
@@ -817,22 +824,26 @@ public class HierarchyPanel : DockPanel
         scene.Add(go);
         if (parent != null)
             go.SetParent(parent);
-        Selection.Select(go);
+        if (select)
+            Selection.Select(go);
 
         Undo.RegisterCreatedObject(go, "Create GameObject");
 
-        // Enter rename via global overlay
-        string goIdStr = go.Identifier.ToString();
-        var goGuid = go.Identifier;
-        RenameOverlay.Begin(goIdStr, go.Name, newName =>
+        if (beginRename)
         {
-            var oldName = go.Name;
-            Undo.RegisterAction("Rename",
-                () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = oldName; },
-                () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = newName; });
-            go.Name = newName;
-            EditorSceneManager.IsDirty = true;
-        });
+            // Enter rename via global overlay
+            string goIdStr = go.Identifier.ToString();
+            var goGuid = go.Identifier;
+            RenameOverlay.Begin(goIdStr, go.Name, newName =>
+            {
+                var oldName = go.Name;
+                Undo.RegisterAction("Rename",
+                    () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = oldName; },
+                    () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = newName; });
+                go.Name = newName;
+                EditorSceneManager.IsDirty = true;
+            });
+        }
 
         return go;
     }
