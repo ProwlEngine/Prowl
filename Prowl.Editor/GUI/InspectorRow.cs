@@ -21,7 +21,7 @@ internal static class InspectorRow
     /// control filling the remainder. When <paramref name="label"/> is empty/null the label
     /// gutter is skipped and the control owns the full width.
     /// </summary>
-    public static void Draw(Paper paper, string id, string label, Action drawControl)
+    public static void Draw(Paper paper, string id, string label, Action drawControl, float? labelWidth = null)
     {
         var font = EditorTheme.DefaultFont;
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(EditorTheme.RowHeight).RowBetween(6).Margin(0, 0, 0, EditorTheme.Spacing).Enter())
@@ -29,7 +29,7 @@ internal static class InspectorRow
             if (!string.IsNullOrEmpty(label) && font != null)
             {
                 paper.Box($"{id}_lbl")
-                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
+                    .Width(labelWidth ?? EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
                     .ChildLeft(4)
                     .IsNotInteractable()
                     .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
