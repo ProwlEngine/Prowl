@@ -22,6 +22,7 @@ namespace Prowl.Runtime.UI;
 /// <see cref="GenerateMesh"/> on each <see cref="UIBehaviour"/> whose mesh is dirty,
 /// then bakes the result into <see cref="CachedMesh"/> for the pipeline to consume.
 /// </remarks>
+[RequireComponent(typeof(RectTransform))]
 public abstract class UIBehaviour : MonoBehaviour
 {
     [SerializeIgnore] internal Mesh? CachedMesh;

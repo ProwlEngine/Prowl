@@ -178,32 +178,19 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// Returns the Transform as a <see cref="RectTransform"/> if it is one, otherwise null.
+    /// The <see cref="RectTransform"/> component on this GameObject, or null if it has none.
     /// </summary>
     public RectTransform? RectTransform
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _transform as RectTransform;
+        get => GetComponent<RectTransform>();
     }
 
     /// <summary>
-    /// Ensures this GameObject's transform is a <see cref="RectTransform"/>.
-    /// If it is already one, returns it. Otherwise, replaces the current
-    /// <see cref="Transform"/> with a new <see cref="RectTransform"/>
-    /// preserving position, rotation, and scale.
+    /// Ensures this GameObject has a <see cref="RectTransform"/> component, adding one if missing.
     /// </summary>
     public RectTransform EnsureRectTransform()
-    {
-        if (_transform is RectTransform existing) return existing;
-
-        RectTransform rt = new();
-        rt.LocalPosition = _transform.LocalPosition;
-        rt.LocalRotation = _transform.LocalRotation;
-        rt.LocalScale = _transform.LocalScale;
-        rt.GameObject = this;
-        _transform = rt;
-        return rt;
-    }
+        => GetComponent<RectTransform>() ?? AddComponent<RectTransform>();
 
     /// <summary>
     /// Checks if this GameObject is a child or the same as the given parent transform.

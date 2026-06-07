@@ -168,6 +168,7 @@ public static class GameObjectInspector
         foreach (var c in gos[0].GetComponents<MonoBehaviour>())
         {
             if (c.HideFlags.HasFlag(HideFlags.Hide)) continue;
+            if (c is RectTransform) continue; // handled by the transform row at the top
             var ct = c.GetType();
             if (!orderedTypes.Contains(ct)) orderedTypes.Add(ct);
         }
@@ -696,6 +697,7 @@ public static class GameObjectInspector
         {
             var comp = components[i];
             if (comp.HideFlags.HasFlag(HideFlags.Hide)) continue;
+            if (comp is RectTransform) continue; // drawn at the top in place of the Transform
 
             string compId = $"gi_comp_{comp.Identifier}";
             string compName = comp.GetType().Name;

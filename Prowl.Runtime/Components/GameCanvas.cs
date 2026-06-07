@@ -21,7 +21,6 @@ namespace Prowl.Runtime;
 /// pipeline then draws via <see cref="UIRenderTree.CollectFor"/>.
 /// </summary>
 [AddComponentMenu("UI/Game Canvas")]
-[RequireComponent(typeof(RectTransform))]
 [ExecuteAlways]
 [ComponentIcon("")] // Image
 public class GameCanvas : MonoBehaviour
@@ -121,6 +120,11 @@ public class GameCanvas : MonoBehaviour
     /// </summary>
     [SerializeIgnore] private Float2 _lastBuildSize = Float2.Zero;
 
+    /// <summary>The canvas's root rect (design pixels) from the last rebuild. The canvas itself has no
+    /// RectTransform; this is its layout extent, used by children and the bounds gizmo.</summary>
+    [SerializeIgnore] private Rect _rootRect;
+    public Rect RootRect => _rootRect;
+
     /// <summary>Called by descendants (or by property setters above) to request a rebuild.</summary>
     public void MarkDirty(UIDirtyFlags flags)
     {
@@ -161,9 +165,9 @@ public class GameCanvas : MonoBehaviour
     /// <summary>Ensures this GameCanvas's GameObject and all descendants use RectTransform.</summary>
     public override void OnAddedToScene()
     {
-        GameObject.EnsureRectTransform();
+        // The canvas is the layout root and needs no RectTransform itself; its children do.
         EnsureChildRectTransforms(GameObject);
-        MarkDirty(UIDirtyFlags.All);   // NEW: first build is always dirty
+        MarkDirty(UIDirtyFlags.All);   // first build is always dirty
     }
 
     // CHANGED: OnEnable / OnDisable bodies — both were empty in the original
@@ -229,12 +233,7 @@ public class GameCanvas : MonoBehaviour
         Tree.Clear();
 
         Rect rootRect = ComputeRootRect();
-        if (GameObject.RectTransform is { } rrt)
-        {
-            rrt.AnchorMin = Float2.Zero; rrt.AnchorMax = Float2.One;
-            rrt.SizeDelta = Float2.Zero; rrt.AnchoredPosition = Float2.Zero;
-            rrt.ComputedRect = rootRect;
-        }
+        _rootRect = rootRect; // the canvas has no RectTransform; children lay out against this directly
 
         int dfs = 0;
         BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, ref dfs);
@@ -246,6 +245,11 @@ public class GameCanvas : MonoBehaviour
 
     private Rect ComputeRootRect()
     {
+        // World-space canvases have a fixed design size (their ReferenceResolution) and don't track the
+        // screen. Screen-space canvases fill the surface (in design pixels, after the scale factor).
+        if (RenderMode == RenderMode.WorldSpace)
+            return new Rect(0, 0, Maths.Max(ReferenceResolution.X, 1f), Maths.Max(ReferenceResolution.Y, 1f));
+
         float rawW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
         float rawH = ScreenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y;
         float screenW = rawW / Maths.Max(ScaleFactor, 0.001f);
@@ -389,9 +393,10 @@ public class GameCanvas : MonoBehaviour
     /// </remarks>
     public Float4x4 CanvasToWorld => RenderMode switch
     {
-        RenderMode.WorldSpace
-            => Transform.LocalToWorldMatrix
-             * Float4x4.CreateScale(1f / Maths.Max(ReferencePixelsPerUnit, 0.001f)),
+        // World-space canvases map design pixels 1:1 to world units (through the transform), so the canvas
+        // occupies its ReferenceResolution in world space and doesn't shrink when the mode is toggled.
+        // Author the world size via the GameObject's Transform scale.
+        RenderMode.WorldSpace => Transform.LocalToWorldMatrix,
         _ => Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f)),
     };
 

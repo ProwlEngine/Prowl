@@ -12,9 +12,9 @@ namespace Prowl.Runtime.UI;
 /// or the canvas outline for a <see cref="GameCanvas"/>.
 /// </summary>
 /// <remarks>
-/// Only emits gizmos for <see cref="RenderMode.WorldSpace"/> canvases. Overlay /
-/// ScreenSpaceCamera UI lives in screen space and has no meaningful position in
-/// the editor scene view.
+/// The canvas bounds (<see cref="DrawCanvasRect"/>) are drawn for every render mode, since the scene
+/// view shows all canvases in world space. Per-element rect/pivot/anchor handles
+/// (<see cref="DrawRect"/>) are currently emitted for <see cref="RenderMode.WorldSpace"/> only.
 /// </remarks>
 internal static class UIGizmos
 {
@@ -163,38 +163,24 @@ internal static class UIGizmos
     }
 
     /// <summary>
-    /// Draws the canvas root rect in the scene view. Mirrors <see cref="DrawRect"/>
-    /// but uses the canvas's own RectTransform (the canvas itself doesn't supply a
-    /// UIBehaviour to feed BuildItemModel).
+    /// Draws the canvas root rect in the scene view from the canvas's own root rect (it has no
+    /// RectTransform), mapped to world by <see cref="GameCanvas.CanvasToWorld"/>.
     /// </summary>
     public static void DrawCanvasRect(GameCanvas canvas, Color color)
     {
-        if (canvas.RenderMode != RenderMode.WorldSpace) return;
-
-        RectTransform? rt = canvas.GameObject.RectTransform;
-        if (rt is null) return;
-
+        // The canvas has no RectTransform; its extent is the root rect (design pixels), mapped to world
+        // by CanvasToWorld - the same space the canvas's child elements render in, so the bounds align.
         canvas.RebuildIfDirty();
 
-        Rect cr = rt.ComputedRect;
+        Rect cr = canvas.RootRect;
         if (cr.Size.X <= 0 || cr.Size.Y <= 0) return;
 
-        Float4x4 model = BuildRectModel(canvas, rt);
+        Float4x4 model = canvas.CanvasToWorld;
 
-        Float2 pivot = rt.Pivot;
-        float pivotX = cr.Min.X + pivot.X * cr.Size.X;
-        float pivotY = cr.Min.Y + pivot.Y * cr.Size.Y;
-        // Corners in pivot-centered space, matching BuildRectModel's translation.
-        // cr.Min is the bottom-left corner, cr.Max the top-right (+Y up).
-        float minX = cr.Min.X - pivotX;
-        float minY = cr.Min.Y - pivotY;
-        float maxX = cr.Max.X - pivotX;
-        float maxY = cr.Max.Y - pivotY;
-
-        Float3 bl = Float4x4.TransformPoint(new Float3(minX, minY, 0), model);
-        Float3 br = Float4x4.TransformPoint(new Float3(maxX, minY, 0), model);
-        Float3 tr = Float4x4.TransformPoint(new Float3(maxX, maxY, 0), model);
-        Float3 tl = Float4x4.TransformPoint(new Float3(minX, maxY, 0), model);
+        Float3 bl = Float4x4.TransformPoint(new Float3(cr.Min.X, cr.Min.Y, 0), model);
+        Float3 br = Float4x4.TransformPoint(new Float3(cr.Max.X, cr.Min.Y, 0), model);
+        Float3 tr = Float4x4.TransformPoint(new Float3(cr.Max.X, cr.Max.Y, 0), model);
+        Float3 tl = Float4x4.TransformPoint(new Float3(cr.Min.X, cr.Max.Y, 0), model);
 
         Debug.DrawLine(tl, tr, color);
         Debug.DrawLine(tr, br, color);
