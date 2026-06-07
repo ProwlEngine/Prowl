@@ -21,6 +21,8 @@ internal enum CommandOpcode : ushort
     SetRenderTarget = 1,
     SetRenderTargets,
     SetViewport,
+    SetScissor,
+    DisableScissor,
     ClearRenderTarget,
     BlitFramebuffer,
 

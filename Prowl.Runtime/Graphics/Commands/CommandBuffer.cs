@@ -136,6 +136,20 @@ public sealed class CommandBuffer : IDisposable
         Write(x); Write(y); Write(w); Write(h);
     }
 
+    /// <summary>Enable the scissor test and set the clip rectangle, in framebuffer pixels
+    /// (OpenGL bottom-left origin). Stays active until <see cref="DisableScissor"/>.</summary>
+    public void SetScissor(int x, int y, uint w, uint h)
+    {
+        WriteHeader(CommandOpcode.SetScissor);
+        Write(x); Write(y); Write(w); Write(h);
+    }
+
+    /// <summary>Disable the scissor test so subsequent draws are not clipped.</summary>
+    public void DisableScissor()
+    {
+        WriteHeader(CommandOpcode.DisableScissor);
+    }
+
     public void ClearRenderTarget(ClearFlags flags, Color color, float depth = 1f, int stencil = 0)
     {
         WriteHeader(CommandOpcode.ClearRenderTarget);

@@ -109,6 +109,21 @@ internal sealed class CommandExecutor
                     Graphics.GL.Viewport(x, y, w, h);
                     break;
                 }
+                case CommandOpcode.SetScissor:
+                {
+                    int x = ReadI32(stream, ref pos);
+                    int y = ReadI32(stream, ref pos);
+                    uint w = ReadU32(stream, ref pos);
+                    uint h = ReadU32(stream, ref pos);
+                    Graphics.GL.Enable(EnableCap.ScissorTest);
+                    Graphics.GL.Scissor(x, y, w, h);
+                    break;
+                }
+                case CommandOpcode.DisableScissor:
+                {
+                    Graphics.GL.Disable(EnableCap.ScissorTest);
+                    break;
+                }
                 case CommandOpcode.ClearRenderTarget:
                 {
                     ClearFlags flags = (ClearFlags)ReadU8(stream, ref pos);
