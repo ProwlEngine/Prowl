@@ -1070,6 +1070,17 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+
+    public override void OnValidate()
+    {
+        base.OnValidate();
+        var targets = GetComponentsInChildren<MonoBehaviour>();
+        foreach (var target in targets)
+        {
+            target.OnValidate();
+        }
+    }
+
     private string FormatVector(Float3 v)
     {
         return $"({v.X:F2}, {v.Y:F2}, {v.Z:F2})";
