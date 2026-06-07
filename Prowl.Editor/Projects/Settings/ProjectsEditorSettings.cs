@@ -13,6 +13,9 @@ public class ProjectsEditorSettings : ProjectSettingsBase
 {
     public List<string> ColorPalette = DefaultColorPalette();
 
+    /// <summary>Last resolution preset selected in the Game View toolbar.</summary>
+    public int SelectedResolutionIndex = 0;
+
     public override void ResetToDefaults()
     {
         ColorPalette = DefaultColorPalette();

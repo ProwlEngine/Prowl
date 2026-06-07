@@ -131,7 +131,7 @@ public class EditorCamera
     /// <summary>
     /// Render the scene from this camera's perspective.
     /// </summary>
-    public void Render(Scene scene)
+    public void Render(Scene scene, bool drawUI = true)
     {
         if (_renderTarget == null) return;
 
@@ -154,6 +154,8 @@ public class EditorCamera
         {
             DisplayGizmos = ShowGizmos,
             DisplayGrid = ShowGrid,
+            IsSceneView = true,
+            SkipUI = !drawUI
         };
 
         // Render

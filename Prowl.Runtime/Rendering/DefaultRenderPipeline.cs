@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.UI;
 using Prowl.Vector;
 
 using Material = Prowl.Runtime.Resources.Material;
@@ -22,12 +23,22 @@ public struct ViewerData
     public Float3 Up;
     public Float3 Right;
 
-    public ViewerData(DefaultRenderPipeline.CameraSnapshot css)
+    // Camera projection data, used by screen-space and world-space UI canvases.
+    public uint PixelWidth;
+    public uint PixelHeight;
+    public Float4x4 ViewMatrix;
+    public Float4x4 ProjectionMatrix;
+
+    public ViewerData(DefaultRenderPipeline.CameraSnapshot css) : this()
     {
         Position = css.CameraPosition;
         Forward = css.CameraForward;
         Up = css.CameraUp;
         Right = css.CameraRight;
+        PixelWidth = css.PixelWidth;
+        PixelHeight = css.PixelHeight;
+        ViewMatrix = css.View;
+        ProjectionMatrix = css.Projection;
     }
 
     public ViewerData(Float3 position, Float3 forward, Float3 right, Float3 up) : this()
@@ -360,6 +371,9 @@ public class DefaultRenderPipeline : RenderPipeline
         DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT);
         Graphics.Submit(transparentCmd);
 
+        // World-space UI canvases (drawn with the camera matrices, into the scene color).
+        RenderUIQueue(css, colorRT, UISurface.World, data);
+
         RenderStats.EndColorPass();
 
         // ─── PostProcess image effects ───
@@ -389,6 +403,9 @@ public class DefaultRenderPipeline : RenderPipeline
         }
         RenderStats.EndPostFx();
 
+        // ─── Screen-space UI (Camera surface) composited into the scene color ───
+        RenderUIQueue(css, colorRT, UISurface.Camera, data);
+
         // ─── Gizmos + final blit CB ───
         var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
         if (data.DisplayGizmos)
@@ -399,11 +416,18 @@ public class DefaultRenderPipeline : RenderPipeline
         }
 
         finalCmd.Blit(colorRT, target, null, 0, false, false);
-
-        // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.).
-        finalCmd.SetRenderTarget(null);
-        finalCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         Graphics.Submit(finalCmd);
+
+        // ─── Screen-space UI (Overlay surface) on top of the final image (into target) ───
+        RenderUIQueue(css, target, UISurface.Overlay, data);
+
+        // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.). MUST run after the
+        // overlay pass, which binds `target` - otherwise the editor's UI draws into the game RT and the
+        // window goes black.
+        var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
+        resetCmd.SetRenderTarget(null);
+        resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+        Graphics.Submit(resetCmd);
 
         // Save previous VP for next frame's motion vectors.
         camera.SavePreviousViewProjectionMatrix();
@@ -448,6 +472,143 @@ public class DefaultRenderPipeline : RenderPipeline
         PropertyState.SetGlobalColor("_AmbientGroundColor", ambient.GroundColor);
         PropertyState.SetGlobalFloat("_AmbientStrength", (float)ambient.Strength);
     }
+
+    // ─────────────────────── UI ───────────────────────
+
+    private static readonly List<IRenderable> s_uiTmp = new(64);
+
+    /// <summary>
+    /// Draws the screen-space UI for one surface (Camera or Overlay) of a camera. Collects the scene's
+    /// UI render items, sorts them by canvas/hierarchy order, sets an orthographic screen projection, and
+    /// draws each item's baked mesh with its material's UI pass through a command buffer. World-space
+    /// canvases are not handled here (they render alongside the scene transparents).
+    /// </summary>
+    private void RenderUIQueue(CameraSnapshot css, RenderTexture? targetRT, UISurface surface, in RenderingData data)
+    {
+        if (surface == UISurface.World) { RenderUIWorld(css, targetRT, data); return; }
+        // Screen-space UI is game-view only. In the scene view every canvas is drawn world-space instead
+        // (see RenderUIWorld), so it can be seen and edited in 3D.
+        if (data.SkipUI || data.IsSceneView) return;
+
+        // Tell every screen-space GameCanvas the surface size so its design-pixel layout matches the
+        // orthographic projection built below; canvases rebuild themselves when this changes.
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        GameCanvas.ScreenSizeOverride = new Float2(css.PixelWidth, css.PixelHeight);
+        try
+        {
+            s_uiTmp.Clear();
+            UIRenderTree.CollectFor(css.Scene, surface, s_uiTmp);
+            if (s_uiTmp.Count == 0) return;
+
+            // Items arrive in per-canvas hierarchy order; stable-sort by SortKey across canvases.
+            s_uiTmp.Sort(static (a, b) => ((UIRenderItem)a).SortKey.CompareTo(((UIRenderItem)b).SortKey));
+
+            // Screen-space orthographic projection (origin bottom-left, +Y up to match RectTransform).
+            AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
+
+            var cmd = Graphics.GetCommandBuffer("UI");
+            if (targetRT != null)
+            {
+                cmd.SetRenderTarget(targetRT.frameBuffer);
+                cmd.SetViewport(0, 0, (uint)targetRT.Width, (uint)targetRT.Height);
+            }
+            else
+            {
+                cmd.SetRenderTarget(null);
+                cmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+            }
+
+            DrawUIItems(cmd, s_uiTmp, new ViewerData(css));
+            Graphics.Submit(cmd);
+
+            // Restore the camera's matrices for anything that runs after this pass.
+            AssignCameraMatrices(css.View, css.Projection);
+        }
+        finally
+        {
+            GameCanvas.ScreenSizeOverride = prevOverride;
+        }
+    }
+
+    /// <summary>
+    /// Draws world-space UI canvases. Their render items carry world-space model matrices, so they use
+    /// the camera's own view/projection (already current after the transparents pass) and render into the
+    /// scene color. Shown in the scene view too, since they live in the world.
+    /// </summary>
+    private void RenderUIWorld(CameraSnapshot css, RenderTexture? targetRT, in RenderingData data)
+    {
+        // In the scene view, screen-space canvases lay out against the viewport size so their world rect
+        // matches the UISceneEditor handles (which push the same override while editing).
+        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
+        if (data.IsSceneView)
+            GameCanvas.ScreenSizeOverride = new Float2(css.PixelWidth, css.PixelHeight);
+        try
+        {
+            s_uiTmp.Clear();
+            UIRenderTree.CollectFor(css.Scene, UISurface.World, s_uiTmp);
+            if (data.IsSceneView)
+            {
+                // The scene view shows every canvas in world space, regardless of RenderMode.
+                UIRenderTree.CollectFor(css.Scene, UISurface.Camera, s_uiTmp);
+                UIRenderTree.CollectFor(css.Scene, UISurface.Overlay, s_uiTmp);
+            }
+            if (s_uiTmp.Count == 0) return;
+
+            s_uiTmp.Sort(static (a, b) => ((UIRenderItem)a).SortKey.CompareTo(((UIRenderItem)b).SortKey));
+
+            var cmd = Graphics.GetCommandBuffer("UIWorld");
+            if (targetRT != null)
+            {
+                cmd.SetRenderTarget(targetRT.frameBuffer);
+                cmd.SetViewport(0, 0, (uint)targetRT.Width, (uint)targetRT.Height);
+            }
+            DrawUIItems(cmd, s_uiTmp, new ViewerData(css));
+            Graphics.Submit(cmd);
+        }
+        finally
+        {
+            GameCanvas.ScreenSizeOverride = prevOverride;
+        }
+    }
+
+    private void DrawUIItems(CommandBuffer cmd, List<IRenderable> items, ViewerData viewer)
+    {
+        for (int i = 0; i < items.Count; i++)
+        {
+            var item = (UIRenderItem)items[i];
+            Material material = item.Material;
+            if (material == null || material.Shader.IsNotValid()) continue;
+
+            item.GetRenderingData(viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out _);
+            if (mesh == null || mesh.VertexCount <= 0) continue;
+
+            // UI materials carry a single pass tagged RenderOrder=UI.
+            var uiPasses = material.Shader.GetPassesWithTag("RenderOrder", "UI");
+            if (uiPasses.Count == 0) continue;
+
+            // Per-item clip rect (RectMask). ScissorPixels are framebuffer pixels (bottom-left origin).
+            if (item.ScissorPixels is { } sp)
+            {
+                int sx = (int)MathF.Floor(sp.X);
+                int sy = (int)MathF.Floor(sp.Y);
+                int sw = Math.Max(0, (int)MathF.Ceiling(sp.X + sp.Z) - sx);
+                int sh = Math.Max(0, (int)MathF.Ceiling(sp.Y + sp.W) - sy);
+                cmd.SetScissor(sx, sy, (uint)sw, (uint)sh);
+            }
+            else
+            {
+                cmd.DisableScissor();
+            }
+
+            cmd.DrawMesh(mesh, material, uiPasses[0], model, properties);
+        }
+
+        // Leave the scissor test off so the next command buffer isn't clipped.
+        cmd.DisableScissor();
+    }
+
+    private static Float4x4 BuildScreenOrtho(CameraSnapshot css)
+        => Float4x4.CreateOrthoOffCenter(0, css.PixelWidth, 0, css.PixelHeight, -1000f, 1000f);
 
     private void RenderSkybox(CommandBuffer cmd, CameraSnapshot css, List<IRenderableLight> lights)
     {

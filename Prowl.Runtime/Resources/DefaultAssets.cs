@@ -21,6 +21,7 @@ public enum DefaultShader
     Terrain,
     Grass,
     Refraction,
+    GameUI,
 
     ProceduralSkybox,
     GradientSkybox,
@@ -75,6 +76,9 @@ public enum DefaultTexture
     Emission,
     Grid,
     Noise,
+
+    // Scene helpers
+    Handle,
 
     // Gizmo icons
     IconCamera,

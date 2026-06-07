@@ -15,6 +15,8 @@ using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
+// Aliased to avoid clashing with Prowl.PaperUI types used elsewhere in this file.
+using UIEventSystem = Prowl.Runtime.UI.UIEventSystem;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -28,6 +30,7 @@ public class GameViewPanel : DockPanel
     private int _resolutionIndex = 0;
     private bool _showStats;
     private RenderStats.Frame _gameStats; // snapshot from last game render (persists when paused)
+    private Rect _displayAbsRect; // game-view rect in paper coords, cached for routing UI input next frame
 
     // Separate Paper instance for in-game UI
     private PaperRenderer? _gamePaperRenderer;
@@ -232,7 +235,11 @@ public class GameViewPanel : DockPanel
                 paper.Box("gv_display")
                     .PositionType(PositionType.SelfDirected)
                     .Position(offsetX, offsetY).Size(displayW, displayH)
-                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                    .OnPostLayout((handle, rect) =>
+                    {
+                        // Cache the absolute paper-coord rect so next frame's UI input maps into RT space.
+                        _displayAbsRect = rect;
+                        paper.Draw(ref handle, (canvas, r) =>
                     {
                         if (capturedRT?.MainTexture == null) return;
                         float rx = (float)r.Min.X;
@@ -254,10 +261,34 @@ public class GameViewPanel : DockPanel
                         canvas.SetStrokeColor(playing ? EditorTheme.Purple500 : EditorTheme.Ink200);
                         canvas.SetStrokeWidth(playing ? 2f : 1f);
                         canvas.Stroke();
-                    }));
+                        });
+                    });
 
-                // Route game input when hovered
-                GameViewInputHandler.IsGameViewFocused = paper.IsParentHovered;
+                // Route game input into the new UI system. The cursor is rescaled from the letterboxed
+                // display rect into the RT's pixel space so clicks map to the same coords the canvas was
+                // laid out at (the pipeline pushed the RT size as GameCanvas.ScreenSizeOverride).
+                bool hovered = paper.IsParentHovered;
+                GameViewInputHandler.IsGameViewFocused = hovered;
+
+                if (_displayAbsRect.Size.X > 0 && _displayAbsRect.Size.Y > 0)
+                {
+                    Float2 origin = new((float)_displayAbsRect.Min.X, (float)_displayAbsRect.Min.Y);
+                    Float2 size = new((float)_displayAbsRect.Size.X, (float)_displayAbsRect.Size.Y);
+                    Float2 local = paper.PointerPos - origin;
+                    Float2 inRT = new(local.X * (rtW / size.X), local.Y * (rtH / size.Y));
+                    bool inside = local.X >= 0 && local.Y >= 0 && local.X <= size.X && local.Y <= size.Y;
+
+                    UIEventSystem.Viewport = new UIEventSystem.HostViewport
+                    {
+                        ReferenceSize = new Float2(rtW, rtH),
+                        PointerPosition = inRT,
+                        ReceivesInput = hovered && inside,
+                    };
+                }
+                else
+                {
+                    UIEventSystem.Viewport = null;
+                }
 
                 // Stats overlay (top-right of viewport, theme sized)
                 if (_showStats)

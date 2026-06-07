@@ -10,6 +10,7 @@ using Prowl.Runtime.Audio;
 using Prowl.PaperUI;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.UI;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -94,6 +95,9 @@ public abstract class Game
                 Time.TimeStack.Push(time);
 
                 Input.UpdateActions(delta);
+
+                // UI input runs after low-level Input is fresh and before script Updates
+                UIEventSystem.Tick(time.Time);
 
                 BeginUpdate();
 
