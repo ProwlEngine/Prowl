@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
@@ -28,9 +29,9 @@ public class PointLight : Light
     private Float4x4[] _shadowMatrices = new Float4x4[6]; // View-projection for each face
     private bool _shadowsValid = false;
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneEvents.OnRenderCollectArgs args)
     {
-        lights.Add(this);
+        args.lights.Add(this);
     }
 
     public override void DrawGizmos()

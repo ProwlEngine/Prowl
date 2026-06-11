@@ -5,13 +5,15 @@ using System;
 
 using Echo.Logging;
 
-using Prowl.Runtime.Audio;
-
 using Prowl.PaperUI;
+using Prowl.Runtime.Audio;
+using Prowl.Runtime.Events;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
+
+using static Prowl.Runtime.Events.GameEvents;
 
 namespace Prowl.Runtime;
 
@@ -36,6 +38,16 @@ public abstract class Game
     private int frameCounter;
 
     public Paper PaperInstance => _paper;
+
+    private GameEvents _events;
+    public GameEvents Events
+    {
+        get
+        {
+            _events ??= new GameEvents();
+            return _events;
+        }
+    }
 
     public bool DrawGizmos { get; set; }
 
@@ -63,7 +75,7 @@ public abstract class Game
 
         InitializeWindow(title, width, height);
 
-        Window.Load += () =>
+        WindowEvents.Load += () =>
         {
             AudioContext.Initialize(44100, 2, 2048);
 
@@ -82,10 +94,14 @@ public abstract class Game
             Initialize();
         };
 
-        Window.Update += (delta) =>
+        WindowEvents.Update.Subscribe((args) =>
         {
             try
             {
+                Scene? currentScene = Scene.Current;
+
+                GameEventsArgs gameEventsArgs = new(currentScene);
+
                 UpdatePaperInput();
 
                 AudioContext.Update();
@@ -94,24 +110,28 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                Input.UpdateActions(delta);
+                Input.UpdateActions(args.Value);
 
                 // UI input runs after low-level Input is fresh and before script Updates
                 UIEventSystem.Tick(time.Time);
 
+                Events.InvokeOnBeforeBeginUpdate(gameEventsArgs);
+
                 BeginUpdate();
 
-                Scene? currentScene = Scene.Current;
+                Events.InvokeOnAfterBeginUpdate(gameEventsArgs);
 
                 // Fixed update loop only when gameplay should run
-                fixedTimeAccumulator += delta;
+                fixedTimeAccumulator += args.Value;
                 if (Application.ShouldRunGameplay)
                 {
                     Application.IsGameplayExecuting = true;
                     int count = 0;
                     while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
                     {
+                        Events.InvokeOnBeforeFixedUpdate(gameEventsArgs);
                         currentScene?.FixedUpdate();
+                        Events.InvokeOnAfterFixedUpdate(gameEventsArgs);
                         fixedTimeAccumulator -= Time.FixedDeltaTime;
                     }
                     Application.IsGameplayExecuting = false;
@@ -122,7 +142,11 @@ public abstract class Game
                     fixedTimeAccumulator = MathF.Min(fixedTimeAccumulator, Time.FixedDeltaTime);
                 }
 
+                Events.InvokeOnBeforeUpdate(gameEventsArgs);
+
                 OnUpdate(currentScene);
+
+                Events.InvokeOnAfterUpdate(gameEventsArgs);
 
                 // Consume step request re-pause after one frame
                 if (Application.StepRequested)
@@ -131,7 +155,11 @@ public abstract class Game
                     Application.IsPaused = true;
                 }
 
+                Events.InvokeOnBeforeEndUpdate(gameEventsArgs);
+
                 EndUpdate();
+
+                Events.InvokeOnAfterEndUpdate(gameEventsArgs);
 
                 if (frameCounter++ % 60 == 0)
                 { 
@@ -145,9 +173,9 @@ public abstract class Game
                 Debug.LogError(e.ToString());
                 throw;
             }
-        };
+        });
 
-        Window.Render += (delta) =>
+        WindowEvents.Render += (delta) =>
         {
             try
             {
@@ -216,18 +244,18 @@ public abstract class Game
             }
         };
 
-        Window.Resize += (size) =>
+        WindowEvents.Resize += (size) =>
         {
             // Paper's resolution is resynced from PreparePaperFrame each render frame.
             Resize(size.X, size.Y);
         };
 
-        Window.FramebufferResize += (size) =>
+        WindowEvents.FramebufferResize += (size) =>
         {
-            _paperRenderer.UpdateProjection(size.X, size.Y);
+            _paperRenderer.UpdateProjection(size.Value.X, size.Value.Y);
         };
 
-        Window.Closing += () =>
+        WindowEvents.Closing += () =>
         {
             Closing();
 

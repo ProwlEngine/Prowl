@@ -18,6 +18,7 @@
 //
 
 using Prowl.Runtime;
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -243,10 +244,11 @@ public sealed class VoxelPlanet : MonoBehaviour
         }
     }
 
-    public override void OnRenderCollect(Camera renderCamera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneEvents.OnRenderCollectArgs onRenderCollectArgs)
+
     {
         if (rootNode != null)
-            rootNode.Collect(renderables);
+            rootNode.Collect(onRenderCollectArgs.renderables);
     }
 
     public override void DrawGizmos()

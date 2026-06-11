@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -411,7 +412,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _morphWeightTexture!.SetData<Float4>(data.AsMemory(0, _morphWeightCapacity), 0, 0, (uint)_morphWeightCapacity, 1);
     }
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneEvents.OnRenderCollectArgs args)
     {
         var mesh = SharedMesh.Res;
         if (mesh == null || Materials.Count == 0) return;
@@ -470,7 +471,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
             if (mesh.HasBlendShapes)
                 ApplyBlendShapeProps(mesh, props);
 
-            renderables.Add(new SkinnedMeshRenderable(
+            args.renderables.Add(new SkinnedMeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,
                 GameObject.LayerIndex, worldBounds, props, subMeshIndex: s));
         }

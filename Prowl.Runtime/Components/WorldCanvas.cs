@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -103,7 +104,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
 
     }
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneEvents.OnRenderCollectArgs args)
     {
         // Push this canvas as a renderable
         if (_renderTexture.IsValid() && (Material.Res?.IsValid() ?? false) && _quadMesh.IsValid())
@@ -111,7 +112,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
             _properties.Clear();
             _properties.SetInt("_ObjectID", InstanceID);
             _properties.SetTexture("_MainTex", _renderTexture.MainTexture);
-            renderables.Add(this);
+            args.renderables.Add(this);
         }
     }
 

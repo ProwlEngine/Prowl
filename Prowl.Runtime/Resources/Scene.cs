@@ -1,12 +1,14 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
@@ -102,8 +104,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public PhysicsWorld Physics => _physics;
 
+    public SceneEvents Events { get; } = new();
+
     [SerializeIgnore]
     private bool _isActive = false;
+
+    private object _lock;
+    public HashSet<EngineObject> ToSubscribe = new(ReferenceEqualityComparer.Instance);
 
     public struct FogParams
     {
@@ -287,6 +294,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (_isActive) throw new Exception("Scene is already enabled!");
 
+        Events.OnBeforeUpdates.Subscribe(SubscribeObjectsToEvents);
+
         _isActive = true;
 
         // Create a copy to avoid collection modification during enumeration
@@ -309,6 +318,28 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 }
             }
         }
+    }
+
+    public void SubscribeObjectsToEvents()
+    {
+        Events.Manager.BeginBatch();
+        ReadOnlySpan<EngineObject> list = CollectionsMarshal.AsSpan(ToSubscribe.ToList());
+        ToSubscribe.Clear();
+        for (int i = 0; i < list.Length; i++)
+        {
+
+            EngineObject obj = list[i];
+            if (obj.IsDisposed) continue;
+            if (obj is GameObject go)
+            {
+                go.SubscribeSceneEvents(this);
+            }
+            else if (obj is MonoBehaviour mb)
+            {
+                mb.SubscribeSceneEvents(this);
+            }
+        }
+        Events.Manager.EndBatch();
     }
 
     /// <summary>
@@ -516,6 +547,72 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         return null;
     }
 
+    /// <summary>
+    /// Assigns an <see cref="ExecutionOrder"/> to every GameObject and MonoBehaviour
+    /// based on its position in the scene hierarchy using a depth-first traversal.
+    /// <para>
+    /// Order scheme per GO at hierarchy levels <c>[L0, L1, …, Ln]</c>:
+    /// <list type="bullet">
+    ///   <item>GameObject itself:  <c>(L0, L1, …, Ln)</c></item>
+    ///   <item>Component i:        <c>(L0, L1, …, Ln, 0, i)</c>  — <c>0</c> discriminator sorts before children</item>
+    ///   <item>Child j:            <c>(L0, L1, …, Ln, 1, j)</c>  — <c>1</c> discriminator sorts after components</item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    public void RecalculateExecutionOrders()
+    {
+        // Stack-based DFS. Each entry carries the parent's levels array.
+        // Children are built as (parentLevels + [1, childIndex]).
+        var stack = new Stack<(GameObject go, int[] parentLevels, int siblingIndex)>();
+
+        // Push roots in reverse so first root is processed first.
+        var roots = RootObjects.ToList();
+        for (int i = roots.Count - 1; i >= 0; i--)
+            stack.Push((roots[i], [], i));
+
+        while (stack.Count > 0)
+        {
+            (GameObject go, int[] parentLevels, int sibIdx) = stack.Pop();
+
+            if (go.IsDisposed) continue;
+
+            // GO priority = parentLevels + (1, siblingIndex), or just (siblingIndex) for roots.
+            int[] goLevels;
+            if (parentLevels.Length == 0)
+            {
+                goLevels = [sibIdx];
+            }
+            else
+            {
+                goLevels = new int[parentLevels.Length + 2];
+                parentLevels.CopyTo(goLevels, 0);
+                goLevels[parentLevels.Length] = 1;     // discriminator: child
+                goLevels[parentLevels.Length + 1] = sibIdx;
+            }
+
+            go.ExecutionOrder = new ExecutionOrder(goLevels);
+
+            // Components: (goLevels + [0, componentIndex])
+            ReadOnlySpan<MonoBehaviour> components = go.GetComponentsAsSpan<MonoBehaviour>();
+            if (components.Length > 0)
+            {
+                int[] compLevels = new int[goLevels.Length + 2];
+                goLevels.CopyTo(compLevels, 0);
+                compLevels[goLevels.Length] = 0; // discriminator: component (sorts before children)
+                for (int c = 0; c < components.Length; c++)
+                {
+                    compLevels[compLevels.Length - 1] = c;
+                    components[c].ExecutionOrder = new ExecutionOrder((int[])compLevels.Clone());
+                }
+            }
+
+            // Push children in reverse order so first child is processed first.
+            List<GameObject> children = go.Children;
+            for (int i = children.Count - 1; i >= 0; i--)
+                stack.Push((children[i], goLevels, i));
+        }
+    }
+
     /// <summary> Unregisters all GameObjects. </summary>
     public void Clear()
     {
@@ -530,6 +627,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary> Unregisters all dead / disposed GameObjects </summary>
     public void Flush()
     {
+        Events?.OnFlush.Invoke();
+        return;
         List<GameObject> removed = [];
         foreach (GameObject obj in _allObj)
         {
@@ -542,6 +641,16 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         foreach (GameObject obj in removed)
             obj.Scene = null;
+    }
+
+    public void Flush(GameObject gameObject)
+    {
+        if (gameObject.IsDisposed)
+        {
+            _allObj.Remove(gameObject);
+            _allObjSet.Remove(gameObject);
+            gameObject.Scene = null;
+        }
     }
 
     public override void OnDispose()
@@ -623,13 +732,29 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Update()
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        foreach (GameObject go in activeGOs)
-            go.PreUpdate();
+        //List<GameObject> activeGOs = [.. ActiveObjects];
 
-        ForeachComponent(activeGOs, (x) => x.InternalUpdate());
+        //ReadOnlySpan<GameObject> activeGOs = CollectionsMarshal.AsSpan(ActiveObjectsList);
 
-        ForeachComponent(activeGOs, (x) => x.InternalLateUpdate());
+        //for (int i = 0;i < activeGOs.Length; i++)
+        //{
+        //        GameObject go = activeGOs[i];
+        //        go.PreUpdate();
+        //}
+
+
+        Events.OnBeforeUpdates.Invoke();
+
+        Events.PreUpdate.Invoke();
+        Events.Update.Invoke();
+        Events.LateUpdate.Invoke();
+
+        //foreach (GameObject go in activeGOs)
+        //    go.PreUpdate();
+
+        //ForeachComponent(activeGOs, (x) => x.InternalUpdate());
+
+        //ForeachComponent(activeGOs, (x) => x.InternalLateUpdate());
 
         Flush();
     }
@@ -642,8 +767,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         Physics.Update();
 
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) => x.InternalFixedUpdate());
+        Events.FixedUpdate.Invoke();
+
+        //ReadOnlySpan<GameObject> activeGOs = CollectionsMarshal.AsSpan(ActiveObjectsList);
+        //ForeachComponent(activeGOs, (x) => x.InternalFixedUpdate());
 
         Flush();
     }
@@ -654,11 +781,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) =>
-        {
-            x.OnRenderCollect(camera, renderables, lights);
-        });
+        Events.OnRenderCollect.Invoke(new(camera, renderables, lights));
     }
 
     /// <summary>
@@ -666,13 +789,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void DrawGizmos()
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) =>
-        {
-            if (!x.HideFlags.HasFlag(HideFlags.NoGizmos))
-                x.DrawGizmos();
-        });
-
+        Events.DrawGizmos.Invoke();
         Flush();
     }
 
@@ -682,12 +799,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void OnGui(Paper paper)
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) =>
-        {
-            x.OnGui(paper);
-        });
-
+        Events.OnGui.Invoke(paper);
         Flush();
     }
 

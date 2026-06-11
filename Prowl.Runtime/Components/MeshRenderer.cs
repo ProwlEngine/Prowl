@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -36,7 +37,7 @@ public class MeshRenderer : MonoBehaviour
     /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
     [HideInInspector] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneEvents.OnRenderCollectArgs args)
     {
         var mesh = Mesh.Res;
         if (mesh == null || Materials.Count == 0) return;
@@ -62,7 +63,7 @@ public class MeshRenderer : MonoBehaviour
             Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
             LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
 
-            renderables.Add(new MeshRenderable(
+            args.renderables.Add(new MeshRenderable(
                 mesh, mat, Transform.LocalToWorldMatrix,
                 GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
         }

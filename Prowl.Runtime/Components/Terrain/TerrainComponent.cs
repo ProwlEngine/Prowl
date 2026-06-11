@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -142,7 +143,7 @@ public class TerrainComponent : MonoBehaviour
     public Float3 WorldToTerrain(Float3 worldPoint) =>
         Float4x4.TransformPoint(worldPoint, Transform.WorldToLocalMatrix);
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneEvents.OnRenderCollectArgs args)
     {
         var terrainData = Data.Res;
         if (terrainData == null) return;
@@ -152,7 +153,7 @@ public class TerrainComponent : MonoBehaviour
         Float4x4 worldToTerrain = Transform.WorldToLocalMatrix;
 
         // Camera position in terrain-local space for LOD
-        Float3 camLocal = WorldToTerrain(camera.Transform.Position);
+        Float3 camLocal = WorldToTerrain(args.camera.Transform.Position);
         camLocal.Y = 0;
 
         if (_quadtree == null
@@ -223,7 +224,7 @@ public class TerrainComponent : MonoBehaviour
         var bounds = TransformAABB(localMin, localMax, terrainToWorld);
 
         InstancedMeshRenderable.CreateBatched(
-            renderables, _baseMesh, mat, _transforms,
+            args.renderables, _baseMesh, mat, _transforms,
             (bounds.Min + bounds.Max) * 0.5f,
             layer: GameObject.LayerIndex,
             properties: _properties, bounds: bounds);
@@ -247,11 +248,11 @@ public class TerrainComponent : MonoBehaviour
             var htex = terrainData.GetHeightmapTexture();
             if (htex != null) grassMat.SetTexture("_Heightmap", htex);
 
-            _grassRenderer?.CollectRenderables(terrainData, this, camera, grassMat, GrassDistance, GrassDensityMultiplier, renderables);
+            _grassRenderer?.CollectRenderables(terrainData, this, args.camera, grassMat, GrassDistance, GrassDensityMultiplier, args.renderables);
         }
 
         // Trees
-        _treeRenderer?.CollectRenderables(terrainData, this, camera, TreeDistance, renderables);
+        _treeRenderer?.CollectRenderables(terrainData, this, args.camera, TreeDistance, args.renderables);
     }
 
     public override void DrawGizmos()

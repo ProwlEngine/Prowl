@@ -2,11 +2,14 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.PaperUI;
+using Prowl.Runtime.Events;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -89,6 +92,96 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// </summary>
     public string Tag => _go.Tag;
 
+    #region Override Detection Cache
+
+    [Flags]
+    private enum OverrideFlags : byte
+    {
+        None            = 0,
+        Update          = 1 << 0,
+        LateUpdate      = 1 << 1,
+        FixedUpdate     = 1 << 2,
+        OnRenderCollect = 1 << 3,
+        OnGui           = 1 << 4,
+        DrawGizmos      = 1 << 5,
+    }
+
+    private static readonly ConcurrentDictionary<Type, OverrideFlags> s_overrideCache = new();
+
+    private static OverrideFlags DetectOverrides(Type type)
+    {
+        return s_overrideCache.GetOrAdd(type, static t =>
+        {
+            OverrideFlags flags = OverrideFlags.None;
+            Type baseType = typeof(MonoBehaviour);
+
+            if (t.GetMethod(nameof(Update), BindingFlags.Instance | BindingFlags.Public, Type.EmptyTypes)?.DeclaringType != baseType)
+                flags |= OverrideFlags.Update;
+            if (t.GetMethod(nameof(LateUpdate), BindingFlags.Instance | BindingFlags.Public, Type.EmptyTypes)?.DeclaringType != baseType)
+                flags |= OverrideFlags.LateUpdate;
+            if (t.GetMethod(nameof(FixedUpdate), BindingFlags.Instance | BindingFlags.Public, Type.EmptyTypes)?.DeclaringType != baseType)
+                flags |= OverrideFlags.FixedUpdate;
+            if (t.GetMethod(nameof(OnRenderCollect), BindingFlags.Instance | BindingFlags.Public, [typeof(SceneEvents.OnRenderCollectArgs)])?.DeclaringType != baseType)
+                flags |= OverrideFlags.OnRenderCollect;
+            if (t.GetMethod(nameof(OnGui), BindingFlags.Instance | BindingFlags.Public, [typeof(Paper)])?.DeclaringType != baseType)
+                flags |= OverrideFlags.OnGui;
+            if (t.GetMethod(nameof(DrawGizmos), BindingFlags.Instance | BindingFlags.Public, Type.EmptyTypes)?.DeclaringType != baseType)
+                flags |= OverrideFlags.DrawGizmos;
+
+            return flags;
+        });
+    }
+
+    [SerializeIgnore]
+    private OverrideFlags _overrides;
+
+    #endregion
+
+    private ExecutionOrder _executionOrder;
+
+    public ExecutionOrder ExecutionOrder
+    {
+        get
+        {
+            return _executionOrder;
+        }
+        set
+        {
+            _executionOrder = value;
+            if (_eventsInitialized && Scene.IsValid())
+            {
+                DisposeSceneEvents();
+                SubscribeSceneEvents(Scene);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates this component's <see cref="ExecutionOrder"/> based on its owning GameObject's
+    /// order and this component's index. Uses discriminator <c>0</c> so components sort
+    /// after their GO but before its children.
+    /// </summary>
+    public void UpdateExecutionOrder()
+    {
+        if (!GameObject.IsValid()) return;
+
+        ReadOnlySpan<int> goLevels = GameObject.ExecutionOrder.Levels;
+        int[] levels = new int[goLevels.Length + 2];
+        goLevels.CopyTo(levels);
+        levels[goLevels.Length] = 0; // discriminator: component
+        levels[goLevels.Length + 1] = GameObject._components.IndexOf(this);
+        ExecutionOrder = new ExecutionOrder(levels);
+    }
+
+    private EventDelegateContainer<SceneEvents.EventTypes, Unit> UpdateDelegate = null;
+    private EventDelegateContainer<SceneEvents.EventTypes, Unit> LateUpdateDelegate = null;
+    private EventDelegateContainer<SceneEvents.EventTypes, Unit> FixedUpdateDelegate = null;
+    private EventDelegateContainer<SceneEvents.EventTypes, SceneEvents.OnRenderCollectArgs> OnRenderCollectDelegate = null;
+    private EventDelegateContainer<SceneEvents.EventTypes, Paper> OnGuiDelegate = null;
+    private EventDelegateContainer<SceneEvents.EventTypes, Unit> DrawGizmosDelegate = null;
+
+    private bool _eventsInitialized = false;
+
     /// <summary>
     /// Gets or sets whether the MonoBehaviour is enabled.
     /// </summary>
@@ -101,6 +194,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
             {
                 _enabled = value;
                 HierarchyStateChanged();
+                UpdateEventDelegateState(_enabled && _enabledInHierarchy);
             }
         }
     }
@@ -237,6 +331,76 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
                 else
                     InternalOnDisable();
             }
+
+            // Sync event subscriptions so disabled-in-hierarchy objects stop receiving Update/FixedUpdate etc.
+            if (_eventsInitialized)
+                UpdateEventDelegateState(newState);
+        }
+    }
+
+    private void DisposeSceneEvents()
+    {
+        if (_eventsInitialized)
+        {
+            UpdateDelegate?.Dispose();
+            LateUpdateDelegate?.Dispose();
+            FixedUpdateDelegate?.Dispose();
+            OnRenderCollectDelegate?.Dispose();
+            OnGuiDelegate?.Dispose();
+            DrawGizmosDelegate?.Dispose();
+
+            _eventsInitialized = false;
+        }
+    }
+
+    internal void SubscribeSceneEvents(Scene scene)
+    {
+        _overrides = DetectOverrides(GetType());
+
+        if (_overrides.HasFlag(OverrideFlags.Update))
+            UpdateDelegate = scene.Events.Update.Subscribe(InternalUpdate, ExecutionOrder);
+        if (_overrides.HasFlag(OverrideFlags.LateUpdate))
+            LateUpdateDelegate = scene.Events.LateUpdate.Subscribe(InternalLateUpdate, ExecutionOrder);
+        if (_overrides.HasFlag(OverrideFlags.FixedUpdate))
+            FixedUpdateDelegate = scene.Events.FixedUpdate.Subscribe(InternalFixedUpdate, ExecutionOrder);
+        if (_overrides.HasFlag(OverrideFlags.OnRenderCollect))
+            OnRenderCollectDelegate = scene.Events.OnRenderCollect.Subscribe(OnRenderCollect, ExecutionOrder);
+        if (_overrides.HasFlag(OverrideFlags.OnGui))
+            OnGuiDelegate = scene.Events.OnGui.Subscribe(OnGui, ExecutionOrder);
+        if (_overrides.HasFlag(OverrideFlags.DrawGizmos))
+            DrawGizmosDelegate = scene.Events.DrawGizmos.Subscribe(DrawGizmos, ExecutionOrder);
+
+        _eventsInitialized = true;
+
+        // Apply current effective state immediately (in case the MB or its GO ancestors are disabled at subscription time)
+        UpdateEventDelegateState(_enabled && _enabledInHierarchy);
+    }
+
+    internal void UpdateEventDelegateState(bool enable)
+    {
+        if (!_eventsInitialized)
+        {
+            Scene?.ToSubscribe.Add(this);
+            return;
+        }
+
+        if (enable)
+        {
+            UpdateDelegate?.Enable();
+            LateUpdateDelegate?.Enable();
+            FixedUpdateDelegate?.Enable();
+            OnRenderCollectDelegate?.Enable();
+            OnGuiDelegate?.Enable();
+            DrawGizmosDelegate?.Enable();
+        }
+        else
+        {
+            UpdateDelegate?.Disable();
+            LateUpdateDelegate?.Disable();
+            FixedUpdateDelegate?.Disable();
+            OnRenderCollectDelegate?.Disable();
+            OnGuiDelegate?.Disable();
+            DrawGizmosDelegate?.Disable();
         }
     }
 
@@ -312,7 +476,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// Components add their renderables/lights to the provided lists.
     /// Camera is provided for LOD and distance-based decisions.
     /// </summary>
-    public virtual void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights) { }
+    public virtual void OnRenderCollect(SceneEvents.OnRenderCollectArgs onRenderCollectArgs) { }
 
     /// <summary>
     /// Called for rendering and handling GUI gizmos.
@@ -395,6 +559,8 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// </summary>
     public override void OnDispose()
     {
+        DisposeSceneEvents();
+
         if (GameObject.IsValid())
             GameObject.RemoveComponent(this);
     }

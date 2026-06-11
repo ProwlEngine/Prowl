@@ -7,9 +7,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Events;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -115,7 +117,19 @@ public class GameObject : EngineObject, ISerializable
     public Scene? Scene
     {
         get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
-        internal set => _scene = new(value);
+        internal set
+        {
+            _scene = new(value);
+            UpdateExecutionOrder();
+            UpdateEventDelegateState(_enabled && _enabledInHierarchy);
+            ReadOnlySpan<MonoBehaviour> components = CollectionsMarshal.AsSpan(_components);
+            for (int i = 0; i < components.Length; i++)
+            {
+                MonoBehaviour component = components[i];
+                // Let the component use its own effective state (its Enabled + its eih, which depends on this GO chain)
+                component.UpdateEventDelegateState(component._enabled && component._enabledInHierarchy);
+            }
+        }
     }
 
     /// <summary>Is this GameObject a prefab instance?</summary>
@@ -174,6 +188,104 @@ public class GameObject : EngineObject, ISerializable
         {
             _transform.GameObject = this; // ensure game object is this
             return _transform;
+        }
+    }
+    private bool _eventsInitialized = false;
+    private ExecutionOrder _executionOrder;
+    public ExecutionOrder ExecutionOrder
+    {
+        get
+        {
+            return _executionOrder;
+        }
+        set
+        {
+            _executionOrder = value;
+            if (_eventsInitialized && Scene.IsValid())
+            {
+                SubscribeSceneEvents(Scene);
+                DisposeSceneEvents();
+            }
+        }
+    }
+
+    public void UpdateExecutionOrder()
+    {
+        int[] goLevels;
+
+        if (_parent != null)
+        {
+            int sibIdx = _parent.Children.IndexOf(this);
+            if (sibIdx < 0) sibIdx = 0;
+            ReadOnlySpan<int> pLevels = _parent.ExecutionOrder.Levels;
+            goLevels = new int[pLevels.Length + 2];
+            pLevels.CopyTo(goLevels);
+            goLevels[pLevels.Length] = 1;
+            goLevels[pLevels.Length + 1] = sibIdx;
+        }
+        else
+        {
+            Scene? scene = Scene;
+            int sibIdx = scene != null ? scene.GetRootIndex(this) : 0;
+            if (sibIdx < 0) sibIdx = 0;
+            goLevels = [sibIdx];
+        }
+
+        ExecutionOrder = new ExecutionOrder(goLevels);
+
+        ReadOnlySpan<MonoBehaviour> components = GetComponentsAsSpan<MonoBehaviour>();
+        if (components.Length > 0)
+        {
+            int[] compLevels = new int[goLevels.Length + 2];
+            goLevels.CopyTo(compLevels, 0);
+            compLevels[goLevels.Length] = 0;
+            for (int i = 0; i < components.Length; i++)
+            {
+                compLevels[compLevels.Length - 1] = i;
+                components[i].ExecutionOrder = new ExecutionOrder((int[])compLevels.Clone());
+            }
+        }
+    }
+
+    private EventDelegateContainer<SceneEvents.EventTypes, Unit> PreUpdateDelegate = null;
+
+    private EventDelegateContainer<SceneEvents.EventTypes, Unit> _disposerDelegate;
+
+    internal void SubscribeSceneEvents(Scene scene)
+    {
+
+        PreUpdateDelegate = scene.Events.PreUpdate.Subscribe(PreUpdate, ExecutionOrder);
+
+        _eventsInitialized = true;
+
+        // Apply current effective state immediately (in case object or ancestors are disabled)
+        UpdateEventDelegateState(_enabled && _enabledInHierarchy);
+    }
+
+    internal void DisposeSceneEvents()
+    {
+        PreUpdateDelegate?.Dispose();
+        _eventsInitialized = false;
+    }
+
+
+    private void UpdateEventDelegateState(bool enable)
+    {
+        if (!_eventsInitialized)
+        {
+            Scene?.ToSubscribe.Add(this);
+            return;
+        }
+
+        if (enable)
+        {
+
+            PreUpdateDelegate?.Enable();
+
+        }
+        else
+        {
+            PreUpdateDelegate?.Disable();
         }
     }
 
@@ -686,6 +798,11 @@ public class GameObject : EngineObject, ISerializable
     /// <returns>The component of type T, or null if not found.</returns>
     public T? GetComponent<T>() where T : MonoBehaviour => (T?)GetComponent(typeof(T));
 
+    public ReadOnlySpan<T> GetComponentsAsSpan<T>() where T : MonoBehaviour
+    {
+        return CollectionsMarshal.AsSpan(GetComponentsList<T>());
+    }
+
     /// <summary>
     /// Gets the first component of the specified type attached to the GameObject.
     /// </summary>
@@ -701,6 +818,46 @@ public class GameObject : EngineObject, ISerializable
                 if (comp.GetType().IsAssignableTo(type))
                     return comp;
         return null;
+    }
+
+    public List<T> GetComponentsList<T>() where T : MonoBehaviour
+    {
+        var results = new List<T>();
+
+        var type = typeof(T);
+
+        if (type == typeof(MonoBehaviour))
+        {
+            ReadOnlySpan<MonoBehaviour> compsSpan = CollectionsMarshal.AsSpan(_components);
+
+            for (int i = 0; i < compsSpan.Length; i++)
+            {
+                var comp = compsSpan[i];
+                if (comp is T t)
+                    results.Add(t);
+            }
+
+        }
+        else if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? cached))
+        {
+            if (cached is IList<MonoBehaviour> list)
+            {
+                for (int i = 0; i < cached.Count; i++)
+                {
+                    if (list[i] is T t)
+                        results.Add(t);
+                }
+            }
+
+        }
+        else
+        {
+            foreach (MonoBehaviour comp in _components)
+                if (comp is T t)
+                    results.Add(t);
+        }
+
+        return results;
     }
 
     /// <summary>
@@ -976,6 +1133,14 @@ public class GameObject : EngineObject, ISerializable
     /// </summary>
     public override void OnDispose()
     {
+        DisposeSceneEvents();
+
+        _disposerDelegate = Scene?.Events.OnFlush.Subscribe(() =>
+        {
+            Scene?.Flush(this);
+            _disposerDelegate?.Dispose();
+        }, ExecutionOrder);
+
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();
 
@@ -1010,6 +1175,7 @@ public class GameObject : EngineObject, ISerializable
     {
         _enabled = state;
         HierarchyStateChanged();
+        UpdateEventDelegateState(_enabled && _enabledInHierarchy);
     }
 
     /// <summary>
@@ -1021,6 +1187,7 @@ public class GameObject : EngineObject, ISerializable
         if (_enabledInHierarchy != newState)
         {
             _enabledInHierarchy = newState;
+            UpdateEventDelegateState(newState);
             foreach (MonoBehaviour component in GetComponents<MonoBehaviour>())
                 component.HierarchyStateChanged();
         }

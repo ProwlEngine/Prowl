@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Runtime.Events;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -190,13 +191,13 @@ public class GameCanvas : MonoBehaviour
     /// Overlay/Camera canvases ignore this hook — they are pulled by
     /// <see cref="UIRenderTree.CollectFor"/> from the pipeline directly.
     /// </summary>
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> _)
+    public override void OnRenderCollect(SceneEvents.OnRenderCollectArgs onRenderCollectArgs)
     {
         if (RenderMode != RenderMode.WorldSpace) return;
         RebuildIfDirty();
         Tree.RefreshTransforms();
         foreach (UIRenderItem it in Tree.Items)
-            renderables.Add(it);
+            onRenderCollectArgs.renderables.Add(it);
     }
 
     // ============================================================

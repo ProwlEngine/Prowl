@@ -4,6 +4,8 @@
 using System;
 using System.Runtime.InteropServices;
 
+using Prowl.Runtime.Events;
+
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
@@ -169,16 +171,17 @@ public static class Window
         InternalWindow.Resize += OnResize;
         InternalWindow.FramebufferResize += OnFramebufferResize;
         InternalWindow.Move += OnMove;
-        InternalWindow.StateChanged += (state) => StateChanged?.Invoke(state);
-        InternalWindow.FileDrop += (files) => FileDrop?.Invoke(files);
+        InternalWindow.StateChanged += (state) => { StateChanged?.Invoke(state); WindowEvents.StateChanged.Invoke(new WindowEvents.WindowStateArgs(state)); };
+        InternalWindow.FileDrop += (files) => { FileDrop?.Invoke(files); WindowEvents.FileDrop.Invoke(new WindowEvents.FileDropArgs(files)); };
         InternalWindow.FocusChanged += (focused) =>
         {
             isFocused = focused;
             FocusChanged?.Invoke(focused);
+            WindowEvents.FocusChanged.Invoke(new WindowEvents.BoolArgs(focused));
         };
     }
 
-    private static void OnMove(Vector2D<int> d) => Move?.Invoke(d);
+    private static void OnMove(Vector2D<int> d) { Move?.Invoke(d); WindowEvents.Move.Invoke(new WindowEvents.Vector2IntArgs(d)); }
 
     public static void Start()
     {
@@ -192,6 +195,7 @@ public static class Window
         // has a live render thread to drain its CBs; otherwise it would deadlock.
         Graphics.BeginFrame();
         Load?.Invoke();
+        WindowEvents.Load.Invoke();
         Graphics.EndFrameAndWait();
 
         try { MainLoop(); }
@@ -216,9 +220,12 @@ public static class Window
 
             InternalWindow.DoEvents();
             Update?.Invoke(delta);
+            WindowEvents.Update.Invoke(new WindowEvents.FloatArgs(delta));
             WindowInputHandler?.LateUpdate();
             Render?.Invoke(delta);
+            WindowEvents.Render.Invoke(delta);
             PostRender?.Invoke(delta);
+            WindowEvents.PostRender.Invoke(new WindowEvents.FloatArgs(delta));
 
             // SwapBuffers runs on the render thread as part of the frame-end
             // sentinel no context handoff per frame.
@@ -236,8 +243,8 @@ public static class Window
         Input.PushHandler(WindowInputHandler);
     }
 
-    public static void OnResize(Vector2D<int> size) => Resize?.Invoke(size);
-    public static void OnFramebufferResize(Vector2D<int> size) => FramebufferResize?.Invoke(size);
+    public static void OnResize(Vector2D<int> size) { Resize?.Invoke(size); WindowEvents.Resize.Invoke(size); }
+    public static void OnFramebufferResize(Vector2D<int> size) { FramebufferResize?.Invoke(size); WindowEvents.FramebufferResize.Invoke(new WindowEvents.Vector2IntArgs(size)); }
 
     public static void OnClose()
     {
@@ -245,6 +252,7 @@ public static class Window
         // otherwise race scene unload and try to submit GPU work after the render thread exits).
         AssetLoader.Stop();
         Closing?.Invoke();
+        WindowEvents.Closing.Invoke();
         WindowInputHandler.Dispose();
         Graphics.Dispose();
     }
