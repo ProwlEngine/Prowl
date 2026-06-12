@@ -29,7 +29,7 @@ public partial class EventManager<T> where T : struct, Enum
     public Task<TArgs> WaitForEventAsync<TArgs>(
         T eventType,
         CancellationToken cancellationToken = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null
@@ -54,7 +54,7 @@ public partial class EventManager<T> where T : struct, Enum
         T eventType,
         Func<TArgs, bool>? predicate,
         CancellationToken cancellationToken = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null
@@ -105,7 +105,7 @@ public partial class EventManager<T> where T : struct, Enum
     public async Task WaitForEventAsync(
         T eventType,
         CancellationToken cancellationToken = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null

@@ -68,8 +68,9 @@ public readonly struct EventAccessor<TEnum> where TEnum : struct, Enum
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null,
-        string[]? tags = null)
-        => _manager.AddNewDelegate(_eventType, handler, order, sourceFile, sourceLine, sourceMember, false, tags);
+        string[]? tags = null,
+        bool allowMultiple = false)
+        => _manager.AddNewDelegate(_eventType, handler, order, sourceFile, sourceLine, sourceMember, allowMultiple, tags);
 
     /// <summary>
     /// Subscribes a parameterless async handler to the event. Supports order, tags, and source location capture.
@@ -80,8 +81,9 @@ public readonly struct EventAccessor<TEnum> where TEnum : struct, Enum
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null,
-        string[]? tags = null)
-        => _manager.AddNewAsyncDelegate(_eventType, handler, order, sourceFile, sourceLine, sourceMember, false, tags);
+        string[]? tags = null,
+        bool allowMultiple = false)
+        => _manager.AddNewAsyncDelegate(_eventType, handler, order, sourceFile, sourceLine, sourceMember, allowMultiple, tags);
 
     /// <summary>
     /// Subscribes a parameterless handler that automatically unsubscribes after one invocation.
@@ -150,8 +152,9 @@ public readonly struct EventAccessor<TEnum, TArgs> where TEnum : struct, Enum
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null,
-        string[]? tags = null)
-        => _manager.AddNewDelegate<TArgs>(_eventType, handler, order, sourceFile, sourceLine, sourceMember, false, tags);
+        string[]? tags = null,
+        bool allowMultiple = false)
+        => _manager.AddNewDelegate<TArgs>(_eventType, handler, order, sourceFile, sourceLine, sourceMember, allowMultiple, tags);
 
     /// <summary>
     /// Subscribes a typed async handler to the event. Supports order, tags, and source location capture.
@@ -162,8 +165,9 @@ public readonly struct EventAccessor<TEnum, TArgs> where TEnum : struct, Enum
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null,
-        string[]? tags = null)
-        => _manager.AddNewAsyncDelegate<TArgs>(_eventType, handler, order, sourceFile, sourceLine, sourceMember, false, tags);
+        string[]? tags = null,
+        bool allowMultiple = false)
+        => _manager.AddNewAsyncDelegate<TArgs>(_eventType, handler, order, sourceFile, sourceLine, sourceMember, allowMultiple, tags);
 
     /// <summary>
     /// Subscribes a typed handler that automatically unsubscribes after one invocation.

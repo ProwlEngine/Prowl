@@ -296,6 +296,8 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
         // Insert at new position
         GameObject._components.Insert(index, this);
+
+        GameObject.Scene?.MarkExecutionOrdersDirty();
     }
     #endregion
 
@@ -309,6 +311,8 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
         bool isEnabled = _enabled && _go.EnabledInHierarchy;
         _enabledInHierarchy = isEnabled;
+
+        _go.Scene?.MarkExecutionOrdersDirty();
     }
 
     /// <summary>
@@ -358,17 +362,17 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         _overrides = DetectOverrides(GetType());
 
         if (_overrides.HasFlag(OverrideFlags.Update))
-            UpdateDelegate = scene.Events.Update.Subscribe(InternalUpdate, ExecutionOrder);
+            UpdateDelegate = scene.Events.Update.Subscribe(InternalUpdate, ExecutionOrder, allowMultiple: true);
         if (_overrides.HasFlag(OverrideFlags.LateUpdate))
-            LateUpdateDelegate = scene.Events.LateUpdate.Subscribe(InternalLateUpdate, ExecutionOrder);
+            LateUpdateDelegate = scene.Events.LateUpdate.Subscribe(InternalLateUpdate, ExecutionOrder, allowMultiple: true);
         if (_overrides.HasFlag(OverrideFlags.FixedUpdate))
-            FixedUpdateDelegate = scene.Events.FixedUpdate.Subscribe(InternalFixedUpdate, ExecutionOrder);
+            FixedUpdateDelegate = scene.Events.FixedUpdate.Subscribe(InternalFixedUpdate, ExecutionOrder, allowMultiple: true);
         if (_overrides.HasFlag(OverrideFlags.OnRenderCollect))
-            OnRenderCollectDelegate = scene.Events.OnRenderCollect.Subscribe(OnRenderCollect, ExecutionOrder);
+            OnRenderCollectDelegate = scene.Events.OnRenderCollect.Subscribe(OnRenderCollect, ExecutionOrder, allowMultiple: true);
         if (_overrides.HasFlag(OverrideFlags.OnGui))
-            OnGuiDelegate = scene.Events.OnGui.Subscribe(OnGui, ExecutionOrder);
+            OnGuiDelegate = scene.Events.OnGui.Subscribe(OnGui, ExecutionOrder, allowMultiple: true);
         if (_overrides.HasFlag(OverrideFlags.DrawGizmos))
-            DrawGizmosDelegate = scene.Events.DrawGizmos.Subscribe(DrawGizmos, ExecutionOrder);
+            DrawGizmosDelegate = scene.Events.DrawGizmos.Subscribe(DrawGizmos, ExecutionOrder, allowMultiple: true);
 
         _eventsInitialized = true;
 

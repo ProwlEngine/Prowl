@@ -112,6 +112,16 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     private object _lock;
     public HashSet<EngineObject> ToSubscribe = new(ReferenceEqualityComparer.Instance);
 
+    [SerializeIgnore]
+    private bool _executionOrdersDirty;
+
+    /// <summary>
+    /// Marks that the execution orders (priorities for event subscriptions) are out of date
+    /// due to hierarchy changes. The orders will be recalculated once at the start of the
+    /// next frame, before any new object event subscriptions are processed.
+    /// </summary>
+    public void MarkExecutionOrdersDirty() => _executionOrdersDirty = true;
+
     public struct FogParams
     {
         public enum FogMode
@@ -294,7 +304,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         if (_isActive) throw new Exception("Scene is already enabled!");
 
-        Events.OnBeforeUpdates.Subscribe(SubscribeObjectsToEvents);
+        Events.OnBeforeUpdates.Subscribe(SubscribeObjectsToEvents, allowMultiple: true);
 
         _isActive = true;
 
@@ -322,6 +332,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public void SubscribeObjectsToEvents()
     {
+        // Ensure execution orders (used as subscription priorities) are up-to-date
+        // exactly once per frame, before we process any pending object subscriptions.
+        if (_executionOrdersDirty)
+        {
+            RecalculateExecutionOrders();
+        }
+
         Events.Manager.BeginBatch();
         ReadOnlySpan<EngineObject> list = CollectionsMarshal.AsSpan(ToSubscribe.ToList());
         ToSubscribe.Clear();
@@ -374,7 +391,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _isActive = false;
     }
 
-
     /// <summary>
     /// Registers a GameObject and all of its children.
     /// </summary>
@@ -402,6 +418,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         index = Math.Max(0, Math.Min(index, rootIndices.Count));
         int insertAt = index < rootIndices.Count ? rootIndices[index] : _allObj.Count;
         _allObj.Insert(insertAt, obj);
+
+        MarkExecutionOrdersDirty();
     }
 
     /// <summary>
@@ -561,6 +579,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void RecalculateExecutionOrders()
     {
+        _executionOrdersDirty = false;
+        Events.Manager.BeginBatch();
         // Stack-based DFS. Each entry carries the parent's levels array.
         // Children are built as (parentLevels + [1, childIndex]).
         var stack = new Stack<(GameObject go, int[] parentLevels, int siblingIndex)>();
@@ -611,6 +631,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             for (int i = children.Count - 1; i >= 0; i--)
                 stack.Push((children[i], goLevels, i));
         }
+        Events.Manager.EndBatch();
     }
 
     /// <summary> Unregisters all GameObjects. </summary>
@@ -723,6 +744,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
         foreach (GameObject obj in serializeObj)
             Add(obj);
+
+        MarkExecutionOrdersDirty();
     }
 
     /// <summary>

@@ -57,12 +57,12 @@ protected AsyncEventDelegateContainer(T eventType, ExecutionOrder priority,
 
     /// <summary>
     /// Synchronous invocation fallback. Fires the async handler without awaiting.
-    /// In DEBUG builds a warning is logged — prefer <see cref="InvokeAsync"/> instead.
+    /// When EVENT_DEBUG is defined, a warning is logged — prefer <see cref="InvokeAsync"/> instead.
     /// </summary>
     public override void Invoke(TArgs args)
     {
         if (!Enabled) return;
-#if DEBUG
+#if EVENT_DEBUG
         EventSystemDiagnostics.LogWarning?.Invoke(
             $"[EventSystem] Async handler on {typeof(T).Name} invoked synchronously. " +
             $"Use InvokeAsync/InvokeEventAsync for proper async execution. " +
@@ -112,7 +112,7 @@ public ParameterlessAsyncEventDelegateContainer(T eventType, Func<Task> asyncAct
     public override void Invoke(Unit args)
     {
         if (!Enabled) return;
-#if DEBUG
+#if EVENT_DEBUG
         EventSystemDiagnostics.LogWarning?.Invoke(
             $"[EventSystem] Async handler on {typeof(T).Name} invoked synchronously. " +
             $"Use InvokeAsync/InvokeEventAsync for proper async execution. " +

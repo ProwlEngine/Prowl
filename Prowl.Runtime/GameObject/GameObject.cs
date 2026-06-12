@@ -120,7 +120,7 @@ public class GameObject : EngineObject, ISerializable
         internal set
         {
             _scene = new(value);
-            UpdateExecutionOrder();
+            value?.MarkExecutionOrdersDirty();
             UpdateEventDelegateState(_enabled && _enabledInHierarchy);
             ReadOnlySpan<MonoBehaviour> components = CollectionsMarshal.AsSpan(_components);
             for (int i = 0; i < components.Length; i++)
@@ -254,7 +254,7 @@ public class GameObject : EngineObject, ISerializable
     internal void SubscribeSceneEvents(Scene scene)
     {
 
-        PreUpdateDelegate = scene.Events.PreUpdate.Subscribe(PreUpdate, ExecutionOrder);
+        PreUpdateDelegate = scene.Events.PreUpdate.Subscribe(PreUpdate, ExecutionOrder, allowMultiple: true);
 
         _eventsInitialized = true;
 
@@ -401,6 +401,8 @@ public class GameObject : EngineObject, ISerializable
                 NewParent.Children.Add(this);
 
             _parent = NewParent;
+
+            Scene?.MarkExecutionOrdersDirty();
         }
 
         if (worldPositionStays)
@@ -663,8 +665,11 @@ public class GameObject : EngineObject, ISerializable
 
         SortComponents();
 
-        // Trigger OnEnable if the GameObject is in an active scene and enabled
         Scene? scene = Scene;
+        if (scene.IsValid())
+            scene.ToSubscribe.Add(newComponent);
+
+        // Trigger OnEnable if the GameObject is in an active scene and enabled
         if (scene.IsValid() && scene.IsActive && newComponent.EnabledInHierarchy)
             newComponent.InternalOnEnable();
 
@@ -705,8 +710,11 @@ public class GameObject : EngineObject, ISerializable
 
         SortComponents();
 
-        // Trigger OnEnable if the GameObject is in an active scene and enabled
         Scene? scene = Scene;
+        if (scene.IsValid())
+            scene.ToSubscribe.Add(comp);
+
+        // Trigger OnEnable if the GameObject is in an active scene and enabled
         if (scene.IsValid() && scene.IsActive && comp.EnabledInHierarchy)
             comp.InternalOnEnable();
     }
@@ -1139,7 +1147,7 @@ public class GameObject : EngineObject, ISerializable
         {
             Scene?.Flush(this);
             _disposerDelegate?.Dispose();
-        }, ExecutionOrder);
+        }, ExecutionOrder, allowMultiple: true);
 
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();

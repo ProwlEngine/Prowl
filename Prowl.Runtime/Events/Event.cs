@@ -25,10 +25,10 @@ public class Event<T> where T : struct, Enum
         public static readonly bool IsCancellable = typeof(ICancellable).IsAssignableFrom(typeof(TArgs));
     }
 
-#if DEBUG
+#if EVENT_DEBUG
     /// <summary>
     /// Configurable threshold in milliseconds. Handlers exceeding this duration
-    /// will be logged as warnings in DEBUG builds. Set to 0 to disable.
+    /// will be logged as warnings when EVENT_DEBUG is defined. Set to 0 to disable.
     /// </summary>
     public static double SlowHandlerThresholdMs { get; set; } = 200.0;
 #endif
@@ -46,7 +46,7 @@ public class Event<T> where T : struct, Enum
     /// <summary>
     /// Copy-on-write snapshot: a flat, priority-sorted array of all delegates.
     /// Rebuilt only when the subscriber list changes (Add/Remove), never on Invoke.
-    /// Used by DEBUG diagnostics to detect type-mismatch handlers.
+    /// Used by EVENT_DEBUG diagnostics to detect type-mismatch handlers.
     /// </summary>
     private EventDelegateContainer<T>[] _cachedSnapshot = [];
 
@@ -135,10 +135,10 @@ public class Event<T> where T : struct, Enum
     public void Invoke<TArgs>(TArgs args)
     {
         if (!Enabled) return;
-        
+
             EventDelegateContainer<T, TArgs>[] typedSnapshot;
             int typedLength;
-#if DEBUG
+#if EVENT_DEBUG
             EventDelegateContainer<T>[] fullSnapshot;
             int fullLength;
 #endif
@@ -154,13 +154,13 @@ public class Event<T> where T : struct, Enum
                     typedSnapshot = [];
                     typedLength = 0;
                 }
-#if DEBUG
+#if EVENT_DEBUG
                 fullSnapshot = _cachedSnapshot;
                 fullLength = _cachedSnapshotLength;
 #endif
             }
 
-#if DEBUG
+#if EVENT_DEBUG
             // Warn about handlers on this event registered with a different TArgs.
             if (fullLength > typedLength)
             {
@@ -177,7 +177,7 @@ public class Event<T> where T : struct, Enum
             var span = typedSnapshot.AsSpan(0, typedLength);
             for (int j = 0; j < span.Length; j++)
             {
-#if DEBUG
+#if EVENT_DEBUG
                 sw?.Restart();
 #endif
                 try
@@ -189,7 +189,7 @@ public class Event<T> where T : struct, Enum
                     Console.WriteLine();
                 }
 
-#if DEBUG
+#if EVENT_DEBUG
                 if (sw is not null)
                 {
                     sw.Stop();
@@ -207,7 +207,7 @@ public class Event<T> where T : struct, Enum
                 if (CancellableCheck<TArgs>.IsCancellable && args is ICancellable { Cancelled: true })
                     break;
             }
-        
+
 
     }
 
@@ -227,7 +227,7 @@ public class Event<T> where T : struct, Enum
 
         EventDelegateContainer<T, TArgs>[] typedSnapshot;
         int typedLength;
-#if DEBUG
+#if EVENT_DEBUG
         EventDelegateContainer<T>[] fullSnapshot;
         int fullLength;
 #endif
@@ -243,13 +243,13 @@ public class Event<T> where T : struct, Enum
                 typedSnapshot = [];
                 typedLength = 0;
             }
-#if DEBUG
+#if EVENT_DEBUG
             fullSnapshot = _cachedSnapshot;
             fullLength = _cachedSnapshotLength;
 #endif
         }
 
-#if DEBUG
+#if EVENT_DEBUG
         // Warn about handlers on this event registered with a different TArgs.
         if (fullLength > typedLength)
         {
@@ -266,7 +266,7 @@ public class Event<T> where T : struct, Enum
 
         for (int j = 0; j < typedLength; j++)
         {
-#if DEBUG
+#if EVENT_DEBUG
             sw?.Restart();
 #endif
             try
@@ -281,7 +281,7 @@ public class Event<T> where T : struct, Enum
                 Console.WriteLine(ex.Message);
             }
 
-#if DEBUG
+#if EVENT_DEBUG
             if (sw is not null)
             {
                 sw.Stop();
@@ -322,10 +322,10 @@ public class Event<T> where T : struct, Enum
         }
     }
 
-#if DEBUG
+#if EVENT_DEBUG
     /// <summary>
     /// Logs a warning when a registered handler is skipped because its TArgs
-    /// does not match the invoked type. Only compiled into DEBUG builds.
+    /// does not match the invoked type. Only compiled when EVENT_DEBUG is defined.
     /// </summary>
     private void WarnTypeMismatch<TArgs>(EventDelegateContainer<T> container)
     {

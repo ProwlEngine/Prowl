@@ -279,7 +279,7 @@ public partial class EventManager<T> : IDisposable where T : struct, Enum
     /// </summary>
     public EventDelegateContainer<T, TArgs> AddNewDelegate<TArgs>(
         T eventType, Action<TArgs> eventDelegate, ExecutionOrder priority = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null,
@@ -312,7 +312,7 @@ public partial class EventManager<T> : IDisposable where T : struct, Enum
     /// </summary>
     public EventDelegateContainer<T, Unit> AddNewDelegate(
         T eventType, Action eventDelegate, ExecutionOrder priority = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null
@@ -346,7 +346,7 @@ public partial class EventManager<T> : IDisposable where T : struct, Enum
     /// </summary>
     public OneTimeEventDelegateContainer<T, TArgs> SubscribeOnce<TArgs>(
         T eventType, Action<TArgs> eventDelegate, ExecutionOrder priority = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null,
@@ -378,7 +378,7 @@ public partial class EventManager<T> : IDisposable where T : struct, Enum
     /// </summary>
     public OneTimeParameterlessEventDelegateContainer<T> SubscribeOnce(
         T eventType, Action eventDelegate, ExecutionOrder priority = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null,
@@ -412,7 +412,7 @@ public partial class EventManager<T> : IDisposable where T : struct, Enum
     /// </summary>
     public AsyncEventDelegateContainer<T, TArgs> AddNewAsyncDelegate<TArgs>(
         T eventType, Func<TArgs, Task> eventDelegate, ExecutionOrder priority = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null
@@ -445,7 +445,7 @@ public partial class EventManager<T> : IDisposable where T : struct, Enum
     /// </summary>
     public AsyncEventDelegateContainer<T, Unit> AddNewAsyncDelegate(
         T eventType, Func<Task> eventDelegate, ExecutionOrder priority = default,
-#if DEBUG
+#if EVENT_DEBUG
         [CallerFilePath] string? sourceFile = null,
         [CallerLineNumber] int sourceLine = 0,
         [CallerMemberName] string? sourceMember = null

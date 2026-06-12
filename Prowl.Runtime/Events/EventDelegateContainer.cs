@@ -67,7 +67,7 @@ public abstract class EventDelegateContainer<T> : IEventDelegateContainer where 
 
 /// <summary>
 /// Source file where this handler was registered. Captured automatically
-/// via <see cref="CallerFilePathAttribute"/> in DEBUG builds.
+/// via <see cref="CallerFilePathAttribute"/> when EVENT_DEBUG is defined.
 /// </summary>
 public string? SourceFile { get; private set; }
 
@@ -124,7 +124,7 @@ public string SourceDescription =>
     protected EventDelegateContainer(T eventType, ExecutionOrder priority, string? sourceFile, int sourceLine, string? sourceMember, string[]? tags = null)
         : this(eventType, priority, tags)
     {
-#if DEBUG
+#if EVENT_DEBUG
         SourceFile = sourceFile is not null ? System.IO.Path.GetFileName(sourceFile) : null;
         SourceLine = sourceLine;
         SourceMember = sourceMember;
