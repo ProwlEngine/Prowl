@@ -12,7 +12,7 @@
         <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
         <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
 
-        <PackageReference Include="Prowl.Slang" Version="0.3.1" />
+        <PackageReference Include="Prowl.Slang" Version="0.3.3" />
     </ItemGroup>
 
 </Project>

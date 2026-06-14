@@ -1,11 +1,15 @@
 using System;
-
+using System.IO;
 
 using Silk.NET;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
+using Silk.NET.Windowing.Sdl;
+
+using Silk.NET.SDL;
+using System.Runtime.InteropServices;
 
 
 namespace Prowl.Veldrid.Samples;
@@ -20,6 +24,8 @@ public static class DeviceCreateUtilities
 
     public static IWindow CreateWindowAndDevice(Action<GraphicsDevice> load, Action<double> render, Action close, GraphicsDeviceOptions options)
     {
+        MoltenVKMacWorkaround();
+
         WindowOptions woptions = WindowOptions.Default;
         woptions.Title = "My Window";
         woptions.Size = new Vector2D<int>(600, 600);
@@ -28,7 +34,7 @@ public static class DeviceCreateUtilities
         woptions.API = new GraphicsAPI(API, ContextProfile.Core, ContextFlags.ForwardCompatible, Version);
         woptions.ShouldSwapAutomatically = false;
 
-        IWindow window = Window.Create(woptions);
+        IWindow window = Silk.NET.Windowing.Window.Create(woptions);
 
         window.Load += () =>
         {
@@ -46,6 +52,30 @@ public static class DeviceCreateUtilities
         window.Run();
 
         return window;
+    }
+
+    // Some idiot didn't configure MoltenVK correctly in Silk.NET so SDL can't find it
+    // Workaround involves loading the library at the correct path manually.
+    private static void MoltenVKMacWorkaround()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || Backend != GraphicsBackend.Vulkan)
+            return;
+
+        SdlWindowing.RegisterPlatform();
+        SdlWindowing.Use();
+
+        Sdl? sdl = Sdl.GetApi();
+
+        if (sdl.Init(Sdl.InitVideo) != 0)
+            Console.WriteLine($"SDL video initialization failed: {sdl.GetErrorS()}");
+
+        string basePath = Environment.ProcessPath != null ? AppContext.BaseDirectory :
+            Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+
+        string libraryPath = Path.Join(basePath, "runtimes/osx/native/libMoltenVK.dylib");
+
+        if (sdl.VulkanLoadLibrary(libraryPath) != 0)
+            Console.WriteLine($"SDL VulkanLoadLibrary failed for '{libraryPath}': {sdl.GetErrorS()}");
     }
 
     public static GraphicsDevice CreateDevice(IWindow window, GraphicsDeviceOptions options, GraphicsBackend backend)
