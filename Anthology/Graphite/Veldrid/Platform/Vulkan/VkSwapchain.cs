@@ -121,11 +121,6 @@ internal unsafe partial class VkSwapchain : Swapchain
         _currentImageIndex = imageIndex;
         _framebuffer.SetImageIndex(_currentImageIndex);
         _gd.RecordSwap(SwapBin.Acquire, 0);
-
-        // [MVK-DEBUG] remove later
-        if (result != Result.Success)
-            Console.WriteLine($"[MVK-DEBUG] AcquireNextImage result={result}");
-
         if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
         {
             CreateSwapchain(_framebuffer.Width, _framebuffer.Height);
@@ -160,12 +155,6 @@ internal unsafe partial class VkSwapchain : Swapchain
         {
             throw new RenderException($"The Swapchain's underlying surface has been lost.");
         }
-
-        // [MVK-DEBUG] remove later
-        Console.WriteLine($"[MVK-DEBUG] CreateSwapchain requested={width}x{height} " +
-            $"current={surfaceCapabilities.CurrentExtent.Width}x{surfaceCapabilities.CurrentExtent.Height} " +
-            $"min={surfaceCapabilities.MinImageExtent.Width}x{surfaceCapabilities.MinImageExtent.Height} " +
-            $"max={surfaceCapabilities.MaxImageExtent.Width}x{surfaceCapabilities.MaxImageExtent.Height}");
 
         if (surfaceCapabilities.MinImageExtent.Width == 0 && surfaceCapabilities.MinImageExtent.Height == 0
             && surfaceCapabilities.MaxImageExtent.Width == 0 && surfaceCapabilities.MaxImageExtent.Height == 0)
