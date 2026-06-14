@@ -580,7 +580,12 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         object presentLock = vkSC.PresentQueueIndex == _graphicsQueueIndex ? _graphicsQueueLock : vkSC;
         lock (presentLock)
         {
-            _khrSwapchain.QueuePresent(vkSC.PresentQueue, &presentInfo);
+            Result presentResult = _khrSwapchain.QueuePresent(vkSC.PresentQueue, &presentInfo);
+
+            // [MVK-DEBUG] remove later
+            if (presentResult != Result.Success)
+                Console.WriteLine($"[MVK-DEBUG] QueuePresent result={presentResult}");
+
             if (vkSC.AcquireNextImage(_device, default(VkSemaphore), vkSC.ImageAvailableFence))
             {
                 VkFenceHandle fence = vkSC.ImageAvailableFence;

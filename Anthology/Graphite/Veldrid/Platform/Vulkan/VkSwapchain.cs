@@ -121,6 +121,11 @@ internal unsafe partial class VkSwapchain : Swapchain
         _currentImageIndex = imageIndex;
         _framebuffer.SetImageIndex(_currentImageIndex);
         _gd.RecordSwap(SwapBin.Acquire, 0);
+
+        // [MVK-DEBUG] remove later
+        if (result != Result.Success)
+            Console.WriteLine($"[MVK-DEBUG] AcquireNextImage result={result}");
+
         if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
         {
             CreateSwapchain(_framebuffer.Width, _framebuffer.Height);
@@ -155,6 +160,12 @@ internal unsafe partial class VkSwapchain : Swapchain
         {
             throw new RenderException($"The Swapchain's underlying surface has been lost.");
         }
+
+        // [MVK-DEBUG] remove later
+        Console.WriteLine($"[MVK-DEBUG] CreateSwapchain requested={width}x{height} " +
+            $"current={surfaceCapabilities.CurrentExtent.Width}x{surfaceCapabilities.CurrentExtent.Height} " +
+            $"min={surfaceCapabilities.MinImageExtent.Width}x{surfaceCapabilities.MinImageExtent.Height} " +
+            $"max={surfaceCapabilities.MaxImageExtent.Width}x{surfaceCapabilities.MaxImageExtent.Height}");
 
         if (surfaceCapabilities.MinImageExtent.Width == 0 && surfaceCapabilities.MinImageExtent.Height == 0
             && surfaceCapabilities.MaxImageExtent.Width == 0 && surfaceCapabilities.MaxImageExtent.Height == 0)
@@ -232,6 +243,17 @@ internal unsafe partial class VkSwapchain : Swapchain
         uint maxImageCount = surfaceCapabilities.MaxImageCount == 0 ? uint.MaxValue : surfaceCapabilities.MaxImageCount;
         uint imageCount = Math.Min(maxImageCount, surfaceCapabilities.MinImageCount + 1);
 
+        // When CurrentExtent is defined (not 0xFFFFFFFF) the spec requires the swapchain to match it
+        // exactly. MoltenVK reports the CAMetalLayer's pixel size here; ignoring it and using the
+        // caller's logical size yields perpetual VK_SUBOPTIMAL_KHR on Retina displays.
+        Extent2D imageExtent = surfaceCapabilities.CurrentExtent.Width != uint.MaxValue
+            ? surfaceCapabilities.CurrentExtent
+            : new Extent2D
+            {
+                Width = Util.Clamp(width, surfaceCapabilities.MinImageExtent.Width, surfaceCapabilities.MaxImageExtent.Width),
+                Height = Util.Clamp(height, surfaceCapabilities.MinImageExtent.Height, surfaceCapabilities.MaxImageExtent.Height)
+            };
+
         SwapchainCreateInfoKHR swapchainCI = new()
         {
             SType = StructureType.SwapchainCreateInfoKhr,
@@ -239,7 +261,7 @@ internal unsafe partial class VkSwapchain : Swapchain
             PresentMode = presentMode,
             ImageFormat = surfaceFormat.Format,
             ImageColorSpace = surfaceFormat.ColorSpace,
-            ImageExtent = new Extent2D { Width = Util.Clamp(width, surfaceCapabilities.MinImageExtent.Width, surfaceCapabilities.MaxImageExtent.Width), Height = Util.Clamp(height, surfaceCapabilities.MinImageExtent.Height, surfaceCapabilities.MaxImageExtent.Height) },
+            ImageExtent = imageExtent,
             MinImageCount = imageCount,
             ImageArrayLayers = 1,
             ImageUsage = ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferDstBit
