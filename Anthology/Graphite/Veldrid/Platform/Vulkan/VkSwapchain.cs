@@ -294,7 +294,7 @@ internal unsafe partial class VkSwapchain : Swapchain
             _gd.KhrSwapchain.DestroySwapchain(_gd.Device, oldSwapchain, null);
         }
 
-        _framebuffer.SetNewSwapchain(_deviceSwapchain, width, height, surfaceFormat, swapchainCI.ImageExtent);
+        _framebuffer.SetNewSwapchain(_deviceSwapchain, surfaceFormat, swapchainCI.ImageExtent);
         return true;
     }
 
