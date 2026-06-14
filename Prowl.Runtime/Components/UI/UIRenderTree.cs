@@ -80,7 +80,7 @@ internal sealed class UIRenderTree
     }
 
     // ============================================================
-    // Static scene query — the pipeline's entry point
+    // Static scene query - the pipeline's entry point
     // ============================================================
 
     /// <summary>
@@ -115,7 +115,7 @@ internal sealed class UIRenderTree
 
     /// <summary>
     /// Maps the user-facing <see cref="RenderMode"/> to the pipeline-side <see cref="UISurface"/>.
-    /// Single source of truth — every other site that needs the conversion calls this.
+    /// Single source of truth - every other site that needs the conversion calls this.
     /// </summary>
     internal static UISurface ToSurface(RenderMode m) => m switch
     {

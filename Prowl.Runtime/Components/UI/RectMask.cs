@@ -14,9 +14,9 @@ namespace Prowl.Runtime.UI;
 /// <remarks>
 /// Compared to <see cref="Mask"/>:
 /// <list type="bullet">
-///   <item><b>Cheaper</b> — no extra draws, no fragment overdraw, no stencil buffer requirement.</item>
-///   <item><b>Cull</b> — items whose bounding rect lies entirely outside the scissor are dropped from the tree.</item>
-///   <item><b>Limitation</b> — the clip is axis-aligned in framebuffer space. Rotated UI hierarchies will
+///   <item><b>Cheaper</b> - no extra draws, no fragment overdraw, no stencil buffer requirement.</item>
+///   <item><b>Cull</b> - items whose bounding rect lies entirely outside the scissor are dropped from the tree.</item>
+///   <item><b>Limitation</b> - the clip is axis-aligned in framebuffer space. Rotated UI hierarchies will
 ///         still get an axis-aligned clip (the rect's screen-space AABB).</item>
 /// </list>
 /// Use <see cref="RectMask"/> for scroll views, lists, and any other rectangular clipping;
@@ -28,7 +28,6 @@ public class RectMask : UIBehaviour
 {
     /// <summary>
     /// Per-side padding (in canvas pixels) shrinking the clip rect. Order: left, top, right, bottom.
-    /// Matches Unity's <c>RectMask2D</c> for portability.
     /// </summary>
     [SerializeField] private Float4 _padding;
     public Float4 Padding
@@ -53,6 +52,6 @@ public class RectMask : UIBehaviour
             r.Max.Y - _padding.Y);
     }
 
-    /// <summary>RectMask itself contributes no geometry — the work happens in <see cref="GameCanvas.BuildRecursive"/>.</summary>
+    /// <summary>RectMask itself contributes no geometry - the work happens in <see cref="GameCanvas.BuildRecursive"/>.</summary>
     public override void GenerateMesh(UIMeshBuilder _, in UIContext __) { /* no geometry */ }
 }

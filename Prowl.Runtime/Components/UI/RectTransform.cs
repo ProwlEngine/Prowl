@@ -11,9 +11,9 @@ using Prowl.Runtime.Rendering;
 namespace Prowl.Vector;
 
 /// <summary>
-/// A component that stores anchor, pivot, and size information for 2D UI layout, analogous to Unity's
-/// <c>RectTransform</c> but as a separate component rather than a <see cref="Transform"/> subclass.
-/// Required by every UI element; rotation, scale and Z come from the GameObject's regular Transform.
+/// A component that stores anchor, pivot, and size information for 2D UI layout. It is a standalone
+/// component (not a <see cref="Transform"/> subclass), required by every UI element; rotation, scale
+/// and Z come from the GameObject's regular Transform.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,14 +23,14 @@ namespace Prowl.Vector;
 /// </para>
 /// <para>
 /// <b>Anchors</b> define how the element's edges attach to its parent rect.
-/// Values are normalized (0–1): (0,0) is bottom-left, (1,1) is top-right.
+/// Values are normalized (0-1): (0,0) is bottom-left, (1,1) is top-right.
 /// When <see cref="AnchorMin"/> == <see cref="AnchorMax"/>, the element has a
 /// fixed size controlled by <see cref="SizeDelta"/>. When they differ, the
 /// element stretches to fill the anchor range and <see cref="SizeDelta"/>
 /// acts as a padding offset.
 /// </para>
 /// <para>
-/// <b>Pivot</b> is the local origin of the element (0–1). (0,0) is bottom-left,
+/// <b>Pivot</b> is the local origin of the element (0-1). (0,0) is bottom-left,
 /// (1,1) is top-right, (0.5, 0.5) is center.
 /// </para>
 /// </remarks>
@@ -57,7 +57,7 @@ public sealed class RectTransform : MonoBehaviour
     }
 
     /// <summary>
-    /// The pivot point of the element, in normalized coordinates (0–1).
+    /// The pivot point of the element, in normalized coordinates (0-1).
     /// (0.5, 0.5) means the center.
     /// </summary>
     [SerializeField] private Float2 _pivot = new(0.5f, 0.5f);
@@ -172,7 +172,7 @@ public sealed class RectTransform : MonoBehaviour
     /// <summary>
     /// Backing-field setter for the layout properties above. Assigns only on a real change
     /// and flags the owning elements + canvas for a layout rebuild. Mirrors
-    /// <see cref="UIBehaviour.SetField{T}"/> — the single value-change check for the UI,
+    /// <see cref="UIBehaviour.SetField{T}"/> - the single value-change check for the UI,
     /// shared by code, inspector edits, and undo (via <c>PropertyGrid.ApplyFieldValue</c>).
     /// </summary>
     private bool SetField<T>(ref T field, T value)

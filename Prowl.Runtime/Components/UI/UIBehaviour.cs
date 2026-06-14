@@ -14,7 +14,6 @@ namespace Prowl.Runtime.UI;
 
 /// <summary>
 /// Abstract base class for every retained-mode UI component.
-/// Similar to Unity's <c>UnityEngine.EventSystems.UIBehaviour</c>.
 /// </summary>
 /// <remarks>
 /// UI components do not draw themselves. Instead, the owning <see cref="GameCanvas"/>
@@ -86,7 +85,7 @@ public abstract class UIBehaviour : MonoBehaviour
     /// Backing-field setter used by every <see cref="UIBehaviour"/> property. Assigns
     /// <paramref name="value"/> only when it differs from <paramref name="field"/>, and
     /// marks <paramref name="flags"/> dirty when it does. Returns <c>true</c> if the value
-    /// changed — callers can branch on it for additional work (see <c>CanvasGroup.Alpha</c>).
+    /// changed - callers can branch on it for additional work (see <c>CanvasGroup.Alpha</c>).
     /// </summary>
     /// <remarks>
     /// This is the single place the UI's value-change check lives. <see cref="EqualityComparer{T}.Default"/>
@@ -105,7 +104,7 @@ public abstract class UIBehaviour : MonoBehaviour
     public GameCanvas? GetCanvas() => GetComponentInParent<GameCanvas>(includeSelf: true);
 
     // ============================================================
-    // Scene-view gizmos (Unity-style RectTransform / UI gizmos)
+    // Scene-view gizmos (RectTransform / UI gizmos)
     // ============================================================
 
     /// <summary>Faint rect outline while not selected, so authors can see where UI lives in the scene.</summary>

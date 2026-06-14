@@ -28,7 +28,7 @@ internal sealed class UIRenderItem : IRenderable
     public Material    Material = null!;         // resolved once per rebuild via Owner.GetMaterial()
 
     // -------- Per-frame state --------
-    public Float4x4      Model;                  // canvas-local-pixel × canvas-world (see GameCanvas.BuildItemModel)
+    public Float4x4      Model;                  // canvas-local-pixel x canvas-world (see GameCanvas.BuildItemModel)
     public PropertyState Props = new();          // reused; never reallocated
 
     // -------- Sort + lifecycle --------
@@ -38,7 +38,7 @@ internal sealed class UIRenderItem : IRenderable
     public UIDirtyFlags PropertyCacheState;      // tracks whether Props needs repopulating
 
     // -------- Mask state (set by the canvas during BuildRecursive) --------
-    public Float4?    ScissorPixels;             // (x, y, w, h) in framebuffer pixels — null = no scissor
+    public Float4?    ScissorPixels;             // (x, y, w, h) in framebuffer pixels - null = no scissor
 
     // ============================================================
     // IRenderable implementation
@@ -51,7 +51,7 @@ internal sealed class UIRenderItem : IRenderable
     /// <summary>
     /// Position used by the back-to-front sorter. We extract the translation from
     /// <see cref="Model"/> via <c>TransformPoint(Float3.Zero, Model)</c> because
-    /// <c>Float4x4</c> in this engine has no <c>.Translation</c> property — it
+    /// <c>Float4x4</c> in this engine has no <c>.Translation</c> property - it
     /// stores columns (c0..c3) and is row-major in API surface only.
     /// </summary>
     public Float3 GetPosition() => Float4x4.TransformPoint(Float3.Zero, Model);

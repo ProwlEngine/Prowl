@@ -30,7 +30,7 @@ public class CanvasGroup : UIBehaviour
         {
             if (!isRoot)
             {
-                // Don't descend into a nested canvas — it owns its own dirty state.
+                // Don't descend into a nested canvas - it owns its own dirty state.
                 if (go.GetComponent<GameCanvas>() != null) return;
 
                 // A nested CanvasGroup that ignores parents starts a fresh context.
@@ -69,7 +69,7 @@ public class CanvasGroup : UIBehaviour
         get => _ignoreParentGroups;
         set
         {
-            // Toggling this changes every descendant's effective alpha — re-bake them.
+            // Toggling this changes every descendant's effective alpha - re-bake them.
             if (SetField(ref _ignoreParentGroups, value, UIDirtyFlags.Vertices))
                 MarkDescendantsDirty(UIDirtyFlags.Vertices);
         }

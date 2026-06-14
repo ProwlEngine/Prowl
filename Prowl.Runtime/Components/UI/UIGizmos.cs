@@ -47,7 +47,7 @@ internal static class UIGizmos
         float w = cr.Size.X;
         float h = cr.Size.Y;
 
-        // Element-local pivot-centered space (+Y up) — matches UIImage.GenerateMesh /
+        // Element-local pivot-centered space (+Y up) - matches UIImage.GenerateMesh /
         // TextComponent.GenerateMesh.
         Float3 lbl = new Float3(-pivot.X * w,        -pivot.Y * h,        0);  // bottom-left
         Float3 lbr = new Float3((1 - pivot.X) * w,   -pivot.Y * h,        0);  // bottom-right
@@ -76,7 +76,7 @@ internal static class UIGizmos
 
         if (drawPivot)
         {
-            // Pivot is the origin in element-local space — TransformPoint(Zero, model) gives world.
+            // Pivot is the origin in element-local space - TransformPoint(Zero, model) gives world.
             Float3 pivotW = Float4x4.TransformPoint(Float3.Zero, model);
             float r = Maths.Max(Maths.Min(rLen, uLen) * 0.05f, 1e-4f);
             Debug.DrawLine(pivotW - rightU * r, pivotW + rightU * r, PivotColor);
@@ -92,7 +92,7 @@ internal static class UIGizmos
     /// <summary>
     /// Draws four small triangle handles inside the parent rect at this element's
     /// AnchorMin / AnchorMax positions. When AnchorMin == AnchorMax the four
-    /// handles collapse to a single quartet at the same point (Unity behavior).
+    /// handles collapse to a single quartet at the same point.
     /// </summary>
     private static void DrawAnchorHandles(UIBehaviour ui, GameCanvas canvas, RectTransform rt, Float3 rightU, Float3 upU)
     {
@@ -125,10 +125,10 @@ internal static class UIGizmos
         Float3 a11 = Float4x4.TransformPoint(new Float3(amaxX - pivotPx, amaxY - pivotPy, 0), parentModel);
         Float3 a01 = Float4x4.TransformPoint(new Float3(aminX - pivotPx, amaxY - pivotPy, 0), parentModel);
 
-        // Handle size — proportional to one design pixel through the parent model.
+        // Handle size - proportional to one design pixel through the parent model.
         Float3 originW = Float4x4.TransformPoint(Float3.Zero, parentModel);
         float pixelW = Float3.Length(Float4x4.TransformPoint(new Float3(1, 0, 0), parentModel) - originW);
-        float size = pixelW * 8f; // 8 design pixels — readable at typical zoom
+        float size = pixelW * 8f; // 8 design pixels - readable at typical zoom
 
         // a00 = bottom-left anchor, a10 = bottom-right, a11 = top-right, a01 = top-left.
         // Legs point inward: +rightU/-rightU horizontally, +upU/-upU vertically.
@@ -140,7 +140,7 @@ internal static class UIGizmos
 
     /// <summary>
     /// World-space matrix that maps a RectTransform's pivot-centered design-pixel space to
-    /// world space, with parent rotation/scale inheritance applied — delegates to
+    /// world space, with parent rotation/scale inheritance applied - delegates to
     /// <see cref="GameCanvas.BuildRectModel"/> so gizmos and the rendered UI stay in lockstep.
     /// </summary>
     private static Float4x4 BuildRectModel(GameCanvas canvas, RectTransform rt)

@@ -32,7 +32,7 @@ public sealed class UIMeshBuilder
         uint baseIdx = (uint)_verts.Count;
         var c = (Color32)tint;
 
-        // Positions (Z=0 — model matrix supplies world Z)
+        // Positions (Z=0 - model matrix supplies world Z)
         _verts.Add(new Float3(r.Min.X, r.Min.Y, 0));   // TL
         _verts.Add(new Float3(r.Max.X, r.Min.Y, 0));   // TR
         _verts.Add(new Float3(r.Max.X, r.Max.Y, 0));   // BR
@@ -79,7 +79,7 @@ public sealed class UIMeshBuilder
             new Float2(r.Max.X - radius, r.Max.Y - radius),  // BR arc center
             new Float2(r.Min.X + radius, r.Max.Y - radius),  // BL arc center
         };
-        // Starting angles for each corner (TL=180°, TR=270°, BR=0°, BL=90°).
+        // Starting angles for each corner (TL=180 deg, TR=270 deg, BR=0 deg, BL=90 deg).
         ReadOnlySpan<float> startAngles = stackalloc float[] { MathF.PI, 1.5f * MathF.PI, 0f, 0.5f * MathF.PI };
 
         uint firstPerimeter = (uint)_verts.Count;
@@ -139,8 +139,8 @@ public sealed class UIMeshBuilder
     }
 
     /// <summary>
-    /// Emits a triangle fan that fills a fraction of <paramref name="r"/> per Unity's Image
-    /// fill modes. Horizontal/Vertical clip the rect on one axis; Radial90/180/360 sweep an
+    /// Emits a triangle fan that fills a fraction of <paramref name="r"/> per the image fill
+    /// modes. Horizontal/Vertical clip the rect on one axis; Radial90/180/360 sweep an
     /// arc from a corner / edge-midpoint / center. <paramref name="amount"/> is clamped to
     /// [0,1]. UV is mapped 1:1 to the original rect so the texture appears un-stretched.
     /// </summary>
@@ -239,7 +239,7 @@ public sealed class UIMeshBuilder
 
         // For bounded wedges (Radial90/180), `startAngle` sits at one edge of the wedge so the
         // default CCW sweep walks inward. To go clockwise we have to start at the *other* edge,
-        // otherwise the first ray immediately exits the rect. (For Radial360 totalAngle is 2π,
+        // otherwise the first ray immediately exits the rect. (For Radial360 totalAngle is 2PI,
         // so this shift is angle-equivalent and harmless.)
         if (clockwise) startAngle += totalAngle;
 
@@ -249,7 +249,7 @@ public sealed class UIMeshBuilder
         const float eps = 1e-4f;
 
         // The rect's perimeter is piecewise-linear, so a geometrically exact fan only needs the
-        // two sweep endpoints plus each rect corner that lies strictly inside the wedge — that's
+        // two sweep endpoints plus each rect corner that lies strictly inside the wedge - that's
         // what prevents the corners from being shaved off by a diagonal triangle edge.
         Span<float> stops = stackalloc float[6];
         int stopCount = 0;
@@ -273,7 +273,7 @@ public sealed class UIMeshBuilder
         }
         stops[stopCount++] = sweep;
 
-        // Insertion sort (≤ 6 entries).
+        // Insertion sort (<= 6 entries).
         for (int i = 1; i < stopCount; i++)
         {
             float v = stops[i];
@@ -335,7 +335,7 @@ public sealed class UIMeshBuilder
     /// <summary>
     /// Adds a nine-slice quad: <paramref name="outer"/> is the on-screen rectangle,
     /// <paramref name="inner"/> is the unstretched center region in *pixel* offsets
-    /// from the outer rect's edges (left, top, right, bottom). UV space is 0–1 for
+    /// from the outer rect's edges (left, top, right, bottom). UV space is 0-1 for
     /// the source texture, with the same four borders given as normalized fractions
     /// in <paramref name="uvBorders"/>.
     /// </summary>
@@ -379,7 +379,7 @@ public sealed class UIMeshBuilder
     private static readonly List<uint>    s_clipSrcIndices = new(96);
 
     /// <summary>
-    /// Intersects the currently-accumulated geometry with a rounded rectangle (Sutherland–Hodgman
+    /// Intersects the currently-accumulated geometry with a rounded rectangle (Sutherland-Hodgman
     /// against a CCW polygon that has <paramref name="cornerSegments"/> straight edges per corner arc).
     /// Each source triangle is clipped independently; per-vertex UVs and colors are linearly
     /// interpolated at the clip intersections so any fill mode (sliced / tiled / filled) keeps its
@@ -434,7 +434,7 @@ public sealed class UIMeshBuilder
 
                 int outCount = 0;
                 int prev = polyCount - 1;
-                // Signed area (= 2D cross) of (edge, prev-vertex). ≥ 0 means prev is on the inside of the CCW edge.
+                // Signed area (= 2D cross) of (edge, prev-vertex). >= 0 means prev is on the inside of the CCW edge.
                 float prevS = edx * (inP[prev].Y - ea.Y) - edy * (inP[prev].X - ea.X);
                 bool prevIn = prevS >= 0f;
 
@@ -498,7 +498,7 @@ public sealed class UIMeshBuilder
 
     private static void BuildRoundedRectClipPolygon(Rect rect, float radius, int segments, Span<Float2> output)
     {
-        // Traverse CCW (Y-up): bottom-right arc → up to TR arc → left to TL arc → down to BL arc.
+        // Traverse CCW (Y-up): bottom-right arc -> up to TR arc -> left to TL arc -> down to BL arc.
         // Each arc emits `segments + 1` points; the straight edges of the rect are the chords
         // between consecutive arcs (polygon-edges between the last point of one and the first of the next).
         int idx = 0;
@@ -535,7 +535,7 @@ public sealed class UIMeshBuilder
 
     /// <summary>
     /// Writes the accumulated buffers into <paramref name="m"/>, recalculates bounds,
-    /// and uploads to the GPU. After Bake the builder is *not* automatically reset —
+    /// and uploads to the GPU. After Bake the builder is *not* automatically reset -
     /// the canvas is responsible for calling <see cref="Return"/> which triggers a Reset.
     /// </summary>
     internal void Bake(Mesh m)

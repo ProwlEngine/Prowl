@@ -43,7 +43,7 @@ internal static class UIRaycaster
             GameCanvas? canvas = go.GetComponent<GameCanvas>();
             if (canvas is null || !canvas.EnabledInHierarchy) continue;
 
-            // Only screen-space canvases participate in the runtime raycaster — World canvases
+            // Only screen-space canvases participate in the runtime raycaster - World canvases
             // need a 3D ray from a Camera, which lives in TryPickWorld below.
             if (canvas.RenderMode == RenderMode.WorldSpace) continue;
 
@@ -103,13 +103,13 @@ internal static class UIRaycaster
             }
             if (childScissor is { } cs && !RectContainsPoint(cs, pt))
             {
-                // Pointer falls outside the active scissor — every descendant inherits this scissor,
+                // Pointer falls outside the active scissor - every descendant inherits this scissor,
                 // so none of them can possibly hit. Skip the whole subtree.
                 continue;
             }
 
             // A CanvasGroup with BlocksRaycasts off makes the whole subtree transparent
-            // to the pointer — children still draw, but they don't consume input.
+            // to the pointer - children still draw, but they don't consume input.
             CanvasGroup? grp = child.GetComponent<CanvasGroup>();
             bool blocked = grp == null || grp.BlocksRaycasts;
 

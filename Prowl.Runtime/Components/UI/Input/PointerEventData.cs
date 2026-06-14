@@ -53,7 +53,7 @@ public sealed class PointerEventData
     /// <summary>Number of clicks in the current multi-click streak (resets after <see cref="UIEventSystem.MultiClickWindow"/>).</summary>
     public int ClickCount;
 
-    /// <summary>Engine time of the most recent click — used by the multi-click detector.</summary>
+    /// <summary>Engine time of the most recent click - used by the multi-click detector.</summary>
     public float LastClickTime;
 
     /// <summary>The canvas whose plane was hit this frame. Null if no hit.</summary>

@@ -19,7 +19,7 @@ public enum SelectionState
 }
 
 /// <summary>
-/// Base class for every interactive UI widget — buttons, toggles, sliders, dropdowns.
+/// Base class for every interactive UI widget - buttons, toggles, sliders, dropdowns.
 /// Tracks the pointer state machine, drives a sibling <see cref="UIImage"/>'s color
 /// across the four states, fires SFX through <see cref="UISounds"/>, and exposes
 /// per-instance overrides for both the colors and the audio.
@@ -48,7 +48,7 @@ public class Selectable : UIBehaviour,
     }
 
     // ============================================================
-    // Target graphic — which UIImage do we tint?
+    // Target graphic - which UIImage do we tint?
     // ============================================================
 
     [SerializeField] private UIImage? _targetGraphic;
@@ -120,7 +120,7 @@ public class Selectable : UIBehaviour,
     public bool IsPressed => _isPressed;
 
     // ============================================================
-    // UIBehaviour overrides — Selectable has no geometry of its own.
+    // UIBehaviour overrides - Selectable has no geometry of its own.
     // ============================================================
 
     /// <inheritdoc/>
@@ -167,7 +167,7 @@ public class Selectable : UIBehaviour,
     public virtual void OnPointerExit(PointerEventData e)
     {
         _isHovered = false;
-        // A press-then-leave keeps the pressed visual until release, matching Unity's feel.
+        // A press-then-leave keeps the pressed visual until release, matching common UI behavior.
         if (!_isPressed) RefreshState(immediate: false);
     }
 

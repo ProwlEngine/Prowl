@@ -30,7 +30,7 @@ public sealed class UISceneEditor : ISceneViewEditor
         AnchorBL, AnchorBR, AnchorTR, AnchorTL,
     }
 
-    /// <summary>Snapshot of the layout fields this editor mutates — used for undo.</summary>
+    /// <summary>Snapshot of the layout fields this editor mutates - used for undo.</summary>
     private struct LayoutState
     {
         public Float2 AnchorMin, AnchorMax, Pivot, SizeDelta, AnchoredPosition;
@@ -60,7 +60,7 @@ public sealed class UISceneEditor : ISceneViewEditor
     }
 
     // ================================================================
-    //  Overlay Preview — temporary World-Space state
+    //  Overlay Preview - temporary World-Space state
     // ================================================================
 
     /// <summary>
@@ -117,7 +117,7 @@ public sealed class UISceneEditor : ISceneViewEditor
     private Handle _hover = Handle.None;
     private Handle _active = Handle.None;
 
-    // Drag anchoring — captured the frame a handle is grabbed.
+    // Drag anchoring - captured the frame a handle is grabbed.
     private Float2 _dragStartDesign;
     private Rect _dragStartRect;
     private LayoutState _dragStartState;
@@ -244,7 +244,7 @@ public sealed class UISceneEditor : ISceneViewEditor
 
                 if (leftPressed && viewportHovered && !camNav)
                 {
-                    // Resize / pivot / anchor handles on the current target win first — that's
+                    // Resize / pivot / anchor handles on the current target win first - that's
                     // the active edit affordance. For Handle.Move (clicked inside the rect body)
                     // and Handle.None we re-pick across every canvas so a click on a sibling /
                     // child UI element switches the selection instead of starting a drag on the
@@ -262,7 +262,7 @@ public sealed class UISceneEditor : ISceneViewEditor
 
                         if (uiHit == _target.GameObject)
                         {
-                            // Topmost UI under cursor IS the current target — start a Move drag.
+                            // Topmost UI under cursor IS the current target - start a Move drag.
                             _active = Handle.Move;
                             _dragStartDesign = designHit;
                             _dragStartRect = cr;
@@ -270,7 +270,7 @@ public sealed class UISceneEditor : ISceneViewEditor
                         }
                         else if (uiHit != null)
                         {
-                            // Different UI element under cursor — switch selection. The registry
+                            // Different UI element under cursor - switch selection. The registry
                             // reactivates this editor against the new target on the next frame.
                             if (Input.IsCtrlPressed) Selection.ToggleSelection(uiHit);
                             else Selection.Select(uiHit);
@@ -356,7 +356,7 @@ public sealed class UISceneEditor : ISceneViewEditor
         if (best != Handle.None)
             return best;
 
-        // Inside the rect body — move.
+        // Inside the rect body - move.
         if (p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y)
             return Handle.Move;
 
@@ -409,7 +409,7 @@ public sealed class UISceneEditor : ISceneViewEditor
                 return;
         }
 
-        // Move / resize — snap to whole pixels and keep a minimum size.
+        // Move / resize - snap to whole pixels and keep a minimum size.
         minX = MathF.Round(minX); maxX = MathF.Round(maxX);
         minY = MathF.Round(minY); maxY = MathF.Round(maxY);
 
@@ -488,7 +488,7 @@ public sealed class UISceneEditor : ISceneViewEditor
         Float2 sizeDelta = rt.SizeDelta;
         Float2 anchored = rt.AnchoredPosition;
 
-        // Horizontal — fixed width when the X anchors coincide, otherwise stretch.
+        // Horizontal - fixed width when the X anchors coincide, otherwise stretch.
         if (Maths.Abs(rt.AnchorMin.X - rt.AnchorMax.X) < 1e-6f)
         {
             sizeDelta.X = width;
@@ -500,7 +500,7 @@ public sealed class UISceneEditor : ISceneViewEditor
             anchored.X = posX - aMinX - sizeDelta.X * 0.5f;
         }
 
-        // Vertical — same rule on Y.
+        // Vertical - same rule on Y.
         if (Maths.Abs(rt.AnchorMin.Y - rt.AnchorMax.Y) < 1e-6f)
         {
             sizeDelta.Y = height;
@@ -528,7 +528,7 @@ public sealed class UISceneEditor : ISceneViewEditor
 
         Float3 ToWorld(Float2 d) => Float4x4.TransformPoint(new Float3(d.X, d.Y, 0), designToWorld);
 
-        // Rect outline — brightened while moving.
+        // Rect outline - brightened while moving.
         bool moving = _active == Handle.Move || (_active == Handle.None && _hover == Handle.Move);
         Color outline = moving ? MoveColor : ResizeColor;
         Float3 bl = ToWorld(cr.Min);
@@ -540,7 +540,7 @@ public sealed class UISceneEditor : ISceneViewEditor
         Debug.DrawLine(tr, tl, outline);
         Debug.DrawLine(tl, bl, outline);
 
-        // Resize handles — corners full size, edge mid-points slightly smaller.
+        // Resize handles - corners full size, edge mid-points slightly smaller.
         Float2 mid = (cr.Min + cr.Max) * 0.5f;
         DrawHandle(Handle.ResizeBL, bl, rightW, upW, half);
         DrawHandle(Handle.ResizeBR, br, rightW, upW, half);

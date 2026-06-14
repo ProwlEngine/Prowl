@@ -16,7 +16,7 @@ namespace Prowl.Runtime;
 
 /// <summary>
 /// Coordinates a UI hierarchy: owns layout, scale, and the destination surface.
-/// Does not render anything itself — visible elements are <see cref="UIBehaviour"/>s
+/// Does not render anything itself - visible elements are <see cref="UIBehaviour"/>s
 /// that produce <see cref="UIRenderItem"/>s into <see cref="Tree"/>, which the
 /// pipeline then draws via <see cref="UIRenderTree.CollectFor"/>.
 /// </summary>
@@ -27,8 +27,8 @@ public class GameCanvas : MonoBehaviour
 {
     // ============================================================
     // REMOVED:
-    //   private RenderTexture? _renderTexture;     // dead — never used
-    //   private bool _initialized = false;          // dead — never read
+    //   private RenderTexture? _renderTexture;     // dead - never used
+    //   private bool _initialized = false;          // dead - never read
     //   public  void DrawGUI() { ... }              // replaced by RebuildIfDirty
     //   private void BuildChildren(...)             // replaced by BuildRecursive
     // ============================================================
@@ -83,7 +83,7 @@ public class GameCanvas : MonoBehaviour
     // ----------------------------------------------------------------
 
     /// <summary>How many canvas pixels equal one world unit when <see cref="RenderMode"/>
-    /// is <see cref="RenderMode.WorldSpace"/>. 100 ⇒ a 100×100 px button is 1×1 m.</summary>
+    /// is <see cref="RenderMode.WorldSpace"/>. 100 => a 100x100 px button is 1x1 m.</summary>
     [SerializeField] private float _referencePixelsPerUnit = 100f;
     public float ReferencePixelsPerUnit
     {
@@ -92,7 +92,7 @@ public class GameCanvas : MonoBehaviour
     }
 
     // ----------------------------------------------------------------
-    // NEW: shared default UI material — referenced by UIBehaviour.GetMaterial
+    // NEW: shared default UI material - referenced by UIBehaviour.GetMaterial
     // ----------------------------------------------------------------
 
     private static Material? s_sharedUIMaterial;
@@ -113,8 +113,8 @@ public class GameCanvas : MonoBehaviour
 
     /// <summary>
     /// Size of the surface this canvas was last built against (in real pixels).
-    /// Tracked so that a resolution change — typical when the editor's game viewport resizes
-    /// or when the rendering camera switches between targets — automatically forces a rebuild.
+    /// Tracked so that a resolution change - typical when the editor's game viewport resizes
+    /// or when the rendering camera switches between targets - automatically forces a rebuild.
     /// Without this, layout uses the previous frame's resolution while the projection uses
     /// the current one, putting the UI off-center and at the wrong scale.
     /// </summary>
@@ -170,7 +170,7 @@ public class GameCanvas : MonoBehaviour
         MarkDirty(UIDirtyFlags.All);   // first build is always dirty
     }
 
-    // CHANGED: OnEnable / OnDisable bodies — both were empty in the original
+    // CHANGED: OnEnable / OnDisable bodies - both were empty in the original
     public override void OnEnable()  => MarkDirty(UIDirtyFlags.All);
     public override void OnDisable() { /* tree retained but no canvas walk picks us up */ }
 
@@ -191,7 +191,7 @@ public class GameCanvas : MonoBehaviour
     /// <summary>
     /// For <see cref="RenderMode.WorldSpace"/> canvases, adds every item in <see cref="Tree"/>
     /// to the scene's main renderable list so they participate in #13 Transparent + UI passes.
-    /// Overlay/Camera canvases ignore this hook — they are pulled by
+    /// Overlay/Camera canvases ignore this hook - they are pulled by
     /// <see cref="UIRenderTree.CollectFor"/> from the pipeline directly.
     /// </summary>
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> _)
@@ -204,7 +204,7 @@ public class GameCanvas : MonoBehaviour
     }
 
     // ============================================================
-    // NEW: rebuild driver — replaces the old DrawGUI
+    // NEW: rebuild driver - replaces the old DrawGUI
     // ============================================================
 
     /// <summary>
@@ -226,7 +226,7 @@ public class GameCanvas : MonoBehaviour
 
         if (!_isDirty) return;
 
-        // Recompute scale factor against the current screen size *before* layout — Update()
+        // Recompute scale factor against the current screen size *before* layout - Update()
         // can't do this reliably because it runs without ScreenSizeOverride set.
         ScaleFactor = ComputeScaleFactor();
 
@@ -263,7 +263,7 @@ public class GameCanvas : MonoBehaviour
         {
             if (!child.EnabledInHierarchy) continue;
 
-            // Nested GameCanvas — skip; it manages its own tree.
+            // Nested GameCanvas - skip; it manages its own tree.
             GameCanvas? nested = child.GetComponent<GameCanvas>();
             if (nested != null && nested != this) continue;
 
@@ -285,7 +285,7 @@ public class GameCanvas : MonoBehaviour
             {
                 Rect mr = rectMask.GetClipRectInCanvasPixels();
                 childScissor = canvasScissor is null ? mr : IntersectRect(canvasScissor.Value, mr);
-                // Empty scissor → whole subtree contributes nothing. Skip it.
+                // Empty scissor -> whole subtree contributes nothing. Skip it.
                 if (childScissor!.Value.Size.X <= 0f || childScissor.Value.Size.Y <= 0f)
                     continue;
             }
@@ -383,9 +383,9 @@ public class GameCanvas : MonoBehaviour
         => a.Max.X > b.Min.X && b.Max.X > a.Min.X && a.Max.Y > b.Min.Y && b.Max.Y > a.Min.Y;
 
     /// <summary>
-    /// Base canvas → world transform without per-element pivot / rotation / scale. Per-mode:
-    ///   • WorldSpace → <see cref="Transform.LocalToWorldMatrix"/> × scale(1 / <see cref="ReferencePixelsPerUnit"/>)
-    ///   • ScreenSpaceOverlay / ScreenSpaceCamera → scale(<see cref="ScaleFactor"/>)
+    /// Base canvas -> world transform without per-element pivot / rotation / scale. Per-mode:
+    ///   - WorldSpace -> <see cref="Transform.LocalToWorldMatrix"/> (design pixels map 1:1 to world units)
+    ///   - ScreenSpaceOverlay / ScreenSpaceCamera -> scale(<see cref="ScaleFactor"/>)
     /// </summary>
     /// <remarks>
     /// Exposed so the scene-view editor and gizmos stay in sync with the actual rendering by
@@ -402,7 +402,7 @@ public class GameCanvas : MonoBehaviour
 
     /// <summary>
     /// Returns the model matrix for a UI element under this canvas. Equivalent to
-    /// <see cref="CanvasToWorld"/> × <see cref="BuildRectModel(RectTransform)"/>.
+    /// <see cref="CanvasToWorld"/> x <see cref="BuildRectModel(RectTransform)"/>.
     /// </summary>
     internal Float4x4 BuildItemModel(UIBehaviour b)
         => CanvasToWorld * BuildRectModel(b.GameObject.RectTransform!);
@@ -450,7 +450,7 @@ public class GameCanvas : MonoBehaviour
     }
 
     // ============================================================
-    // Unchanged from the original — preserved verbatim
+    // Unchanged from the original - preserved verbatim
     // ============================================================
 
     private static void EnsureChildRectTransforms(GameObject parent)

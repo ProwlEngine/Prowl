@@ -70,7 +70,7 @@ public class TextComponentEditor : CustomEditor
     }
 
     // ================================================================
-    //  Alignment setter — two segmented controls on one row
+    //  Alignment setter - two segmented controls on one row
     // ================================================================
 
     private static void AlignmentRow(Paper paper, string id, TextComponent text)
@@ -86,7 +86,7 @@ public class TextComponentEditor : CustomEditor
                     .IsNotInteractable()
                     .Text("Alignment", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
 
-            // Horizontal axis — icon segments, captures the current vertical flag on click.
+            // Horizontal axis - icon segments, captures the current vertical flag on click.
             Origami.ButtonGroup(paper, $"{id}_h", HIndex(text.Alignment),
                     idx => text.Alignment = VFlag(VIndex(text.Alignment)) | HFlag(idx))
                 .Height(EditorTheme.RowHeight)
@@ -96,7 +96,7 @@ public class TextComponentEditor : CustomEditor
                 .Item("", EditorIcons.AlignRight, "Right")
                 .Show();
 
-            // Vertical axis — labelled segments (no clean vertical-align glyphs in the icon font).
+            // Vertical axis - labelled segments (no clean vertical-align glyphs in the icon font).
             Origami.ButtonGroup(paper, $"{id}_v", VIndex(text.Alignment),
                     idx => text.Alignment = VFlag(idx) | HFlag(HIndex(text.Alignment)))
                 .Height(EditorTheme.RowHeight)

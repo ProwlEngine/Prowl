@@ -33,7 +33,7 @@ public static class UIEventSystem
     /// <summary>
     /// The active host viewport, or <c>null</c> when running standalone (no editor).
     /// Hosts write this every frame; <see cref="Tick"/> reads it and uses the override
-    /// when present. There is no auto-reset — a host that stops being active must
+    /// when present. There is no auto-reset - a host that stops being active must
     /// set <see cref="HostViewport.ReceivesInput"/> to <c>false</c> (or clear to <c>null</c>).
     /// </summary>
     public static HostViewport? Viewport { get; set; }
@@ -42,7 +42,7 @@ public static class UIEventSystem
     public static GameObject? CurrentHovered { get; private set; }
 
     /// <summary>
-    /// The currently focused element — receives keyboard navigation, submit, and cancel.
+    /// The currently focused element - receives keyboard navigation, submit, and cancel.
     /// Set via <see cref="SetSelected"/> (or by clicking a <see cref="Selectable"/>).
     /// </summary>
     public static GameObject? CurrentSelected { get; private set; }
@@ -50,7 +50,7 @@ public static class UIEventSystem
     /// <summary>Pointer position in window pixels (top-left origin, +Y down).</summary>
     public static Float2 PointerPosition { get; private set; }
 
-    /// <summary>The pointer event data for the left mouse button — usually what handlers read.</summary>
+    /// <summary>The pointer event data for the left mouse button - usually what handlers read.</summary>
     public static PointerEventData Left => s_left;
 
     // -------- Per-button tracked event data --------
@@ -89,9 +89,8 @@ public static class UIEventSystem
 
     /// <summary>
     /// Fires <typeparamref name="TInterface"/> on the first component up the GameObject
-    /// hierarchy (starting from <paramref name="root"/>) that implements it. Mirrors
-    /// Unity's <c>ExecuteEvents.ExecuteHierarchy</c>. Returns the consuming GameObject,
-    /// or <c>null</c> if no handler was found.
+    /// hierarchy (starting from <paramref name="root"/>) that implements it. Returns the
+    /// consuming GameObject, or <c>null</c> if no handler was found.
     /// </summary>
     public static GameObject? ExecuteHierarchy<TInterface>(GameObject? root, Action<TInterface> action)
         where TInterface : class
@@ -146,7 +145,7 @@ public static class UIEventSystem
     }
 
     // ============================================================
-    // Frame tick — called by Game.cs once per Update
+    // Frame tick - called by Game.cs once per Update
     // ============================================================
 
     /// <summary>
@@ -207,7 +206,7 @@ public static class UIEventSystem
         CurrentHovered = hovered;
 
         // ------------------------------------------------------------------------
-        // 2) Hover transitions — Exit on previous, Enter on new.
+        // 2) Hover transitions - Exit on previous, Enter on new.
         // ------------------------------------------------------------------------
         if (!ReferenceEquals(hovered, s_lastHovered))
         {
@@ -233,7 +232,7 @@ public static class UIEventSystem
         UpdateButton(s_middle, MouseButton.Middle, 2, hovered, hoveredCanvas, pos, delta, designPos, currentTime);
 
         // ------------------------------------------------------------------------
-        // 4) Scroll dispatch — only when the pointer is over something hittable.
+        // 4) Scroll dispatch - only when the pointer is over something hittable.
         // ------------------------------------------------------------------------
         float scroll = Input.MouseWheelDelta;
         if (Maths.Abs(scroll) > 0.0001f && hovered != null)
@@ -246,7 +245,7 @@ public static class UIEventSystem
 
         // ------------------------------------------------------------------------
         // 5) Keyboard navigation: Submit / Cancel on the focused element.
-        //    Directional Move is opt-in via IMoveHandler — wired here for parity.
+        //    Directional Move is opt-in via IMoveHandler - wired here for parity.
         // ------------------------------------------------------------------------
         if (CurrentSelected is { IsDisposed: false })
         {
@@ -324,9 +323,9 @@ public static class UIEventSystem
             {
                 Bubble<IPointerDownHandler>(hovered, e, static (h, ev) => h.OnPointerDown(ev));
 
-                // Auto-focus a Selectable on press — Unity does this, and it's what every
-                // player expects when they click a button: subsequent keyboard input goes
-                // to that widget. Non-Selectable presses don't change focus.
+                // Auto-focus a Selectable on press - it's what every player expects when they
+                // click a button: subsequent keyboard input goes to that widget.
+                // Non-Selectable presses don't change focus.
                 if (button == MouseButton.Left)
                 {
                     GameObject? sel = FindAncestor<Selectable>(hovered);

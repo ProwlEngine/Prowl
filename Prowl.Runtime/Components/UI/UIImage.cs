@@ -27,9 +27,9 @@ public enum ImageType
 /// <summary>Geometry pattern used by <see cref="ImageType.Filled"/>. Origin values map per-method (see FillOrigin*).</summary>
 public enum FillMethod
 {
-    /// <summary>Linear wipe left↔right. Origin: 0=Left, 1=Right.</summary>
+    /// <summary>Linear wipe left to right. Origin: 0=Left, 1=Right.</summary>
     Horizontal,
-    /// <summary>Linear wipe bottom↔top. Origin: 0=Bottom, 1=Top.</summary>
+    /// <summary>Linear wipe bottom to top. Origin: 0=Bottom, 1=Top.</summary>
     Vertical,
     /// <summary>Quarter-circle wipe from a corner. Origin: 0=BL, 1=TL, 2=TR, 3=BR.</summary>
     Radial90,
@@ -160,7 +160,7 @@ public class UIImage : UIBehaviour
 
     /// <summary>
     /// Whether this element should block raycasts (pointer hit-testing).
-    /// Affects input dispatch only — does not change rendering.
+    /// Affects input dispatch only - does not change rendering.
     /// </summary>
     [SerializeField] private bool _raycastTarget = true;
     public bool RaycastTarget

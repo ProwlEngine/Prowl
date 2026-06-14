@@ -11,8 +11,8 @@ namespace Prowl.Runtime.UI;
 
 /// <summary>
 /// Owns the Scribe <see cref="FontSystem"/> and its glyph atlas <see cref="Texture2D"/>
-/// for the retained-mode UI framework. There is one instance per process — UI text from
-/// every <see cref="GameCanvas"/> shares it (matching how Unity / most engines treat font
+/// for the retained-mode UI framework. There is one instance per process - UI text from
+/// every <see cref="GameCanvas"/> shares it (matching how most engines treat font
 /// atlases).
 /// </summary>
 /// <remarks>

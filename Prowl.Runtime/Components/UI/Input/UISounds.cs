@@ -15,7 +15,7 @@ public enum UISound
     Hover,
     /// <summary>Button / Selectable was pressed (the down half).</summary>
     Press,
-    /// <summary>Successful click — press + release on the same element.</summary>
+    /// <summary>Successful click - press + release on the same element.</summary>
     Click,
     /// <summary>A drag began.</summary>
     DragStart,
@@ -27,7 +27,7 @@ public enum UISound
     Submit,
     /// <summary>Focused element canceled via Cancel (Escape / Gamepad-B).</summary>
     Cancel,
-    /// <summary>A non-interactable element was clicked — gives the player negative feedback.</summary>
+    /// <summary>A non-interactable element was clicked - gives the player negative feedback.</summary>
     Denied,
 }
 
@@ -125,7 +125,7 @@ public static class UISounds
 
             IntPtr src = s_voices[slot];
 
-            // Stop whatever was playing in this voice — keeps responsiveness tight without
+            // Stop whatever was playing in this voice - keeps responsiveness tight without
             // stealing the *other* voices, so rapid distinct sounds layer naturally.
             MiniAudioExNative.ma_ex_audio_source_stop(src);
             MiniAudioExNative.ma_ex_audio_source_set_pcm_position(src, 0);

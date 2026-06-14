@@ -178,8 +178,8 @@ public class TextComponent : UIBehaviour
 
     public override void PopulateProperties(PropertyState p, in UIContext _)
     {
-        // Always re-read the atlas through System.Texture — it can be replaced when the
-        // atlas grows. Falls back to a 1×1 white texture if Scribe hasn't allocated yet.
+        // Always re-read the atlas through System.Texture - it can be replaced when the
+        // atlas grows. Falls back to a 1x1 white texture if Scribe hasn't allocated yet.
         Texture2D atlas = UIFontSystem.Default.Atlas ?? Texture2D.LoadDefault(DefaultTexture.White);
         p.SetTexture("_MainTex", atlas);
         p.SetColor("_MainColor", Color.White);
@@ -192,7 +192,7 @@ public class TextComponent : UIBehaviour
     // ============================================================
 
     // TAlignment is a [Flags] enum with one bit per axis position, so both helpers test the
-    // individual axis flags rather than switching on the nine named combinations — that way
+    // individual axis flags rather than switching on the nine named combinations - that way
     // every combination (including TopCenter / TopRight) resolves correctly.
 
     private static ScribeAlign ToScribeAlignment(TAlignment a)
