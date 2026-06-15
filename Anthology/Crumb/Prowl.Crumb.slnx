@@ -5,4 +5,8 @@
     <Folder Name="/Tests/">
         <Project Path="Tests/Prowl.Crumb.Tests.csproj" />
     </Folder>
+    <Folder Name="/Samples/"/>
+    <Folder Name="/Samples/ShaderLab/">
+        <Project Path="Samples/ShaderLab/ShaderLab.csproj" />
+    </Folder>
 </Solution>
