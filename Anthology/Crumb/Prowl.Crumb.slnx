@@ -1,0 +1,8 @@
+<Solution>
+    <Folder Name="/Crumb/">
+        <Project Path="Crumb/Prowl.Crumb.csproj" />
+    </Folder>
+    <Folder Name="/Tests/">
+        <Project Path="Tests/Prowl.Crumb.Tests.csproj" />
+    </Folder>
+</Solution>
