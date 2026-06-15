@@ -77,26 +77,15 @@ public static class ShaderLoader
                 new ResourceLayoutDescription()
                 {
                     Set = 0,
-                    // Binding indices match what Slang emits for the ParameterBlock<ModelData>:
-                    // the combined Sampler2D is separated into a sampler (binding 0) and a texture
-                    // (binding 2), with the loose uniform data collected into a UBO at binding 1.
                     Elements =
                     [
-                        new ResourceLayoutElementDescription()
-                        {
-                            Stages = ShaderStages.Fragment,
-                            Name = "MainTexture",
-                            GLUniformName = "Model_MainTextureSmplr",
-                            Kind = ResourceKind.Sampler,
-                            BindingIndex = 0,
-                        },
                         new ResourceLayoutElementDescription()
                         {
                             Stages = ShaderStages.Vertex | ShaderStages.Fragment,
                             Name = "Model",
                             GLUniformName = "block_ModelData_0",
                             Kind = ResourceKind.UniformBuffer,
-                            BindingIndex = 1,
+                            BindingIndex = 0,
                             UniformFields =
                             [
                                 new UniformBlockField("MatrixMVP", 0, sizeof(float) * 4 * 4, UniformScalarType.Float4x4),
@@ -109,7 +98,7 @@ public static class ShaderLoader
                             Name = "MainTexture",
                             GLUniformName = "Model_MainTexture_0",
                             Kind = ResourceKind.TextureReadOnly,
-                            BindingIndex = 2,
+                            BindingIndex = 1,
                         }
                     ]
                 }
