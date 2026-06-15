@@ -2,7 +2,7 @@
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 
 public abstract class VertexLayoutTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator

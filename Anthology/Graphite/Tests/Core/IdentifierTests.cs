@@ -2,7 +2,7 @@
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 public class IdentifierTests
 {

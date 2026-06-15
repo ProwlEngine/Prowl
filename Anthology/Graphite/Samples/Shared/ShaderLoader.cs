@@ -5,7 +5,7 @@ using System.Linq;
 using Prowl.Slang;
 
 
-namespace Prowl.Veldrid.Samples;
+namespace Prowl.Graphite.Samples;
 
 
 public static class ShaderLoader

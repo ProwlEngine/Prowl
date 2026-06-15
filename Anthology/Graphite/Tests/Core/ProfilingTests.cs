@@ -2,7 +2,7 @@ using System;
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // CPU-side coverage of the profiling value types (the counter-API surface). The actual
 // per-frame recording lives on GraphicsDevice and is exercised by the GPU profiling tests;

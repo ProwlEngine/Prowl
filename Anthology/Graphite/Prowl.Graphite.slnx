@@ -1,0 +1,24 @@
+<Solution>
+    <Folder Name="/Tests/">
+        <Project Path="Tests/Prowl.Graphite.Tests.csproj" />
+    </Folder>
+    <Folder Name="/Graphite/">
+        <Project Path="Graphite/Prowl.Graphite.csproj" />
+    </Folder>
+    <Folder Name="/Samples/" />
+    <Folder Name="/Samples/HelloTriangle/">
+        <Project Path="Samples/HelloTriangle/HelloTriangle.csproj" />
+    </Folder>
+    <Folder Name="/Samples/CubeGrid/">
+        <Project Path="Samples/CubeGrid/CubeGrid.csproj" />
+    </Folder>
+    <Folder Name="/Samples/Cube/">
+        <Project Path="Samples/Cube/Cube.csproj" />
+    </Folder>
+    <Folder Name="/Samples/TexturedQuad/">
+        <Project Path="Samples/TexturedQuad/TexturedQuad.csproj" />
+    </Folder>
+    <Folder Name="/Samples/Shared/">
+        <Project Path="Samples/Shared/Shared.csproj" />
+    </Folder>
+</Solution>

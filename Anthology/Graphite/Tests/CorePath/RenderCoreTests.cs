@@ -4,7 +4,7 @@ using Prowl.Vector;
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Core-path render test: draws a colored point through the GraphicsProgram + PropertySet +
 // Frame API and reads the result back. Exercises uint vertex attributes, a uniform block bound

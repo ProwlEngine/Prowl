@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Verifies the live profiling counters on a real device: that creating/destroying resources
 // moves the gauges by the right counts and bytes, that overlapping buffer roles do not

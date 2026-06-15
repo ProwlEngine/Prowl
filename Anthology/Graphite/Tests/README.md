@@ -41,25 +41,25 @@ Backend selection is automatic based on the platform:
 Run all backends for the current platform:
 
 ```bash
-dotnet test Tests/Prowl.Veldrid.Tests.csproj
+dotnet test Tests/Prowl.Graphite.Tests.csproj
 ```
 
 Run a specific backend only (tests are tagged `[Trait("Backend", "...")]`):
 
 ```bash
-dotnet test Tests/Prowl.Veldrid.Tests.csproj --filter "Backend=Vulkan"
+dotnet test Tests/Prowl.Graphite.Tests.csproj --filter "Backend=Vulkan"
 ```
 
 Run a specific test across all backends:
 
 ```bash
-dotnet test Tests/Prowl.Veldrid.Tests.csproj --filter "Points_WithUIntColor_ProduceExpectedPixel"
+dotnet test Tests/Prowl.Graphite.Tests.csproj --filter "Points_WithUIntColor_ProduceExpectedPixel"
 ```
 
 Run only the non-GPU tests (CI or machines without graphics hardware):
 
 ```bash
-dotnet test Tests/Prowl.Veldrid.Tests.csproj -p:ExcludeGPU=true
+dotnet test Tests/Prowl.Graphite.Tests.csproj -p:ExcludeGPU=true
 ```
 
 ## Profiler tests

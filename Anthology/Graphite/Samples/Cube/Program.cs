@@ -1,7 +1,7 @@
 using Prowl.Vector;
 
 
-namespace Prowl.Veldrid.Samples.Cube;
+namespace Prowl.Graphite.Samples.Cube;
 
 
 public static class Program

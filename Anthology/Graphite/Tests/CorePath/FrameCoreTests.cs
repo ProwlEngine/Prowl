@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Core-path coverage of the frame/synchronization API that has no upstream equivalent:
 // the BeginFrame/EndFrame lifecycle, transient ring allocation, fences, and disposal.

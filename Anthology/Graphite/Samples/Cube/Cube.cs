@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using Prowl.Vector;
 
 
-namespace Prowl.Veldrid.Samples.Cube;
+namespace Prowl.Graphite.Samples.Cube;
 
 
 public class Cube

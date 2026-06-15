@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Core-path compute test: dispatches BasicComputeTest, which copies Source into Destination
 // and doubles Source in place. Exercises the ComputeProgram + PropertySet (uniforms + RW

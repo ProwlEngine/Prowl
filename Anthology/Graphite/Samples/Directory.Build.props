@@ -8,6 +8,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../Veldrid/Prowl.Veldrid.csproj" />
+        <ProjectReference Include="../../Graphite/Prowl.Graphite.csproj" />
     </ItemGroup>
 </Project>

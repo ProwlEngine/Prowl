@@ -4,10 +4,10 @@ using System.IO;
 using ImageMagick;
 
 using Prowl.Vector;
-using Prowl.Veldrid;
+using Prowl.Graphite;
 
 
-namespace Prowl.Veldrid.Samples;
+namespace Prowl.Graphite.Samples;
 
 
 public static class ImageLoader

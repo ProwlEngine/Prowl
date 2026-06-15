@@ -5,7 +5,7 @@ using System.Linq;
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 public class FormatSizeHelpersTests : IDisposable
 {

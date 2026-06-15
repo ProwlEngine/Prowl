@@ -1,0 +1,1817 @@
+﻿using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
+
+using Prowl.Vector;
+
+using Silk.NET.OpenGL;
+
+using static Prowl.Graphite.OpenGL.OpenGLUtil;
+
+using GLFramebufferAttachment = Silk.NET.OpenGL.FramebufferAttachment;
+using GLPixelFormat = Silk.NET.OpenGL.PixelFormat;
+
+namespace Prowl.Graphite.OpenGL;
+
+internal unsafe class OpenGLCommandExecutor
+{
+    private readonly OpenGLGraphicsDevice _gd;
+    private GL _gl => _gd.GL;
+    private readonly GraphicsBackend _backend;
+    private readonly OpenGLTextureSamplerManager _textureSamplerManager;
+    private readonly StagingMemoryPool _stagingMemoryPool;
+    private readonly OpenGLExtensions _extensions;
+    private readonly OpenGLPlatformInfo _platformInfo;
+    private readonly GraphicsDeviceFeatures _features;
+
+    private Framebuffer _fb;
+    private bool _isSwapchainFB;
+    private OpenGLGraphicsProgram _currentShaderProgram;
+    private uint[] _vertexAttribDivisors = Array.Empty<uint>();
+    private uint _vertexAttributesBound;
+    private readonly Viewport[] _viewports = new Viewport[20];
+    private PrimitiveType _primitiveType;
+
+    private IVertexSource _currentVertexSource;
+    private OpenGLCommandBuffer _currentReplayingBuffer;
+    private OpenGLBuffer _currentIndexBuffer;
+    private DrawElementsType _currentDrawElementsType;
+    private uint _currentIndexCount;
+
+    private OpenGLComputeProgram _currentComputeProgram;
+
+    private readonly PropertySet _activeProperties = new();
+
+    private bool _graphicsPipelineActive;
+    private bool _vertexLayoutFlushed;
+
+    public OpenGLCommandExecutor(OpenGLGraphicsDevice gd, OpenGLPlatformInfo platformInfo)
+    {
+        _gd = gd;
+        _backend = gd.BackendType;
+        _extensions = gd.Extensions;
+        _textureSamplerManager = gd.TextureSamplerManager;
+        _stagingMemoryPool = gd.StagingMemoryPool;
+        _platformInfo = platformInfo;
+        _features = gd.Features;
+    }
+
+    public void Begin()
+    {
+    }
+
+    public void ClearColorTarget(uint index, Color clearColor)
+    {
+        if (!_isSwapchainFB)
+        {
+            DrawBufferMode bufs = (DrawBufferMode)((uint)DrawBufferMode.ColorAttachment0 + index);
+            _gl.DrawBuffers(1, &bufs);
+            CheckLastError();
+        }
+
+        Color color = clearColor;
+        _gl.ClearColor(color.R, color.G, color.B, color.A);
+        CheckLastError();
+
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
+        {
+            _gl.Disable(EnableCap.ScissorTest);
+            CheckLastError();
+        }
+
+        _gl.Clear(ClearBufferMask.ColorBufferBit);
+        CheckLastError();
+
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
+        {
+            _gl.Enable(EnableCap.ScissorTest);
+        }
+
+        if (!_isSwapchainFB)
+        {
+            int colorCount = _fb.ColorTargets.Count;
+            DrawBufferMode* bufs = stackalloc DrawBufferMode[colorCount];
+            for (int i = 0; i < colorCount; i++)
+            {
+                bufs[i] = DrawBufferMode.ColorAttachment0 + i;
+            }
+            _gl.DrawBuffers((uint)colorCount, bufs);
+            CheckLastError();
+        }
+    }
+
+    public void ClearDepthStencil(float depth, byte stencil)
+    {
+        _gd.ClearDepthCompat(depth);
+        CheckLastError();
+
+        _gl.StencilMask(~0u);
+        CheckLastError();
+
+        _gl.ClearStencil(stencil);
+        CheckLastError();
+
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
+        {
+            _gl.Disable(EnableCap.ScissorTest);
+            CheckLastError();
+        }
+
+        _gl.DepthMask(true);
+        _gl.Clear(ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
+        CheckLastError();
+
+        if (_currentShaderProgram != null && _currentShaderProgram.RasterizerState.ScissorTestEnabled)
+        {
+            _gl.Enable(EnableCap.ScissorTest);
+        }
+    }
+
+    public void Draw(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
+    {
+        PreDrawCommand();
+
+        if (instanceCount == 1 && instanceStart == 0)
+        {
+            _gl.DrawArrays(_primitiveType, (int)vertexStart, vertexCount);
+            CheckLastError();
+        }
+        else
+        {
+            if (instanceStart == 0)
+            {
+                _gl.DrawArraysInstanced(_primitiveType, (int)vertexStart, vertexCount, instanceCount);
+                CheckLastError();
+            }
+            else
+            {
+                _gl.DrawArraysInstancedBaseInstance(_primitiveType, (int)vertexStart, vertexCount, instanceCount, instanceStart);
+                CheckLastError();
+            }
+        }
+    }
+
+    public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    {
+        PreDrawCommand();
+        ResolveIndexBufferForDraw();
+
+        uint indexSize = _currentDrawElementsType == DrawElementsType.UnsignedShort ? 2u : 4u;
+        void* indices = (void*)(indexStart * indexSize);
+
+        if (instanceCount == 1 && instanceStart == 0)
+        {
+            if (vertexOffset == 0)
+            {
+                _gl.DrawElements(_primitiveType, _currentIndexCount, _currentDrawElementsType, indices);
+                CheckLastError();
+            }
+            else
+            {
+                _gl.DrawElementsBaseVertex(_primitiveType, _currentIndexCount, _currentDrawElementsType, indices, vertexOffset);
+                CheckLastError();
+            }
+        }
+        else
+        {
+            if (instanceStart > 0)
+            {
+                _gl.DrawElementsInstancedBaseVertexBaseInstance(
+                    _primitiveType,
+                    _currentIndexCount,
+                    _currentDrawElementsType,
+                    indices,
+                    instanceCount,
+                    vertexOffset,
+                    instanceStart);
+                CheckLastError();
+            }
+            else if (vertexOffset == 0)
+            {
+                _gl.DrawElementsInstanced(_primitiveType, _currentIndexCount, _currentDrawElementsType, indices, instanceCount);
+                CheckLastError();
+            }
+            else
+            {
+                _gl.DrawElementsInstancedBaseVertex(
+                    _primitiveType,
+                    _currentIndexCount,
+                    _currentDrawElementsType,
+                    indices,
+                    instanceCount,
+                    vertexOffset);
+                CheckLastError();
+            }
+        }
+    }
+
+    public void DrawIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+    {
+        PreDrawCommand();
+
+        OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(indirectBuffer);
+        _gl.BindBuffer(BufferTargetARB.DrawIndirectBuffer, glBuffer.Buffer);
+        CheckLastError();
+
+        if (_extensions.MultiDrawIndirect)
+        {
+            _gl.MultiDrawArraysIndirect(_primitiveType, (void*)offset, drawCount, stride);
+            CheckLastError();
+        }
+        else
+        {
+            uint indirect = offset;
+            for (uint i = 0; i < drawCount; i++)
+            {
+                _gl.DrawArraysIndirect(_primitiveType, (void*)indirect);
+                CheckLastError();
+
+                indirect += stride;
+            }
+        }
+    }
+
+    public void DrawIndexedIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+    {
+        PreDrawCommand();
+
+        OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(indirectBuffer);
+        _gl.BindBuffer(BufferTargetARB.DrawIndirectBuffer, glBuffer.Buffer);
+        CheckLastError();
+
+        ResolveIndexBufferForDraw();
+
+        if (_extensions.MultiDrawIndirect)
+        {
+            _gl.MultiDrawElementsIndirect(_primitiveType, _currentDrawElementsType, (void*)offset, drawCount, stride);
+            CheckLastError();
+        }
+        else
+        {
+            uint indirect = offset;
+            for (uint i = 0; i < drawCount; i++)
+            {
+                _gl.DrawElementsIndirect(_primitiveType, _currentDrawElementsType, (void*)indirect);
+                CheckLastError();
+
+                indirect += stride;
+            }
+        }
+    }
+
+    private void PreDrawCommand()
+    {
+        if (!_graphicsPipelineActive)
+        {
+            ActivateGraphicsPipeline();
+        }
+
+        _primitiveType = OpenGLFormats.VdToGLPrimitiveType(_currentVertexSource.Topology);
+
+        BindProperties(graphics: true);
+        if (!_vertexLayoutFlushed)
+        {
+            FlushVertexLayouts();
+            _vertexLayoutFlushed = true;
+        }
+    }
+
+    public void SetVertexSource(IVertexSource source, OpenGLCommandBuffer owner)
+    {
+        _currentVertexSource = source;
+        _currentReplayingBuffer = owner;
+        _vertexLayoutFlushed = false;
+        _currentIndexBuffer = null;
+    }
+
+    private void ResolveIndexBufferForDraw()
+    {
+        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
+        _currentReplayingBuffer?.Bridge_AssertIndexBufferResolved(has);
+
+        _currentReplayingBuffer?.Bridge_CheckIndexBufferUsage(ib);
+
+        OpenGLBuffer glIB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(ib);
+        glIB.EnsureResourcesCreated();
+
+        if (!ReferenceEquals(_currentIndexBuffer, glIB))
+        {
+            _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glIB.Buffer);
+            CheckLastError();
+            _currentIndexBuffer = glIB;
+        }
+
+        _currentDrawElementsType = OpenGLFormats.VdToGLDrawElementsType(fmt);
+        _currentIndexCount = count;
+    }
+
+    private void BindProperties(bool graphics)
+    {
+        ResourceLayoutDescription[] layouts = graphics
+            ? _currentShaderProgram.ResourceLayoutsArray
+            : _currentComputeProgram.ResourceLayoutsArray;
+
+        for (uint setIdx = 0; setIdx < layouts.Length; setIdx++)
+        {
+            ResourceLayoutDescription layout = layouts[setIdx];
+            for (uint elemIdx = 0; elemIdx < layout.Elements.Length; elemIdx++)
+            {
+                ref ResourceLayoutElementDescription elem = ref layout.Elements[elemIdx];
+                switch (elem.Kind)
+                {
+                    case ResourceKind.UniformBuffer:
+                        BindUniformBufferGL(setIdx, elemIdx, in elem, graphics);
+                        break;
+                    case ResourceKind.StructuredBufferReadOnly:
+                    case ResourceKind.StructuredBufferReadWrite:
+                        BindStorageBufferGL(setIdx, elemIdx, in elem, graphics);
+                        break;
+                    case ResourceKind.TextureReadOnly:
+                        BindTextureGL(setIdx, elemIdx, in elem, graphics, readWrite: false);
+                        break;
+                    case ResourceKind.TextureReadWrite:
+                        BindTextureGL(setIdx, elemIdx, in elem, graphics, readWrite: true);
+                        break;
+                    case ResourceKind.Sampler:
+                        break;
+                    default:
+                        throw Illegal.Value<ResourceKind>();
+                }
+            }
+        }
+    }
+
+    private void BindUniformBufferGL(uint setIdx, uint elemIdx, in ResourceLayoutElementDescription elem, bool graphics)
+    {
+        if (!GetUniformBindingForSlot(graphics, setIdx, elemIdx, out OpenGLUniformBinding uniformBinding))
+            return;
+
+        DeviceBufferRange range;
+        bool hasImplicit = elem.UniformFields != null && elem.UniformFields.Length > 0;
+        if (hasImplicit)
+        {
+            range = GetOrBuildImplicitUboGL(graphics, setIdx, elem.BindingIndex, elem.UniformFields, uniformBinding.BlockSize);
+            if (range.Buffer == null) return;
+        }
+        else
+        {
+            if (!_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
+                return;
+
+            range = entry.Buffer.Value;
+        }
+
+        OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
+        glUB.EnsureResourcesCreated();
+
+        if (range.SizeInBytes < uniformBinding.BlockSize)
+        {
+            string name = PropertyID.ToString(elem.Name) ?? "<unknown>";
+            throw new RenderException(
+                $"Not enough data in uniform buffer \"{name}\" (set {setIdx}, element {elemIdx}). Shader expects at least {uniformBinding.BlockSize} bytes, but buffer only contains {range.SizeInBytes} bytes");
+        }
+
+        _gl.UniformBlockBinding(ActiveProgramHandle(graphics), uniformBinding.BlockLocation, uniformBinding.BindingPoint);
+        CheckLastError();
+        _gl.BindBufferRange(BufferTargetARB.UniformBuffer, uniformBinding.BindingPoint, glUB.Buffer, (IntPtr)range.Offset, range.SizeInBytes);
+        CheckLastError();
+    }
+
+    private DeviceBufferRange GetOrBuildImplicitUboGL(
+        bool graphics, uint setIdx, int bindingIndex,
+        UniformBlockField[] fields, uint blockSize)
+    {
+        byte[] scratch = ArrayPool<byte>.Shared.Rent((int)blockSize);
+        scratch.AsSpan(0, (int)blockSize).Clear();
+
+        foreach (UniformBlockField field in fields)
+        {
+            if (!_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Uniform)
+                continue;
+            Span<byte> src = MemoryMarshal.CreateSpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), 128);
+            src.Slice(0, (int)Math.Min(field.Size, (uint)src.Length)).CopyTo(scratch.AsSpan((int)field.Offset));
+        }
+
+        DeviceBufferRange range = _gd.ExecutorActiveFrame.AllocateTransient(blockSize);
+        fixed (byte* ptr = scratch)
+        {
+            UpdateBuffer(range.Buffer, range.Offset, (IntPtr)ptr, blockSize);
+        }
+        ArrayPool<byte>.Shared.Return(scratch);
+
+        return range;
+    }
+
+    private void BindStorageBufferGL(uint setIdx, uint elemIdx, in ResourceLayoutElementDescription elem, bool graphics)
+    {
+        if (!GetStorageBufferBindingForSlot(graphics, setIdx, elemIdx, out OpenGLShaderStorageBinding ssBinding))
+            return;
+
+        if (!_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                graphics ? _currentShaderProgram : null,
+                !graphics ? _currentComputeProgram : null,
+                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+            _gl.BindBufferBase(BufferTargetARB.ShaderStorageBuffer, ssBinding.BindingPoint, 0);
+            CheckLastError();
+            return;
+        }
+
+        DeviceBufferRange range = entry.Buffer.Value;
+        OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
+        glBuffer.EnsureResourcesCreated();
+
+        if (_backend == GraphicsBackend.OpenGL)
+        {
+            _gl.ShaderStorageBlockBinding(ActiveProgramHandle(graphics), ssBinding.StorageBlockBinding, ssBinding.BindingPoint);
+            CheckLastError();
+        }
+
+        _gl.BindBufferRange(BufferTargetARB.ShaderStorageBuffer, ssBinding.BindingPoint, glBuffer.Buffer, (IntPtr)range.Offset, range.SizeInBytes);
+        CheckLastError();
+    }
+
+    private void BindTextureGL(uint setIdx, uint elemIdx, in ResourceLayoutElementDescription elem, bool graphics, bool readWrite)
+    {
+        if (!GetTextureBindingInfo(graphics, setIdx, elemIdx, out OpenGLTextureBindingSlotInfo bindingInfo))
+            return;
+
+        TextureView? texView = null;
+        Sampler? sampler = null;
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? entry) && entry.Kind == PropertyEntryKind.Texture)
+        {
+            if (entry.TextureView != null)
+                texView = entry.TextureView;
+            else if (entry.Texture != null)
+                texView = entry.Texture.GetFullTextureView(_gd);
+
+            if (entry.Sampler != null)
+                sampler = entry.Sampler;
+        }
+
+        if (texView == null)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                graphics ? _currentShaderProgram : null,
+                !graphics ? _currentComputeProgram : null,
+                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+
+            texView = (readWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D).GetFullTextureView(_gd);
+        }
+
+        if (sampler == null)
+        {
+            _gd.OnMissingProperty?.Invoke(
+                graphics ? _currentShaderProgram : null,
+                !graphics ? _currentComputeProgram : null,
+                elem.Name, elem.Kind, setIdx, elem.BindingIndex);
+
+            sampler = _gd.PointSampler;
+        }
+
+        OpenGLTextureView glTexView = Util.AssertSubtype<TextureView, OpenGLTextureView>(texView);
+        glTexView.EnsureResourcesCreated();
+
+        if (readWrite)
+        {
+            bool layered = texView.Target.Usage.HasFlag(TextureUsage.Cubemap) || texView.ArrayLayers > 1;
+            if (layered && (texView.BaseArrayLayer > 0 || (texView.ArrayLayers > 1 && texView.ArrayLayers < texView.Target.ArrayLayers)))
+                throw new RenderException("Cannot bind texture with BaseArrayLayer > 0 and ArrayLayers > 1, or with an incomplete set of array layers (cubemaps have ArrayLayers == 6 implicitly).");
+
+            _gl.BindImageTexture(
+                (uint)bindingInfo.RelativeIndex,
+                glTexView.Target.Texture,
+                (int)texView.BaseMipLevel,
+                layered,
+                (int)texView.BaseArrayLayer,
+                BufferAccessARB.ReadWrite,
+                (InternalFormat)glTexView.GetReadWriteSizedInternalFormat());
+            CheckLastError();
+            if (_backend == GraphicsBackend.OpenGL)
+            {
+                _gl.Uniform1(bindingInfo.UniformLocation, bindingInfo.RelativeIndex);
+                CheckLastError();
+            }
+        }
+        else
+        {
+            uint textureUnit = (uint)bindingInfo.RelativeIndex;
+            _textureSamplerManager.SetTexture(textureUnit, glTexView);
+            _gl.Uniform1(bindingInfo.UniformLocation, bindingInfo.RelativeIndex);
+            CheckLastError();
+
+            OpenGLSampler glSampler = Util.AssertSubtype<Sampler, OpenGLSampler>(sampler);
+            glSampler.EnsureResourcesCreated();
+            _textureSamplerManager.SetSampler(textureUnit, glSampler);
+        }
+    }
+
+    public void SetProperties(PropertySet ps)
+    {
+        _activeProperties.ApplyOther(ps);
+    }
+
+    public void ClearProperties()
+    {
+        _activeProperties.Clear();
+    }
+
+    private void FlushVertexLayouts()
+    {
+        uint highestAttribBound = 0;
+        IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
+        for (int i = 0; i < layouts.Count; i++)
+        {
+            VertexLayoutDescription input = layouts[i];
+
+            _currentVertexSource.ResolveSlot((uint)i, in input, out VertexBinding binding);
+            _currentReplayingBuffer?.Bridge_CheckVertexBindingUsage(in binding, (uint)i);
+
+            OpenGLBuffer vb = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(binding.Buffer);
+            vb.EnsureResourcesCreated();
+            _gl.BindBuffer(BufferTargetARB.ArrayBuffer, vb.Buffer);
+            uint offset = 0;
+            uint vbOffset = binding.Offset;
+            for (uint slot = 0; slot < input.Elements.Length; slot++)
+            {
+                ref VertexElementDescription element = ref input.Elements[slot]; // Large structure -- use by reference.
+                uint actualSlot = input.Location + slot;
+                if (actualSlot >= _vertexAttributesBound)
+                {
+                    _gl.EnableVertexAttribArray(actualSlot);
+                }
+                VertexAttribPointerType type = OpenGLFormats.VdToGLVertexAttribPointerType(
+                    element.Format,
+                    out bool normalized,
+                    out bool isInteger);
+
+                uint actualOffset = element.Offset != 0 ? element.Offset : offset;
+                actualOffset += vbOffset;
+
+                if (isInteger && !normalized)
+                {
+                    _gl.VertexAttribIPointer(
+                        actualSlot,
+                        FormatHelpers.GetElementCount(element.Format),
+                        (VertexAttribIType)type,
+                        (uint)_currentShaderProgram.VertexStrides[i],
+                        (void*)actualOffset);
+                    CheckLastError();
+                }
+                else
+                {
+                    _gl.VertexAttribPointer(
+                        actualSlot,
+                        FormatHelpers.GetElementCount(element.Format),
+                        type,
+                        normalized,
+                        (uint)_currentShaderProgram.VertexStrides[i],
+                        (void*)actualOffset);
+                    CheckLastError();
+                }
+
+                uint stepRate = input.InstanceStepRate;
+                if (_vertexAttribDivisors[actualSlot] != stepRate)
+                {
+                    _gl.VertexAttribDivisor(actualSlot, stepRate);
+                    _vertexAttribDivisors[actualSlot] = stepRate;
+                }
+
+                offset += element.Format.GetSizeInBytes();
+
+                if (actualSlot + 1 > highestAttribBound)
+                    highestAttribBound = actualSlot + 1;
+            }
+        }
+
+        for (uint extraSlot = highestAttribBound; extraSlot < _vertexAttributesBound; extraSlot++)
+        {
+            _gl.DisableVertexAttribArray(extraSlot);
+        }
+
+        _vertexAttributesBound = highestAttribBound;
+    }
+
+    internal void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
+    {
+        PreDispatchCommand();
+
+        _gl.DispatchCompute(groupCountX, groupCountY, groupCountZ);
+        CheckLastError();
+
+        PostDispatchCommand();
+    }
+
+    public void DispatchIndirect(DeviceBuffer indirectBuffer, uint offset)
+    {
+        PreDispatchCommand();
+
+        OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(indirectBuffer);
+        _gl.BindBuffer(BufferTargetARB.DrawIndirectBuffer, glBuffer.Buffer);
+        CheckLastError();
+
+        _gl.DispatchComputeIndirect((IntPtr)offset);
+        CheckLastError();
+
+        PostDispatchCommand();
+    }
+
+    private void PreDispatchCommand()
+    {
+        if (_graphicsPipelineActive)
+        {
+            ActivateComputePipeline();
+        }
+
+        BindProperties(graphics: false);
+    }
+
+    private static void PostDispatchCommand()
+    {
+        // TODO: Smart barriers?
+        OpenGLUtil.GL.MemoryBarrier(MemoryBarrierMask.AllBarrierBits);
+        CheckLastError();
+    }
+
+    public void End()
+    {
+    }
+
+    public void SetFramebuffer(Framebuffer fb)
+    {
+        if (fb is OpenGLFramebuffer glFB)
+        {
+            if (_backend == GraphicsBackend.OpenGL || _extensions.EXT_sRGBWriteControl)
+            {
+                _gl.Enable(EnableCap.FramebufferSrgb);
+                CheckLastError();
+            }
+
+            glFB.EnsureResourcesCreated();
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, glFB.Framebuffer);
+            CheckLastError();
+            _isSwapchainFB = false;
+        }
+        else if (fb is OpenGLSwapchainFramebuffer swapchainFB)
+        {
+            if ((_backend == GraphicsBackend.OpenGL || _extensions.EXT_sRGBWriteControl))
+            {
+                if (swapchainFB.DisableSrgbConversion)
+                {
+                    _gl.Disable(EnableCap.FramebufferSrgb);
+                    CheckLastError();
+                }
+                else
+                {
+                    _gl.Enable(EnableCap.FramebufferSrgb);
+                    CheckLastError();
+                }
+            }
+
+            if (_platformInfo.SetSwapchainFramebuffer != null)
+            {
+                _platformInfo.SetSwapchainFramebuffer();
+            }
+            else
+            {
+                _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+                CheckLastError();
+            }
+
+            _isSwapchainFB = true;
+        }
+        else
+        {
+            throw new RenderException("Invalid Framebuffer type: " + fb.GetType().Name);
+        }
+
+        _fb = fb;
+    }
+
+    public void SetShader(GraphicsProgram program)
+    {
+        OpenGLGraphicsProgram sp = Util.AssertSubtype<GraphicsProgram, OpenGLGraphicsProgram>(program);
+        if (_currentShaderProgram == sp && _graphicsPipelineActive) return;
+        _currentShaderProgram = sp;
+        ActivateGraphicsPipeline();
+        _vertexLayoutFlushed = false;
+    }
+
+    public void SetComputeShader(ComputeProgram program)
+    {
+        OpenGLComputeProgram cp = Util.AssertSubtype<ComputeProgram, OpenGLComputeProgram>(program);
+        if (_currentComputeProgram == cp && !_graphicsPipelineActive) return;
+        _currentComputeProgram = cp;
+        ActivateComputePipeline();
+    }
+
+    private void ActivateGraphicsPipeline()
+    {
+        _graphicsPipelineActive = true;
+        _currentShaderProgram.EnsureResourcesCreated();
+
+        // Blend State
+
+        BlendStateDescription blendState = _currentShaderProgram.BlendState;
+        _gl.BlendColor(blendState.BlendFactor.R, blendState.BlendFactor.G, blendState.BlendFactor.B, blendState.BlendFactor.A);
+        CheckLastError();
+
+        if (blendState.AlphaToCoverageEnabled)
+        {
+            _gl.Enable(EnableCap.SampleAlphaToCoverage);
+            CheckLastError();
+        }
+        else
+        {
+            _gl.Disable(EnableCap.SampleAlphaToCoverage);
+            CheckLastError();
+        }
+
+        if (_features.IndependentBlend)
+        {
+            for (uint i = 0; i < blendState.AttachmentStates.Length; i++)
+            {
+                BlendAttachmentDescription attachment = blendState.AttachmentStates[i];
+                ColorWriteMask colorMask = attachment.ColorWriteMask ?? ColorWriteMask.All;
+
+                _gl.ColorMask(
+                    i,
+                    (colorMask & ColorWriteMask.Red) == ColorWriteMask.Red,
+                    (colorMask & ColorWriteMask.Green) == ColorWriteMask.Green,
+                    (colorMask & ColorWriteMask.Blue) == ColorWriteMask.Blue,
+                    (colorMask & ColorWriteMask.Alpha) == ColorWriteMask.Alpha);
+                CheckLastError();
+
+                if (!attachment.BlendEnabled)
+                {
+                    _gl.Disable(EnableCap.Blend, i);
+                    CheckLastError();
+                }
+                else
+                {
+                    _gl.Enable(EnableCap.Blend, i);
+                    CheckLastError();
+
+                    _gl.BlendFuncSeparate(
+                        i,
+                        OpenGLFormats.VdToGLBlendFactorSrc(attachment.SourceColorFactor),
+                        OpenGLFormats.VdToGLBlendFactorDest(attachment.DestinationColorFactor),
+                        OpenGLFormats.VdToGLBlendFactorSrc(attachment.SourceAlphaFactor),
+                        OpenGLFormats.VdToGLBlendFactorDest(attachment.DestinationAlphaFactor));
+                    CheckLastError();
+
+                    _gl.BlendEquationSeparate(
+                        i,
+                        OpenGLFormats.VdToGLBlendEquationMode(attachment.ColorFunction),
+                        OpenGLFormats.VdToGLBlendEquationMode(attachment.AlphaFunction));
+                    CheckLastError();
+                }
+            }
+        }
+        else if (blendState.AttachmentStates.Length > 0)
+        {
+            BlendAttachmentDescription attachment = blendState.AttachmentStates[0];
+            ColorWriteMask colorMask = attachment.ColorWriteMask ?? ColorWriteMask.All;
+
+            _gl.ColorMask(
+                (colorMask & ColorWriteMask.Red) == ColorWriteMask.Red,
+                (colorMask & ColorWriteMask.Green) == ColorWriteMask.Green,
+                (colorMask & ColorWriteMask.Blue) == ColorWriteMask.Blue,
+                (colorMask & ColorWriteMask.Alpha) == ColorWriteMask.Alpha);
+            CheckLastError();
+
+            if (!attachment.BlendEnabled)
+            {
+                _gl.Disable(EnableCap.Blend);
+                CheckLastError();
+            }
+            else
+            {
+                _gl.Enable(EnableCap.Blend);
+                CheckLastError();
+
+                _gl.BlendFuncSeparate(
+                    OpenGLFormats.VdToGLBlendFactorSrc(attachment.SourceColorFactor),
+                    OpenGLFormats.VdToGLBlendFactorDest(attachment.DestinationColorFactor),
+                    OpenGLFormats.VdToGLBlendFactorSrc(attachment.SourceAlphaFactor),
+                    OpenGLFormats.VdToGLBlendFactorDest(attachment.DestinationAlphaFactor));
+                CheckLastError();
+
+                _gl.BlendEquationSeparate(
+                    OpenGLFormats.VdToGLBlendEquationMode(attachment.ColorFunction),
+                    OpenGLFormats.VdToGLBlendEquationMode(attachment.AlphaFunction));
+                CheckLastError();
+            }
+        }
+
+        // Depth Stencil State
+
+        DepthStencilStateDescription dss = _currentShaderProgram.DepthStencilState;
+        if (!dss.DepthTestEnabled)
+        {
+            _gl.Disable(EnableCap.DepthTest);
+            CheckLastError();
+        }
+        else
+        {
+            _gl.Enable(EnableCap.DepthTest);
+            CheckLastError();
+
+            _gl.DepthFunc(OpenGLFormats.VdToGLDepthFunction(dss.DepthComparison));
+            CheckLastError();
+        }
+
+        _gl.DepthMask(dss.DepthWriteEnabled);
+        CheckLastError();
+
+        if (dss.StencilTestEnabled)
+        {
+            _gl.Enable(EnableCap.StencilTest);
+            CheckLastError();
+
+            _gl.StencilFuncSeparate(
+                TriangleFace.Front,
+                OpenGLFormats.VdToGLStencilFunction(dss.StencilFront.Comparison),
+                (int)dss.StencilReference,
+                dss.StencilReadMask);
+            CheckLastError();
+
+            _gl.StencilOpSeparate(
+                TriangleFace.Front,
+                OpenGLFormats.VdToGLStencilOp(dss.StencilFront.Fail),
+                OpenGLFormats.VdToGLStencilOp(dss.StencilFront.DepthFail),
+                OpenGLFormats.VdToGLStencilOp(dss.StencilFront.Pass));
+            CheckLastError();
+
+            _gl.StencilFuncSeparate(
+                TriangleFace.Back,
+                OpenGLFormats.VdToGLStencilFunction(dss.StencilBack.Comparison),
+                (int)dss.StencilReference,
+                dss.StencilReadMask);
+            CheckLastError();
+
+            _gl.StencilOpSeparate(
+                TriangleFace.Back,
+                OpenGLFormats.VdToGLStencilOp(dss.StencilBack.Fail),
+                OpenGLFormats.VdToGLStencilOp(dss.StencilBack.DepthFail),
+                OpenGLFormats.VdToGLStencilOp(dss.StencilBack.Pass));
+            CheckLastError();
+
+            _gl.StencilMask(dss.StencilWriteMask);
+            CheckLastError();
+        }
+        else
+        {
+            _gl.Disable(EnableCap.StencilTest);
+            CheckLastError();
+        }
+
+        // Rasterizer State
+
+        RasterizerStateDescription rs = _currentShaderProgram.RasterizerState;
+        if (rs.CullMode == FaceCullMode.None)
+        {
+            _gl.Disable(EnableCap.CullFace);
+            CheckLastError();
+        }
+        else
+        {
+            _gl.Enable(EnableCap.CullFace);
+            CheckLastError();
+
+            _gl.CullFace(OpenGLFormats.VdToGLCullFaceMode(rs.CullMode));
+            CheckLastError();
+        }
+
+        if (_backend == GraphicsBackend.OpenGL)
+        {
+            _gl.PolygonMode(TriangleFace.FrontAndBack, PolygonMode.Fill);
+            CheckLastError();
+        }
+
+        if (!rs.ScissorTestEnabled)
+        {
+            _gl.Disable(EnableCap.ScissorTest);
+            CheckLastError();
+        }
+        else
+        {
+            _gl.Enable(EnableCap.ScissorTest);
+            CheckLastError();
+        }
+
+        if (_backend == GraphicsBackend.OpenGL)
+        {
+            if (!rs.DepthClipEnabled)
+            {
+                _gl.Enable(EnableCap.DepthClamp);
+                CheckLastError();
+            }
+            else
+            {
+                _gl.Disable(EnableCap.DepthClamp);
+                CheckLastError();
+            }
+        }
+
+        _gl.FrontFace(OpenGLFormats.VdToGLFrontFaceDirection(rs.FrontFace));
+        CheckLastError();
+
+        // Shader Set
+        _gl.UseProgram(_currentShaderProgram.GLProgram);
+        CheckLastError();
+
+        // Size the divisor cache to cover the highest attribute index this pipeline uses.
+        // Attributes are addressed by Location..Location+Elements.Length-1 per layout, so
+        // the array must reach the max(Location + Elements.Length).
+        uint maxAttribIndex = 0;
+        for (int i = 0; i < _currentShaderProgram.VertexLayouts.Count; i++)
+        {
+            VertexLayoutDescription layout = _currentShaderProgram.VertexLayouts[i];
+            uint end = layout.Location + (uint)layout.Elements.Length;
+            if (end > maxAttribIndex)
+                maxAttribIndex = end;
+        }
+        Util.EnsureArrayMinimumSize(ref _vertexAttribDivisors, maxAttribIndex);
+    }
+
+    public void GenerateMipmaps(Texture texture)
+    {
+        OpenGLTexture glTex = Util.AssertSubtype<Texture, OpenGLTexture>(texture);
+        glTex.EnsureResourcesCreated();
+        if (_extensions.ARB_DirectStateAccess)
+        {
+            _gl.GenerateTextureMipmap(glTex.Texture);
+            CheckLastError();
+        }
+        else
+        {
+            TextureTarget target = glTex.TextureTarget;
+            _textureSamplerManager.SetTextureTransient(target, glTex.Texture);
+            _gl.GenerateMipmap(target);
+            CheckLastError();
+        }
+    }
+
+    public void PushDebugGroup(string name)
+    {
+        if (_extensions.KHR_Debug)
+        {
+            int byteCount = Encoding.UTF8.GetByteCount(name);
+            byte* utf8Ptr = stackalloc byte[byteCount];
+            fixed (char* namePtr = name)
+            {
+                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+            }
+            _gl.PushDebugGroup(DebugSource.DebugSourceApplication, 0, (uint)byteCount, utf8Ptr);
+            CheckLastError();
+        }
+        else if (_extensions.EXT_DebugMarker)
+        {
+            int byteCount = Encoding.UTF8.GetByteCount(name);
+            byte* utf8Ptr = stackalloc byte[byteCount];
+            fixed (char* namePtr = name)
+            {
+                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+            }
+            _gd._extDebugMarker.PushGroupMarker((uint)byteCount, utf8Ptr);
+        }
+    }
+
+    public void PopDebugGroup()
+    {
+        if (_extensions.KHR_Debug)
+        {
+            _gl.PopDebugGroup();
+            CheckLastError();
+        }
+        else if (_extensions.EXT_DebugMarker)
+        {
+            _gd._extDebugMarker.PopGroupMarker();
+        }
+    }
+
+    public void InsertDebugMarker(string name)
+    {
+        if (_extensions.KHR_Debug)
+        {
+            int byteCount = Encoding.UTF8.GetByteCount(name);
+            byte* utf8Ptr = stackalloc byte[byteCount];
+            fixed (char* namePtr = name)
+            {
+                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+            }
+
+            _gl.DebugMessageInsert(
+                DebugSource.DebugSourceApplication,
+                DebugType.DebugTypeMarker,
+                0,
+                DebugSeverity.DebugSeverityNotification,
+                (uint)byteCount,
+                utf8Ptr);
+            CheckLastError();
+        }
+        else if (_extensions.EXT_DebugMarker)
+        {
+            int byteCount = Encoding.UTF8.GetByteCount(name);
+            byte* utf8Ptr = stackalloc byte[byteCount];
+            fixed (char* namePtr = name)
+            {
+                Encoding.UTF8.GetBytes(namePtr, name.Length, utf8Ptr, byteCount);
+            }
+            _gd._extDebugMarker.InsertEventMarker((uint)byteCount, utf8Ptr);
+        }
+    }
+
+    private void ActivateComputePipeline()
+    {
+        _graphicsPipelineActive = false;
+        _currentComputeProgram.EnsureResourcesCreated();
+
+        _gl.UseProgram(_currentComputeProgram.GLProgram);
+        CheckLastError();
+    }
+
+    private uint ActiveProgramHandle(bool graphics) => graphics
+        ? _currentShaderProgram.GLProgram
+        : _currentComputeProgram.GLProgram;
+
+    private bool GetUniformBindingForSlot(bool graphics, uint set, uint slot, out OpenGLUniformBinding b) => graphics
+        ? _currentShaderProgram.GetUniformBindingForSlot(set, slot, out b)
+        : _currentComputeProgram.GetUniformBindingForSlot(set, slot, out b);
+
+    private bool GetTextureBindingInfo(bool graphics, uint set, uint slot, out OpenGLTextureBindingSlotInfo b) => graphics
+        ? _currentShaderProgram.GetTextureBindingInfo(set, slot, out b)
+        : _currentComputeProgram.GetTextureBindingInfo(set, slot, out b);
+
+    private bool GetStorageBufferBindingForSlot(bool graphics, uint set, uint slot, out OpenGLShaderStorageBinding b) => graphics
+        ? _currentShaderProgram.GetStorageBufferBindingForSlot(set, slot, out b)
+        : _currentComputeProgram.GetStorageBufferBindingForSlot(set, slot, out b);
+
+    public void ResolveTexture(Texture source, Texture destination)
+    {
+        OpenGLTexture glSourceTex = Util.AssertSubtype<Texture, OpenGLTexture>(source);
+        OpenGLTexture glDestinationTex = Util.AssertSubtype<Texture, OpenGLTexture>(destination);
+        glSourceTex.EnsureResourcesCreated();
+        glDestinationTex.EnsureResourcesCreated();
+
+        uint sourceFramebuffer = glSourceTex.GetFramebuffer(0, 0);
+        uint destinationFramebuffer = glDestinationTex.GetFramebuffer(0, 0);
+
+        _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, sourceFramebuffer);
+        CheckLastError();
+
+        _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, destinationFramebuffer);
+        CheckLastError();
+
+        _gl.Disable(EnableCap.ScissorTest);
+        CheckLastError();
+
+        _gl.BlitFramebuffer(
+            0,
+            0,
+            (int)source.Width,
+            (int)source.Height,
+            0,
+            0,
+            (int)destination.Width,
+            (int)destination.Height,
+            ClearBufferMask.ColorBufferBit,
+            BlitFramebufferFilter.Nearest);
+        CheckLastError();
+    }
+
+    public void SetScissorRect(uint index, uint x, uint y, uint width, uint height)
+    {
+        if (_backend == GraphicsBackend.OpenGL)
+        {
+            _gl.ScissorIndexed(
+                index,
+                (int)x,
+                (int)(_fb.Height - (int)height - y),
+                width,
+                height);
+            CheckLastError();
+        }
+        else
+        {
+            if (index == 0)
+            {
+                _gl.Scissor(
+                    (int)x,
+                    (int)(_fb.Height - (int)height - y),
+                    width,
+                    height);
+                CheckLastError();
+            }
+        }
+    }
+
+    public void SetViewport(uint index, ref Viewport viewport)
+    {
+        _viewports[(int)index] = viewport;
+
+        if (_backend == GraphicsBackend.OpenGL)
+        {
+            float left = viewport.X;
+            float bottom = _fb.Height - (viewport.Y + viewport.Height);
+
+            _gl.ViewportIndexed(index, left, bottom, viewport.Width, viewport.Height);
+            CheckLastError();
+
+            _gl.DepthRangeIndexed(index, viewport.MinDepth, viewport.MaxDepth);
+            CheckLastError();
+        }
+        else
+        {
+            if (index == 0)
+            {
+                _gl.Viewport((int)viewport.X, (int)viewport.Y, (uint)viewport.Width, (uint)viewport.Height);
+                CheckLastError();
+
+                _gd.DepthRangeCompat(viewport.MinDepth, viewport.MaxDepth);
+                CheckLastError();
+            }
+        }
+    }
+
+    public void UpdateBuffer(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr dataPtr, uint sizeInBytes)
+    {
+        OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(buffer);
+        glBuffer.EnsureResourcesCreated();
+
+        if (_extensions.ARB_DirectStateAccess)
+        {
+            _gl.NamedBufferSubData(
+                glBuffer.Buffer,
+                (IntPtr)bufferOffsetInBytes,
+                sizeInBytes,
+                dataPtr.ToPointer());
+            CheckLastError();
+        }
+        else
+        {
+            BufferTargetARB bufferTarget = BufferTargetARB.CopyWriteBuffer;
+            _gl.BindBuffer(bufferTarget, glBuffer.Buffer);
+            CheckLastError();
+            _gl.BufferSubData(
+                bufferTarget,
+                (IntPtr)bufferOffsetInBytes,
+                (UIntPtr)sizeInBytes,
+                dataPtr.ToPointer());
+            CheckLastError();
+        }
+    }
+
+    public void UpdateTexture(
+        Texture texture,
+        IntPtr dataPtr,
+        uint x,
+        uint y,
+        uint z,
+        uint width,
+        uint height,
+        uint depth,
+        uint mipLevel,
+        uint arrayLayer)
+    {
+        if (width == 0 || height == 0 || depth == 0) { return; }
+
+        OpenGLTexture glTex = Util.AssertSubtype<Texture, OpenGLTexture>(texture);
+        glTex.EnsureResourcesCreated();
+
+        TextureTarget texTarget = glTex.TextureTarget;
+
+        _textureSamplerManager.SetTextureTransient(texTarget, glTex.Texture);
+        CheckLastError();
+
+        bool isCompressed = FormatHelpers.IsCompressedFormat(texture.Format);
+        uint blockSize = isCompressed ? 4u : 1u;
+
+        uint blockAlignedWidth = Math.Max(width, blockSize);
+        uint blockAlignedHeight = Math.Max(height, blockSize);
+
+        uint rowPitch = FormatHelpers.GetRowPitch(blockAlignedWidth, texture.Format);
+        uint depthPitch = FormatHelpers.GetDepthPitch(rowPitch, blockAlignedHeight, texture.Format);
+
+        // Compressed textures can specify regions that are larger than the dimensions.
+        // We should only pass up to the dimensions to OpenGL, though.
+        Util.GetMipDimensions(glTex, mipLevel, out uint mipWidth, out uint mipHeight, out uint mipDepth);
+        width = Math.Min(width, mipWidth);
+        height = Math.Min(height, mipHeight);
+
+        uint unpackAlignment = 4;
+        if (!isCompressed)
+        {
+            unpackAlignment = glTex.Format.GetSizeInBytes();
+        }
+        if (unpackAlignment < 4)
+        {
+            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, (int)unpackAlignment);
+            CheckLastError();
+        }
+
+        if (texTarget == TextureTarget.Texture1D)
+        {
+            if (isCompressed)
+            {
+                _gl.CompressedTexSubImage1D(
+                    TextureTarget.Texture1D,
+                    (int)mipLevel,
+                    (int)x,
+                    width,
+                    glTex.GLInternalFormat,
+                    rowPitch,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+            else
+            {
+                _gl.TexSubImage1D(
+                    TextureTarget.Texture1D,
+                    (int)mipLevel,
+                    (int)x,
+                    width,
+                    glTex.GLPixelFormat,
+                    glTex.GLPixelType,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+        }
+        else if (texTarget == TextureTarget.Texture1DArray)
+        {
+            if (isCompressed)
+            {
+                _gl.CompressedTexSubImage2D(
+                    TextureTarget.Texture1DArray,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)arrayLayer,
+                    width,
+                    1,
+                    glTex.GLInternalFormat,
+                    rowPitch,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+            else
+            {
+                _gl.TexSubImage2D(
+                TextureTarget.Texture1DArray,
+                (int)mipLevel,
+                (int)x,
+                (int)arrayLayer,
+                width,
+                1,
+                glTex.GLPixelFormat,
+                glTex.GLPixelType,
+                dataPtr.ToPointer());
+                CheckLastError();
+            }
+        }
+        else if (texTarget == TextureTarget.Texture2D)
+        {
+            if (isCompressed)
+            {
+                _gl.CompressedTexSubImage2D(
+                    TextureTarget.Texture2D,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    width,
+                    height,
+                    glTex.GLInternalFormat,
+                    depthPitch,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+            else
+            {
+                _gl.TexSubImage2D(
+                    TextureTarget.Texture2D,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    width,
+                    height,
+                    glTex.GLPixelFormat,
+                    glTex.GLPixelType,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+        }
+        else if (texTarget == TextureTarget.Texture2DArray)
+        {
+            if (isCompressed)
+            {
+                _gl.CompressedTexSubImage3D(
+                    TextureTarget.Texture2DArray,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    (int)arrayLayer,
+                    width,
+                    height,
+                    1,
+                    glTex.GLInternalFormat,
+                    depthPitch,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+            else
+            {
+                _gl.TexSubImage3D(
+                    TextureTarget.Texture2DArray,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    (int)arrayLayer,
+                    width,
+                    height,
+                    1,
+                    glTex.GLPixelFormat,
+                    glTex.GLPixelType,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+        }
+        else if (texTarget == TextureTarget.Texture3D)
+        {
+            if (isCompressed)
+            {
+                _gl.CompressedTexSubImage3D(
+                    TextureTarget.Texture3D,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    (int)z,
+                    width,
+                    height,
+                    depth,
+                    glTex.GLInternalFormat,
+                    depthPitch * depth,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+            else
+            {
+                _gl.TexSubImage3D(
+                    TextureTarget.Texture3D,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    (int)z,
+                    width,
+                    height,
+                    depth,
+                    glTex.GLPixelFormat,
+                    glTex.GLPixelType,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+        }
+        else if (texTarget == TextureTarget.TextureCubeMap)
+        {
+            TextureTarget cubeTarget = GetCubeTarget(arrayLayer);
+            if (isCompressed)
+            {
+                _gl.CompressedTexSubImage2D(
+                    cubeTarget,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    width,
+                    height,
+                    glTex.GLInternalFormat,
+                    depthPitch,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+            else
+            {
+                _gl.TexSubImage2D(
+                    cubeTarget,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    width,
+                    height,
+                    glTex.GLPixelFormat,
+                    glTex.GLPixelType,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+        }
+        else if (texTarget == TextureTarget.TextureCubeMapArray)
+        {
+            if (isCompressed)
+            {
+                _gl.CompressedTexSubImage3D(
+                    TextureTarget.TextureCubeMapArray,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    (int)arrayLayer,
+                    width,
+                    height,
+                    1,
+                    glTex.GLInternalFormat,
+                    depthPitch,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+            else
+            {
+                _gl.TexSubImage3D(
+                    TextureTarget.TextureCubeMapArray,
+                    (int)mipLevel,
+                    (int)x,
+                    (int)y,
+                    (int)arrayLayer,
+                    width,
+                    height,
+                    1,
+                    glTex.GLPixelFormat,
+                    glTex.GLPixelType,
+                    dataPtr.ToPointer());
+                CheckLastError();
+            }
+        }
+        else
+        {
+            throw new RenderException($"Invalid OpenGL TextureTarget encountered: {glTex.TextureTarget}.");
+        }
+
+        if (unpackAlignment < 4)
+        {
+            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
+            CheckLastError();
+        }
+    }
+
+    private TextureTarget GetCubeTarget(uint arrayLayer)
+    {
+        switch (arrayLayer)
+        {
+            case 0:
+                return TextureTarget.TextureCubeMapPositiveX;
+            case 1:
+                return TextureTarget.TextureCubeMapNegativeX;
+            case 2:
+                return TextureTarget.TextureCubeMapPositiveY;
+            case 3:
+                return TextureTarget.TextureCubeMapNegativeY;
+            case 4:
+                return TextureTarget.TextureCubeMapPositiveZ;
+            case 5:
+                return TextureTarget.TextureCubeMapNegativeZ;
+            default:
+                throw new RenderException("Unexpected array layer in UpdateTexture called on a cubemap texture.");
+        }
+    }
+
+    public void CopyBuffer(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
+    {
+        OpenGLBuffer srcGLBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(source);
+        OpenGLBuffer dstGLBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(destination);
+
+        srcGLBuffer.EnsureResourcesCreated();
+        dstGLBuffer.EnsureResourcesCreated();
+
+        if (_extensions.ARB_DirectStateAccess)
+        {
+            _gl.CopyNamedBufferSubData(
+                srcGLBuffer.Buffer,
+                dstGLBuffer.Buffer,
+                (IntPtr)sourceOffset,
+                (IntPtr)destinationOffset,
+                sizeInBytes);
+        }
+        else
+        {
+            _gl.BindBuffer(BufferTargetARB.CopyReadBuffer, srcGLBuffer.Buffer);
+            CheckLastError();
+
+            _gl.BindBuffer(BufferTargetARB.CopyWriteBuffer, dstGLBuffer.Buffer);
+            CheckLastError();
+
+            _gl.CopyBufferSubData(
+                CopyBufferSubDataTarget.CopyReadBuffer,
+                CopyBufferSubDataTarget.CopyWriteBuffer,
+                (nint)sourceOffset,
+                (nint)destinationOffset,
+                (nuint)sizeInBytes);
+            CheckLastError();
+        }
+    }
+
+    public void CopyTexture(
+        Texture source,
+        uint srcX, uint srcY, uint srcZ,
+        uint srcMipLevel,
+        uint srcBaseArrayLayer,
+        Texture destination,
+        uint dstX, uint dstY, uint dstZ,
+        uint dstMipLevel,
+        uint dstBaseArrayLayer,
+        uint width, uint height, uint depth,
+        uint layerCount)
+    {
+        OpenGLTexture srcGLTexture = Util.AssertSubtype<Texture, OpenGLTexture>(source);
+        OpenGLTexture dstGLTexture = Util.AssertSubtype<Texture, OpenGLTexture>(destination);
+
+        srcGLTexture.EnsureResourcesCreated();
+        dstGLTexture.EnsureResourcesCreated();
+
+        if (_extensions.CopyImage && depth == 1)
+        {
+            // glCopyImageSubData does not work properly when depth > 1, so use the awful roundabout copy.
+            uint srcZOrLayer = Math.Max(srcBaseArrayLayer, srcZ);
+            uint dstZOrLayer = Math.Max(dstBaseArrayLayer, dstZ);
+            uint depthOrLayerCount = Math.Max(depth, layerCount);
+            // Copy width and height are allowed to be a full compressed block size, even if the mip level only contains a
+            // region smaller than the block size.
+            Util.GetMipDimensions(source, srcMipLevel, out uint mipWidth, out uint mipHeight, out _);
+            width = Math.Min(width, mipWidth);
+            height = Math.Min(height, mipHeight);
+            _gl.CopyImageSubData(
+                srcGLTexture.Texture, (CopyImageSubDataTarget)srcGLTexture.TextureTarget, (int)srcMipLevel, (int)srcX, (int)srcY, (int)srcZOrLayer,
+                dstGLTexture.Texture, (CopyImageSubDataTarget)dstGLTexture.TextureTarget, (int)dstMipLevel, (int)dstX, (int)dstY, (int)dstZOrLayer,
+                width, height, depthOrLayerCount);
+            CheckLastError();
+        }
+        else
+        {
+            for (uint layer = 0; layer < layerCount; layer++)
+            {
+                uint srcLayer = layer + srcBaseArrayLayer;
+                uint dstLayer = layer + dstBaseArrayLayer;
+                CopyRoundabout(
+                    srcGLTexture, dstGLTexture,
+                    srcX, srcY, srcZ, srcMipLevel, srcLayer,
+                    dstX, dstY, dstZ, dstMipLevel, dstLayer,
+                    width, height, depth);
+            }
+        }
+    }
+
+    private void CopyRoundabout(
+        OpenGLTexture srcGLTexture, OpenGLTexture dstGLTexture,
+        uint srcX, uint srcY, uint srcZ, uint srcMipLevel, uint srcLayer,
+        uint dstX, uint dstY, uint dstZ, uint dstMipLevel, uint dstLayer,
+        uint width, uint height, uint depth)
+    {
+        bool isCompressed = FormatHelpers.IsCompressedFormat(srcGLTexture.Format);
+        if (srcGLTexture.Format != dstGLTexture.Format)
+        {
+            throw new RenderException("Copying to/from Textures with different formats is not supported.");
+        }
+
+        uint packAlignment = 4;
+        uint depthSliceSize = 0;
+        uint sizeInBytes;
+        TextureTarget srcTarget = srcGLTexture.TextureTarget;
+        if (isCompressed)
+        {
+            _textureSamplerManager.SetTextureTransient(srcTarget, srcGLTexture.Texture);
+            CheckLastError();
+
+            int compressedSize;
+            _gl.GetTexLevelParameter(
+                srcTarget,
+                (int)srcMipLevel,
+                (GetTextureParameter)GLEnum.TextureCompressedImageSize,
+                &compressedSize);
+            CheckLastError();
+            sizeInBytes = (uint)compressedSize;
+        }
+        else
+        {
+            uint pixelSize = srcGLTexture.Format.GetSizeInBytes();
+            packAlignment = pixelSize;
+            depthSliceSize = width * height * pixelSize;
+            sizeInBytes = depthSliceSize * depth;
+        }
+
+        StagingBlock block = _stagingMemoryPool.GetStagingBlock(sizeInBytes);
+
+        if (packAlignment < 4)
+        {
+            _gl.PixelStore(PixelStoreParameter.PackAlignment, (int)packAlignment);
+            CheckLastError();
+        }
+
+        if (isCompressed)
+        {
+            if (_extensions.ARB_DirectStateAccess)
+            {
+                _gl.GetCompressedTextureImage(
+                    srcGLTexture.Texture,
+                    (int)srcMipLevel,
+                    block.SizeInBytes,
+                    block.Data);
+                CheckLastError();
+            }
+            else
+            {
+                _textureSamplerManager.SetTextureTransient(srcTarget, srcGLTexture.Texture);
+                CheckLastError();
+
+                _gl.GetCompressedTexImage(srcTarget, (int)srcMipLevel, block.Data);
+                CheckLastError();
+            }
+
+            TextureTarget dstTarget = dstGLTexture.TextureTarget;
+            _textureSamplerManager.SetTextureTransient(dstTarget, dstGLTexture.Texture);
+            CheckLastError();
+
+            Util.GetMipDimensions(srcGLTexture, srcMipLevel, out uint mipWidth, out uint mipHeight, out uint mipDepth);
+            uint fullRowPitch = FormatHelpers.GetRowPitch(mipWidth, srcGLTexture.Format);
+            uint fullDepthPitch = FormatHelpers.GetDepthPitch(
+                fullRowPitch,
+                mipHeight,
+                srcGLTexture.Format);
+
+            uint denseRowPitch = FormatHelpers.GetRowPitch(width, srcGLTexture.Format);
+            uint denseDepthPitch = FormatHelpers.GetDepthPitch(denseRowPitch, height, srcGLTexture.Format);
+            uint numRows = FormatHelpers.GetNumRows(height, srcGLTexture.Format);
+            uint trueCopySize = denseRowPitch * numRows;
+            StagingBlock trueCopySrc = _stagingMemoryPool.GetStagingBlock(trueCopySize);
+
+            uint layerStartOffset = denseDepthPitch * srcLayer;
+
+            Util.CopyTextureRegion(
+                (byte*)block.Data + layerStartOffset,
+                srcX, srcY, srcZ,
+                fullRowPitch, fullDepthPitch,
+                trueCopySrc.Data,
+                0, 0, 0,
+                denseRowPitch,
+                denseDepthPitch,
+                width, height, depth,
+                srcGLTexture.Format);
+
+            UpdateTexture(
+                dstGLTexture,
+                (IntPtr)trueCopySrc.Data,
+                dstX, dstY, dstZ,
+                width, height, 1,
+                dstMipLevel, dstLayer);
+
+            _stagingMemoryPool.Free(trueCopySrc);
+        }
+        else // !isCompressed
+        {
+            if (_extensions.ARB_DirectStateAccess)
+            {
+                _gl.GetTextureSubImage(
+                    srcGLTexture.Texture, (int)srcMipLevel, (int)srcX, (int)srcY, (int)srcZ,
+                    width, height, depth,
+                    srcGLTexture.GLPixelFormat, srcGLTexture.GLPixelType, block.SizeInBytes, block.Data);
+                CheckLastError();
+            }
+            else
+            {
+                for (uint layer = 0; layer < depth; layer++)
+                {
+                    uint curLayer = srcZ + srcLayer + layer;
+                    uint curOffset = depthSliceSize * layer;
+                    uint readFB = _gl.GenFramebuffer();
+                    CheckLastError();
+                    _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, readFB);
+                    CheckLastError();
+
+                    if (srcGLTexture.ArrayLayers > 1 || srcGLTexture.Type == TextureType.Texture3D
+                        || (srcGLTexture.Usage & TextureUsage.Cubemap) != 0)
+                    {
+                        _gl.FramebufferTextureLayer(
+                            FramebufferTarget.ReadFramebuffer,
+                            GLFramebufferAttachment.ColorAttachment0,
+                            srcGLTexture.Texture,
+                            (int)srcMipLevel,
+                            (int)curLayer);
+                        CheckLastError();
+                    }
+                    else if (srcGLTexture.Type == TextureType.Texture1D)
+                    {
+                        _gl.FramebufferTexture1D(
+                            FramebufferTarget.ReadFramebuffer,
+                            GLFramebufferAttachment.ColorAttachment0,
+                            TextureTarget.Texture1D,
+                            srcGLTexture.Texture,
+                            (int)srcMipLevel);
+                        CheckLastError();
+                    }
+                    else
+                    {
+                        _gl.FramebufferTexture2D(
+                            FramebufferTarget.ReadFramebuffer,
+                            GLFramebufferAttachment.ColorAttachment0,
+                            TextureTarget.Texture2D,
+                            srcGLTexture.Texture,
+                            (int)srcMipLevel);
+                        CheckLastError();
+                    }
+
+                    CheckLastError();
+                    _gl.ReadPixels(
+                        (int)srcX, (int)srcY,
+                        width, height,
+                        srcGLTexture.GLPixelFormat,
+                        srcGLTexture.GLPixelType,
+                        (byte*)block.Data + curOffset);
+                    CheckLastError();
+                    _gl.DeleteFramebuffer(readFB);
+                    CheckLastError();
+                }
+            }
+
+            UpdateTexture(
+                dstGLTexture,
+                (IntPtr)block.Data,
+                dstX, dstY, dstZ,
+                width, height, depth, dstMipLevel, dstLayer);
+        }
+
+        if (packAlignment < 4)
+        {
+            _gl.PixelStore(PixelStoreParameter.PackAlignment, 4);
+            CheckLastError();
+        }
+
+        _stagingMemoryPool.Free(block);
+    }
+
+    private static void CopyWithFBO(
+        OpenGLTextureSamplerManager textureSamplerManager,
+        OpenGLTexture srcGLTexture, OpenGLTexture dstGLTexture,
+        uint srcX, uint srcY, uint srcZ, uint srcMipLevel, uint srcBaseArrayLayer,
+        uint dstX, uint dstY, uint dstZ, uint dstMipLevel, uint dstBaseArrayLayer,
+        uint width, uint height, uint depth, uint layerCount, uint layer)
+    {
+        TextureTarget dstTarget = dstGLTexture.TextureTarget;
+        if (dstTarget == TextureTarget.Texture2D)
+        {
+            OpenGLUtil.GL.BindFramebuffer(
+                FramebufferTarget.ReadFramebuffer,
+                srcGLTexture.GetFramebuffer(srcMipLevel, srcBaseArrayLayer + layer));
+            CheckLastError();
+
+            textureSamplerManager.SetTextureTransient(TextureTarget.Texture2D, dstGLTexture.Texture);
+            CheckLastError();
+
+            OpenGLUtil.GL.CopyTexSubImage2D(
+                TextureTarget.Texture2D,
+                (int)dstMipLevel,
+                (int)dstX, (int)dstY,
+                (int)srcX, (int)srcY,
+                width, height);
+            CheckLastError();
+        }
+        else if (dstTarget == TextureTarget.Texture2DArray)
+        {
+            OpenGLUtil.GL.BindFramebuffer(
+                FramebufferTarget.ReadFramebuffer,
+                srcGLTexture.GetFramebuffer(srcMipLevel, srcBaseArrayLayer + layerCount));
+
+            textureSamplerManager.SetTextureTransient(TextureTarget.Texture2DArray, dstGLTexture.Texture);
+            CheckLastError();
+
+            OpenGLUtil.GL.CopyTexSubImage3D(
+                TextureTarget.Texture2DArray,
+                (int)dstMipLevel,
+                (int)dstX,
+                (int)dstY,
+                (int)(dstBaseArrayLayer + layer),
+                (int)srcX,
+                (int)srcY,
+                width,
+                height);
+            CheckLastError();
+        }
+        else if (dstTarget == TextureTarget.Texture3D)
+        {
+            textureSamplerManager.SetTextureTransient(TextureTarget.Texture3D, dstGLTexture.Texture);
+            CheckLastError();
+
+            for (uint i = srcZ; i < srcZ + depth; i++)
+            {
+                OpenGLUtil.GL.CopyTexSubImage3D(
+                    TextureTarget.Texture3D,
+                    (int)dstMipLevel,
+                    (int)dstX,
+                    (int)dstY,
+                    (int)dstZ,
+                    (int)srcX,
+                    (int)srcY,
+                    width,
+                    height);
+            }
+            CheckLastError();
+        }
+    }
+}

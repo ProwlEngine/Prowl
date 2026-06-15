@@ -2,7 +2,7 @@ using System;
 using System.IO;
 
 
-namespace Prowl.Veldrid.Samples;
+namespace Prowl.Graphite.Samples;
 
 
 public static class FileLoader

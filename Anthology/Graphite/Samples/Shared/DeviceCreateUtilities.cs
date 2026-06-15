@@ -12,7 +12,7 @@ using Silk.NET.SDL;
 using System.Runtime.InteropServices;
 
 
-namespace Prowl.Veldrid.Samples;
+namespace Prowl.Graphite.Samples;
 
 
 public static class DeviceCreateUtilities

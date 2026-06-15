@@ -7,7 +7,7 @@ using Prowl.Vector;
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 public abstract class PipelineTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {

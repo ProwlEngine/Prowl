@@ -5,9 +5,9 @@ using Prowl.Vector;
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
-// Regression tests for specific bugs that have been fixed in Prowl.Veldrid. Each test in this
+// Regression tests for specific bugs that have been fixed in Prowl.Graphite. Each test in this
 // file exists to prevent a particular past bug from coming back; they are not part of the
 // general behavioral coverage in TextureTests.cs and should not be relied on as
 // documentation of the public contract. The test name and a comment above each test should

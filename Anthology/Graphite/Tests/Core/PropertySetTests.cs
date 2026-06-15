@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Covers the CPU-only surface of PropertySet: scalar uniform writes, entry de-duplication
 // by name, the resource-version counter, and Clear. Resource setters (buffer/texture/sampler)

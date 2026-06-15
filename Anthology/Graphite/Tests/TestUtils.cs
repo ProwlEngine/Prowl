@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Device/window creation for the test suite. The device-creation switch is duplicated from
 // Samples/Shared/DeviceCreateUtilities so the tests exercise the same path the samples do.
@@ -53,7 +53,7 @@ public static class TestUtils
     public static IWindow CreateWindow(GraphicsBackend backend)
     {
         WindowOptions options = WindowOptions.Default;
-        options.Title = "Prowl.Veldrid.Tests";
+        options.Title = "Prowl.Graphite.Tests";
         options.Size = new Vector2D<int>(200, 200);
         options.IsVisible = false;
         options.WindowState = Silk.NET.Windowing.WindowState.Normal;

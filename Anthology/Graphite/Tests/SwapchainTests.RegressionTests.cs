@@ -1,8 +1,8 @@
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
-// Regression tests for specific swapchain-related bugs that have been fixed in Prowl.Veldrid.
+// Regression tests for specific swapchain-related bugs that have been fixed in Prowl.Graphite.
 // Unlike the generic SwapchainTests / MainSwapchainTests infrastructure in SwapchainTests.cs,
 // each test here creates its own device with bug-specific options rather than inheriting a
 // pre-built device from a shared fixture, because the bugs under test are in the device
@@ -10,9 +10,9 @@ namespace Prowl.Veldrid.Tests;
 public class SwapchainRegressionTests
 {
     // Regression test for a bug where the 2-argument convenience overload of
-    // Prowl.VeldridStartup.CreateVulkanGraphicsDevice hardcoded `colorSrgb = false` instead of
+    // Prowl.GraphiteStartup.CreateVulkanGraphicsDevice hardcoded `colorSrgb = false` instead of
     // passing `options.SwapchainSrgbFormat` through to the 3-argument overload. Because
-    // Prowl.VeldridStartup.CreateGraphicsDevice (the default dispatch from
+    // Prowl.GraphiteStartup.CreateGraphicsDevice (the default dispatch from
     // CreateWindowAndGraphicsDevice) routes to the 2-argument overload, every application
     // using the default code path to create a Vulkan device got a non-sRGB swapchain even
     // when they explicitly set GraphicsDeviceOptions.SwapchainSrgbFormat = true.

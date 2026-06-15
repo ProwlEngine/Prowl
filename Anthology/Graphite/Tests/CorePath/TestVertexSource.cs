@@ -1,4 +1,4 @@
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Minimal IVertexSource for tests: holds one buffer per layout slot, an optional index
 // buffer, and a fixed topology. Mirrors what Samples/Shared/Mesh does, without the loading.

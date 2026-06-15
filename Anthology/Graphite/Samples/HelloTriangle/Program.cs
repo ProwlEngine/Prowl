@@ -1,7 +1,7 @@
 using Prowl.Vector;
 
 
-namespace Prowl.Veldrid.Samples.HelloTriangle;
+namespace Prowl.Graphite.Samples.HelloTriangle;
 
 
 public static class Program

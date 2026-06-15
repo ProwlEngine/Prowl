@@ -4,7 +4,7 @@ using System.IO;
 
 using Prowl.Slang;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // Compiles the test .slang shaders to per-backend bytecode at runtime, mirroring
 // Samples/Shared/ShaderLoader. Each test owns its ShaderDescription/ComputeDescription

@@ -8,7 +8,7 @@ using Prowl.Vector;
 
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 internal struct UIntVertexAttribsVertex
 {

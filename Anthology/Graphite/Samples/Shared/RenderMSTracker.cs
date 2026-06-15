@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.IO;
 
 
-namespace Prowl.Veldrid.Samples;
+namespace Prowl.Graphite.Samples;
 
 
 public class RenderMSTracker

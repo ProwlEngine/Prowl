@@ -5,7 +5,7 @@ using System.IO;
 using Prowl.Vector;
 
 
-namespace Prowl.Veldrid.Samples;
+namespace Prowl.Graphite.Samples;
 
 
 public static class ModelLoader

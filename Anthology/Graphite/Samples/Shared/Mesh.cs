@@ -2,10 +2,10 @@ using System;
 using System.Runtime.CompilerServices;
 
 
-using Prowl.Veldrid;
+using Prowl.Graphite;
 
 
-namespace Prowl.Veldrid.Samples;
+namespace Prowl.Graphite.Samples;
 
 
 public sealed class Mesh : IDisposable, IVertexSource

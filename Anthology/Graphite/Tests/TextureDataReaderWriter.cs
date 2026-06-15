@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 internal unsafe class TextureDataReaderWriter
 {

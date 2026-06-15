@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace Prowl.Veldrid.Tests;
+namespace Prowl.Graphite.Tests;
 
 // CPU-side tests (Core/*, format helpers, profiling value types) run in parallel.
 // GPU tests share a single graphics device per backend and must not run concurrently,
