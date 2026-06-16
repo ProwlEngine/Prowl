@@ -35,7 +35,7 @@
     <!-- Local development -->
     <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
         <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
-        <ProjectReference Include="..\Shaders\Prowl.Graphite.Shaders.csproj" />
+        <ProjectReference Include="..\Variants\Prowl.Graphite.Variants.csproj" />
     </ItemGroup>
 
     <!-- NuGet dependency -->

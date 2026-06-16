@@ -5,7 +5,7 @@ using Xunit;
 namespace Prowl.Graphite.Shaders.Tests;
 
 
-public class ShaderVariantSetTests
+public class VariantSetTests
 {
     [Fact]
     public void SelectsBaseVariantInitially()
@@ -17,7 +17,7 @@ public class ShaderVariantSetTests
             [new Keyword("MODE", "C")],
         ];
 
-        ShaderVariantSet<string> set = new(["progA", "progB", "progC"], keywords);
+        VariantSet<string> set = new(["progA", "progB", "progC"], keywords);
 
         Assert.Equal("progA", set.ActiveVariant);
     }
@@ -33,7 +33,7 @@ public class ShaderVariantSetTests
             [new Keyword("MODE", "C")],
         ];
 
-        ShaderVariantSet<string> set = new(["progA", "progB", "progC"], keywords);
+        VariantSet<string> set = new(["progA", "progB", "progC"], keywords);
 
         set.SetKeyword(new Keyword("MODE", "C"));
         Assert.Equal("progC", set.ActiveVariant);
@@ -55,7 +55,7 @@ public class ShaderVariantSetTests
             [new Keyword("X", "1"), new Keyword("Y", "1")], // v11
         ];
 
-        ShaderVariantSet<string> set = new(["v00", "v01", "v10", "v11"], keywords);
+        VariantSet<string> set = new(["v00", "v01", "v10", "v11"], keywords);
 
         Assert.Equal("v00", set.ActiveVariant);
 
@@ -76,6 +76,6 @@ public class ShaderVariantSetTests
         Keyword[][] keywords = [[new Keyword("MODE", "A")]];
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new ShaderVariantSet<string>(["a", "b"], keywords));
+            new VariantSet<string>(["a", "b"], keywords));
     }
 }

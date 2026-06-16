@@ -14,7 +14,7 @@ namespace Prowl.Graphite.Shaders;
 /// pipeline state; that now lives inside each compiled variant.
 /// </para>
 /// </summary>
-public sealed class ShaderVariantSet<T>
+public sealed class VariantSet<T>
 {
     /// <summary>
     /// The variant currently selected by the keyword state. Updated by <see cref="SetKeyword"/>
@@ -30,13 +30,13 @@ public sealed class ShaderVariantSet<T>
 
 
     /// <summary>
-    /// Creates a variant set from precompiled variants and their matching keyword sets. The current
+    /// Creates a variant set from a list of values and their matching keyword sets. The current
     /// active variant can be changed by setting different keywords on the set.
     /// </summary>
-    /// <param name="variants">The precompiled variants. Each variant should have a corresponding
+    /// <param name="variants">The variant values. Each variant should have a corresponding
     /// keyword set at the same index in <paramref name="keywords"/>.</param>
     /// <param name="keywords">The keyword sets for each variant.</param>
-    public ShaderVariantSet(T[] variants, Keyword[][] keywords)
+    public VariantSet(T[] variants, Keyword[][] keywords)
     {
         if (variants.Length > keywords.Length)
             throw new ArgumentOutOfRangeException(nameof(variants), "More variants than keywords have been specified. Please ensure each variant has a matching keyword set.");
