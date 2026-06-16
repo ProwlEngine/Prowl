@@ -64,6 +64,18 @@ public static class CreateAssetMenuRegistry
 
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
+    /// <summary>
+    /// Drop ALL cached entries (including manual factory entries, which hold a user-supplied
+    /// <see cref="Type"/> and factory delegate) so the script AssemblyLoadContext can be
+    /// collected. Manual entries are re-registered after reload by their owners (e.g.
+    /// <c>ShaderTypeCreateMenu.Register()</c>).
+    /// </summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _entries.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

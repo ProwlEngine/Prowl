@@ -50,6 +50,14 @@ public static class NodePreviewRegistry
         Initialize();
     }
 
+    /// <summary>Drop cached type maps so the script AssemblyLoadContext can be collected.</summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _typeToDrawer.Clear();
+        _cache.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

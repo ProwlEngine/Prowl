@@ -57,6 +57,17 @@ public static class GraphValidatorRegistry
         Initialize();
     }
 
+    /// <summary>
+    /// Drop cached validators (each holds a marker <see cref="Type"/> and a live instance,
+    /// possibly user types) without re-scanning, so a collectible AssemblyLoadContext can be
+    /// unloaded. Rebuilds on the next <see cref="Initialize"/> after reload.
+    /// </summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _validators.Clear();
+    }
+
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
         Justification = "Engine bootstrap: scans loaded assemblies for GraphValidator subclasses. Validator types must be preserved by the consuming application's trim configuration.")]
     [UnconditionalSuppressMessage("Trimming", "IL2072:DynamicallyAccessedMembers",

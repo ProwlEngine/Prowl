@@ -37,6 +37,14 @@ public static class AssetImporterEditorRegistry
 
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
+    /// <summary>Drop cached type maps and editor instances so the script AssemblyLoadContext can be collected.</summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _typeToEditor.Clear();
+        _editorCache.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

@@ -75,6 +75,14 @@ public static class NodeRendererRegistry
         Initialize();
     }
 
+    /// <summary>Drop cached type maps so the script AssemblyLoadContext can be collected.</summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _typeToRenderer.Clear();
+        _cache.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

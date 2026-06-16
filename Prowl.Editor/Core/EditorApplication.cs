@@ -1116,6 +1116,30 @@ public class EditorApplication : Game
         return FindInNode(node.ChildA, panelType) ?? FindInNode(node.ChildB, panelType);
     }
 
+    /// <summary>Enumerate every open panel across the docked tree and all floating windows.</summary>
+    private IEnumerable<DockPanel> EnumerateAllPanels()
+    {
+        foreach (var p in EnumerateNodePanels(_dockSpace.Root))
+            yield return p;
+        foreach (var fw in _dockSpace.FloatingWindows)
+            foreach (var p in EnumerateNodePanels(fw.Node))
+                yield return p;
+    }
+
+    private static IEnumerable<DockPanel> EnumerateNodePanels(DockNode? node)
+    {
+        if (node == null) yield break;
+        if (node.IsLeaf)
+        {
+            if (node.Tabs != null)
+                foreach (var tab in node.Tabs)
+                    yield return tab;
+            yield break;
+        }
+        foreach (var p in EnumerateNodePanels(node.ChildA)) yield return p;
+        foreach (var p in EnumerateNodePanels(node.ChildB)) yield return p;
+    }
+
     /// <summary>
     /// Open a panel. If it's already open, focus it. Otherwise create a new instance as a floating window.
     /// </summary>
@@ -1267,8 +1291,80 @@ public class EditorApplication : Game
     //  Script Compilation
     // ================================================================
 
-    /// <summary>Called by ScriptAssemblyManager after hot-reload to re-scan all registries.</summary>
-    public void ReinitializeAfterReload() => ReinitializeRegistries();
+    /// <summary>
+    /// Called by <see cref="ScriptAssemblyManager"/> right after the new script assemblies are
+    /// loaded. Re-scans every registry against the fresh assemblies and reloads project settings.
+    /// </summary>
+    public void ReinitializeAfterReload()
+    {
+        ReinitializeRegistries();
+
+        // Re-create settings singletons against the new types, then reload the values that
+        // SaveProjectState() persisted to disk just before the reload so authoring survives.
+        ProjectSettingsRegistry.OnProjectOpened();
+    }
+
+    /// <summary>
+    /// Drops every strong reference the editor holds into the script <see cref="System.Runtime.Loader.AssemblyLoadContext"/>
+    /// so it can actually be collected when unloaded. This is the counterpart to
+    /// <see cref="ReinitializeAfterReload"/>: tear everything down here, rebuild it there.
+    ///
+    /// Anything that survives this call and transitively reaches a user type (a live instance, a
+    /// <see cref="Type"/> handle, a delegate bound to user code, a <see cref="FieldInfo"/>) pins
+    /// the old context and forces a full editor restart instead of a hot-reload.
+    /// </summary>
+    public void ReleaseScriptReferences()
+    {
+        // 1. Live object graph: the scene's GameObjects hold user MonoBehaviour instances.
+        //    The scene was already serialized to disk by SaveSceneForRestart().
+        Selection.Clear();
+        Undo.Clear();
+        Runtime.Resources.Scene.Unload();
+        Runtime.UI.UIEventSystem.ResetState();
+        SceneViewEditorRegistry.ClearCache();
+
+        // 1b. Long-lived editor panels cache scene objects (e.g. the Inspector's last target,
+        //     the Hierarchy's drag target). Let each drop its references before the unload.
+        if (_dockSpace != null)
+            foreach (var panel in EnumerateAllPanels())
+                if (panel is IScriptReloadCleanup cleanup)
+                    try { cleanup.OnScriptReloadCleanup(); } catch { }
+
+        // 2. Play-mode leftovers (normally empty outside play mode; cleared defensively).
+        _savedEditorScene = null;
+        _savedEditorTime = null;
+        StaticFieldCrawler.Clear();
+
+        // 3. Menu closures: Window/* and GameObject/* items capture user Types. Drop the whole
+        //    menu (rebuilt wholesale by ReinitializeRegistries) plus the panel type list.
+        MenuRegistry.Clear();
+        _registeredPanels.Clear();
+
+        // 4. Editor registry caches (Type maps, cached editor/drawer/generator instances, ...).
+        PropertyEditorRegistry.ClearCache();
+        CustomEditorRegistry.ClearCache();
+        GraphTools.NodeRendererRegistry.ClearCache();
+        GraphTools.NodePreviewRegistry.ClearCache();
+        Inspector.AssetImporterEditorRegistry.ClearCache();
+        GUI.Popups.AddComponentPopup.ClearCache();
+        Importers.ImporterRegistry.ClearCache();
+        ProjectSettingsRegistry.ClearCache();
+        CreateAssetMenuRegistry.ClearCache();
+        ThumbnailGeneratorRegistry.ClearCache();
+        SceneDropHandlerRegistry.ClearCache();
+        CreateGameObjectMenuRegistry.ClearCache();
+        FileIconRegistry.ClearCache();
+        AssetDoubleClickRegistry.ClearCache();
+        ScriptTemplateRegistry.ClearCache();
+        ComponentIconRegistry.ClearCache();
+
+        // 5. Runtime-side caches that also reflect over user assemblies.
+        Echo.Serializer.ClearCache();
+        RuntimeUtils.ClearCache();
+        Runtime.GraphTools.NodeRegistry.Reinitialize();          // clear-only; rebuilds lazily
+        Runtime.GraphTools.GraphValidatorRegistry.ClearCache();
+        Runtime.MeshFeatures.MeshFeatureRegistry.ClearCache();
+    }
 
     private void ReinitializeRegistries()
     {
@@ -1293,16 +1389,11 @@ public class EditorApplication : Game
         AssetDoubleClickRegistry.Reinitialize();
         ScriptTemplateRegistry.Reinitialize();
 
-        // Re-register Window menu items for any new panels from user assemblies
-        foreach (var (type, path) in _registeredPanels)
-        {
-            var capturedType = type;
-            MenuRegistry.Register($"Window/{path}", () => OpenPanel(capturedType),
-                isChecked: () => IsPanelOpen(capturedType));
-        }
-
-        // Re-register GameObject menu items for any new creators from user assemblies
-        CreateGameObjectMenuRegistry.RegisterMenuBarItems();
+        // Rebuild the menu bar from scratch. A hot-reload clears it in ReleaseScriptReferences()
+        // (dropping closures that captured user Types); rebuild the full set so removed/renamed
+        // user windows and creators don't linger. Cheap and idempotent on the normal open path.
+        MenuRegistry.Clear();
+        RegisterMenus();
     }
 
     public void RestoreAutoSavedScene(string path)
@@ -1463,6 +1554,15 @@ public class EditorApplication : Game
             return;
         }
 
+        // Snapshot static fields before play mode so we can restore them on exit
+        foreach (Assembly assembly in ScriptAssemblyManager.GetAllRelevantAssemblies())
+        {
+            if (!assembly.FullName.StartsWith("System.") && !assembly.FullName.StartsWith("Microsoft."))
+            {
+                StaticFieldCrawler.SnapshotStaticFields(assembly);
+            }
+        }
+
         // Clear selection (references will be invalid)
         Selection.Clear();
 
@@ -1519,6 +1619,9 @@ public class EditorApplication : Game
 
         // Unload the play scene
         Runtime.Resources.Scene.Unload();
+
+        // Restore static fields to their pre-play-mode values
+        StaticFieldCrawler.RestoreStaticFields();
 
         // Restore the editor scene WITHOUT lifecycle callbacks
         if (_savedEditorScene != null)

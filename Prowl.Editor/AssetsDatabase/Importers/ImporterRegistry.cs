@@ -16,6 +16,14 @@ public static class ImporterRegistry
 
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
+    /// <summary>Drop cached importer type maps so the script AssemblyLoadContext can be collected.</summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _extensionToImporter.Clear();
+        _nameToImporter.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

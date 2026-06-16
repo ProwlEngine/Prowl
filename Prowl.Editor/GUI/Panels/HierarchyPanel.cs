@@ -19,10 +19,18 @@ using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Hierarchy")]
-public class HierarchyPanel : DockPanel
+public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 {
     public override string Title => Loc.Get("panel.hierarchy");
     public override string Icon => EditorIcons.Sitemap;
+
+    // The drag-hover targets are scene GameObjects; drop them before a hot-reload unload so they
+    // don't pin the script AssemblyLoadContext. (Normally null outside an active drag.)
+    public void OnScriptReloadCleanup()
+    {
+        _dragHoverTarget = null;
+        _dragHoverTargetNext = null;
+    }
 
     private string _searchText = "";
     private Paper? _paper;

@@ -56,6 +56,13 @@ public static class CreateGameObjectMenuRegistry
 
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
+    /// <summary>Drop cached menu entries (which capture user <see cref="Type"/>s) so the script AssemblyLoadContext can be collected.</summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _entries.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

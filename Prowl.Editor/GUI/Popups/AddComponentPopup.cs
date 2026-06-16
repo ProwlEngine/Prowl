@@ -37,6 +37,12 @@ public static class AddComponentPopup
     /// <summary>Clear cached component list so it re-scans assemblies on next Open.</summary>
     public static void Reinitialize() => _cachedComponents = null;
 
+    /// <summary>
+    /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
+    /// including user ones) so the script AssemblyLoadContext can be collected.
+    /// </summary>
+    public static void ClearCache() => _cachedComponents = null;
+
     public static bool IsOpen => _isOpen;
 
     private static OrigamiUI.IModal? _modal;

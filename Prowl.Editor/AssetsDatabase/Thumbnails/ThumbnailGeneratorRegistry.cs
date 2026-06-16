@@ -43,6 +43,13 @@ public static class ThumbnailGeneratorRegistry
 
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
+    /// <summary>Drop cached generators (keyed by user <see cref="Type"/>) so the script AssemblyLoadContext can be collected.</summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _generators.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

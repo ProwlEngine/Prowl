@@ -46,6 +46,18 @@ public static class MeshFeatureRegistry
         Initialize();
     }
 
+    /// <summary>
+    /// Drop cached specs without re-scanning, so a collectible AssemblyLoadContext holding
+    /// user <see cref="MeshFeatureSpec"/> types can be unloaded. Specs rebuild on the next
+    /// <see cref="Initialize"/>/<see cref="Reinitialize"/> after the new assemblies are loaded.
+    /// </summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _specs.Clear();
+        _aggregateVersion = 0;
+    }
+
     [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
         Justification = "Engine bootstrap: scans loaded assemblies for MeshFeatureSpec subclasses. Spec types must be preserved by the consuming application's trim configuration.")]
     [UnconditionalSuppressMessage("Trimming", "IL2072:DynamicallyAccessedMembers",

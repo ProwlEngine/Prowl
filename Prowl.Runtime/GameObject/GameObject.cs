@@ -998,6 +998,13 @@ public class GameObject : EngineObject, ISerializable
         }
         _components.Clear();
 
+        // Sever every graph link so a disposed GameObject is a dead-end. Without this, anything
+        // still holding a reference to this GameObject (an editor panel, a render cache, a stray
+        // delegate) transitively keeps its components - and therefore their user-script types and
+        // the collectible AssemblyLoadContext - alive, which blocks script hot-reload.
+        _componentCache.Clear();
+        Children.Clear();
+
         if (_parent.IsValid() && !_parent.IsDisposed)
             SetParent(null);
     }

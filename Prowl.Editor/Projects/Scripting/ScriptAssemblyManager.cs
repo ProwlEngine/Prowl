@@ -294,22 +294,11 @@ public static class ScriptAssemblyManager
             SaveSceneForRestart(project);
             EditorApplication.Instance?.SaveProjectState();
 
-            // 2. Clear all caches that hold Type references or reflection data
-            Echo.Serializer.ClearCache();
-            Runtime.RuntimeUtils.ClearCache();
-            Runtime.GraphTools.NodeRegistry.Reinitialize();
-            Runtime.MeshFeatures.MeshFeatureRegistry.Reinitialize();
+            // 2. Drop every editor/runtime strong reference into the old assemblies. Without this
+            //    the collectible context stays rooted and the unload below fails, forcing a restart.
+            EditorApplication.Instance?.ReleaseScriptReferences();
 
-            // Editor ComponentIconRegistry cache
-            typeof(ComponentIconRegistry)
-                .GetField("_cache", BindingFlags.NonPublic | BindingFlags.Static)?
-                .GetValue(null)
-                ?.GetType().GetMethod("Clear")?
-                .Invoke(typeof(ComponentIconRegistry)
-                    .GetField("_cache", BindingFlags.NonPublic | BindingFlags.Static)?
-                    .GetValue(null), null);
-
-            // 3. Unload old assemblies - if this fails, caller will restart
+            // 3. Unload old assemblies - if this fails, caller will restart.
             if (!UnloadScriptAssemblies())
                 return false;
 

@@ -60,6 +60,17 @@ public static class CustomEditorRegistry
         Initialize();
     }
 
+    /// <summary>
+    /// Drop all cached <see cref="Type"/> references and editor instances so the script
+    /// AssemblyLoadContext can be collected. Caches rebuild on the next <see cref="Initialize"/>.
+    /// </summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _typeToEditor.Clear();
+        _editorCache.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

@@ -77,6 +77,18 @@ public static class ProjectSettingsRegistry
 
     public static void Reinitialize() { _initialized = false; _entries.Clear(); Initialize(); }
 
+    /// <summary>
+    /// Drop cached settings entries (each holds a settings <see cref="Type"/> and a live
+    /// instance, which may be a user type) so the script AssemblyLoadContext can be collected.
+    /// Callers must <see cref="SaveAll"/> first and reload via <see cref="OnProjectOpened"/>
+    /// after the new assemblies are in place so authored values survive the reload.
+    /// </summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _entries.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;
@@ -114,7 +126,20 @@ public static class ProjectSettingsRegistry
     {
         foreach (var entry in _entries)
             if (entry.Instance is T t) return t;
-        throw new InvalidOperationException($"Settings type {typeof(T).Name} not registered.");
+
+        // Not registered. This normally only happens transiently if the registry was cleared for
+        // a script hot-reload that then failed to finish. Rebuild instead of hard-crashing the
+        // editor (a throw here turned a recoverable reload failure into a fatal exception during
+        // Scene.Load -> Settings.Apply).
+        if (!_initialized)
+        {
+            Initialize();
+            foreach (var entry in _entries)
+                if (entry.Instance is T t) return t;
+        }
+
+        Debug.LogWarning($"Settings type {typeof(T).Name} not registered; returning a transient default.");
+        return (T)Activator.CreateInstance(typeof(T))!;
     }
 
     /// <summary>Load all settings from the current project's ProjectSettings folder.</summary>

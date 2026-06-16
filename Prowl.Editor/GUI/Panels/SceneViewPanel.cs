@@ -19,12 +19,16 @@ using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Scene")]
-public class SceneViewPanel : DockPanel
+public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 {
     public override string Title => Loc.Get("panel.scene");
     public override string Icon => EditorIcons.Video;
 
     private EditorCamera? _editorCamera;
+
+    // The editor camera caches the scene camera + cloned image effects (possibly user types).
+    // Release them before a hot-reload so they don't pin the script AssemblyLoadContext.
+    public void OnScriptReloadCleanup() => _editorCamera?.ReleaseSceneReferences();
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;

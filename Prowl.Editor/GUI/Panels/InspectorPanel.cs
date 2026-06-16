@@ -17,7 +17,7 @@ using Prowl.Editor.Projects;
 namespace Prowl.Editor.GUI.Panels;
 
 [EditorWindow("General/Inspector")]
-public class InspectorPanel : DockPanel
+public class InspectorPanel : DockPanel, IScriptReloadCleanup
 {
     public override string Title => Loc.Get("panel.inspector");
     public override string Icon => EditorIcons.Sliders;
@@ -25,6 +25,10 @@ public class InspectorPanel : DockPanel
     // Remember the last non-folder selection so navigating folders doesn't clear the inspector.
     private object? _lastInspectable;
     private bool _subscribed;
+
+    // The cached inspectable is usually a scene GameObject/component (a user type), which would
+    // pin the script AssemblyLoadContext across a hot-reload. Drop it before the unload.
+    public void OnScriptReloadCleanup() => _lastInspectable = null;
 
     public override bool SerializeState(System.Text.Json.Nodes.JsonObject state)
     {

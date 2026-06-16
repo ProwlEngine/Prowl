@@ -56,6 +56,13 @@ public static class ScriptTemplateRegistry
 
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
+    /// <summary>Drop cached templates so the script AssemblyLoadContext can be collected.</summary>
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _templates.Clear();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;
