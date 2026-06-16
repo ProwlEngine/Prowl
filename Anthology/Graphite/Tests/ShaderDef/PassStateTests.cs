@@ -172,8 +172,8 @@ public class PassStateTests
     [Fact]
     public void StopsAtUnknownIdentifier()
     {
-        // "ShaderSource" is not a render-state command, so parsing stops there and Cull is captured.
-        ParsedPassState s = Parse.State("Cull Back ShaderSource");
+        // "Banana" is not a render-state command, so parsing stops there and Cull is captured.
+        ParsedPassState s = Parse.State("Cull Back Banana");
 
         Assert.Equal(FaceCullMode.Back, s.CullMode);
     }
@@ -182,6 +182,6 @@ public class PassStateTests
     [Fact]
     public void UnknownEnumValue_Throws()
     {
-        Assert.ThrowsAny<Exception>(() => Parse.State("ZTest Bullcrap"));
+        Assert.ThrowsAny<Exception>(() => Parse.State("ZTest Baloney"));
     }
 }

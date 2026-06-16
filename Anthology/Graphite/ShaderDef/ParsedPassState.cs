@@ -256,7 +256,7 @@ public class ParsedPassState
 
     // Consumes and parses a single render-state command if the identifier names one.
     // Returns false (without consuming) for any unrecognized identifier, which terminates the
-    // command loop, e.g. on reaching the ShaderSource block.
+    // command loop, e.g. on reaching the SLANGPROGRAM block.
     static bool TryParseRenderCommand(ref Tokenizer<ShaderToken> t, string name, out ParsedPassState state)
     {
         switch (name)

@@ -14,7 +14,9 @@ public class ParsedPass
 
     public required ParsedPassState State;
 
-    public required ParsedShaderSource Source;
+    // The raw Slang source embedded between SLANGPROGRAM and ENDSLANG. Slang derives its own
+    // entrypoints, so no explicit vertex/fragment stages are declared here.
+    public required string InlineSlang;
 
 
     static string ParsePassName(ref Tokenizer<ShaderToken> t)
@@ -64,7 +66,8 @@ public class ParsedPass
             tags = ParsePassTags(ref t);
 
         ParsedPassState state = ParsedPassState.Parse(ref t);
-        ParsedShaderSource source = ParsedShaderSource.Parse(ref t);
+
+        string inlineSlang = ParserUtility.SlangProgram(ref t);
 
         t.Expect(ShaderToken.CloseBrace);
 
@@ -73,7 +76,7 @@ public class ParsedPass
             Name = name,
             Tags = tags,
             State = state,
-            Source = source
+            InlineSlang = inlineSlang
         };
     }
 }

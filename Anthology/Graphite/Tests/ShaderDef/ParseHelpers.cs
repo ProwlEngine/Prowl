@@ -21,10 +21,10 @@ internal static class Parse
     }
 
 
-    public static ParsedShaderSource Source(string source)
+    public static string Slang(string source)
     {
         Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
-        return ParsedShaderSource.Parse(ref t);
+        return ParserUtility.SlangProgram(ref t);
     }
 
 

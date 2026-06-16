@@ -125,6 +125,20 @@ public static class ParserUtility
     }
 
 
+    // Parses a SLANGPROGRAM ... ENDSLANG block, returning the embedded Slang source verbatim.
+    public static string SlangProgram(ref Tokenizer<ShaderToken> t)
+    {
+        Token<ShaderToken> token = t.Expect(ShaderToken.SlangProgram);
+
+        // Crumb's block rule consumes to end-of-source when the terminator is absent, so a missing
+        // ENDSLANG leaves no terminator immediately following the captured content.
+        if (!t.Source.Slice(token.End).StartsWith("ENDSLANG"))
+            throw Exceptions.UnterminatedSlangProgram(token);
+
+        return t.Slice(token).ToString().Trim();
+    }
+
+
     // Parses a texture definition as "" {}
     public static string Texture(ref Tokenizer<ShaderToken> t)
     {

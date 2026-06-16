@@ -17,7 +17,7 @@ public class TagsTests
         ParsedPass pass = Parse.Pass("""
             Pass
             {
-                ShaderSource "s" { Vertex "v" Fragment "f" }
+                SLANGPROGRAM void main() {} ENDSLANG
             }
             """);
 
@@ -32,7 +32,7 @@ public class TagsTests
             Pass
             {
                 Tags { "LightMode" = "ForwardBase" }
-                ShaderSource "s" { Vertex "v" Fragment "f" }
+                SLANGPROGRAM void main() {} ENDSLANG
             }
             """);
 
@@ -49,7 +49,7 @@ public class TagsTests
             Pass
             {
                 Tags { "LightMode" = "ForwardBase" "Queue" = "Transparent" "RenderType" = "Opaque" }
-                ShaderSource "s" { Vertex "v" Fragment "f" }
+                SLANGPROGRAM void main() {} ENDSLANG
             }
             """);
 
@@ -67,7 +67,7 @@ public class TagsTests
             Pass
             {
                 Tags { }
-                ShaderSource "s" { Vertex "v" Fragment "f" }
+                SLANGPROGRAM void main() {} ENDSLANG
             }
             """);
 

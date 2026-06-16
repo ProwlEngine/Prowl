@@ -31,11 +31,10 @@ public class ShaderTests
 
                 Stencil { Ref 2 Comp Equal Pass Keep }
 
-                ShaderSource "Standard.slang"
-                {
-                    Vertex "vsMain"
-                    Fragment "fsMain"
-                }
+                SLANGPROGRAM
+                float4 vsMain() : SV_Position { return 0; }
+                float4 fsMain() : SV_Target { return 1; }
+                ENDSLANG
             }
 
             Fallback "Hidden/Fallback"
@@ -72,7 +71,7 @@ public class ShaderTests
         ParsedShader shader = Parse.Shader("""
             Shader "Min"
             {
-                Pass { ShaderSource "s" { Vertex "v" Fragment "f" } }
+                Pass { SLANGPROGRAM void main() {} ENDSLANG }
                 Fallback "fb"
             }
             """);
@@ -87,8 +86,8 @@ public class ShaderTests
         ParsedShader shader = Parse.Shader("""
             Shader "Multi"
             {
-                Pass { Name "A" ShaderSource "s" { Vertex "v" Fragment "f" } }
-                Pass { Name "B" ShaderSource "s" { Vertex "v" Fragment "f" } }
+                Pass { Name "A" SLANGPROGRAM void a() {} ENDSLANG }
+                Pass { Name "B" SLANGPROGRAM void b() {} ENDSLANG }
                 Fallback "fb"
             }
             """);
@@ -105,7 +104,7 @@ public class ShaderTests
         Assert.ThrowsAny<Exception>(() => Parse.Shader("""
             Shader "NoFallback"
             {
-                Pass { ShaderSource "s" { Vertex "v" Fragment "f" } }
+                Pass { SLANGPROGRAM void main() {} ENDSLANG }
             }
             """));
     }

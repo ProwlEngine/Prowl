@@ -15,8 +15,7 @@ It uses Slang shaders in conjunction with a custom ShaderLab-adjacent syntax to 
   - [Tags](#tags)
   - [Render State Commands](#render-state-commands)
   - [Stencil Block](#stencil-block)
-  - [ShaderSource Block](#shadersource-block)
-    - [Entrypoints](#entrypoints)
+  - [SLANGPROGRAM Block](#slangprogram-block)
 - [Fallback](#fallback)
 - [Full Example](#full-example)
 
@@ -108,10 +107,9 @@ Pass [index]
 
     Stencil { ... }         // optional
 
-    ShaderSource "SourceFile"
-    {
-        ...
-    }
+    SLANGPROGRAM
+    ...                     // embedded Slang source
+    ENDSLANG
 }
 ```
 
@@ -409,39 +407,31 @@ Used by `Pass`/`PassFront`/`PassBack`, `Fail`/`FailFront`/`FailBack`, and
 
 ---
 
-## ShaderSource Block
+## SLANGPROGRAM Block
 
-Each pass must contain exactly one `ShaderSource` block, which identifies the source `.slang` file to use
-as the shader for the pass. This is to allow re-use of logic between multiple `.slang` files, with different
-entrypoints contained in the same module being able to be used across different `Pass` blocks
-and `.shaderdef` definitions.
+Each pass must contain exactly one `SLANGPROGRAM ... ENDSLANG` block, which embeds the Slang
+source for the pass inline. Everything between the `SLANGPROGRAM` and `ENDSLANG` markers is captured
+verbatim and handed to the Slang compiler untouched; the ShaderDef parser does not interpret its
+contents.
 
 ```
-ShaderSource "VertexShader.slang"
-{
-    Vertex "vertexEntrypoint"
-    Fragment "fragmentEntrypoint"
-}
+SLANGPROGRAM
+[shader("vertex")]
+float4 vertexMain(uint id : SV_VertexID) : SV_Position { ... }
+
+[shader("fragment")]
+float4 fragmentMain() : SV_Target { ... }
+ENDSLANG
 ```
 
-| Element                   | Required | Notes                                                |
-|---------------------------|----------|------------------------------------------------------|
-| `ShaderSource "Filename"` | Yes      | Quoted source file to load                           |
-| `Vertex "Entrypoint"`     | Yes      | The module entrypoint to use for the Vertex stage    |
-| `Fragment "EntryPoint"`   | Yes      | The module entrypoint to use for the Fragment stage  |
+Stages and entrypoints are not declared in ShaderDef. Slang determines them from the embedded
+source (for example via `[shader("...")]` attributes), so there is no need to specify a vertex or
+fragment entrypoint by hand.
 
-### Entrypoints
-
-Entrypoint commands describe what entry point to use for a shader stage from within the `ShaderSource` block.
-
-| Command                        | Description                                                       |
-|--------------------------------|-------------------------------------------------------------------|
-| `Vertex "Name"`                | The Slang module function to use for the vertex shader stage      |
-| `Fragment "Name"`              | The Slang module function to use for the fragment shader stage    |
-| `Mesh "Name"`                  | The Slang module function to use for the mesh shader stage        |
-| `Task "Name"`                  | The Slang module function to use for the task shader stage        |
-| `Geometry "Name"`              | The Slang module function to use for the geometry shader stage    |
-| `Tesselation "Name"`           | The Slang module function to use for the tesselation shader stage |
+| Element        | Required | Notes                                                          |
+|----------------|----------|----------------------------------------------------------------|
+| `SLANGPROGRAM` | Yes      | Opening marker. Case-sensitive, must be uppercase.             |
+| `ENDSLANG`     | Yes      | Closing marker. Case-sensitive, must be uppercase.             |
 
 ---
 
@@ -480,11 +470,13 @@ Shader "Example/PBR"
         ZWrite On
         Blend SrcAlpha OneMinusSrcAlpha
 
-        ShaderSource "PBR.slang"
-        {
-            Vertex "PBRVertex"
-            Fragment "PBRFragment"
-        }
+        SLANGPROGRAM
+        [shader("vertex")]
+        float4 PBRVertex(uint id : SV_VertexID) : SV_Position { ... }
+
+        [shader("fragment")]
+        float4 PBRFragment() : SV_Target { ... }
+        ENDSLANG
     }
 
     Pass 1
@@ -497,11 +489,13 @@ Shader "Example/PBR"
         ZWrite On
         ColorMask R
 
-        ShaderSource "PBR.slang"
-        {
-            Vertex "PBRShadowVertex"
-            Fragment "PBRShadowFragment"
-        }
+        SLANGPROGRAM
+        [shader("vertex")]
+        float4 PBRShadowVertex(uint id : SV_VertexID) : SV_Position { ... }
+
+        [shader("fragment")]
+        float4 PBRShadowFragment() : SV_Target { ... }
+        ENDSLANG
     }
 
     Fallback "Hidden/InternalError"

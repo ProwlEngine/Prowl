@@ -12,6 +12,9 @@ public enum ShaderToken
     String,
     Number,
 
+    // Raw embedded Slang source captured between SLANGPROGRAM and ENDSLANG.
+    SlangProgram,
+
     // Character token types
     OpenBrace,
     CloseBrace,

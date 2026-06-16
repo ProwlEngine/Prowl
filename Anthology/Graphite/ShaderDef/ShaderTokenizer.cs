@@ -34,6 +34,10 @@ public static class ShaderTokenizer
             // tokenized as its own symbol and folded back into the value by the numeric parsers.
             .Symbol("-", ShaderToken.Minus)
 
+            // Captures everything between SLANGPROGRAM and ENDSLANG verbatim, without
+            // tokenizing the embedded Slang. Markers are matched literally (case-sensitive).
+            .Block("SLANGPROGRAM", "ENDSLANG", ShaderToken.SlangProgram)
+
             .String('"', ShaderToken.String)
             .Number(ShaderToken.Number)
             .Identifier(ShaderToken.Identifier)

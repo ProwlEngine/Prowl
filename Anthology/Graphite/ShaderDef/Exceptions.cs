@@ -29,4 +29,8 @@ public static class Exceptions
 
     public static ParseException ExpectedAny(IEnumerable<string> expected, string found, Token<ShaderToken> at) =>
         new($"Expected any of '{string.Join(", ", expected)}' but got '{found}'", at.Line, at.Column);
+
+
+    public static ParseException UnterminatedSlangProgram(Token<ShaderToken> at) =>
+        new("Unterminated SLANGPROGRAM block: missing closing 'ENDSLANG'", at.Line, at.Column);
 }

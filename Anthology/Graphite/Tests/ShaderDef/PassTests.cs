@@ -14,14 +14,16 @@ public class PassTests
                 Name "Forward"
                 Tags { "LightMode" = "ForwardBase" }
                 Cull Back
-                ShaderSource "Standard.slang" { Vertex "vs" Fragment "fs" }
+                SLANGPROGRAM
+                float4 vsMain() : SV_Position { return 0; }
+                ENDSLANG
             }
             """);
 
         Assert.Equal("Forward", pass.Name);
         Assert.NotNull(pass.Tags);
         Assert.Equal(FaceCullMode.Back, pass.State.CullMode);
-        Assert.Equal("Standard.slang", pass.Source.ShaderSourceFile);
+        Assert.Equal("float4 vsMain() : SV_Position { return 0; }", pass.InlineSlang);
     }
 
 
@@ -31,13 +33,15 @@ public class PassTests
         ParsedPass pass = Parse.Pass("""
             Pass
             {
-                ShaderSource "s" { Vertex "v" Fragment "f" }
+                SLANGPROGRAM
+                void main() {}
+                ENDSLANG
             }
             """);
 
         Assert.Equal("", pass.Name);
         Assert.Null(pass.Tags);
-        Assert.Equal("v", pass.Source.VertexEntrypoint);
+        Assert.Equal("void main() {}", pass.InlineSlang);
     }
 
 
@@ -48,7 +52,9 @@ public class PassTests
             Pass
             {
                 Name "ShadowCaster"
-                ShaderSource "s" { Vertex "v" Fragment "f" }
+                SLANGPROGRAM
+                void main() {}
+                ENDSLANG
             }
             """);
 
