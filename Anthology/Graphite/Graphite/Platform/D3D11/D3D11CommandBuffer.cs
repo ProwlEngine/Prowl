@@ -365,6 +365,16 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         _boundTextureInfoPool.Add(btis);
     }
 
+    private static bool ContainsBinding(List<BoundTextureInfo> list, int slot, ShaderStages stages)
+    {
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i].Slot == slot && list[i].Stages == stages)
+                return true;
+        }
+        return false;
+    }
+
     private void UnbindUAVTexture(Texture target)
     {
         if (_boundUAVs.TryGetValue(target, out List<BoundTextureInfo> btis))
@@ -797,7 +807,8 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                 list = GetNewOrCachedBoundTextureInfoList();
                 _boundSRVs.Add(texView.Target, list);
             }
-            list.Add(new BoundTextureInfo { Slot = slot, Stages = stages });
+            if (!ContainsBinding(list, slot, stages))
+                list.Add(new BoundTextureInfo { Slot = slot, Stages = stages });
         }
 
         if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
@@ -1018,7 +1029,8 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                 list = GetNewOrCachedBoundTextureInfoList();
                 _boundUAVs.Add(texture, list);
             }
-            list.Add(new BoundTextureInfo { Slot = slot, Stages = stages });
+            if (!ContainsBinding(list, slot, stages))
+                list.Add(new BoundTextureInfo { Slot = slot, Stages = stages });
         }
 
         int baseSlot = 0;
