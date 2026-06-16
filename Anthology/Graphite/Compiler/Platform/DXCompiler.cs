@@ -21,7 +21,7 @@ public class DXCompiler : CompilerModule
     public GraphicsBackend Backend => _backend;
 
 
-    public DXCompiler(string profileString = "sm_6_6", GraphicsBackend backend = GraphicsBackend.Direct3D11)
+    public DXCompiler(string profileString = "sm_5_1", GraphicsBackend backend = GraphicsBackend.Direct3D11)
     {
         _backend = backend;
         _target = new()
@@ -32,5 +32,5 @@ public class DXCompiler : CompilerModule
     }
 
     public ShaderDescription CompileForTarget(ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler) =>
-        SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler);
+        SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler, bindsBySemantic: true);
 }

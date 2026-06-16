@@ -47,6 +47,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
     // Silk.NET maps GL.ClearDepth(float) to glClearDepthf (GL 4.1+ / GLES) and
     // GL.ClearDepth(double) to glClearDepth (desktop GL). Same for DepthRange.
     // Desktop GL below 4.1 doesn't have glClearDepthf, so we must use the double variant there.
+    // Not like it matters for us since slang doesn't even output glsl older than 4.5, so this is just for the oldheads who like to mess with older GL versions.
     internal void ClearDepthCompat(float depth)
     {
         if (_backendType == GraphicsBackend.OpenGLES)

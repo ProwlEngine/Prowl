@@ -567,7 +567,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             }
             else
             {
-                // No current mapping exists -- create one.
+                // No current mapping exists, create one.
 
                 if (resource is D3D11Buffer buffer)
                 {
@@ -925,6 +925,8 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             _dxgiAdapter.Dispose();
 
             // Report live DXGI objects (only available on Windows)
+            // there shouldn't be a platform check like this since there's literally 
+            // **no way** to create a D3D11 device without windows, but just in case...
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
             try
             {

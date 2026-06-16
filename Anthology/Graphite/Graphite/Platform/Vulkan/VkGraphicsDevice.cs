@@ -858,7 +858,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         {
             _vk.EnumeratePhysicalDevices(_instance, ref deviceCount, devicesPtr);
         }
-        // Just use the first one.
+        // Just use the first one. premature apologies to anyone with multiple GPUs, 
+        // but I'd rather die than add multi-gpu rendering support.
         _physicalDevice = physicalDevices[0];
 
         _vk.GetPhysicalDeviceProperties(_physicalDevice, out _physicalDeviceProperties);

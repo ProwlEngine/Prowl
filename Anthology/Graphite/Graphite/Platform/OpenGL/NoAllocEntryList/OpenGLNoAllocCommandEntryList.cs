@@ -36,9 +36,6 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
     private const byte SetFramebufferEntryID = 6;
     private static readonly uint SetFramebufferEntrySize = Util.USizeOf<NoAllocSetFramebufferEntry>();
 
-    // ID 7 was SetIndexBufferEntry, deleted in Stage 4 (vertex source owns index buffer).
-    // ID 9 was SetResourceSetEntry, deleted in Stage 7 (replaced by PropertySet).
-
     private const byte SetPropertiesEntryID = 29;
     private static readonly uint SetPropertiesEntrySize = Util.USizeOf<NoAllocSetPropertiesEntry>();
 

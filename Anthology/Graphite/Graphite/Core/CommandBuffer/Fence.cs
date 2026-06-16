@@ -2,7 +2,7 @@
 
 namespace Prowl.Graphite;
 
-// A GPU-CPU sync point
+
 /// <summary>
 /// A synchronization primitive which allows the GPU to communicate when submitted work items have finished executing.
 /// </summary>

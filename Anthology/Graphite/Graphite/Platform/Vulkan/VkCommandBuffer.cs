@@ -33,10 +33,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private ClearValue? _depthClearValue;
     private readonly List<VkTexture> _preDrawSampledImages = [];
 
-    // Within-draw dedup of implicit UBO ranges, keyed by (set, binding). Cleared at the top of every
-    // BindPropertySets so identity-building, descriptor writes, and dynamic offsets all resolve the
-    // same transient range for a given UBO in a single draw. Program/uniform state is constant within
-    // a draw, so set+binding is a sufficient key.
     private readonly Dictionary<(int set, int binding), DeviceBufferRange> _drawUboScratch = [];
 
     // Graphics State
@@ -1058,7 +1054,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private VkSampler ResolveSampler(
         in ResourceLayoutElementDescription elem, in ResourceLayoutDescription layout)
     {
-        // Rule 1: explicit SetSampler(name) entry
+        // case 1: explicit SetSampler(name) entry
         if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
             && samplerEntry.Kind == PropertyEntryKind.Sampler
             && samplerEntry.Sampler != null)
@@ -1066,7 +1062,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             return (VkSampler)samplerEntry.Sampler;
         }
 
-        // Rule 2: SetTexture(name, _, sampler) where the texture element shares this name
+        // case 2: SetTexture(name, _, sampler) where the texture element shares this name
         foreach (ResourceLayoutElementDescription other in layout.Elements)
         {
             if (other.Name == elem.Name
@@ -1082,7 +1078,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             }
         }
 
-        // Rule 3: fallback to LinearSampler
+        // case 3: oops, all linear!
         return (VkSampler)_gd.LinearSampler;
     }
 

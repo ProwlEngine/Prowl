@@ -263,9 +263,6 @@ internal unsafe class D3D11ResourceCache : IDisposable
         return result;
     }
 
-    // Latent: cache key is VertexLayoutDescription[] only. Two programs with identical vertex
-    // layouts but incompatible VS input signatures will share an input layout and the second
-    // draw will fail D3D11 validation. Deferred per Stage 1 D3D11 doc ("Input-layout cache key").
     private ID3D11InputLayout* AcquireInputLayout(VertexLayoutDescription[] vertexLayouts, byte[] vsBytecode)
     {
         Debug.Assert(Monitor.IsEntered(_lock));
@@ -317,6 +314,10 @@ internal unsafe class D3D11ResourceCache : IDisposable
             totalCount += vertexLayouts[i].Elements.Length;
         }
 
+        // D3D11 binds each input by its raw semantic name plus a semantic index carried by the
+        // element's location.
+        (string Name, uint Index)[] semantics = ResolveSemanticBindings(vertexLayouts);
+
         int element = 0; // Total element index across slots.
         InputElementDesc[] elements = new InputElementDesc[totalCount];
         nint[] semanticPtrs = new nint[totalCount];
@@ -328,19 +329,15 @@ internal unsafe class D3D11ResourceCache : IDisposable
             for (int i = 0; i < elementDescs.Length; i++)
             {
                 VertexElementDescription desc = elementDescs[i];
-                string semanticName = VertexAttributeID.ToString(desc.Name)
-                    ?? throw new RenderException("Vertex attribute name was not interned.");
-                semanticPtrs[element] = SilkMarshal.StringToPtr(semanticName);
+                semanticPtrs[element] = SilkMarshal.StringToPtr(semantics[element].Name);
                 elements[element] = new InputElementDesc
                 {
                     SemanticName = (byte*)semanticPtrs[element],
-                    SemanticIndex = 0,
+                    SemanticIndex = semantics[element].Index,
                     Format = D3D11Formats.ToDxgiFormat(desc.Format),
                     AlignedByteOffset = desc.Offset != 0 ? desc.Offset : (uint)currentOffset,
                     // InputSlot matches the IASetVertexBuffers slot, which is the layout
-                    // index (what IVertexSource.ResolveSlot's layoutSlot receives). D3D11
-                    // binds attributes by SemanticName, so VertexLayoutDescription.Location
-                    // has no shader effect here.
+                    // index (what IVertexSource.ResolveSlot's layoutSlot receives).
                     InputSlot = (uint)slot,
                     InputSlotClass = stepRate == 0 ? InputClassification.PerVertexData : InputClassification.PerInstanceData,
                     InstanceDataStepRate = stepRate,
@@ -370,6 +367,32 @@ internal unsafe class D3D11ResourceCache : IDisposable
                 SilkMarshal.Free(ptr);
             }
         }
+    }
+
+    internal static (string Name, uint Index)[] ResolveSemanticBindings(VertexLayoutDescription[] vertexLayouts)
+    {
+        int totalCount = 0;
+        for (int i = 0; i < vertexLayouts.Length; i++)
+            totalCount += vertexLayouts[i].Elements.Length;
+
+        (string, uint)[] bindings = new (string, uint)[totalCount];
+
+        int n = 0;
+        for (int slot = 0; slot < vertexLayouts.Length; slot++)
+        {
+            VertexLayoutDescription layout = vertexLayouts[slot];
+            for (int i = 0; i < layout.Elements.Length; i++)
+            {
+                VertexElementDescription desc = layout.Elements[i];
+                string semantic = desc.D3D11SemanticName
+                    ?? VertexAttributeID.ToString(desc.Name)
+                    ?? throw new RenderException("Vertex attribute name was not interned.");
+
+                bindings[n++] = (semantic, layout.Location + (uint)i);
+            }
+        }
+
+        return bindings;
     }
 
     public void Dispose()

@@ -9,19 +9,11 @@ using SlangScalar = Prowl.Slang.ScalarType;
 namespace Prowl.Graphite.Compiler;
 
 
-// Shared reflection used by every Slang-backed platform compiler. Each target only differs by its
-// compile format (held on the compiler's TargetDescription), so the stage and vertex-input
-// reflection is identical across backends and lives here to avoid duplication.
-//
-// Pipeline state (blend / depth / rasterizer) and resource layouts are intentionally left at their
-// defaults; those are owned by the user for now.
 internal static class SlangReflector
 {
-    // entryPointNameOverride forces every stage's reported entry point name. Slang emits SPIR-V
-    // entry points named "main" regardless of the source name, so the Vulkan target must override
-    // to "main" for Graphite to resolve them; targets that preserve the name (e.g. HLSL) pass null.
     public static ShaderDescription BuildDescription(
-        ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler, string? entryPointNameOverride = null)
+        ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler,
+        string? entryPointNameOverride = null, bool bindsBySemantic = false)
     {
         ShaderReflection layout = linkedComponent.GetLayout(layoutIndex, out _);
 
@@ -45,7 +37,7 @@ internal static class SlangReflector
             };
 
             if (ep.Stage == ShaderStage.Vertex)
-                ReflectVertexInputs(vertexLayouts, ep);
+                ReflectVertexInputs(vertexLayouts, ep, bindsBySemantic);
         }
 
         return new ShaderDescription
@@ -60,7 +52,7 @@ internal static class SlangReflector
     }
 
 
-    static void ReflectVertexInputs(List<VertexLayoutDescription> layouts, EntryPointReflection ep)
+    static void ReflectVertexInputs(List<VertexLayoutDescription> layouts, EntryPointReflection ep, bool bindsBySemantic)
     {
         foreach (VariableLayoutReflection p in ep.Parameters)
         {
@@ -70,34 +62,49 @@ internal static class SlangReflector
             if (p.GetCategoryByIndex(0) != ParameterCategory.VaryingInput)
                 continue;
 
-            AddVertexInputs(layouts, p);
+            AddVertexInputs(layouts, p, bindsBySemantic);
         }
     }
 
 
-    static void AddVertexInputs(List<VertexLayoutDescription> layouts, VariableLayoutReflection parameter)
+    static void AddVertexInputs(List<VertexLayoutDescription> layouts, VariableLayoutReflection parameter, bool bindsBySemantic)
     {
         if (parameter.Type.Kind == TypeKind.Struct)
         {
             foreach (VariableLayoutReflection field in parameter.TypeLayout.Fields)
-                AddVertexInput(layouts, field.SemanticName, field.TypeLayout, field.BindingIndex);
+                AddVertexInput(layouts, field, bindsBySemantic);
 
             return;
         }
 
-        AddVertexInput(layouts, parameter.SemanticName, parameter.TypeLayout, parameter.BindingIndex);
+        AddVertexInput(layouts, parameter, bindsBySemantic);
     }
 
 
-    static void AddVertexInput(List<VertexLayoutDescription> layouts, string name, TypeLayoutReflection typeLayout, uint location)
+    static void AddVertexInput(List<VertexLayoutDescription> layouts, VariableLayoutReflection field, bool bindsBySemantic)
     {
-        if (!TryGetFormat(typeLayout, out VertexElementFormat format))
+        if (!TryGetFormat(field.TypeLayout, out VertexElementFormat format))
             return;
 
-        layouts.Add(new VertexLayoutDescription(
-            location,
-            format.GetSizeInBytes(),
-            new VertexElementDescription(name, format)));
+        string rawSemantic = field.SemanticName;
+        uint semanticIndex = field.SemanticIndex;
+
+        // User-visible semantic name is blended from raw semantic + index
+        VertexElementDescription element = new($"{rawSemantic}{semanticIndex}", format);
+
+        // d3d11 backend is funky so we use the raw semantic and its index directly there
+        uint location;
+        if (bindsBySemantic)
+        {
+            element.D3D11SemanticName = rawSemantic;
+            location = semanticIndex;
+        }
+        else
+        {
+            location = field.BindingIndex;
+        }
+
+        layouts.Add(new VertexLayoutDescription(location, format.GetSizeInBytes(), element));
     }
 
 
