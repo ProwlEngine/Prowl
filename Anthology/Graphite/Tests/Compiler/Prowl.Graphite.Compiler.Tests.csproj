@@ -4,4 +4,8 @@
         <ProjectReference Include="..\..\Compiler\Prowl.Graphite.Compiler.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <None Include="KnownGood\**\*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>
