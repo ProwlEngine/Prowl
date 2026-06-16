@@ -194,32 +194,45 @@ public static class ProjectBuilder
         var progress = new BuildProgress();
         var projectPath = Project.Current?.RootPath ?? "";
 
-        // Now that rendering is handled by a separate thread, we should be able to run
-        // the build in a separate thread as well without having any issues
-        System.Threading.Tasks.Task task = System.Threading.Tasks.Task.Run(async () =>
+        var assetSettings = ProjectSettingsRegistry.Get<AssetSettings>();
+        if (assetSettings != null && assetSettings.AsyncAssetLoading)
         {
-            try
+            // Now that rendering is handled by a separate thread, we should be able to run
+            // the build in a separate thread as well without having any issues
+            System.Threading.Tasks.Task task = System.Threading.Tasks.Task.Run(() =>
             {
-                Console.WriteLine($"[BEGIN]{projectPath}[END]");
-                var result = pipeline.BuildAsync(
-                    projectPath, settings, outputPath, progress).GetAwaiter().GetResult();
-                progress.Complete(result);
+                ProcessBuild(projectPath, pipeline, settings, outputPath, progress, andRun);
+            });
 
-                HandleBuildResult(pipeline, result, settings, andRun);
-            }
-            catch (Exception ex)
+            if (Program.BuildMode)
             {
-                progress.Log($"FATAL: {ex.Message}", Runtime.LogSeverity.Error);
-                progress.Complete(new BuildResult { Success = false, Errors = ex.ToString(), });
+                task.Wait();
             }
-        });
-
-        if (Program.BuildMode)
+        }
+        else
         {
-            task.Wait();
+            ProcessBuild(projectPath, pipeline, settings, outputPath, progress, andRun);
         }
 
         return progress;
+    }
+
+    public static void ProcessBuild(string projectPath, BuildPipeline pipeline, BuildSettings settings, string outputPath, BuildProgress progress, bool andRun)
+    {
+        try
+        {
+            Console.WriteLine($"[BEGIN]{projectPath}[END]");
+            var result = pipeline.BuildAsync(
+                projectPath, settings, outputPath, progress).GetAwaiter().GetResult();
+            progress.Complete(result);
+
+            HandleBuildResult(pipeline, result, settings, andRun);
+        }
+        catch (Exception ex)
+        {
+            progress.Log($"FATAL: {ex.Message}", Runtime.LogSeverity.Error);
+            progress.Complete(new BuildResult { Success = false, Errors = ex.ToString(), });
+        }
     }
 
     private static void HandleBuildResult(BuildPipeline pipeline, BuildResult result, BuildSettings settings, bool andRun)
