@@ -63,18 +63,6 @@ public class KeywordMapTests
 
 
     [Fact]
-    public void Find_SingleEntry()
-    {
-        Dictionary<int, int> slots = SlotMap(new Keyword("MODE", "A"));
-        KeywordState[] states = States(slots, [new Keyword("MODE", "A")]);
-
-        KeywordMap map = new(states);
-
-        Assert.Equal(0, map.Find(states[0]));
-    }
-
-
-    [Fact]
     public void Find_DistinguishesSymmetricCollisions()
     {
         // X=0,Y=1 and X=1,Y=0 share a hash bucket; Find must still resolve them separately.

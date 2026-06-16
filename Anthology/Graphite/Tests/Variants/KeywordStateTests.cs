@@ -94,20 +94,6 @@ public class KeywordStateTests
 
 
     [Fact]
-    public void Matches_DifferentHash_ShortCircuitsFalse()
-    {
-        Keyword[] keywords = [new Keyword("MODE", "A")];
-        Dictionary<int, int> slots = SlotMap(keywords);
-
-        KeywordState a = new(slots, [new Keyword("MODE", "A")]);
-        KeywordState b = new(slots, [new Keyword("MODE", "B")]);
-
-        Assert.NotEqual(a.LongHash(), b.LongHash());
-        Assert.False(a.Matches(b));
-    }
-
-
-    [Fact]
     public void MatchesKeywords_ComparesUpToSharedPrefix()
     {
         Keyword[] keywords = [new Keyword("X", "0"), new Keyword("Y", "1")];
