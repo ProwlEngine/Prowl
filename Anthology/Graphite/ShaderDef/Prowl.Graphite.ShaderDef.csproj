@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Library</OutputType>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!-- <GenerateDocumentationFile>true</GenerateDocumentationFile> -->
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.Graphite.ShaderDef</PackageId>
+        <Version>0.0.1</Version>
+
+        <Authors>Prowl Group</Authors>
+        <Owners>Prowl Group</Owners>
+        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
+
+        <Description>The ShaderDef language spec for Prowl.Graphite.</Description>
+        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Graphite</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+
+        <PackageTags>graphics api DirectX Vulkan OpenGL Metal direct-x direct3D11 direct3D12</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+
+        <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+
+        <!-- Toggle this when packing -->
+        <UseLocalProjectReferences Condition="'$(UseLocalProjectReferences)' == ''">true</UseLocalProjectReferences>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+        <PackageReference Include="Prowl.Crumb" Version="0.1.0" />
+    </ItemGroup>
+
+    <!-- Local development -->
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
+        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+    </ItemGroup>
+
+    <!-- NuGet dependency -->
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
+        <PackageReference Include="Prowl.Graphite" Version="1.0.0" />
+    </ItemGroup>
+</Project>
