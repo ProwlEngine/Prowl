@@ -184,4 +184,19 @@ public class PassStateTests
     {
         Assert.ThrowsAny<Exception>(() => Parse.State("ZTest Baloney"));
     }
+
+
+    [Fact]
+    public void InvalidNumber_ReportsLineAndColumn()
+    {
+        // A hex literal is a valid Number token but not a valid float, and it sits on line 2,
+        // so the diagnostic must point there rather than line 1.
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.State("""
+            Cull Back
+            Offset 0xFF 0
+            """));
+
+        Assert.Equal(2, ex.Line);
+        Assert.Contains("number", ex.Message);
+    }
 }

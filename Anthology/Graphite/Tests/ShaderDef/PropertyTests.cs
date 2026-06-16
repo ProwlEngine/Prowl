@@ -96,6 +96,37 @@ public class PropertyTests
 
 
     [Fact]
+    public void OverflowingInteger_ThrowsParseException()
+    {
+        ParseException ex = Assert.Throws<ParseException>(
+            () => Parse.Property("""_C("Count", Integer) = 99999999999999999999"""));
+
+        Assert.Contains("integer", ex.Message);
+    }
+
+
+    [Fact]
+    public void MissingName_ReportsPropertyName()
+    {
+        ParseException ex = Assert.Throws<ParseException>(
+            () => Parse.Property("""("X", Float) = 1"""));
+
+        Assert.Contains("property name", ex.Message);
+    }
+
+
+    [Fact]
+    public void MissingOpenParen_ReportsLiteralSymbol()
+    {
+        // The diagnostic should name the literal '(' rather than the token kind "OpenParen".
+        ParseException ex = Assert.Throws<ParseException>(
+            () => Parse.Property("""_X "X", Float) = 1"""));
+
+        Assert.Contains("'('", ex.Message);
+    }
+
+
+    [Fact]
     public void NoDefaultValue_LeavesDefaults()
     {
         ShaderProperty p = Parse.Property("""_X("X", Float)""");

@@ -29,19 +29,19 @@ public class ParsedPass
     static Dictionary<string, string> ParsePassTags(ref Tokenizer<ShaderToken> t)
     {
         ParserUtility.ExpectKeyword(ref t, "Tags");
-        t.Expect(ShaderToken.OpenBrace);
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
         Dictionary<string, string> tags = new();
 
         while (t.Peek().Kind == ShaderToken.String)
         {
             string key = ParserUtility.QuotedString(ref t);
-            t.Expect(ShaderToken.Equals);
+            ParserUtility.Expect(ref t, ShaderToken.Equals);
             string value = ParserUtility.QuotedString(ref t);
             tags[key] = value;
         }
 
-        t.Expect(ShaderToken.CloseBrace);
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
         return tags;
     }
 
@@ -55,7 +55,7 @@ public class ParsedPass
         if (t.Peek().Kind is ShaderToken.Number or ShaderToken.Minus)
             ParserUtility.Integer(ref t);
 
-        t.Expect(ShaderToken.OpenBrace);
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
         string name = "";
         if (ParserUtility.PeekKeyword(ref t, "Name"))
@@ -69,7 +69,7 @@ public class ParsedPass
 
         string inlineSlang = ParserUtility.SlangProgram(ref t);
 
-        t.Expect(ShaderToken.CloseBrace);
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
 
         return new ParsedPass
         {

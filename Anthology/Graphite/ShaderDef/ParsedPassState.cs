@@ -237,7 +237,7 @@ public class ParsedPassState
 
     static ParsedPassState ParseStencil(ref Tokenizer<ShaderToken> t)
     {
-        t.Expect(ShaderToken.OpenBrace);
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
         List<ParsedPassState> states = new();
 
@@ -249,7 +249,7 @@ public class ParsedPassState
             states.Add(state);
         }
 
-        t.Expect(ShaderToken.CloseBrace);
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
         return FromSeveral(states);
     }
 
@@ -294,7 +294,7 @@ public class ParsedPassState
 
             case "ColorMask":
                 t.Next();
-                Token<ShaderToken> mask = t.Expect(ShaderToken.Identifier);
+                Token<ShaderToken> mask = ParserUtility.Expect(ref t, ShaderToken.Identifier);
                 state = new() { WriteMask = ParseMask(ref t, mask) };
                 return true;
 

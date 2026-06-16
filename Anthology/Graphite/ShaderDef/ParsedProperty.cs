@@ -60,14 +60,14 @@ public static class ParsedProperty
     // Parses a single property: Name("Display Name", Type) = Value
     public static ShaderProperty Parse(ref Tokenizer<ShaderToken> t)
     {
-        Token<ShaderToken> nameToken = t.Expect(ShaderToken.Identifier);
+        Token<ShaderToken> nameToken = ParserUtility.Expect(ref t, ShaderToken.Identifier, "property name");
         string name = t.Slice(nameToken).ToString();
 
-        t.Expect(ShaderToken.OpenParen);
+        ParserUtility.Expect(ref t, ShaderToken.OpenParen);
         string display = ParserUtility.QuotedString(ref t);
-        t.Expect(ShaderToken.Comma);
+        ParserUtility.Expect(ref t, ShaderToken.Comma);
         ShaderPropertyType type = ParserUtility.Keywords<ShaderPropertyType>(ref t);
-        t.Expect(ShaderToken.CloseParen);
+        ParserUtility.Expect(ref t, ShaderToken.CloseParen);
 
         object? value = null;
         if (t.TryConsume(ShaderToken.Equals))

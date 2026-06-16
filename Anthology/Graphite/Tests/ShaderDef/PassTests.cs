@@ -60,4 +60,18 @@ public class PassTests
 
         Assert.Equal("ShadowCaster", pass.Name);
     }
+
+
+    [Fact]
+    public void MissingSlangProgram_ThrowsDomainMessage()
+    {
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""
+            Pass
+            {
+                Cull Back
+            }
+            """));
+
+        Assert.Contains("SLANGPROGRAM", ex.Message);
+    }
 }

@@ -19,14 +19,14 @@ public class ParsedShader
     static ShaderProperty[] ParsePropertiesBlock(ref Tokenizer<ShaderToken> t)
     {
         ParserUtility.ExpectKeyword(ref t, "Properties");
-        t.Expect(ShaderToken.OpenBrace);
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
         List<ShaderProperty> properties = new();
 
         while (t.Peek().Kind == ShaderToken.Identifier)
             properties.Add(ParsedProperty.Parse(ref t));
 
-        t.Expect(ShaderToken.CloseBrace);
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
         return properties.ToArray();
     }
 
@@ -38,7 +38,7 @@ public class ParsedShader
         ParserUtility.ExpectKeyword(ref t, "Shader");
         string name = ParserUtility.QuotedString(ref t);
 
-        t.Expect(ShaderToken.OpenBrace);
+        ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
         ShaderProperty[] properties = [];
         if (ParserUtility.PeekKeyword(ref t, "Properties"))
@@ -51,7 +51,7 @@ public class ParsedShader
         ParserUtility.ExpectKeyword(ref t, "Fallback");
         string fallback = ParserUtility.QuotedString(ref t);
 
-        t.Expect(ShaderToken.CloseBrace);
+        ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
 
         return new ParsedShader
         {
