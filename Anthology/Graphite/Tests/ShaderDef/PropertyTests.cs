@@ -127,6 +127,36 @@ public class PropertyTests
 
 
     [Fact]
+    public void Float_GivenVector_ReportsExpectedShape()
+    {
+        ParseException ex = Assert.Throws<ParseException>(
+            () => Parse.Property("""_R("Rough", Float) = (1, 2, 3, 4)"""));
+
+        Assert.Contains("Float property expects a scalar", ex.Message);
+    }
+
+
+    [Fact]
+    public void Vector_GivenScalar_ReportsExpectedShape()
+    {
+        ParseException ex = Assert.Throws<ParseException>(
+            () => Parse.Property("""_V("V", Vector) = 0.5"""));
+
+        Assert.Contains("Vector property expects a 4-component", ex.Message);
+    }
+
+
+    [Fact]
+    public void Texture_GivenNumber_ReportsExpectedShape()
+    {
+        ParseException ex = Assert.Throws<ParseException>(
+            () => Parse.Property("""_T("Tex", Texture2D) = 3"""));
+
+        Assert.Contains("Texture2D property expects a texture name", ex.Message);
+    }
+
+
+    [Fact]
     public void NoDefaultValue_LeavesDefaults()
     {
         ShaderProperty p = Parse.Property("""_X("X", Float)""");

@@ -249,6 +249,12 @@ public class ParsedPassState
             states.Add(state);
         }
 
+        // The loop only stops on an identifier when it names no stencil command; a stencil block
+        // otherwise ends at its closing brace, so a leftover identifier is a misspelled command.
+        Token<ShaderToken> after = t.Peek();
+        if (after.Kind == ShaderToken.Identifier)
+            throw Exceptions.UnknownCommand(ParserUtility.Text(ref t, after), after);
+
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
         return FromSeveral(states);
     }

@@ -36,7 +36,7 @@ public static class ParserUtility
 
 
     // Describes the token actually encountered, used as the "found" half of a diagnostic.
-    static string Found(ref Tokenizer<ShaderToken> t, Token<ShaderToken> token)
+    public static string Found(ref Tokenizer<ShaderToken> t, Token<ShaderToken> token)
         => token.Kind == ShaderToken.EndOfFile ? "end of input" : Text(ref t, token);
 
 

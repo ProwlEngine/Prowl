@@ -74,4 +74,19 @@ public class TagsTests
         Assert.NotNull(tags);
         Assert.Empty(tags!);
     }
+
+
+    [Fact]
+    public void DuplicateTagKey_Throws()
+    {
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""
+            Pass
+            {
+                Tags { "LightMode" = "ForwardBase" "LightMode" = "Deferred" }
+                SLANGPROGRAM void main() {} ENDSLANG
+            }
+            """));
+
+        Assert.Contains("LightMode", ex.Message);
+    }
 }

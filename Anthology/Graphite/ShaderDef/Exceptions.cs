@@ -41,4 +41,24 @@ public static class Exceptions
 
     public static ParseException InvalidNumber(string type, string found, Token<ShaderToken> at) =>
         new($"'{found}' is not a valid {type}", at.Line, at.Column);
+
+
+    public static ParseException Duplicate(string what, string name, Token<ShaderToken> at) =>
+        new($"Duplicate {what} '{name}'", at.Line, at.Column);
+
+
+    public static ParseException UnknownCommand(string name, Token<ShaderToken> at) =>
+        new($"Unknown command '{name}'", at.Line, at.Column);
+
+
+    public static ParseException PropertyValue(string propertyType, string expected, string found, Token<ShaderToken> at) =>
+        new($"{propertyType} property expects {expected}, but found '{found}'", at.Line, at.Column);
+
+
+    public static ParseException NoPasses(Token<ShaderToken> at) =>
+        new("Shader must contain at least one Pass", at.Line, at.Column);
+
+
+    public static ParseException TrailingContent(string found, Token<ShaderToken> at) =>
+        new($"Unexpected content '{found}' after shader", at.Line, at.Column);
 }

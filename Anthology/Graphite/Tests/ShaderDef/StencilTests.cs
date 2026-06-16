@@ -113,4 +113,15 @@ public class StencilTests
         Assert.Null(s.StencilFrontRef);
         Assert.Null(s.StencilFrontFunc);
     }
+
+
+    [Fact]
+    public void UnknownStencilCommand_Throws()
+    {
+        ParseException ex = Assert.Throws<ParseException>(
+            () => Parse.State("""Stencil { Reff 3 }"""));
+
+        Assert.Contains("Unknown command", ex.Message);
+        Assert.Contains("Reff", ex.Message);
+    }
 }

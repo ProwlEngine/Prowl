@@ -35,7 +35,12 @@ public class ParsedPass
 
         while (t.Peek().Kind == ShaderToken.String)
         {
+            Token<ShaderToken> keyToken = t.Peek();
             string key = ParserUtility.QuotedString(ref t);
+
+            if (tags.ContainsKey(key))
+                throw Exceptions.Duplicate("tag key", key, keyToken);
+
             ParserUtility.Expect(ref t, ShaderToken.Equals);
             string value = ParserUtility.QuotedString(ref t);
             tags[key] = value;
@@ -66,6 +71,12 @@ public class ParsedPass
             tags = ParsePassTags(ref t);
 
         ParsedPassState state = ParsedPassState.Parse(ref t);
+
+        // State parsing stops at the first identifier it doesn't recognize. A SLANGPROGRAM block is
+        // a block token, not an identifier, so a leftover identifier here is a misspelled command.
+        Token<ShaderToken> afterState = t.Peek();
+        if (afterState.Kind == ShaderToken.Identifier)
+            throw Exceptions.UnknownCommand(ParserUtility.Text(ref t, afterState), afterState);
 
         string inlineSlang = ParserUtility.SlangProgram(ref t);
 

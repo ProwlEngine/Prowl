@@ -22,9 +22,18 @@ public class ParsedShader
         ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
         List<ShaderProperty> properties = new();
+        HashSet<string> names = new();
 
         while (t.Peek().Kind == ShaderToken.Identifier)
-            properties.Add(ParsedProperty.Parse(ref t));
+        {
+            Token<ShaderToken> nameToken = t.Peek();
+            ShaderProperty property = ParsedProperty.Parse(ref t);
+
+            if (!names.Add(property.Name))
+                throw Exceptions.Duplicate("property", property.Name, nameToken);
+
+            properties.Add(property);
+        }
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
         return properties.ToArray();
@@ -45,13 +54,30 @@ public class ParsedShader
             properties = ParsePropertiesBlock(ref t);
 
         List<ParsedPass> passes = new();
+        HashSet<string> passNames = new();
         while (ParserUtility.PeekKeyword(ref t, "Pass"))
-            passes.Add(ParsedPass.Parse(ref t));
+        {
+            Token<ShaderToken> passToken = t.Peek();
+            ParsedPass pass = ParsedPass.Parse(ref t);
+
+            // Pass names are optional, so only named passes are checked for collisions.
+            if (pass.Name.Length > 0 && !passNames.Add(pass.Name))
+                throw Exceptions.Duplicate("pass name", pass.Name, passToken);
+
+            passes.Add(pass);
+        }
+
+        if (passes.Count == 0)
+            throw Exceptions.NoPasses(t.Peek());
 
         ParserUtility.ExpectKeyword(ref t, "Fallback");
         string fallback = ParserUtility.QuotedString(ref t);
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
+
+        Token<ShaderToken> trailing = t.Peek();
+        if (trailing.Kind != ShaderToken.EndOfFile)
+            throw Exceptions.TrailingContent(ParserUtility.Text(ref t, trailing), trailing);
 
         return new ParsedShader
         {

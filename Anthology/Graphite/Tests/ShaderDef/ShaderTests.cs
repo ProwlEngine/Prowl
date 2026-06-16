@@ -108,4 +108,86 @@ public class ShaderTests
             }
             """));
     }
+
+
+    [Fact]
+    public void NoPasses_Throws()
+    {
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
+            Shader "Empty"
+            {
+                Fallback "fb"
+            }
+            """));
+
+        Assert.Contains("at least one Pass", ex.Message);
+    }
+
+
+    [Fact]
+    public void TrailingContent_Throws()
+    {
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
+            Shader "X"
+            {
+                Pass { SLANGPROGRAM void main() {} ENDSLANG }
+                Fallback "fb"
+            }
+            Shader "Leftover" { }
+            """));
+
+        Assert.Contains("after shader", ex.Message);
+    }
+
+
+    [Fact]
+    public void DuplicateProperty_Throws()
+    {
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
+            Shader "X"
+            {
+                Properties
+                {
+                    _Color("A", Color) = (1, 1, 1, 1)
+                    _Color("B", Color) = (0, 0, 0, 0)
+                }
+                Pass { SLANGPROGRAM void main() {} ENDSLANG }
+                Fallback "fb"
+            }
+            """));
+
+        Assert.Contains("_Color", ex.Message);
+    }
+
+
+    [Fact]
+    public void DuplicatePassName_Throws()
+    {
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.Shader("""
+            Shader "X"
+            {
+                Pass { Name "Forward" SLANGPROGRAM void a() {} ENDSLANG }
+                Pass { Name "Forward" SLANGPROGRAM void b() {} ENDSLANG }
+                Fallback "fb"
+            }
+            """));
+
+        Assert.Contains("Forward", ex.Message);
+    }
+
+
+    [Fact]
+    public void UnnamedPasses_DoNotCollide()
+    {
+        ParsedShader shader = Parse.Shader("""
+            Shader "X"
+            {
+                Pass { SLANGPROGRAM void a() {} ENDSLANG }
+                Pass { SLANGPROGRAM void b() {} ENDSLANG }
+                Fallback "fb"
+            }
+            """);
+
+        Assert.Equal(2, shader.Passes!.Length);
+    }
 }

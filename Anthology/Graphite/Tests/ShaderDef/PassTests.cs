@@ -63,6 +63,22 @@ public class PassTests
 
 
     [Fact]
+    public void MisspelledCommand_ThrowsUnknownCommand()
+    {
+        ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""
+            Pass
+            {
+                Culll Back
+                SLANGPROGRAM void main() {} ENDSLANG
+            }
+            """));
+
+        Assert.Contains("Unknown command", ex.Message);
+        Assert.Contains("Culll", ex.Message);
+    }
+
+
+    [Fact]
     public void MissingSlangProgram_ThrowsDomainMessage()
     {
         ParseException ex = Assert.Throws<ParseException>(() => Parse.Pass("""

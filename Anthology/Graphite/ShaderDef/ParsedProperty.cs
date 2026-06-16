@@ -37,8 +37,37 @@ public enum ShaderPropertyType
 
 public static class ParsedProperty
 {
+    // Rejects a value whose leading token can't begin the property's type, so a mismatch reports
+    // the expected shape rather than a generic "expected number/(" from the underlying parser.
+    static void ValidateValueShape(ref Tokenizer<ShaderToken> t, ShaderPropertyType type)
+    {
+        Token<ShaderToken> value = t.Peek();
+
+        (bool ok, string expected) = type switch
+        {
+            ShaderPropertyType.Float or
+            ShaderPropertyType.Integer =>
+                (value.Kind is ShaderToken.Number or ShaderToken.Minus, "a scalar number"),
+
+            ShaderPropertyType.Color or
+            ShaderPropertyType.Vector =>
+                (value.Kind == ShaderToken.OpenParen, "a 4-component vector like (x, y, z, w)"),
+
+            ShaderPropertyType.Matrix =>
+                (value.Kind == ShaderToken.OpenParen, "a 4x4 matrix like ((..)(..)(..)(..))"),
+
+            _ => (value.Kind == ShaderToken.String, "a texture name like \"name\" {}")
+        };
+
+        if (!ok)
+            throw Exceptions.PropertyValue(type.ToString(), expected, ParserUtility.Found(ref t, value), value);
+    }
+
+
     static object PropertyValue(ref Tokenizer<ShaderToken> t, ShaderPropertyType type)
     {
+        ValidateValueShape(ref t, type);
+
         return type switch
         {
             ShaderPropertyType.Float => ParserUtility.Float(ref t),
