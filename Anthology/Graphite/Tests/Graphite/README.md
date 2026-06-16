@@ -2,12 +2,13 @@
 
 ## Layout
 
-- **CPU tests** (`Core/`, `FormatSizeHelpersTests`, ...) are pure value-type tests and run in parallel.
-- **GPU tests** require a graphics device. They share one device per backend and must not run
-  concurrently, so every GPU test class joins the `"GPU Tests"` collection
+- **`CPU/`** holds pure value-type tests (identifiers, interner, profiling value types,
+  `PropertySet`, format helpers). They touch no graphics device and run in parallel.
+- **`GPU/`** holds tests that require a graphics device. They share one device per backend and
+  must not run concurrently, so every GPU test class joins the `"GPU Tests"` collection
   (`[CollectionDefinition("GPU Tests", DisableParallelization = true)]` in `XunitAssemblyOptions.cs`).
   This keeps the GPU tests serialized while leaving the CPU tests parallel.
-- **`CorePath/`** holds the representative GPU tests rewritten against the current
+- **`GPU/Baseline/`** holds the representative GPU tests rewritten against the current
   `GraphicsProgram` / `PropertySet` / `Frame` API (render, compute, frame lifecycle,
   transient allocation, fences, disposal, profiler counters).
 
@@ -23,9 +24,9 @@ entry point `"main"`.
 
 Several suites are still written against the removed `Pipeline` / `ResourceLayout` /
 `ResourceSet` API and are excluded from the build (see the `<Compile Remove>` group in the
-`.csproj`): `RenderTests`, `ComputeTests`, `ResourceSetTests`, `PipelineTests`,
-`VertexLayoutTests`, `DisposalTests`, `SwapchainTests`. Re-include and migrate them onto the
-`GraphicsProgram` / `PropertySet` API as the remaining shaders are converted to Slang.
+`.csproj`): `GPU/RenderTests`, `GPU/ComputeTests`, `GPU/ResourceSetTests`, `GPU/PipelineTests`,
+`GPU/VertexLayoutTests`, `GPU/DisposalTests`, `GPU/SwapchainTests`. Re-include and migrate them
+onto the `GraphicsProgram` / `PropertySet` API as the remaining shaders are converted to Slang.
 
 ## GPU backends
 
@@ -64,7 +65,7 @@ dotnet test Tests/Prowl.Graphite.Tests.csproj -p:ExcludeGPU=true
 
 ## Profiler tests
 
-`CorePath/ProfilingCountingTests` assert the live profiling counters against real device work.
+`GPU/Baseline/ProfilingCountingTests` assert the live profiling counters against real device work.
 They require the library to be built with `PROFILE_USAGE` (the default; disabled by
 `-p:DisableProfiling=true`). When profiling is compiled out, `GetProfile` returns a zeroed
 snapshot and these tests skip.

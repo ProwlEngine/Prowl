@@ -30,17 +30,17 @@
     <!--
         Tests still written against the removed Pipeline/ResourceLayout/ResourceSet API.
         Parked (not compiled) pending migration to the GraphicsProgram/PropertySet/Frame API.
-        The representative core path lives under CorePath/. Re-include these as they are migrated.
+        The representative core path lives under GPU/Baseline/. Re-include these as they are migrated.
     -->
     <ItemGroup>
-        <Compile Remove="RenderTests.cs" />
-        <Compile Remove="ComputeTests.cs" />
-        <Compile Remove="ResourceSetTests.cs" />
-        <Compile Remove="PipelineTests.cs" />
-        <Compile Remove="VertexLayoutTests.cs" />
-        <Compile Remove="DisposalTests.cs" />
-        <Compile Remove="SwapchainTests.cs" />
-        <Compile Remove="SwapchainTests.RegressionTests.cs" />
+        <Compile Remove="GPU/RenderTests.cs" />
+        <Compile Remove="GPU/ComputeTests.cs" />
+        <Compile Remove="GPU/ResourceSetTests.cs" />
+        <Compile Remove="GPU/PipelineTests.cs" />
+        <Compile Remove="GPU/VertexLayoutTests.cs" />
+        <Compile Remove="GPU/DisposalTests.cs" />
+        <Compile Remove="GPU/SwapchainTests.cs" />
+        <Compile Remove="GPU/SwapchainTests.RegressionTests.cs" />
     </ItemGroup>
 
 </Project>

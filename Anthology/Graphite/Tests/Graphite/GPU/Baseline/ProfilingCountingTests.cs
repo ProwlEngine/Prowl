@@ -8,7 +8,7 @@ namespace Prowl.Graphite.Tests;
 // BeginFrame, and that ResetProfile clears everything.
 //
 // The value-type plumbing (ProfileSnapshot / ProfileBinGroup) is covered separately by the
-// CPU-side Core/ProfilingTests. These run only when the library was built with PROFILE_USAGE;
+// CPU-side CPU/ProfilingTests. These run only when the library was built with PROFILE_USAGE;
 // otherwise GetProfile returns a zeroed snapshot and the tests skip.
 public abstract class ProfilingCountingTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
