@@ -1034,7 +1034,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         }
 
         int baseSlot = 0;
-        if (!compute && _fragmentBoundSamplers != null)
+        if (!compute && _framebuffer != null)
         {
             baseSlot = _framebuffer.ColorTargets.Count;
         }
