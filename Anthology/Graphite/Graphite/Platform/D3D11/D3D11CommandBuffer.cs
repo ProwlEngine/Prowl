@@ -517,7 +517,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                     if (range.Buffer != null)
                         BindStorageBufferView(range, bindingIndex, stages);
                     else
-                        BindNullStorageBuffer(bindingIndex, stages, false);
+                        BindNullStorageBuffer(bindingIndex, stages);
                     break;
                 }
             case ResourceKind.StructuredBufferReadWrite:
@@ -531,7 +531,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                         BindUnorderedAccessView(null, range.Buffer, uav, bindingIndex, stages);
                     }
                     else
-                        BindNullStorageBuffer(bindingIndex, stages, true);
+                        BindUnorderedAccessView(null, null, null, bindingIndex, stages);
                     break;
                 }
             case ResourceKind.TextureReadOnly:
@@ -637,25 +637,15 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         return default;
     }
 
-    private void BindNullStorageBuffer(int slot, ShaderStages stages, bool isUav)
+    private void BindNullStorageBuffer(int slot, ShaderStages stages)
     {
-        if (isUav)
-        {
-            ID3D11UnorderedAccessView* nullUav = null;
-            uint initialCount = unchecked((uint)-1);
-            if ((stages & ShaderStages.Compute) == ShaderStages.Compute)
-                Ctx->CSSetUnorderedAccessViews((uint)slot, 1, &nullUav, &initialCount);
-        }
-        else
-        {
-            ID3D11ShaderResourceView* nullSrv = null;
-            if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
-                Ctx->VSSetShaderResources((uint)slot, 1, &nullSrv);
-            if ((stages & ShaderStages.Fragment) == ShaderStages.Fragment)
-                Ctx->PSSetShaderResources((uint)slot, 1, &nullSrv);
-            if ((stages & ShaderStages.Compute) == ShaderStages.Compute)
-                Ctx->CSSetShaderResources((uint)slot, 1, &nullSrv);
-        }
+        ID3D11ShaderResourceView* nullSrv = null;
+        if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
+            Ctx->VSSetShaderResources((uint)slot, 1, &nullSrv);
+        if ((stages & ShaderStages.Fragment) == ShaderStages.Fragment)
+            Ctx->PSSetShaderResources((uint)slot, 1, &nullSrv);
+        if ((stages & ShaderStages.Compute) == ShaderStages.Compute)
+            Ctx->CSSetShaderResources((uint)slot, 1, &nullSrv);
     }
 
     private D3D11TextureView ResolveTextureViewD3D11(
