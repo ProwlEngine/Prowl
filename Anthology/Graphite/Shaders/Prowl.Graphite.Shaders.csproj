@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Library</OutputType>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.Graphite.Shaders</PackageId>
+        <Version>0.0.1</Version>
+
+        <Authors>Prowl Group</Authors>
+        <Owners>Prowl Group</Owners>
+        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
+
+        <Description>The shared keyword and shader-variant system for Prowl.Graphite.</Description>
+        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Graphite</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+
+        <PackageTags>graphics shader variant keyword</PackageTags>
+
+        <!-- Toggle this when packing -->
+        <UseLocalProjectReferences Condition="'$(UseLocalProjectReferences)' == ''">true</UseLocalProjectReferences>
+    </PropertyGroup>
+
+    <!-- Local development -->
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
+        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+    </ItemGroup>
+
+    <!-- NuGet dependency -->
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
+        <PackageReference Include="Prowl.Graphite" Version="1.0.0" />
+    </ItemGroup>
+</Project>
