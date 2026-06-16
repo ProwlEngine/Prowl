@@ -17,6 +17,7 @@ It uses Slang shaders in conjunction with a custom ShaderLab-adjacent syntax to 
   - [Stencil Block](#stencil-block)
   - [SLANGPROGRAM Block](#slangprogram-block)
 - [Fallback](#fallback)
+- [Diagnostics](#diagnostics)
 - [Full Example](#full-example)
 
 ---
@@ -443,6 +444,49 @@ Fallback "FallbackShaderName"
 
 Specifies the name of an alternative shader to use when this shader cannot run on the current
 hardware or render pipeline. The library resolves the fallback by name.
+
+---
+
+## Diagnostics
+
+Parsing reports errors with the source line and column. The following conditions are rejected
+rather than silently accepted:
+
+### Structure
+
+| Condition                                  | Message                                       |
+|--------------------------------------------|-----------------------------------------------|
+| A `Pass` has no `SLANGPROGRAM` block       | `Each Pass must contain a SLANGPROGRAM block` |
+| A `SLANGPROGRAM` block has no `ENDSLANG`    | `Unterminated SLANGPROGRAM block: missing closing 'ENDSLANG'` |
+| A `Shader` declares no passes              | `Shader must contain at least one Pass`       |
+| Content follows the shader's closing brace | `Unexpected content '...' after shader`       |
+
+### Duplicates
+
+Duplicate identifiers are errors; the diagnostic points at the second occurrence.
+
+| Scope                              | Message                      |
+|------------------------------------|------------------------------|
+| Two tags share a key in one `Pass` | `Duplicate tag key '...'`    |
+| Two properties share a name        | `Duplicate property '...'`   |
+| Two passes share a `Name`          | `Duplicate pass name '...'`  |
+
+Passes without a `Name` are never considered duplicates of one another.
+
+### Commands
+
+A render-state or `Stencil` command that is not recognized (for example a typo like `Culll`)
+reports `Unknown command '...'` rather than failing later with a confusing message.
+
+### Values
+
+| Condition                                          | Message                                       |
+|----------------------------------------------------|-----------------------------------------------|
+| A number cannot be parsed (e.g. overflow, hex)     | `'...' is not a valid integer` / `number`     |
+| A property default does not match its declared type| `<Type> property expects <shape>, but found '...'` |
+
+> Because a `Vector` and a `Matrix` default both begin with `(`, supplying one where the other is
+> expected is reported by the underlying value parser rather than as a property-shape mismatch.
 
 ---
 
