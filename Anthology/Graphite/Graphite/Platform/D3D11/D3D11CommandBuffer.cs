@@ -814,7 +814,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         if ((stages & ShaderStages.Vertex) == ShaderStages.Vertex)
         {
             bool bind = false;
-            if (slot < MaxCachedUniformBuffers)
+            if (slot < MaxCachedTextureViews)
             {
                 if (_vertexBoundTextureViews[slot] != texView)
                 {
@@ -846,7 +846,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         if ((stages & ShaderStages.Fragment) == ShaderStages.Fragment)
         {
             bool bind = false;
-            if (slot < MaxCachedUniformBuffers)
+            if (slot < MaxCachedTextureViews)
             {
                 if (_fragmentBoundTextureViews[slot] != texView)
                 {
