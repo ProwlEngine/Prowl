@@ -384,10 +384,7 @@ internal unsafe class D3D11ResourceCache : IDisposable
             for (int i = 0; i < layout.Elements.Length; i++)
             {
                 VertexElementDescription desc = layout.Elements[i];
-                string semantic = desc.D3D11SemanticName
-                    ?? VertexAttributeID.ToString(desc.Name)
-                    ?? throw new RenderException("Vertex attribute name was not interned.");
-
+                string semantic = desc.D3D11SemanticName;
                 bindings[n++] = (semantic, layout.Location + (uint)i);
             }
         }

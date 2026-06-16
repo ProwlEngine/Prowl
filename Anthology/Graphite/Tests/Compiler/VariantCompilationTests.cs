@@ -51,7 +51,8 @@ public class VariantCompilationTests
 
 
     static CompilationResult Compile() =>
-        CompilerTestHarness.Compile(VariantSource, "VariantShader", new GLCompiler(), new VulkanCompiler(), new DXCompiler());
+        CompilerTestHarness.Compile(VariantSource, "VariantShader",
+            () => new GLCompiler(), () => new VulkanCompiler(), () => new DXCompiler());
 
 
     [Fact]

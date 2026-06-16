@@ -54,32 +54,35 @@ internal static class CompilerTestHarness
     public static string KnownGoodText(string fileName) => File.ReadAllText(Path.Combine(KnownGoodDirectory, fileName));
 
 
-    // Compiles GraphicsSource for the registered modules and returns the single (non-variant) result.
-    public static VariantResult CompileGraphics(params CompilerModule[] modules)
+    // Compiles GraphicsSource for the given modules and returns the single (non-variant) result.
+    // Modules are passed as factories so they are constructed on the Slang thread (their constructors
+    // call GlobalSession.FindProfile, which must run there too).
+    public static VariantResult CompileGraphics(params Func<CompilerModule>[] moduleFactories)
     {
-        CompilationResult result = Compile(GraphicsSource, "TestShader", modules);
+        CompilationResult result = Compile(GraphicsSource, "TestShader", moduleFactories);
 
         // No variant attributes in the source, so exactly one (empty) variant is produced.
         return result.CompiledVariants[0];
     }
 
 
-    public static CompilationResult Compile(string source, string moduleName, params CompilerModule[] modules)
-    {
-        CompilationSession session = new();
+    public static CompilationResult Compile(string source, string moduleName, params Func<CompilerModule>[] moduleFactories)
+        => SlangThread.Run(() =>
+        {
+            CompilationSession session = new();
 
-        foreach (CompilerModule module in modules)
-            session.RegisterModule(module);
+            foreach (Func<CompilerModule> factory in moduleFactories)
+                session.RegisterModule(factory());
 
-        // The inline module has no imports, but the native session requires a non-empty search path.
-        session.BeginSession([new DirectoryInfo(AppContext.BaseDirectory)]);
+            // The inline module has no imports, but the native session requires a non-empty search path.
+            session.BeginSession([new DirectoryInfo(AppContext.BaseDirectory)]);
 
-        CompilationResult result = session.CompileShader(
-            moduleName, $"{moduleName}.slang", Encoding.UTF8.GetBytes(source), ShaderType.Rasterization);
+            CompilationResult result = session.CompileShader(
+                moduleName, $"{moduleName}.slang", Encoding.UTF8.GetBytes(source), ShaderType.Rasterization);
 
-        session.EndSession();
-        return result;
-    }
+            session.EndSession();
+            return result;
+        });
 
 
     // The compiled bytes for one stage, decoded as UTF-8 text (GLSL / HLSL targets).
@@ -109,20 +112,18 @@ internal static class CompilerTestHarness
     }
 
 
-    public static VertexElementDescription ElementWithSemantic(ShaderDescription description, string semantic)
+    // Locates a layout by its element's user-facing (blended) name, e.g. "UV0".
+    public static VertexLayoutDescription LayoutWithName(ShaderDescription description, string blendedName)
     {
         foreach (VertexLayoutDescription layout in description.VertexLayouts)
-        {
-            VertexElementDescription element = Single(layout);
-            if (element.Name == semantic)
-                return element;
-        }
+            if (Single(layout).Name == blendedName)
+                return layout;
 
-        throw new InvalidOperationException($"No vertex element with semantic '{semantic}'.");
+        throw new InvalidOperationException($"No vertex element named '{blendedName}'.");
     }
 
 
-    static VertexElementDescription Single(VertexLayoutDescription layout)
+    public static VertexElementDescription Single(VertexLayoutDescription layout)
     {
         if (layout.Elements.Length != 1)
             throw new InvalidOperationException("Expected exactly one element per reflected vertex layout.");

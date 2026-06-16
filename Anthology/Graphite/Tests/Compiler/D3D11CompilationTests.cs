@@ -9,7 +9,7 @@ namespace Prowl.Graphite.Compiler.Tests;
 public class D3D11CompilationTests
 {
     static ShaderDescription Compile() =>
-        CompilerTestHarness.CompileGraphics(new DXCompiler()).Backends[0].Description;
+        CompilerTestHarness.CompileGraphics(() => new DXCompiler()).Backends[0].Description;
 
 
     [Fact]
@@ -23,14 +23,48 @@ public class D3D11CompilationTests
     }
 
 
-    [Fact]
-    public void VertexInputs_HaveExpectedSemanticsAndFormats()
+    [Theory]
+    // Blended user-facing name, raw D3D11 semantic, format. All three inputs are semantic index 0,
+    // so the location (which D3D11 uses as the semantic index) is 0 for each.
+    [InlineData("POSITION0", "POSITION", VertexElementFormat.Float3)]
+    [InlineData("UV0", "UV", VertexElementFormat.Float2)]
+    [InlineData("COLOR0", "COLOR", VertexElementFormat.Float4)]
+    public void VertexInputs_BlendedNameRawSemanticAndLocationIndex(string blended, string raw, VertexElementFormat format)
     {
         ShaderDescription d = Compile();
 
-        Assert.Equal(VertexElementFormat.Float3, CompilerTestHarness.ElementWithSemantic(d, "POSITION").Format);
-        Assert.Equal(VertexElementFormat.Float2, CompilerTestHarness.ElementWithSemantic(d, "UV").Format);
-        Assert.Equal(VertexElementFormat.Float4, CompilerTestHarness.ElementWithSemantic(d, "COLOR").Format);
+        VertexLayoutDescription layout = CompilerTestHarness.LayoutWithName(d, blended);
+        VertexElementDescription element = CompilerTestHarness.Single(layout);
+
+        Assert.Equal(format, element.Format);
+        Assert.Equal(raw, element.D3D11SemanticName);
+        Assert.Equal(0u, layout.Location); // semantic index, carried in the location for D3D11
+    }
+
+
+    [Fact]
+    public void IndexedSemantics_BlendDistinctlyButShareRawSemantic()
+    {
+        // UV0 and UV3 share the raw semantic "UV" but differ by index. The blended names keep them
+        // distinct for user lookup, the raw semantic collapses to "UV", and the index rides the location.
+        const string source = """
+            module MultiUV;
+            struct VIn { float2 a : UV0; float2 b : UV3; }
+            [shader("vertex")] float4 vertex(VIn i) : SV_Position { return float4(i.a, i.b); }
+            [shader("fragment")] float4 fragment() : SV_Target { return 0; }
+            """;
+
+        ShaderDescription d = CompilerTestHarness
+            .Compile(source, "MultiUV", () => new DXCompiler())
+            .CompiledVariants[0].Backends[0].Description;
+
+        VertexLayoutDescription uv0 = CompilerTestHarness.LayoutWithName(d, "UV0");
+        VertexLayoutDescription uv3 = CompilerTestHarness.LayoutWithName(d, "UV3");
+
+        Assert.Equal("UV", CompilerTestHarness.Single(uv0).D3D11SemanticName);
+        Assert.Equal("UV", CompilerTestHarness.Single(uv3).D3D11SemanticName);
+        Assert.Equal(0u, uv0.Location);
+        Assert.Equal(3u, uv3.Location);
     }
 
 

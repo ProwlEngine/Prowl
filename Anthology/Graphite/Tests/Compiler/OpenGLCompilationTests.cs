@@ -8,7 +8,7 @@ namespace Prowl.Graphite.Compiler.Tests;
 public class OpenGLCompilationTests
 {
     static ShaderDescription Compile() =>
-        CompilerTestHarness.CompileGraphics(new GLCompiler()).Backends[0].Description;
+        CompilerTestHarness.CompileGraphics(() => new GLCompiler()).Backends[0].Description;
 
 
     [Fact]

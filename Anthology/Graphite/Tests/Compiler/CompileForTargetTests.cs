@@ -4,21 +4,23 @@ namespace Prowl.Graphite.Compiler.Tests;
 
 
 // Cross-backend smoke test: a single session with every implemented compiler registered produces one
-// tagged ShaderDescription per backend. Per-target output is verified in the platform-specific suites.
+// tagged ShaderDescription per backend, in registration order. Per-target output is verified in the
+// platform-specific suites.
 public class CompileForTargetTests
 {
     [Fact]
     public void CompilesEveryRegisteredBackend()
     {
-        CompilerModule[] modules = [new GLCompiler(), new VulkanCompiler(), new DXCompiler()];
+        VariantResult variant = CompilerTestHarness.CompileGraphics(
+            () => new GLCompiler(), () => new VulkanCompiler(), () => new DXCompiler());
 
-        VariantResult variant = CompilerTestHarness.CompileGraphics(modules);
+        GraphicsBackend[] expected = [GraphicsBackend.OpenGL, GraphicsBackend.Vulkan, GraphicsBackend.Direct3D11];
 
-        Assert.Equal(modules.Length, variant.Backends.Length);
+        Assert.Equal(expected.Length, variant.Backends.Length);
 
-        for (int i = 0; i < modules.Length; i++)
+        for (int i = 0; i < expected.Length; i++)
         {
-            Assert.Equal(modules[i].Backend, variant.Backends[i].Backend);
+            Assert.Equal(expected[i], variant.Backends[i].Backend);
             Assert.NotEmpty(variant.Backends[i].Description.Stages);
         }
     }

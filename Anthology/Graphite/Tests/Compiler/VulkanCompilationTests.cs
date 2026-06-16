@@ -11,7 +11,7 @@ namespace Prowl.Graphite.Compiler.Tests;
 public class VulkanCompilationTests
 {
     static ShaderDescription Compile() =>
-        CompilerTestHarness.CompileGraphics(new VulkanCompiler()).Backends[0].Description;
+        CompilerTestHarness.CompileGraphics(() => new VulkanCompiler()).Backends[0].Description;
 
 
     [Fact]
