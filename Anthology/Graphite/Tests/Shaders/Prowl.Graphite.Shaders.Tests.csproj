@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Shaders\Prowl.Graphite.Shaders.csproj" />
+    </ItemGroup>
+
+</Project>
