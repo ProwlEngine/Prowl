@@ -303,7 +303,11 @@ public class CompilationSession
     {
         StringBuilder sb = new();
 
-        sb.AppendLine("module __Variant;");
+        // The session caches loaded modules by name, so each permutation needs a distinct module
+        // name; otherwise every variant after the first reuses the first variant's constants.
+        string name = "__Variant_" + string.Join("_", variants.Select(v => v.ValueId));
+
+        sb.AppendLine($"module {name};");
 
         for (int i = 0; i < spaces.Length; i++)
         {
@@ -314,7 +318,7 @@ public class CompilationSession
 
         string variantModule = sb.ToString();
 
-        Module loaded = _session!.LoadModuleFromSourceString("__Variant", "__Variant.slang", variantModule, out DiagnosticInfo diagnostics);
+        Module loaded = _session!.LoadModuleFromSourceString(name, $"{name}.slang", variantModule, out DiagnosticInfo diagnostics);
         _handler.HandleCompilationDiagnostics(diagnostics);
 
         return loaded;

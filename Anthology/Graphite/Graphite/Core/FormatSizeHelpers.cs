@@ -2,7 +2,7 @@
 
 namespace Prowl.Graphite;
 
-internal static class FormatSizeHelpers
+public static class FormatSizeHelpers
 {
     /// <summary>
     /// Given a pixel format, returns the number of bytes required to store

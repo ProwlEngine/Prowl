@@ -32,5 +32,5 @@ public class DXCompiler : CompilerModule
     }
 
     public ShaderDescription CompileForTarget(ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler) =>
-        throw new NotImplementedException();
+        SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler);
 }

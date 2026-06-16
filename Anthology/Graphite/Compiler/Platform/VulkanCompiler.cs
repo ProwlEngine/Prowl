@@ -30,5 +30,5 @@ public class VulkanCompiler : CompilerModule
     }
 
     public ShaderDescription CompileForTarget(ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler) =>
-        throw new NotImplementedException();
+        SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler, entryPointNameOverride: "main");
 }
