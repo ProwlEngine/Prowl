@@ -28,7 +28,7 @@ public static class ScriptAssemblyManager
     private static bool _isCompiling;
     private static ScriptCompiler.CompileResult? _pendingResult;
     private static bool _restartDeferred;
-    private static readonly TimeSpan DebounceDelay = TimeSpan.FromSeconds(1);
+    private static TimeSpan DebounceDelay = TimeSpan.FromSeconds(1);
 
     private static AssemblyLoadContext? s_scriptContext;
     private static readonly List<Assembly> s_scriptAssemblies = [];
@@ -213,10 +213,10 @@ public static class ScriptAssemblyManager
     // ================================================================
 
     /// <summary>
-    /// Unload the script assembly context. Uses GC retries to verify the context
-    /// is truly gone. Returns false if unloading fails (caller should restart).
-    /// NoInlining prevents the JIT from keeping references on the stack that would
-    /// prevent the GC from collecting the context.
+    /// Unload the script assembly context, then verify it is truly gone via a forced GC loop.
+    /// Returns false if it survives (caller should restart). The strong reference to the context
+    /// is confined entirely to <see cref="UnloadContext"/>: this method only ever holds the
+    /// <see cref="WeakReference"/>, so no live local roots the context across the GC loop.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool UnloadScriptAssemblies()
@@ -224,43 +224,53 @@ public static class ScriptAssemblyManager
         if (s_scriptContext == null)
             return true;
 
-        // Clear framework-level type caches that hold references into the assembly
+        // Drop framework reflection caches that key off the user assemblies.
         foreach (var asm in s_scriptAssemblies)
-        {
-            try { TypeDescriptor.Refresh(asm); } catch { }
-        }
-
+            TypeDescriptor.Refresh(asm);
         s_scriptAssemblies.Clear();
 
-        // Unload in a separate method so the local reference to the context
-        // doesn't stay on this method's stack frame during the GC loop.
-        UnloadContextInternal(out WeakReference contextRef);
+        WeakReference weakCtx = UnloadContext();
 
-        for (int i = 0; contextRef.IsAlive; i++)
+        // Forced GC loop. Collect, run finalizers, collect again so anything resurrected for
+        // finalization is reclaimed within the same iteration.
+        // In this section, it's useless to re-assign s_scriptContext as it pins down the ALC and, if it fails to reload,
+        // the editor will restart anyway so there's no need to have it here
+        for (int i = 0; i < MaxGCAttempts && weakCtx.IsAlive; i++)
         {
-            if (i >= MaxGCAttempts)
-            {
-                Runtime.Debug.LogError($"[ScriptAssemblyManager] Failed to unload script assemblies after {MaxGCAttempts} GC attempts.");
-                // Context is still alive - recover the reference so we don't leak it
-                s_scriptContext = contextRef.Target as AssemblyLoadContext;
-                return false;
-            }
-
-            Runtime.Debug.Log($"[ScriptAssemblyManager] GC attempt ({i + 1}/{MaxGCAttempts})...");
             GC.Collect();
             GC.WaitForPendingFinalizers();
+            GC.Collect();
         }
 
-        Runtime.Debug.Log("[ScriptAssemblyManager] Script assemblies unloaded successfully.");
+        if (weakCtx.IsAlive)
+        {
+            string hint = System.Diagnostics.Debugger.IsAttached
+                ? " A DEBUGGER IS ATTACHED - the CLR keeps collectible assemblies alive for the whole debug " +
+                  "session, so hot-reload cannot unload while debugging. Run without the debugger (Ctrl+F5 / " +
+                  "launch the built exe) to get true hot-reload; under the debugger the editor restarts instead."
+                : " No debugger attached - the pin is a runtime type/method handle (reflection or JIT/emit cache " +
+                  "of a script type), which a heap dump's managed graph can't show. Falling back to editor restart.";
+            Debug.LogError($"[ScriptAssemblyManager] Script context still alive after {MaxGCAttempts} GC attempts." + hint);
+            return false;
+        }
+
+        Debug.Log("[ScriptAssemblyManager] Unload successful.");
         return true;
     }
 
+    /// <summary>
+    /// Nulls the static field and unloads the context. The only strong reference to the context
+    /// lives in this method's <c>ctx</c> local, which goes out of scope on return — so the caller's
+    /// GC loop can collect it. NoInlining keeps that local out of the caller's stack frame.
+    /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void UnloadContextInternal(out WeakReference contextRef)
+    private static WeakReference UnloadContext()
     {
-        s_scriptContext!.Unload();
-        contextRef = new WeakReference(s_scriptContext);
+        AssemblyLoadContext ctx = s_scriptContext!;
         s_scriptContext = null;
+        var weak = new WeakReference(ctx);
+        ctx.Unload();
+        return weak;
     }
 
     // ================================================================
@@ -303,7 +313,9 @@ public static class ScriptAssemblyManager
             if (!UnloadScriptAssemblies())
                 return false;
 
-            // 4. Load the new assemblies into a fresh context
+            DebounceDelay = TimeSpan.FromSeconds(1);
+
+            // 4. Load the new assemblies into a fresh context.
             LoadAssemblies(project);
 
             // 5. Reinitialize all editor registries (re-scans assemblies for attributes)
