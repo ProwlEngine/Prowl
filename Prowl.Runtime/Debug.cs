@@ -27,14 +27,14 @@ public enum LogSeverity
 public delegate void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity);
 
 
-public record DebugStackFrame(string FileName, int? Line = null, int? Column = null, MethodBase? MethodBase = null)
+public record DebugStackFrame(string FileName, int? Line = null, int? Column = null, string? Method = null)
 {
     public override string ToString()
     {
         string locSuffix = Line != null ? Column != null ? $"({Line},{Column})" : $"({Line})" : "";
 
-        if (MethodBase != null)
-            return $"In {MethodBase.DeclaringType.Name}.{MethodBase.Name} at {FileName}{locSuffix}";
+        if (!string.IsNullOrEmpty(Method))
+            return $"In {Method} at {FileName}{locSuffix}";
         else
             return $"At {FileName}{locSuffix}";
     }
@@ -53,7 +53,11 @@ public record DebugStackTrace(params DebugStackFrame[] StackFrames)
         for (int i = 0; i < stackFrames.Length; i++)
         {
             StackFrame srcFrame = stackTrace.GetFrame(i);
-            stackFrames[i] = new DebugStackFrame(srcFrame.GetFileName(), srcFrame.GetFileLineNumber(), srcFrame.GetFileColumnNumber(), srcFrame.GetMethod());
+
+            MethodBase? m = srcFrame.GetMethod();
+            string? method = m != null ? $"{m.DeclaringType?.Name}.{m.Name}" : null;
+
+            stackFrames[i] = new DebugStackFrame(srcFrame.GetFileName(), srcFrame.GetFileLineNumber(), srcFrame.GetFileColumnNumber(), method);
         }
 
         return new DebugStackTrace(stackFrames);

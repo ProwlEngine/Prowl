@@ -1330,6 +1330,9 @@ public class EditorApplication : Game
                 if (panel is IScriptReloadCleanup cleanup)
                     try { cleanup.OnScriptReloadCleanup(); } catch { }
 
+        // Release Paper callbacks as they might otherwise pin ALC types across a reload.
+        ReleasePaperRetainedCallbacks();
+
         // 2. Play-mode leftovers (normally empty outside play mode; cleared defensively).
         _savedEditorScene = null;
         _savedEditorTime = null;
@@ -1364,6 +1367,29 @@ public class EditorApplication : Game
         Runtime.GraphTools.NodeRegistry.Reinitialize();          // clear-only; rebuilds lazily
         Runtime.GraphTools.GraphValidatorRegistry.ClearCache();
         Runtime.MeshFeatures.MeshFeatureRegistry.ClearCache();
+    }
+
+    private void ReleasePaperRetainedCallbacks()
+    {
+        try
+        {
+            var paper = PaperInstance;
+            if (paper == null) return;
+
+            Type t = paper.GetType();
+            const BindingFlags BF = BindingFlags.NonPublic | BindingFlags.Instance;
+
+            if (t.GetField("_elements", BF)?.GetValue(paper) is not Array elements) return;
+
+            int count = t.GetField("_elementCount", BF)?.GetValue(paper) is int c ? c : 0;
+            count = Math.Clamp(count, 0, elements.Length);
+            if (count < elements.Length)
+                Array.Clear(elements, count, elements.Length - count);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"[EditorApplication] Could not reset PaperUI retained callbacks: {ex.Message}");
+        }
     }
 
     private void ReinitializeRegistries()
