@@ -28,6 +28,8 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
 
         ComputeProgram program = CreateBasicComputeProgram();
 
+        Frame frame = GD.BeginFrame();
+
         PropertySet props = new();
         props.SetInt("Width", (int)width);
         props.SetInt("Height", (int)height);
@@ -41,7 +43,6 @@ public abstract class ComputeCoreTests<T> : GraphicsDeviceTestBase<T> where T : 
         cl.Dispatch(width / 16, height / 16, 1);
         cl.End();
 
-        Frame frame = GD.BeginFrame();
         frame.SubmitCommands(cl);
         GD.EndFrame(frame);
         GD.WaitForIdle();
