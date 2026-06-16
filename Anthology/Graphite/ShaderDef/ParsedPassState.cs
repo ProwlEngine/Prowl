@@ -124,7 +124,7 @@ public class ParsedPassState
     {
         { "Back", FaceCullMode.Back },
         { "Front", FaceCullMode.Front },
-        { "Off", 0 }
+        { "Off", FaceCullMode.None }
     };
 
 
