@@ -11,15 +11,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.4.1" />
-        <PackageReference Include="xunit" Version="2.9.3" />
+        <!-- Shared xunit tooling comes from Tests/Directory.Build.props. -->
         <PackageReference Include="xunit.console" Version="2.9.3" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
-        <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
         <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
         <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
         <PackageReference Include="Prowl.Slang" Version="0.3.1" />
-        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
     </ItemGroup>
 
     <ItemGroup>
