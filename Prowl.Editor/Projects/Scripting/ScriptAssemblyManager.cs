@@ -315,6 +315,8 @@ public static class ScriptAssemblyManager
             if (File.Exists(autoSavePath))
                 EditorApplication.Instance?.RestoreAutoSavedScene(autoSavePath);
 
+            EditorApplication.Instance?.RestoreSelectionAfterReload();
+
             Runtime.Debug.LogSuccess("[ScriptAssemblyManager] Hot-reload successful!");
             return true;
         }

@@ -1315,6 +1315,8 @@ public class EditorApplication : Game
     /// </summary>
     public void ReleaseScriptReferences()
     {
+        CaptureSelectionForReload();
+
         // 1. Live object graph: the scene's GameObjects hold user MonoBehaviour instances.
         //    The scene was already serialized to disk by SaveSceneForRestart().
         Selection.Clear();
@@ -1389,6 +1391,114 @@ public class EditorApplication : Game
         catch (Exception ex)
         {
             Runtime.Debug.LogWarning($"[EditorApplication] Could not reset PaperUI retained callbacks: {ex.Message}");
+        }
+    }
+
+    // ================================================================
+    //  Selection preserve/restore across a hot-reload
+    // ================================================================
+
+    private List<SelectionToken>? _reloadSelection;
+    private SelectionToken _reloadActive;
+    private bool _hasReloadActive;
+
+    /// <summary>
+    /// Snapshot the current selection as identifier tokens (called before the selection is cleared).
+    /// </summary>
+    private void CaptureSelectionForReload()
+    {
+        _reloadSelection = new List<SelectionToken>();
+        _hasReloadActive = false;
+
+        foreach (var obj in Selection.Selected)
+        {
+            if (!TryMakeSelectionToken(obj, out var token))
+                continue;
+
+            _reloadSelection.Add(token);
+            if (ReferenceEquals(obj, Selection.ActiveObject))
+            {
+                _reloadActive = token;
+                _hasReloadActive = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tries to create a selection token to then restore the selection after script reload.
+    /// </summary>
+    private static bool TryMakeSelectionToken(object obj, out SelectionToken token)
+    {
+        switch (obj)
+        {
+            // Scene GameObject - restore by stable scene identifier.
+            case GameObject go:
+                token = new SelectionToken(SelKind.GameObject, go.Identifier, Guid.Empty, "", "", false);
+                return true;
+            // Scene component - restore by owning GameObject + component identifier.
+            case MonoBehaviour mb when mb.GameObject.IsValid():
+                token = new SelectionToken(SelKind.Component, mb.GameObject.Identifier, mb.Identifier, "", "", false);
+                return true;
+            // Project asset - restore by AssetID via the asset database.
+            case EngineObject eo when eo.AssetID != Guid.Empty:
+                token = new SelectionToken(SelKind.Asset, eo.AssetID, Guid.Empty, "", "", false);
+                return true;
+            // Project browser item - identifier-only, rebuilt from its path/guid.
+            case ContentItem ci:
+                token = new SelectionToken(SelKind.Content, ci.Guid, Guid.Empty, ci.RelativePath, ci.Name, ci.IsFolder);
+                return true;
+            default:
+                token = default;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Re-resolve the captured selection tokens against the freshly reloaded scene/assets and re-select them.
+    /// </summary>
+    public void RestoreSelectionAfterReload()
+    {
+        if (_reloadSelection == null)
+            return;
+
+        var tokens = _reloadSelection;
+        _reloadSelection = null;
+
+        Selection.Clear();
+        object? active = null;
+
+        foreach (var token in tokens)
+        {
+            object? resolved = ResolveSelectionToken(token);
+            if (resolved == null)
+                continue;
+
+            Selection.AddToSelection(resolved);
+            if (_hasReloadActive && token.Equals(_reloadActive))
+                active = resolved;
+        }
+
+        if (active != null)
+            Selection.ActiveObject = active;
+
+        _hasReloadActive = false;
+    }
+
+    private static object? ResolveSelectionToken(SelectionToken token)
+    {
+        switch (token.Kind)
+        {
+            case SelKind.GameObject:
+                return Runtime.Resources.Scene.Current?.FindObjectByIdentifier<GameObject>(token.Id);
+            case SelKind.Component:
+                return Runtime.Resources.Scene.Current?.FindObjectByIdentifier<GameObject>(token.Id)?.GetComponentByIdentifier(token.CompId);
+            case SelKind.Asset:
+                return Runtime.AssetDatabase.Get(token.Id);
+            case SelKind.Content:
+                // ContentItem compares by Guid + RelativePath, so a rebuilt instance re-selects the same item.
+                return new ContentItem { Guid = token.Id, RelativePath = token.Path, Name = token.Name, IsFolder = token.IsFolder };
+            default:
+                return null;
         }
     }
 
