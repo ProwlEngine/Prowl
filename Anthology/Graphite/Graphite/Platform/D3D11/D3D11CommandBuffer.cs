@@ -1194,6 +1194,9 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             ppRTVs[i] = d3dFB.RenderTargetViews[i];
         }
 
+        // OMSetRenderTargets implicitly unbinds all OM-stage UAVs, so the OM UAV tracking is now stale.
+        _boundOMUAVBuffers.Clear();
+
         Ctx->OMSetRenderTargets((uint)rtvCount, ppRTVs, d3dFB.DepthStencilView);
     }
 
