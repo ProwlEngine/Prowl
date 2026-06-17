@@ -38,9 +38,11 @@ public static class FileIconRegistry
     private static string _defaultIcon = EditorIcons.File;
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
     /// <summary>Reset to an uninitialized state so it rebuilds after a script reload. Kept symmetric with the other registries' teardown.</summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

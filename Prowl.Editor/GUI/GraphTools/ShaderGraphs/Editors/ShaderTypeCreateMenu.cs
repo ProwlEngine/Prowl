@@ -18,6 +18,9 @@ public static class ShaderTypeCreateMenu
     public const string ShaderGraphExtension = ".shadergraph";
     private const string MenuPrefix = "Shader Graph/";
 
+    // Order 10: runs after CreateAssetMenuRegistry (default order 0) has rescanned, since this
+    // appends manual shader-graph entries onto the create-asset menu.
+    [Runtime.OnAssemblyLoad(Order = 10)]
     public static void Register()
     {
         // Rescan so plugin-defined types picked up after a recompile are visible.

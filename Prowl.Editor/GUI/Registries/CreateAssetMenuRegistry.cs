@@ -62,6 +62,7 @@ public static class CreateAssetMenuRegistry
 
     public static IReadOnlyList<Entry> Entries => _entries;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
     /// <summary>
@@ -70,6 +71,7 @@ public static class CreateAssetMenuRegistry
     /// collected. Manual entries are re-registered after reload by their owners (e.g.
     /// <c>ShaderTypeCreateMenu.Register()</c>).
     /// </summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

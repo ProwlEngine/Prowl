@@ -66,6 +66,7 @@ public static class UIEventSystem
     /// These outlive a <see cref="Resources.Scene"/> unload and would otherwise pin disposed
     /// GameObjects — and, during script hot-reload, the collectible AssemblyLoadContext.
     /// </summary>
+    [OnAssemblyUnload]
     public static void ResetState()
     {
         CurrentHovered = null;

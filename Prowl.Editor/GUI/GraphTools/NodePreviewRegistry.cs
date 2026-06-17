@@ -43,6 +43,7 @@ public static class NodePreviewRegistry
     private static readonly Dictionary<Type, NodePreviewDrawer> _cache = new();
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize()
     {
         _initialized = false;
@@ -51,6 +52,7 @@ public static class NodePreviewRegistry
     }
 
     /// <summary>Drop cached type maps so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

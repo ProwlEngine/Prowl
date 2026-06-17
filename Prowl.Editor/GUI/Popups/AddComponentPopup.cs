@@ -41,6 +41,7 @@ public static class AddComponentPopup
     /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
     /// including user ones) so the script AssemblyLoadContext can be collected.
     /// </summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache() => _cachedComponents = null;
 
     public static bool IsOpen => _isOpen;

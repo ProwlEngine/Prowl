@@ -23,6 +23,7 @@ public static class ComponentIconRegistry
     /// Drop the per-type icon cache (keyed by component <see cref="Type"/>, including user
     /// components) so the script AssemblyLoadContext can be collected.
     /// </summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache() => _cache.Clear();
 
     public static string GetIcon(MonoBehaviour component) => GetIcon(component.GetType());

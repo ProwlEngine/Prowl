@@ -43,12 +43,14 @@ public static class PropertyEditorRegistry
     private static readonly Dictionary<Type, PropertyEditor> _editorCache = new();
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
     /// <summary>
     /// Drop all cached <see cref="Type"/> references and editor instances so the script
     /// AssemblyLoadContext can be collected. Caches rebuild on the next <see cref="Initialize"/>.
     /// </summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

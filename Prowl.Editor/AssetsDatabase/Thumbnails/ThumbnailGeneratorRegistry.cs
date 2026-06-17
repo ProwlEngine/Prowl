@@ -41,9 +41,11 @@ public static class ThumbnailGeneratorRegistry
     private static readonly Dictionary<Type, IThumbnailGenerator> _generators = new();
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
     /// <summary>Drop cached generators (keyed by user <see cref="Type"/>) so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

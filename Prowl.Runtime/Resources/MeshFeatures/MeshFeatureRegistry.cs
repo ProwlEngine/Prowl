@@ -51,6 +51,7 @@ public static class MeshFeatureRegistry
     /// user <see cref="MeshFeatureSpec"/> types can be unloaded. Specs rebuild on the next
     /// <see cref="Initialize"/>/<see cref="Reinitialize"/> after the new assemblies are loaded.
     /// </summary>
+    [OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

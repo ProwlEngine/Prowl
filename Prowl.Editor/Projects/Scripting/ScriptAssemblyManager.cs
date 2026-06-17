@@ -108,6 +108,9 @@ public static class ScriptAssemblyManager
         _isCompiling = true;
         Runtime.Debug.Log("[ScriptAssemblyManager] Starting compilation...");
 
+        // Notify anything tagged [OnScriptCompile] that a recompile is starting (main thread).
+        Core.ScriptReloadCallbacks.InvokeScriptCompile();
+
         // Run on background thread result polled on main thread via _pendingResult
         Task.Run(() =>
         {

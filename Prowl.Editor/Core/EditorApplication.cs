@@ -427,10 +427,9 @@ public class EditorApplication : Game
 
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
-                ReinitializeRegistries();
 
-                // Load project settings
-                ProjectSettingsRegistry.OnProjectOpened();
+                // ReinitializeRegistries() runs the [OnAssemblyLoad] hooks, which include the project-settings reload.
+                ReinitializeRegistries();
 
                 // Restore layout from project (or use default)
                 var savedLayout = LoadDockLayout();
@@ -1298,10 +1297,6 @@ public class EditorApplication : Game
     public void ReinitializeAfterReload()
     {
         ReinitializeRegistries();
-
-        // Re-create settings singletons against the new types, then reload the values that
-        // SaveProjectState() persisted to disk just before the reload so authoring survives.
-        ProjectSettingsRegistry.OnProjectOpened();
     }
 
     /// <summary>
@@ -1322,8 +1317,6 @@ public class EditorApplication : Game
         Selection.Clear();
         Undo.Clear();
         Runtime.Resources.Scene.Unload();
-        Runtime.UI.UIEventSystem.ResetState();
-        SceneViewEditorRegistry.ClearCache();
 
         // 1b. Long-lived editor panels cache scene objects (e.g. the Inspector's last target,
         //     the Hierarchy's drag target). Let each drop its references before the unload.
@@ -1338,37 +1331,14 @@ public class EditorApplication : Game
         // 2. Play-mode leftovers (normally empty outside play mode; cleared defensively).
         _savedEditorScene = null;
         _savedEditorTime = null;
-        StaticFieldCrawler.Clear();
-
-        // 3. Menu closures: Window/* and GameObject/* items capture user Types. Drop the whole
-        //    menu (rebuilt wholesale by ReinitializeRegistries) plus the panel type list.
         MenuRegistry.Clear();
         _registeredPanels.Clear();
 
-        // 4. Editor registry caches (Type maps, cached editor/drawer/generator instances, ...).
-        PropertyEditorRegistry.ClearCache();
-        CustomEditorRegistry.ClearCache();
-        GraphTools.NodeRendererRegistry.ClearCache();
-        GraphTools.NodePreviewRegistry.ClearCache();
-        Inspector.AssetImporterEditorRegistry.ClearCache();
-        GUI.Popups.AddComponentPopup.ClearCache();
-        Importers.ImporterRegistry.ClearCache();
-        ProjectSettingsRegistry.ClearCache();
-        CreateAssetMenuRegistry.ClearCache();
-        ThumbnailGeneratorRegistry.ClearCache();
-        SceneDropHandlerRegistry.ClearCache();
-        CreateGameObjectMenuRegistry.ClearCache();
-        FileIconRegistry.ClearCache();
-        AssetDoubleClickRegistry.ClearCache();
-        ScriptTemplateRegistry.ClearCache();
-        ComponentIconRegistry.ClearCache();
-
-        // 5. Runtime-side caches that also reflect over user assemblies.
+        // 3. The Echo serializer cache lives in an external package so we can't call OnAssemblyUnload there.
         Echo.Serializer.ClearCache();
-        RuntimeUtils.ClearCache();
-        Runtime.GraphTools.NodeRegistry.Reinitialize();          // clear-only; rebuilds lazily
-        Runtime.GraphTools.GraphValidatorRegistry.ClearCache();
-        Runtime.MeshFeatures.MeshFeatureRegistry.ClearCache();
+
+        // 4. Everything tagged [OnAssemblyUnload]
+        ScriptReloadCallbacks.InvokeAssemblyUnload();
     }
 
     private void ReleasePaperRetainedCallbacks()
@@ -1504,30 +1474,13 @@ public class EditorApplication : Game
 
     private void ReinitializeRegistries()
     {
+        // Panel scan is an editor-instance step (needed before the menu rebuild reads the panel list).
         _registeredPanels.Clear();
         ScanAndRegisterPanels();
-        InitializeOnLoadRegistry.Reinitialize();
-        PropertyEditorRegistry.Reinitialize();
-        CustomEditorRegistry.Reinitialize();
-        GraphTools.NodeRendererRegistry.Reinitialize();
-        GraphTools.NodePreviewRegistry.Reinitialize();
-        Runtime.GraphTools.GraphValidatorRegistry.Reinitialize();
-        Inspector.AssetImporterEditorRegistry.Reinitialize();
-        GUI.Popups.AddComponentPopup.Reinitialize();
-        Importers.ImporterRegistry.Reinitialize();
-        ProjectSettingsRegistry.Reinitialize();
-        CreateAssetMenuRegistry.Reinitialize();
-        ShaderTypeCreateMenu.Register();
-        ThumbnailGeneratorRegistry.Reinitialize();
-        SceneDropHandlerRegistry.Reinitialize();
-        CreateGameObjectMenuRegistry.Reinitialize();
-        FileIconRegistry.Reinitialize();
-        AssetDoubleClickRegistry.Reinitialize();
-        ScriptTemplateRegistry.Reinitialize();
 
-        // Rebuild the menu bar from scratch. A hot-reload clears it in ReleaseScriptReferences()
-        // (dropping closures that captured user Types); rebuild the full set so removed/renamed
-        // user windows and creators don't linger. Cheap and idempotent on the normal open path.
+        // Run every [OnAssemblyLoad] hook
+        ScriptReloadCallbacks.InvokeAssemblyLoad();
+
         MenuRegistry.Clear();
         RegisterMenus();
     }

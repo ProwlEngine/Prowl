@@ -54,9 +54,11 @@ public static class ScriptTemplateRegistry
 
     public static IReadOnlyList<ScriptTemplate> Templates => _templates;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
     /// <summary>Drop cached templates so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

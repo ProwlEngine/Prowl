@@ -83,10 +83,22 @@ public static class ProjectSettingsRegistry
     /// Callers must <see cref="SaveAll"/> first and reload via <see cref="OnProjectOpened"/>
     /// after the new assemblies are in place so authored values survive the reload.
     /// </summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;
         _entries.Clear();
+    }
+
+    /// <summary>
+    /// Hook before scripts reload, reinizializes all the settings singletons against the values
+    /// written to disk just before by SaveAll.
+    /// </summary>
+    [Runtime.OnAssemblyLoad]
+    public static void OnScriptReload()
+    {
+        Reinitialize();
+        OnProjectOpened();
     }
 
     public static void Initialize()

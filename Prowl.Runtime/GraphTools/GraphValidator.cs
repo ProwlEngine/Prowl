@@ -50,6 +50,7 @@ public static class GraphValidatorRegistry
     private static readonly List<(Type? marker, GraphValidator instance)> _validators = new();
     private static bool _initialized;
 
+    [OnAssemblyLoad]
     public static void Reinitialize()
     {
         _initialized = false;
@@ -62,6 +63,7 @@ public static class GraphValidatorRegistry
     /// possibly user types) without re-scanning, so a collectible AssemblyLoadContext can be
     /// unloaded. Rebuilds on the next <see cref="Initialize"/> after reload.
     /// </summary>
+    [OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;

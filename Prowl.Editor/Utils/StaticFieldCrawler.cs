@@ -71,5 +71,6 @@ public static class StaticFieldCrawler
     /// Only relevant if a reload is somehow attempted with a live snapshot; normally the
     /// snapshot is already empty outside of play mode.
     /// </summary>
+    [Runtime.OnAssemblyUnload]
     public static void Clear() => s_snapshot.Clear();
 }

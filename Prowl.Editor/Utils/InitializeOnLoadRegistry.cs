@@ -23,6 +23,7 @@ public static class InitializeOnLoadRegistry
 {
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
 
     public static void Initialize()

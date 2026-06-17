@@ -51,6 +51,7 @@ public static class SceneViewEditorRegistry
     /// instances, and <see cref="ActiveTarget"/> holds a live scene <see cref="GameObject"/> —
     /// all of which pin the script AssemblyLoadContext. Re-scans lazily on the next access.
     /// </summary>
+    [Runtime.OnAssemblyUnload]
     public static void ClearCache()
     {
         Deactivate();
