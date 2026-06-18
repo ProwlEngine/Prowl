@@ -175,4 +175,109 @@ internal static class SlangReflector
             ShaderStage.Domain => ShaderStages.TessellationEvaluation,
             _ => throw new NotSupportedException($"Unsupported shader stage: {stage}")
         };
+
+
+    // Maps a reflected resource type layout to its Graphite resource kind. Returns false for type
+    // layouts that are not bindable resources (e.g. ParameterBlock, which is a container of others).
+    public static bool TryGetResourceKind(TypeLayoutReflection typeLayout, out ResourceKind kind)
+    {
+        switch (typeLayout.Kind)
+        {
+            case TypeKind.ConstantBuffer:
+                kind = ResourceKind.UniformBuffer;
+                return true;
+
+            case TypeKind.SamplerState:
+                kind = ResourceKind.Sampler;
+                return true;
+
+            case TypeKind.Resource:
+                bool readWrite = typeLayout.ResourceAccess == ResourceAccess.ReadWrite;
+
+                if ((typeLayout.ResourceShape & ResourceShape.BaseShapeMask) == ResourceShape.StructuredBuffer)
+                    kind = readWrite ? ResourceKind.StructuredBufferReadWrite : ResourceKind.StructuredBufferReadOnly;
+                else
+                    kind = readWrite ? ResourceKind.TextureReadWrite : ResourceKind.TextureReadOnly;
+
+                return true;
+
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+
+    // Flattens the scalar/vector/matrix fields of a uniform block into UniformBlockField entries,
+    // keyed by the Slang-source field name. Arrays, nested structs, and scalar types with no
+    // UniformScalarType mapping are skipped; offsets are absolute so omitting a field is harmless.
+    public static UniformBlockField[] ReflectUniformFields(TypeLayoutReflection blockLayout)
+    {
+        List<UniformBlockField> fields = [];
+
+        foreach (VariableLayoutReflection field in blockLayout.Fields)
+        {
+            if (!TryGetScalarType(field.TypeLayout, out UniformScalarType type))
+                continue;
+
+            fields.Add(new UniformBlockField(field.Name, field.GetOffset(), field.TypeLayout.GetSize(), type));
+        }
+
+        return [.. fields];
+    }
+
+
+    static bool TryGetScalarType(TypeLayoutReflection typeLayout, out UniformScalarType type)
+    {
+        switch (typeLayout.Kind)
+        {
+            case TypeKind.Scalar:
+                type = typeLayout.ScalarType switch
+                {
+                    SlangScalar.Float32 => UniformScalarType.Float1,
+                    SlangScalar.Int32 => UniformScalarType.Int1,
+                    SlangScalar.Float64 => UniformScalarType.Double1,
+                    _ => Unsupported,
+                };
+                break;
+
+            case TypeKind.Vector:
+                type = (typeLayout.ScalarType, typeLayout.ColumnCount) switch
+                {
+                    (SlangScalar.Float32, 2) => UniformScalarType.Float2,
+                    (SlangScalar.Float32, 3) => UniformScalarType.Float3,
+                    (SlangScalar.Float32, 4) => UniformScalarType.Float4,
+
+                    (SlangScalar.Int32, 2) => UniformScalarType.Int2,
+                    (SlangScalar.Int32, 3) => UniformScalarType.Int3,
+                    (SlangScalar.Int32, 4) => UniformScalarType.Int4,
+
+                    (SlangScalar.Float64, 2) => UniformScalarType.Double2,
+                    (SlangScalar.Float64, 3) => UniformScalarType.Double3,
+                    (SlangScalar.Float64, 4) => UniformScalarType.Double4,
+
+                    _ => Unsupported,
+                };
+                break;
+
+            case TypeKind.Matrix:
+                type = (typeLayout.ScalarType, typeLayout.RowCount, typeLayout.ColumnCount) switch
+                {
+                    (SlangScalar.Float32, 4, 4) => UniformScalarType.Float4x4,
+                    (SlangScalar.Float64, 4, 4) => UniformScalarType.Double4x4,
+                    _ => Unsupported,
+                };
+                break;
+
+            default:
+                type = Unsupported;
+                break;
+        }
+
+        return type != Unsupported;
+    }
+
+
+    // Sentinel for "no UniformScalarType maps this Slang type"; distinct from any real enum member.
+    const UniformScalarType Unsupported = (UniformScalarType)byte.MaxValue;
 }

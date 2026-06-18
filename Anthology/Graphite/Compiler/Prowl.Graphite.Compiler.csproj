@@ -28,7 +28,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Prowl.Slang" Version="0.3.1" />
+        <PackageReference Include="Prowl.Slang" Version="0.3.4" />
         <PackageReference Include="Prowl.Vector" Version="2.1.0" />
     </ItemGroup>
 
