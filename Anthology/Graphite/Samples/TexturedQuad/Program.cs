@@ -50,6 +50,8 @@ public static class Program
     {
         tracker.Begin();
 
+        Frame frame = device.BeginFrame();
+
         buffer.Begin();
         buffer.SetFramebuffer(device.SwapchainFramebuffer);
         buffer.ClearDepthStencil(1, 0);
@@ -60,7 +62,6 @@ public static class Program
         buffer.DrawIndexed();
         buffer.End();
 
-        Frame frame = device.BeginFrame();
         frame.SubmitCommands(buffer);
         device.EndFrame(frame);
 

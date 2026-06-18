@@ -289,10 +289,10 @@ public struct MeshCreateInfo
     {
         VertexLayout =
         [
-            new VertexElementDescription("POSITION", VertexElementFormat.Float3),
-            new VertexElementDescription("NORMAL",   VertexElementFormat.Float3),
-            new VertexElementDescription("TANGENT",  VertexElementFormat.Float3),
-            new VertexElementDescription("UV",       VertexElementFormat.Float4),
+            new VertexElementDescription("POSITION0", VertexElementFormat.Float3),
+            new VertexElementDescription("NORMAL0",   VertexElementFormat.Float3),
+            new VertexElementDescription("TANGENT0",  VertexElementFormat.Float3),
+            new VertexElementDescription("UV0",       VertexElementFormat.Float4),
             new VertexElementDescription("UV1",      VertexElementFormat.Float4),
             new VertexElementDescription("UV2",      VertexElementFormat.Float4),
         ],

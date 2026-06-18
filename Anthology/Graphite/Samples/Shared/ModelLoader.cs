@@ -15,8 +15,8 @@ public static class ModelLoader
         MeshCreateInfo createInfo = new()
         {
             VertexLayout = [
-                new VertexElementDescription("POSITION", VertexElementFormat.Float3),
-                new VertexElementDescription("UV", VertexElementFormat.Float2)
+                new VertexElementDescription("POSITION0", VertexElementFormat.Float3),
+                new VertexElementDescription("UV0", VertexElementFormat.Float2)
             ],
             Topology = PrimitiveTopology.TriangleList
         };
@@ -134,8 +134,8 @@ public static class ModelLoader
         MeshCreateInfo createInfo = new()
         {
             VertexLayout = [
-                new VertexElementDescription("POSITION", VertexElementFormat.Float3),
-                new VertexElementDescription("UV", VertexElementFormat.Float2)
+                new VertexElementDescription("POSITION0", VertexElementFormat.Float3),
+                new VertexElementDescription("UV0", VertexElementFormat.Float2)
             ],
             Topology = PrimitiveTopology.TriangleStrip
         };
@@ -167,8 +167,8 @@ public static class ModelLoader
         MeshCreateInfo createInfo = new()
         {
             VertexLayout = [
-                new VertexElementDescription("POSITION", VertexElementFormat.Float3),
-                new VertexElementDescription("UV", VertexElementFormat.Float2)
+                new VertexElementDescription("POSITION0", VertexElementFormat.Float3),
+                new VertexElementDescription("UV0", VertexElementFormat.Float2)
             ],
             Topology = PrimitiveTopology.TriangleStrip
         };
