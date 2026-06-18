@@ -33,4 +33,7 @@
     <Folder Name="/Variants/">
         <Project Path="Variants/Prowl.Graphite.Variants.csproj" />
     </Folder>
+    <Folder Name="/Tools/">
+        <Project Path="Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
+    </Folder>
 </Solution>
