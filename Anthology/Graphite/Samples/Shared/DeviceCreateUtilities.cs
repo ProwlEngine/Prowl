@@ -17,9 +17,8 @@ namespace Prowl.Graphite.Samples;
 
 public static class DeviceCreateUtilities
 {
-    const ContextAPI API = ContextAPI.Vulkan;
-    static readonly APIVersion Version = new APIVersion(2, 1);
-    const GraphicsBackend Backend = GraphicsBackend.Vulkan;
+    private static readonly (GraphicsBackend backend, APIVersion version) Backend = (GraphicsBackend.OpenGL, new APIVersion(4, 5));
+    static readonly ContextAPI API = Backend.backend == GraphicsBackend.OpenGL ? ContextAPI.OpenGL : ContextAPI.Vulkan;
 
 
     public static IWindow CreateWindowAndDevice(Action<GraphicsDevice> load, Action<double> render, Action close, GraphicsDeviceOptions options)
@@ -31,14 +30,14 @@ public static class DeviceCreateUtilities
         woptions.Size = new Vector2D<int>(600, 600);
         woptions.WindowState = WindowState.Normal;
         woptions.VideoMode = VideoMode.Default;
-        woptions.API = new GraphicsAPI(API, ContextProfile.Core, ContextFlags.ForwardCompatible, Version);
+        woptions.API = new GraphicsAPI(API, ContextProfile.Core, ContextFlags.ForwardCompatible, Backend.version);
         woptions.ShouldSwapAutomatically = false;
 
         IWindow window = Silk.NET.Windowing.Window.Create(woptions);
 
         window.Load += () =>
         {
-            GraphicsDevice device = CreateDevice(window, options, Backend);
+            GraphicsDevice device = CreateDevice(window, options, Backend.backend);
             device.SyncToVerticalBlank = options.SyncToVerticalBlank;
 
             window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
@@ -58,7 +57,7 @@ public static class DeviceCreateUtilities
     // Workaround involves loading the library at the correct path manually.
     private static void MoltenVKMacWorkaround()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || Backend != GraphicsBackend.Vulkan)
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || Backend.backend != GraphicsBackend.Vulkan)
             return;
 
         SdlWindowing.RegisterPlatform();
