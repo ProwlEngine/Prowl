@@ -6,6 +6,7 @@
 
     <ItemGroup>
         <None Include="KnownGood\**\*" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="Shaders\**\*" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>

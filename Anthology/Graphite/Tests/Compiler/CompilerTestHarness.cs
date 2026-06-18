@@ -6,46 +6,13 @@ using System.Text;
 namespace Prowl.Graphite.Compiler.Tests;
 
 
-// Shared scaffolding for the platform compilation tests: a single graphics shader, the session
-// plumbing to compile it for one or more backends, and access to the checked-in known-good outputs.
+// Shared scaffolding for the platform compilation tests: access to the on-disk shared shader suite,
+// the session plumbing to compile a shader for one or more backends, and the checked-in known-good
+// outputs. The shaders live as real .slang files under Shaders/ (copied next to the test binary) so
+// they can import one another, the single source of truth every backend suite compiles against.
 internal static class CompilerTestHarness
 {
-    // A self-contained graphics module: a three-attribute vertex input feeding a vertex + fragment
-    // stage. Kept deliberately tiny so the known-good GLSL/HLSL/SPIR-V stay readable.
-    public const string GraphicsSource = """
-        module TestShader;
-
-        struct VertexInput
-        {
-            float3 position : POSITION;
-            float2 uv       : UV0;
-            float4 color    : COLOR;
-        }
-
-        struct VertexOutput
-        {
-            float4 clipPosition : SV_Position;
-            float2 uv : UV;
-            float4 color : COLOR;
-        }
-
-        [shader("vertex")]
-        VertexOutput vertex(VertexInput input)
-        {
-            VertexOutput output;
-            output.clipPosition = float4(input.position, 1);
-            output.uv = input.uv;
-            output.color = input.color;
-            return output;
-        }
-
-        [shader("fragment")]
-        float4 fragment(VertexOutput input) : SV_Target
-        {
-            return input.color;
-        }
-        """;
-
+    static string ShadersDirectory => Path.Combine(AppContext.BaseDirectory, "Shaders");
 
     static string KnownGoodDirectory => Path.Combine(AppContext.BaseDirectory, "KnownGood");
 
@@ -54,16 +21,29 @@ internal static class CompilerTestHarness
     public static string KnownGoodText(string fileName) => File.ReadAllText(Path.Combine(KnownGoodDirectory, fileName));
 
 
-    // Compiles GraphicsSource for the given modules and returns the single (non-variant) result.
-    // Modules are passed as factories so they are constructed on the Slang thread (their constructors
-    // call GlobalSession.FindProfile, which must run there too).
-    public static VariantResult CompileGraphics(params Func<CompilerModule>[] moduleFactories)
+    // Reads the source of a shared shader module from the Shaders directory.
+    public static string ShaderSource(string moduleName) => File.ReadAllText(Path.Combine(ShadersDirectory, $"{moduleName}.slang"));
+
+
+    // Compiles the named shared shader for the given backends and returns the single (non-variant)
+    // result. Use for shaders that declare no variant space.
+    public static VariantResult CompileShared(string moduleName, params Func<CompilerModule>[] moduleFactories)
     {
-        CompilationResult result = Compile(GraphicsSource, "TestShader", moduleFactories);
+        CompilationResult result = CompileSharedAll(moduleName, moduleFactories);
 
         // No variant attributes in the source, so exactly one (empty) variant is produced.
         return result.CompiledVariants[0];
     }
+
+
+    // Compiles the named shared shader and returns the full result (every variant permutation).
+    public static CompilationResult CompileSharedAll(string moduleName, params Func<CompilerModule>[] moduleFactories)
+        => Compile(ShaderSource(moduleName), moduleName, moduleFactories);
+
+
+    // Backwards-compatible shorthand for the baseline Graphics shader.
+    public static VariantResult CompileGraphics(params Func<CompilerModule>[] moduleFactories)
+        => CompileShared("Graphics", moduleFactories);
 
 
     public static CompilationResult Compile(string source, string moduleName, params Func<CompilerModule>[] moduleFactories)
@@ -74,8 +54,9 @@ internal static class CompilerTestHarness
             foreach (Func<CompilerModule> factory in moduleFactories)
                 session.RegisterModule(factory());
 
-            // The inline module has no imports, but the native session requires a non-empty search path.
-            session.BeginSession([new DirectoryInfo(AppContext.BaseDirectory)]);
+            // The Shaders directory is on the search path so shaders can import sibling modules
+            // (e.g. Modules imports Common); the base directory satisfies the native non-empty path.
+            session.BeginSession([new DirectoryInfo(ShadersDirectory), new DirectoryInfo(AppContext.BaseDirectory)]);
 
             CompilationResult result = session.CompileShader(
                 moduleName, $"{moduleName}.slang", Encoding.UTF8.GetBytes(source), ShaderType.Rasterization);
@@ -88,6 +69,16 @@ internal static class CompilerTestHarness
     // The compiled bytes for one stage, decoded as UTF-8 text (GLSL / HLSL targets).
     public static string StageText(ShaderDescription description, ShaderStages stage)
         => Encoding.UTF8.GetString(StageOf(description, stage).ShaderBytes);
+
+
+    // HLSL embeds the source file path in every #line directive; that path varies by how the module
+    // was loaded and the machine it ran on, so it is reduced to the bare file name before comparison.
+    // The known-good generator (Tools/SlangQuickCompile) applies the identical reduction on write.
+    static readonly System.Text.RegularExpressions.Regex s_lineDirective =
+        new("^(?<pre>\\s*#line\\s+\\d+\\s+)\"(?<path>[^\"]*)\"", System.Text.RegularExpressions.RegexOptions.Multiline);
+
+    public static string NormalizeSourcePaths(string hlsl)
+        => s_lineDirective.Replace(hlsl, m => $"{m.Groups["pre"].Value}\"{Path.GetFileName(m.Groups["path"].Value)}\"");
 
 
     public static ShaderStageDescription StageOf(ShaderDescription description, ShaderStages stage)

@@ -7,51 +7,14 @@ using Xunit;
 namespace Prowl.Graphite.Compiler.Tests;
 
 
-// Exercises variant specialization end-to-end. A single boolean variant space yields two compiled
-// permutations; the test is platform-agnostic and registers all three backends to show the variant
-// enumeration is independent of the targets.
+// Exercises variant specialization end-to-end. The shared Variants shader declares a single boolean
+// variant space (DoubleColor) consumed by the vertex stage, yielding two compiled permutations; the
+// test is platform-agnostic and registers all three backends to show the variant enumeration is
+// independent of the targets.
 public class VariantCompilationTests
 {
-    // One variant space (DoubleColor) consumed by the vertex stage so the two permutations differ.
-    const string VariantSource = """
-        import VariantAttributes;
-
-        module VariantShader;
-
-        [variant("false") variant("true")]
-        extern static const bool DoubleColor;
-
-        struct VertexInput
-        {
-            float3 position : POSITION;
-            float4 color    : COLOR;
-        }
-
-        struct VertexOutput
-        {
-            float4 clipPosition : SV_Position;
-            float4 color : COLOR;
-        }
-
-        [shader("vertex")]
-        VertexOutput vertex(VertexInput input)
-        {
-            VertexOutput output;
-            output.clipPosition = float4(input.position, 1);
-            output.color = DoubleColor ? input.color * 2.0 : input.color;
-            return output;
-        }
-
-        [shader("fragment")]
-        float4 fragment(VertexOutput input) : SV_Target
-        {
-            return input.color;
-        }
-        """;
-
-
     static CompilationResult Compile() =>
-        CompilerTestHarness.Compile(VariantSource, "VariantShader",
+        CompilerTestHarness.CompileSharedAll("Variants",
             () => new GLCompiler(), () => new VulkanCompiler(), () => new DXCompiler());
 
 

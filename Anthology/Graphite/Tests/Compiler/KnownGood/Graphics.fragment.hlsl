@@ -9,7 +9,7 @@
 #endif
 
 
-#line 10 "TestShader.slang"
+#line 13 "Graphics.slang"
 struct VertexOutput_0
 {
     float4 clipPosition_0 : SV_Position;
@@ -18,8 +18,8 @@ struct VertexOutput_0
 };
 
 
-#line 28
-[shader("pixel")]float4 fragment(VertexOutput_0 input_0) : SV_TARGET
+#line 31
+float4 fragment(VertexOutput_0 input_0) : SV_TARGET
 {
     return input_0.color_0;
 }
