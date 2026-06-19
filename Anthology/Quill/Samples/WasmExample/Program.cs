@@ -50,7 +50,7 @@ public partial class App
         object? wallTexture = LoadTextureResource(asm, "Textures.wall.png");
 
         // Load SVGs from embedded resources
-        // Common.projitems SVGs get embedded with names like "WasmExample.path.to.file.svg"
+        // Common's SVGs get embedded with names like "WasmExample.path.to.file.svg"
         var svgElements = LoadSVGResources(asm);
 
         _demos = new List<IDemo>

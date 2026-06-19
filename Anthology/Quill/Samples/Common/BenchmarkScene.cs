@@ -8,7 +8,7 @@ using Color = Prowl.Vector.Color;
 
 namespace Common
 {
-    internal class BenchmarkScene : IDemo
+    public class BenchmarkScene : IDemo
     {
         private Canvas _canvas;
         private float _width => _canvas.Width;

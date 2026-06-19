@@ -1,11 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
     <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
     <OutputType>Exe</OutputType>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WasmMainJSPath>main.js</WasmMainJSPath>
     <RunAOTCompilation>true</RunAOTCompilation>
@@ -16,12 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Quill\Quill.csproj" />
+    <ProjectReference Include="..\Common\Common.csproj" />
   </ItemGroup>
 
-  <Import Project="..\Common\Common.projitems" Label="Shared" />
-
-  <!-- Embed fonts, textures, and SVGs as resources for WASM (no filesystem) -->
+  <!-- WASM has no filesystem, so embed Common's assets as resources instead of copying them -->
   <ItemGroup>
     <EmbeddedResource Include="..\Common\Fonts\Roboto.ttf" LogicalName="Fonts.Roboto.ttf" />
     <EmbeddedResource Include="..\Common\Fonts\Alamak.ttf" LogicalName="Fonts.Alamak.ttf" />

@@ -5,7 +5,7 @@ using System.Drawing;
 
 namespace Common
 {
-    internal class SVGDemo : IDemo
+    public class SVGDemo : IDemo
     {
         private Canvas _canvas;
         private float _width => _canvas.Width;

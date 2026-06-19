@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Quill\Quill.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Fonts\**;Textures\**;SVGs\**" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+</Project>
