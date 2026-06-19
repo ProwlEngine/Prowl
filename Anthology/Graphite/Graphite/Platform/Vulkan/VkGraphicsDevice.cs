@@ -560,7 +560,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         else
         {
             FenceCreateInfo fenceCI = new(sType: StructureType.FenceCreateInfo);
-            VkFenceHandle newFence = default;
+            VkFenceHandle newFence;
             _vk.CreateFence(_device, &fenceCI, null, &newFence).CheckResult();
             return newFence;
         }
@@ -1452,7 +1452,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
         else
         {
-            void* mappedPtr = null;
+            void* mappedPtr;
             _vk.MapMemory(Device, buffer.Memory.DeviceMemory, buffer.Memory.Offset, numBytes, 0, &mappedPtr).CheckResult();
             return (IntPtr)mappedPtr;
         }

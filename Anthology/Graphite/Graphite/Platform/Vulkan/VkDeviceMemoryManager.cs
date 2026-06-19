@@ -474,7 +474,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
 
     internal IntPtr Map(VkMemoryBlock memoryBlock)
     {
-        void* ret = null;
+        void* ret;
         _vk.MapMemory(_device, memoryBlock.DeviceMemory, memoryBlock.Offset, memoryBlock.Size, 0, &ret).CheckResult();
         return (IntPtr)ret;
     }

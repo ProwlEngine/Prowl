@@ -252,12 +252,11 @@ internal static unsafe class VkPipelineCacheFactory
         renderPassCI.DependencyCount = 1;
         renderPassCI.PDependencies = &subpassDependency;
 
-        RenderPass renderPass = default;
-        gd.Vk.CreateRenderPass(gd.Device, in renderPassCI, null, out renderPass).CheckResult();
+        gd.Vk.CreateRenderPass(gd.Device, in renderPassCI, null, out RenderPass renderPass).CheckResult();
+
         pipelineCI.RenderPass = renderPass;
 
-        Pipeline pipeline = default;
-        gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out pipeline).CheckResult();
+        gd.Vk.CreateGraphicsPipelines(gd.Device, gd.DriverPipelineCache, 1, in pipelineCI, null, out Silk.NET.Vulkan.Pipeline pipeline).CheckResult();
 
         return new VkPipelineCacheEntry(
             pipeline,

@@ -61,8 +61,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram
         stageCI.PName = CommonStrings.main;
         pipelineCI.Stage = stageCI;
 
-        VkPipelineHandle pipeline = default;
-        _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out pipeline).CheckResult();
+        _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();
         DevicePipeline = pipeline;
 
         DescriptorCache = new VkDescriptorSetCache(_gd);
