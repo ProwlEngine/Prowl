@@ -44,18 +44,17 @@ jobs:
           name: nuget-packages
           path: ./nupkgs/*
 
-      - name: Setup NuGet credentials (OIDC)
-        uses: NuGet/setup-nuget@v2
-
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: contoso-bot # Recommended: use a secret like ${{ secrets.NUGET_USER }} for your nuget.org username (profile name), NOT your email address
+    
       - name: Push NuGet packages
         run: |
-          dotnet nuget push "./nupkgs/*.nupkg" \
-            --source "https://api.nuget.org/v3/index.json" \
-            --skip-duplicate
+          dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
-          dotnet nuget push "./nupkgs/*.snupkg" \
-            --source "https://api.nuget.org/v3/index.json" \
-            --skip-duplicate
+          dotnet nuget push "./nupkgs/*.snupkg" --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Get previous tag
         id: prev_tag
