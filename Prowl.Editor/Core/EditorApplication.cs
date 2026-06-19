@@ -1709,6 +1709,15 @@ public class EditorApplication : Game
         // Unload the play scene
         Runtime.Resources.Scene.Unload();
 
+        // Clear all static fields
+        foreach (Assembly assembly in ScriptAssemblyManager.GetAllRelevantAssemblies())
+        {
+            if (!assembly.FullName.StartsWith("System.") && !assembly.FullName.StartsWith("Microsoft."))
+            {
+                StaticFieldCrawler.ClearAllStaticFields(assembly);
+            }
+        }
+
         // Restore static fields to their pre-play-mode values
         StaticFieldCrawler.RestoreStaticFields();
 

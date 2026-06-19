@@ -44,6 +44,33 @@ public static class StaticFieldCrawler
     }
 
     /// <summary>
+    /// Clears all the current values of all mutable static fields in the given assembly.
+    /// Call this before restoring the static values when exiting play mode.
+    /// </summary>
+    public static void ClearAllStaticFields(Assembly assembly)
+    {
+        foreach (Type type in assembly.GetTypes())
+        {
+            var staticFields = type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+            foreach (FieldInfo field in staticFields)
+            {
+                if (field.IsLiteral || field.IsInitOnly)
+                    continue;
+
+                try
+                {
+                    field.SetValue(null, null);
+                }
+                catch (Exception ex)
+                {
+                    //Runtime.Debug.LogWarning($"[StaticFieldCrawler] Could not snapshot '{type.Name}.{field.Name}': {ex.Message}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Restores all previously snapshotted static fields to their pre-play-mode values.
     /// Call this after exiting play mode.
     /// </summary>
