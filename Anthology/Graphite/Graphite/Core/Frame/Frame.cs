@@ -60,6 +60,11 @@ public abstract partial class Frame
     /// </summary>
     /// <remarks>
     /// <para>
+    /// The per-frame transient allocator is for uniform buffers only. Its backing memory is created with
+    /// uniform usage exclusively, so the returned range must not be bound as a vertex, index, or structured
+    /// buffer.
+    /// </para>
+    /// <para>
     /// To write data into the allocation, call <see cref="GraphicsDevice.Map(MappableResource, MapMode)"/> on
     /// <see cref="DeviceBufferRange.Buffer"/> with <see cref="MapMode.Write"/> and write at
     /// <see cref="DeviceBufferRange.Offset"/>, or use <see cref="GraphicsDevice.UpdateBuffer"/> where

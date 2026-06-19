@@ -284,8 +284,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             VkFence slotWrapper = new(this, false);
 
             VkBuffer primary = new(this, _transientInitialSize,
-                BufferUsage.Dynamic | BufferUsage.VertexBuffer | BufferUsage.IndexBuffer
-                | BufferUsage.UniformBuffer | BufferUsage.StructuredBufferReadOnly);
+                BufferUsage.Dynamic | BufferUsage.UniformBuffer);
             byte* mapped = (byte*)primary.Memory.BlockMappedPointer;
 
             _slots[i] = new SlotState
