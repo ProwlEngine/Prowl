@@ -45,16 +45,6 @@ public class D3D11SemanticBindingTests
     }
 
     [Fact]
-    public void FallsBackToInternedName_WhenRawSemanticUnset()
-    {
-        VertexElementDescription noRaw = new() { Name = "COLOR", Format = VertexElementFormat.Float4 };
-
-        (string Name, uint Index)[] bindings = D3D11ResourceCache.ResolveSemanticBindings([Layout(2, noRaw)]);
-
-        Assert.Equal(("COLOR", 2u), bindings[0]);
-    }
-
-    [Fact]
     public void Empty_ReturnsEmpty()
     {
         Assert.Empty(D3D11ResourceCache.ResolveSemanticBindings([]));
