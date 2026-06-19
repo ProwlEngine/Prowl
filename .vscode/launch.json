@@ -1,0 +1,29 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Prowl.Editor (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: Prowl.Editor Debug",
+            "program": "${workspaceFolder}/Build/Editor/Debug/net10.0/Prowl.Editor.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Prowl.Editor (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: Prowl.Editor Release",
+            "program": "${workspaceFolder}/Build/Editor/Release/net10.0/Prowl.Editor.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "justMyCode": false
+        }
+    ]
+}

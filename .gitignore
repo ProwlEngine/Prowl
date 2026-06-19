@@ -48,7 +48,7 @@ artifacts/
 **/Properties/launchSettings.json
 
 # VS Code
-.vscode/
+# .vscode/
 
 *_i.c
 *_p.c
@@ -327,7 +327,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # VS Code files for those working on multiple tools
-.vscode
+# .vscode
 *.code-workspace
 
 # Local History for Visual Studio Code
