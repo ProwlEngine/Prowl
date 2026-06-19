@@ -1,0 +1,41 @@
+name: CPU Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run ShaderDef tests
+        run: dotnet test Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj --configuration Release --no-build
+
+      - name: Run Variants tests
+        run: dotnet test Tests/Variants/Prowl.Graphite.Variants.Tests.csproj --configuration Release --no-build
+
+      - name: Run Compiler tests
+        run: dotnet test Tests/Compiler/Prowl.Graphite.Compiler.Tests.csproj --configuration Release --no-build
+
+      - name: Run Graphite CPU tests
+        run: >
+          dotnet test Tests/Graphite/Prowl.Graphite.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "Backend!=Vulkan&Backend!=D3D11&Backend!=OpenGL&Backend!=OpenGLES"

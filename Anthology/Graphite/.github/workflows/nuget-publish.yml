@@ -1,4 +1,4 @@
-name: Build and Publish NuGet
+name: Publish NuGet
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
       - "v*.*.*"
 
 permissions:
-  id-token: write   # REQUIRED for OIDC Trusted Publishing
+  id-token: write   # REQUIRED for NuGet Trusted Publishing
   contents: read
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,10 +28,6 @@ jobs:
       - name: Set version from tag
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
 
-      - name: Build solution
-        run: dotnet build --configuration Release --no-restore
-
-      # --- PACK (SourceLink + symbols enabled) ---
       - name: Pack NuGet packages
         run: |
           dotnet pack \
@@ -48,11 +44,10 @@ jobs:
           name: nuget-packages
           path: ./nupkgs/*
 
-      # --- TRUSTED PUBLISHING (NuGet.org OIDC) ---
       - name: Setup NuGet credentials (OIDC)
         uses: NuGet/setup-nuget@v2
 
-      - name: Push NuGet packages (trusted publishing)
+      - name: Push NuGet packages
         run: |
           dotnet nuget push "./nupkgs/*.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
@@ -61,3 +56,30 @@ jobs:
           dotnet nuget push "./nupkgs/*.snupkg" \
             --source "https://api.nuget.org/v3/index.json" \
             --skip-duplicate
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          echo "tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes from git history
+        id: changelog
+        run: |
+          if [ -z "${{ steps.prev_tag.outputs.tag }}" ]; then
+            echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+            git log --pretty=format:"- %s (%h)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+            git log ${{ steps.prev_tag.outputs.tag }}..HEAD --pretty=format:"- %s (%h)" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: ${{ env.CHANGELOG }}
