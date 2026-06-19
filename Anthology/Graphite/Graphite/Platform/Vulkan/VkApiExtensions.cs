@@ -316,8 +316,6 @@ internal static class VkApiExtensions
             1, &barrier);
     }
 
-
-    [Conditional("DEBUG")]
     public static void CheckResult(this Result result)
     {
         if (result != Result.Success)
