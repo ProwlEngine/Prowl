@@ -24,6 +24,16 @@
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "justMyCode": false
+        },
+        {
+            "name": "Prowl.Editor (Release, No Debugger)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: Prowl.Editor Release",
+            "program": "${workspaceFolder}/Build/Editor/Release/net10.0/Prowl.Editor.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "noDebug": true
         }
     ]
 }
