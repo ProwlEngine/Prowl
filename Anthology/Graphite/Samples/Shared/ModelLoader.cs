@@ -163,6 +163,11 @@ public static class ModelLoader
 
 
     public static Mesh CreateQuad(GraphicsDevice device)
+        => CreateQuad(device, -0.5f, 0.5f, -0.5f, 0.5f);
+
+    // Creates a quad spanning the given clip-space rectangle. The TexturedQuad sample uses the
+    // placement parameters to draw two quads side by side, each bound to its own texture.
+    public static Mesh CreateQuad(GraphicsDevice device, float minX, float maxX, float minY, float maxY)
     {
         MeshCreateInfo createInfo = new()
         {
@@ -176,10 +181,10 @@ public static class ModelLoader
         Mesh mesh = new(device, createInfo);
 
         mesh.SetVertexInput([
-            new Float3(0.5f,  0.5f, 0.5f),   // top right
-            new Float3(-0.5f,  0.5f, 0.5f),   // top left
-            new Float3(-0.5f, -0.5f, 0.5f),   // bottom left
-            new Float3( 0.5f, -0.5f, 0.5f),   // bottom right
+            new Float3(maxX, maxY, 0.5f),   // top right
+            new Float3(minX, maxY, 0.5f),   // top left
+            new Float3(minX, minY, 0.5f),   // bottom left
+            new Float3(maxX, minY, 0.5f),   // bottom right
         ], 0);
 
         mesh.SetVertexInput([
