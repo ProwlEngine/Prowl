@@ -969,14 +969,24 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         ShaderProgram programKey, uint setIdx, in ResourceLayoutElementDescription elem,
         bool reportMissing = true)
     {
-        if (elem.UniformFields != null && elem.UniformFields.Length > 0)
-            return GetOrBuildImplicitUbo((int)setIdx, elem.BindingIndex, elem.UniformFields);
+        bool hasExplicit = _activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
+            && uboEntry.Kind == PropertyEntryKind.Buffer;
 
-        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
-            && uboEntry.Kind == PropertyEntryKind.Buffer)
-        {
+        // A read-only buffer is bound with its existing contents; any scalar writes are ignored.
+        if (hasExplicit && uboEntry!.ReadOnly)
             return uboEntry.Buffer!.Value;
+
+        // Loose uniform fields are written into the explicit (writable) buffer when one is bound,
+        // otherwise into a per-draw transient buffer.
+        if (elem.UniformFields != null && elem.UniformFields.Length > 0)
+        {
+            DeviceBufferRange? writableTarget = hasExplicit ? uboEntry!.Buffer : null;
+            return GetOrBuildImplicitUbo((int)setIdx, elem.BindingIndex, elem.UniformFields, writableTarget);
         }
+
+        // No loose uniform fields declared: bind the explicit buffer directly.
+        if (hasExplicit)
+            return uboEntry!.Buffer!.Value;
 
         if (reportMissing)
         {
@@ -989,10 +999,29 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     }
 
     private DeviceBufferRange GetOrBuildImplicitUbo(
-        int setIdx, int bindingIndex, UniformBlockField[] fields)
+        int setIdx, int bindingIndex, UniformBlockField[] fields, DeviceBufferRange? writableTarget)
     {
         (int, int) key = (setIdx, bindingIndex);
         if (_drawUboScratch.TryGetValue(key, out DeviceBufferRange cached)) return cached;
+
+        // A writable explicit buffer is used as backing storage: only the set fields are written,
+        // leaving any unset bytes the caller may rely on intact.
+        if (writableTarget.HasValue)
+        {
+            DeviceBufferRange target = writableTarget.Value;
+            foreach (UniformBlockField field in fields)
+            {
+                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                    && uEntry.Kind == PropertyEntryKind.Uniform)
+                {
+                    ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform);
+                    fixed (byte* ptr = &payload)
+                        _gd.UpdateBuffer(target.Buffer, target.Offset + field.Offset, (IntPtr)ptr, field.Size);
+                }
+            }
+            _drawUboScratch[key] = target;
+            return target;
+        }
 
         uint totalSize = 0;
         foreach (UniformBlockField field in fields)

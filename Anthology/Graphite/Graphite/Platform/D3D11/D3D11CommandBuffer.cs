@@ -560,8 +560,22 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private DeviceBufferRange ResolveUboD3D11(
         in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx)
     {
+        bool hasExplicit = _activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
+            && uboEntry.Kind == PropertyEntryKind.Buffer;
+
+        // A read-only buffer is bound with its existing contents; any scalar writes are ignored.
+        if (hasExplicit && uboEntry!.ReadOnly)
+            return uboEntry.Buffer!.Value;
+
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
         {
+            // A writable explicit buffer is used as backing storage for the scalar writes.
+            if (hasExplicit)
+            {
+                WriteUniformsIntoBufferD3D11(uboEntry!.Buffer!.Value, elem.UniformFields);
+                return uboEntry.Buffer!.Value;
+            }
+
             ShaderProgram key = isCompute ? _currentComputeProgram : _currentShaderProgram;
 
             DeviceBufferRange r = GetOrBuildImplicitUboD3D11(key, setIdx, elem.BindingIndex, elem.UniformFields);
@@ -570,10 +584,9 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                 Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(r.Buffer), r.Offset, r.SizeInBytes);
         }
 
-        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry) && uboEntry.Kind == PropertyEntryKind.Buffer)
-        {
-            return uboEntry.Buffer!.Value;
-        }
+        // No loose uniform fields declared: bind the explicit buffer directly.
+        if (hasExplicit)
+            return uboEntry!.Buffer!.Value;
 
         _gd.OnMissingProperty?.Invoke(
             !isCompute ? _currentShaderProgram : null,
@@ -581,6 +594,20 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             elem.Name, ResourceKind.UniformBuffer, setIdx, elem.BindingIndex);
 
         return new DeviceBufferRange(Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(_gd.NullUniform), 0, 16);
+    }
+
+    private void WriteUniformsIntoBufferD3D11(DeviceBufferRange target, UniformBlockField[] fields)
+    {
+        foreach (UniformBlockField field in fields)
+        {
+            if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                && uEntry.Kind == PropertyEntryKind.Uniform)
+            {
+                ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform);
+                fixed (byte* ptr = &payload)
+                    _gd.UpdateBuffer(target.Buffer, target.Offset + field.Offset, (IntPtr)ptr, field.Size);
+            }
+        }
     }
 
     private DeviceBufferRange GetOrBuildImplicitUboD3D11(

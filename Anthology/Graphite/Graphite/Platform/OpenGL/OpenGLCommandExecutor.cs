@@ -350,18 +350,36 @@ internal unsafe class OpenGLCommandExecutor
             return;
 
         DeviceBufferRange range;
+        bool hasExplicit = _activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry explicitEntry)
+            && explicitEntry.Kind == PropertyEntryKind.Buffer && explicitEntry.Buffer != null;
         bool hasImplicit = elem.UniformFields != null && elem.UniformFields.Length > 0;
-        if (hasImplicit)
+
+        if (hasExplicit && explicitEntry.ReadOnly)
         {
-            range = GetOrBuildImplicitUboGL(graphics, setIdx, elem.BindingIndex, elem.UniformFields, uniformBinding.BlockSize);
-            if (range.Buffer == null) return;
+            // A read-only buffer is bound with its existing contents; scalar writes are ignored.
+            range = explicitEntry.Buffer!.Value;
+        }
+        else if (hasImplicit)
+        {
+            if (hasExplicit)
+            {
+                // A writable explicit buffer is used as backing storage for the scalar writes.
+                WriteUniformsIntoBufferGL(explicitEntry.Buffer!.Value, elem.UniformFields);
+                range = explicitEntry.Buffer!.Value;
+            }
+            else
+            {
+                range = GetOrBuildImplicitUboGL(graphics, setIdx, elem.BindingIndex, elem.UniformFields, uniformBinding.BlockSize);
+                if (range.Buffer == null) return;
+            }
+        }
+        else if (hasExplicit)
+        {
+            range = explicitEntry.Buffer!.Value;
         }
         else
         {
-            if (!_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
-                return;
-
-            range = entry.Buffer.Value;
+            return;
         }
 
         OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
@@ -378,6 +396,18 @@ internal unsafe class OpenGLCommandExecutor
         CheckLastError();
         _gl.BindBufferRange(BufferTargetARB.UniformBuffer, uniformBinding.BindingPoint, glUB.Buffer, (IntPtr)range.Offset, range.SizeInBytes);
         CheckLastError();
+    }
+
+    private void WriteUniformsIntoBufferGL(DeviceBufferRange target, UniformBlockField[] fields)
+    {
+        foreach (UniformBlockField field in fields)
+        {
+            if (!_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Uniform)
+                continue;
+            ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform);
+            fixed (byte* ptr = &payload)
+                UpdateBuffer(target.Buffer, target.Offset + field.Offset, (IntPtr)ptr, field.Size);
+        }
     }
 
     private DeviceBufferRange GetOrBuildImplicitUboGL(
