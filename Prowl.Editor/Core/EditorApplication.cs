@@ -1643,6 +1643,8 @@ public class EditorApplication : Game
             return;
         }
 
+        StaticFieldCrawler.Clear();
+
         // Snapshot static fields before play mode so we can restore them on exit
         foreach (Assembly assembly in ScriptAssemblyManager.GetAllRelevantAssemblies())
         {
