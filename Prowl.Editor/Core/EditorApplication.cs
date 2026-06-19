@@ -1643,17 +1643,6 @@ public class EditorApplication : Game
             return;
         }
 
-        StaticFieldCrawler.Clear();
-
-        // Snapshot static fields before play mode so we can restore them on exit
-        foreach (Assembly assembly in ScriptAssemblyManager.GetAllRelevantAssemblies())
-        {
-            if (!assembly.FullName.StartsWith("System.") && !assembly.FullName.StartsWith("Microsoft."))
-            {
-                StaticFieldCrawler.SnapshotStaticFields(assembly);
-            }
-        }
-
         // Clear selection (references will be invalid)
         Selection.Clear();
 
@@ -1710,18 +1699,6 @@ public class EditorApplication : Game
 
         // Unload the play scene
         Runtime.Resources.Scene.Unload();
-
-        // Clear all static fields
-        foreach (Assembly assembly in ScriptAssemblyManager.GetAllRelevantAssemblies())
-        {
-            if (!assembly.FullName.StartsWith("System.") && !assembly.FullName.StartsWith("Microsoft."))
-            {
-                StaticFieldCrawler.ClearAllStaticFields(assembly);
-            }
-        }
-
-        // Restore static fields to their pre-play-mode values
-        StaticFieldCrawler.RestoreStaticFields();
 
         // Restore the editor scene WITHOUT lifecycle callbacks
         if (_savedEditorScene != null)
