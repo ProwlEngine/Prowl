@@ -1,0 +1,63 @@
+name: Build and Publish NuGet
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  id-token: write   # REQUIRED for OIDC Trusted Publishing
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Set version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Build solution
+        run: dotnet build --configuration Release --no-restore
+
+      # --- PACK (SourceLink + symbols enabled) ---
+      - name: Pack NuGet packages
+        run: |
+          dotnet pack \
+            -c Release \
+            -o ./nupkgs \
+            -p:GraphiteVersion=$VERSION \
+            -p:IncludeSymbols=true \
+            -p:SymbolPackageFormat=snupkg \
+            -p:ContinuousIntegrationBuild=true
+
+      - name: Upload artifacts (optional debug step)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./nupkgs/*
+
+      # --- TRUSTED PUBLISHING (NuGet.org OIDC) ---
+      - name: Setup NuGet credentials (OIDC)
+        uses: NuGet/setup-nuget@v2
+
+      - name: Push NuGet packages (trusted publishing)
+        run: |
+          dotnet nuget push "./nupkgs/*.nupkg" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --skip-duplicate
+
+          dotnet nuget push "./nupkgs/*.snupkg" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --skip-duplicate
