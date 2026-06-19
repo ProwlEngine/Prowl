@@ -99,7 +99,9 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram
             {
                 shaderModuleCI.CodeSize = (UIntPtr)sd.ShaderBytes.Length;
                 shaderModuleCI.PCode = (uint*)codePtr;
-                _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out ShaderModule module).CheckResult();
+
+                ShaderModule module = default;
+                _gd.Vk.CreateShaderModule(gd.Device, in shaderModuleCI, null, out module).CheckResult();
                 _modules[sd.Stage] = module;
                 _entryPoints[sd.Stage] = sd.EntryPoint;
             }

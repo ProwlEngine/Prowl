@@ -100,7 +100,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             CommandBufferCount = 1,
             Level = CommandBufferLevel.Primary
         };
-        _gd.Vk.AllocateCommandBuffers(_gd.Device, in cbAI, out Silk.NET.Vulkan.CommandBuffer cb).CheckResult();
+
+        Silk.NET.Vulkan.CommandBuffer cb = default;
+        _gd.Vk.AllocateCommandBuffers(_gd.Device, in cbAI, out cb).CheckResult();
         return cb;
     }
 

@@ -309,11 +309,12 @@ internal unsafe partial class VkSwapchain : Swapchain
 
     private bool QueueSupportsPresent(uint queueFamilyIndex, SurfaceKHR surface)
     {
+        Bool32 supported = false;
         _gd.KhrSurface.GetPhysicalDeviceSurfaceSupport(
             _gd.PhysicalDevice,
             queueFamilyIndex,
             surface,
-            out Bool32 supported).CheckResult();
+            out supported).CheckResult();
         return supported;
     }
 
