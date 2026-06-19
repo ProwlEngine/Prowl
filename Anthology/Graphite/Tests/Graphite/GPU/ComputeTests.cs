@@ -48,17 +48,17 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
         Submit(cl =>
         {
-        cl.SetComputeShader(compute);
-        cl.SetProperties(computeProps);
-        cl.Dispatch(1, 1, 1);
+            cl.SetComputeShader(compute);
+            cl.SetProperties(computeProps);
+            cl.Dispatch(1, 1, 1);
 
-        cl.SetFramebuffer(fb);
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetFullViewports();
-        cl.SetShader(graphics);
-        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
-        cl.SetProperties(graphicsProps);
-        cl.Draw(4);
+            cl.SetFramebuffer(fb);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFullViewports();
+            cl.SetShader(graphics);
+            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+            cl.SetProperties(graphicsProps);
+            cl.Draw(4);
         });
 
         Texture readback = GetReadback(output);
@@ -121,9 +121,9 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
         Submit(cl =>
         {
-        cl.SetComputeShader(compute);
-        cl.SetProperties(props);
-        cl.Dispatch(texSize / 32, texSize / 32, layers);
+            cl.SetComputeShader(compute);
+            cl.SetProperties(props);
+            cl.Dispatch(texSize / 32, texSize / 32, layers);
         });
 
         // sideColorStep = floor(1 / layers) is 0 for layers >= 2, so every texel is written as 0.
@@ -167,9 +167,9 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
         Submit(cl =>
         {
-        cl.SetComputeShader(compute);
-        cl.SetProperties(props);
-        cl.Dispatch(size / 16, size / 16, size);
+            cl.SetComputeShader(compute);
+            cl.SetProperties(props);
+            cl.Dispatch(size / 16, size / 16, size);
         });
 
         Texture readback = GetReadback(texture);
@@ -221,9 +221,9 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
         Submit(cl =>
         {
-        cl.SetComputeShader(compute);
-        cl.SetProperties(props);
-        cl.DispatchIndirect(indirect, 0);
+            cl.SetComputeShader(compute);
+            cl.SetProperties(props);
+            cl.DispatchIndirect(indirect, 0);
         });
 
         DeviceBuffer readback = GetReadback(destination);

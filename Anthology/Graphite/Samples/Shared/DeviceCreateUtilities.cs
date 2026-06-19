@@ -1,15 +1,14 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 
 using Silk.NET;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Maths;
+using Silk.NET.SDL;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 using Silk.NET.Windowing.Sdl;
-
-using Silk.NET.SDL;
-using System.Runtime.InteropServices;
 
 
 namespace Prowl.Graphite.Samples;

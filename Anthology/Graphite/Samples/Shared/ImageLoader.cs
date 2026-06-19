@@ -3,8 +3,8 @@ using System.IO;
 
 using ImageMagick;
 
-using Prowl.Vector;
 using Prowl.Graphite;
+using Prowl.Vector;
 
 
 namespace Prowl.Graphite.Samples;

@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 
-using Prowl.Vector;
 using Prowl.Graphite.OpenGL.NoAllocEntryList;
+using Prowl.Vector;
 
 namespace Prowl.Graphite.OpenGL;
 

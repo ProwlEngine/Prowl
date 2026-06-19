@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-using Prowl.Vector;
-
 using Prowl.Crumb;
+using Prowl.Vector;
 
 
 namespace Prowl.Graphite.ShaderDef;

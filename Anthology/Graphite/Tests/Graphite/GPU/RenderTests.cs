@@ -181,13 +181,13 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Submit(cl =>
         {
-        cl.SetFramebuffer(fb);
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetFullViewports();
-        cl.SetShader(program);
-        cl.SetVertexSource(source);
-        cl.SetProperties(props);
-        cl.Draw((uint)pointCount);
+            cl.SetFramebuffer(fb);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFullViewports();
+            cl.SetShader(program);
+            cl.SetVertexSource(source);
+            cl.SetProperties(props);
+            cl.Draw((uint)pointCount);
         });
 
         Texture readback = GetReadback(target);
@@ -267,13 +267,13 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Submit(cl =>
         {
-        cl.SetFramebuffer(fb);
-        cl.ClearDepthStencil(0f);
-        cl.SetFullViewports();
-        cl.SetShader(program);
-        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
-        cl.SetProperties(props);
-        cl.Draw(3);
+            cl.SetFramebuffer(fb);
+            cl.ClearDepthStencil(0f);
+            cl.SetFullViewports();
+            cl.SetShader(program);
+            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetProperties(props);
+            cl.Draw(3);
         });
 
         Texture readback = GetReadback(depthTarget);
@@ -409,13 +409,13 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Submit(cl =>
         {
-        cl.SetFramebuffer(fb);
-        cl.ClearColorTarget(0, clear);
-        cl.SetFullViewports();
-        cl.SetShader(program);
-        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
-        cl.SetProperties(props);
-        cl.Draw(4);
+            cl.SetFramebuffer(fb);
+            cl.ClearColorTarget(0, clear);
+            cl.SetFullViewports();
+            cl.SetShader(program);
+            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+            cl.SetProperties(props);
+            cl.Draw(4);
         });
     }
 
@@ -449,32 +449,32 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
         Submit(cl =>
         {
 
-        // Pass 1: sample target2 into target1.
-        cl.SetFramebuffer(fb1);
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetFullViewports();
-        cl.SetShader(texProgram);
-        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
-        cl.SetProperties(texProps);
-        cl.Draw(3);
-        cl.CopyTexture(target1, s1);
+            // Pass 1: sample target2 into target1.
+            cl.SetFramebuffer(fb1);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFullViewports();
+            cl.SetShader(texProgram);
+            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetProperties(texProps);
+            cl.Draw(3);
+            cl.CopyTexture(target1, s1);
 
-        // Pass 2: an unrelated shader that uses no textures, into target2.
-        cl.SetFramebuffer(fb2);
-        cl.ClearColorTarget(0, Color.Blue);
-        cl.SetShader(quadProgram);
-        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, [quadVb]));
-        cl.ClearProperties();
-        cl.Draw(3);
+            // Pass 2: an unrelated shader that uses no textures, into target2.
+            cl.SetFramebuffer(fb2);
+            cl.ClearColorTarget(0, Color.Blue);
+            cl.SetShader(quadProgram);
+            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, [quadVb]));
+            cl.ClearProperties();
+            cl.Draw(3);
 
-        // Pass 3: the texture shader again. Its binding must survive the intervening pass.
-        cl.SetFramebuffer(fb1);
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetShader(texProgram);
-        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
-        cl.SetProperties(texProps);
-        cl.Draw(3);
-        cl.CopyTexture(target1, s3);
+            // Pass 3: the texture shader again. Its binding must survive the intervening pass.
+            cl.SetFramebuffer(fb1);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetShader(texProgram);
+            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetProperties(texProps);
+            cl.Draw(3);
+            cl.CopyTexture(target1, s3);
 
         });
 
@@ -518,13 +518,13 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
 
         Submit(cl =>
         {
-        cl.SetFramebuffer(fb);
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetFullViewports();
-        cl.SetShader(program);
-        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
-        cl.SetProperties(props);
-        cl.Draw(3);
+            cl.SetFramebuffer(fb);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFullViewports();
+            cl.SetShader(program);
+            cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+            cl.SetProperties(props);
+            cl.Draw(3);
         });
 
         Texture readback = GetReadback(target);
