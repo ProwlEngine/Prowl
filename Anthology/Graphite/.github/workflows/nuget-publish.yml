@@ -13,6 +13,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write  # enable GitHub OIDC token issuance for this job
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -48,7 +51,7 @@ jobs:
         uses: NuGet/login@v1
         id: login
         with:
-          user: contoso-bot # Recommended: use a secret like ${{ secrets.NUGET_USER }} for your nuget.org username (profile name), NOT your email address
+          user: ${{ secrets.NUGET_USER }}
     
       - name: Push NuGet packages
         run: |
