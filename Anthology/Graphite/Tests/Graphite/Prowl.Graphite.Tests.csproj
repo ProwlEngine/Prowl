@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
         <IsPackable>false</IsPackable>
+        <AllowUnsafeCode>true</AllowUnsafeCode>
         <OutputType>exe</OutputType>
         <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' != 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_D3D11;TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
         <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' == 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>

@@ -1,9 +1,6 @@
 <Project>
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <LangVersion>latest</LangVersion>
-        <Nullable>enable</Nullable>
+        <AllowUnsafeCode>true</AllowUnsafeCode>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
     </PropertyGroup>

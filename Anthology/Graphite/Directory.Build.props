@@ -9,6 +9,7 @@
     <!-- Centralized package versions -->
     <PropertyGroup>
         <SilkNetVersion>2.23.0</SilkNetVersion>
+        <GraphiteVersion>0.1.0</GraphiteVersion>
     </PropertyGroup>
 
     <!-- Backend exclusion flags (set to true to exclude a backend from the build) -->
@@ -17,4 +18,41 @@
         <ExcludeD3D11>false</ExcludeD3D11>
         <ExcludeOpenGL>false</ExcludeOpenGL>
     </PropertyGroup>
+
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Version>$(GraphiteVersion)</Version>
+
+        <Authors>Prowl Group</Authors>
+        <Owners>Prowl Group</Owners>
+        <Company>Prowl Group</Company>
+        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
+        <Version>$(GraphiteVersion)</Version>
+
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+
+        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Graphite</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+
+        <UseLocalProjectReferences Condition="'$(IsPacking)' == ''">true</UseLocalProjectReferences>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)README.md"
+              Pack="true"
+              PackagePath="\" />
+    
+        <None Include="$(MSBuildThisFileDirectory)LICENSE"
+              Pack="true"
+              PackagePath="\" />
+    </ItemGroup>
 </Project>
