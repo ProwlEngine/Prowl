@@ -1,6 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.Linq;
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,1335 +8,295 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-internal struct UIntVertexAttribsVertex
-{
-    public Float2 Position;
-    public UInt4 Color_Int;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct UIntVertexAttribsInfo
-{
-    public uint ColorNormalizationFactor;
-    private float padding0;
-    private float padding1;
-    private float padding2;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public struct ColoredVertex
-{
-    public Float4 Color;
-    public Float2 Position;
-    private Float2 _padding0;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-public struct TestVertex
-{
-    public Float3 A_V3;
-    public Float4 B_V4;
-    public Float2 C_V2;
-    public Float4 D_V4;
-}
-
+// Rasterization coverage on the GraphicsProgram + PropertySet + Frame API: vertex attribute
+// formats (uint / ushort / normalized ushort / half), blend factor, color write mask, fragment
+// depth writes, texture binding across multiple passes, and rendering into a specific framebuffer
+// array layer. All targets are R32_G32_B32_A32_Float so readbacks can be mapped as Color.
 public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
-    [Fact]
-    public void Points_WithUIntColor()
-    {
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
+    private const uint Size = 50;
 
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
-
-        DeviceBuffer infoBuffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
-            0,
-            framebuffer.Width,
-            framebuffer.Height,
-            0,
-            -1,
-            1);
-        GD.UpdateBuffer(orthoBuffer, 0, ref orthoMatrix);
-
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            new VertexLayoutDescription[]
-            {
-                new(
-                    0u,
-                    new VertexElementDescription("Position", VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_UInt", VertexElementFormat.UInt4))
-            },
-            TestShaders.LoadVertexFragment(RF, "UIntVertexAttribs"));
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
-
-        ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, infoBuffer, orthoBuffer));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.PointList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        uint colorNormalizationFactor = 2500;
-
-        UIntVertexAttribsVertex[] vertices =
-        [
-            new UIntVertexAttribsVertex
-            {
-                Position = new Float2(0.5f, 0.5f),
-                Color_Int = new UInt4
-                {
-                    X = (uint)(0.25f * colorNormalizationFactor),
-                    Y = (uint)(0.5f * colorNormalizationFactor),
-                    Z = (uint)(0.75f * colorNormalizationFactor),
-                }
-            },
-            new UIntVertexAttribsVertex
-            {
-                Position = new Float2(10.5f, 12.5f),
-                Color_Int = new UInt4
-                {
-                    X = (uint)(0.25f * colorNormalizationFactor),
-                    Y = (uint)(0.5f * colorNormalizationFactor),
-                    Z = (uint)(0.75f * colorNormalizationFactor),
-                }
-            },
-            new UIntVertexAttribsVertex
-            {
-                Position = new Float2(25.5f, 35.5f),
-                Color_Int = new UInt4
-                {
-                    X = (uint)(0.75f * colorNormalizationFactor),
-                    Y = (uint)(0.5f * colorNormalizationFactor),
-                    Z = (uint)(0.25f * colorNormalizationFactor),
-                }
-            },
-            new UIntVertexAttribsVertex
-            {
-                Position = new Float2(49.5f, 49.5f),
-                Color_Int = new UInt4
-                {
-                    X = (uint)(0.15f * colorNormalizationFactor),
-                    Y = (uint)(0.25f * colorNormalizationFactor),
-                    Z = (uint)(0.35f * colorNormalizationFactor),
-                }
-            },
-        ];
-
-        DeviceBuffer vb = RF.CreateBuffer(
-            new BufferDescription((uint)(Unsafe.SizeOf<UIntVertexAttribsVertex>() * vertices.Length), BufferUsage.VertexBuffer));
-        GD.UpdateBuffer(vb, 0, vertices);
-        GD.UpdateBuffer(infoBuffer, 0, new UIntVertexAttribsInfo { ColorNormalizationFactor = colorNormalizationFactor });
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetPipeline(pipeline);
-        cl.SetVertexBuffer(0, vb);
-        cl.SetGraphicsResourceSet(0, set);
-        cl.Draw((uint)vertices.Length);
-        cl.CopyTexture(target, staging);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
-
-        foreach (UIntVertexAttribsVertex vertex in vertices)
-        {
-            uint x = (uint)vertex.Position.X;
-            uint y = (uint)vertex.Position.Y;
-            if (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted)
-            {
-                y = framebuffer.Height - y - 1;
-            }
-
-            Color expectedColor = new(
-                vertex.Color_Int.X / (float)colorNormalizationFactor,
-                vertex.Color_Int.Y / (float)colorNormalizationFactor,
-                vertex.Color_Int.Z / (float)colorNormalizationFactor,
-                1);
-            Assert.Equal(expectedColor, readView[x, y], ColorFuzzyComparer.Instance);
-        }
-        GD.Unmap(staging);
-    }
-
-    [Fact]
-    public void Points_WithUShortNormColor()
-    {
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
-
-        DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
-            0,
-            framebuffer.Width,
-            framebuffer.Height,
-            0,
-            -1,
-            1);
-        GD.UpdateBuffer(orthoBuffer, 0, ref orthoMatrix);
-
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            new VertexLayoutDescription[]
-            {
-                new(
-                    0u,
-                    new VertexElementDescription("Position", VertexElementFormat.Float2),
-                    new VertexElementDescription("Color", VertexElementFormat.UShort4_Norm))
-            },
-            TestShaders.LoadVertexFragment(RF, "U16NormVertexAttribs"));
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
-
-        ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, orthoBuffer));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.PointList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        VertexCPU_UShortNorm[] vertices =
-        [
-            new VertexCPU_UShortNorm
-            {
-                Position = new Float2(0.5f, 0.5f),
-                R = UShortNorm(0.25f),
-                G = UShortNorm(0.5f),
-                B = UShortNorm(0.75f),
-            },
-            new VertexCPU_UShortNorm
-            {
-                Position = new Float2(10.5f, 12.5f),
-                R = UShortNorm(0.25f),
-                G = UShortNorm(0.5f),
-                B = UShortNorm(0.75f),
-            },
-            new VertexCPU_UShortNorm
-            {
-                Position = new Float2(25.5f, 35.5f),
-                R = UShortNorm(0.75f),
-                G = UShortNorm(0.5f),
-                B = UShortNorm(0.25f),
-            },
-            new VertexCPU_UShortNorm
-            {
-                Position = new Float2(49.5f, 49.5f),
-                R = UShortNorm(0.15f),
-                G = UShortNorm(0.25f),
-                B = UShortNorm(0.35f),
-            },
-        ];
-
-        DeviceBuffer vb = RF.CreateBuffer(
-            new BufferDescription((uint)(Unsafe.SizeOf<VertexCPU_UShortNorm>() * vertices.Length), BufferUsage.VertexBuffer));
-        GD.UpdateBuffer(vb, 0, vertices);
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetPipeline(pipeline);
-        cl.SetVertexBuffer(0, vb);
-        cl.SetGraphicsResourceSet(0, set);
-        cl.Draw((uint)vertices.Length);
-        cl.CopyTexture(target, staging);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
-
-        foreach (VertexCPU_UShortNorm vertex in vertices)
-        {
-            uint x = (uint)vertex.Position.X;
-            uint y = (uint)vertex.Position.Y;
-            if (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted)
-            {
-                y = framebuffer.Height - y - 1;
-            }
-
-            Color expectedColor = new(
-                vertex.R / (float)ushort.MaxValue,
-                vertex.G / (float)ushort.MaxValue,
-                vertex.B / (float)ushort.MaxValue,
-                1);
-            Assert.Equal(expectedColor, readView[x, y], ColorFuzzyComparer.Instance);
-        }
-        GD.Unmap(staging);
-    }
-
-    public struct VertexCPU_UShortNorm
+    [StructLayout(LayoutKind.Sequential)]
+    private struct UIntVertex
     {
         public Float2 Position;
-        public ushort R;
-        public ushort G;
-        public ushort B;
-        public ushort A;
+        public Int4 Color;
     }
 
-    public struct VertexCPU_UShort
+    [StructLayout(LayoutKind.Sequential)]
+    private struct UShortVertex
     {
         public Float2 Position;
-        public ushort R;
-        public ushort G;
-        public ushort B;
-        public ushort A;
+        public ushort R, G, B, A;
     }
 
-    private ushort UShortNorm(float normalizedValue)
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HalfVertex
     {
-        Debug.Assert(normalizedValue >= 0 && normalizedValue <= 1);
-        return (ushort)(normalizedValue * ushort.MaxValue);
+        public Float2 Position;
+        public Half R, G, B, A;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ColoredVertex
+    {
+        public Float4 Color;
+        public Float2 Position;
+        private Float2 _padding0;
+
+        public ColoredVertex(Float2 position, Float4 color)
+        {
+            Position = position;
+            Color = color;
+            _padding0 = default;
+        }
+    }
+
+    private (Texture target, Framebuffer fb) CreateColorTarget(uint width = Size, uint height = Size)
+    {
+        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
+            width, height, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
+        return (target, fb);
+    }
+
+    private uint FlipY(uint y, uint height)
+        => (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted) ? height - y - 1 : y;
+
+    [Fact]
+    public void Points_WithUIntColor_ProduceExpectedPixels()
+    {
+        const uint norm = 2500;
+        UIntVertex[] vertices =
+        [
+            new() { Position = new(0.5f, 0.5f), Color = Scale(0.25f, 0.5f, 0.75f, norm) },
+            new() { Position = new(10.5f, 12.5f), Color = Scale(0.25f, 0.5f, 0.75f, norm) },
+            new() { Position = new(25.5f, 35.5f), Color = Scale(0.75f, 0.5f, 0.25f, norm) },
+            new() { Position = new(49.5f, 49.5f), Color = Scale(0.15f, 0.25f, 0.35f, norm) },
+        ];
+
+        VertexLayoutDescription layout = new(0, (uint)Unsafe.SizeOf<UIntVertex>(),
+            new VertexElementDescription("POSITION", VertexElementFormat.Float2),
+            new VertexElementDescription("COLOR", VertexElementFormat.UInt4));
+
+        DrawColoredPoints("UIntVertexAttribs.slang", layout, vertices, norm, vertices.Length,
+            i => new Color(vertices[i].Color.X / (float)norm, vertices[i].Color.Y / (float)norm, vertices[i].Color.Z / (float)norm, 1),
+            i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
+
+        static Int4 Scale(float r, float g, float b, uint n) => new() { X = (int)(r * n), Y = (int)(g * n), Z = (int)(b * n) };
     }
 
     [Fact]
-    public void Points_WithUShortColor()
+    public void Points_WithUShortColor_ProduceExpectedPixels()
     {
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
-
-        DeviceBuffer infoBuffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
-            0,
-            framebuffer.Width,
-            framebuffer.Height,
-            0,
-            -1,
-            1);
-        GD.UpdateBuffer(orthoBuffer, 0, ref orthoMatrix);
-
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            new VertexLayoutDescription[]
-            {
-                new(
-                    0u,
-                    new VertexElementDescription("Position", VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_UInt", VertexElementFormat.UShort4))
-            },
-            TestShaders.LoadVertexFragment(RF, "U16VertexAttribs"));
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
-
-        ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, infoBuffer, orthoBuffer));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.PointList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        uint colorNormalizationFactor = 2500;
-
-        VertexCPU_UShort[] vertices =
+        const uint norm = 2500;
+        UShortVertex[] vertices =
         [
-            new VertexCPU_UShort
-            {
-                Position = new Float2(0.5f, 0.5f),
-                R = (ushort)(0.25f * colorNormalizationFactor),
-                G = (ushort)(0.5f * colorNormalizationFactor),
-                B = (ushort)(0.75f * colorNormalizationFactor),
-            },
-            new VertexCPU_UShort
-            {
-                Position = new Float2(10.5f, 12.5f),
-                R = (ushort)(0.25f * colorNormalizationFactor),
-                G = (ushort)(0.5f * colorNormalizationFactor),
-                B = (ushort)(0.75f * colorNormalizationFactor),
-            },
-            new VertexCPU_UShort
-            {
-                Position = new Float2(25.5f, 35.5f),
-                R = (ushort)(0.75f * colorNormalizationFactor),
-                G = (ushort)(0.5f * colorNormalizationFactor),
-                B = (ushort)(0.25f * colorNormalizationFactor),
-            },
-            new VertexCPU_UShort
-            {
-                Position = new Float2(49.5f, 49.5f),
-                R = (ushort)(0.15f * colorNormalizationFactor),
-                G = (ushort)(0.2f * colorNormalizationFactor),
-                B = (ushort)(0.35f * colorNormalizationFactor),
-            },
+            new() { Position = new(0.5f, 0.5f), R = US(0.25f, norm), G = US(0.5f, norm), B = US(0.75f, norm) },
+            new() { Position = new(10.5f, 12.5f), R = US(0.25f, norm), G = US(0.5f, norm), B = US(0.75f, norm) },
+            new() { Position = new(25.5f, 35.5f), R = US(0.75f, norm), G = US(0.5f, norm), B = US(0.25f, norm) },
+            new() { Position = new(49.5f, 49.5f), R = US(0.15f, norm), G = US(0.2f, norm), B = US(0.35f, norm) },
         ];
 
-        DeviceBuffer vb = RF.CreateBuffer(
-            new BufferDescription((uint)(Unsafe.SizeOf<UIntVertexAttribsVertex>() * vertices.Length), BufferUsage.VertexBuffer));
+        // The hardware widens UShort4 to uint4 in the shader, so the uint shader is reused here.
+        VertexLayoutDescription layout = new(0, (uint)Unsafe.SizeOf<UShortVertex>(),
+            new VertexElementDescription("POSITION", VertexElementFormat.Float2),
+            new VertexElementDescription("COLOR", VertexElementFormat.UShort4));
+
+        DrawColoredPoints("UIntVertexAttribs.slang", layout, vertices, norm, vertices.Length,
+            i => new Color(vertices[i].R / (float)norm, vertices[i].G / (float)norm, vertices[i].B / (float)norm, 1),
+            i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
+
+        static ushort US(float v, uint n) => (ushort)(v * n);
+    }
+
+    [Fact]
+    public void Points_WithUShortNormColor_ProduceExpectedPixels()
+    {
+        // Normalized ushorts arrive in [0, 1] as floats, so no normalization factor is applied.
+        UShortVertex[] vertices =
+        [
+            new() { Position = new(0.5f, 0.5f), R = N(0.25f), G = N(0.5f), B = N(0.75f) },
+            new() { Position = new(10.5f, 12.5f), R = N(0.25f), G = N(0.5f), B = N(0.75f) },
+            new() { Position = new(25.5f, 35.5f), R = N(0.75f), G = N(0.5f), B = N(0.25f) },
+            new() { Position = new(49.5f, 49.5f), R = N(0.15f), G = N(0.25f), B = N(0.35f) },
+        ];
+
+        VertexLayoutDescription layout = new(0, (uint)Unsafe.SizeOf<UShortVertex>(),
+            new VertexElementDescription("POSITION", VertexElementFormat.Float2),
+            new VertexElementDescription("COLOR", VertexElementFormat.UShort4_Norm));
+
+        DrawColoredPoints("FloatColorVertexAttribs.slang", layout, vertices, 1, vertices.Length,
+            i => new Color(vertices[i].R / (float)ushort.MaxValue, vertices[i].G / (float)ushort.MaxValue, vertices[i].B / (float)ushort.MaxValue, 1),
+            i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
+
+        static ushort N(float v) => (ushort)(v * ushort.MaxValue);
+    }
+
+    [Fact]
+    public void Points_WithHalfColor_ProduceExpectedPixels()
+    {
+        const uint norm = 2500;
+        HalfVertex[] vertices =
+        [
+            new() { Position = new(0.5f, 0.5f), R = (Half)625f, G = (Half)1250f, B = (Half)1875f },
+            new() { Position = new(10.5f, 12.5f), R = (Half)625f, G = (Half)1250f, B = (Half)1875f },
+            new() { Position = new(25.5f, 35.5f), R = (Half)1875f, G = (Half)1250f, B = (Half)625f },
+            new() { Position = new(49.5f, 49.5f), R = (Half)375f, G = (Half)500f, B = (Half)875f },
+        ];
+
+        VertexLayoutDescription layout = new(0, (uint)Unsafe.SizeOf<HalfVertex>(),
+            new VertexElementDescription("POSITION", VertexElementFormat.Float2),
+            new VertexElementDescription("COLOR", VertexElementFormat.Half4));
+
+        DrawColoredPoints("FloatColorVertexAttribs.slang", layout, vertices, norm, vertices.Length,
+            i => new Color((float)vertices[i].R / norm, (float)vertices[i].G / norm, (float)vertices[i].B / norm, 1),
+            i => ((uint)vertices[i].Position.X, (uint)vertices[i].Position.Y));
+    }
+
+    // Shared driver for the point-color format tests. Builds a GraphicsProgram from the given
+    // module, draws one point per vertex through the Frame API, and asserts the resulting pixels.
+    private void DrawColoredPoints<TVertex>(
+        string module,
+        VertexLayoutDescription layout,
+        TVertex[] vertices,
+        uint normalizationFactor,
+        int pointCount,
+        Func<int, Color> expectedColor,
+        Func<int, (uint x, uint y)> pixelOf) where TVertex : unmanaged
+    {
+        (Texture target, Framebuffer fb) = CreateColorTarget();
+
+        GraphicsProgram program = CreateColorProgram(module, layout);
+
+        DeviceBuffer vb = RF.CreateBuffer(new BufferDescription(
+            (uint)(Unsafe.SizeOf<TVertex>() * vertices.Length), BufferUsage.VertexBuffer));
         GD.UpdateBuffer(vb, 0, vertices);
-        GD.UpdateBuffer(infoBuffer, 0, new UIntVertexAttribsInfo { ColorNormalizationFactor = colorNormalizationFactor });
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
+        PropertySet props = new();
+        props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, Size, Size, 0, -1, 1));
+        props.SetInt("ColorNormalizationFactor", (int)normalizationFactor);
 
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
+        TestVertexSource source = new(PrimitiveTopology.PointList, [vb]);
+
+        Submit(cl =>
+        {
+        cl.SetFramebuffer(fb);
         cl.ClearColorTarget(0, Color.Black);
-        cl.SetPipeline(pipeline);
-        cl.SetVertexBuffer(0, vb);
-        cl.SetGraphicsResourceSet(0, set);
-        cl.Draw((uint)vertices.Length);
-        cl.CopyTexture(target, staging);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
-
-        foreach (VertexCPU_UShort vertex in vertices)
-        {
-            uint x = (uint)vertex.Position.X;
-            uint y = (uint)vertex.Position.Y;
-            if (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted)
-            {
-                y = framebuffer.Height - y - 1;
-            }
-
-            Color expectedColor = new(
-                vertex.R / (float)colorNormalizationFactor,
-                vertex.G / (float)colorNormalizationFactor,
-                vertex.B / (float)colorNormalizationFactor,
-                1);
-            Assert.Equal(expectedColor, readView[x, y], ColorFuzzyComparer.Instance);
-        }
-        GD.Unmap(staging);
-    }
-
-    [Fact]
-    public void Points_WithFloat16Color()
-    {
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
-
-        DeviceBuffer infoBuffer = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
-            0,
-            framebuffer.Width,
-            framebuffer.Height,
-            0,
-            -1,
-            1);
-        GD.UpdateBuffer(orthoBuffer, 0, ref orthoMatrix);
-
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            new VertexLayoutDescription[]
-            {
-                new(
-                    0u,
-                    new VertexElementDescription("Position", VertexElementFormat.Float2),
-                    new VertexElementDescription("Color_Half", VertexElementFormat.Half4))
-            },
-            TestShaders.LoadVertexFragment(RF, "F16VertexAttribs"));
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InfoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
-            new ResourceLayoutElementDescription("OrthoBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex, 1)));
-
-        ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, infoBuffer, orthoBuffer));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.PointList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        uint colorNormalizationFactor = 2500;
-
-        const ushort f16_375 = 0x5DDC; // 375.0
-        const ushort f16_500 = 0x5FD0; // 500.0
-        const ushort f16_625 = 0x60E2; // 625.0
-        const ushort f16_875 = 0x62D6; // 875.0
-        const ushort f16_1250 = 0x64E2; // 1250.0
-        const ushort f16_1875 = 0x6753; // 1875.0
-
-        VertexCPU_UShort[] vertices =
-        [
-            new VertexCPU_UShort
-            {
-                Position = new Float2(0.5f, 0.5f),
-                R = f16_625,
-                G = f16_1250,
-                B = f16_1875,
-            },
-            new VertexCPU_UShort
-            {
-                Position = new Float2(10.5f, 12.5f),
-                R = f16_625,
-                G = f16_1250,
-                B = f16_1875,
-            },
-            new VertexCPU_UShort
-            {
-                Position = new Float2(25.5f, 35.5f),
-                R = f16_1875,
-                G = f16_1250,
-                B = f16_625,
-            },
-            new VertexCPU_UShort
-            {
-                Position = new Float2(49.5f, 49.5f),
-                R = f16_375,
-                G = f16_500,
-                B = f16_875,
-            },
-        ];
-
-        Color[] expectedColors =
-        [
-            new Color(
-                625.0f / colorNormalizationFactor,
-                1250.0f / colorNormalizationFactor,
-                1875.0f / colorNormalizationFactor,
-                1),
-            new Color(
-                625.0f / colorNormalizationFactor,
-                1250.0f / colorNormalizationFactor,
-                1875.0f / colorNormalizationFactor,
-                1),
-            new Color(
-                1875.0f / colorNormalizationFactor,
-                1250.0f / colorNormalizationFactor,
-                625.0f / colorNormalizationFactor,
-                1),
-            new Color(
-                375.0f / colorNormalizationFactor,
-                500.0f / colorNormalizationFactor,
-                875.0f / colorNormalizationFactor,
-                1),
-        ];
-
-        DeviceBuffer vb = RF.CreateBuffer(
-            new BufferDescription((uint)(Unsafe.SizeOf<UIntVertexAttribsVertex>() * vertices.Length), BufferUsage.VertexBuffer));
-        GD.UpdateBuffer(vb, 0, vertices);
-        GD.UpdateBuffer(infoBuffer, 0, new UIntVertexAttribsInfo { ColorNormalizationFactor = colorNormalizationFactor });
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
         cl.SetFullViewports();
-        cl.SetFullScissorRects();
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetPipeline(pipeline);
-        cl.SetVertexBuffer(0, vb);
-        cl.SetGraphicsResourceSet(0, set);
-        cl.Draw((uint)vertices.Length);
-        cl.CopyTexture(target, staging);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
+        cl.SetShader(program);
+        cl.SetVertexSource(source);
+        cl.SetProperties(props);
+        cl.Draw((uint)pointCount);
+        });
 
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
-
-        for (int i = 0; i < vertices.Length; i++)
+        Texture readback = GetReadback(target);
+        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        for (int i = 0; i < pointCount; i++)
         {
-            VertexCPU_UShort vertex = vertices[i];
-            uint x = (uint)vertex.Position.X;
-            uint y = (uint)vertex.Position.Y;
-            if (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted)
-            {
-                y = framebuffer.Height - y - 1;
-            }
-
-            Color expectedColor = expectedColors[i];
-            Assert.Equal(expectedColor, readView[x, y], ColorFuzzyComparer.Instance);
+            (uint x, uint y) = pixelOf(i);
+            Assert.Equal(expectedColor(i), map[x, FlipY(y, Size)], ColorFuzzyComparer.Instance);
         }
-        GD.Unmap(staging);
-    }
-
-    [InlineData(false)]
-    [InlineData(true)]
-    [Theory]
-    public unsafe void Points_WithTexture_UpdateUnrelated(bool useTextureView)
-    {
-        // This is a regression test for the case where a user modifies an unrelated texture
-        // at a time after a ResourceSet containing a texture has been bound. The OpenGL
-        // backend was caching texture state improperly, resulting in wrong textures being sampled.
-
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
-
-        DeviceBuffer orthoBuffer = RF.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-        Float4x4 orthoMatrix = Float4x4.CreateOrthoOffCenter(
-            0,
-            framebuffer.Width,
-            framebuffer.Height,
-            0,
-            -1,
-            1);
-        GD.UpdateBuffer(orthoBuffer, 0, ref orthoMatrix);
-
-        Texture sampledTexture = RF.CreateTexture(
-            TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
-
-        Color white = Color.White;
-        GD.UpdateTexture(sampledTexture, (IntPtr)(&white), (uint)Unsafe.SizeOf<Color>(), 0, 0, 0, 1, 1, 1, 0, 0);
-
-        Texture shouldntBeSampledTexture = RF.CreateTexture(
-            TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
-
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            new VertexLayoutDescription[]
-            {
-                new(
-                    0u,
-                    new VertexElementDescription("Position", VertexElementFormat.Float2))
-            },
-            TestShaders.LoadVertexFragment(RF, "TexturedPoints"));
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Ortho", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0),
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
-
-        ResourceSet set;
-        if (useTextureView)
-        {
-            TextureView view = RF.CreateTextureView(sampledTexture);
-            set = RF.CreateResourceSet(new ResourceSetDescription(layout, orthoBuffer, view, GD.PointSampler));
-        }
-        else
-        {
-            set = RF.CreateResourceSet(new ResourceSetDescription(layout, orthoBuffer, sampledTexture, GD.PointSampler));
-        }
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.PointList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        Float2[] vertices =
-        [
-            new Float2(0.5f, 0.5f),
-            new Float2(15.5f, 15.5f),
-            new Float2(25.5f, 26.5f),
-            new Float2(3.5f, 25.5f),
-        ];
-
-        DeviceBuffer vb = RF.CreateBuffer(
-            new BufferDescription((uint)(Unsafe.SizeOf<Float2>() * vertices.Length), BufferUsage.VertexBuffer));
-        GD.UpdateBuffer(vb, 0, vertices);
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        for (int i = 0; i < 2; i++)
-        {
-            cl.Begin();
-            cl.SetFramebuffer(framebuffer);
-            cl.ClearColorTarget(0, Color.Black);
-            cl.SetPipeline(pipeline);
-            cl.SetVertexBuffer(0, vb);
-            cl.SetGraphicsResourceSet(0, set);
-
-            // Modify an unrelated texture.
-            // This must have no observable effect on the next draw call.
-            Color pink = Color.Pink;
-            GD.UpdateTexture(shouldntBeSampledTexture,
-                (IntPtr)(&pink), (uint)Unsafe.SizeOf<Color>(),
-                0, 0, 0,
-                1, 1, 1,
-                0, 0);
-
-            cl.Draw((uint)vertices.Length);
-            cl.End();
-            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-            GD.WaitForIdle();
-        }
-
-        cl.Begin();
-        cl.CopyTexture(target, staging);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
-
-        foreach (Float2 vertex in vertices)
-        {
-            uint x = (uint)vertex.X;
-            uint y = (uint)vertex.Y;
-            if (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted)
-            {
-                y = framebuffer.Height - y - 1;
-            }
-
-            Assert.Equal(white, readView[x, y], ColorFuzzyComparer.Instance);
-        }
-        GD.Unmap(staging);
-    }
-
-    [Fact]
-    public void ComputeGeneratedVertices()
-    {
-        if (!GD.Features.ComputeShader)
-        {
-            return;
-        }
-
-        uint width = 512;
-        uint height = 512;
-        Texture output = RF.CreateTexture(
-            TextureDescription.Texture2D(width, height, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, output));
-
-        uint vertexSize = (uint)Unsafe.SizeOf<ColoredVertex>();
-        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            vertexSize * 4,
-            BufferUsage.StructuredBufferReadWrite,
-            vertexSize));
-
-        ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("OutputVertices", ResourceKind.StructuredBufferReadWrite, ShaderStages.Compute, 0)));
-        ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, buffer));
-
-        Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
-            TestShaders.LoadCompute(RF, "ComputeColoredQuadGenerator"),
-            computeLayout,
-            1, 1, 1));
-
-        ResourceLayout graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, 0)));
-        ResourceSet graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, buffer));
-
-        Pipeline graphicsPipeline = RF.CreateGraphicsPipeline(new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.TriangleStrip,
-            new ShaderSetDescription(
-                Array.Empty<VertexLayoutDescription>(),
-                TestShaders.LoadVertexFragment(RF, "ColoredQuadRenderer")),
-            graphicsLayout,
-            framebuffer.OutputDescription));
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetPipeline(computePipeline);
-        cl.SetComputeResourceSet(0, computeSet);
-        cl.Dispatch(1, 1, 1);
-        cl.SetFramebuffer(framebuffer);
-        cl.ClearColorTarget(0, new Color());
-        cl.SetPipeline(graphicsPipeline);
-        cl.SetGraphicsResourceSet(0, graphicsSet);
-        cl.Draw(4);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        Texture readback = GetReadback(output);
-        MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
-        for (uint y = 0; y < height; y++)
-            for (uint x = 0; x < width; x++)
-            {
-                Assert.Equal(Color.Red, readView[x, y]);
-            }
         GD.Unmap(readback);
     }
 
-    [SkippableFact]
-    public void ComputeGeneratedTexture()
+    private GraphicsProgram CreateColorProgram(string module, VertexLayoutDescription layout)
     {
-        Skip.IfNot(GD.Features.ComputeShader);
-
-        uint width = 4;
-        uint height = 1;
-        TextureDescription texDesc = TextureDescription.Texture2D(
-            width, height,
-            1,
-            1,
-            PixelFormat.R32_G32_B32_A32_Float,
-            TextureUsage.Sampled | TextureUsage.Storage);
-        Texture computeOutput = RF.CreateTexture(texDesc);
-        texDesc.Usage = TextureUsage.RenderTarget;
-        Texture finalOutput = RF.CreateTexture(texDesc);
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, finalOutput));
-
-        ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
-        ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, computeOutput));
-
-        Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
-            TestShaders.LoadCompute(RF, "ComputeTextureGenerator"),
-            computeLayout,
-            4, 1, 1));
-
-        ResourceLayout graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Input", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
-            new ResourceLayoutElementDescription("InputSampler", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
-        ResourceSet graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, computeOutput, GD.PointSampler));
-
-        Pipeline graphicsPipeline = RF.CreateGraphicsPipeline(new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.CullNone,
-            PrimitiveTopology.TriangleStrip,
-            new ShaderSetDescription(
-                Array.Empty<VertexLayoutDescription>(),
-                TestShaders.LoadVertexFragment(RF, "FullScreenBlit")),
-            graphicsLayout,
-            framebuffer.OutputDescription));
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetPipeline(computePipeline);
-        cl.SetComputeResourceSet(0, computeSet);
-        cl.Dispatch(1, 1, 1);
-        cl.SetFramebuffer(framebuffer);
-        cl.ClearColorTarget(0, new Color());
-        cl.SetPipeline(graphicsPipeline);
-        cl.SetGraphicsResourceSet(0, graphicsSet);
-        cl.Draw(4);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        Texture readback = GetReadback(finalOutput);
-        MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
-        Assert.Equal(Color.Red, readView[0, 0]);
-        Assert.Equal(Color.Green, readView[1, 0]);
-        Assert.Equal(Color.Blue, readView[2, 0]);
-        Assert.Equal(Color.White, readView[3, 0]);
-        GD.Unmap(readback);
-    }
-
-    [SkippableTheory]
-    [InlineData(2)]
-    [InlineData(6)]
-    public void ComputeBindTextureWithArrayLayersAsWriteable(uint ArrayLayers)
-    {
-        Skip.IfNot(GD.Features.ComputeShader);
-
-        uint TexSize = 32;
-        uint MipLevels = 1;
-        TextureDescription texDesc = TextureDescription.Texture2D(
-            TexSize, TexSize,
-            MipLevels,
-            ArrayLayers,
-            PixelFormat.R8_G8_B8_A8_UNorm,
-            TextureUsage.Sampled | TextureUsage.Storage);
-        Texture computeOutput = RF.CreateTexture(texDesc);
-
-        ResourceLayout computeLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("ComputeOutput", ResourceKind.TextureReadWrite, ShaderStages.Compute, 0)));
-        ResourceSet computeSet = RF.CreateResourceSet(new ResourceSetDescription(computeLayout, computeOutput));
-
-        Pipeline computePipeline = RF.CreateComputePipeline(new ComputePipelineDescription(
-            TestShaders.LoadCompute(RF, "ComputeImage2DArrayGenerator"),
-            computeLayout,
-            32, 32, 1));
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetPipeline(computePipeline);
-        cl.SetComputeResourceSet(0, computeSet);
-        cl.Dispatch(TexSize / 32, TexSize / 32, ArrayLayers);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        float sideColorStep = (float)Math.Floor(1.0f / ArrayLayers);
-        Texture readback = GetReadback(computeOutput);
-
-        foreach (var mip in Enumerable.Range(0, (int)MipLevels))
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, module);
+        ShaderDescription desc = new(stages)
         {
-            foreach (var layer in Enumerable.Range(0, (int)ArrayLayers))
-            {
-                var subresource = readback.CalculateSubresource((uint)mip, (uint)layer);
-                var mipSize = TexSize >> mip;
-                var expectedColor = (byte)255.0f * ((layer + 1) * sideColorStep);
-                MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
-
-                Assert.All(
-                    from x in Enumerable.Range(0, (int)mipSize)
-                    from y in Enumerable.Range(0, (int)mipSize)
-                    select (X: x, Y: y),
-                    (xy) =>
-                    {
-                        Assert.Equal(map[xy.X, xy.Y], expectedColor);
-                    }
-                );
-
-                GD.Unmap(readback, subresource);
-            }
-        }
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void SampleTexture1D(bool arrayTexture)
-    {
-        if (!GD.Features.Texture1D) { return; }
-
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, target));
-
-        string SetName = arrayTexture ? "FullScreenTriSampleTextureArray" : "FullScreenTriSampleTexture";
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            Array.Empty<VertexLayoutDescription>(),
-            TestShaders.LoadVertexFragment(RF, SetName));
-
-        uint layers = arrayTexture ? 10u : 1u;
-        Texture tex1D = RF.CreateTexture(
-            TextureDescription.Texture1D(128, 1, layers, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
-        Color[] colors = new Color[tex1D.Width];
-        for (int i = 0; i < colors.Length; i++) { colors[i] = Color.Pink; }
-        GD.UpdateTexture(tex1D, colors, 0, 0, 0, tex1D.Width, 1, 1, 0, 0);
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
-
-        ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tex1D, GD.PointSampler));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.CullNone,
-            PrimitiveTopology.TriangleList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetPipeline(pipeline);
-        cl.SetGraphicsResourceSet(0, set);
-        cl.Draw(3);
-        cl.CopyTexture(target, staging);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read);
-        for (int x = 0; x < staging.Width; x++)
-        {
-            Assert.Equal(Color.Pink, readView[x, 0]);
-        }
-        GD.Unmap(staging);
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.Default,
+            VertexLayouts = [layout],
+            ResourceLayouts =
+            [
+                new ResourceLayoutDescription
+                {
+                    Set = 0,
+                    Elements =
+                    [
+                        new ResourceLayoutElementDescription("Model", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0)
+                        {
+                            UniformFields =
+                            [
+                                new UniformBlockField("Ortho", 0, sizeof(float) * 16, UniformScalarType.Float4x4),
+                                new UniformBlockField("ColorNormalizationFactor", sizeof(float) * 16, sizeof(uint), UniformScalarType.Int1),
+                            ]
+                        }
+                    ]
+                }
+            ],
+        };
+        return RF.CreateGraphicsProgram(desc);
     }
 
     [Fact]
-    public void BindTextureAcrossMultipleDrawCalls()
+    public void WriteFragmentDepth_ProducesDepthRamp()
     {
-        Texture target1 = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Texture target2 = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        TextureView textureView = RF.CreateTextureView(target2);
+        const uint size = 64;
+        Texture depthTarget = RF.CreateTexture(TextureDescription.Texture2D(
+            size, size, 1, 1, PixelFormat.R32_Float, TextureUsage.DepthStencil | TextureUsage.Sampled));
+        Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(depthTarget));
 
-        Texture staging1 = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-        Texture staging2 = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-        Texture staging3 = RF.CreateTexture(TextureDescription.Texture2D(
-            50, 50, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
-
-        Framebuffer framebuffer1 = RF.CreateFramebuffer(new FramebufferDescription(null, target1));
-        Framebuffer framebuffer2 = RF.CreateFramebuffer(new FramebufferDescription(null, target2));
-
-        // This shader doesn't really matter, just as long as it is different to the first
-        // and third render pass and also doesn't use any texture bindings
-        ShaderSetDescription textureShaderSet = new ShaderSetDescription(
-            Array.Empty<VertexLayoutDescription>(),
-            TestShaders.LoadVertexFragment(RF, "FullScreenTriSampleTexture2D"));
-        ShaderSetDescription quadShaderSet = new ShaderSetDescription(
-            new VertexLayoutDescription[]
-            {
-                new(
-                    0u,
-                    new VertexElementDescription("A_V3", VertexElementFormat.Float3),
-                    new VertexElementDescription("B_V4", VertexElementFormat.Float4),
-                    new VertexElementDescription("C_V2", VertexElementFormat.Float2),
-                    new VertexElementDescription("D_V4", VertexElementFormat.Float4)
-                )
-            },
-            TestShaders.LoadVertexFragment(RF, "VertexLayoutTestShader"));
-
-        DeviceBuffer vertexBuffer = RF.CreateBuffer(new BufferDescription(
-            (uint)Unsafe.SizeOf<TestVertex>() * 3,
-            BufferUsage.VertexBuffer));
-        GD.UpdateBuffer(vertexBuffer, 0, [
-            new TestVertex(),
-            new TestVertex(),
-            new TestVertex()
-        ]);
-
-        // Fill the second target with a known color
-        Color[] colors = new Color[target2.Width * target2.Height];
-        for (int i = 0; i < colors.Length; i++) { colors[i] = Color.Pink; }
-        GD.UpdateTexture(target2, colors, 0, 0, 0, target2.Width, target2.Height, 1, 0, 0);
-
-        ResourceLayout textureLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
-
-        ResourceSet textureSet = RF.CreateResourceSet(new ResourceSetDescription(textureLayout, textureView, GD.PointSampler));
-
-        Pipeline texturePipeline = RF.CreateGraphicsPipeline(new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.CullNone,
-            PrimitiveTopology.TriangleList,
-            textureShaderSet,
-            textureLayout,
-            framebuffer1.OutputDescription));
-        Pipeline quadPipeline = RF.CreateGraphicsPipeline(new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.CullNone,
-            PrimitiveTopology.TriangleList,
-            quadShaderSet,
-            Array.Empty<ResourceLayout>(),
-            framebuffer2.OutputDescription));
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer1);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
-
-        // First pass using texture shader
-        cl.SetPipeline(texturePipeline);
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetGraphicsResourceSet(0, textureSet);
-        cl.Draw(3);
-        cl.CopyTexture(target1, staging1);
-
-        //  Second pass using dummy shader
-        cl.SetPipeline(quadPipeline);
-        cl.SetFramebuffer(framebuffer2);
-        cl.ClearColorTarget(0, Color.Blue);
-        cl.SetVertexBuffer(0, vertexBuffer);
-        cl.Draw(3);
-        cl.CopyTexture(target2, staging2);
-
-        // Third pass using texture shader again
-        cl.SetPipeline(texturePipeline);
-        cl.SetFramebuffer(framebuffer1);
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetGraphicsResourceSet(0, textureSet);
-        cl.Draw(3);
-        cl.CopyTexture(target1, staging3);
-
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        MappedResourceView<Color> readView1 = GD.Map<Color>(staging1, MapMode.Read);
-        MappedResourceView<Color> readView2 = GD.Map<Color>(staging2, MapMode.Read);
-        MappedResourceView<Color> readView3 = GD.Map<Color>(staging3, MapMode.Read);
-        for (int x = 0; x < staging1.Width; x++)
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenWriteDepth.slang");
+        ShaderDescription desc = new(stages)
         {
-            Assert.Equal(Color.Pink, readView1[x, 0]);
-            Assert.Equal(Color.Blue, readView2[x, 0]);
-            Assert.Equal(Color.Blue, readView3[x, 0]);
-        }
-        GD.Unmap(staging1);
-        GD.Unmap(staging2);
-        GD.Unmap(staging3);
-    }
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = new DepthStencilStateDescription(true, true, ComparisonKind.Always),
+            RasterizerState = RasterizerStateDescription.CullNone,
+            ResourceLayouts =
+            [
+                new ResourceLayoutDescription
+                {
+                    Set = 0,
+                    Elements =
+                    [
+                        new ResourceLayoutElementDescription("Frame", ResourceKind.UniformBuffer, ShaderStages.Fragment, 0)
+                        {
+                            UniformFields = [new UniformBlockField("OutputSize", 0, sizeof(float) * 4, UniformScalarType.Float4)]
+                        }
+                    ]
+                }
+            ],
+        };
+        GraphicsProgram program = RF.CreateGraphicsProgram(desc);
 
-    [Theory]
-    [InlineData(2, 0)]
-    [InlineData(5, 3)]
-    [InlineData(32, 31)]
-    public void FramebufferArrayLayer(uint layerCount, uint targetLayer)
-    {
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            16, 16, 1, layerCount, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        Framebuffer framebuffer = RF.CreateFramebuffer(
-            new FramebufferDescription(
-                null,
-                [new FramebufferAttachmentDescription(target, targetLayer)]));
+        PropertySet props = new();
+        props.SetFloat4("OutputSize", new Float4(size, size, 0, 0));
 
-        string setName = "FullScreenTriSampleTexture2D";
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            Array.Empty<VertexLayoutDescription>(),
-            TestShaders.LoadVertexFragment(RF, setName));
-
-        Texture tex2D = RF.CreateTexture(
-            TextureDescription.Texture2D(128, 128, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
-        Color[] colors = new Color[tex2D.Width * tex2D.Height];
-        for (int i = 0; i < colors.Length; i++) { colors[i] = Color.Pink; }
-        GD.UpdateTexture(tex2D, colors, 0, 0, 0, tex2D.Width, 1, 1, 0, 0);
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
-
-        ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tex2D, GD.PointSampler));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.CullNone,
-            PrimitiveTopology.TriangleList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetPipeline(pipeline);
-        cl.SetGraphicsResourceSet(0, set);
-        cl.Draw(3);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        Texture staging = GetReadback(target);
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read, targetLayer);
-        for (int x = 0; x < staging.Width; x++)
+        Submit(cl =>
         {
-            Assert.Equal(Color.Pink, readView[x, 0]);
-        }
-        GD.Unmap(staging, targetLayer);
-    }
-
-    [Theory]
-    [InlineData(1, 0, 0)]
-    [InlineData(1, 0, 3)]
-    [InlineData(1, 0, 5)]
-    [InlineData(4, 2, 0)]
-    [InlineData(4, 2, 3)]
-    [InlineData(4, 2, 5)]
-    public void RenderToCubemapFace(uint layerCount, uint targetLayer, uint targetFace)
-    {
-        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
-            16, 16,
-            1, layerCount,
-            PixelFormat.R32_G32_B32_A32_Float,
-            TextureUsage.RenderTarget | TextureUsage.Cubemap));
-        Framebuffer framebuffer = RF.CreateFramebuffer(
-            new FramebufferDescription(
-                null,
-                [new FramebufferAttachmentDescription(target, (targetLayer * 6) + targetFace)]));
-
-        string setName = "FullScreenTriSampleTexture2D";
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            Array.Empty<VertexLayoutDescription>(),
-            TestShaders.LoadVertexFragment(RF, setName));
-
-        Texture tex2D = RF.CreateTexture(
-            TextureDescription.Texture2D(128, 128, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
-        Color[] colors = new Color[tex2D.Width * tex2D.Height];
-        for (int i = 0; i < colors.Length; i++) { colors[i] = Color.Pink; }
-        GD.UpdateTexture(tex2D, colors, 0, 0, 0, tex2D.Width, 1, 1, 0, 0);
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
-            new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1)));
-
-        ResourceSet set = RF.CreateResourceSet(new ResourceSetDescription(layout, tex2D, GD.PointSampler));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.CullNone,
-            PrimitiveTopology.TriangleList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
-        cl.ClearColorTarget(0, Color.Black);
-        cl.SetPipeline(pipeline);
-        cl.SetGraphicsResourceSet(0, set);
-        cl.Draw(3);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
-
-        Texture staging = GetReadback(target);
-        MappedResourceView<Color> readView = GD.Map<Color>(staging, MapMode.Read, (targetLayer * 6) + targetFace);
-        for (int x = 0; x < staging.Width; x++)
-        {
-            Assert.Equal(Color.Pink, readView[x, 0]);
-        }
-        GD.Unmap(staging, (targetLayer * 6) + targetFace);
-    }
-
-    [Fact]
-    public void WriteFragmentDepth()
-    {
-        Texture depthTarget = RF.CreateTexture(
-            TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R32_Float, TextureUsage.DepthStencil | TextureUsage.Sampled));
-        Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(depthTarget));
-
-        string setName = "FullScreenWriteDepth";
-        ShaderSetDescription shaderSet = new ShaderSetDescription(
-            Array.Empty<VertexLayoutDescription>(),
-            TestShaders.LoadVertexFragment(RF, setName));
-
-        ResourceLayout layout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("FramebufferInfo", ResourceKind.UniformBuffer, ShaderStages.Fragment, 0)));
-
-        DeviceBuffer ub = RF.CreateBuffer(new BufferDescription(16, BufferUsage.UniformBuffer));
-        GD.UpdateBuffer(ub, 0, new Float4(depthTarget.Width, depthTarget.Height, 0, 0));
-        ResourceSet rs = RF.CreateResourceSet(new ResourceSetDescription(layout, ub));
-
-        GraphicsPipelineDescription gpd = new GraphicsPipelineDescription(
-            BlendStateDescription.SingleOverrideBlend,
-            new DepthStencilStateDescription(true, true, ComparisonKind.Always),
-            RasterizerStateDescription.CullNone,
-            PrimitiveTopology.TriangleList,
-            shaderSet,
-            layout,
-            framebuffer.OutputDescription);
-
-        Pipeline pipeline = RF.CreateGraphicsPipeline(ref gpd);
-
-        CommandBuffer cl = RF.CreateCommandBuffer();
-
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.SetFullViewports();
-        cl.SetFullScissorRects();
+        cl.SetFramebuffer(fb);
         cl.ClearDepthStencil(0f);
-        cl.SetPipeline(pipeline);
-        cl.SetGraphicsResourceSet(0, rs);
+        cl.SetFullViewports();
+        cl.SetShader(program);
+        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+        cl.SetProperties(props);
         cl.Draw(3);
-        cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-        GD.WaitForIdle();
+        });
 
         Texture readback = GetReadback(depthTarget);
-
-        MappedResourceView<float> readView = GD.Map<float>(readback, MapMode.Read);
-        for (uint y = 0; y < readback.Height; y++)
+        MappedResourceView<float> map = GD.Map<float>(readback, MapMode.Read);
+        for (uint y = 0; y < size; y++)
         {
-            for (uint x = 0; x < readback.Width; x++)
+            for (uint x = 0; x < size; x++)
             {
-                float xComp = x;
-                float yComp = y * readback.Width;
-                float val = (yComp + xComp) / (readback.Width * readback.Height);
-
-                Assert.Equal(val, readView[x, y], 2.0f);
+                float expected = (y * size + x) / (float)(size * size);
+                Assert.Equal(expected, map[x, y], 2.0f);
             }
         }
         GD.Unmap(readback);
     }
 
-    [SkippableFact]
-    public void UseBlendFactor()
+    [Fact]
+    public void UseBlendFactor_BlendsAgainstConstant()
     {
-        Skip.If(GD.BackendType == GraphicsBackend.Vulkan, "Upstream: Vulkan image layout validation error");
-        const uint width = 512;
-        const uint height = 512;
-        using Texture output = RF.CreateTexture(
-            TextureDescription.Texture2D(width, height, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        using Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, output));
+        const uint size = 64;
+        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
+        DeviceBuffer vb = CreateFullScreenQuad();
 
-        var yMod = GD.IsClipSpaceYInverted ? -1.0f : 1.0f;
-        ColoredVertex[] vertices =
-        [
-            new ColoredVertex { Position = new Float2(-1, 1 * yMod), Color = Float4.One },
-            new ColoredVertex { Position = new Float2(1, 1 * yMod), Color = Float4.One },
-            new ColoredVertex { Position = new Float2(-1, -1 * yMod), Color = Float4.One },
-            new ColoredVertex { Position = new Float2(1, -1 * yMod), Color = Float4.One }
-        ];
-        uint vertexSize = (uint)Unsafe.SizeOf<ColoredVertex>();
-        using DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            vertexSize * (uint)vertices.Length,
-            BufferUsage.StructuredBufferReadOnly,
-            vertexSize));
-        GD.UpdateBuffer(buffer, 0, vertices);
-
-        using var graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, 0)));
-        using var graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, buffer));
-
-        var blendDesc = new BlendStateDescription
+        BlendStateDescription blend = new()
         {
             BlendFactor = new Color(0.25f, 0.5f, 0.75f, 1),
             AttachmentStates =
@@ -1351,205 +309,318 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                     ColorFunction = BlendFunction.Add,
                     SourceAlphaFactor = BlendFactor.BlendFactor,
                     DestinationAlphaFactor = BlendFactor.Zero,
-                    AlphaFunction = BlendFunction.Add
+                    AlphaFunction = BlendFunction.Add,
                 }
             ]
         };
-        var pipelineDesc = new GraphicsPipelineDescription(
-            blendDesc,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.TriangleStrip,
-            new ShaderSetDescription(
-                Array.Empty<VertexLayoutDescription>(),
-                TestShaders.LoadVertexFragment(RF, "ColoredQuadRenderer")),
-            graphicsLayout,
-            framebuffer.OutputDescription);
 
-        using (var pipeline1 = RF.CreateGraphicsPipeline(pipelineDesc))
-        using (CommandBuffer cl = RF.CreateCommandBuffer())
-        {
-            cl.Begin();
-            cl.SetFramebuffer(framebuffer);
-            cl.ClearColorTarget(0, default(Color));
-            cl.SetPipeline(pipeline1);
-            cl.SetGraphicsResourceSet(0, graphicsSet);
-            cl.Draw((uint)vertices.Length);
-            cl.End();
-            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-            GD.WaitForIdle();
-        }
+        GraphicsProgram program = CreateColoredQuadProgram(blend);
 
-        using (Texture readback = GetReadback(output))
-        {
-            MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
-            for (uint y = 0; y < height; y++)
-                for (uint x = 0; x < width; x++)
-                {
-                    Assert.Equal(new Color(0.25f, 0.5f, 0.75f, 1), readView[x, y]);
-                }
-            GD.Unmap(readback);
-        }
+        DrawColoredQuad(fb, program, vb, Color.Black);
 
-        blendDesc.BlendFactor = new Color(0, 1, 0.5f, 0);
-        blendDesc.AttachmentStates[0].DestinationColorFactor = BlendFactor.InverseBlendFactor;
-        blendDesc.AttachmentStates[0].DestinationAlphaFactor = BlendFactor.InverseBlendFactor;
-        pipelineDesc.BlendState = blendDesc;
-
-        using (var pipeline2 = RF.CreateGraphicsPipeline(pipelineDesc))
-        using (CommandBuffer cl = RF.CreateCommandBuffer())
-        {
-            cl.Begin();
-            cl.SetFramebuffer(framebuffer);
-            cl.SetPipeline(pipeline2);
-            cl.SetGraphicsResourceSet(0, graphicsSet);
-            cl.Draw((uint)vertices.Length);
-            cl.End();
-            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-            GD.WaitForIdle();
-        }
-
-        using (Texture readback = GetReadback(output))
-        {
-            MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
-            for (uint y = 0; y < height; y++)
-                for (uint x = 0; x < width; x++)
-                {
-                    Assert.Equal(new Color(0.25f, 1, 0.875f, 1), readView[x, y]);
-                }
-            GD.Unmap(readback);
-        }
+        Texture readback = GetReadback(target);
+        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        Assert.Equal(new Color(0.25f, 0.5f, 0.75f, 1), map[size / 2, size / 2], ColorFuzzyComparer.Instance);
+        GD.Unmap(readback);
     }
 
     [Fact]
-    public void UseColorWriteMask()
+    public void UseColorWriteMask_RespectsPerChannelMask()
     {
-        Texture output = RF.CreateTexture(
-            TextureDescription.Texture2D(64, 64, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
-        using Framebuffer framebuffer = RF.CreateFramebuffer(new FramebufferDescription(null, output));
-
-        var yMod = GD.IsClipSpaceYInverted ? -1.0f : 1.0f;
-        ColoredVertex[] vertices =
-        [
-            new ColoredVertex { Position = new Float2(-1, 1 * yMod), Color = Float4.One },
-            new ColoredVertex { Position = new Float2(1, 1 * yMod), Color = Float4.One },
-            new ColoredVertex { Position = new Float2(-1, -1 * yMod), Color = Float4.One },
-            new ColoredVertex { Position = new Float2(1, -1 * yMod), Color = Float4.One }
-        ];
-        uint vertexSize = (uint)Unsafe.SizeOf<ColoredVertex>();
-        using DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
-            vertexSize * (uint)vertices.Length,
-            BufferUsage.StructuredBufferReadOnly,
-            vertexSize));
-        GD.UpdateBuffer(buffer, 0, vertices);
-
-        using var graphicsLayout = RF.CreateResourceLayout(new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, 0)));
-        using var graphicsSet = RF.CreateResourceSet(new ResourceSetDescription(graphicsLayout, buffer));
-
-        var blendDesc = new BlendStateDescription
-        {
-            AttachmentStates =
-            [
-                new BlendAttachmentDescription
-                {
-                    BlendEnabled = true,
-                    SourceColorFactor = BlendFactor.One,
-                    DestinationColorFactor = BlendFactor.Zero,
-                    ColorFunction = BlendFunction.Add,
-                    SourceAlphaFactor = BlendFactor.One,
-                    DestinationAlphaFactor = BlendFactor.Zero,
-                    AlphaFunction = BlendFunction.Add,
-                }
-            ],
-        };
-
-        var pipelineDesc = new GraphicsPipelineDescription(
-            blendDesc,
-            DepthStencilStateDescription.Disabled,
-            RasterizerStateDescription.Default,
-            PrimitiveTopology.TriangleStrip,
-            new ShaderSetDescription(
-                Array.Empty<VertexLayoutDescription>(),
-                TestShaders.LoadVertexFragment(RF, "ColoredQuadRenderer")),
-            graphicsLayout,
-            framebuffer.OutputDescription);
-
-        using (var pipeline1 = RF.CreateGraphicsPipeline(pipelineDesc))
-        using (CommandBuffer cl = RF.CreateCommandBuffer())
-        {
-            cl.Begin();
-            cl.SetFramebuffer(framebuffer);
-            cl.ClearColorTarget(0, default(Color));
-            cl.SetPipeline(pipeline1);
-            cl.SetGraphicsResourceSet(0, graphicsSet);
-            cl.Draw((uint)vertices.Length);
-            cl.End();
-            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-            GD.WaitForIdle();
-        }
-
-        using (Texture readback = GetReadback(output))
-        {
-            MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
-            for (uint y = 0; y < output.Height; y++)
-                for (uint x = 0; x < output.Width; x++)
-                {
-                    Assert.Equal(Color.White, readView[x, y]);
-                }
-
-            GD.Unmap(readback);
-        }
+        const uint size = 64;
+        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
+        DeviceBuffer vb = CreateFullScreenQuad();
 
         foreach (ColorWriteMask mask in Enum.GetValues<ColorWriteMask>())
         {
-            blendDesc.AttachmentStates[0].ColorWriteMask = mask;
-            pipelineDesc.BlendState = blendDesc;
-
-            using (var maskedPipeline = RF.CreateGraphicsPipeline(pipelineDesc))
-            using (CommandBuffer cl = RF.CreateCommandBuffer())
+            BlendStateDescription blend = new()
             {
-                cl.Begin();
-                cl.SetFramebuffer(framebuffer);
-                cl.ClearColorTarget(0, new Color(0.25f, 0.25f, 0.25f, 0.25f));
-                cl.SetPipeline(maskedPipeline);
-                cl.SetGraphicsResourceSet(0, graphicsSet);
-                cl.Draw((uint)vertices.Length);
-                cl.End();
-                { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
-                GD.WaitForIdle();
-            }
-
-            using (Texture readback = GetReadback(output))
-            {
-                MappedResourceView<Color> readView = GD.Map<Color>(readback, MapMode.Read);
-                for (uint y = 0; y < output.Height; y++)
-                    for (uint x = 0; x < output.Width; x++)
+                AttachmentStates =
+                [
+                    new BlendAttachmentDescription
                     {
-                        Assert.Equal(mask.HasFlag(ColorWriteMask.Red) ? 1 : 0.25f, readView[x, y].R);
-                        Assert.Equal(mask.HasFlag(ColorWriteMask.Green) ? 1 : 0.25f, readView[x, y].G);
-                        Assert.Equal(mask.HasFlag(ColorWriteMask.Blue) ? 1 : 0.25f, readView[x, y].B);
-                        Assert.Equal(mask.HasFlag(ColorWriteMask.Alpha) ? 1 : 0.25f, readView[x, y].A);
+                        BlendEnabled = true,
+                        SourceColorFactor = BlendFactor.One,
+                        DestinationColorFactor = BlendFactor.Zero,
+                        ColorFunction = BlendFunction.Add,
+                        SourceAlphaFactor = BlendFactor.One,
+                        DestinationAlphaFactor = BlendFactor.Zero,
+                        AlphaFunction = BlendFunction.Add,
+                        ColorWriteMask = mask,
                     }
-                GD.Unmap(readback);
-            }
+                ]
+            };
+
+            GraphicsProgram program = CreateColoredQuadProgram(blend);
+            DrawColoredQuad(fb, program, vb, new Color(0.25f, 0.25f, 0.25f, 0.25f));
+
+            Texture readback = GetReadback(target);
+            MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+            Color pixel = map[size / 2, size / 2];
+            Assert.Equal(mask.HasFlag(ColorWriteMask.Red) ? 1 : 0.25f, pixel.R, 2);
+            Assert.Equal(mask.HasFlag(ColorWriteMask.Green) ? 1 : 0.25f, pixel.G, 2);
+            Assert.Equal(mask.HasFlag(ColorWriteMask.Blue) ? 1 : 0.25f, pixel.B, 2);
+            Assert.Equal(mask.HasFlag(ColorWriteMask.Alpha) ? 1 : 0.25f, pixel.A, 2);
+            GD.Unmap(readback);
         }
+    }
+
+    private DeviceBuffer CreateFullScreenQuad()
+    {
+        float y = GD.IsClipSpaceYInverted ? -1.0f : 1.0f;
+        ColoredVertex[] vertices =
+        [
+            new(new Float2(-1, 1 * y), Float4.One),
+            new(new Float2(1, 1 * y), Float4.One),
+            new(new Float2(-1, -1 * y), Float4.One),
+            new(new Float2(1, -1 * y), Float4.One),
+        ];
+        uint stride = (uint)Unsafe.SizeOf<ColoredVertex>();
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
+            stride * (uint)vertices.Length, BufferUsage.StructuredBufferReadOnly, stride));
+        GD.UpdateBuffer(buffer, 0, vertices);
+        return buffer;
+    }
+
+    private GraphicsProgram CreateColoredQuadProgram(BlendStateDescription blend)
+    {
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "ColoredQuadRenderer.slang");
+        ShaderDescription desc = new(stages)
+        {
+            BlendState = blend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.Default,
+            ResourceLayouts =
+            [
+                new ResourceLayoutDescription
+                {
+                    Set = 0,
+                    Elements = [new ResourceLayoutElementDescription("InputVertices", ResourceKind.StructuredBufferReadOnly, ShaderStages.Vertex, 0)]
+                }
+            ],
+        };
+        return RF.CreateGraphicsProgram(desc);
+    }
+
+    private void DrawColoredQuad(Framebuffer fb, GraphicsProgram program, DeviceBuffer vertexStorage, Color clear)
+    {
+        PropertySet props = new();
+        props.SetBuffer("InputVertices", vertexStorage, readOnly: true);
+
+        Submit(cl =>
+        {
+        cl.SetFramebuffer(fb);
+        cl.ClearColorTarget(0, clear);
+        cl.SetFullViewports();
+        cl.SetShader(program);
+        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleStrip, []));
+        cl.SetProperties(props);
+        cl.Draw(4);
+        });
+    }
+
+    [Fact]
+    public void BindTexture_AcrossMultiplePasses_KeepsBinding()
+    {
+        (Texture target1, Framebuffer fb1) = CreateColorTarget();
+        Texture target2 = RF.CreateTexture(TextureDescription.Texture2D(
+            Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget | TextureUsage.Sampled));
+        Framebuffer fb2 = RF.CreateFramebuffer(new FramebufferDescription(null, target2));
+
+        // Seed target2 with a known color that the texture pass samples and blits into target1.
+        Color[] pink = new Color[target2.Width * target2.Height];
+        Array.Fill(pink, Color.Pink);
+        GD.UpdateTexture(target2, pink, 0, 0, 0, target2.Width, target2.Height, 1, 0, 0);
+
+        GraphicsProgram texProgram = CreateSampleTexture2DProgram();
+        GraphicsProgram quadProgram = CreateVertexLayoutSinkProgram();
+
+        DeviceBuffer quadVb = RF.CreateBuffer(new BufferDescription(
+            (uint)Unsafe.SizeOf<SinkVertex>() * 3, BufferUsage.VertexBuffer));
+        GD.UpdateBuffer(quadVb, 0, new SinkVertex[3]);
+
+        PropertySet texProps = new();
+        texProps.SetTexture("Tex", target2, GD.PointSampler);
+        texProps.SetSampler("Smp", GD.PointSampler);
+
+        Texture s1 = RF.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
+        Texture s3 = RF.CreateTexture(TextureDescription.Texture2D(Size, Size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Staging));
+
+        Submit(cl =>
+        {
+
+        // Pass 1: sample target2 into target1.
+        cl.SetFramebuffer(fb1);
+        cl.ClearColorTarget(0, Color.Black);
+        cl.SetFullViewports();
+        cl.SetShader(texProgram);
+        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+        cl.SetProperties(texProps);
+        cl.Draw(3);
+        cl.CopyTexture(target1, s1);
+
+        // Pass 2: an unrelated shader that uses no textures, into target2.
+        cl.SetFramebuffer(fb2);
+        cl.ClearColorTarget(0, Color.Blue);
+        cl.SetShader(quadProgram);
+        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, [quadVb]));
+        cl.ClearProperties();
+        cl.Draw(3);
+
+        // Pass 3: the texture shader again. Its binding must survive the intervening pass.
+        cl.SetFramebuffer(fb1);
+        cl.ClearColorTarget(0, Color.Black);
+        cl.SetShader(texProgram);
+        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+        cl.SetProperties(texProps);
+        cl.Draw(3);
+        cl.CopyTexture(target1, s3);
+
+        });
+
+        // Pass 1 sampled target2 while it was pink. Pass 2 cleared target2 to blue, and pass 3
+        // re-bound the same texture program and sampled target2 again - now blue. The binding
+        // surviving the intervening pass is what produces a correct (blue) sample rather than
+        // garbage / a stale texture.
+        MappedResourceView<Color> r1 = GD.Map<Color>(s1, MapMode.Read);
+        MappedResourceView<Color> r3 = GD.Map<Color>(s3, MapMode.Read);
+        for (uint x = 0; x < Size; x++)
+        {
+            Assert.Equal(Color.Pink, r1[x, 0], ColorFuzzyComparer.Instance);
+            Assert.Equal(Color.Blue, r3[x, 0], ColorFuzzyComparer.Instance);
+        }
+        GD.Unmap(s1);
+        GD.Unmap(s3);
+    }
+
+    [Theory]
+    [InlineData(2u, 0u)]
+    [InlineData(5u, 3u)]
+    [InlineData(8u, 7u)]
+    public void Render_ToFramebufferArrayLayer(uint layerCount, uint targetLayer)
+    {
+        const uint size = 16;
+        Texture target = RF.CreateTexture(TextureDescription.Texture2D(
+            size, size, 1, layerCount, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.RenderTarget));
+        Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(
+            null, [new FramebufferAttachmentDescription(target, targetLayer)]));
+
+        Texture sampled = RF.CreateTexture(TextureDescription.Texture2D(
+            size, size, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
+        Color[] pink = new Color[sampled.Width * sampled.Height];
+        Array.Fill(pink, Color.Pink);
+        GD.UpdateTexture(sampled, pink, 0, 0, 0, sampled.Width, sampled.Height, 1, 0, 0);
+
+        GraphicsProgram program = CreateSampleTexture2DProgram();
+        PropertySet props = new();
+        props.SetTexture("Tex", sampled, GD.PointSampler);
+        props.SetSampler("Smp", GD.PointSampler);
+
+        Submit(cl =>
+        {
+        cl.SetFramebuffer(fb);
+        cl.ClearColorTarget(0, Color.Black);
+        cl.SetFullViewports();
+        cl.SetShader(program);
+        cl.SetVertexSource(new TestVertexSource(PrimitiveTopology.TriangleList, []));
+        cl.SetProperties(props);
+        cl.Draw(3);
+        });
+
+        Texture readback = GetReadback(target);
+        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read, targetLayer);
+        for (uint x = 0; x < size; x++)
+        {
+            Assert.Equal(Color.Pink, map[x, 0], ColorFuzzyComparer.Instance);
+        }
+        GD.Unmap(readback, targetLayer);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SinkVertex
+    {
+        public Float3 A;
+        public Float4 B;
+        public Float2 C;
+        public Float4 D;
+    }
+
+    private GraphicsProgram CreateSampleTexture2DProgram()
+    {
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "FullScreenTriSampleTexture2D.slang");
+        ShaderDescription desc = new(stages)
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            ResourceLayouts =
+            [
+                new ResourceLayoutDescription
+                {
+                    Set = 0,
+                    Elements =
+                    [
+                        new ResourceLayoutElementDescription("Tex", ResourceKind.TextureReadOnly, ShaderStages.Fragment, 0),
+                        new ResourceLayoutElementDescription("Smp", ResourceKind.Sampler, ShaderStages.Fragment, 1),
+                    ]
+                }
+            ],
+        };
+        return RF.CreateGraphicsProgram(desc);
+    }
+
+    private GraphicsProgram CreateVertexLayoutSinkProgram()
+    {
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "VertexLayoutTestShader.slang");
+        ShaderDescription desc = new(stages)
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.CullNone,
+            VertexLayouts =
+            [
+                new VertexLayoutDescription(0, (uint)Unsafe.SizeOf<SinkVertex>(),
+                    new VertexElementDescription("POSITION", VertexElementFormat.Float3),
+                    new VertexElementDescription("COLOR0", VertexElementFormat.Float4),
+                    new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2),
+                    new VertexElementDescription("COLOR1", VertexElementFormat.Float4))
+            ],
+        };
+        return RF.CreateGraphicsProgram(desc);
+    }
+
+    // Records and submits in one open frame. The frame must be open during recording because
+    // property binding allocates transient memory at record time.
+    private void Submit(Action<CommandBuffer> record)
+    {
+        Frame frame = GD.BeginFrame();
+        CommandBuffer cl = RF.CreateCommandBuffer();
+        cl.Begin();
+        record(cl);
+        cl.End();
+        frame.SubmitCommands(cl);
+        GD.EndFrame(frame);
+        GD.WaitForIdle();
     }
 }
 
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-public class OpenGLRenderTests : RenderTests<OpenGLDeviceCreator> { }
-#endif
-#if TEST_OPENGLES
-[Trait("Backend", "OpenGLES")]
-public class OpenGLESRenderTests : RenderTests<OpenGLESDeviceCreator> { }
-#endif
 #if TEST_VULKAN
 [Trait("Backend", "Vulkan")]
+[Collection("GPU Tests")]
 public class VulkanRenderTests : RenderTests<VulkanDeviceCreator> { }
 #endif
 #if TEST_D3D11
 [Trait("Backend", "D3D11")]
+[Collection("GPU Tests")]
 public class D3D11RenderTests : RenderTests<D3D11DeviceCreator> { }
+#endif
+#if TEST_OPENGL
+[Trait("Backend", "OpenGL")]
+[Collection("GPU Tests")]
+public class OpenGLRenderTests : RenderTests<OpenGLDeviceCreator> { }
+#endif
+#if TEST_OPENGLES
+[Trait("Backend", "OpenGLES")]
+[Collection("GPU Tests")]
+public class OpenGLESRenderTests : RenderTests<OpenGLESDeviceCreator> { }
 #endif

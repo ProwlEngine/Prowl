@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Prowl.Vector;
@@ -43,7 +44,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
         };
 
         DeviceBuffer vertexBuffer = RF.CreateBuffer(new BufferDescription(
-            (uint)Marshal.SizeOf<Vertex>(), BufferUsage.VertexBuffer));
+            (uint)Unsafe.SizeOf<Vertex>(), BufferUsage.VertexBuffer));
         GD.UpdateBuffer(vertexBuffer, 0, [vertex]);
 
         PropertySet props = new();
@@ -52,6 +53,8 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
 
         TestVertexSource source = new(PrimitiveTopology.PointList, [vertexBuffer]);
 
+        // The frame must be open while recording: property binding allocates transient memory.
+        Frame frame = GD.BeginFrame();
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.SetFramebuffer(framebuffer);
@@ -63,15 +66,15 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
         cl.Draw(1);
         cl.End();
 
-        Frame frame = GD.BeginFrame();
         frame.SubmitCommands(cl);
         GD.EndFrame(frame);
         GD.WaitForIdle();
 
         Texture readback = GetReadback(target);
         MappedResourceView<Float4> map = GD.Map<Float4>(readback, MapMode.Read, 0);
-        uint rowStride = map.MappedResource.RowPitch / (uint)Marshal.SizeOf<Float4>();
-        Float4 pixel = map[(int)(25 * rowStride + 25)];
+        uint rowStride = map.MappedResource.RowPitch / (uint)Unsafe.SizeOf<Float4>();
+        uint row = (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted) ? height - 25 - 1 : 25;
+        Float4 pixel = map[(int)(row * rowStride + 25)];
         GD.Unmap(readback);
 
         Assert.Equal(0.25f, pixel.X, 2);
@@ -94,7 +97,7 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
                 new VertexLayoutDescription
                 {
                     Location = 0,
-                    Stride = (uint)Marshal.SizeOf<Vertex>(),
+                    Stride = (uint)Unsafe.SizeOf<Vertex>(),
                     Elements =
                     [
                         new VertexElementDescription("POSITION", VertexElementFormat.Float2),

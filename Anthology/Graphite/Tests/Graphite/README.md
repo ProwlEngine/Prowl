@@ -8,9 +8,25 @@
   must not run concurrently, so every GPU test class joins the `"GPU Tests"` collection
   (`[CollectionDefinition("GPU Tests", DisableParallelization = true)]` in `XunitAssemblyOptions.cs`).
   This keeps the GPU tests serialized while leaving the CPU tests parallel.
-- **`GPU/Baseline/`** holds the representative GPU tests rewritten against the current
+- **`GPU/Baseline/`** holds the representative smoke tests against the current
   `GraphicsProgram` / `PropertySet` / `Frame` API (render, compute, frame lifecycle,
   transient allocation, fences, disposal, profiler counters).
+- The remaining `GPU/` suites are the deeper feature coverage, organized by feature rather than
+  mirroring the old Veldrid suites:
+  - `RenderTests` - vertex attribute formats (uint / ushort / normalized ushort / half), blend
+    factor, color write mask, fragment depth writes, texture binding across passes, framebuffer
+    array layers.
+  - `ComputeTests` - compute-fed graphics, compute-written storage textures (2D, 2D-array, 3D),
+    and indirect dispatch.
+  - `GraphicsDeviceTests` - device identity/features, the `BeginFrame`/`EndFrame` ring lifecycle,
+    frames-in-flight throttling, transient allocation and its hard cap, fences, and
+    `ShaderProgram` lifetime.
+  - `PropertySetBindingTests` - end-to-end `PropertySet` binding through `CommandBuffer`:
+    transient vs. read-only vs. writable uniform buffers, structured buffers, `ApplyOther`, and
+    the missing-property handler.
+  - `FramebufferTests` / `SwapchainTests` - offscreen framebuffers and `OutputDescription`, plus
+    the main swapchain's framebuffer, presentation, resize, and sRGB creation.
+  - `DisposalTests` - resource disposal and dependency lifetimes.
 
 ### Shaders
 
@@ -20,13 +36,12 @@ no checked-in `.spv` files. Each `.slang` collapses a vertex+fragment (or comput
 module; Slang entry-point names are not preserved on Vulkan, so every stage is created with the
 entry point `"main"`.
 
-### Pending migration
+### Migration status
 
-Several suites are still written against the removed `Pipeline` / `ResourceLayout` /
-`ResourceSet` API and are excluded from the build (see the `<Compile Remove>` group in the
-`.csproj`): `GPU/RenderTests`, `GPU/ComputeTests`, `GPU/ResourceSetTests`, `GPU/PipelineTests`,
-`GPU/VertexLayoutTests`, `GPU/DisposalTests`, `GPU/SwapchainTests`. Re-include and migrate them
-onto the `GraphicsProgram` / `PropertySet` API as the remaining shaders are converted to Slang.
+The old Veldrid-era suites (`PipelineTests`, `ResourceSetTests`, `VertexLayoutTests`, and the SDL
+based `SwapchainTests`) have been removed. Their coverage was folded into the feature-organized
+suites above: pipeline/program creation is exercised everywhere a program is built, vertex layouts
+by `RenderTests`, and resource binding by `PropertySetBindingTests`. All shaders are now Slang.
 
 ## GPU backends
 

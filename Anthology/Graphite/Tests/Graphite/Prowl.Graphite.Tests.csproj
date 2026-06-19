@@ -15,8 +15,8 @@
         <PackageReference Include="xunit.console" Version="2.9.3" />
         <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
         <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
-        <PackageReference Include="Prowl.Slang" Version="0.3.1" />
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\Compiler\Prowl.Graphite.Compiler.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -25,22 +25,6 @@
         </Content>
         <None Remove="Shaders/**/*" />
         <Content Include="Shaders/**/*" CopyToOutputDirectory="PreserveNewest" />
-    </ItemGroup>
-
-    <!--
-        Tests still written against the removed Pipeline/ResourceLayout/ResourceSet API.
-        Parked (not compiled) pending migration to the GraphicsProgram/PropertySet/Frame API.
-        The representative core path lives under GPU/Baseline/. Re-include these as they are migrated.
-    -->
-    <ItemGroup>
-        <Compile Remove="GPU/RenderTests.cs" />
-        <Compile Remove="GPU/ComputeTests.cs" />
-        <Compile Remove="GPU/ResourceSetTests.cs" />
-        <Compile Remove="GPU/PipelineTests.cs" />
-        <Compile Remove="GPU/VertexLayoutTests.cs" />
-        <Compile Remove="GPU/DisposalTests.cs" />
-        <Compile Remove="GPU/SwapchainTests.cs" />
-        <Compile Remove="GPU/SwapchainTests.RegressionTests.cs" />
     </ItemGroup>
 
 </Project>
