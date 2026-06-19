@@ -1,6 +1,5 @@
 <Project>
     <PropertyGroup>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
     </PropertyGroup>

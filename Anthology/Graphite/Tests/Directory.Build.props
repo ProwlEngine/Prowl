@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <AllowUnsafeCode>true</AllowUnsafeCode>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <IsPackable>false</IsPackable>
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
     </PropertyGroup>
