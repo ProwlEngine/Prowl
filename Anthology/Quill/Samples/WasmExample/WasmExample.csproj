@@ -2,8 +2,6 @@
 
   <PropertyGroup>
     <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
-    <OutputType>Exe</OutputType>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WasmMainJSPath>main.js</WasmMainJSPath>
     <RunAOTCompilation>true</RunAOTCompilation>
   </PropertyGroup>
