@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 
 using Prowl.Slang;
 
@@ -29,7 +30,28 @@ public class GLCompiler : CompilerModule
     {
         ShaderDescription description = SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler);
         description.ResourceLayouts = Reflect(linkedComponent, layoutIndex, description.Stages);
+        MakePortableGlsl(description.Stages);
         return description;
+    }
+
+
+    // Slang emits the Vulkan GLSL vertex/instance builtins (gl_VertexIndex / gl_InstanceIndex) for
+    // its GLSL target, which desktop GL does not define (it has gl_VertexID / gl_InstanceID). Rather
+    // than depend on GL_KHR_vulkan_glsl - which many desktop drivers do not expose - the emitted
+    // GLSL is rewritten to the core GL builtins so it compiles on any OpenGL driver. The names are
+    // unique identifiers, so plain token replacement is unambiguous.
+    static void MakePortableGlsl(ShaderStageDescription[] stages)
+    {
+        for (int i = 0; i < stages.Length; i++)
+        {
+            string source = Encoding.UTF8.GetString(stages[i].ShaderBytes);
+
+            source = source
+                .Replace("gl_VertexIndex", "gl_VertexID")
+                .Replace("gl_InstanceIndex", "gl_InstanceID");
+
+            stages[i].ShaderBytes = Encoding.UTF8.GetBytes(source);
+        }
     }
 
     public static ResourceLayoutDescription[] Reflect(ComponentType linkedComponent, int layoutIndex, ShaderStageDescription[] stages)
