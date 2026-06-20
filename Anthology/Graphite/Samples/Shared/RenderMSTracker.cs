@@ -14,7 +14,6 @@ public class RenderMSTracker
     float smoothedDelta = 0.0001f;
     const float smoothing = 0.05f;
     int _top;
-    int _lineCount;
 
 
     public RenderMSTracker(GraphicsDevice gd)

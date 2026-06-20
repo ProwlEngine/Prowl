@@ -73,7 +73,7 @@ public class VulkanCompilationTests
         foreach (ShaderStages stage in new[] { ShaderStages.Vertex, ShaderStages.Fragment })
         {
             byte[] spirv = CompilerTestHarness.StageOf(d, stage).ShaderBytes;
-            string? validation = CompilerTestHarness.TryValidateSpirv(spirv);
+            string validation = CompilerTestHarness.TryValidateSpirv(spirv);
 
             // null => spirv-val unavailable; the known-good comparison still covers correctness.
             if (validation != null)

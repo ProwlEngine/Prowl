@@ -106,8 +106,9 @@ public class CompilationSession
     /// <summary>
     /// Begins a compilation session. Any modules imported or loaded during compilation will remain imported or loaded until this instance is done being used.
     /// </summary>
-    /// <param name="searchPaths"></param>
-    /// <param name="provider"></param>
+    /// <param name="searchPaths">Directories searched when resolving imported modules.</param>
+    /// <param name="provider">Optional callback that supplies module source bytes for a given path.</param>
+    /// <param name="pragmas">Optional preprocessor macro name/value pairs applied to the session.</param>
     public void BeginSession(DirectoryInfo[] searchPaths, Func<string, Memory<byte>?>? provider = null, (string, string)[]? pragmas = null)
     {
         SessionDescription sessionDesc = new()
@@ -135,6 +136,7 @@ public class CompilationSession
     /// Compiles a shader module from a filename.
     /// </summary>
     /// <param name="moduleName">The module filename to load</param>
+    /// <param name="type">The shader stage to compile.</param>
     /// <exception cref="CompilationException">
     /// Thrown when the Slang shader compiler fails to compile shader code.
     /// View <see cref="CompilationException.Diagnostics"/> to diagnose compilation exceptions.
@@ -160,6 +162,7 @@ public class CompilationSession
     /// <param name="moduleName">The module filename</param>
     /// <param name="path">The module's virtual source path</param>
     /// <param name="sourceUtf8">The source string in a utf-8 memory array</param>
+    /// <param name="type">The shader stage to compile.</param>
     /// <exception cref="CompilationException">
     /// Thrown when the Slang shader compiler fails to compile shader code.
     /// View <see cref="CompilationException.Diagnostics"/> to diagnose compilation exceptions.

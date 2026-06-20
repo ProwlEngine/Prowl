@@ -84,7 +84,7 @@ public class SwapchainRegressionTests
         };
 
         IWindow window = TestUtils.CreateWindow(backend);
-        GraphicsDevice? gd = null;
+        GraphicsDevice gd = null;
         try
         {
             gd = TestUtils.CreateDevice(window, options, backend);

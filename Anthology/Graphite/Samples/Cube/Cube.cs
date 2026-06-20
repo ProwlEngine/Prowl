@@ -15,7 +15,6 @@ public class Cube
 
     static Float4x4 view;
     static Float4x4 projection;
-    static Float4x4 model;
     static PropertySet properties;
 
 

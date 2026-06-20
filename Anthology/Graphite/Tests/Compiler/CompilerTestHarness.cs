@@ -125,7 +125,7 @@ internal static class CompilerTestHarness
 
     // Runs spirv-val on the given SPIR-V bytes. Returns null when the tool is unavailable so callers
     // can fall back to the byte-for-byte known-good comparison; otherwise the tool's stderr on failure.
-    public static string? TryValidateSpirv(byte[] spirv)
+    public static string TryValidateSpirv(byte[] spirv)
     {
         string temp = Path.Combine(Path.GetTempPath(), $"graphite_val_{Guid.NewGuid():N}.spv");
         File.WriteAllBytes(temp, spirv);

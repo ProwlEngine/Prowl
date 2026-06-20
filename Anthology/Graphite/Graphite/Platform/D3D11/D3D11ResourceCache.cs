@@ -453,9 +453,9 @@ internal unsafe class D3D11ResourceCache : IDisposable
         public RasterizerStateDescription GraphiteDescription;
         public bool Multisampled;
 
-        public D3D11RasterizerStateCacheKey(RasterizerStateDescription GraphiteDescription, bool multisampled)
+        public D3D11RasterizerStateCacheKey(RasterizerStateDescription graphiteDescription, bool multisampled)
         {
-            GraphiteDescription = GraphiteDescription;
+            GraphiteDescription = graphiteDescription;
             Multisampled = multisampled;
         }
 

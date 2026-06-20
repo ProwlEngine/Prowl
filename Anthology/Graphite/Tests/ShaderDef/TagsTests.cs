@@ -8,7 +8,7 @@ namespace Prowl.Graphite.ShaderDef.Tests;
 // Tags are only reachable through a pass, so they are driven via ParsedPass.Parse.
 public class TagsTests
 {
-    static Dictionary<string, string>? TagsOf(string pass) => Parse.Pass(pass).Tags;
+    static Dictionary<string, string> TagsOf(string pass) => Parse.Pass(pass).Tags;
 
 
     [Fact]
@@ -28,7 +28,7 @@ public class TagsTests
     [Fact]
     public void SingleTag_Parsed()
     {
-        Dictionary<string, string>? tags = TagsOf("""
+        Dictionary<string, string> tags = TagsOf("""
             Pass
             {
                 Tags { "LightMode" = "ForwardBase" }
@@ -45,7 +45,7 @@ public class TagsTests
     [Fact]
     public void MultipleTags_Parsed()
     {
-        Dictionary<string, string>? tags = TagsOf("""
+        Dictionary<string, string> tags = TagsOf("""
             Pass
             {
                 Tags { "LightMode" = "ForwardBase" "Queue" = "Transparent" "RenderType" = "Opaque" }
@@ -63,7 +63,7 @@ public class TagsTests
     [Fact]
     public void EmptyTagsBlock_EmptyDictionary()
     {
-        Dictionary<string, string>? tags = TagsOf("""
+        Dictionary<string, string> tags = TagsOf("""
             Pass
             {
                 Tags { }

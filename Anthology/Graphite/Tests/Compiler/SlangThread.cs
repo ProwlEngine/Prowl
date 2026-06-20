@@ -34,7 +34,7 @@ internal static class SlangThread
     public static T Run<T>(Func<T> func)
     {
         T result = default!;
-        ExceptionDispatchInfo? error = null;
+        ExceptionDispatchInfo error = null;
         using ManualResetEventSlim done = new(false);
 
         s_work.Add(() =>
