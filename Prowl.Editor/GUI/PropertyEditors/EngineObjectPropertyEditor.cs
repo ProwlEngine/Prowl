@@ -77,14 +77,16 @@ public class EngineObjectPropertyEditor : PropertyEditor
 
             using (fieldEl.Enter())
             {
-                // Accept asset drop
+                // Accept asset drop. This editor only handles plain (non-AssetRef) fields,
+                // so assigning an asset here serializes a copy into the scene instead of a
+                // reference. Confirm with the user before committing that copy.
                 var assetDrop = DragDrop.AcceptDrop<AssetDragPayload>(paper.IsParentHovered,
                     dp => dp.AssetType != null && fieldType.IsAssignableFrom(dp.AssetType));
                 if (assetDrop != null)
                 {
                     var droppedAsset = Runtime.AssetDatabase.Get(assetDrop.AssetGuid);
                     if (droppedAsset != null)
-                        onChange(droppedAsset);
+                        ConfirmAssetCopy(assetDrop.AssetName, droppedAsset, onChange);
                 }
 
                 // Accept GameObject drop
@@ -149,6 +151,25 @@ public class EngineObjectPropertyEditor : PropertyEditor
     /// </summary>
     [ThreadStatic] private static Type? _lastFieldType;
     public static void SetFieldType(Type type) => _lastFieldType = type;
+
+    /// <summary>
+    /// Warns that the target field is not an AssetRef, so assigning an asset stores a copy
+    /// inside the scene rather than a reference. Only applies the value if the user confirms.
+    /// </summary>
+    private static void ConfirmAssetCopy(string assetName, object? asset, Action<object?> onChange)
+    {
+        var dialog = new DialogModal { Title = "Field Is Not an Asset Reference", Width = 440 };
+        dialog.DrawContent = p =>
+        {
+            Origami.Label(p, "ac_l1", $"'{assetName}' is an asset, but this field is not an AssetRef.").Show();
+            Origami.Label(p, "ac_l2", "Assigning it stores a copy of the asset inside the scene").Show();
+            Origami.Label(p, "ac_l3", "rather than a reference to the original asset.").Show();
+            Origami.Label(p, "ac_l4", "Are you sure you want to continue?").Show();
+        };
+        dialog.Button("Assign Copy", () => { onChange(asset); Modal.Pop(); }, OrigamiVariant.Warning);
+        dialog.Button("Cancel", Modal.Pop);
+        Modal.Push(dialog);
+    }
 
     internal static void OpenAssetSelector(Type type, Action<object?> onChange)
     {
