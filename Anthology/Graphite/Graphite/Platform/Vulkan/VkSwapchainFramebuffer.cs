@@ -82,7 +82,6 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         SurfaceFormatKHR surfaceFormat,
         Extent2D swapchainExtent)
     {
-        // Get the images
         uint scImageCount = 0;
         _gd.KhrSwapchain.GetSwapchainImages(_gd.Device, deviceSwapchain, ref scImageCount, null).CheckResult();
         if (_scImages.Length < scImageCount)

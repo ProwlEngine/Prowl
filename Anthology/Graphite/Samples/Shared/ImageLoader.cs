@@ -19,13 +19,9 @@ public static class ImageLoader
         if (file == null)
             throw new Exception("File not found: " + file);
 
-        // Read from file.
         using var image = new MagickImage(file.Value.Span);
 
-        // Ensure alpha exists
         image.Alpha(AlphaOption.Set);
-
-        // Force 8-bit channels
         image.Depth = 8;
 
         image.Flip();

@@ -662,8 +662,7 @@ internal unsafe class OpenGLCommandExecutor
 
     private static void PostDispatchCommand()
     {
-        // TODO: Smart barriers?
-        // NODO: We're too smart for barriers, just do a full one for now. --- IGNORE ---
+        // we're too smart for smart barriers, just do a full one for now.
         OpenGLUtil.GL.MemoryBarrier(MemoryBarrierMask.AllBarrierBits);
         CheckLastError();
     }

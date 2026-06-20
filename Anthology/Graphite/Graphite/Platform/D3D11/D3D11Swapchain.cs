@@ -133,7 +133,6 @@ internal unsafe partial class D3D11Swapchain : Swapchain
                 ((IDXGISwapChain*)_dxgiSwapChain)->ResizeBuffers(2, actualWidth, actualHeight, _colorFormat, 0u));
         }
 
-        // Get the backbuffer from the swapchain
         ID3D11Texture2D* pBackBuffer;
         Guid tex2dGuid = ID3D11Texture2D.Guid;
         SilkMarshal.ThrowHResult(

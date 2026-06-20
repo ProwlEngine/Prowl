@@ -1291,7 +1291,6 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         {
                             if (!isCompressed)
                             {
-                                // Read data into buffer.
                                 if (_gd.Extensions.ARB_DirectStateAccess && texture.ArrayLayers == 1)
                                 {
                                     int zoffset = texture.ArrayLayers > 1 ? (int)arrayLayer : 0;

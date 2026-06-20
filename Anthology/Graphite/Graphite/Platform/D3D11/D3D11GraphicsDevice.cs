@@ -924,9 +924,8 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
 
             _dxgiAdapter.Dispose();
 
-            // Report live DXGI objects (only available on Windows)
-            // there shouldn't be a platform check like this since there's literally 
-            // **no way** to create a D3D11 device without windows, but just in case...
+            // report live DXGI objects (Windows-only API). 
+            // this check is pointless: you can't get a D3D11 device off Windows anyway.
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
             try
             {

@@ -144,7 +144,6 @@ public class CompilationSession
         if (_session == null)
             throw new InvalidOperationException("CompileShader called before BeginSession!");
 
-        // Add the module for VariantAttributes to the compilation pipeline
         _session.LoadModuleFromSource("VariantAttributes", "VariantAttributes.slang", s_variantModule, out DiagnosticInfo diagnostics);
         _handler.HandleCompilationDiagnostics(diagnostics);
 
@@ -170,7 +169,6 @@ public class CompilationSession
         if (_session == null)
             throw new InvalidOperationException("CompileShader called before BeginSession!");
 
-        // Add the module for VariantAttributes to the compilation pipeline
         _session.LoadModuleFromSource("VariantAttributes", "VariantAttributes.slang", s_variantModule, out DiagnosticInfo diagnostics);
         _handler.HandleCompilationDiagnostics(diagnostics);
 
