@@ -132,7 +132,7 @@ public class CompilationSession
 
 
     /// <summary>
-    /// Compiles yo shi for ya
+    /// Compiles a shader module from a filename.
     /// </summary>
     /// <param name="moduleName">The module filename to load</param>
     /// <exception cref="CompilationException">
@@ -156,7 +156,7 @@ public class CompilationSession
 
 
     /// <summary>
-    /// Compiles yo shi for ya
+    /// Compiles a shader module from a filename, virtual path, and a user-provided raw source string.
     /// </summary>
     /// <param name="moduleName">The module filename</param>
     /// <param name="path">The module's virtual source path</param>
