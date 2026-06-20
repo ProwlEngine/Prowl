@@ -68,11 +68,21 @@ public static class NodeRendererRegistry
     private static readonly NodeRenderer _default = new DefaultNodeRenderer();
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize()
     {
         _initialized = false;
         _cache.Clear();
         Initialize();
+    }
+
+    /// <summary>Drop cached type maps so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _typeToRenderer.Clear();
+        _cache.Clear();
     }
 
     public static void Initialize()

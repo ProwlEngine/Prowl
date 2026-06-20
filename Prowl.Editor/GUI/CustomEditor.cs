@@ -53,11 +53,24 @@ public static class CustomEditorRegistry
     private static readonly Dictionary<Type, CustomEditor> _editorCache = new();
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize()
     {
         _initialized = false;
         _editorCache.Clear();
         Initialize();
+    }
+
+    /// <summary>
+    /// Drop all cached <see cref="Type"/> references and editor instances so the script
+    /// AssemblyLoadContext can be collected. Caches rebuild on the next <see cref="Initialize"/>.
+    /// </summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _typeToEditor.Clear();
+        _editorCache.Clear();
     }
 
     public static void Initialize()

@@ -45,6 +45,21 @@ public static class SceneViewEditorRegistry
     /// <summary>The GameObject the active editor is targeting.</summary>
     public static GameObject? ActiveTarget { get; private set; }
 
+    /// <summary>
+    /// Deactivate the active editor and drop all cached entries. <c>_entries</c> holds target
+    /// component <see cref="Type"/>s (possibly user types), <c>_editorCache</c> holds editor
+    /// instances, and <see cref="ActiveTarget"/> holds a live scene <see cref="GameObject"/> —
+    /// all of which pin the script AssemblyLoadContext. Re-scans lazily on the next access.
+    /// </summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        Deactivate();
+        _entries = [];
+        _editorCache.Clear();
+        _initialized = false;
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;

@@ -35,7 +35,16 @@ public static class AssetDoubleClickRegistry
     private static readonly Dictionary<string, Handler> _handlers = new(StringComparer.OrdinalIgnoreCase);
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
+
+    /// <summary>Drop cached handler delegates (which may bind user code) so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _handlers.Clear();
+    }
 
     public static void Initialize()
     {

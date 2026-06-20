@@ -14,7 +14,17 @@ public static class ImporterRegistry
     private static readonly Dictionary<string, Type> _nameToImporter = new(StringComparer.OrdinalIgnoreCase);
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
+
+    /// <summary>Drop cached importer type maps so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _extensionToImporter.Clear();
+        _nameToImporter.Clear();
+    }
 
     public static void Initialize()
     {

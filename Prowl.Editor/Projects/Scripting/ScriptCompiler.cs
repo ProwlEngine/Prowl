@@ -118,7 +118,7 @@ public static class ScriptCompiler
         int plus = version.IndexOf('+');
         if (plus >= 0) version = version[..plus];
         // Convert "0.0.1" to "PROWL_0_0_1"
-        return "PROWL_" + version.Replace('.', '_');
+        return "PROWL_" + version.Replace('.', '_').Replace('-', '_').ToUpperInvariant();
     }
 
     private static void GenerateGameCsproj(Project project, List<string> scripts)
@@ -133,7 +133,10 @@ public static class ScriptCompiler
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
         sb.AppendLine("  <PropertyGroup>");
         sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
-        sb.AppendLine("    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>");
+        // EnableDefaultItems=false prevents the CandidateAssemblyFiles to include Dlls
+        // in the Builds\ path, if it's in the same folder as the project. This won't cause any issues as other compile
+        // references are directly added below.
+        sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");
         sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
         sb.AppendLine("    <Nullable>enable</Nullable>");
         sb.AppendLine($"    <OutputPath>{outputDir}</OutputPath>");
@@ -198,7 +201,8 @@ public static class ScriptCompiler
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
         sb.AppendLine("  <PropertyGroup>");
         sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
-        sb.AppendLine("    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>");
+        // Same as above
+        sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");
         sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
         sb.AppendLine("    <Nullable>enable</Nullable>");
         sb.AppendLine($"    <OutputPath>{outputDir}</OutputPath>");

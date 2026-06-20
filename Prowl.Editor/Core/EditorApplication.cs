@@ -427,10 +427,9 @@ public class EditorApplication : Game
 
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
-                ReinitializeRegistries();
 
-                // Load project settings
-                ProjectSettingsRegistry.OnProjectOpened();
+                // ReinitializeRegistries() runs the [OnAssemblyLoad] hooks, which include the project-settings reload.
+                ReinitializeRegistries();
 
                 // Restore layout from project (or use default)
                 var savedLayout = LoadDockLayout();
@@ -1116,6 +1115,30 @@ public class EditorApplication : Game
         return FindInNode(node.ChildA, panelType) ?? FindInNode(node.ChildB, panelType);
     }
 
+    /// <summary>Enumerate every open panel across the docked tree and all floating windows.</summary>
+    private IEnumerable<DockPanel> EnumerateAllPanels()
+    {
+        foreach (var p in EnumerateNodePanels(_dockSpace.Root))
+            yield return p;
+        foreach (var fw in _dockSpace.FloatingWindows)
+            foreach (var p in EnumerateNodePanels(fw.Node))
+                yield return p;
+    }
+
+    private static IEnumerable<DockPanel> EnumerateNodePanels(DockNode? node)
+    {
+        if (node == null) yield break;
+        if (node.IsLeaf)
+        {
+            if (node.Tabs != null)
+                foreach (var tab in node.Tabs)
+                    yield return tab;
+            yield break;
+        }
+        foreach (var p in EnumerateNodePanels(node.ChildA)) yield return p;
+        foreach (var p in EnumerateNodePanels(node.ChildB)) yield return p;
+    }
+
     /// <summary>
     /// Open a panel. If it's already open, focus it. Otherwise create a new instance as a floating window.
     /// </summary>
@@ -1267,42 +1290,199 @@ public class EditorApplication : Game
     //  Script Compilation
     // ================================================================
 
-    /// <summary>Called by ScriptAssemblyManager after hot-reload to re-scan all registries.</summary>
-    public void ReinitializeAfterReload() => ReinitializeRegistries();
+    /// <summary>
+    /// Called by <see cref="ScriptAssemblyManager"/> right after the new script assemblies are
+    /// loaded. Re-scans every registry against the fresh assemblies and reloads project settings.
+    /// </summary>
+    public void ReinitializeAfterReload()
+    {
+        ReinitializeRegistries();
+    }
+
+    /// <summary>
+    /// Drops every strong reference the editor holds into the script <see cref="System.Runtime.Loader.AssemblyLoadContext"/>
+    /// so it can actually be collected when unloaded. This is the counterpart to
+    /// <see cref="ReinitializeAfterReload"/>: tear everything down here, rebuild it there.
+    ///
+    /// Anything that survives this call and transitively reaches a user type (a live instance, a
+    /// <see cref="Type"/> handle, a delegate bound to user code, a <see cref="FieldInfo"/>) pins
+    /// the old context and forces a full editor restart instead of a hot-reload.
+    /// </summary>
+    public void ReleaseScriptReferences()
+    {
+        CaptureSelectionForReload();
+
+        // 1. Live object graph: the scene's GameObjects hold user MonoBehaviour instances.
+        //    The scene was already serialized to disk by SaveSceneForRestart().
+        Selection.Clear();
+        Undo.Clear();
+        Runtime.Resources.Scene.Unload();
+
+        // 1b. Long-lived editor panels cache scene objects (e.g. the Inspector's last target,
+        //     the Hierarchy's drag target). Let each drop its references before the unload.
+        if (_dockSpace != null)
+            foreach (var panel in EnumerateAllPanels())
+                if (panel is IScriptReloadCleanup cleanup)
+                    try { cleanup.OnScriptReloadCleanup(); } catch { }
+
+        // Release Paper callbacks as they might otherwise pin ALC types across a reload.
+        ReleasePaperRetainedCallbacks();
+
+        // 2. Play-mode leftovers (normally empty outside play mode; cleared defensively).
+        _savedEditorScene = null;
+        _savedEditorTime = null;
+        MenuRegistry.Clear();
+        _registeredPanels.Clear();
+
+        // 3. The Echo serializer cache lives in an external package so we can't call OnAssemblyUnload there.
+        Echo.Serializer.ClearCache();
+
+        // 4. Everything tagged [OnAssemblyUnload]
+        ScriptReloadCallbacks.InvokeAssemblyUnload();
+    }
+
+    private void ReleasePaperRetainedCallbacks()
+    {
+        try
+        {
+            var paper = PaperInstance;
+            if (paper == null) return;
+
+            Type t = paper.GetType();
+            const BindingFlags BF = BindingFlags.NonPublic | BindingFlags.Instance;
+
+            if (t.GetField("_elements", BF)?.GetValue(paper) is not Array elements) return;
+
+            int count = t.GetField("_elementCount", BF)?.GetValue(paper) is int c ? c : 0;
+            count = Math.Clamp(count, 0, elements.Length);
+            if (count < elements.Length)
+                Array.Clear(elements, count, elements.Length - count);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"[EditorApplication] Could not reset PaperUI retained callbacks: {ex.Message}");
+        }
+    }
+
+    // ================================================================
+    //  Selection preserve/restore across a hot-reload
+    // ================================================================
+
+    private List<SelectionToken>? _reloadSelection;
+    private SelectionToken _reloadActive;
+    private bool _hasReloadActive;
+
+    /// <summary>
+    /// Snapshot the current selection as identifier tokens (called before the selection is cleared).
+    /// </summary>
+    private void CaptureSelectionForReload()
+    {
+        _reloadSelection = new List<SelectionToken>();
+        _hasReloadActive = false;
+
+        foreach (var obj in Selection.Selected)
+        {
+            if (!TryMakeSelectionToken(obj, out var token))
+                continue;
+
+            _reloadSelection.Add(token);
+            if (ReferenceEquals(obj, Selection.ActiveObject))
+            {
+                _reloadActive = token;
+                _hasReloadActive = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tries to create a selection token to then restore the selection after script reload.
+    /// </summary>
+    private static bool TryMakeSelectionToken(object obj, out SelectionToken token)
+    {
+        switch (obj)
+        {
+            // Scene GameObject - restore by stable scene identifier.
+            case GameObject go:
+                token = new SelectionToken(SelKind.GameObject, go.Identifier, Guid.Empty, "", "", false);
+                return true;
+            // Scene component - restore by owning GameObject + component identifier.
+            case MonoBehaviour mb when mb.GameObject.IsValid():
+                token = new SelectionToken(SelKind.Component, mb.GameObject.Identifier, mb.Identifier, "", "", false);
+                return true;
+            // Project asset - restore by AssetID via the asset database.
+            case EngineObject eo when eo.AssetID != Guid.Empty:
+                token = new SelectionToken(SelKind.Asset, eo.AssetID, Guid.Empty, "", "", false);
+                return true;
+            // Project browser item - identifier-only, rebuilt from its path/guid.
+            case ContentItem ci:
+                token = new SelectionToken(SelKind.Content, ci.Guid, Guid.Empty, ci.RelativePath, ci.Name, ci.IsFolder);
+                return true;
+            default:
+                token = default;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Re-resolve the captured selection tokens against the freshly reloaded scene/assets and re-select them.
+    /// </summary>
+    public void RestoreSelectionAfterReload()
+    {
+        if (_reloadSelection == null)
+            return;
+
+        var tokens = _reloadSelection;
+        _reloadSelection = null;
+
+        Selection.Clear();
+        object? active = null;
+
+        foreach (var token in tokens)
+        {
+            object? resolved = ResolveSelectionToken(token);
+            if (resolved == null)
+                continue;
+
+            Selection.AddToSelection(resolved);
+            if (_hasReloadActive && token.Equals(_reloadActive))
+                active = resolved;
+        }
+
+        if (active != null)
+            Selection.ActiveObject = active;
+
+        _hasReloadActive = false;
+    }
+
+    private static object? ResolveSelectionToken(SelectionToken token)
+    {
+        switch (token.Kind)
+        {
+            case SelKind.GameObject:
+                return Runtime.Resources.Scene.Current?.FindObjectByIdentifier<GameObject>(token.Id);
+            case SelKind.Component:
+                return Runtime.Resources.Scene.Current?.FindObjectByIdentifier<GameObject>(token.Id)?.GetComponentByIdentifier(token.CompId);
+            case SelKind.Asset:
+                return Runtime.AssetDatabase.Get(token.Id);
+            case SelKind.Content:
+                // ContentItem compares by Guid + RelativePath, so a rebuilt instance re-selects the same item.
+                return new ContentItem { Guid = token.Id, RelativePath = token.Path, Name = token.Name, IsFolder = token.IsFolder };
+            default:
+                return null;
+        }
+    }
 
     private void ReinitializeRegistries()
     {
+        // Panel scan is an editor-instance step (needed before the menu rebuild reads the panel list).
         _registeredPanels.Clear();
         ScanAndRegisterPanels();
-        InitializeOnLoadRegistry.Reinitialize();
-        PropertyEditorRegistry.Reinitialize();
-        CustomEditorRegistry.Reinitialize();
-        GraphTools.NodeRendererRegistry.Reinitialize();
-        GraphTools.NodePreviewRegistry.Reinitialize();
-        Runtime.GraphTools.GraphValidatorRegistry.Reinitialize();
-        Inspector.AssetImporterEditorRegistry.Reinitialize();
-        GUI.Popups.AddComponentPopup.Reinitialize();
-        Importers.ImporterRegistry.Reinitialize();
-        ProjectSettingsRegistry.Reinitialize();
-        CreateAssetMenuRegistry.Reinitialize();
-        ShaderTypeCreateMenu.Register();
-        ThumbnailGeneratorRegistry.Reinitialize();
-        SceneDropHandlerRegistry.Reinitialize();
-        CreateGameObjectMenuRegistry.Reinitialize();
-        FileIconRegistry.Reinitialize();
-        AssetDoubleClickRegistry.Reinitialize();
-        ScriptTemplateRegistry.Reinitialize();
 
-        // Re-register Window menu items for any new panels from user assemblies
-        foreach (var (type, path) in _registeredPanels)
-        {
-            var capturedType = type;
-            MenuRegistry.Register($"Window/{path}", () => OpenPanel(capturedType),
-                isChecked: () => IsPanelOpen(capturedType));
-        }
+        // Run every [OnAssemblyLoad] hook
+        ScriptReloadCallbacks.InvokeAssemblyLoad();
 
-        // Re-register GameObject menu items for any new creators from user assemblies
-        CreateGameObjectMenuRegistry.RegisterMenuBarItems();
+        MenuRegistry.Clear();
+        RegisterMenus();
     }
 
     public void RestoreAutoSavedScene(string path)

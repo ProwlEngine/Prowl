@@ -35,7 +35,17 @@ public static class AssetImporterEditorRegistry
     private static readonly Dictionary<Type, AssetImporterEditor> _editorCache = new();
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
+
+    /// <summary>Drop cached type maps and editor instances so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _typeToEditor.Clear();
+        _editorCache.Clear();
+    }
 
     public static void Initialize()
     {

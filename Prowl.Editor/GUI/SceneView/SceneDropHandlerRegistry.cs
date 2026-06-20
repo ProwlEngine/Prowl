@@ -63,7 +63,16 @@ public static class SceneDropHandlerRegistry
     private static readonly List<HandlerEntry> _handlers = [];
     private static bool _initialized;
 
+    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { _initialized = false; Initialize(); }
+
+    /// <summary>Drop cached handlers (which may bind user code) so the script AssemblyLoadContext can be collected.</summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache()
+    {
+        _initialized = false;
+        _handlers.Clear();
+    }
 
     public static void Initialize()
     {

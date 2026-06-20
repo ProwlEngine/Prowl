@@ -563,6 +563,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Clear any remaining references
         _allObj.Clear();
         _allObjSet.Clear();
+
+        // Remove all identifiers and reference to any possible gameobject that could hold a
+        // user-defined script as it might leave the ALC alive
+        serializeObj = null;
+        _goIdentifiers = null;
+        _compIdentifiers = null;
+        _compIdOffsets = null;
     }
 
     public void OnBeforeSerialize()

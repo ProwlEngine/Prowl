@@ -140,6 +140,8 @@ public static class NodeRegistry
     /// Force a full rescan call after adding/removing assemblies at runtime (e.g. after
     /// recompiling user scripts).
     /// </summary>
+    // Clear-only (rebuilds lazily on next access), so this is the unload hook, not a load hook.
+    [OnAssemblyUnload]
     public static void Reinitialize()
     {
         lock (s_lock)

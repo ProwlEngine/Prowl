@@ -61,6 +61,22 @@ public static class UIEventSystem
     private static GameObject? s_lastHovered;
     private static Float2 s_lastPointerPos;
 
+    /// <summary>
+    /// Clears all retained <see cref="GameObject"/> references (hover/selection/pointer targets).
+    /// These outlive a <see cref="Resources.Scene"/> unload and would otherwise pin disposed
+    /// GameObjects — and, during script hot-reload, the collectible AssemblyLoadContext.
+    /// </summary>
+    [OnAssemblyUnload]
+    public static void ResetState()
+    {
+        CurrentHovered = null;
+        CurrentSelected = null;
+        s_lastHovered = null;
+        s_left.Reset();
+        s_right.Reset();
+        s_middle.Reset();
+    }
+
     // ============================================================
     // Public API
     // ============================================================

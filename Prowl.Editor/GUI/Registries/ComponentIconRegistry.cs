@@ -19,6 +19,13 @@ public static class ComponentIconRegistry
 {
     private static readonly ConcurrentDictionary<Type, string> _cache = new();
 
+    /// <summary>
+    /// Drop the per-type icon cache (keyed by component <see cref="Type"/>, including user
+    /// components) so the script AssemblyLoadContext can be collected.
+    /// </summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearCache() => _cache.Clear();
+
     public static string GetIcon(MonoBehaviour component) => GetIcon(component.GetType());
 
     public static string GetIcon(Type componentType)

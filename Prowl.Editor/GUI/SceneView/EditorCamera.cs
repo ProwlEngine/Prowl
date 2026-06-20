@@ -173,6 +173,18 @@ public class EditorCamera
     private Camera? _lastSceneCamera;
 
     /// <summary>
+    /// Drop references to scene-derived objects: the cached scene <see cref="Camera"/> and the
+    /// cloned <see cref="ImageEffect"/> instances (which can be user-script types). These persist
+    /// across frames, so they must be released before a script hot-reload unloads the ALC.
+    /// </summary>
+    public void ReleaseSceneReferences()
+    {
+        DisposeClonedEffects();
+        _camera.Effects.Clear();
+        _lastSceneCamera = null;
+    }
+
+    /// <summary>
     /// Sync image effects from the scene's main camera. Clones effect instances on first
     /// use or when the effect list changes, then uses DeserializeInto each frame to copy
     /// settings without destroying internal state (TAA history, etc.).
