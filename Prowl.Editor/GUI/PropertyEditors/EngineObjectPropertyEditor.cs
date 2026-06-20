@@ -178,6 +178,14 @@ public class EngineObjectPropertyEditor : PropertyEditor
         bool isSceneType = typeof(GameObject).IsAssignableFrom(type) || typeof(MonoBehaviour).IsAssignableFrom(type);
         var tabs = isSceneType ? SelectorTabs.Scene : SelectorTabs.Assets;
 
-        SelectorModal.Open($"Select {type.Name}", type, tabs, onChange);
+        SelectorModal.Open($"Select {type.Name}", type, tabs, selected =>
+        {
+            // Like a drag, picking an asset into a non-AssetRef field stores a copy in the
+            // scene rather than a reference. Scene selections and "None" pass through unchanged.
+            if (selected is EngineObject eo && eo.AssetID != Guid.Empty)
+                ConfirmAssetCopy(eo.Name, eo, onChange);
+            else
+                onChange(selected);
+        });
     }
 }
