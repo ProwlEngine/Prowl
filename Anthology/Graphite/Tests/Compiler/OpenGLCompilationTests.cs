@@ -46,6 +46,7 @@ public class OpenGLCompilationTests
     [InlineData("Modules")]
     [InlineData("ConstantBuffers")]
     [InlineData("ParameterBlocks")]
+    [InlineData("UVOriginUsage")]
     public void Glsl_MatchesKnownGood(string module)
     {
         ShaderDescription d = Compile(module);

@@ -57,6 +57,7 @@ public class D3D11CompilationTests
     [InlineData("Modules")]
     [InlineData("ConstantBuffers")]
     [InlineData("ParameterBlocks")]
+    [InlineData("UVOriginUsage")]
     public void Hlsl_MatchesKnownGood(string module)
     {
         ShaderDescription d = Compile(module);
