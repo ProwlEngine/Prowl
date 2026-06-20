@@ -7,10 +7,8 @@
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
-    <!-- Deliberately depends only on Prowl.Slang: this utility is a raw-Slang baseline generator,
-         independent of the Prowl.Graphite.Compiler reflection paths it helps verify. -->
     <ItemGroup>
-        <PackageReference Include="Prowl.Slang" Version="0.3.4" />
+        <ProjectReference Include="..\..\Compiler\Prowl.Graphite.Compiler.csproj" />
     </ItemGroup>
 
 </Project>

@@ -1,59 +1,34 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-using Prowl.Slang;
+using Prowl.Graphite;
+using Prowl.Graphite.Compiler;
+using Prowl.Graphite.Shaders;
 
 namespace SlangQuickCompile;
 
 
-// Raw-Slang baseline generator for the compiler test suite. Compiles the shared .slang shaders under
-// Tests/Compiler/Shaders to GLSL / HLSL / SPIR-V using Prowl.Slang directly (no dependency on
-// Prowl.Graphite.Compiler), writing the per-stage results into Tests/Compiler/KnownGood and printing
-// a reflection table per target. Because it shares nothing with the compiler it verifies, a match
-// against its output is an independent regression lock rather than a tautology.
+// Known-good generator for the compiler test suite.
 //
 // Usage (from the repo root, or any subdirectory):
 //   dotnet run --project Tools/SlangQuickCompile -- [--dump] [--write] [shaderName ...]
-//     --dump    print the reflection table for each shader/target (default when no flag given)
+//     --dump    list the files each shader would produce (default when no flag given)
 //     --write   (re)write the KnownGood output files
-//   With no shader names every shader in the manifest is processed.
 internal static class Program
 {
-    // A target backend: the output file extension plus the Slang profile and format that produce it.
-    sealed record Target(string Extension, string Profile, CompileTarget Format);
-
-    // One specialized permutation of a shader. ConstLines define any `extern` constants the shader
-    // needs to link (variant specialization); Suffix disambiguates the output file name.
-    sealed record Permutation(string Suffix, string[] ConstLines)
-    {
-        public static readonly Permutation Default = new("", []);
-    }
-
-    sealed record ShaderJob(string Module, Target[] Targets, Permutation[] Permutations);
-
-
-    static readonly Target s_glsl = new("glsl", "glsl_450", CompileTarget.Glsl);
-    static readonly Target s_hlsl = new("hlsl", "sm_5_0", CompileTarget.Hlsl);
-    static readonly Target s_spirv = new("spv", "spirv_1_5", CompileTarget.Spirv);
-
-    static readonly Target[] s_allTargets = [s_glsl, s_hlsl, s_spirv];
-
-
-    static readonly ShaderJob[] s_manifest =
+    // Every shared shader the suite locks down. Variant permutations are discovered from each shader's
+    // own [variant] attributes, so they are not listed here.
+    static readonly string[] s_manifest =
     [
-        new("Graphics", s_allTargets, [Permutation.Default]),
-        new("Modules", s_allTargets, [Permutation.Default]),
-        new("ConstantBuffers", s_allTargets, [Permutation.Default]),
-        new("ParameterBlocks", s_allTargets, [Permutation.Default]),
-        new("Variants", s_allTargets,
-        [
-            new("_false", ["export public static const bool DoubleColor = false;"]),
-            new("_true", ["export public static const bool DoubleColor = true;"]),
-        ]),
+        "Graphics",
+        "Modules",
+        "ConstantBuffers",
+        "ParameterBlocks",
+        "Variants",
+        "UVOriginUsage",
     ];
 
 
@@ -69,199 +44,94 @@ internal static class Program
         Console.WriteLine($"Shaders:   {shaderDir}");
         Console.WriteLine($"KnownGood: {knownGoodDir}\n");
 
-        foreach (ShaderJob job in s_manifest)
+        foreach (string module in s_manifest)
         {
-            if (names.Length > 0 && !names.Contains(job.Module))
+            if (names.Length > 0 && !names.Contains(module))
                 continue;
 
-            foreach (Target target in job.Targets)
-                foreach (Permutation permutation in job.Permutations)
-                    Process(job, target, permutation, shaderDir, knownGoodDir, write, dump);
+            Process(module, shaderDir, knownGoodDir, write, dump);
         }
 
         return 0;
     }
 
 
-    static void Process(
-        ShaderJob job, Target target, Permutation permutation,
-        string shaderDir, string knownGoodDir, bool write, bool dump)
+    static void Process(string module, string shaderDir, string knownGoodDir, bool write, bool dump)
     {
-        Session session = CreateSession(target, shaderDir);
+        CompilationSession session = new();
 
-        // VariantAttributes provides the [variant(...)] attribute the variant shader imports.
-        session.LoadModuleFromSourceString("VariantAttributes", "VariantAttributes.slang", VariantAttributesModule, out _);
+        session.RegisterModule(new GLCompiler());
+        session.RegisterModule(new DXCompiler());
+        session.RegisterModule(new VulkanCompiler());
 
-        Module module = session.LoadModule(job.Module, out DiagnosticInfo diagnostics);
-        Report(diagnostics);
+        session.BeginSession([new DirectoryInfo(shaderDir), new DirectoryInfo(AppContext.BaseDirectory)]);
 
-        EntryPoint[] entryPoints = DefinedEntryPoints(module);
+        CompilationResult result = session.CompileShader(module, ShaderType.Rasterization);
 
-        List<ComponentType> parts = [module, .. entryPoints];
+        session.EndSession();
 
-        if (permutation.ConstLines.Length > 0)
-            parts.Add(SpecializationModule(session, job.Module + permutation.Suffix, permutation.ConstLines));
-
-        ComponentType composite = session.CreateCompositeComponentType([.. parts], out diagnostics);
-        Report(diagnostics);
-
-        ComponentType linked = composite.Link(out diagnostics);
-        Report(diagnostics);
-
-        ShaderReflection layout = linked.GetLayout(0, out _);
-
-        string label = $"{job.Module}{permutation.Suffix} -> {target.Extension}";
-
-        for (uint i = 0; i < layout.EntryPointCount; i++)
+        foreach (VariantResult variant in result.CompiledVariants)
         {
-            EntryPointReflection ep = layout.GetEntryPointByIndex(i);
-            Memory<byte> code = linked.GetEntryPointCode((nint)i, 0, out diagnostics);
-            Report(diagnostics);
+            string suffix = VariantSuffix(variant.Variants);
 
-            string fileName = $"{job.Module}.{StageName(ep.Stage)}{permutation.Suffix}.{target.Extension}";
-
-            if (write)
+            foreach ((ShaderDescription description, GraphicsBackend backend) in variant.Backends)
             {
-                byte[] bytes = target.Format == CompileTarget.Hlsl
-                    ? Encoding.UTF8.GetBytes(NormalizeSourcePaths(Encoding.UTF8.GetString(code.Span)))
-                    : code.ToArray();
+                string extension = Extension(backend);
 
-                File.WriteAllBytes(Path.Combine(knownGoodDir, fileName), bytes);
-                Console.WriteLine($"  wrote {fileName} ({bytes.Length} bytes)");
+                foreach (ShaderStageDescription stage in description.Stages)
+                {
+                    string fileName = $"{module}.{StageName(stage.Stage)}{suffix}.{extension}";
+                    byte[] bytes = OutputBytes(extension, stage.ShaderBytes);
+
+                    if (write)
+                    {
+                        File.WriteAllBytes(Path.Combine(knownGoodDir, fileName), bytes);
+                        Console.WriteLine($"  wrote {fileName} ({bytes.Length} bytes)");
+                    }
+                    else if (dump)
+                    {
+                        Console.WriteLine($"  {fileName} ({bytes.Length} bytes)");
+                    }
+                }
             }
         }
-
-        if (dump)
-        {
-            Console.WriteLine($"== {label} ==");
-            DumpParameters(layout);
-            Console.WriteLine();
-        }
     }
 
 
-    static Session CreateSession(Target target, string shaderDir)
+    static string Extension(GraphicsBackend backend) => backend switch
     {
-        SessionDescription description = new()
-        {
-            Targets =
-            [
-                new TargetDescription { Profile = GlobalSession.FindProfile(target.Profile), Format = target.Format }
-            ],
-            SearchPaths = [shaderDir],
-            DefaultMatrixLayoutMode = MatrixLayoutMode.ColumnMajor,
-        };
-
-        return GlobalSession.CreateSession(description);
-    }
-
-
-    static EntryPoint[] DefinedEntryPoints(Module module)
-    {
-        List<EntryPoint> entryPoints = [];
-
-        for (int i = 0; i < module.GetDefinedEntryPointCount(); i++)
-            entryPoints.Add(module.GetDefinedEntryPoint(i));
-
-        return [.. entryPoints];
-    }
-
-
-    static Module SpecializationModule(Session session, string name, string[] constLines)
-    {
-        string moduleName = "__Spec_" + name.Replace("_", "");
-
-        StringBuilder sb = new();
-        sb.AppendLine($"module {moduleName};");
-        foreach (string line in constLines)
-            sb.AppendLine(line);
-
-        Module module = session.LoadModuleFromSourceString(moduleName, $"{moduleName}.slang", sb.ToString(), out DiagnosticInfo diagnostics);
-        Report(diagnostics);
-        return module;
-    }
-
-
-    // Walks the program's global parameters, descending into parameter blocks, and prints the binding
-    // each resource receives for the current target. The category offsets are exactly what the backend
-    // reflectors read, so this is the ground-truth view for authoring expected layouts.
-    static void DumpParameters(ShaderReflection layout)
-    {
-        foreach (VariableLayoutReflection parameter in layout.Parameters)
-            DumpParameter(parameter, indent: "  ");
-    }
-
-
-    static void DumpParameter(VariableLayoutReflection parameter, string indent)
-    {
-        TypeLayoutReflection typeLayout = parameter.TypeLayout;
-
-        StringBuilder categories = new();
-        for (uint c = 0; c < parameter.CategoryCount; c++)
-        {
-            ParameterCategory category = parameter.GetCategoryByIndex(c);
-            categories.Append($" {category}(offset={parameter.GetOffset(category)},space={parameter.GetBindingSpace(category)})");
-        }
-
-        Console.WriteLine($"{indent}{parameter.Name,-16} kind={typeLayout.Kind,-16} size={typeLayout.GetSize(),-4}{categories}");
-
-        if (typeLayout.Kind == TypeKind.ConstantBuffer)
-            DumpUniformFields(typeLayout.ElementTypeLayout, indent + "    ");
-
-        if (typeLayout.Kind == TypeKind.ParameterBlock)
-        {
-            TypeLayoutReflection element = typeLayout.ElementTypeLayout;
-            Console.WriteLine($"{indent}  [block container] cbufferOffset(slot)={typeLayout.ContainerVarLayout.GetOffset(ParameterCategory.DescriptorTableSlot)} elementSize={element.GetSize()}");
-            DumpUniformFields(element, indent + "    ");
-
-            foreach (VariableLayoutReflection field in element.Fields)
-                if (field.TypeLayout.Kind is TypeKind.Resource or TypeKind.SamplerState or TypeKind.ParameterBlock)
-                    DumpParameter(field, indent + "    ");
-        }
-    }
-
-
-    static void DumpUniformFields(TypeLayoutReflection block, string indent)
-    {
-        foreach (VariableLayoutReflection field in block.Fields)
-        {
-            TypeKind kind = field.TypeLayout.Kind;
-            if (kind is TypeKind.Scalar or TypeKind.Vector or TypeKind.Matrix)
-                Console.WriteLine($"{indent}.{field.Name,-14} offset={field.GetOffset(),-4} size={field.TypeLayout.GetSize(),-4} {field.TypeLayout.Kind}");
-        }
-    }
-
-
-    // The HLSL target embeds the source file path in every #line directive. That path depends on how
-    // the module was loaded (and the machine it was compiled on), so it is reduced to the bare file
-    // name. The compiler-under-test applies the same reduction before comparing, keeping the checked-in
-    // known-good output portable.
-    static readonly Regex s_lineDirective = new("^(?<pre>\\s*#line\\s+\\d+\\s+)\"(?<path>[^\"]*)\"", RegexOptions.Multiline);
-
-    public static string NormalizeSourcePaths(string hlsl)
-        => s_lineDirective.Replace(hlsl, m => $"{m.Groups["pre"].Value}\"{Path.GetFileName(m.Groups["path"].Value)}\"");
-
-
-    static string StageName(ShaderStage stage) => stage switch
-    {
-        ShaderStage.Vertex => "vertex",
-        ShaderStage.Fragment => "fragment",
-        ShaderStage.Compute => "compute",
-        ShaderStage.Geometry => "geometry",
-        ShaderStage.Hull => "hull",
-        ShaderStage.Domain => "domain",
-        _ => stage.ToString().ToLowerInvariant(),
+        GraphicsBackend.OpenGL => "glsl",
+        GraphicsBackend.Direct3D11 => "hlsl",
+        GraphicsBackend.Vulkan => "spv",
+        _ => throw new NotSupportedException($"No known-good extension for backend {backend}."),
     };
 
 
-    static void Report(DiagnosticInfo diagnostics)
+    static string VariantSuffix(Keyword[] variants)
+        => variants.Length == 0 ? "" : "_" + string.Join("_", variants.Select(v => v.Value));
+
+
+    static string StageName(ShaderStages stage) => stage switch
     {
-        if (!string.IsNullOrWhiteSpace(diagnostics.Message))
-            Console.WriteLine(diagnostics.Message);
-    }
+        ShaderStages.Vertex => "vertex",
+        ShaderStages.Fragment => "fragment",
+        ShaderStages.Compute => "compute",
+        _ => stage.ToString().ToLowerInvariant(),
+    };
+
+    static byte[] OutputBytes(string extension, byte[] shaderBytes)
+        => extension == "hlsl"
+            ? Encoding.UTF8.GetBytes(NormalizeSourcePaths(Encoding.UTF8.GetString(shaderBytes)))
+            : shaderBytes;
 
 
-    // Walks up from the working directory to find the requested repo-relative directory.
+    // Remove HLSL line directives for portability.
+    static readonly Regex s_lineDirective = new("^(?<pre>\\s*#line\\s+\\d+\\s+)\"(?<path>[^\"]*)\"", RegexOptions.Multiline);
+
+    static string NormalizeSourcePaths(string hlsl)
+        => s_lineDirective.Replace(hlsl, m => $"{m.Groups["pre"].Value}\"{Path.GetFileName(m.Groups["path"].Value)}\"");
+
+
     static string LocateDirectory(string relative)
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
@@ -277,15 +147,4 @@ internal static class Program
 
         throw new DirectoryNotFoundException($"Could not locate '{relative}' from {AppContext.BaseDirectory}.");
     }
-
-
-    const string VariantAttributesModule = """
-        module VariantAttributes;
-
-        [__AttributeUsage(_AttributeTargets.Var)]
-        public struct variantAttribute
-        {
-            string values;
-        };
-        """;
 }
