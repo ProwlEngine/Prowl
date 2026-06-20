@@ -47,6 +47,27 @@ public class CompilationSession
     """u8.ToArray();
 
 
+    // Always loaded so user shaders can `import UVOrigin` and read IsUVOriginTopLeft. The extern is
+    // resolved at link time by one of the hardcoded implementation modules below, chosen per backend.
+    private static byte[] UVOriginDeclModule =
+    """
+    module UVOrigin;
+    extern public static const bool IsUVOriginTopLeft;
+    """u8.ToArray();
+
+    private static byte[] UVOriginTopLeftModule =
+    """
+    module UVOriginTopLeft;
+    export public static const bool IsUVOriginTopLeft = true;
+    """u8.ToArray();
+
+    private static byte[] UVOriginBottomLeftModule =
+    """
+    module UVOriginBottomLeft;
+    export public static const bool IsUVOriginTopLeft = false;
+    """u8.ToArray();
+
+
     public ReadOnlyCollection<CompilerModule> Modules => _modules.AsReadOnly();
 
     private List<CompilerModule> _modules = [];
@@ -127,6 +148,8 @@ public class CompilationSession
         _session.LoadModuleFromSource("VariantAttributes", "VariantAttributes.slang", s_variantModule, out DiagnosticInfo diagnostics);
         _handler.HandleCompilationDiagnostics(diagnostics);
 
+        LoadUVOriginDeclModule();
+
         Module module = _session.LoadModule(moduleName, out diagnostics);
         return CompileShader(module, type);
     }
@@ -150,6 +173,8 @@ public class CompilationSession
         // Add the module for VariantAttributes to the compilation pipeline
         _session.LoadModuleFromSource("VariantAttributes", "VariantAttributes.slang", s_variantModule, out DiagnosticInfo diagnostics);
         _handler.HandleCompilationDiagnostics(diagnostics);
+
+        LoadUVOriginDeclModule();
 
         Module module = _session.LoadModuleFromSource(moduleName, path, sourceUtf8, out diagnostics);
         return CompileShader(module, type);
@@ -345,23 +370,55 @@ public class CompilationSession
     }
 
 
+    private void LoadUVOriginDeclModule()
+    {
+        _session!.LoadModuleFromSource("UVOrigin", "UVOrigin.slang", UVOriginDeclModule, out DiagnosticInfo diagnostics);
+        _handler.HandleCompilationDiagnostics(diagnostics);
+    }
+
+
+    private Module LoadUVOriginModule(bool topLeft)
+    {
+        string name = topLeft ? "UVOriginTopLeft" : "UVOriginBottomLeft";
+        byte[] source = topLeft ? UVOriginTopLeftModule : UVOriginBottomLeftModule;
+
+        Module loaded = _session!.LoadModuleFromSource(name, $"{name}.slang", source, out DiagnosticInfo diagnostics);
+        _handler.HandleCompilationDiagnostics(diagnostics);
+
+        return loaded;
+    }
+
+
+    private static bool IsBackendTopLeft(GraphicsBackend backend)
+        => backend is GraphicsBackend.Direct3D11 or GraphicsBackend.Vulkan;
+
+
     private VariantResult[] CompileVariants(ComponentType compositeModules, VariantSpace[] spaces, Keyword[][] variants)
     {
         VariantResult[] compiledVariants = new VariantResult[variants.Length];
 
+        Module uvTopLeft = LoadUVOriginModule(true);
+        Module uvBottomLeft = LoadUVOriginModule(false);
+
         for (int variant = 0; variant < variants.Length; variant++)
         {
             Module variantModule = CreateVariantModule(spaces, variants[variant]);
-            ComponentType compositeVariant = _session!.CreateCompositeComponentType([compositeModules, variantModule], out DiagnosticInfo diagnostics);
-            _handler.HandleCompilationDiagnostics(diagnostics);
-
-            ComponentType linked = compositeVariant.Link(out diagnostics);
-            _handler.HandleCompilationDiagnostics(diagnostics);
 
             (ShaderDescription Description, GraphicsBackend Backend)[] compiled = new (ShaderDescription, GraphicsBackend)[_modules.Count];
 
+            // Link per backend so each one resolves IsUVOriginTopLeft against its hardcoded UV module.
             for (int compiler = 0; compiler < _modules.Count; compiler++)
+            {
+                Module uvModule = IsBackendTopLeft(_modules[compiler].Backend) ? uvTopLeft : uvBottomLeft;
+
+                ComponentType compositeVariant = _session!.CreateCompositeComponentType([compositeModules, variantModule, uvModule], out DiagnosticInfo diagnostics);
+                _handler.HandleCompilationDiagnostics(diagnostics);
+
+                ComponentType linked = compositeVariant.Link(out diagnostics);
+                _handler.HandleCompilationDiagnostics(diagnostics);
+
                 compiled[compiler] = (_modules[compiler].CompileForTarget(linked, compiler, _handler), _modules[compiler].Backend);
+            }
 
             VariantResult variantResult = new()
             {
