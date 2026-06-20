@@ -746,7 +746,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         GD.Unmap(copyDst);
     }
 
-    // [InlineData(true)]
+    [InlineData(true)]
     [InlineData(false)]
     [Theory]
     public unsafe void Copy_Compressed_Array(bool separateLayerCopies)

@@ -172,13 +172,11 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public void MapThenUpdate_Fails()
     {
-        if (GD.BackendType == GraphicsBackend.Vulkan)
-        {
-            return; // TODO
-        }
+        Skip.If(GD.BackendType == GraphicsBackend.Vulkan,
+            "Vulkan maps memory directly without map-state tracking, so it does not enforce this contract.");
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
         MappedResourceView<int> view = GD.Map<int>(buffer, MapMode.ReadWrite);
         int[] data = Enumerable.Range(0, 256).Select(i => 2 * i).ToArray();
@@ -200,13 +198,11 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.Unmap(buffer);
     }
 
-    [Fact]
+    [SkippableFact]
     public void Map_DifferentMode_Fails()
     {
-        if (GD.BackendType == GraphicsBackend.Vulkan)
-        {
-            return; // TODO
-        }
+        Skip.If(GD.BackendType == GraphicsBackend.Vulkan,
+            "Vulkan maps memory directly without map-state tracking, so it does not enforce this contract.");
         DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(1024, BufferUsage.Staging));
         MappedResource map = GD.Map(buffer, MapMode.Read);
         Assert.Throws<RenderException>(() => GD.Map(buffer, MapMode.Write));
