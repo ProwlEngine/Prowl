@@ -13,13 +13,17 @@ public static class Program
     static CommandBuffer buffer;
     static Mesh leftQuad;
     static Mesh rightQuad;
+    static Mesh midQuad;
     static GraphicsProgram shader;
     static PropertySet leftProperties;
     static PropertySet rightProperties;
+    static PropertySet midProperties;
     static Texture leftTexture;
     static Texture rightTexture;
+    static Texture midTexture;
     static Sampler leftSampler;
     static Sampler rightSampler;
+    static Sampler midSampler;
     static RenderMSTracker tracker;
 
 
@@ -45,11 +49,13 @@ public static class Program
 
         // Two side-by-side quads, each bound to its own texture through its own PropertySet, to
         // exercise switching textures / resource sets between draws.
-        leftQuad = ModelLoader.CreateQuad(device, -0.9f, -0.05f, -0.45f, 0.45f);
-        rightQuad = ModelLoader.CreateQuad(device, 0.05f, 0.9f, -0.45f, 0.45f);
+        leftQuad = ModelLoader.CreateQuad(device, -0.75f, -0.25f, -0.45f, 0.45f);
+        rightQuad = ModelLoader.CreateQuad(device, 0.25f, 0.75f, -0.45f, 0.45f);
+        midQuad = ModelLoader.CreateQuad(device, -0.25f, 0.25f, -0.45f, 0.45f);
 
         (leftTexture, leftSampler) = ImageLoader.Load(device, "Cat_cat.png");
         (rightTexture, rightSampler) = ImageLoader.Load(device, "Cat_cat2.png");
+        (midTexture, midSampler) = ImageLoader.Load(device, "Cat_cat3.jpg");
 
         buffer = device.ResourceFactory.CreateCommandBuffer();
 
@@ -58,6 +64,9 @@ public static class Program
 
         rightProperties = new();
         rightProperties.SetTexture("MainTexture", rightTexture, rightSampler);
+
+        midProperties = new();
+        midProperties.SetTexture("MainTexture", midTexture, midSampler);
     }
 
 
@@ -79,6 +88,10 @@ public static class Program
 
         buffer.SetProperties(rightProperties);
         buffer.SetVertexSource(rightQuad);
+        buffer.DrawIndexed();
+
+        buffer.SetProperties(midProperties);
+        buffer.SetVertexSource(midQuad);
         buffer.DrawIndexed();
 
         buffer.End();
