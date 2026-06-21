@@ -541,6 +541,8 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                 GLEnum status = GL.ClientWaitSync(sync, (SyncObjectMask)0, 0);
                 done = status == GLEnum.AlreadySignaled || status == GLEnum.ConditionSatisfied;
             });
+            if (done)
+                slot.FenceWrapper.Set();
             return done;
         }
 
@@ -564,6 +566,8 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                 GLEnum status = GL.ClientWaitSync(sync, SyncObjectMask.Bit, nanosecondTimeout);
                 succeeded = status == GLEnum.AlreadySignaled || status == GLEnum.ConditionSatisfied;
             });
+            if (succeeded)
+                slot.FenceWrapper.Set();
             return succeeded;
         }
 
