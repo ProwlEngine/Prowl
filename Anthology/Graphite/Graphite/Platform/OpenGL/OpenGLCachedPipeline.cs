@@ -88,17 +88,17 @@ internal static class OpenGLCachedPipeline
                 else if (resource.Kind == ResourceKind.StructuredBufferReadOnly
                     || resource.Kind == ResourceKind.StructuredBufferReadWrite)
                 {
-                    uint storageBlockBinding;
                     if (backend == GraphicsBackend.OpenGL)
                     {
-                        storageBlockBinding = gl.GetProgramResourceIndex(program, ProgramInterface.ShaderStorageBlock, resourceName);
+                        uint storageBlockBinding = gl.GetProgramResourceIndex(program, ProgramInterface.ShaderStorageBlock, resourceName);
                         CheckLastError();
+                        if (storageBlockBinding != GL_INVALID_INDEX)
+                            storageBufferBindings[i] = new OpenGLShaderStorageBinding(storageBlockBinding, (uint)bindingIndex);
                     }
                     else
                     {
-                        storageBlockBinding = (uint)bindingIndex;
+                        storageBufferBindings[i] = new OpenGLShaderStorageBinding((uint)bindingIndex, (uint)bindingIndex);
                     }
-                    storageBufferBindings[i] = new OpenGLShaderStorageBinding(storageBlockBinding, (uint)bindingIndex);
                 }
             }
 
