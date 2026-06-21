@@ -641,7 +641,7 @@ internal unsafe class OpenGLCommandExecutor
         PreDispatchCommand();
 
         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(indirectBuffer);
-        _gl.BindBuffer(BufferTargetARB.DrawIndirectBuffer, glBuffer.Buffer);
+        _gl.BindBuffer(BufferTargetARB.DispatchIndirectBuffer, glBuffer.Buffer);
         CheckLastError();
 
         _gl.DispatchComputeIndirect((IntPtr)offset);
