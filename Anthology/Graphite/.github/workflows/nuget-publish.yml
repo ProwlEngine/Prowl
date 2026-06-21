@@ -7,7 +7,6 @@ on:
 
 permissions:
   id-token: write   # REQUIRED for NuGet Trusted Publishing
-  contents: read
   contents: write
 
 jobs:
