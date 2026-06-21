@@ -42,13 +42,13 @@ jobs:
             -p:SymbolPackageFormat=snupkg \
             -p:ContinuousIntegrationBuild=true
 
-      - name: Upload artifacts (optional debug step)
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
           path: ./nupkgs/*
 
-      - name: NuGet login (OIDC → temp API key)
+      - name: NuGet login
         uses: NuGet/login@v1
         id: login
         with:
@@ -65,7 +65,7 @@ jobs:
         run: |
           echo "tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
 
-      - name: Generate release notes from git history
+      - name: Generate release notes
         id: changelog
         run: |
           if [ -z "${{ steps.prev_tag.outputs.tag }}" ]; then
