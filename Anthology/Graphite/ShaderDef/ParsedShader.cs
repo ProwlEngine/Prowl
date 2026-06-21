@@ -65,7 +65,7 @@ public class ParsedShader
         string name = ParserUtility.QuotedString(ref t);
 
         if (string.IsNullOrWhiteSpace(name))
-            throw Exceptions.NoName(t.Peek());
+            throw new ParseException("Shader must contain non-empty name", t.Line, t.Column);
 
         ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
@@ -88,11 +88,17 @@ public class ParsedShader
         }
 
         if (passes.Count == 0)
-            throw Exceptions.NoPasses(t.Peek());
+            throw new ParseException("Shader must contain at least one Pass", t.Line, t.Column);
 
         string fallback = "";
         if (ParserUtility.PeekKeyword(ref t, "Fallback"))
+        {
+            t.Next();
             fallback = ParserUtility.QuotedString(ref t);
+
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ParseException("Fallback must contain non-empty name", t.Line, t.Column);
+        }
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
 

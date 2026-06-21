@@ -99,14 +99,14 @@ public class ShaderTests
 
 
     [Fact]
-    public void MissingFallback_Throws()
+    public void MissingFallback_Empty()
     {
-        Assert.ThrowsAny<Exception>(() => Parse.Shader("""
+        Assert.Empty(Parse.Shader("""
             Shader "NoFallback"
             {
                 Pass { SLANGPROGRAM void main() {} ENDSLANG }
             }
-            """));
+            """).Fallback);
     }
 
 

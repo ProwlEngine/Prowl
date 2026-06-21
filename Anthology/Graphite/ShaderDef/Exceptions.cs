@@ -78,10 +78,6 @@ internal static class Exceptions
         new("Shader must contain at least one Pass", at.Line, at.Column);
 
 
-    public static ParseException NoName(Token<ShaderToken> at) =>
-        new("Shader must contain non-empty name", at.Line, at.Column);
-
-
     public static ParseException TrailingContent(string found, Token<ShaderToken> at) =>
         new($"Unexpected content '{found}' after shader", at.Line, at.Column);
 }
