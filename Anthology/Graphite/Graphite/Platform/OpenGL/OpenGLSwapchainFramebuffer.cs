@@ -36,7 +36,7 @@ internal class OpenGLSwapchainFramebuffer : Framebuffer
         // This is wrong, but it's not really used.
         OutputAttachmentDescription? depthDesc = _depthFormat != null
             ? new OutputAttachmentDescription(_depthFormat.Value)
-            : (OutputAttachmentDescription?)null;
+            : null;
         OutputDescription = new OutputDescription(
             depthDesc,
             new OutputAttachmentDescription(colorFormat));
@@ -54,7 +54,7 @@ internal class OpenGLSwapchainFramebuffer : Framebuffer
             _depthTexture = new OpenGLPlaceholderTexture(
                 width,
                 height,
-                depthFormat.Value,
+                _depthFormat.Value,
                 TextureUsage.DepthStencil,
                 TextureSampleCount.Count1);
             _depthTarget = new FramebufferAttachment(_depthTexture, 0);

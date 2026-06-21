@@ -26,7 +26,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
 
     public MemoryRequirements BufferMemoryRequirements => _bufferMemoryRequirements;
 
-    public VkBuffer(VkGraphicsDevice gd, uint sizeInBytes, BufferUsage usage, string callerMember = null)
+    public VkBuffer(VkGraphicsDevice gd, uint sizeInBytes, BufferUsage usage, string? callerMember = null)
     {
         _gd = gd;
         SizeInBytes = sizeInBytes;
@@ -90,8 +90,8 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             prefersDedicatedAllocation = false;
         }
 
-        var isStaging = (usage & BufferUsage.Staging) == BufferUsage.Staging;
-        var hostVisible = isStaging || (usage & BufferUsage.Dynamic) == BufferUsage.Dynamic;
+        bool isStaging = (usage & BufferUsage.Staging) == BufferUsage.Staging;
+        bool hostVisible = isStaging || (usage & BufferUsage.Dynamic) == BufferUsage.Dynamic;
 
         MemoryPropertyFlags memoryPropertyFlags =
             hostVisible
@@ -100,7 +100,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         if (isStaging)
         {
             // Use "host cached" memory for staging when available, for better performance of GPU -> CPU transfers
-            var hostCachedAvailable = _gd.Vk.TryFindMemoryType(
+            bool hostCachedAvailable = _gd.Vk.TryFindMemoryType(
                 gd.PhysicalDeviceMemProperties,
                 _bufferMemoryRequirements.MemoryTypeBits,
                 memoryPropertyFlags | MemoryPropertyFlags.HostCachedBit,
@@ -119,7 +119,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             _bufferMemoryRequirements.Size,
             _bufferMemoryRequirements.Alignment,
             prefersDedicatedAllocation,
-            default(Image),
+            default,
             _deviceBuffer);
         _memory = memoryToken;
         _gd.Vk.BindBufferMemory(gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();

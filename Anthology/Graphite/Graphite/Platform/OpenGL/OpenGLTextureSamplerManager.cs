@@ -18,7 +18,7 @@ internal class OpenGLTextureSamplerManager
     private readonly bool _dsaAvailable;
     private readonly int _maxTextureUnits;
     private readonly uint _lastTextureUnit;
-    private readonly OpenGLTextureView[] _textureUnitTextures;
+    private readonly OpenGLTextureView?[] _textureUnitTextures;
     private readonly BoundSamplerStateInfo[] _textureUnitSamplers;
     private uint _currentActiveUnit = 0;
 
@@ -29,7 +29,7 @@ internal class OpenGLTextureSamplerManager
         _gl.GetInteger(GetPName.MaxCombinedTextureImageUnits, out int maxTextureUnits);
         CheckLastError();
         _maxTextureUnits = Math.Max(maxTextureUnits, 8); // OpenGL spec indicates that implementations must support at least 8.
-        _textureUnitTextures = new OpenGLTextureView[_maxTextureUnits];
+        _textureUnitTextures = new OpenGLTextureView?[_maxTextureUnits];
         _textureUnitSamplers = new BoundSamplerStateInfo[_maxTextureUnits];
 
         _lastTextureUnit = (uint)(_maxTextureUnits - 1);
@@ -71,7 +71,7 @@ internal class OpenGLTextureSamplerManager
         if (_textureUnitSamplers[textureUnit].Sampler != sampler)
         {
             bool mipmapped = false;
-            OpenGLTextureView texBinding = _textureUnitTextures[textureUnit];
+            OpenGLTextureView? texBinding = _textureUnitTextures[textureUnit];
             if (texBinding != null)
             {
                 mipmapped = texBinding.MipLevels > 1;
@@ -83,9 +83,9 @@ internal class OpenGLTextureSamplerManager
 
             _textureUnitSamplers[textureUnit] = new BoundSamplerStateInfo(sampler, mipmapped);
         }
-        else if (_textureUnitTextures[textureUnit] != null)
+        else if (_textureUnitTextures[textureUnit] is OpenGLTextureView texBinding)
         {
-            EnsureSamplerMipmapState(textureUnit, _textureUnitTextures[textureUnit].MipLevels > 1);
+            EnsureSamplerMipmapState(textureUnit, texBinding.MipLevels > 1);
         }
     }
 

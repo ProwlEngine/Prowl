@@ -481,8 +481,8 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             slot.SyncObject = 0;
             _executionThread.Run(() =>
             {
-                GL.ClientWaitSync((IntPtr)sync, SyncObjectMask.Bit, ulong.MaxValue);
-                GL.DeleteSync((IntPtr)sync);
+                GL.ClientWaitSync(sync, SyncObjectMask.Bit, ulong.MaxValue);
+                GL.DeleteSync(sync);
             });
 
             ulong completed = slot.CurrentFrameId;
@@ -517,7 +517,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         nint sync = 0;
         ExecuteOnGLThread(() =>
         {
-            sync = (nint)GL.FenceSync(SyncCondition.SyncGpuCommandsComplete, SyncBehaviorFlags.None);
+            sync = GL.FenceSync(SyncCondition.SyncGpuCommandsComplete, SyncBehaviorFlags.None);
         });
         slot.SyncObject = sync;
 
@@ -538,7 +538,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             nint sync = slot.SyncObject;
             ExecuteOnGLThread(() =>
             {
-                GLEnum status = GL.ClientWaitSync((IntPtr)sync, (SyncObjectMask)0, 0);
+                GLEnum status = GL.ClientWaitSync(sync, (SyncObjectMask)0, 0);
                 done = status == GLEnum.AlreadySignaled || status == GLEnum.ConditionSatisfied;
             });
             return done;
@@ -561,7 +561,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             nint sync = slot.SyncObject;
             ExecuteOnGLThread(() =>
             {
-                GLEnum status = GL.ClientWaitSync((IntPtr)sync, SyncObjectMask.Bit, nanosecondTimeout);
+                GLEnum status = GL.ClientWaitSync(sync, SyncObjectMask.Bit, nanosecondTimeout);
                 succeeded = status == GLEnum.AlreadySignaled || status == GLEnum.ConditionSatisfied;
             });
             return succeeded;
@@ -652,13 +652,15 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         {
             if (_slots != null)
             {
-                List<nint> pending = null;
+                List<nint>? pending = null;
                 for (int i = 0; i < _slots.Length; i++)
                 {
                     ref SlotState slot = ref _slots[i];
                     if (slot.CurrentFrameId != 0 && slot.SyncObject != 0)
                     {
-                        (pending ??= []).Add(slot.SyncObject);
+                        pending ??= [];
+
+                        pending.Add(slot.SyncObject);
                         slot.SyncObject = 0;
                         slot.FenceWrapper.Set();
                     }
@@ -671,8 +673,8 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                     {
                         for (int i = 0; i < syncs.Length; i++)
                         {
-                            GL.ClientWaitSync((IntPtr)syncs[i], SyncObjectMask.Bit, ulong.MaxValue);
-                            GL.DeleteSync((IntPtr)syncs[i]);
+                            GL.ClientWaitSync(syncs[i], SyncObjectMask.Bit, ulong.MaxValue);
+                            GL.DeleteSync(syncs[i]);
                         }
                     });
                 }
@@ -702,7 +704,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         if (type == TextureType.Texture1D && !_features.Texture1D
             || !OpenGLFormats.IsFormatSupported(_extensions, format, _backendType))
         {
-            properties = default(PixelFormatProperties);
+            properties = default;
             return false;
         }
 
@@ -888,10 +890,8 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
         try
         {
-            while (_resourcesToDispose.TryDequeue(out OpenGLDeferredResource resource))
-            {
+            while (_resourcesToDispose.TryDequeue(out OpenGLDeferredResource? resource))
                 resource.DestroyGLResources();
-            }
         }
         catch (SymbolLoadingException)
         {
@@ -940,7 +940,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                 if (slot.SyncObject != 0)
                 {
                     nint sync = slot.SyncObject;
-                    try { ExecuteOnGLThread(() => GL.DeleteSync((IntPtr)sync)); }
+                    try { ExecuteOnGLThread(() => GL.DeleteSync(sync)); }
                     catch { }
                 }
                 slot.TransientPrimary?.Dispose();
@@ -1037,7 +1037,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                 {
                     case WorkItemType.ExecuteList:
                         {
-                            OpenGLCommandEntryList list = (OpenGLCommandEntryList)workItem.Object0;
+                            OpenGLCommandEntryList list = (OpenGLCommandEntryList)workItem.Object0!;
                             try
                             {
                                 list.ExecuteAll(_gd._commandExecutor);
@@ -1053,8 +1053,8 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         break;
                     case WorkItemType.Map:
                         {
-                            MappableResource resourceToMap = (MappableResource)workItem.Object0;
-                            ManualResetEventSlim mre = (ManualResetEventSlim)workItem.Object1;
+                            MappableResource resourceToMap = (MappableResource)workItem.Object0!;
+                            ManualResetEventSlim mre = (ManualResetEventSlim)workItem.Object1!;
 
                             MapParams* resultPtr = (MapParams*)Util.UnpackIntPtr(workItem.UInt0, workItem.UInt1);
 
@@ -1073,7 +1073,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         break;
                     case WorkItemType.UpdateBuffer:
                         {
-                            DeviceBuffer updateBuffer = (DeviceBuffer)workItem.Object0;
+                            DeviceBuffer updateBuffer = (DeviceBuffer)workItem.Object0!;
                             uint offsetInBytes = workItem.UInt0;
                             StagingBlock stagingBlock = _gd.StagingMemoryPool.RetrieveById(workItem.UInt1);
 
@@ -1087,7 +1087,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         }
                         break;
                     case WorkItemType.UpdateTexture:
-                        Texture texture = (Texture)workItem.Object0;
+                        Texture texture = (Texture)workItem.Object0!;
                         StagingMemoryPool pool = _gd.StagingMemoryPool;
                         StagingBlock argBlock = pool.RetrieveById(workItem.UInt0);
                         StagingBlock textureData = pool.RetrieveById(workItem.UInt1);
@@ -1102,7 +1102,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         break;
                     case WorkItemType.GenericAction:
                         {
-                            ((Action)workItem.Object0)();
+                            ((Action)workItem.Object0!).Invoke();
                         }
                         break;
                     case WorkItemType.TerminateAction:
@@ -1130,8 +1130,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         break;
                     case WorkItemType.SetSyncToVerticalBlank:
                         {
-                            bool value = workItem.UInt0 == 1 ? true : false;
-                            _gd._setSyncToVBlank(value);
+                            _gd._setSyncToVBlank(workItem.UInt0 == 1);
                         }
                         break;
                     case WorkItemType.SwapBuffers:
@@ -1147,8 +1146,8 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                             try
                             {
                                 _gd.FlushDisposables();
-                                bool isFullFlush = workItem.UInt0 != 0;
-                                if (isFullFlush)
+                                // isFullFlush
+                                if (workItem.UInt0 != 0)
                                 {
                                     _gd.GL.Flush();
                                     _gd.GL.Finish();
@@ -1160,13 +1159,13 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                             }
                             finally
                             {
-                                ((ManualResetEventSlim)workItem.Object0).Set();
+                                ((ManualResetEventSlim)workItem.Object0!).Set();
                             }
                         }
                         break;
                     case WorkItemType.InitializeResource:
                         {
-                            InitializeResourceInfo info = (InitializeResourceInfo)workItem.Object0;
+                            InitializeResourceInfo info = (InitializeResourceInfo)workItem.Object0!;
                             try
                             {
                                 info.DeferredResource.EnsureResourcesCreated();
@@ -1183,7 +1182,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                         break;
                     case WorkItemType.SetActiveFrame:
                         {
-                            _gd._executorActiveFrame = (Frame)workItem.Object0;
+                            _gd._executorActiveFrame = (Frame)workItem.Object0!;
                         }
                         break;
                     default:
@@ -1228,7 +1227,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
                             _gd.GL.BindBuffer(BufferTargetARB.CopyWriteBuffer, buffer.Buffer);
                             CheckLastError();
 
-                            mappedPtr = _gd.GL.MapBufferRange(BufferTargetARB.CopyWriteBuffer, IntPtr.Zero, (UIntPtr)buffer.SizeInBytes, accessMask);
+                            mappedPtr = _gd.GL.MapBufferRange(BufferTargetARB.CopyWriteBuffer, IntPtr.Zero, buffer.SizeInBytes, accessMask);
                             CheckLastError();
                         }
 
@@ -1570,7 +1569,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             _workItems.Add(new ExecutionThreadWorkItem(entryList));
         }
 
-        internal void SetActiveFrame(Frame frame)
+        internal void SetActiveFrame(Frame? frame)
         {
             CheckExceptions();
             _workItems.Add(new ExecutionThreadWorkItem(WorkItemType.SetActiveFrame, frame));
@@ -1645,9 +1644,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             info.ResetEvent.Dispose();
 
             if (info.Exception != null)
-            {
                 throw info.Exception;
-            }
         }
     }
 
@@ -1777,7 +1774,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
             UInt2 = 0;
         }
 
-        public ExecutionThreadWorkItem(WorkItemType type, Frame frame)
+        public ExecutionThreadWorkItem(WorkItemType type, Frame? frame)
         {
             Type = type;
             Object0 = frame;
@@ -1813,7 +1810,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
     {
         public OpenGLDeferredResource DeferredResource;
         public ManualResetEventSlim ResetEvent;
-        public Exception Exception;
+        public Exception? Exception;
 
         public InitializeResourceInfo(OpenGLDeferredResource deferredResource, ManualResetEventSlim mre)
         {

@@ -402,7 +402,7 @@ internal unsafe class OpenGLCommandExecutor
     {
         foreach (UniformBlockField field in fields)
         {
-            if (!_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Uniform)
+            if (!_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry? entry) || entry.Kind != PropertyEntryKind.Uniform)
                 continue;
             ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform);
             fixed (byte* ptr = &payload)
@@ -419,7 +419,7 @@ internal unsafe class OpenGLCommandExecutor
 
         foreach (UniformBlockField field in fields)
         {
-            if (!_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Uniform)
+            if (!_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry? entry) || entry.Kind != PropertyEntryKind.Uniform)
                 continue;
             Span<byte> src = MemoryMarshal.CreateSpan(ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref entry.Uniform), 128);
             src.Slice(0, (int)Math.Min(field.Size, (uint)src.Length)).CopyTo(scratch.AsSpan((int)field.Offset));
@@ -440,7 +440,7 @@ internal unsafe class OpenGLCommandExecutor
         if (!GetStorageBufferBindingForSlot(graphics, setIdx, elemIdx, out OpenGLShaderStorageBinding ssBinding))
             return;
 
-        if (!_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
+        if (!_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? entry) || entry.Kind != PropertyEntryKind.Buffer || entry.Buffer == null)
         {
             _gd.OnMissingProperty?.Invoke(
                 graphics ? _currentShaderProgram : null,
@@ -1191,7 +1191,7 @@ internal unsafe class OpenGLCommandExecutor
             _gl.BufferSubData(
                 bufferTarget,
                 (IntPtr)bufferOffsetInBytes,
-                (UIntPtr)sizeInBytes,
+                sizeInBytes,
                 dataPtr.ToPointer());
             CheckLastError();
         }
@@ -1534,7 +1534,7 @@ internal unsafe class OpenGLCommandExecutor
                 CopyBufferSubDataTarget.CopyWriteBuffer,
                 (nint)sourceOffset,
                 (nint)destinationOffset,
-                (nuint)sizeInBytes);
+                sizeInBytes);
             CheckLastError();
         }
     }

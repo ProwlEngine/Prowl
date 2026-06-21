@@ -59,8 +59,8 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
         DepthComparison = comparisonKind;
 
         StencilTestEnabled = false;
-        StencilFront = default(StencilBehaviorDescription);
-        StencilBack = default(StencilBehaviorDescription);
+        StencilFront = default;
+        StencilBack = default;
         StencilReadMask = 0;
         StencilWriteMask = 0;
         StencilReference = 0;

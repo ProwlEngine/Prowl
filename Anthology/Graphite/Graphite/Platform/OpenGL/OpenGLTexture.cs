@@ -227,7 +227,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage1D(
                     _texture,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width);
                 CheckLastError();
             }
@@ -236,7 +236,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TexStorage1D(
                     TextureTarget.Texture1D,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width);
                 CheckLastError();
             }
@@ -269,7 +269,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage2D(
                     _texture,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     heightOrArrayLayers);
                 CheckLastError();
@@ -279,7 +279,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TexStorage2D(
                     TextureTarget,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     heightOrArrayLayers);
                 CheckLastError();
@@ -318,7 +318,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage3D(
                     _texture,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     ArrayLayers);
@@ -329,7 +329,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TexStorage3D(
                     TextureTarget.Texture2DArray,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     ArrayLayers);
@@ -366,7 +366,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage2DMultisample(
                     _texture,
                     FormatHelpers.GetSampleCountUInt32(SampleCount),
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     false);
@@ -379,7 +379,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                     _gl.TexStorage2DMultisample(
                         TextureTarget.Texture2DMultisample,
                         FormatHelpers.GetSampleCountUInt32(SampleCount),
-                        (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                        OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                         Width,
                         Height,
                         false);
@@ -405,7 +405,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage3DMultisample(
                     _texture,
                     FormatHelpers.GetSampleCountUInt32(SampleCount),
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     ArrayLayers,
@@ -419,7 +419,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                     _gl.TexStorage3DMultisample(
                         TextureTarget.Texture2DMultisampleArray,
                         FormatHelpers.GetSampleCountUInt32(SampleCount),
-                        (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                        OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                         Width,
                         Height,
                         ArrayLayers,
@@ -446,7 +446,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage2D(
                     _texture,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height);
                 CheckLastError();
@@ -456,7 +456,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TexStorage2D(
                     TextureTarget.TextureCubeMap,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height);
                 CheckLastError();
@@ -495,7 +495,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage3D(
                     _texture,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     ArrayLayers * 6);
@@ -506,7 +506,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TexStorage3D(
                     TextureTarget.TextureCubeMapArray,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     ArrayLayers * 6);
@@ -547,7 +547,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TextureStorage3D(
                     _texture,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     Depth);
@@ -558,7 +558,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
                 _gl.TexStorage3D(
                     TextureTarget.Texture3D,
                     MipLevels,
-                    (SizedInternalFormat)OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
+                    OpenGLFormats.VdToGLSizedInternalFormat(Format, isDepthTex),
                     Width,
                     Height,
                     Depth);
@@ -669,7 +669,7 @@ internal unsafe partial class OpenGLTexture : Texture, OpenGLDeferredResource
             uint dataSize = Width * Height * Format.GetSizeInBytes();
             _gl.BufferData(
                 BufferTargetARB.CopyWriteBuffer,
-                (UIntPtr)dataSize,
+                dataSize,
                 null,
                 BufferUsageARB.StaticCopy);
             CheckLastError();

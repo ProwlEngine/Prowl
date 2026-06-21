@@ -229,7 +229,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         if (_activeRenderPass.Handle != default)
         {
-            ImageAspectFlags aspect = FormatHelpers.IsStencilFormat(_currentFramebuffer.DepthTarget.Value.Target.Format)
+            ImageAspectFlags aspect = FormatHelpers.IsStencilFormat(_currentFramebuffer.DepthTarget!.Value.Target.Format)
                 ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
                 : ImageAspectFlags.DepthBit;
             ClearAttachment clearAttachment = new()
@@ -295,7 +295,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private void BindVertexBuffersFromSource()
     {
-        System.Collections.Generic.IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
+        IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
         int count = layouts.Count;
         if (count == 0) return;
 
@@ -305,7 +305,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         for (int slot = 0; slot < count; slot++)
         {
             VertexLayoutDescription layout = layouts[slot];
-            _currentVertexSource.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
+            _currentVertexSource!.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
 
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(binding.Buffer);
@@ -320,7 +320,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private void BindIndexBufferFromSource()
     {
-        bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount);
+        bool has = _currentVertexSource!.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint indexCount);
         _currentIndexCount = indexCount;
         DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
@@ -478,10 +478,11 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         {
             BeginCurrentRenderPass();
         }
+
         if (_activeRenderPass.Handle != default)
         {
             EndCurrentRenderPass();
-            _currentFramebuffer.TransitionToFinalLayout(_cb);
+            _currentFramebuffer!.TransitionToFinalLayout(_cb);
         }
 
         _gd.Vk.EndCommandBuffer(_cb);
@@ -691,10 +692,10 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                     continue;
 
                 VkTexture tex;
-                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry entry)
+                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? entry)
                     && entry.Kind == PropertyEntryKind.Texture)
                 {
-                    Texture resolved = entry.Texture ?? entry.TextureView?.Target;
+                    Texture? resolved = entry.Texture ?? entry.TextureView?.Target;
                     tex = resolved != null ? (VkTexture)resolved : GetMissingTexture(elem.Kind);
                 }
                 else
@@ -799,7 +800,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                 case ResourceKind.TextureReadOnly:
                 case ResourceKind.TextureReadWrite:
                     {
-                        VkTextureView view = ResolveTextureView(in elem, isCompute, (uint)setIdx, reportMissing: false);
+                        VkTextureView view = ResolveTextureView(in elem, (uint)setIdx, reportMissing: false);
                         dst[n++] = view.ImageView.Handle;
                         break;
                     }
@@ -899,7 +900,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
                 case ResourceKind.TextureReadOnly:
                     {
-                        VkTextureView view = ResolveTextureView(in elem, isCompute, setIdx);
+                        VkTextureView view = ResolveTextureView(in elem, setIdx);
                         imgInfos[imgIdx] = new DescriptorImageInfo
                         {
                             ImageView = view.ImageView,
@@ -912,7 +913,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
                 case ResourceKind.TextureReadWrite:
                     {
-                        VkTextureView view = ResolveTextureView(in elem, isCompute, setIdx);
+                        VkTextureView view = ResolveTextureView(in elem, setIdx);
                         imgInfos[imgIdx] = new DescriptorImageInfo
                         {
                             ImageView = view.ImageView,
@@ -1011,7 +1012,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             DeviceBufferRange target = writableTarget.Value;
             foreach (UniformBlockField field in fields)
             {
-                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry? uEntry)
                     && uEntry.Kind == PropertyEntryKind.Uniform)
                 {
                     ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform);
@@ -1036,7 +1037,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             Array.Clear(uploadBuf, 0, (int)totalSize);
             foreach (UniformBlockField field in fields)
             {
-                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry? uEntry)
                     && uEntry.Kind == PropertyEntryKind.Uniform)
                 {
                     ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
@@ -1059,9 +1060,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     }
 
     private VkTextureView ResolveTextureView(
-        in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx, bool reportMissing = true)
+        in ResourceLayoutElementDescription elem, uint setIdx, bool reportMissing = true)
     {
-        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? texEntry)
             && texEntry.Kind == PropertyEntryKind.Texture)
         {
             if (texEntry.TextureView != null)
@@ -1084,7 +1085,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         in ResourceLayoutElementDescription elem, in ResourceLayoutDescription layout)
     {
         // case 1: explicit SetSampler(name) entry
-        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? samplerEntry)
             && samplerEntry.Kind == PropertyEntryKind.Sampler
             && samplerEntry.Sampler != null)
         {
@@ -1097,7 +1098,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             if (other.Name == elem.Name
                 && (other.Kind == ResourceKind.TextureReadOnly || other.Kind == ResourceKind.TextureReadWrite))
             {
-                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? texEntry)
                     && texEntry.Kind == PropertyEntryKind.Texture
                     && texEntry.Sampler != null)
                 {
@@ -1115,7 +1116,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         if (index == 0 || _gd.Features.MultipleViewports)
         {
-            Rect2D scissor = new(new Offset2D((int)x, (int)y), new Extent2D((uint)width, (uint)height));
+            Rect2D scissor = new(new Offset2D((int)x, (int)y), new Extent2D(width, height));
             if (!scissor.Equals(_scissorRects[index]))
             {
                 _scissorRects[index] = scissor;
@@ -1656,24 +1657,26 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         lock (_stagingLock)
         {
-            VkBuffer ret = null;
+            VkBuffer? staging = null;
+
             foreach (VkBuffer buffer in _availableStagingBuffers)
             {
                 if (buffer.SizeInBytes >= size)
                 {
-                    ret = buffer;
+                    staging = buffer;
                     _availableStagingBuffers.Remove(buffer);
                     break;
                 }
             }
-            if (ret == null)
+
+            if (staging == null)
             {
-                ret = (VkBuffer)_gd.ResourceFactory.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
-                ret.Name = $"Staging Buffer (CommandBuffer {_name})";
+                staging = (VkBuffer)_gd.ResourceFactory.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
+                staging.Name = $"Staging Buffer (CommandBuffer {_name})";
             }
 
-            _currentStagingInfo.BuffersUsed.Add(ret);
-            return ret;
+            _currentStagingInfo.BuffersUsed.Add(staging);
+            return staging;
         }
     }
 

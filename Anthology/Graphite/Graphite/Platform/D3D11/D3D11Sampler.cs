@@ -28,7 +28,7 @@ internal unsafe partial class D3D11Sampler : Sampler
             Filter = D3D11Formats.ToD3D11Filter(description.Filter, description.ComparisonKind.HasValue),
             MinLOD = description.MinimumLod,
             MaxLOD = description.MaximumLod,
-            MaxAnisotropy = (uint)description.MaximumAnisotropy,
+            MaxAnisotropy = description.MaximumAnisotropy,
             ComparisonFunc = comparison,
             MipLODBias = description.LodBias,
         };

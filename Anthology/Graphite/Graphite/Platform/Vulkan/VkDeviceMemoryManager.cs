@@ -21,16 +21,16 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
     private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryTypeUnmapped = [];
     private readonly Dictionary<uint, ChunkAllocatorSet> _allocatorsByMemoryType = [];
 
-    private readonly vkGetBufferMemoryRequirements2_t _getBufferMemoryRequirements2;
-    private readonly vkGetImageMemoryRequirements2_t _getImageMemoryRequirements2;
+    private readonly vkGetBufferMemoryRequirements2_t? _getBufferMemoryRequirements2;
+    private readonly vkGetImageMemoryRequirements2_t? _getImageMemoryRequirements2;
 
     public VkDeviceMemoryManager(
         Silk.NET.Vulkan.Vk vk,
         Device device,
         PhysicalDevice physicalDevice,
         ulong bufferImageGranularity,
-        vkGetBufferMemoryRequirements2_t getBufferMemoryRequirements2,
-        vkGetImageMemoryRequirements2_t getImageMemoryRequirements2)
+        vkGetBufferMemoryRequirements2_t? getBufferMemoryRequirements2,
+        vkGetImageMemoryRequirements2_t? getImageMemoryRequirements2)
     {
         _vk = vk;
         _device = device;
@@ -111,7 +111,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
 
         lock (_lock)
         {
-            if (!_vk.TryFindMemoryType(memProperties, memoryTypeBits, flags, out var memoryTypeIndex))
+            if (!_vk.TryFindMemoryType(memProperties, memoryTypeBits, flags, out uint memoryTypeIndex))
             {
                 throw new RenderException("No suitable memory type.");
             }
@@ -191,7 +191,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
 
     private ChunkAllocatorSet GetAllocator(uint memoryTypeIndex, bool persistentMapped)
     {
-        ChunkAllocatorSet ret = null;
+        ChunkAllocatorSet? ret = null;
         if (persistentMapped)
         {
             if (!_allocatorsByMemoryType.TryGetValue(memoryTypeIndex, out ret))
@@ -365,7 +365,7 @@ internal unsafe class VkDeviceMemoryManager : IDisposable
                     }
                 }
 
-                block = default(VkMemoryBlock);
+                block = default;
                 return false;
             }
         }

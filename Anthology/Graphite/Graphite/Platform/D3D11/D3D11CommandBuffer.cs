@@ -61,8 +61,8 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private readonly DeviceBufferRange[] _vertexBoundUniformBuffers = new DeviceBufferRange[MaxCachedUniformBuffers];
     private readonly DeviceBufferRange[] _fragmentBoundUniformBuffers = new DeviceBufferRange[MaxCachedUniformBuffers];
     private const int MaxCachedTextureViews = 16;
-    private readonly D3D11TextureView[] _vertexBoundTextureViews = new D3D11TextureView[MaxCachedTextureViews];
-    private readonly D3D11TextureView[] _fragmentBoundTextureViews = new D3D11TextureView[MaxCachedTextureViews];
+    private readonly D3D11TextureView?[] _vertexBoundTextureViews = new D3D11TextureView[MaxCachedTextureViews];
+    private readonly D3D11TextureView?[] _fragmentBoundTextureViews = new D3D11TextureView[MaxCachedTextureViews];
     private const int MaxCachedSamplers = 4;
     private readonly D3D11Sampler[] _vertexBoundSamplers = new D3D11Sampler[MaxCachedSamplers];
     private readonly D3D11Sampler[] _fragmentBoundSamplers = new D3D11Sampler[MaxCachedSamplers];
@@ -347,7 +347,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 
     private void UnbindSRVTexture(Texture target)
     {
-        if (_boundSRVs.TryGetValue(target, out List<BoundTextureInfo> btis))
+        if (_boundSRVs.TryGetValue(target, out List<BoundTextureInfo>? btis))
         {
             foreach (BoundTextureInfo bti in btis)
                 BindTextureView(null, bti.Slot, bti.Stages);
@@ -377,7 +377,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 
     private void UnbindUAVTexture(Texture target)
     {
-        if (_boundUAVs.TryGetValue(target, out List<BoundTextureInfo> btis))
+        if (_boundUAVs.TryGetValue(target, out List<BoundTextureInfo>? btis))
         {
             foreach (BoundTextureInfo bti in btis)
                 BindUnorderedAccessView(null, null, null, bti.Slot, bti.Stages);
@@ -600,7 +600,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     {
         foreach (UniformBlockField field in fields)
         {
-            if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+            if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry? uEntry)
                 && uEntry.Kind == PropertyEntryKind.Uniform)
             {
                 ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform);
@@ -627,7 +627,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             Array.Clear(uploadBuf, 0, (int)totalSize);
             foreach (UniformBlockField field in fields)
             {
-                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry uEntry)
+                if (_activeProperties.Entries.TryGetValue(field.Name, out PropertyEntry? uEntry)
                     && uEntry.Kind == PropertyEntryKind.Uniform)
                 {
                     MemoryMarshal.CreateReadOnlySpan(
@@ -678,7 +678,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private D3D11TextureView ResolveTextureViewD3D11(
         in ResourceLayoutElementDescription elem, bool isCompute, uint setIdx, bool isReadWrite)
     {
-        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? texEntry)
             && texEntry.Kind == PropertyEntryKind.Texture)
         {
             if (texEntry.TextureView != null)
@@ -698,7 +698,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private D3D11Sampler ResolveD3D11Sampler(
         in ResourceLayoutElementDescription elem, in ResourceLayoutDescription layout)
     {
-        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry samplerEntry)
+        if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? samplerEntry)
             && samplerEntry.Kind == PropertyEntryKind.Sampler
             && samplerEntry.Sampler != null)
         {
@@ -710,7 +710,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             if (other.Name == elem.Name
                 && (other.Kind == ResourceKind.TextureReadOnly || other.Kind == ResourceKind.TextureReadWrite))
             {
-                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry texEntry)
+                if (_activeProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? texEntry)
                     && texEntry.Kind == PropertyEntryKind.Texture
                     && texEntry.Sampler != null)
                 {
@@ -766,7 +766,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 
     private void FlushVertexBindings()
     {
-        System.Collections.Generic.IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
+        IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
         int count = layouts.Count;
         if (count == 0) return;
 
@@ -814,12 +814,13 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         };
     }
 
-    private void BindTextureView(D3D11TextureView texView, int slot, ShaderStages stages)
+    private void BindTextureView(D3D11TextureView? texView, int slot, ShaderStages stages)
     {
         ID3D11ShaderResourceView* srv = texView != null ? texView.ShaderResourceView : null;
+
         if (srv != null)
         {
-            if (!_boundSRVs.TryGetValue(texView.Target, out List<BoundTextureInfo> list))
+            if (!_boundSRVs.TryGetValue(texView!.Target, out List<BoundTextureInfo>? list))
             {
                 list = GetNewOrCachedBoundTextureInfoList();
                 _boundSRVs.Add(texView.Target, list);
@@ -1029,8 +1030,8 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     }
 
     private void BindUnorderedAccessView(
-        Texture texture,
-        DeviceBuffer buffer,
+        Texture? texture,
+        DeviceBuffer? buffer,
         ID3D11UnorderedAccessView* uav,
         int slot,
         ShaderStages stages)
@@ -1041,7 +1042,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 
         if (texture != null && uav != null)
         {
-            if (!_boundUAVs.TryGetValue(texture, out List<BoundTextureInfo> list))
+            if (!_boundUAVs.TryGetValue(texture, out List<BoundTextureInfo>? list))
             {
                 list = GetNewOrCachedBoundTextureInfoList();
                 _boundUAVs.Add(texture, list);

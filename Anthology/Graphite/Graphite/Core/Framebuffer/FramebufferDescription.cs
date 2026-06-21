@@ -26,7 +26,7 @@ public struct FramebufferDescription : IEquatable<FramebufferDescription>
     /// <see cref="TextureUsage.DepthStencil"/> usage flags. May be null.</param>
     /// <param name="colorTargets">An array of color textures, all of which must have been created with
     /// <see cref="TextureUsage.RenderTarget"/> usage flags. May be null or empty.</param>
-    public FramebufferDescription(Texture depthTarget, params Texture[] colorTargets)
+    public FramebufferDescription(Texture? depthTarget, params Texture[] colorTargets)
     {
         if (depthTarget != null)
         {

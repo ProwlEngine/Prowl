@@ -504,7 +504,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
     {
         if (D3D11Formats.IsUnsupportedFormat(format))
         {
-            properties = default(PixelFormatProperties);
+            properties = default;
             return false;
         }
 
@@ -514,7 +514,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
         int fhr = ((ID3D11Device*)_device)->CheckFormatSupport(dxgiFormat, &fsRaw);
         if (fhr < 0)
         {
-            properties = default(PixelFormatProperties);
+            properties = default;
             return false;
         }
         FormatSupport fs = (FormatSupport)fsRaw;
@@ -525,7 +525,7 @@ internal unsafe class D3D11GraphicsDevice : GraphicsDevice
             || (usage & TextureUsage.Cubemap) != 0 && (fs & FormatSupport.Texturecube) == 0
             || (usage & TextureUsage.Storage) != 0 && (fs & FormatSupport.TypedUnorderedAccessView) == 0)
         {
-            properties = default(PixelFormatProperties);
+            properties = default;
             return false;
         }
 

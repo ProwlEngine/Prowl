@@ -73,9 +73,9 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private bool _standardValidationSupported;
     private bool _khronosValidationSupported;
     private bool _standardClipYDirection;
-    private vkGetBufferMemoryRequirements2_t _getBufferMemoryRequirements2;
-    private vkGetImageMemoryRequirements2_t _getImageMemoryRequirements2;
-    private vkGetPhysicalDeviceProperties2_t _getPhysicalDeviceProperties2;
+    private vkGetBufferMemoryRequirements2_t? _getBufferMemoryRequirements2;
+    private vkGetImageMemoryRequirements2_t? _getImageMemoryRequirements2;
+    private vkGetPhysicalDeviceProperties2_t? _getPhysicalDeviceProperties2;
 
     // Staging Resources
     private const uint MinStagingBufferSize = 64;
@@ -152,7 +152,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     {
         lock (_defaultTextureViewsLock)
         {
-            if (!_defaultTextureViews.TryGetValue(texture, out VkTextureView view))
+            if (!_defaultTextureViews.TryGetValue(texture, out VkTextureView? view))
             {
                 view = (VkTextureView)ResourceFactory.CreateTextureView(texture);
                 _defaultTextureViews[texture] = view;
@@ -169,8 +169,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     public vkCmdDebugMarkerBeginEXT_t MarkerBegin => _markerBegin;
     public vkCmdDebugMarkerEndEXT_t MarkerEnd => _markerEnd;
     public vkCmdDebugMarkerInsertEXT_t MarkerInsert => _markerInsert;
-    public vkGetBufferMemoryRequirements2_t GetBufferMemoryRequirements2 => _getBufferMemoryRequirements2;
-    public vkGetImageMemoryRequirements2_t GetImageMemoryRequirements2 => _getImageMemoryRequirements2;
+    public vkGetBufferMemoryRequirements2_t? GetBufferMemoryRequirements2 => _getBufferMemoryRequirements2;
+    public vkGetImageMemoryRequirements2_t? GetImageMemoryRequirements2 => _getImageMemoryRequirements2;
     public KhrSurface KhrSurface => _khrSurface;
     public KhrSwapchain KhrSwapchain => _khrSwapchain;
 
@@ -420,7 +420,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         VkSemaphore* waitSemaphoresPtr,
         uint signalSemaphoreCount,
         VkSemaphore* signalSemaphoresPtr,
-        Fence fence)
+        Fence? fence)
     {
         VkCommandBuffer vkCL = Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(cl);
         Silk.NET.Vulkan.CommandBuffer vkCB = vkCL.CommandBuffer;
@@ -430,20 +430,24 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     private void SubmitCommandBuffer(
-        VkCommandBuffer vkCL,
+        VkCommandBuffer? vkCL,
         Silk.NET.Vulkan.CommandBuffer vkCB,
         uint waitSemaphoreCount,
         VkSemaphore* waitSemaphoresPtr,
         uint signalSemaphoreCount,
         VkSemaphore* signalSemaphoresPtr,
-        Fence fence)
+        Fence? fence)
     {
         CheckSubmittedFences();
 
         bool useExtraFence = fence != null;
-        SubmitInfo si = new(sType: StructureType.SubmitInfo);
-        si.CommandBufferCount = 1;
-        si.PCommandBuffers = &vkCB;
+
+        SubmitInfo si = new(sType: StructureType.SubmitInfo)
+        {
+            CommandBufferCount = 1,
+            PCommandBuffers = &vkCB
+        };
+
         PipelineStageFlags waitDstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
         si.PWaitDstStageMask = &waitDstStageMask;
 
@@ -452,11 +456,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         si.PSignalSemaphores = signalSemaphoresPtr;
         si.SignalSemaphoreCount = signalSemaphoreCount;
 
-        VkFenceHandle vkFence = default;
-        VkFenceHandle submissionFence = default;
+        VkFenceHandle vkFence;
+        VkFenceHandle submissionFence;
         if (useExtraFence)
         {
-            vkFence = Util.AssertSubtype<Fence, Prowl.Graphite.Vk.VkFence>(fence).DeviceFence;
+            vkFence = Util.AssertSubtype<Fence, VkFence>(fence!).DeviceFence;
             submissionFence = GetFreeSubmissionFence();
         }
         else
@@ -469,6 +473,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         {
             _vk.QueueSubmit(_graphicsQueue, 1, &si, vkFence).CheckResult();
             FlushValidationErrors();
+
             if (useExtraFence)
             {
                 _vk.QueueSubmit(_graphicsQueue, 0, (SubmitInfo*)null, submissionFence).CheckResult();
@@ -506,17 +511,19 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     {
         VkFenceHandle fence = fsi.Fence;
         Silk.NET.Vulkan.CommandBuffer completedCB = fsi.VulkanCommandBuffer;
+
         fsi.CommandBuffer?.CommandBufferCompleted(completedCB);
+
         _vk.ResetFences(_device, 1, &fence).CheckResult();
         ReturnSubmissionFence(fence);
         lock (_stagingResourcesLock)
         {
-            if (_submittedStagingTextures.TryGetValue(completedCB, out VkTexture stagingTex))
+            if (_submittedStagingTextures.TryGetValue(completedCB, out VkTexture? stagingTex))
             {
                 _submittedStagingTextures.Remove(completedCB);
                 _availableStagingTextures.Add(stagingTex);
             }
-            if (_submittedStagingBuffers.TryGetValue(completedCB, out VkBuffer stagingBuffer))
+            if (_submittedStagingBuffers.TryGetValue(completedCB, out VkBuffer? stagingBuffer))
             {
                 _submittedStagingBuffers.Remove(completedCB);
                 if (stagingBuffer.SizeInBytes <= MaxStagingBufferSize)
@@ -528,7 +535,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                     stagingBuffer.Dispose();
                 }
             }
-            if (_submittedSharedCommandPools.TryGetValue(completedCB, out SharedCommandPool sharedPool))
+            if (_submittedSharedCommandPools.TryGetValue(completedCB, out SharedCommandPool? sharedPool))
             {
                 _submittedSharedCommandPools.Remove(completedCB);
                 lock (_graphicsCommandPoolLock)
@@ -580,7 +587,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         lock (presentLock)
         {
             _khrSwapchain.QueuePresent(vkSC.PresentQueue, &presentInfo);
-            if (vkSC.AcquireNextImage(_device, default(VkSemaphore), vkSC.ImageAvailableFence))
+            if (vkSC.AcquireNextImage(_device, default, vkSC.ImageAvailableFence))
             {
                 VkFenceHandle fence = vkSC.ImageAvailableFence;
                 _vk.WaitForFences(_device, 1, &fence, true, ulong.MaxValue);
@@ -801,7 +808,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     // Stored validation error from the debug callback (cannot throw from unmanaged callback)
-    private static volatile string _lastValidationError;
+    private static volatile string? _lastValidationError;
 
     /// <summary>
     /// Checks if a Vulkan validation error was reported and throws if so.
@@ -809,15 +816,16 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     /// </summary>
     internal static void FlushValidationErrors()
     {
+        if (_lastValidationError == null)
+            return;
+
         string error = _lastValidationError;
-        if (error != null)
-        {
-            _lastValidationError = null;
-            throw new RenderException("A Vulkan validation error was encountered: " + error);
-        }
+        _lastValidationError = null;
+        throw new RenderException("A Vulkan validation error was encountered: " + error);
     }
 
-    [System.Runtime.InteropServices.UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static Bool32 DebugCallback(
         DebugReportFlagsEXT flags,
         DebugReportObjectTypeEXT objectType,
@@ -1064,7 +1072,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         return (IntPtr)_vk.GetInstanceProcAddr(_instance, utf8Ptr);
     }
 
-    internal T GetInstanceProcAddr<T>(string name)
+    internal T? GetInstanceProcAddr<T>(string name)
     {
         IntPtr funcPtr = GetInstanceProcAddr(name);
         if (funcPtr != IntPtr.Zero)
@@ -1088,7 +1096,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         return (IntPtr)_vk.GetDeviceProcAddr(_device, utf8Ptr);
     }
 
-    private T GetDeviceProcAddr<T>(string name)
+    private T? GetDeviceProcAddr<T>(string name)
     {
         IntPtr funcPtr = GetDeviceProcAddr(name);
         if (funcPtr != IntPtr.Zero)
@@ -1154,7 +1162,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     protected override MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource)
     {
-        VkMemoryBlock memoryBlock = default(VkMemoryBlock);
+        VkMemoryBlock memoryBlock = default;
         IntPtr mappedPtr = IntPtr.Zero;
         uint sizeInBytes;
         uint offset = 0;
@@ -1201,7 +1209,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     protected override void UnmapCore(MappableResource resource, uint subresource)
     {
-        VkMemoryBlock memoryBlock = default(VkMemoryBlock);
+        VkMemoryBlock memoryBlock = default;
         if (resource is VkBuffer buffer)
         {
             memoryBlock = buffer.Memory;
@@ -1358,7 +1366,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         if (result == Result.ErrorFormatNotSupported)
         {
-            properties = default(PixelFormatProperties);
+            properties = default;
             return false;
         }
 
@@ -1391,7 +1399,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private protected override void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)
     {
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(buffer);
-        VkBuffer copySrcVkBuffer = null;
+        VkBuffer? copySrcVkBuffer = null;
         IntPtr mappedPtr;
         byte* destPtr;
         bool isPersistentMapped = vkBuffer.Memory.IsPersistentMapped;
@@ -1419,7 +1427,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 DstOffset = bufferOffsetInBytes,
                 Size = sizeInBytes
             };
-            _vk.CmdCopyBuffer(cb, copySrcVkBuffer.DeviceBuffer, vkBuffer.DeviceBuffer, 1, in copyRegion);
+            _vk.CmdCopyBuffer(cb, copySrcVkBuffer!.DeviceBuffer, vkBuffer.DeviceBuffer, 1, in copyRegion);
 
             pool.EndAndSubmit(cb);
             lock (_stagingResourcesLock)
@@ -1431,17 +1439,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     private SharedCommandPool GetFreeCommandPool()
     {
-        SharedCommandPool sharedPool = null;
         lock (_graphicsCommandPoolLock)
         {
             if (_sharedGraphicsCommandPools.Count > 0)
-                sharedPool = _sharedGraphicsCommandPools.Pop();
+                return _sharedGraphicsCommandPools.Pop();
         }
 
-        if (sharedPool == null)
-            sharedPool = new SharedCommandPool(this, false);
-
-        return sharedPool;
+        return new SharedCommandPool(this, false);
     }
 
     private IntPtr MapBuffer(VkBuffer buffer, uint numBytes)
@@ -1754,8 +1758,11 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         public Silk.NET.Vulkan.CommandBuffer BeginNewCommandBuffer()
         {
-            CommandBufferBeginInfo beginInfo = new(sType: StructureType.CommandBufferBeginInfo);
-            beginInfo.Flags = CommandBufferUsageFlags.OneTimeSubmitBit;
+            CommandBufferBeginInfo beginInfo = new(sType: StructureType.CommandBufferBeginInfo)
+            {
+                Flags = CommandBufferUsageFlags.OneTimeSubmitBit
+            };
+
             _gd._vk.BeginCommandBuffer(_cb, in beginInfo).CheckResult();
 
             return _cb;
@@ -1780,9 +1787,10 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private struct FenceSubmissionInfo
     {
         public VkFenceHandle Fence;
-        public VkCommandBuffer CommandBuffer;
+        public VkCommandBuffer? CommandBuffer;
         public Silk.NET.Vulkan.CommandBuffer VulkanCommandBuffer;
-        public FenceSubmissionInfo(VkFenceHandle fence, VkCommandBuffer commandBuffer, Silk.NET.Vulkan.CommandBuffer vulkanCommandBuffer)
+
+        public FenceSubmissionInfo(VkFenceHandle fence, VkCommandBuffer? commandBuffer, Silk.NET.Vulkan.CommandBuffer vulkanCommandBuffer)
         {
             Fence = fence;
             CommandBuffer = commandBuffer;

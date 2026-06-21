@@ -125,8 +125,8 @@ internal static class FormatHelpers
             case PixelFormat.ETC2_R8_G8_B8_UNorm:
             case PixelFormat.ETC2_R8_G8_B8_A1_UNorm:
             case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
-                var blocksPerRow = (width + 3) / 4;
-                var blockSizeInBytes = GetBlockSizeInBytes(format);
+                uint blocksPerRow = (width + 3) / 4;
+                uint blockSizeInBytes = GetBlockSizeInBytes(format);
                 return blocksPerRow * blockSizeInBytes;
 
             default:

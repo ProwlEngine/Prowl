@@ -56,7 +56,7 @@ public static class TestUtils
         options.Title = "Prowl.Graphite.Tests";
         options.Size = new Vector2D<int>(200, 200);
         options.IsVisible = false;
-        options.WindowState = Silk.NET.Windowing.WindowState.Normal;
+        options.WindowState = WindowState.Normal;
         options.ShouldSwapAutomatically = false;
         options.API = GetApi(backend);
 
@@ -70,7 +70,7 @@ public static class TestUtils
         GraphicsBackend.Vulkan =>
             new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
         GraphicsBackend.OpenGL =>
-            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 3)),
+            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 5)),
         GraphicsBackend.OpenGLES =>
             new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 2)),
         GraphicsBackend.Direct3D11 =>

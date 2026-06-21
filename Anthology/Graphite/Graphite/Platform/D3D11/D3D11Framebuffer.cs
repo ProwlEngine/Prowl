@@ -38,7 +38,7 @@ internal unsafe partial class D3D11Framebuffer : Framebuffer
                 if (d3dDepthTarget.SampleCount == TextureSampleCount.Count1)
                 {
                     dsvDesc.ViewDimension = DsvDimension.Texture2D;
-                    dsvDesc.Texture2D.MipSlice = (uint)description.DepthTarget.Value.MipLevel;
+                    dsvDesc.Texture2D.MipSlice = description.DepthTarget.Value.MipLevel;
                 }
                 else
                 {
@@ -50,14 +50,14 @@ internal unsafe partial class D3D11Framebuffer : Framebuffer
                 if (d3dDepthTarget.SampleCount == TextureSampleCount.Count1)
                 {
                     dsvDesc.ViewDimension = DsvDimension.Texture2Darray;
-                    dsvDesc.Texture2DArray.FirstArraySlice = (uint)description.DepthTarget.Value.ArrayLayer;
+                    dsvDesc.Texture2DArray.FirstArraySlice = description.DepthTarget.Value.ArrayLayer;
                     dsvDesc.Texture2DArray.ArraySize = 1;
-                    dsvDesc.Texture2DArray.MipSlice = (uint)description.DepthTarget.Value.MipLevel;
+                    dsvDesc.Texture2DArray.MipSlice = description.DepthTarget.Value.MipLevel;
                 }
                 else
                 {
                     dsvDesc.ViewDimension = DsvDimension.Texture2Dmsarray;
-                    dsvDesc.Texture2DMSArray.FirstArraySlice = (uint)description.DepthTarget.Value.ArrayLayer;
+                    dsvDesc.Texture2DMSArray.FirstArraySlice = description.DepthTarget.Value.ArrayLayer;
                     dsvDesc.Texture2DMSArray.ArraySize = 1;
                 }
             }
@@ -84,14 +84,14 @@ internal unsafe partial class D3D11Framebuffer : Framebuffer
                     {
                         rtvDesc.ViewDimension = RtvDimension.Texture2Darray;
                         rtvDesc.Texture2DArray.ArraySize = 1;
-                        rtvDesc.Texture2DArray.FirstArraySlice = (uint)description.ColorTargets[i].ArrayLayer;
-                        rtvDesc.Texture2DArray.MipSlice = (uint)description.ColorTargets[i].MipLevel;
+                        rtvDesc.Texture2DArray.FirstArraySlice = description.ColorTargets[i].ArrayLayer;
+                        rtvDesc.Texture2DArray.MipSlice = description.ColorTargets[i].MipLevel;
                     }
                     else
                     {
                         rtvDesc.ViewDimension = RtvDimension.Texture2Dmsarray;
                         rtvDesc.Texture2DMSArray.ArraySize = 1;
-                        rtvDesc.Texture2DMSArray.FirstArraySlice = (uint)description.ColorTargets[i].ArrayLayer;
+                        rtvDesc.Texture2DMSArray.FirstArraySlice = description.ColorTargets[i].ArrayLayer;
                     }
                 }
                 else
@@ -99,7 +99,7 @@ internal unsafe partial class D3D11Framebuffer : Framebuffer
                     if (d3dColorTarget.SampleCount == TextureSampleCount.Count1)
                     {
                         rtvDesc.ViewDimension = RtvDimension.Texture2D;
-                        rtvDesc.Texture2D.MipSlice = (uint)description.ColorTargets[i].MipLevel;
+                        rtvDesc.Texture2D.MipSlice = description.ColorTargets[i].MipLevel;
                     }
                     else
                     {

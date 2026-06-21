@@ -88,7 +88,7 @@ internal static partial class VkFormats
 
     internal static ImageUsageFlags VdToVkTextureUsage(TextureUsage vdUsage)
     {
-        ImageUsageFlags vkUsage = (ImageUsageFlags)0;
+        ImageUsageFlags vkUsage = 0;
 
         vkUsage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.TransferSrcBit;
         bool isDepthStencil = (vdUsage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil;
@@ -230,7 +230,7 @@ internal static partial class VkFormats
 
     internal static ColorComponentFlags VdToVkColorWriteMask(ColorWriteMask mask)
     {
-        ColorComponentFlags flags = (ColorComponentFlags)0;
+        ColorComponentFlags flags = 0;
 
         if ((mask & ColorWriteMask.Red) == ColorWriteMask.Red)
             flags |= ColorComponentFlags.RBit;
@@ -369,7 +369,7 @@ internal static partial class VkFormats
 
     internal static ShaderStageFlags VdToVkShaderStages(ShaderStages stage)
     {
-        ShaderStageFlags ret = (ShaderStageFlags)0;
+        ShaderStageFlags ret = 0;
 
         if ((stage & ShaderStages.Vertex) == ShaderStages.Vertex)
             ret |= ShaderStageFlags.VertexBit;

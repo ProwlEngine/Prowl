@@ -85,7 +85,7 @@ internal unsafe partial class OpenGLFramebuffer : Framebuffer, OpenGLDeferredRes
                     _gl.FramebufferTextureLayer(
                         FramebufferTarget.Framebuffer,
                         GLFramebufferAttachment.ColorAttachment0 + i,
-                        (uint)glTex.Texture,
+                        glTex.Texture,
                         (int)colorAttachment.MipLevel,
                         (int)colorAttachment.ArrayLayer);
                     CheckLastError();

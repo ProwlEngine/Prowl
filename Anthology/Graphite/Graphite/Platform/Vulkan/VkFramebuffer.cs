@@ -34,6 +34,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
     public VkFramebuffer(VkGraphicsDevice gd, ref FramebufferDescription description, bool isPresented)
         : base(description.DepthTarget, description.ColorTargets)
     {
+        _name = "";
         _gd = gd;
 
         RenderPassCreateInfo renderPassCI = new()

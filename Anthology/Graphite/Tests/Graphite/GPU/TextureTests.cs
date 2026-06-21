@@ -154,7 +154,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             for (uint layer = 0; layer < ArrayLayers; layer++)
             {
-                var mipSize = TexSize >> (int)mip;
+                uint mipSize = TexSize >> (int)mip;
                 byte[] data = Enumerable.Repeat((layer + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
                 GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, layer);
             }
@@ -178,7 +178,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             for (uint face = 0; face < 6; face++)
             {
-                var mipSize = TexSize >> (int)mip;
+                uint mipSize = TexSize >> (int)mip;
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
                 GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, face);
             }
@@ -186,18 +186,18 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         Texture readback = GetReadback(tex);
 
-        foreach (var mip in Enumerable.Range(0, (int)MipLevels))
+        foreach (int mip in Enumerable.Range(0, (int)MipLevels))
         {
-            foreach (var face in Enumerable.Range(0, 6))
+            foreach (int face in Enumerable.Range(0, 6))
             {
-                var subresource = readback.CalculateSubresource((uint)mip, (uint)face);
-                var mipSize = TexSize >> mip;
+                uint subresource = readback.CalculateSubresource((uint)mip, (uint)face);
+                uint mipSize = TexSize >> mip;
                 byte expectedColor = (byte)((face + 1) * 42);
                 MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
-                foreach (var x in Enumerable.Range(0, (int)mipSize))
+                foreach (int x in Enumerable.Range(0, (int)mipSize))
                 {
-                    foreach (var y in Enumerable.Range(0, (int)mipSize))
+                    foreach (int y in Enumerable.Range(0, (int)mipSize))
                     {
                         Assert.Equal(expectedColor, map[x, y]);
                     }
@@ -222,7 +222,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             for (uint face = 0; face < 6; face++)
             {
-                var mipSize = TexSize >> (int)mip;
+                uint mipSize = TexSize >> (int)mip;
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
                 GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, face);
             }
@@ -258,18 +258,18 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
-        foreach (var mip in Enumerable.Range(0, (int)MipLevels))
+        foreach (int mip in Enumerable.Range(0, (int)MipLevels))
         {
-            foreach (var face in Enumerable.Range(0, 6))
+            foreach (int face in Enumerable.Range(0, 6))
             {
-                var subresource = dst.CalculateSubresource((uint)mip, (uint)face);
-                var mipSize = (uint)(TexSize / (1 << mip));
+                uint subresource = dst.CalculateSubresource((uint)mip, (uint)face);
+                uint mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
                 MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
 
-                foreach (var x in Enumerable.Range(0, (int)mipSize))
+                foreach (int x in Enumerable.Range(0, (int)mipSize))
                 {
-                    foreach (var y in Enumerable.Range(0, (int)mipSize))
+                    foreach (int y in Enumerable.Range(0, (int)mipSize))
                     {
                         Assert.Equal(expectedColor, map[x, y]);
                     }
@@ -309,18 +309,18 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         Texture readback = GetReadback(dst);
 
-        foreach (var mip in Enumerable.Range(0, (int)MipLevels))
+        foreach (int mip in Enumerable.Range(0, (int)MipLevels))
         {
-            foreach (var face in Enumerable.Range(0, 6))
+            foreach (int face in Enumerable.Range(0, 6))
             {
-                var subresource = readback.CalculateSubresource((uint)mip, (uint)face);
-                var mipSize = (uint)(TexSize / (1 << mip));
+                uint subresource = readback.CalculateSubresource((uint)mip, (uint)face);
+                uint mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
                 MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
-                foreach (var x in Enumerable.Range(0, (int)mipSize))
+                foreach (int x in Enumerable.Range(0, (int)mipSize))
                 {
-                    foreach (var y in Enumerable.Range(0, (int)mipSize))
+                    foreach (int y in Enumerable.Range(0, (int)mipSize))
                     {
                         Assert.Equal(expectedColor, map[x, y]);
                     }
@@ -347,7 +347,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         for (uint mip = 0; mip < MipLevels; mip++)
         {
-            var mipSize = (uint)(TexSize / (1 << (int)mip));
+            uint mipSize = (uint)(TexSize / (1 << (int)mip));
             for (uint face = 0; face < 6; face++)
             {
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
@@ -367,8 +367,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             for (uint face = 0; face < 6; face++)
             {
-                var subresource = dst.CalculateSubresource(mip, face);
-                var mipSize = (uint)(TexSize / (1 << (int)mip));
+                uint subresource = dst.CalculateSubresource(mip, face);
+                uint mipSize = (uint)(TexSize / (1 << (int)mip));
                 byte expectedColor = mip == CopiedMip ? (byte)((face + 1) * 42) : (byte)0;
                 MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
                 for (int y = 0; y < mipSize; y++)
@@ -396,7 +396,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         for (uint mip = 0; mip < MipLevels; mip++)
         {
-            var mipSize = (uint)(TexSize / (1 << (int)mip));
+            uint mipSize = (uint)(TexSize / (1 << (int)mip));
             for (uint face = 0; face < 6; face++)
             {
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
@@ -411,18 +411,18 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
         GD.WaitForIdle();
 
-        foreach (var mip in Enumerable.Range(0, (int)MipLevels))
+        foreach (int mip in Enumerable.Range(0, (int)MipLevels))
         {
-            foreach (var face in Enumerable.Range(0, 6))
+            foreach (int face in Enumerable.Range(0, 6))
             {
-                var subresource = dst.CalculateSubresource((uint)mip, (uint)face);
-                var mipSize = (uint)(TexSize / (1 << mip));
+                uint subresource = dst.CalculateSubresource((uint)mip, (uint)face);
+                uint mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
                 MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
 
-                foreach (var x in Enumerable.Range(0, (int)mipSize))
+                foreach (int x in Enumerable.Range(0, (int)mipSize))
                 {
-                    foreach (var y in Enumerable.Range(0, (int)mipSize))
+                    foreach (int y in Enumerable.Range(0, (int)mipSize))
                     {
                         Assert.Equal(expectedColor, map[x, y]);
                     }
@@ -449,7 +449,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         for (uint mip = 0; mip < MipLevels; mip++)
         {
-            var mipSize = (uint)(TexSize / (1 << (int)mip));
+            uint mipSize = (uint)(TexSize / (1 << (int)mip));
             for (uint face = 0; face < 6; face++)
             {
                 byte[] data = Enumerable.Repeat((face + 1) * 42, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
@@ -469,8 +469,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             for (uint face = 0; face <= CopiedArrayLayer; face++)
             {
-                var subresource = dst.CalculateSubresource(mip, face);
-                var mipSize = (uint)(TexSize / (1 << (int)mip));
+                uint subresource = dst.CalculateSubresource(mip, face);
+                uint mipSize = (uint)(TexSize / (1 << (int)mip));
                 byte expectedColor = face == CopiedArrayLayer ? (byte)((face + 1) * 42) : (byte)0;
                 MappedResourceView<byte> map = GD.Map<byte>(dst, MapMode.Read, subresource);
                 for (int y = 0; y < mipSize; y++)
@@ -506,16 +506,16 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         }
 
         Texture readback = GetReadback(tex);
-        foreach (var face in Enumerable.Range(0, 6))
+        foreach (int face in Enumerable.Range(0, 6))
         {
-            var subresource = readback.CalculateSubresource(0, (uint)face);
-            var mipSize = TexSize;
+            uint subresource = readback.CalculateSubresource(0, (uint)face);
+            uint mipSize = TexSize;
             byte expectedColor = (byte)((face + 1) * 42);
             MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
-            foreach (var x in Enumerable.Range(0, (int)mipSize))
+            foreach (int x in Enumerable.Range(0, (int)mipSize))
             {
-                foreach (var y in Enumerable.Range(0, (int)mipSize))
+                foreach (int y in Enumerable.Range(0, (int)mipSize))
                 {
                     Assert.Equal(expectedColor, map[x, y]);
                 }
@@ -532,18 +532,18 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         GD.WaitForIdle();
 
         readback = GetReadback(tex);
-        foreach (var mip in Enumerable.Range(0, (int)MipLevels))
+        foreach (int mip in Enumerable.Range(0, (int)MipLevels))
         {
-            foreach (var face in Enumerable.Range(0, 6))
+            foreach (int face in Enumerable.Range(0, 6))
             {
-                var subresource = readback.CalculateSubresource((uint)mip, (uint)face);
-                var mipSize = (uint)(TexSize / (1 << mip));
+                uint subresource = readback.CalculateSubresource((uint)mip, (uint)face);
+                uint mipSize = (uint)(TexSize / (1 << mip));
                 byte expectedColor = (byte)((face + 1) * 42);
                 MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
 
-                foreach (var x in Enumerable.Range(0, (int)mipSize))
+                foreach (int x in Enumerable.Range(0, (int)mipSize))
                 {
-                    foreach (var y in Enumerable.Range(0, (int)mipSize))
+                    foreach (int y in Enumerable.Range(0, (int)mipSize))
                     {
                         Assert.Equal(expectedColor, map[x, y]);
                     }
@@ -577,7 +577,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         for (uint layer = 0; layer < ArrayLayers; layer++)
         {
-            var subresource = tex.CalculateSubresource(0, layer);
+            uint subresource = tex.CalculateSubresource(0, layer);
             byte expectedColor = (byte)(layer * ArrayColorDelta);
             MappedResourceView<byte> map = GD.Map<byte>(tex, MapMode.Read, subresource);
             for (int y = 0; y < TexSize; y++)
@@ -608,7 +608,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 
         for (uint layer = 0; layer < ArrayLayers; layer++)
         {
-            var subresource = tex.CalculateSubresource(0, layer);
+            uint subresource = tex.CalculateSubresource(0, layer);
             byte expectedColor = (byte)(layer * ArrayColorDelta);
             MappedResourceView<byte> map = GD.Map<byte>(tex, MapMode.Read, subresource);
             for (int y = 0; y < TexSize; y++)
@@ -638,7 +638,7 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             for (uint layer = 0; layer < ArrayLayers; layer++)
             {
-                var mipSize = MipLevels >> (int)mip;
+                uint mipSize = MipLevels >> (int)mip;
                 byte[] data = Enumerable.Repeat(layer * ArrayColorDelta, (int)(mipSize * mipSize)).Select(n => (byte)n).ToArray();
                 GD.UpdateTexture(tex, data, 0, 0, 0, mipSize, mipSize, 1, mip, layer);
             }
@@ -655,8 +655,8 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
         {
             for (uint layer = 0; layer < ArrayLayers; layer++)
             {
-                var mipSize = MipLevels >> (int)mip;
-                var subresource = readback.CalculateSubresource(0, layer);
+                uint mipSize = MipLevels >> (int)mip;
+                uint subresource = readback.CalculateSubresource(0, layer);
                 byte expectedColor = (byte)(layer * ArrayColorDelta);
                 MappedResourceView<byte> map = GD.Map<byte>(readback, MapMode.Read, subresource);
                 for (int y = 0; y < mipSize; y++)

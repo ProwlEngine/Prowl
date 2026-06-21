@@ -216,7 +216,7 @@ internal partial class OpenGLTextureView : TextureView, OpenGLDeferredResource
         CheckLastError();
 
         TextureTarget originalTarget = Target.TextureTarget;
-        var effectiveArrayLayers = ArrayLayers;
+        uint effectiveArrayLayers = ArrayLayers;
         if (originalTarget == TextureTarget.Texture1D)
         {
             TextureTarget = TextureTarget.Texture1D;

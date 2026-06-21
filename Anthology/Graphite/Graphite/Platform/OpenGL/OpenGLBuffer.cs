@@ -84,7 +84,7 @@ internal unsafe partial class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResourc
 
             _gl.BufferData(
                 BufferTargetARB.CopyReadBuffer,
-                (UIntPtr)SizeInBytes,
+                SizeInBytes,
                 null,
                 _dynamic ? BufferUsageARB.DynamicDraw : BufferUsageARB.StaticDraw);
             CheckLastError();

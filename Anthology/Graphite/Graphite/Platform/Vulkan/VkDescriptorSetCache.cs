@@ -52,7 +52,7 @@ internal sealed class VkDescriptorSetCache
     /// <summary>Returns the cached set for the given resource identity, refreshing its last-used time.</summary>
     public bool TryGet(ReadOnlySpan<ulong> identity, ulong frameId, out DescriptorSet set)
     {
-        if (_lookup.TryGetValue(identity, out Entry entry))
+        if (_lookup.TryGetValue(identity, out Entry? entry))
         {
             entry.LastUsedFrameId = frameId;
             set = entry.Token.Set;
@@ -81,7 +81,7 @@ internal sealed class VkDescriptorSetCache
         };
 
         _byIdentity[entry.Identity] = entry;
-        if (!_bySet.TryGetValue(setIdx, out List<Entry> list))
+        if (!_bySet.TryGetValue(setIdx, out List<Entry>? list))
         {
             list = [];
             _bySet[setIdx] = list;

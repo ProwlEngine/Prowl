@@ -16,11 +16,11 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
     private readonly PixelFormat? _depthFormat;
     private uint _currentImageIndex;
 
-    private VkFramebuffer[] _scFramebuffers;
+    private VkFramebuffer[] _scFramebuffers = [];
     private Image[] _scImages = [];
     private Format _scImageFormat;
     private Extent2D _scExtent;
-    private FramebufferAttachment[][] _scColorTextures;
+    private FramebufferAttachment[][] _scColorTextures = [];
 
     private FramebufferAttachment? _depthAttachment;
     private bool _destroyed;
@@ -101,15 +101,11 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     private void DestroySwapchainFramebuffers()
     {
-        if (_scFramebuffers != null)
+        for (int i = 0; i < _scFramebuffers.Length; i++)
         {
-            for (int i = 0; i < _scFramebuffers.Length; i++)
-            {
-                _scFramebuffers[i]?.Dispose();
-                _scFramebuffers[i] = null;
-            }
-            Array.Clear(_scFramebuffers, 0, _scFramebuffers.Length);
+            _scFramebuffers[i]?.Dispose();
         }
+        Array.Clear(_scFramebuffers, 0, _scFramebuffers.Length);
     }
 
     private void CreateDepthTexture()
@@ -130,15 +126,11 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
 
     private void CreateFramebuffers()
     {
-        if (_scFramebuffers != null)
+        for (int i = 0; i < _scFramebuffers.Length; i++)
         {
-            for (int i = 0; i < _scFramebuffers.Length; i++)
-            {
-                _scFramebuffers[i]?.Dispose();
-                _scFramebuffers[i] = null;
-            }
-            Array.Clear(_scFramebuffers, 0, _scFramebuffers.Length);
+            _scFramebuffers[i]?.Dispose();
         }
+        Array.Clear(_scFramebuffers, 0, _scFramebuffers.Length);
 
         Util.EnsureArrayMinimumSize(ref _scFramebuffers, (uint)_scImages.Length);
         Util.EnsureArrayMinimumSize(ref _scColorTextures, (uint)_scImages.Length);
