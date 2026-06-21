@@ -6,10 +6,10 @@ using Prowl.Crumb;
 namespace Prowl.Graphite.ShaderDef;
 
 
-public static class ShaderTokenizer
+internal static class ShaderTokenizer
 {
     // Compiled once and reused across every tokenizer; the rules are immutable after compilation.
-    public static readonly TokenizerRules<ShaderToken> Rules = BuildRules();
+    static readonly TokenizerRules<ShaderToken> Rules = BuildRules();
 
 
     // Tokenizes the top-level ShaderLab-inspired syntax of a shader.
@@ -43,7 +43,6 @@ public static class ShaderTokenizer
             .Identifier(ShaderToken.Identifier)
 
             .Compile();
-
 
     public static Tokenizer<ShaderToken> Create(ReadOnlySpan<char> source)
         => new(source, Rules);

@@ -7,11 +7,29 @@ using Prowl.Crumb;
 namespace Prowl.Graphite.ShaderDef;
 
 
+/// <summary>
+/// The exception that is thrown when ShaderDef encounters invalid syntax
+/// while parsing a shader definition document.
+/// </summary>
+/// <remarks>
+/// Additionaly provides line and column position.
+/// </remarks>
 public sealed class ParseException : Exception
 {
+    /// <summary>
+    /// The line in source where the parser failed.
+    /// </summary>
     public int Line { get; }
+
+    /// <summary>
+    /// The column in source where the parser failed.
+    /// </summary>
     public int Column { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ParseException"/> class
+    /// with the specified error message and source location.
+    /// </summary>
     public ParseException(string message, int line, int column)
         : base($"{message} at line {line}, column {column}.")
     {
@@ -21,7 +39,8 @@ public sealed class ParseException : Exception
 }
 
 
-public static class Exceptions
+
+internal static class Exceptions
 {
     public static ParseException Expected(string expected, string found, Token<ShaderToken> at) =>
         new($"Expected '{expected}' but found '{found}'", at.Line, at.Column);
@@ -57,6 +76,10 @@ public static class Exceptions
 
     public static ParseException NoPasses(Token<ShaderToken> at) =>
         new("Shader must contain at least one Pass", at.Line, at.Column);
+
+
+    public static ParseException NoName(Token<ShaderToken> at) =>
+        new("Shader must contain non-empty name", at.Line, at.Column);
 
 
     public static ParseException TrailingContent(string found, Token<ShaderToken> at) =>

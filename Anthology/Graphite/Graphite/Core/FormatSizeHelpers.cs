@@ -2,6 +2,9 @@
 
 namespace Prowl.Graphite;
 
+/// <summary>
+/// Format extension utility for byte size of graphics formats.
+/// </summary>
 public static class FormatSizeHelpers
 {
     /// <summary>

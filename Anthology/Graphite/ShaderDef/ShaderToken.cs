@@ -1,7 +1,7 @@
 namespace Prowl.Graphite.ShaderDef;
 
 
-public enum ShaderToken
+internal enum ShaderToken
 {
     // Crumb requires explicit end-of-file and error kinds.
     EndOfFile,

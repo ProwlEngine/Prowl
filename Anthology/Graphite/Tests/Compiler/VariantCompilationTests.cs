@@ -1,6 +1,6 @@
 using System.Linq;
 
-using Prowl.Graphite.Shaders;
+using Prowl.Graphite.Variants;
 
 using Xunit;
 

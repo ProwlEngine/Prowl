@@ -6,12 +6,29 @@ using Prowl.Crumb;
 namespace Prowl.Graphite.ShaderDef;
 
 
+/// <summary>
+/// The parsed representation of a shaderdef shader description markdown file.
+/// </summary>
 public class ParsedShader
 {
+    /// <summary>
+    /// The identifier name of this shader. Required and never null.
+    /// </summary>
     public string? Name;
+
+    /// <summary>
+    /// Metadata for a fallback shader name that a renderer can use. Empty if none is defined.
+    /// </summary>
     public string? Fallback;
 
+    /// <summary>
+    /// A list of default properties requested by the markdown for shader resources or uniforms
+    /// </summary>
     public ShaderProperty[]? Properties;
+
+    /// <summary>
+    /// A list of executable render passes present in the shader.
+    /// </summary>
     public ParsedPass[]? Passes;
 
 
@@ -47,6 +64,9 @@ public class ParsedShader
         ParserUtility.ExpectKeyword(ref t, "Shader");
         string name = ParserUtility.QuotedString(ref t);
 
+        if (string.IsNullOrWhiteSpace(name))
+            throw Exceptions.NoName(t.Peek());
+
         ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
         ShaderProperty[] properties = [];
@@ -70,8 +90,9 @@ public class ParsedShader
         if (passes.Count == 0)
             throw Exceptions.NoPasses(t.Peek());
 
-        ParserUtility.ExpectKeyword(ref t, "Fallback");
-        string fallback = ParserUtility.QuotedString(ref t);
+        string fallback = "";
+        if (ParserUtility.PeekKeyword(ref t, "Fallback"))
+            fallback = ParserUtility.QuotedString(ref t);
 
         ParserUtility.Expect(ref t, ShaderToken.CloseBrace);
 
@@ -89,6 +110,9 @@ public class ParsedShader
     }
 
 
+    /// <summary>
+    /// Parses a full .shaderdef markdown file.
+    /// </summary>
     public static ParsedShader Parse(string source)
     {
         Tokenizer<ShaderToken> tokenizer = ShaderTokenizer.Create(source);

@@ -1,9 +1,9 @@
 using System;
 
-namespace Prowl.Graphite.Shaders;
+namespace Prowl.Graphite.Variants;
 
 
-public sealed class KeywordMap
+internal sealed class KeywordMap
 {
     private struct Entry
     {

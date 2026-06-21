@@ -23,4 +23,8 @@
     <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
         <PackageReference Include="Prowl.Graphite" Version="$(GraphiteVersion)" />
     </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Tests" />
+    </ItemGroup>
 </Project>

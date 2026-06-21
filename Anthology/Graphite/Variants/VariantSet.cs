@@ -2,17 +2,13 @@ using System;
 using System.Collections.Generic;
 
 
-namespace Prowl.Graphite.Shaders;
+namespace Prowl.Graphite.Variants;
 
 
 /// <summary>
 /// A set of precompiled shader variants selected at runtime by keyword state. Generic over the
 /// resolved variant type <typeparamref name="T"/> (for example a <c>GraphicsProgram</c> in
 /// Graphite, or a higher-level material/asset type in the engine runtime).
-/// <para>
-/// This is the keyword-driven successor to the old core <c>ShaderPass</c>. It owns no render or
-/// pipeline state; that now lives inside each compiled variant.
-/// </para>
 /// </summary>
 public sealed class VariantSet<T>
 {
@@ -65,6 +61,10 @@ public sealed class VariantSet<T>
     }
 
 
+    /// <summary>
+    /// Sets a given keyword on the set's current state and updates the active variant.
+    /// </summary>
+    /// <param name="keyword"></param>
     public void SetKeyword(Keyword keyword)
     {
         _state.SetKeyword(keyword);
@@ -72,6 +72,10 @@ public sealed class VariantSet<T>
     }
 
 
+    /// <summary>
+    /// Sets a list of keywords on the set's current state and updates the active variant. 
+    /// Faster than calling <see cref="SetKeyword"/> in succession since it batches the hash lookup.
+    /// </summary>
     public void SetKeywords(params Keyword[] keywords)
     {
         for (int i = 0; i < keywords.Length; i++)

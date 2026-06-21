@@ -6,16 +6,30 @@ using Prowl.Crumb;
 namespace Prowl.Graphite.ShaderDef;
 
 
+/// <summary>
+/// A parsed pass that encapsulates render state, identification metadata, and source shader files.
+/// </summary>
 public class ParsedPass
 {
+    /// <summary>
+    /// The name of this pass, or blank if no name was defined.
+    /// </summary>
     public string Name = "";
 
+    /// <summary>
+    /// The tag key-value pairs for this pass, defined in source as a list of: <code>{ "Key" = "Value" "Key2" = "Value2" }</code>
+    /// </summary>
     public Dictionary<string, string>? Tags = null;
 
+    /// <summary>
+    /// The pass state, encapsulating rasterizer settings, blend, depth, stencil, and more.
+    /// </summary>
     public required ParsedPassState State;
 
-    // The raw Slang source embedded between SLANGPROGRAM and ENDSLANG. Slang derives its own
-    // entrypoints, so no explicit vertex/fragment stages are declared here.
+    /// <summary>
+    /// The raw Slang source embedded between SLANGPROGRAM and ENDSLANG. Slang derives its own
+    /// entrypoints, so no explicit vertex/fragment stages are declared here.
+    /// </summary>
     public required string InlineSlang;
 
 
@@ -51,8 +65,17 @@ public class ParsedPass
     }
 
 
-    // Parses a pass block.
-    public static ParsedPass Parse(ref Tokenizer<ShaderToken> t)
+    /// <summary>
+    /// Parses a pass block.
+    /// </summary>
+    public static ParsedPass Parse(string source)
+    {
+        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
+        return Parse(ref t);
+    }
+
+
+    internal static ParsedPass Parse(ref Tokenizer<ShaderToken> t)
     {
         ParserUtility.ExpectKeyword(ref t, "Pass");
 

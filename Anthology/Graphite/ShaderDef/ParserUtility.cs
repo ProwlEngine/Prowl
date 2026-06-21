@@ -9,7 +9,7 @@ using Prowl.Vector;
 namespace Prowl.Graphite.ShaderDef;
 
 
-public static class ParserUtility
+internal static class ParserUtility
 {
     // Materializes a token's source text.
     public static string Text(ref Tokenizer<ShaderToken> t, Token<ShaderToken> token)

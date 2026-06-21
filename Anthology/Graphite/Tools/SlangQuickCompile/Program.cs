@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 using Prowl.Graphite;
 using Prowl.Graphite.Compiler;
-using Prowl.Graphite.Shaders;
+using Prowl.Graphite.Variants;
 
 namespace SlangQuickCompile;
 

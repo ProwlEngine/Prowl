@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-using Prowl.Graphite.Shaders;
+using Prowl.Graphite.Variants;
 using Prowl.Slang;
 
 

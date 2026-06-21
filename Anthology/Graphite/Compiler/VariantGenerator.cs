@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Graphite.Shaders;
+using Prowl.Graphite.Variants;
 
 
 namespace Prowl.Graphite.Compiler;

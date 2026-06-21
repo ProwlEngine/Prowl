@@ -6,8 +6,12 @@ using Prowl.Crumb;
 namespace Prowl.Graphite.ShaderDef;
 
 
+/// <summary>
+/// A defined set of all possible render state options, encapsulating rasterizer settings, blend, depth, stencil, multisampling, and write masks.
+/// </summary>
 public class ParsedPassState
 {
+#pragma warning disable CS1591
     public bool? EnableCulling;
     public FaceCullMode? CullMode;
     public FrontFace? FrontFace;
@@ -56,8 +60,12 @@ public class ParsedPassState
 
     // -------------------- Color Write Mask --------------------
     public ColorWriteMask? WriteMask;
+#pragma warning restore CS1591
 
 
+    /// <summary>
+    /// Merges two <see cref="ParsedPassState"/> objects into a single merged <see cref="ParsedPassState"/> with values being overwritten on <paramref name="other"/> 
+    /// </summary>
     public ParsedPassState Apply(ParsedPassState other)
     {
         return new()
@@ -355,9 +363,19 @@ public class ParsedPassState
     }
 
 
-    public static ParsedPassState Parse(ref Tokenizer<ShaderToken> t)
+    /// <summary>
+    /// Parses a pass state as an unordered list of blend, depth, stencil, and raster commands.
+    /// </summary>
+    public static ParsedPassState Parse(string source)
     {
-        List<ParsedPassState> states = new();
+        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
+        return Parse(ref t);
+    }
+
+
+    internal static ParsedPassState Parse(ref Tokenizer<ShaderToken> t)
+    {
+        List<ParsedPassState> states = [];
 
         while (t.Peek().Kind == ShaderToken.Identifier)
         {

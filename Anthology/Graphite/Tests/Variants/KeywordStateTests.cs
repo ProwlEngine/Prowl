@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 using Xunit;
 
-namespace Prowl.Graphite.Shaders.Tests;
+namespace Prowl.Graphite.Variants.Tests;
 
 
 public class KeywordStateTests

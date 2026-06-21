@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 
-namespace Prowl.Graphite.Shaders;
+namespace Prowl.Graphite.Variants;
 
 
-public struct KeywordState
+internal struct KeywordState
 {
     private Dictionary<int, int> _nameIDToSlot;
     private ulong _hash;
