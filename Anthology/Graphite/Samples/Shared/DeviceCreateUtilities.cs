@@ -16,7 +16,7 @@ namespace Prowl.Graphite.Samples;
 
 public static class DeviceCreateUtilities
 {
-    private static readonly (GraphicsBackend backend, APIVersion version) Backend = (GraphicsBackend.OpenGL, new APIVersion(4, 5));
+    private static readonly (GraphicsBackend backend, APIVersion version) Backend = (GraphicsBackend.Vulkan, new APIVersion(2, 1));
     static readonly ContextAPI API = Backend.backend == GraphicsBackend.OpenGL ? ContextAPI.OpenGL : ContextAPI.Vulkan;
 
 
