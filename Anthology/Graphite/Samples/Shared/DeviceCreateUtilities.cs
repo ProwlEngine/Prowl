@@ -52,7 +52,7 @@ public static class DeviceCreateUtilities
         return window;
     }
 
-    // Some idiot didn't configure MoltenVK correctly in Silk.NET so SDL can't find it
+    // Some goober didn't configure MoltenVK correctly in Silk.NET so SDL can't find it
     // Workaround involves loading the library at the correct path manually.
     private static void MoltenVKMacWorkaround()
     {
