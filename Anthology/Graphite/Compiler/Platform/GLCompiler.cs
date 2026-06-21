@@ -13,8 +13,7 @@ namespace Prowl.Graphite.Compiler;
 /// </summary>
 public partial class GLCompiler : CompilerModule
 {
-    private string _profileString;
-    private bool _isOlderThanGL450;
+    private int _profileVersion;
     private TargetDescription _target;
 
     /// <inheritdoc/>
@@ -31,10 +30,7 @@ public partial class GLCompiler : CompilerModule
     /// </summary>
     public GLCompiler(string profileString = "glsl_450", GraphicsBackend backend = GraphicsBackend.OpenGL)
     {
-        _profileString = profileString;
-
-        if (int.Parse(_profileString.Split('_')[1]) < 450)
-            _isOlderThanGL450 = true;
+        _profileVersion = int.Parse(profileString.Split('_')[^1]);
 
         _backend = backend;
         _target = new()
@@ -70,12 +66,14 @@ public partial class GLCompiler : CompilerModule
                 .Replace("gl_VertexIndex", "gl_VertexID")
                 .Replace("gl_InstanceIndex", "gl_InstanceID");
 
-            // Not robust portability code from vk GLSL->gl 4.1, but should work for most usecases
-            if (_isOlderThanGL450)
+            // Not robust portability code from vk GLSL->gl 4.1
+            // actually very broken
+            if (_profileVersion < 450)
             {
                 source = source
-                    .Replace("#version 450", $"#version {_profileString}");
+                    .Replace("#version 450", $"#version {_profileVersion}");
                 source = VulkanGLSLRemovalRegex().Replace(source, "");
+                System.Console.WriteLine(source);
             }
 
             stages[i].ShaderBytes = Encoding.UTF8.GetBytes(source);

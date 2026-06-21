@@ -14,7 +14,7 @@ public static class ShaderLoader
     // GlobalSession.FindProfile) only run for the backend actually in use.
     private static Dictionary<GraphicsBackend, Func<CompilerModule>> s_modules = new()
     {
-        [GraphicsBackend.OpenGL] = () => new GLCompiler("glsl_410", GraphicsBackend.OpenGL),
+        [GraphicsBackend.OpenGL] = () => new GLCompiler("glsl_450", GraphicsBackend.OpenGL),
         [GraphicsBackend.OpenGLES] = () => new GLCompiler("glsl_es_310", GraphicsBackend.OpenGLES),
         [GraphicsBackend.Vulkan] = () => new VulkanCompiler("spirv_1_4"),
         [GraphicsBackend.Direct3D11] = () => new DXCompiler("sm_5_0", GraphicsBackend.Direct3D11),
