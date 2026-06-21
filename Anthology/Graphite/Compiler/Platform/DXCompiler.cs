@@ -7,16 +7,25 @@ using Prowl.Slang;
 namespace Prowl.Graphite.Compiler;
 
 
-
+/// <summary>
+/// The Direct3D/HLSL compiler module for all Direct3D backends.
+/// </summary>
 public class DXCompiler : CompilerModule
 {
     private TargetDescription _target;
+
+    /// <inheritdoc/>
     public TargetDescription Target => _target;
 
     private GraphicsBackend _backend;
+
+    /// <inheritdoc/>
     public GraphicsBackend Backend => _backend;
 
 
+    /// <summary>
+    /// Creates a new instance of <see cref="DXCompiler"/>
+    /// </summary>
     public DXCompiler(string profileString = "sm_5_0", GraphicsBackend backend = GraphicsBackend.Direct3D11)
     {
         _backend = backend;
@@ -27,6 +36,8 @@ public class DXCompiler : CompilerModule
         };
     }
 
+
+    /// <inheritdoc/>
     public ShaderDescription CompileForTarget(ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler)
     {
         ShaderDescription description = SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler, bindsBySemantic: true);
@@ -35,7 +46,7 @@ public class DXCompiler : CompilerModule
     }
 
 
-    public static ResourceLayoutDescription[] Reflect(ComponentType linkedComponent, int layoutIndex, ShaderStageDescription[] stages)
+    static ResourceLayoutDescription[] Reflect(ComponentType linkedComponent, int layoutIndex, ShaderStageDescription[] stages)
     {
         ShaderStages programStages = ShaderStages.None;
         foreach (ShaderStageDescription stage in stages)

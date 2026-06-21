@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 
 using Prowl.Slang;
 
@@ -7,17 +8,34 @@ using Prowl.Slang;
 namespace Prowl.Graphite.Compiler;
 
 
-public class GLCompiler : CompilerModule
+/// <summary>
+/// The GLSL compiler module for all OpenGL backends.
+/// </summary>
+public partial class GLCompiler : CompilerModule
 {
+    private string _profileString;
+    private bool _isOlderThanGL450;
     private TargetDescription _target;
+
+    /// <inheritdoc/>
     public TargetDescription Target => _target;
 
     private readonly GraphicsBackend _backend;
+
+    /// <inheritdoc/>
     public GraphicsBackend Backend => _backend;
 
 
+    /// <summary>
+    /// Creates a new instance of <see cref="GLCompiler"/> 
+    /// </summary>
     public GLCompiler(string profileString = "glsl_450", GraphicsBackend backend = GraphicsBackend.OpenGL)
     {
+        _profileString = profileString;
+
+        if (int.Parse(_profileString.Split('_')[1]) < 450)
+            _isOlderThanGL450 = true;
+
         _backend = backend;
         _target = new()
         {
@@ -26,6 +44,8 @@ public class GLCompiler : CompilerModule
         };
     }
 
+
+    /// <inheritdoc/>
     public ShaderDescription CompileForTarget(ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler)
     {
         ShaderDescription description = SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler);
@@ -40,7 +60,7 @@ public class GLCompiler : CompilerModule
     // than depend on GL_KHR_vulkan_glsl - which many desktop drivers do not expose - the emitted
     // GLSL is rewritten to the core GL builtins so it compiles on any OpenGL driver. The names are
     // unique identifiers, so plain token replacement is unambiguous.
-    static void MakePortableGlsl(ShaderStageDescription[] stages)
+    private void MakePortableGlsl(ShaderStageDescription[] stages)
     {
         for (int i = 0; i < stages.Length; i++)
         {
@@ -50,11 +70,20 @@ public class GLCompiler : CompilerModule
                 .Replace("gl_VertexIndex", "gl_VertexID")
                 .Replace("gl_InstanceIndex", "gl_InstanceID");
 
+            // Not robust portability code from vk GLSL->gl 4.1, but should work for most usecases
+            if (_isOlderThanGL450)
+            {
+                source = source
+                    .Replace("#version 450", $"#version {_profileString}");
+                source = VulkanGLSLRemovalRegex().Replace(source, "");
+            }
+
             stages[i].ShaderBytes = Encoding.UTF8.GetBytes(source);
         }
     }
 
-    public static ResourceLayoutDescription[] Reflect(ComponentType linkedComponent, int layoutIndex, ShaderStageDescription[] stages)
+
+    static ResourceLayoutDescription[] Reflect(ComponentType linkedComponent, int layoutIndex, ShaderStageDescription[] stages)
     {
         ShaderStages programStages = ShaderStages.None;
         foreach (ShaderStageDescription stage in stages)
@@ -183,4 +212,7 @@ public class GLCompiler : CompilerModule
             glName,
             fields));
     }
+
+    [GeneratedRegex(@"\blayout\s*\(\s*(?=[^)]*\b(?:set|binding)\s*=)[^)]*\)\s*")]
+    private static partial Regex VulkanGLSLRemovalRegex();
 }

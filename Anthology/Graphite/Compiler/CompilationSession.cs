@@ -12,6 +12,12 @@ using Prowl.Slang;
 namespace Prowl.Graphite.Compiler;
 
 
+/// <summary>
+/// A shader compilation session, wrapping the native Slang compiler with platform-specific codegen and variant generation.
+/// <para>
+/// If compiling a heavy workload with a large set of shaders, it is best to reuse a single session to preserve cached loaded modules.
+/// </para>
+/// </summary>
 public class CompilationSession
 {
     private class FileProvider : IFileProvider
@@ -68,35 +74,58 @@ public class CompilationSession
     """u8.ToArray();
 
 
+    /// <summary>
+    /// The platform compilation modules registered on this session.
+    /// </summary>
     public ReadOnlyCollection<CompilerModule> Modules => _modules.AsReadOnly();
 
     private List<CompilerModule> _modules = [];
 
     private Session? _session;
 
-    private DiagnosticHandler _handler = new DefaultDiagnosticHandler();
+    private DiagnosticHandler _handler = (x) =>
+    {
+        if (string.IsNullOrWhiteSpace(x.Message))
+            return;
+
+        Console.WriteLine(x.Message);
+    };
 
     private int _variantCap = int.MaxValue;
 
 
+    /// <summary>
+    /// Registers a platform module. Cannot de-register a module.
+    /// </summary>
     public void RegisterModule(CompilerModule module)
     {
         _modules.Add(module);
     }
 
 
+    /// <summary>
+    /// Gets the index for a specific module to determine the result index of a certain platform's compiled shader in <see cref="VariantResult.Backends"/>.
+    /// </summary>
     public int GetModuleIndex(CompilerModule module)
     {
         return _modules.IndexOf(module);
     }
 
 
+    /// <summary>
+    /// Registers a diagnostic handler delegate to read all compiler error/warning logs. If unset, uses <see cref="Console.WriteLine()"/>
+    /// </summary>
+    /// <param name="handler"></param>
     public void RegisterDiagnosticHandler(DiagnosticHandler handler)
     {
         _handler = handler;
     }
 
 
+    /// <summary>
+    /// Sets a cap on the absolute maximum amount of variants this session can generate. 
+    /// Useful if you want to enforce a strict permutation limit on shader authors.
+    /// </summary>
     public void SetVariantCap(int max)
     {
         _variantCap = max;
@@ -126,6 +155,9 @@ public class CompilationSession
     }
 
 
+    /// <summary>
+    /// Ends this compilation session. Modules, diagnostic handlers, and variant caps are preserved if <see cref="BeginSession"/> is invoked again.
+    /// </summary>
     public void EndSession()
     {
         _session = null;
@@ -147,7 +179,7 @@ public class CompilationSession
             throw new InvalidOperationException("CompileShader called before BeginSession!");
 
         _session.LoadModuleFromSource("VariantAttributes", "VariantAttributes.slang", s_variantModule, out DiagnosticInfo diagnostics);
-        _handler.HandleCompilationDiagnostics(diagnostics);
+        _handler.Invoke(diagnostics);
 
         LoadUVOriginDeclModule();
 
@@ -173,7 +205,7 @@ public class CompilationSession
             throw new InvalidOperationException("CompileShader called before BeginSession!");
 
         _session.LoadModuleFromSource("VariantAttributes", "VariantAttributes.slang", s_variantModule, out DiagnosticInfo diagnostics);
-        _handler.HandleCompilationDiagnostics(diagnostics);
+        _handler.Invoke(diagnostics);
 
         LoadUVOriginDeclModule();
 
@@ -193,7 +225,7 @@ public class CompilationSession
 
         // Create a composite module to link the variant specialization module to all modules affected by variant options.
         ComponentType compositeModules = _session!.CreateCompositeComponentType([.. affectedModules, .. entryPoints], out DiagnosticInfo diagnostics);
-        _handler.HandleCompilationDiagnostics(diagnostics);
+        _handler.Invoke(diagnostics);
 
         CompilationResult result = new()
         {
@@ -344,7 +376,7 @@ public class CompilationSession
         string variantModule = sb.ToString();
 
         Module loaded = _session!.LoadModuleFromSourceString(name, $"{name}.slang", variantModule, out DiagnosticInfo diagnostics);
-        _handler.HandleCompilationDiagnostics(diagnostics);
+        _handler.Invoke(diagnostics);
 
         return loaded;
     }
@@ -374,7 +406,7 @@ public class CompilationSession
     private void LoadUVOriginDeclModule()
     {
         _session!.LoadModuleFromSource("UVOrigin", "UVOrigin.slang", UVOriginDeclModule, out DiagnosticInfo diagnostics);
-        _handler.HandleCompilationDiagnostics(diagnostics);
+        _handler.Invoke(diagnostics);
     }
 
 
@@ -384,7 +416,7 @@ public class CompilationSession
         byte[] source = topLeft ? UVOriginTopLeftModule : UVOriginBottomLeftModule;
 
         Module loaded = _session!.LoadModuleFromSource(name, $"{name}.slang", source, out DiagnosticInfo diagnostics);
-        _handler.HandleCompilationDiagnostics(diagnostics);
+        _handler.Invoke(diagnostics);
 
         return loaded;
     }
@@ -413,10 +445,10 @@ public class CompilationSession
                 Module uvModule = IsBackendTopLeft(_modules[compiler].Backend) ? uvTopLeft : uvBottomLeft;
 
                 ComponentType compositeVariant = _session!.CreateCompositeComponentType([compositeModules, variantModule, uvModule], out DiagnosticInfo diagnostics);
-                _handler.HandleCompilationDiagnostics(diagnostics);
+                _handler.Invoke(diagnostics);
 
                 ComponentType linked = compositeVariant.Link(out diagnostics);
-                _handler.HandleCompilationDiagnostics(diagnostics);
+                _handler.Invoke(diagnostics);
 
                 compiled[compiler] = (_modules[compiler].CompileForTarget(linked, compiler, _handler), _modules[compiler].Backend);
             }

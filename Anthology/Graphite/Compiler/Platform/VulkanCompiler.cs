@@ -11,15 +11,24 @@ using Prowl.Slang;
 namespace Prowl.Graphite.Compiler;
 
 
-// Will use slang so no need for abstraction
+/// <summary>
+/// The SPIR-V compiler module for all Vulkan backends.
+/// </summary>
 public class VulkanCompiler : CompilerModule
 {
     private TargetDescription _target;
+
+    /// <inheritdoc/>
     public TargetDescription Target => _target;
 
+    /// <inheritdoc/>
     public GraphicsBackend Backend => GraphicsBackend.Vulkan;
 
 
+    /// <summary>
+    /// Creates a new instance of <see cref="VulkanCompiler"/> 
+    /// </summary>
+    /// <param name="profileString"></param>
     public VulkanCompiler(string profileString = "spirv_1_5")
     {
         _target = new()
@@ -30,6 +39,7 @@ public class VulkanCompiler : CompilerModule
     }
 
 
+    /// <inheritdoc/>
     public ShaderDescription CompileForTarget(ComponentType linkedComponent, int layoutIndex, DiagnosticHandler handler)
     {
         ShaderDescription description = SlangReflector.BuildDescription(linkedComponent, layoutIndex, handler, entryPointNameOverride: "main");
@@ -38,7 +48,7 @@ public class VulkanCompiler : CompilerModule
     }
 
 
-    public static ResourceLayoutDescription[] Reflect(ComponentType linkedComponent, int layoutIndex, ShaderStageDescription[] stages)
+    static ResourceLayoutDescription[] Reflect(ComponentType linkedComponent, int layoutIndex, ShaderStageDescription[] stages)
     {
         ShaderStages programStages = ShaderStages.None;
         foreach (ShaderStageDescription stage in stages)

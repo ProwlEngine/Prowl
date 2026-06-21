@@ -6,7 +6,8 @@ using Prowl.Graphite.Variants;
 
 namespace Prowl.Graphite.Compiler;
 
-public static class VariantGenerator
+
+internal static class VariantGenerator
 {
     public static Keyword[][] Generate(IReadOnlyList<VariantSpace> props, int maxCap)
     {

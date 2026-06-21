@@ -26,7 +26,7 @@ internal static class SlangReflector
             EntryPointReflection ep = layout.GetEntryPointByIndex(i);
 
             Memory<byte> code = linkedComponent.GetEntryPointCode((nint)i, layoutIndex, out DiagnosticInfo diagnostics);
-            handler.HandleCompilationDiagnostics(diagnostics);
+            handler.Invoke(diagnostics);
 
             stages[i] = new ShaderStageDescription
             {

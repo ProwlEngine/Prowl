@@ -3,19 +3,7 @@ using Prowl.Slang;
 namespace Prowl.Graphite.Compiler;
 
 
-public interface DiagnosticHandler
-{
-    public void HandleCompilationDiagnostics(DiagnosticInfo diagnostics);
-}
-
-
-public class DefaultDiagnosticHandler : DiagnosticHandler
-{
-    public void HandleCompilationDiagnostics(DiagnosticInfo diagnostics)
-    {
-        if (string.IsNullOrWhiteSpace(diagnostics.Message))
-            return;
-
-        System.Console.WriteLine(diagnostics.Message);
-    }
-}
+/// <summary>
+/// A handler for any error, warning or log message produced when compiling shaders.
+/// </summary>
+public delegate void DiagnosticHandler(DiagnosticInfo diagnostics);

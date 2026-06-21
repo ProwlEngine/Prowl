@@ -4,15 +4,29 @@ using Prowl.Slang;
 namespace Prowl.Graphite.Compiler;
 
 
+/// <summary>
+/// The type of shader to compile.
+/// </summary>
 public enum ShaderType
 {
+    /// <summary>
+    /// A rasterization shader. Applies to both regular vertex and mesh shaders. 
+    /// </summary>
     Rasterization,
+
+    /// <summary>
+    /// A compute shader. Only applies to compute kernels.
+    /// </summary>
     Compute,
+
+    /// <summary>
+    /// A raytracing shader. Only applies to raytracing payload shaders.
+    /// </summary>
     Raytracing,
 }
 
 
-public static class ShaderTypeExtensions
+internal static class ShaderTypeExtensions
 {
     public static ShaderType FromStage(ShaderStage stage) =>
         stage switch

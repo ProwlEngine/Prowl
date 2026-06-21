@@ -25,4 +25,8 @@
         <PackageReference Include="Prowl.Graphite" Version="$(GraphiteVersion)" />
         <PackageReference Include="Prowl.Graphite.Variants" Version="$(GraphiteVersion)" />
     </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Prowl.Graphite.Compiler.Tests" />
+    </ItemGroup>
 </Project>
