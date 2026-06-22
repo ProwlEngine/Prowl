@@ -26,9 +26,8 @@ public class VulkanCompiler : CompilerModule
 
 
     /// <summary>
-    /// Creates a new instance of <see cref="VulkanCompiler"/> 
+    /// Creates a new instance of <see cref="VulkanCompiler"/>.
     /// </summary>
-    /// <param name="profileString"></param>
     public VulkanCompiler(string profileString = "spirv_1_5")
     {
         _target = new()
@@ -106,8 +105,7 @@ public class VulkanCompiler : CompilerModule
         TypeLayoutReflection typeLayout = block.TypeLayout;
         uint set = baseSpace + RegisterSpaceOf(block);
 
-        // Ordinary uniform data within the block collapses into one implicit uniform buffer, placed
-        // at the binding the container reserves for it (binding 0 when the block holds uniform data).
+        // Loose uniform data collapses into one implicit uniform buffer at the container's reserved binding.
         TypeLayoutReflection elementLayout = typeLayout.ElementTypeLayout;
         if (elementLayout.GetSize() > 0)
         {
@@ -116,8 +114,7 @@ public class VulkanCompiler : CompilerModule
                 ResourceLayoutElementOptions.None, SlangReflector.ReflectUniformFields(elementLayout));
         }
 
-        // Resources declared inside the block bind into the block's own space; their slot offsets are
-        // already absolute within that space (past the implicit uniform buffer, if any).
+        // Resources inside the block bind into its own space, offsets already absolute within it.
         foreach (VariableLayoutReflection field in elementLayout.Fields)
             if (field.TypeLayout.Kind != TypeKind.Scalar
                 && field.TypeLayout.Kind != TypeKind.Vector

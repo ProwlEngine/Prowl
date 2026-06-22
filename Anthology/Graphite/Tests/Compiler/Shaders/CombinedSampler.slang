@@ -15,9 +15,7 @@ struct VertexOutput
 }
 
 
-// A combined Sampler2D<> sits next to a split Texture2D + SamplerState so the reflection can be
-// asserted to flag only the combined one. Slang emits the Sampler2D as a single SPIR-V combined
-// image-sampler descriptor; the split pair stays two separate descriptors.
+// A combined Sampler2D<> beside a split Texture2D + SamplerState, so reflection can assert it flags only the combined one.
 struct ModelData
 {
     float4x4 MatrixMVP;

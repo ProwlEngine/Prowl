@@ -4,8 +4,8 @@ namespace Prowl.Graphite.Vk;
 
 /// <summary>
 /// Builds and tears down the descriptor-set-layout + pipeline-layout state shared by
-/// <see cref="VkGraphicsProgram"/> and <see cref="VkComputeProgram"/>. Both program kinds derive
-/// from different core bases, so this logic is shared by composition rather than inheritance.
+/// <see cref="VkGraphicsProgram"/> and <see cref="VkComputeProgram"/>. They derive from different
+/// core bases, so this is shared by composition rather than inheritance.
 /// </summary>
 internal static unsafe partial class VkDescriptorLayoutBuilder
 {
@@ -129,10 +129,9 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
     }
 
     /// <summary>
-    /// Returns the Vulkan descriptor type for the given <see cref="ResourceKind"/>.
-    /// All uniform buffers are <c>UNIFORM_BUFFER_DYNAMIC</c>; textures use separate image/sampler descriptors,
-    /// except a texture flagged <see cref="ResourceLayoutElementOptions.CombinedImageSampler"/>, which binds
-    /// as a single combined image-sampler descriptor.
+    /// Vulkan descriptor type for a <see cref="ResourceKind"/>. Uniform buffers are always dynamic;
+    /// textures use separate image/sampler descriptors unless flagged
+    /// <see cref="ResourceLayoutElementOptions.CombinedImageSampler"/>, which binds as one combined descriptor.
     /// </summary>
     private static DescriptorType GetDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options) => kind switch
     {

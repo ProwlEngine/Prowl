@@ -37,17 +37,15 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
     public ResourceLayoutElementOptions Options;
 
     /// <summary>
-    /// In-shader name used by the OpenGL backend when resolving this element via
-    /// <c>glGetUniformLocation</c> / <c>glGetUniformBlockIndex</c>. 
-    /// Required on OpenGL backends. Ignored by other backends. 
-    /// If no name is specified, name will read from the name this description was created with.
+    /// In-shader name the OpenGL backend resolves via <c>glGetUniformLocation</c> /
+    /// <c>glGetUniformBlockIndex</c>. Ignored by other backends. Defaults to <see cref="Name"/>.
     /// </summary>
     public string GLUniformName;
 
     /// <summary>
-    /// Flat list of fields describing the layout of this uniform block. Must be null or empty
-    /// unless <see cref="Kind"/> is <see cref="ResourceKind.UniformBuffer"/>. Order is not
-    /// significant. Binder looks fields up by <see cref="UniformBlockField.Name"/> and binds by specified offset/size.
+    /// Fields of this uniform block, looked up by <see cref="UniformBlockField.Name"/> and bound by
+    /// offset/size. Order is insignificant. Empty unless <see cref="Kind"/> is
+    /// <see cref="ResourceKind.UniformBuffer"/>.
     /// </summary>
     public UniformBlockField[] UniformFields;
 
@@ -154,11 +152,11 @@ public enum ResourceLayoutElementOptions
     DynamicBinding = 1 << 0,
 
     /// <summary>
-    /// Applies to a <see cref="ResourceKind.TextureReadOnly"/> element that originates from a combined
-    /// texture-sampler type in the shader (e.g. Slang's <c>Sampler2D&lt;&gt;</c>). On Vulkan the element
-    /// binds as a single combined image-sampler descriptor, sourcing its sampler from the paired
-    /// <see cref="PropertySet.SetTexture(PropertyID,Texture,Sampler)"/> call. Ignored by backends that
-    /// already merge texture and sampler (OpenGL).
+    /// Marks a <see cref="ResourceKind.TextureReadOnly"/> element that came from a combined
+    /// texture-sampler type (e.g. Slang's <c>Sampler2D&lt;&gt;</c>). On Vulkan it binds as a single
+    /// combined image-sampler descriptor, sourcing its sampler from the paired
+    /// <see cref="PropertySet.SetTexture(PropertyID,Texture,Sampler)"/> call. Ignored where texture
+    /// and sampler are already merged (OpenGL).
     /// </summary>
     CombinedImageSampler = 1 << 1,
 }

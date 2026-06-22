@@ -3,10 +3,8 @@ using Xunit;
 namespace Prowl.Graphite.Compiler.Tests;
 
 
-// Compiles the shared shader suite through the SPIR-V target and checks the binary output, entry
-// points, vertex locations, and resource reflection. Slang names every SPIR-V entry point "main", so
-// VulkanCompiler reports "main" for each stage. Expected resource layouts are authored statically and
-// compared by the shared ReflectionTestbed.
+// Compiles the shared shader suite to SPIR-V and asserts output, entry points, vertex locations, and
+// reflection. Slang names every SPIR-V entry point "main", so each stage reports "main".
 public class VulkanCompilationTests
 {
     const ShaderStages VF = ShaderStages.Vertex | ShaderStages.Fragment;
@@ -117,9 +115,7 @@ public class VulkanCompilationTests
     }
 
 
-    // Top-level resources in set 0; each ParameterBlock opens its own descriptor set. perObject holds
-    // uniform data (an implicit uniform buffer at binding 0) plus resources; onlyTex is resource-only,
-    // so it has no uniform buffer and binds its resources from 0.
+    // Each ParameterBlock opens its own set; one with uniform data gets an implicit buffer at binding 0.
     [Fact]
     public void ParameterBlocks_OpenDescriptorSets()
     {

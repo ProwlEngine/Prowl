@@ -20,7 +20,7 @@ internal static class SlangReflector
         ShaderStageDescription[] stages = new ShaderStageDescription[layout.EntryPointCount];
         List<VertexLayoutDescription> vertexLayouts = [];
 
-        // The layout's entry point ordering matches the indices accepted by GetEntryPointCode.
+        // Entry-point order matches the indices GetEntryPointCode expects.
         for (uint i = 0; i < layout.EntryPointCount; i++)
         {
             EntryPointReflection ep = layout.GetEntryPointByIndex(i);
@@ -89,10 +89,9 @@ internal static class SlangReflector
         string rawSemantic = field.SemanticName;
         uint semanticIndex = field.SemanticIndex;
 
-        // User-visible semantic name is blended from raw semantic + index
         VertexElementDescription element = new($"{rawSemantic}{semanticIndex}", format);
 
-        // d3d11 backend is funky so we use the raw semantic and its index directly there
+        // d3d11 binds by raw semantic name + index, not by location.
         uint location;
         if (bindsBySemantic)
         {
@@ -177,8 +176,7 @@ internal static class SlangReflector
         };
 
 
-    // Maps a reflected resource type layout to its Graphite resource kind. Returns false for type
-    // layouts that are not bindable resources (e.g. ParameterBlock, which is a container of others).
+    // False for non-bindable layouts (e.g. ParameterBlock).
     public static bool TryGetResourceKind(TypeLayoutReflection typeLayout, out ResourceKind kind)
     {
         switch (typeLayout.Kind)
@@ -208,17 +206,13 @@ internal static class SlangReflector
     }
 
 
-    // True when the resource is a combined texture-sampler (Slang's Sampler2D<> and friends), which
-    // surfaces as a plain texture resource but additionally carries a sampler that backends splitting
-    // the two (Vulkan, D3D11) must bind alongside it.
+    // Slang's Sampler2D<> reflects as a plain texture but carries a sampler split backends must bind too.
     public static bool IsCombinedTextureSampler(TypeLayoutReflection typeLayout) =>
         (long)typeLayout.BindingRangeCount > 0
         && typeLayout.GetBindingRangeType(0) == BindingType.CombinedTextureSampler;
 
 
-    // Flattens the scalar/vector/matrix fields of a uniform block into UniformBlockField entries,
-    // keyed by the Slang-source field name. Arrays, nested structs, and scalar types with no
-    // UniformScalarType mapping are skipped; offsets are absolute so omitting a field is harmless.
+    // Flattens a block's scalar/vector/matrix fields; unmapped types are skipped, offsets are absolute.
     public static UniformBlockField[] ReflectUniformFields(TypeLayoutReflection blockLayout)
     {
         List<UniformBlockField> fields = [];
@@ -286,6 +280,6 @@ internal static class SlangReflector
     }
 
 
-    // Sentinel for "no UniformScalarType maps this Slang type"; distinct from any real enum member.
+    // Sentinel for "no UniformScalarType maps this Slang type".
     const UniformScalarType Unsupported = (UniformScalarType)byte.MaxValue;
 }

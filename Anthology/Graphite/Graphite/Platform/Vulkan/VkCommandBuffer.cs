@@ -337,7 +337,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         ResolveAndBindGraphicsPipeline();
 
-        // Transition property textures to the right layout before the render pass begins.
+        // Property textures must reach their layout before the render pass begins.
         TransitionPropertyTextures(isCompute: false);
 
         EnsureRenderPassActive();
@@ -631,8 +631,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _currentFramebuffer.TransitionToIntermediateLayout(_cb);
         _activeRenderPass = default;
 
-        // Place a barrier between RenderPasses, so that color / depth outputs
-        // can be read in subsequent passes.
+        // Barrier so color/depth outputs can be read in subsequent passes.
         _gd.Vk.CmdPipelineBarrier(
             _cb,
             PipelineStageFlags.BottomOfPipeBit,
@@ -674,8 +673,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private protected override void SetPropertiesCore(PropertySet properties) { }
 
-    // Descriptor sets are content-addressed in the per-program cache, so clearing properties needs no
-    // invalidation here: the next bind simply resolves a new identity and hits or misses accordingly.
+    // Sets are content-addressed in the cache, so clearing needs no invalidation here.
     private protected override void ClearPropertiesCore() { }
 
     private void TransitionPropertyTextures(bool isCompute)
@@ -762,10 +760,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _gd.Vk.CmdBindDescriptorSets(_cb, bindPoint, pipelineLayout, 0, setCount, sets, (uint)dynOffsetCount, dynOffsets);
     }
 
-    // Builds the content identity of a descriptor set from its resolved resources: the same handles
-    // (and storage-buffer ranges) that WriteDescriptorSlot writes, minus per-draw dynamic UBO offsets.
-    // Identical resources produce an identical key, so the per-program cache reuses the set across frames.
-    // Resolution here is quiet (no OnMissingProperty); the actual write reports missing resources.
+    // Content key for the per-program set cache: resolved handles minus per-draw dynamic UBO offsets.
     private int BuildSetIdentity(
         ShaderProgram programKey, int setIdx, in ResourceLayoutDescription layout,
         bool isCompute, Span<ulong> dst)
@@ -979,8 +974,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         if (hasExplicit && uboEntry!.ReadOnly)
             return uboEntry.Buffer!.Value;
 
-        // Loose uniform fields are written into the explicit (writable) buffer when one is bound,
-        // otherwise into a per-draw transient buffer.
+        // Loose uniform fields go into the explicit writable buffer if bound, else a per-draw transient.
         if (elem.UniformFields != null && elem.UniformFields.Length > 0)
         {
             DeviceBufferRange? writableTarget = hasExplicit ? uboEntry!.Buffer : null;
@@ -1007,8 +1001,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         (int, int) key = (setIdx, bindingIndex);
         if (_drawUboScratch.TryGetValue(key, out DeviceBufferRange cached)) return cached;
 
-        // A writable explicit buffer is used as backing storage: only the set fields are written,
-        // leaving any unset bytes the caller may rely on intact.
+        // Write only the set fields into the explicit buffer, leaving unset bytes intact.
         if (writableTarget.HasValue)
         {
             DeviceBufferRange target = writableTarget.Value;
@@ -1110,7 +1103,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             }
         }
 
-        // case 3: oops, all linear!
+        // case 3: fall back to the default linear sampler
         return (VkSampler)_gd.LinearSampler;
     }
 
