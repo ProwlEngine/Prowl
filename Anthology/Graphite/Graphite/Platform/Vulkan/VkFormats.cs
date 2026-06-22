@@ -138,7 +138,9 @@ internal static partial class VkFormats
             case ResourceKind.StructuredBufferReadOnly:
                 return dynamicBinding ? DescriptorType.StorageBufferDynamic : DescriptorType.StorageBuffer;
             case ResourceKind.TextureReadOnly:
-                return DescriptorType.SampledImage;
+                return (options & ResourceLayoutElementOptions.CombinedImageSampler) != 0
+                    ? DescriptorType.CombinedImageSampler
+                    : DescriptorType.SampledImage;
             case ResourceKind.TextureReadWrite:
                 return DescriptorType.StorageImage;
             case ResourceKind.Sampler:

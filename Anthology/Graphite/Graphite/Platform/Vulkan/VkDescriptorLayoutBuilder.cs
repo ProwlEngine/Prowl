@@ -92,12 +92,12 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         ResourceLayoutElementDescription[] elems = desc.Elements;
         DescriptorSetLayoutBinding* bindings = stackalloc DescriptorSetLayoutBinding[elems.Length];
 
-        uint uniformBufferDynamic = 0, sampledImage = 0, sampler = 0, storageBuffer = 0, storageImage = 0;
+        uint uniformBufferDynamic = 0, sampledImage = 0, sampler = 0, storageBuffer = 0, storageImage = 0, combinedImageSampler = 0;
 
         for (int i = 0; i < elems.Length; i++)
         {
             ref ResourceLayoutElementDescription elem = ref elems[i];
-            DescriptorType descType = GetDescriptorType(elem.Kind);
+            DescriptorType descType = GetDescriptorType(elem.Kind, elem.Options);
             bindings[i] = new DescriptorSetLayoutBinding
             {
                 Binding = (uint)elem.BindingIndex,
@@ -112,6 +112,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
                 case DescriptorType.Sampler: sampler++; break;
                 case DescriptorType.StorageBuffer: storageBuffer++; break;
                 case DescriptorType.StorageImage: storageImage++; break;
+                case DescriptorType.CombinedImageSampler: combinedImageSampler++; break;
             }
         }
 
@@ -124,19 +125,23 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         gd.Vk.CreateDescriptorSetLayout(gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
         gd.RecordAllocation(AllocBin.ResourceLayout, 0);
 
-        return (dsl, new DescriptorResourceCounts(0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage));
+        return (dsl, new DescriptorResourceCounts(0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage, combinedImageSampler));
     }
 
     /// <summary>
     /// Returns the Vulkan descriptor type for the given <see cref="ResourceKind"/>.
-    /// All uniform buffers are <c>UNIFORM_BUFFER_DYNAMIC</c>; textures use separate image/sampler descriptors.
+    /// All uniform buffers are <c>UNIFORM_BUFFER_DYNAMIC</c>; textures use separate image/sampler descriptors,
+    /// except a texture flagged <see cref="ResourceLayoutElementOptions.CombinedImageSampler"/>, which binds
+    /// as a single combined image-sampler descriptor.
     /// </summary>
-    private static DescriptorType GetDescriptorType(ResourceKind kind) => kind switch
+    private static DescriptorType GetDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options) => kind switch
     {
         ResourceKind.UniformBuffer => DescriptorType.UniformBufferDynamic,
         ResourceKind.StructuredBufferReadOnly => DescriptorType.StorageBuffer,
         ResourceKind.StructuredBufferReadWrite => DescriptorType.StorageBuffer,
-        ResourceKind.TextureReadOnly => DescriptorType.SampledImage,
+        ResourceKind.TextureReadOnly => (options & ResourceLayoutElementOptions.CombinedImageSampler) != 0
+            ? DescriptorType.CombinedImageSampler
+            : DescriptorType.SampledImage,
         ResourceKind.TextureReadWrite => DescriptorType.StorageImage,
         ResourceKind.Sampler => DescriptorType.Sampler,
         _ => throw Illegal.Value<ResourceKind>(),

@@ -900,13 +900,15 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
                 case ResourceKind.TextureReadOnly:
                     {
+                        bool combined = (elem.Options & ResourceLayoutElementOptions.CombinedImageSampler) != 0;
                         VkTextureView view = ResolveTextureView(in elem, setIdx);
                         imgInfos[imgIdx] = new DescriptorImageInfo
                         {
                             ImageView = view.ImageView,
                             ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+                            Sampler = combined ? ResolveSampler(in elem, in layout).DeviceSampler : default,
                         };
-                        write.DescriptorType = DescriptorType.SampledImage;
+                        write.DescriptorType = combined ? DescriptorType.CombinedImageSampler : DescriptorType.SampledImage;
                         write.PImageInfo = &imgInfos[imgIdx++];
                         break;
                     }

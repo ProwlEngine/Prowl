@@ -208,6 +208,14 @@ internal static class SlangReflector
     }
 
 
+    // True when the resource is a combined texture-sampler (Slang's Sampler2D<> and friends), which
+    // surfaces as a plain texture resource but additionally carries a sampler that backends splitting
+    // the two (Vulkan, D3D11) must bind alongside it.
+    public static bool IsCombinedTextureSampler(TypeLayoutReflection typeLayout) =>
+        (long)typeLayout.BindingRangeCount > 0
+        && typeLayout.GetBindingRangeType(0) == BindingType.CombinedTextureSampler;
+
+
     // Flattens the scalar/vector/matrix fields of a uniform block into UniformBlockField entries,
     // keyed by the Slang-source field name. Arrays, nested structs, and scalar types with no
     // UniformScalarType mapping are skipped; offsets are absolute so omitting a field is harmless.

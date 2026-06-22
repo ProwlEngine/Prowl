@@ -9,6 +9,7 @@ internal readonly struct DescriptorResourceCounts
     public readonly uint StorageBufferCount;
     public readonly uint StorageBufferDynamicCount;
     public readonly uint StorageImageCount;
+    public readonly uint CombinedImageSamplerCount;
 
     public DescriptorResourceCounts(
         uint uniformBufferCount,
@@ -17,7 +18,8 @@ internal readonly struct DescriptorResourceCounts
         uint samplerCount,
         uint storageBufferCount,
         uint storageBufferDynamicCount,
-        uint storageImageCount)
+        uint storageImageCount,
+        uint combinedImageSamplerCount)
     {
         UniformBufferCount = uniformBufferCount;
         UniformBufferDynamicCount = uniformBufferDynamicCount;
@@ -26,5 +28,6 @@ internal readonly struct DescriptorResourceCounts
         StorageBufferCount = storageBufferCount;
         StorageBufferDynamicCount = storageBufferDynamicCount;
         StorageImageCount = storageImageCount;
+        CombinedImageSamplerCount = combinedImageSamplerCount;
     }
 }

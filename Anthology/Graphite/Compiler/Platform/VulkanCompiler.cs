@@ -91,7 +91,11 @@ public class VulkanCompiler : CompilerModule
             ? SlangReflector.ReflectUniformFields(typeLayout.ElementTypeLayout)
             : [];
 
-        Add(bySet, set, parameter.Name, kind, stages, binding, fields);
+        ResourceLayoutElementOptions options = SlangReflector.IsCombinedTextureSampler(typeLayout)
+            ? ResourceLayoutElementOptions.CombinedImageSampler
+            : ResourceLayoutElementOptions.None;
+
+        Add(bySet, set, parameter.Name, kind, stages, binding, options, fields);
     }
 
 
@@ -109,7 +113,7 @@ public class VulkanCompiler : CompilerModule
         {
             int uboBinding = (int)typeLayout.ContainerVarLayout.GetOffset(ParameterCategory.DescriptorTableSlot);
             Add(bySet, set, block.Name, ResourceKind.UniformBuffer, stages, uboBinding,
-                SlangReflector.ReflectUniformFields(elementLayout));
+                ResourceLayoutElementOptions.None, SlangReflector.ReflectUniformFields(elementLayout));
         }
 
         // Resources declared inside the block bind into the block's own space; their slot offsets are
@@ -129,7 +133,8 @@ public class VulkanCompiler : CompilerModule
 
     static void Add(
         Dictionary<uint, List<ResourceLayoutElementDescription>> bySet,
-        uint set, PropertyID name, ResourceKind kind, ShaderStages stages, int binding, UniformBlockField[] fields)
+        uint set, PropertyID name, ResourceKind kind, ShaderStages stages, int binding,
+        ResourceLayoutElementOptions options, UniformBlockField[] fields)
     {
         if (!bySet.TryGetValue(set, out List<ResourceLayoutElementDescription>? elements))
             bySet[set] = elements = [];
@@ -139,7 +144,7 @@ public class VulkanCompiler : CompilerModule
             kind,
             stages,
             binding,
-            ResourceLayoutElementOptions.None,
+            options,
             PropertyID.ToString(name) ?? string.Empty,
             fields));
     }

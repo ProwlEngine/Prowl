@@ -152,4 +152,13 @@ public enum ResourceLayoutElementOptions
     /// <see cref="GraphicsDevice.StructuredBufferMinOffsetAlignment"/>, depending on the kind of resource.
     /// </summary>
     DynamicBinding = 1 << 0,
+
+    /// <summary>
+    /// Applies to a <see cref="ResourceKind.TextureReadOnly"/> element that originates from a combined
+    /// texture-sampler type in the shader (e.g. Slang's <c>Sampler2D&lt;&gt;</c>). On Vulkan the element
+    /// binds as a single combined image-sampler descriptor, sourcing its sampler from the paired
+    /// <see cref="PropertySet.SetTexture(PropertyID,Texture,Sampler)"/> call. Ignored by backends that
+    /// already merge texture and sampler (OpenGL).
+    /// </summary>
+    CombinedImageSampler = 1 << 1,
 }

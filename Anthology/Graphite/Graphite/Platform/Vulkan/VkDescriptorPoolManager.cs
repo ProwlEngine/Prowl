@@ -104,7 +104,7 @@ internal partial class VkDescriptorPoolManager
     {
         uint totalSets = 1000;
         uint descriptorCount = 100;
-        uint poolSizeCount = 7;
+        uint poolSizeCount = 8;
         DescriptorPoolSize* sizes = stackalloc DescriptorPoolSize[(int)poolSizeCount];
         sizes[0].Type = DescriptorType.UniformBuffer;
         sizes[0].DescriptorCount = descriptorCount;
@@ -120,6 +120,8 @@ internal partial class VkDescriptorPoolManager
         sizes[5].DescriptorCount = descriptorCount;
         sizes[6].Type = DescriptorType.StorageBufferDynamic;
         sizes[6].DescriptorCount = descriptorCount;
+        sizes[7].Type = DescriptorType.CombinedImageSampler;
+        sizes[7].DescriptorCount = descriptorCount;
 
         DescriptorPoolCreateInfo poolCI = new()
         {
@@ -156,6 +158,7 @@ internal partial class VkDescriptorPoolManager
         public uint StorageBufferCount;
         public uint StorageBufferDynamicCount;
         public uint StorageImageCount;
+        public uint CombinedImageSamplerCount;
 
         public PoolInfo(DescriptorPool pool, uint totalSets, uint descriptorCount)
         {
@@ -168,6 +171,7 @@ internal partial class VkDescriptorPoolManager
             StorageBufferCount = descriptorCount;
             StorageBufferDynamicCount = descriptorCount;
             StorageImageCount = descriptorCount;
+            CombinedImageSamplerCount = descriptorCount;
         }
 
         internal bool Allocate(DescriptorResourceCounts counts)
@@ -179,7 +183,8 @@ internal partial class VkDescriptorPoolManager
                 && SamplerCount >= counts.SamplerCount
                 && StorageBufferCount >= counts.StorageBufferCount
                 && StorageBufferDynamicCount >= counts.StorageBufferDynamicCount
-                && StorageImageCount >= counts.StorageImageCount)
+                && StorageImageCount >= counts.StorageImageCount
+                && CombinedImageSamplerCount >= counts.CombinedImageSamplerCount)
             {
                 RemainingSets -= 1;
                 UniformBufferCount -= counts.UniformBufferCount;
@@ -189,6 +194,7 @@ internal partial class VkDescriptorPoolManager
                 StorageBufferCount -= counts.StorageBufferCount;
                 StorageBufferDynamicCount -= counts.StorageBufferDynamicCount;
                 StorageImageCount -= counts.StorageImageCount;
+                CombinedImageSamplerCount -= counts.CombinedImageSamplerCount;
                 return true;
             }
             else
@@ -210,6 +216,7 @@ internal partial class VkDescriptorPoolManager
             StorageBufferCount += counts.StorageBufferCount;
             StorageBufferDynamicCount += counts.StorageBufferDynamicCount;
             StorageImageCount += counts.StorageImageCount;
+            CombinedImageSamplerCount += counts.CombinedImageSamplerCount;
         }
 
         internal void ResetCounters()
@@ -222,6 +229,7 @@ internal partial class VkDescriptorPoolManager
             StorageBufferCount = 100;
             StorageBufferDynamicCount = 100;
             StorageImageCount = 100;
+            CombinedImageSamplerCount = 100;
         }
     }
 }

@@ -24,6 +24,9 @@ public class VulkanCompilationTests
     static ResourceLayoutElementDescription Samp(string name, int binding)
         => new(name, ResourceKind.Sampler, VF, binding, ResourceLayoutElementOptions.None, name, []);
 
+    static ResourceLayoutElementDescription CombinedTex(string name, int binding)
+        => new(name, ResourceKind.TextureReadOnly, VF, binding, ResourceLayoutElementOptions.CombinedImageSampler, name, []);
+
 
     [Fact]
     public void Graphics_StageEntryPointsAreMain()
@@ -136,5 +139,21 @@ public class VulkanCompilationTests
             new ResourceLayoutDescription(2,
                 Tex("tex", 0),
                 Samp("s", 1)));
+    }
+
+
+    // A Slang Sampler2D<> reflects as a single texture descriptor flagged CombinedImageSampler, so the
+    // Vulkan binder can bind it as one combined image-sampler. A split Texture2D + SamplerState in the
+    // same block stays two plain descriptors with no such flag.
+    [Fact]
+    public void CombinedSampler_FlagsOnlyTheCombinedTexture()
+    {
+        ReflectionTestbed.AssertResourceLayouts(Compile("CombinedSampler"),
+            new ResourceLayoutDescription(0,
+                Ubo("Model", 0,
+                    new UniformBlockField("MatrixMVP", 0, 64, UniformScalarType.Float4x4)),
+                CombinedTex("Combined", 1),
+                Tex("SplitTexture", 2),
+                Samp("SplitSampler", 3)));
     }
 }
