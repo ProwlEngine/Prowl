@@ -287,12 +287,22 @@ internal unsafe class OpenGLCommandExecutor
         _currentIndexBuffer = null;
     }
 
+    [System.Diagnostics.Conditional("VALIDATE_USAGE")]
+    private void MarkBufferInFlight(DeviceBuffer buffer)
+    {
+#if VALIDATE_USAGE
+        if (buffer != null)
+            buffer.SubmitCommands_MarkInFlight(_gd, _gd.ExecutorActiveFrame.FrameId);
+#endif
+    }
+
     private void ResolveIndexBufferForDraw()
     {
         bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
         _currentReplayingBuffer?.Bridge_AssertIndexBufferResolved(has);
 
         _currentReplayingBuffer?.Bridge_CheckIndexBufferUsage(ib);
+        MarkBufferInFlight(ib);
 
         OpenGLBuffer glIB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(ib);
         glIB.EnsureResourcesCreated();
@@ -560,6 +570,7 @@ internal unsafe class OpenGLCommandExecutor
 
             _currentVertexSource.ResolveSlot((uint)i, in input, out VertexBinding binding);
             _currentReplayingBuffer?.Bridge_CheckVertexBindingUsage(in binding, (uint)i);
+            MarkBufferInFlight(binding.Buffer);
 
             OpenGLBuffer vb = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(binding.Buffer);
             vb.EnsureResourcesCreated();

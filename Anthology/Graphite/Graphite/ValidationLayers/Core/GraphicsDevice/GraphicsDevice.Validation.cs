@@ -62,6 +62,23 @@ public abstract partial class GraphicsDevice
     }
 
     [Conditional("VALIDATE_USAGE")]
+    private static void Map_CheckBufferNotInFlight(MappableResource resource, MapMode mode)
+    {
+#if VALIDATE_USAGE
+        if ((mode == MapMode.Write || mode == MapMode.ReadWrite) && resource is DeviceBuffer buffer)
+            buffer.CheckNotInFlightForWrite(nameof(Map));
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
+    private static void UpdateBuffer_CheckBufferNotInFlight(DeviceBuffer buffer)
+    {
+#if VALIDATE_USAGE
+        buffer.CheckNotInFlightForWrite(nameof(UpdateBuffer));
+#endif
+    }
+
+    [Conditional("VALIDATE_USAGE")]
     private static void Map_CheckResource(MappableResource resource, MapMode mode, uint subresource)
     {
 #if VALIDATE_USAGE

@@ -14,7 +14,7 @@ internal unsafe class D3D11ResourceFactory : ResourceFactory, IDisposable
     public override GraphicsBackend BackendType => GraphicsBackend.Direct3D11;
 
     public D3D11ResourceFactory(D3D11GraphicsDevice gd)
-        : base(gd.Features)
+        : base(gd, gd.Features)
     {
         _gd = gd;
         _device = gd.Device;

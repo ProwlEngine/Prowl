@@ -469,6 +469,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public MappedResource Map(MappableResource resource, MapMode mode, uint subresource)
     {
         Map_CheckResource(resource, mode, subresource);
+        Map_CheckBufferNotInFlight(resource, mode);
 
         MappedResource mapped = MapCore(resource, mode, subresource);
         RecordBufferOp(BufferOpBin.Map, mapped.SizeInBytes);
@@ -803,6 +804,7 @@ public abstract partial class GraphicsDevice : IDisposable
         {
             return;
         }
+        UpdateBuffer_CheckBufferNotInFlight(buffer);
         UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
         RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }

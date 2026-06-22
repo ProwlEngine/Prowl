@@ -6,9 +6,11 @@ namespace Prowl.Graphite;
 public abstract partial class ResourceFactory
 {
     /// <summary></summary>
+    /// <param name="device">The <see cref="GraphicsDevice"/> that owns this factory.</param>
     /// <param name="features"></param>
-    protected ResourceFactory(GraphicsDeviceFeatures features)
+    protected ResourceFactory(GraphicsDevice device, GraphicsDeviceFeatures features)
     {
+        Device = device;
         Features = features;
     }
 
@@ -16,6 +18,11 @@ public abstract partial class ResourceFactory
     /// Gets the <see cref="GraphicsBackend"/> of this instance.
     /// </summary>
     public abstract GraphicsBackend BackendType { get; }
+
+    /// <summary>
+    /// Gets the <see cref="GraphicsDevice"/> that owns this instance.
+    /// </summary>
+    public GraphicsDevice Device { get; }
 
     /// <summary>
     /// Gets the <see cref="GraphicsDeviceFeatures"/> this instance was created with.
@@ -146,7 +153,9 @@ public abstract partial class ResourceFactory
     public DeviceBuffer CreateBuffer(ref BufferDescription description)
     {
         CreateBuffer_CheckDescription(ref description);
-        return CreateBufferCore(ref description);
+        DeviceBuffer buffer = CreateBufferCore(ref description);
+        buffer.CreateBuffer_SetTransientWrites(description.TransientWrites);
+        return buffer;
     }
 
     /// <summary>
@@ -154,6 +163,21 @@ public abstract partial class ResourceFactory
     /// <param name="description"></param>
     /// <returns></returns>
     protected abstract DeviceBuffer CreateBufferCore(ref BufferDescription description);
+
+    /// <summary>
+    /// Creates a new <see cref="StreamingBuffer"/>: a set of <see cref="GraphicsDevice.MaxFramesInFlight"/> backing
+    /// buffers, each described by <paramref name="description"/>, exposed as a single per-frame buffer. Use this for
+    /// data that is rewritten by the CPU every frame, such as per-frame uniform data.
+    /// </summary>
+    /// <param name="description">The desired properties of each backing buffer.</param>
+    /// <returns>A new <see cref="StreamingBuffer"/>.</returns>
+    public StreamingBuffer CreateStreamingBuffer(BufferDescription description) => CreateStreamingBuffer(ref description);
+    /// <inheritdoc cref="CreateStreamingBuffer(BufferDescription)"/>
+    public StreamingBuffer CreateStreamingBuffer(ref BufferDescription description)
+    {
+        CreateBuffer_CheckDescription(ref description);
+        return new StreamingBuffer(Device, ref description);
+    }
 
     /// <summary>
     /// Creates a new <see cref="Sampler"/>.

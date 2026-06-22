@@ -7,7 +7,7 @@ namespace Prowl.Graphite;
 /// The size of a <see cref="DeviceBuffer"/> is fixed upon creation, and resizing is not possible.
 /// See <see cref="BufferDescription"/>.
 /// </summary>
-public abstract class DeviceBuffer : DeviceResource, BindableResource, MappableResource, IDisposable
+public abstract partial class DeviceBuffer : DeviceResource, BindableResource, MappableResource, IDisposable
 {
     /// <summary>
     /// The total capacity, in bytes, of the buffer. This value is fixed upon creation.

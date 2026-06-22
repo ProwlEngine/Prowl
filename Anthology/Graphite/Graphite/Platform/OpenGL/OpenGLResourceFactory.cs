@@ -12,7 +12,7 @@ internal class OpenGLResourceFactory : ResourceFactory
     public override GraphicsBackend BackendType => _gd.BackendType;
 
     public OpenGLResourceFactory(OpenGLGraphicsDevice gd)
-        : base(gd.Features)
+        : base(gd, gd.Features)
     {
         _gd = gd;
         _pool = gd.StagingMemoryPool;

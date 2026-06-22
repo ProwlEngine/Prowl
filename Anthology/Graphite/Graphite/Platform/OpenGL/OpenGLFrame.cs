@@ -44,6 +44,7 @@ internal sealed class OpenGLFrame : Frame
     public override void SubmitCommands(CommandBuffer commandList)
     {
         SubmitCommands_CheckEnded(commandList);
+        commandList.SubmitCommands_MarkReferencedBuffersInFlight(Device, FrameId);
         _gd.SubmitCommandBufferInternal(commandList);
     }
 

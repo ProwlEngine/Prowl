@@ -32,6 +32,17 @@ public struct BufferDescription : IEquatable<BufferDescription>
     public bool UseTypedHlslBinding;
 
     /// <summary>
+    /// When true, this <see cref="DeviceBuffer"/> opts out of in-flight write-hazard tracking. Writing to the buffer
+    /// (via <see cref="GraphicsDevice.Map(MappableResource, MapMode)"/> or
+    /// <see cref="GraphicsDevice.UpdateBuffer(DeviceBuffer, uint, IntPtr, uint)"/>) while a previous frame may still
+    /// be reading it will no longer be reported as an error. This accepts a possible one-frame tear in exchange for
+    /// being able to update a single buffer in place. Use this for buffers that are only updated occasionally and
+    /// where a brief flicker is acceptable; prefer a <see cref="StreamingBuffer"/> when tearing is not acceptable.
+    /// Has no effect in builds without usage validation.
+    /// </summary>
+    public bool TransientWrites;
+
+    /// <summary>
     /// Constructs a new <see cref="BufferDescription"/> describing a non-dynamic <see cref="DeviceBuffer"/>.
     /// </summary>
     /// <param name="sizeInBytes">The desired capacity, in bytes.</param>
@@ -42,6 +53,7 @@ public struct BufferDescription : IEquatable<BufferDescription>
         Usage = usage;
         StructureByteStride = 0;
         UseTypedHlslBinding = false;
+        TransientWrites = false;
     }
 
     /// <summary>
@@ -57,6 +69,7 @@ public struct BufferDescription : IEquatable<BufferDescription>
         Usage = usage;
         StructureByteStride = structureByteStride;
         UseTypedHlslBinding = false;
+        TransientWrites = false;
     }
 
     /// <summary>
@@ -78,6 +91,7 @@ public struct BufferDescription : IEquatable<BufferDescription>
         Usage = usage;
         StructureByteStride = structureByteStride;
         UseTypedHlslBinding = useTypedHlslBinding;
+        TransientWrites = false;
     }
 
     /// <summary>
@@ -90,7 +104,8 @@ public struct BufferDescription : IEquatable<BufferDescription>
         return SizeInBytes.Equals(other.SizeInBytes)
             && Usage == other.Usage
             && StructureByteStride.Equals(other.StructureByteStride)
-            && UseTypedHlslBinding.Equals(other.UseTypedHlslBinding);
+            && UseTypedHlslBinding.Equals(other.UseTypedHlslBinding)
+            && TransientWrites.Equals(other.TransientWrites);
     }
 
     /// <summary>
@@ -103,6 +118,7 @@ public struct BufferDescription : IEquatable<BufferDescription>
             SizeInBytes.GetHashCode(),
             (int)Usage,
             StructureByteStride.GetHashCode(),
-            UseTypedHlslBinding.GetHashCode());
+            UseTypedHlslBinding.GetHashCode(),
+            TransientWrites.GetHashCode());
     }
 }

@@ -8,7 +8,7 @@ internal class VkResourceFactory : ResourceFactory
     private readonly Device _device;
 
     public VkResourceFactory(VkGraphicsDevice vkGraphicsDevice)
-        : base(vkGraphicsDevice.Features)
+        : base(vkGraphicsDevice, vkGraphicsDevice.Features)
     {
         _gd = vkGraphicsDevice;
         _device = vkGraphicsDevice.Device;

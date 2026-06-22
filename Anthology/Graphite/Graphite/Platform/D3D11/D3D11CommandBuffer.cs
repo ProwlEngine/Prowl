@@ -245,6 +245,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
         DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
+        TrackReferencedBuffer(ib);
 
         Format dxgiFmt = D3D11Formats.ToDxgiFormat(fmt);
 
@@ -780,6 +781,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 
             _currentVertexSource.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
+            TrackReferencedBuffer(binding.Buffer);
 
             D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(binding.Buffer);
             UnbindUAVBuffer(binding.Buffer);

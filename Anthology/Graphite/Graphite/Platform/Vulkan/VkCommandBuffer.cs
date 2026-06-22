@@ -307,6 +307,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             VertexLayoutDescription layout = layouts[slot];
             _currentVertexSource!.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
+            TrackReferencedBuffer(binding.Buffer);
 
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(binding.Buffer);
             buffers[slot] = vkBuffer.DeviceBuffer;
@@ -324,6 +325,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _currentIndexCount = indexCount;
         DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
+        TrackReferencedBuffer(ib);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
         _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.VdToVkIndexFormat(fmt));
