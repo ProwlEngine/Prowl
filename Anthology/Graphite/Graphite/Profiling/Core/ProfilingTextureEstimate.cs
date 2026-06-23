@@ -1,4 +1,3 @@
-#if PROFILE_USAGE
 namespace Prowl.Graphite;
 
 /// <summary>
@@ -21,4 +20,3 @@ internal static class ProfilingTextureEstimate
         return bytes * texture.ArrayLayers;
     }
 }
-#endif

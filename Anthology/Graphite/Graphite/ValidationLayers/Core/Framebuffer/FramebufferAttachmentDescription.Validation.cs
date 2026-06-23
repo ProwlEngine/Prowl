@@ -1,13 +1,12 @@
-using System.Diagnostics;
-
 namespace Prowl.Graphite;
 
 public partial struct FramebufferAttachmentDescription
 {
-    [Conditional("VALIDATE_USAGE")]
     private static void FramebufferAttachmentDescription_CheckLayerAndMip(Texture target, uint arrayLayer, uint mipLevel)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         uint effectiveArrayLayers = ValidationHelpers.GetEffectiveArrayLayers(target);
         if (arrayLayer >= effectiveArrayLayers)
         {
@@ -19,6 +18,5 @@ public partial struct FramebufferAttachmentDescription
             throw new RenderException(
                 $"{nameof(mipLevel)} must be less than {nameof(target)}.{nameof(Texture.MipLevels)}.");
         }
-#endif
     }
 }

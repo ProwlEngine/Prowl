@@ -12,8 +12,8 @@ namespace Prowl.Graphite.Tests;
 // creators build a window.
 public static class TestUtils
 {
-    private static readonly GraphicsDeviceOptions s_headlessOptions = new(true);
-    private static readonly GraphicsDeviceOptions s_swapchainOptions = new(true, PixelFormat.R16_UNorm, false);
+    private static readonly GraphicsDeviceOptions s_headlessOptions = new(true) { EnableProfiling = true };
+    private static readonly GraphicsDeviceOptions s_swapchainOptions = new(true, PixelFormat.R16_UNorm, false) { EnableProfiling = true };
 
     public static GraphicsDevice CreateVulkanDevice()
         => GraphicsDevice.CreateVulkan(s_headlessOptions);

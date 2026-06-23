@@ -246,11 +246,9 @@ internal partial class OpenGLCommandBuffer : CommandBuffer
         _currentCommands.InsertDebugMarker(name);
     }
 
-    [System.Diagnostics.Conditional("VALIDATE_USAGE")]
     internal void Bridge_CheckVertexBindingUsage(in VertexBinding binding, uint slot)
         => CheckVertexBindingUsage(in binding, slot);
 
-    [System.Diagnostics.Conditional("VALIDATE_USAGE")]
     internal void Bridge_CheckIndexBufferUsage(DeviceBuffer buffer)
         => CheckIndexBufferUsage(buffer);
 

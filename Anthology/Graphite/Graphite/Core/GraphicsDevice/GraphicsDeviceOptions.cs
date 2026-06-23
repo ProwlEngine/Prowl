@@ -65,6 +65,20 @@ public struct GraphicsDeviceOptions
     public uint TransientBufferHardCapBytes;
 
     /// <summary>
+    /// Indicates whether the GraphicsDevice runs its usage-validation layer, which performs extra
+    /// correctness checks on API calls and throws a <see cref="RenderException"/> on misuse.
+    /// If null, the device defaults to enabled.
+    /// </summary>
+    public bool? EnableValidation;
+
+    /// <summary>
+    /// Indicates whether the GraphicsDevice runs its profiling layer, which records per-frame
+    /// allocation and data-transfer counters readable through <see cref="GraphicsDevice.GetProfile"/>.
+    /// If null, the device defaults to disabled.
+    /// </summary>
+    public bool? EnableProfiling;
+
+    /// <summary>
     /// Constructs a new GraphicsDeviceOptions for a device with no main Swapchain.
     /// </summary>
     /// <param name="debug">Indicates whether the GraphicsDevice will support debug features, provided they are supported by

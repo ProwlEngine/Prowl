@@ -1,31 +1,30 @@
 using System;
-using System.Diagnostics;
 
 namespace Prowl.Graphite;
 
 internal static class ValidationHelpers
 {
-    [Conditional("VALIDATE_USAGE")]
     internal static void RequireNotNull(object value, string parameterName, string caller)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         if (value == null)
         {
             throw new ArgumentNullException(parameterName,
                 $"'{parameterName}' passed to {caller} must be non-null.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     internal static void RequireNotNullRender(object value, string typeName, string caller)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         if (value == null)
         {
             throw new RenderException($"{typeName} passed to {caller} must be non-null.");
         }
-#endif
     }
 
     /// <summary>

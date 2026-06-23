@@ -138,7 +138,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// Gets the currently active <see cref="Frame"/>.
     /// <para>
     /// This is the single guarded entry point for frame access from recording code: when usage
-    /// validation is enabled (VALIDATE_USAGE), reading it while no frame is open throws a
+    /// validation is enabled, reading it while no frame is open throws a
     /// <see cref="RenderException"/>, so backends never need to null-check before allocating
     /// transient memory or per-frame resources. Without validation it returns
     /// <see langword="null"/> if no frame is in progress.
@@ -335,6 +335,9 @@ public abstract partial class GraphicsDevice : IDisposable
             _transientSoftCapBytes = _transientInitialSize;
         if (_transientHardCapBytes < _transientSoftCapBytes)
             _transientHardCapBytes = _transientSoftCapBytes;
+
+        InitializeFrameOptions_SetValidationEnabled(options);
+        InitializeFrameOptions_InitializeProfiling(options);
     }
 
     /// <summary>

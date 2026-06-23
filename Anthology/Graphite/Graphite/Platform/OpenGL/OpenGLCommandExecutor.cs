@@ -287,13 +287,13 @@ internal unsafe class OpenGLCommandExecutor
         _currentIndexBuffer = null;
     }
 
-    [System.Diagnostics.Conditional("VALIDATE_USAGE")]
     private void MarkBufferInFlight(DeviceBuffer buffer)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         if (buffer != null)
             buffer.SubmitCommands_MarkInFlight(_gd, _gd.ExecutorActiveFrame.FrameId);
-#endif
     }
 
     private void ResolveIndexBufferForDraw()

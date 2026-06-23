@@ -1,4 +1,3 @@
-#if PROFILE_USAGE
 namespace Prowl.Graphite;
 
 /// <summary>
@@ -11,4 +10,3 @@ internal struct ProfileCell
     public long Count;
     public long Bytes;
 }
-#endif

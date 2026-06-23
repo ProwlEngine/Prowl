@@ -1,13 +1,12 @@
-using System.Diagnostics;
-
 namespace Prowl.Graphite;
 
 public abstract partial class ResourceFactory
 {
-    [Conditional("VALIDATE_USAGE")]
     private void CreateTexture_CheckDescription(ref TextureDescription description)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         if (description.Width == 0 || description.Height == 0 || description.Depth == 0)
         {
             throw new RenderException("Width, Height, and Depth must be non-zero.");
@@ -36,13 +35,13 @@ public abstract partial class ResourceFactory
             throw new RenderException(
                 $"{nameof(TextureUsage)}.{nameof(TextureUsage.DepthStencil)} and {nameof(TextureUsage)}.{nameof(TextureUsage.GenerateMipmaps)} cannot be combined.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void CreateTextureView_CheckDescription(ref TextureViewDescription description)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         if (description.MipLevels == 0 || description.ArrayLayers == 0
             || (description.BaseMipLevel + description.MipLevels) > description.Target.MipLevels
             || (description.BaseArrayLayer + description.ArrayLayers) > description.Target.ArrayLayers)
@@ -72,13 +71,13 @@ public abstract partial class ResourceFactory
                     $"components as the underlying Texture's format, or the same format.");
             }
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void CreateBuffer_CheckDescription(ref BufferDescription description)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         BufferUsage usage = description.Usage;
         if ((usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
             || (usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
@@ -122,13 +121,13 @@ public abstract partial class ResourceFactory
         {
             throw new RenderException($"Uniform buffer size must be a multiple of 16 bytes.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void CreateSampler_CheckDescription(ref SamplerDescription description)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         if (!Features.SamplerLodBias && description.LodBias != 0)
         {
             throw new RenderException(
@@ -139,13 +138,13 @@ public abstract partial class ResourceFactory
             throw new RenderException(
                 "SamplerFilter.Anisotropic cannot be used unless GraphicsDeviceFeatures.SamplerAnisotropy is supported.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void CreateGraphicsProgram_CheckDescription(ref ShaderDescription description)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         ShaderStageDescription[] stages = description.Stages;
         if (stages == null || stages.Length == 0)
         {
@@ -239,13 +238,13 @@ public abstract partial class ResourceFactory
                 }
             }
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void CreateComputeProgram_CheckDescription(ref ComputeDescription description)
     {
-#if VALIDATE_USAGE
+        if (!GraphicsDevice.ValidationEnabled)
+            return;
+
         if (!Features.ComputeShader)
         {
             throw new RenderException("GraphicsDevice does not support Compute Shaders.");
@@ -257,10 +256,8 @@ public abstract partial class ResourceFactory
         }
 
         ValidateProgramResourceLayouts(description.ResourceLayouts, nameof(ComputeProgram));
-#endif
     }
 
-#if VALIDATE_USAGE
     private static void ValidateProgramResourceLayouts(ResourceLayoutDescription[] layouts, string programType)
     {
         if (layouts == null) return;
@@ -347,5 +344,4 @@ public abstract partial class ResourceFactory
         UniformScalarType.Double4x4 => 128,
         _ => 0,
     };
-#endif
 }

@@ -1,87 +1,97 @@
-using System.Diagnostics;
-
 namespace Prowl.Graphite;
 
 public abstract partial class GraphicsDevice
 {
-    [Conditional("VALIDATE_USAGE")]
+    /// <summary>
+    /// When true, the usage-validation layer performs its correctness checks. Set once from
+    /// <see cref="GraphicsDeviceOptions.EnableValidation"/> at device creation.
+    /// </summary>
+    internal static bool ValidationEnabled;
+
+    private void InitializeFrameOptions_SetValidationEnabled(in GraphicsDeviceOptions options)
+    {
+        ValidationEnabled = options.EnableValidation ?? true;
+    }
+
     private void CurrentFrame_CheckActive()
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if (_currentFrame == null)
         {
             throw new RenderException(
                 "This operation requires an active frame, but none is open. Call BeginFrame before " +
                 "recording frame-dependent commands, and submit them before EndFrame.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void BeginFrame_CheckNoActive()
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if (_currentFrame != null)
         {
             throw new RenderException("BeginFrame called while a frame is already active. Call EndFrame first.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void EndFrame_CheckHasActive()
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if (_currentFrame == null)
         {
             throw new RenderException("EndFrame called with no active frame. Call BeginFrame first.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void EndFrame_CheckIsActive(Frame frame)
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if (CurrentFrame != frame)
         {
             throw new RenderException("The specified Frame is not the currently active frame.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private void SyncToVerticalBlank_CheckMainSwapchain()
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if (MainSwapchain == null)
         {
             throw new RenderException("This GraphicsDevice was created without a main Swapchain. This property cannot be set.");
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private static void Map_CheckBufferNotInFlight(MappableResource resource, MapMode mode)
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if ((mode == MapMode.Write || mode == MapMode.ReadWrite) && resource is DeviceBuffer buffer)
             buffer.CheckNotInFlightForWrite(nameof(Map));
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private static void UpdateBuffer_CheckBufferNotInFlight(DeviceBuffer buffer)
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         buffer.CheckNotInFlightForWrite(nameof(UpdateBuffer));
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private static void Map_CheckResource(MappableResource resource, MapMode mode, uint subresource)
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if (resource is DeviceBuffer buffer)
         {
             if ((buffer.Usage & BufferUsage.Dynamic) != BufferUsage.Dynamic
@@ -111,10 +121,8 @@ public abstract partial class GraphicsDevice
                     "Subresource must be less than the number of subresources in the Texture being mapped.");
             }
         }
-#endif
     }
 
-    [Conditional("VALIDATE_USAGE")]
     private static void UpdateTexture_CheckParameters(
         Texture texture,
         uint sizeInBytes,
@@ -122,7 +130,9 @@ public abstract partial class GraphicsDevice
         uint width, uint height, uint depth,
         uint mipLevel, uint arrayLayer)
     {
-#if VALIDATE_USAGE
+        if (!ValidationEnabled)
+            return;
+
         if (FormatHelpers.IsCompressedFormat(texture.Format))
         {
             if (x % 4 != 0 || y % 4 != 0 || height % 4 != 0 || width % 4 != 0)
@@ -172,6 +182,5 @@ public abstract partial class GraphicsDevice
             throw new RenderException(
                 $"{nameof(arrayLayer)} ({arrayLayer}) must be less than the Texture's effective array layer count ({effectiveArrayLayers}).");
         }
-#endif
     }
 }

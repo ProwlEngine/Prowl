@@ -91,7 +91,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
     /// <see cref="GraphicsDevice.CurrentFrame"/> by the depth of the work queue. Use this anywhere
     /// inside the executor (e.g. transient UBO allocation) instead of <c>_gd.CurrentFrame</c>.
     /// <para>
-    /// When usage validation is enabled (VALIDATE_USAGE), reading this while no frame is active on
+    /// When usage validation is enabled, reading this while no frame is active on
     /// the execution thread throws a <see cref="RenderException"/>, catching frame-dependent commands
     /// submitted outside a frame. Without validation it returns <see langword="null"/>.
     /// </para>
