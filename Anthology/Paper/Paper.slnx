@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Samples/">
+    <Project Path="Samples/Shared/Shared.csproj" />
+    <Project Path="Samples/OpenTK/OpenTKSample.csproj" />
+    <Project Path="Samples/RaylibSample/RaylibSample.csproj" />
+    <Project Path="Samples/WasmExample/WasmExample.csproj" />
+  </Folder>
+  <Project Path="Paper/Paper.csproj" />
+  <Project Path="Tests/Tests.csproj" />
+</Solution>
