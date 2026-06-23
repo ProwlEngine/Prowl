@@ -7,17 +7,16 @@ namespace Prowl.Graphite.ShaderDef.Tests;
 public class StencilTests
 {
     [Fact]
-    public void Ref_SetsFrontAndBack()
+    public void Ref_Sets()
     {
         ParsedPassState s = Parse.State("""Stencil { Ref 3 }""");
 
-        Assert.Equal(3, s.StencilFrontRef);
-        Assert.Equal(3, s.StencilBackRef);
+        Assert.Equal(3, s.StencilRef);
     }
 
 
     [Fact]
-    public void ReadAndWriteMask_SetBothFaces()
+    public void ReadAndWriteMask_Set()
     {
         ParsedPassState s = Parse.State("""
             Stencil
@@ -27,10 +26,8 @@ public class StencilTests
             }
             """);
 
-        Assert.Equal(15u, s.StencilFrontReadMask);
-        Assert.Equal(15u, s.StencilBackReadMask);
-        Assert.Equal(7u, s.StencilFrontWriteMask);
-        Assert.Equal(7u, s.StencilBackWriteMask);
+        Assert.Equal(15u, s.StencilReadMask);
+        Assert.Equal(7u, s.StencilWriteMask);
     }
 
 
@@ -110,7 +107,7 @@ public class StencilTests
     {
         ParsedPassState s = Parse.State("""Stencil { }""");
 
-        Assert.Null(s.StencilFrontRef);
+        Assert.Null(s.StencilRef);
         Assert.Null(s.StencilFrontFunc);
     }
 

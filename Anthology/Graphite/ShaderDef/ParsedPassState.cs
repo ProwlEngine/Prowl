@@ -29,21 +29,19 @@ public class ParsedPassState
     // -------------------- Stencil --------------------
 
     public bool? EnableStencilTest;
+    public int? StencilRef;
+    public uint? StencilReadMask;
+    public uint? StencilWriteMask;
+
     public ComparisonKind? StencilFrontFunc;
-    public int? StencilFrontRef;
-    public uint? StencilFrontReadMask;
     public StencilOperation? StencilFrontFailOp;
     public StencilOperation? StencilFrontDepthFailOp;
     public StencilOperation? StencilFrontPassOp;
-    public uint? StencilFrontWriteMask;
 
     public ComparisonKind? StencilBackFunc;
-    public int? StencilBackRef;
-    public uint? StencilBackReadMask;
     public StencilOperation? StencilBackFailOp;
     public StencilOperation? StencilBackDepthFailOp;
     public StencilOperation? StencilBackPassOp;
-    public uint? StencilBackWriteMask;
 
     // -------------------- Blending (equation / factors) --------------------
     public bool? EnableBlend;
@@ -64,7 +62,80 @@ public class ParsedPassState
 
 
     /// <summary>
-    /// Merges two <see cref="ParsedPassState"/> objects into a single merged <see cref="ParsedPassState"/> with values being overwritten on <paramref name="other"/> 
+    /// Collapses the blend-related fields into a single-attachment <see cref="BlendStateDescription"/>, overlaying any
+    /// explicitly parsed values onto the given base description.
+    /// </summary>
+    public BlendStateDescription ToBlendState(BlendStateDescription baseState)
+    {
+        BlendAttachmentDescription attachment = baseState.AttachmentStates.Length > 0
+            ? baseState.AttachmentStates[0]
+            : BlendAttachmentDescription.Disabled;
+
+        attachment.BlendEnabled = EnableBlend ?? attachment.BlendEnabled;
+        attachment.ColorWriteMask = WriteMask ?? attachment.ColorWriteMask;
+        attachment.SourceColorFactor = BlendSrcRgb ?? attachment.SourceColorFactor;
+        attachment.DestinationColorFactor = BlendDstRgb ?? attachment.DestinationColorFactor;
+        attachment.ColorFunction = BlendFunctionRgb ?? attachment.ColorFunction;
+        attachment.SourceAlphaFactor = BlendSrcAlpha ?? attachment.SourceAlphaFactor;
+        attachment.DestinationAlphaFactor = BlendDstAlpha ?? attachment.DestinationAlphaFactor;
+        attachment.AlphaFunction = BlendFunctionAlpha ?? attachment.AlphaFunction;
+
+        baseState.AlphaToCoverageEnabled = AlphaToMask ?? baseState.AlphaToCoverageEnabled;
+        baseState.AttachmentStates = [attachment];
+        return baseState;
+    }
+
+
+    /// <summary>
+    /// Collapses the depth and stencil fields into a <see cref="DepthStencilStateDescription"/>, overlaying any explicitly
+    /// parsed values onto the given base description.
+    /// </summary>
+    public DepthStencilStateDescription ToDepthStencilState(DepthStencilStateDescription baseState)
+    {
+        baseState.DepthWriteEnabled = DepthWriteMask ?? baseState.DepthWriteEnabled;
+        baseState.DepthComparison = DepthFunc ?? baseState.DepthComparison;
+        baseState.StencilTestEnabled = EnableStencilTest ?? baseState.StencilTestEnabled;
+
+        baseState.StencilFront = new StencilBehaviorDescription
+        {
+            Fail = StencilFrontFailOp ?? baseState.StencilFront.Fail,
+            Pass = StencilFrontPassOp ?? baseState.StencilFront.Pass,
+            DepthFail = StencilFrontDepthFailOp ?? baseState.StencilFront.DepthFail,
+            Comparison = StencilFrontFunc ?? baseState.StencilFront.Comparison,
+        };
+        baseState.StencilBack = new StencilBehaviorDescription
+        {
+            Fail = StencilBackFailOp ?? baseState.StencilBack.Fail,
+            Pass = StencilBackPassOp ?? baseState.StencilBack.Pass,
+            DepthFail = StencilBackDepthFailOp ?? baseState.StencilBack.DepthFail,
+            Comparison = StencilBackFunc ?? baseState.StencilBack.Comparison,
+        };
+
+        baseState.StencilReadMask = (byte)(StencilReadMask ?? baseState.StencilReadMask);
+        baseState.StencilWriteMask = (byte)(StencilWriteMask ?? baseState.StencilWriteMask);
+        baseState.StencilReference = (uint)(StencilRef ?? (int)baseState.StencilReference);
+        return baseState;
+    }
+
+
+    /// <summary>
+    /// Collapses the rasterizer fields into a <see cref="RasterizerStateDescription"/>, overlaying any explicitly parsed
+    /// values onto the given base description.
+    /// </summary>
+    public RasterizerStateDescription ToRasterizerState(RasterizerStateDescription baseState)
+    {
+        baseState.CullMode = CullMode ?? baseState.CullMode;
+        baseState.FrontFace = FrontFace ?? baseState.FrontFace;
+
+        if (EnableDepthClamp.HasValue)
+            baseState.DepthClipEnabled = !EnableDepthClamp.Value;
+
+        return baseState;
+    }
+
+
+    /// <summary>
+    /// Merges two <see cref="ParsedPassState"/> objects into a single merged <see cref="ParsedPassState"/> with values being overwritten on <paramref name="other"/>
     /// </summary>
     public ParsedPassState Apply(ParsedPassState other)
     {
@@ -80,20 +151,17 @@ public class ParsedPassState
             DepthWriteMask = DepthWriteMask ?? other.DepthWriteMask,
             EnableDepthClamp = EnableDepthClamp ?? other.EnableDepthClamp,
             EnableStencilTest = EnableStencilTest ?? other.EnableStencilTest,
+            StencilRef = StencilRef ?? other.StencilRef,
+            StencilReadMask = StencilReadMask ?? other.StencilReadMask,
+            StencilWriteMask = StencilWriteMask ?? other.StencilWriteMask,
             StencilFrontFunc = StencilFrontFunc ?? other.StencilFrontFunc,
-            StencilFrontRef = StencilFrontRef ?? other.StencilFrontRef,
-            StencilFrontReadMask = StencilFrontReadMask ?? other.StencilFrontReadMask,
             StencilFrontFailOp = StencilFrontFailOp ?? other.StencilFrontFailOp,
             StencilFrontDepthFailOp = StencilFrontDepthFailOp ?? other.StencilFrontDepthFailOp,
             StencilFrontPassOp = StencilFrontPassOp ?? other.StencilFrontPassOp,
-            StencilFrontWriteMask = StencilFrontWriteMask ?? other.StencilFrontWriteMask,
             StencilBackFunc = StencilBackFunc ?? other.StencilBackFunc,
-            StencilBackRef = StencilBackRef ?? other.StencilBackRef,
-            StencilBackReadMask = StencilBackReadMask ?? other.StencilBackReadMask,
             StencilBackFailOp = StencilBackFailOp ?? other.StencilBackFailOp,
             StencilBackDepthFailOp = StencilBackDepthFailOp ?? other.StencilBackDepthFailOp,
             StencilBackPassOp = StencilBackPassOp ?? other.StencilBackPassOp,
-            StencilBackWriteMask = StencilBackWriteMask ?? other.StencilBackWriteMask,
             EnableBlend = EnableBlend ?? other.EnableBlend,
             BlendFunctionRgb = BlendFunctionRgb ?? other.BlendFunctionRgb,
             BlendFunctionAlpha = BlendFunctionAlpha ?? other.BlendFunctionAlpha,
@@ -164,20 +232,17 @@ public class ParsedPassState
         {
             case "Ref":
                 t.Next();
-                int stencilref = ParserUtility.Integer(ref t);
-                state = new() { StencilBackRef = stencilref, StencilFrontRef = stencilref };
+                state = new() { StencilRef = ParserUtility.Integer(ref t) };
                 return true;
 
             case "ReadMask":
                 t.Next();
-                int readmask = ParserUtility.Integer(ref t);
-                state = new() { StencilBackReadMask = (uint)readmask, StencilFrontReadMask = (uint)readmask };
+                state = new() { StencilReadMask = (uint)ParserUtility.Integer(ref t) };
                 return true;
 
             case "WriteMask":
                 t.Next();
-                int writemask = ParserUtility.Integer(ref t);
-                state = new() { StencilBackWriteMask = (uint)writemask, StencilFrontWriteMask = (uint)writemask };
+                state = new() { StencilWriteMask = (uint)ParserUtility.Integer(ref t) };
                 return true;
 
             case "Comp":
