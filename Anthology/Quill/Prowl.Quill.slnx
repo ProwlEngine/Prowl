@@ -6,6 +6,7 @@
     <Project Path="Samples/SFMLExample/SFMLExample.csproj" />
     <Project Path="Samples/SilkNETExample/SilkNETExample.csproj" />
     <Project Path="Samples/WasmExample/WasmExample.csproj" />
+    <Project Path="Samples/GraphiteExample/GraphiteExample.csproj" />
   </Folder>
   <Project Path="Quill/Quill.csproj" />
 </Solution>

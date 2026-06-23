@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Fonts\**;Textures\**;SVGs\**" CopyToOutputDirectory="Always" />
+    <Content Include="Fonts\**;Textures\**;SVGs\**;Shaders\**" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
 </Project>

@@ -41,7 +41,7 @@ namespace Common
         {
             //SVGRenderer.debug = true;
             svgElements = new List<SvgElement>();
-            var svgFiles = Directory.GetFiles("SVGs/");
+            var svgFiles = Directory.GetFiles(Path.Join(AppContext.BaseDirectory, "SVGs/"));
 
             foreach (var svgFile in svgFiles)
                 if (Path.GetExtension(svgFile) == ".svg")
