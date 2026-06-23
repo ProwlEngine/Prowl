@@ -12,6 +12,7 @@ using Silk.NET.Windowing;
 using Texture = Prowl.Graphite.Texture;
 using Sampler = Prowl.Graphite.Sampler;
 using Silk.NET.Windowing.Sdl;
+using Silk.NET.Input.Sdl;
 using System.Runtime.InteropServices;
 using Silk.NET.SDL;
 
@@ -58,6 +59,7 @@ public class SilkWindow : IDisposable
 
         SdlWindowing.RegisterPlatform();
         SdlWindowing.Use();
+        SdlInput.Use();
 
         Sdl? sdl = Sdl.GetApi();
 

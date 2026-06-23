@@ -8,6 +8,7 @@
     <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
     <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
     <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Input.SDL" Version="2.22.0" />
 
     <PackageReference Include="Prowl.Graphite" Version="0.6.0" />
     <PackageReference Include="Prowl.Graphite.Compiler" Version="0.6.0" />
