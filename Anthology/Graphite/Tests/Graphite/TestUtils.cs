@@ -148,7 +148,7 @@ internal sealed class TrackingResourceFactory : ResourceFactory
     private readonly ResourceFactory _inner;
     private readonly List<IDisposable> _created = [];
 
-    public TrackingResourceFactory(ResourceFactory inner) : base(inner.Features)
+    public TrackingResourceFactory(ResourceFactory inner) : base(inner.Device, inner.Features)
     {
         _inner = inner;
     }
