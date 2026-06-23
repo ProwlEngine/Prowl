@@ -4,6 +4,7 @@
     <Project Path="Samples/OpenTK/OpenTKSample.csproj" />
     <Project Path="Samples/RaylibSample/RaylibSample.csproj" />
     <Project Path="Samples/WasmExample/WasmExample.csproj" />
+    <Project Path="Samples/GraphiteSample/GraphiteSample.csproj" />
   </Folder>
   <Project Path="Paper/Paper.csproj" />
   <Project Path="Tests/Tests.csproj" />
