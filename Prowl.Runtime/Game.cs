@@ -7,8 +7,10 @@ using Echo.Logging;
 
 using Prowl.Runtime.Audio;
 
+using Prowl.Graphite;
 using Prowl.PaperUI;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;

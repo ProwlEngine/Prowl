@@ -4,9 +4,14 @@
 using System;
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite;
+
 using Silk.NET.Input;
+using Silk.NET.Input.Sdl;
 using Silk.NET.Maths;
+using Silk.NET.SDL;
 using Silk.NET.Windowing;
+using Silk.NET.Windowing.Sdl;
 
 namespace Prowl.Runtime;
 
@@ -15,6 +20,14 @@ public static class Window
 
     public static IWindow InternalWindow { get; internal set; }
     public static IInputContext InternalInput { get; internal set; }
+
+    /// <summary>
+    /// Graphics backend the device is created with. Set before <see cref="InitWindow"/> to
+    /// override. Drives the windowing platform (SDL for Vulkan on macOS) and the context API.
+    /// </summary>
+    public static GraphicsBackend Backend { get; set; } = GraphicsBackend.Vulkan;
+
+    private static GraphicsDeviceOptions s_deviceOptions;
 
     // --- Per-monitor DPI awareness on Windows ----------------------------------------------
     // [DllImport("user32.dll")]
@@ -129,8 +142,8 @@ public static class Window
 
     public static bool VSync
     {
-        get { return InternalWindow.VSync; }
-        set { InternalWindow.VSync = value; }
+        get { return Graphics.Device.SyncToVerticalBlank; }
+        set { Graphics.Device.SyncToVerticalBlank = value; }
     }
 
     public static float FramesPerSecond
@@ -154,16 +167,27 @@ public static class Window
 
     public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool VSync = true)
     {
+        MoltenVKMacWorkaround(Backend);
+
         WindowOptions options = WindowOptions.Default;
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
         options.VSync = VSync;
-        options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 1));
-        // Update / Render are driven manually from MainLoop SwapBuffers happens
-        // on the render thread.
+        options.API = SilkApiFor(Backend);
+        // Update / Render are driven manually from MainLoop, and SwapBuffers is called
+        // explicitly after EndFrame, so Silk must not swap on its own.
         options.ShouldSwapAutomatically = false;
         InternalWindow = Silk.NET.Windowing.Window.Create(options);
+
+        s_deviceOptions = new GraphicsDeviceOptions
+        {
+            Debug = false,
+            SwapchainDepthFormat = Graphite.PixelFormat.D24_UNorm_S8_UInt,
+            SyncToVerticalBlank = VSync,
+            PreferStandardClipSpaceYDirection = true,
+            PreferDepthRangeZeroToOne = true,
+        };
 
         InternalWindow.Load += OnLoad;
         InternalWindow.Resize += OnResize;
@@ -180,19 +204,46 @@ public static class Window
 
     private static void OnMove(Vector2D<int> d) => Move?.Invoke(d);
 
+    private static GraphicsAPI SilkApiFor(GraphicsBackend backend) => backend switch
+    {
+        GraphicsBackend.OpenGL => new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 5)),
+        GraphicsBackend.OpenGLES => new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 2)),
+        GraphicsBackend.Vulkan => new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
+        _ => GraphicsAPI.None,
+    };
+
+    // MoltenVK + SDL is used on Mac since GLFW doesn't provide Vk surfaces there
+    // Unfortunately, the Silk.NET config for MoltenVK/SDL doesn't correctly resovle libMoltenVK.dylib so we have to load it manually.
+    private static void MoltenVKMacWorkaround(GraphicsBackend backend)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || backend != GraphicsBackend.Vulkan)
+            return;
+
+        SdlWindowing.RegisterPlatform();
+        SdlWindowing.Use();
+        SdlInput.Use();
+
+        Sdl sdl = Sdl.GetApi();
+
+        if (sdl.Init(Sdl.InitVideo) != 0)
+            Debug.LogError($"SDL video initialization failed: {sdl.GetErrorS()}");
+
+        string basePath = Environment.ProcessPath != null ? AppContext.BaseDirectory :
+            System.IO.Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+
+        string libraryPath = System.IO.Path.Join(basePath, "runtimes/osx/native/libMoltenVK.dylib");
+
+        if (sdl.VulkanLoadLibrary(libraryPath) != 0)
+            Debug.LogError($"SDL VulkanLoadLibrary failed for '{libraryPath}': {sdl.GetErrorS()}");
+    }
+
     public static void Start()
     {
+        // Initialize() fires InternalWindow.Load -> OnLoad, which creates the Graphite
+        // device and sets Graphics.Device before the public Load event below runs.
         InternalWindow.Initialize();
-        // Silk.NET's automatic Render path (which would apply options.VSync) doesn't
-        // run under our manual loop, so apply the swap interval directly.
-        InternalWindow.GLContext!.SwapInterval(InternalWindow.VSync ? 1 : 0);
-        Graphics.StartRenderThread();
 
-        // Load runs as a warmup frame so SubmitAndWait (shader compiles, FBO checks)
-        // has a live render thread to drain its CBs; otherwise it would deadlock.
-        Graphics.BeginFrame();
         Load?.Invoke();
-        Graphics.EndFrameAndWait();
 
         try { MainLoop(); }
         finally
@@ -206,13 +257,15 @@ public static class Window
     {
         long lastTicks = System.Diagnostics.Stopwatch.GetTimestamp();
         long freq = System.Diagnostics.Stopwatch.Frequency;
+
         while (!InternalWindow.IsClosing)
         {
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
             float delta = (float)((now - lastTicks) / (double)freq);
             lastTicks = now;
 
-            Graphics.BeginFrame();
+            Frame frame = Graphics.Device.BeginFrame();
+            Graphics.CurrentFrame = frame;
 
             InternalWindow.DoEvents();
             Update?.Invoke(delta);
@@ -220,9 +273,11 @@ public static class Window
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
 
-            // SwapBuffers runs on the render thread as part of the frame-end
-            // sentinel no context handoff per frame.
-            Graphics.EndFrameAndWait();
+            Graphics.SubmitPendingMipmaps(frame);
+
+            Graphics.Device.EndFrame(frame);
+            Graphics.CurrentFrame = null;
+            Graphics.Device.SwapBuffers();
         }
     }
 
@@ -230,9 +285,13 @@ public static class Window
 
     public static void OnLoad()
     {
+        Graphics.Device = DeviceCreateUtilities.CreateDevice(InternalWindow, s_deviceOptions, Backend);
+        Graphics.Device.SyncToVerticalBlank = s_deviceOptions.SyncToVerticalBlank;
+
+        Graphics.QueryDeviceLimits();
+
         InternalInput = InternalWindow.CreateInput();
         WindowInputHandler = new DefaultInputHandler(InternalInput);
-        Graphics.Initialize(false);
         Input.PushHandler(WindowInputHandler);
     }
 
@@ -246,6 +305,6 @@ public static class Window
         AssetLoader.Stop();
         Closing?.Invoke();
         WindowInputHandler.Dispose();
-        Graphics.Dispose();
+        Graphics.Device?.Dispose();
     }
 }
