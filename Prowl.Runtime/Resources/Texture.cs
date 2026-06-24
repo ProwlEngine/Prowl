@@ -1,34 +1,48 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+
+using Prowl.Graphite;
+
+using GraphiteTexture = Prowl.Graphite.Texture;
 
 namespace Prowl.Runtime.Resources;
 
 /// <summary>
 /// This is the base class for all texture types and manages some of their internal workings.
+/// <para>
+/// Backed by Prowl.Graphite. Graphite keeps sampler state (filter/address modes) on a
+/// separate <see cref="Graphite.Sampler"/> rather than on the texture, so changing a
+/// filter or wrap mode rebuilds <see cref="Sampler"/>. The GPU texture itself is immutable
+/// in size, so resizing recreates <see cref="Handle"/> (done by the derived types once the
+/// dimensions are known).
+/// </para>
 /// </summary>
 public abstract class Texture : EngineObject
 {
+    private protected const SamplerFilter DefaultFilter = SamplerFilter.MinPoint_MagPoint_MipPoint;
+    private protected const SamplerFilter DefaultMipmapFilter = SamplerFilter.MinPoint_MagPoint_MipLinear;
 
-    private protected const TextureMin DefaultMinFilter = TextureMin.Nearest, DefaultMipmapMinFilter = TextureMin.NearestMipmapLinear;
-    private protected const TextureMag DefaultMagFilter = TextureMag.Nearest;
+    /// <summary>The backing Graphite GPU texture. Null until a derived type allocates storage.</summary>
+    public GraphiteTexture Handle { get; private protected set; }
 
-    /// <summary>The handle for the GL Texture Object.</summary>
-    public readonly GraphicsTexture Handle;
+    /// <summary>The Graphite sampler describing how this texture is filtered and wrapped.</summary>
+    public Sampler Sampler { get; private set; }
 
-    /// <summary>The type of this <see cref="Texture"/>, such as 1D, 2D, Multisampled 2D, Array 2D, CubeMap, etc.</summary>
+    /// <summary>The type of this <see cref="Texture"/>, such as 2D, 3D, CubeMap.</summary>
     public readonly TextureType Type;
 
-    public TextureMin MinFilter { get; protected set; }
-    public TextureMag MagFilter { get; protected set; }
-    public TextureWrap WrapMode { get; protected set; }
+    public SamplerFilter Filter { get; private set; }
+    public SamplerAddressMode AddressModeU { get; private set; }
+    public SamplerAddressMode AddressModeV { get; private set; }
+    public SamplerAddressMode AddressModeW { get; private set; }
 
-    /// <summary>The format for this <see cref="Texture"/>'s image.</summary>
-    public readonly TextureImageFormat ImageFormat;
+    /// <summary>The pixel format for this <see cref="Texture"/>'s image.</summary>
+    public readonly PixelFormat ImageFormat;
 
     /// <summary>Gets whether this <see cref="Texture"/> is mipmapped.</summary>
-    public bool IsMipmapped { get; private set; }
+    public bool IsMipmapped { get; private protected set; }
 
     /// <summary>False if this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
     private readonly bool isNotMipmappable;
@@ -36,46 +50,91 @@ public abstract class Texture : EngineObject
     /// <summary>Gets whether this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
     public bool IsMipmappable => !isNotMipmappable;
 
-    /// <summary>
-    /// Creates a <see cref="Texture"/> with specified <see cref="TextureType"/> and <see cref="TextureImageFormat"/>.
-    /// </summary>
-    /// <param name="type">The type of texture (or texture target) the texture will be.</param>
-    /// <param name="imageFormat">The type of image format this texture will store.</param>
-    internal Texture(TextureType type, TextureImageFormat imageFormat) : base("New Texture")
-    {
-        if (!Enum.IsDefined(typeof(TextureType), type))
-            throw new FormatException("Invalid texture target");
+    public bool IsCubemap { get; private protected set; }
 
-        if (!Enum.IsDefined(typeof(TextureImageFormat), imageFormat))
-            throw new FormatException("Invalid texture image format");
+
+    internal Texture(TextureType type, PixelFormat imageFormat, bool isCubemap = false) : base("New Texture")
+    {
+        if (!Enum.IsDefined(type))
+            throw new FormatException("Invalid texture target");
 
         Type = type;
         ImageFormat = imageFormat;
         IsMipmapped = false;
-        isNotMipmappable = !IsTextureTypeMipmappable(type);
-        Handle = Graphics.CreateTexture(type, imageFormat);
-        Graphics.SetWrapS(Handle, TextureWrap.Repeat);
-        Graphics.SetWrapT(Handle, TextureWrap.Repeat);
-        Graphics.SetTextureFilters(Handle, DefaultMinFilter, DefaultMagFilter);
-        MinFilter = DefaultMinFilter;
-        MagFilter = DefaultMagFilter;
-        WrapMode = TextureWrap.Repeat;
+        IsCubemap = isCubemap;
+        isNotMipmappable = !IsTextureTypeMipmappable(imageFormat, TextureSampleCount.Count1);
+
+        Filter = DefaultFilter;
+        AddressModeU = SamplerAddressMode.Wrap;
+        AddressModeV = SamplerAddressMode.Wrap;
+        AddressModeW = SamplerAddressMode.Wrap;
+        RebuildSampler();
     }
 
-    /// <summary>
-    /// Sets this <see cref="Texture"/>'s minifying and magnifying filters.
-    /// </summary>
-    /// <param name="minFilter">The desired minifying filter for the <see cref="Texture"/>.</param>
-    /// <param name="magFilter">The desired magnifying filter for the <see cref="Texture"/>.</param>
-    public void SetTextureFilters(TextureMin minFilter, TextureMag magFilter)
+    /// <summary>Recreates <see cref="Sampler"/> from the current filter and address-mode state.</summary>
+    private protected void RebuildSampler()
     {
-        Graphics.SetTextureFilters(Handle, minFilter, magFilter);
-        MinFilter = minFilter;
-        MagFilter = magFilter;
+        Sampler?.Dispose();
+        Sampler = Graphics.Device.ResourceFactory.CreateSampler(new SamplerDescription
+        {
+            AddressModeU = AddressModeU,
+            AddressModeV = AddressModeV,
+            AddressModeW = AddressModeW,
+            Filter = Filter,
+            MinimumLod = 0,
+            MaximumLod = uint.MaxValue,
+        });
+    }
+
+    /// <summary>Sets this <see cref="Texture"/>'s sampling filter.</summary>
+    public void SetTextureFilters(SamplerFilter filter)
+    {
+        Filter = filter;
+        RebuildSampler();
     }
 
     /// <summary>
-    /// Generates mipmaps for this <see cref="Texture"/>.
+    /// Bridges the old (min, mag) GL-style filter pair onto a Graphite <see cref="SamplerFilter"/>.
+    /// </summary>
+    public void SetTextureFilters(TextureMin min, TextureMag mag)
+        => SetTextureFilters(ToSamplerFilter(min, mag));
+
+    private static SamplerFilter ToSamplerFilter(TextureMin min, TextureMag mag)
+    {
+        bool magLinear = mag == TextureMag.Linear;
+        return min switch
+        {
+            TextureMin.Nearest => magLinear ? SamplerFilter.MinPoint_MagLinear_MipPoint : SamplerFilter.MinPoint_MagPoint_MipPoint,
+            TextureMin.Linear => magLinear ? SamplerFilter.MinLinear_MagLinear_MipPoint : SamplerFilter.MinLinear_MagPoint_MipPoint,
+            TextureMin.NearestMipmapNearest => magLinear ? SamplerFilter.MinPoint_MagLinear_MipPoint : SamplerFilter.MinPoint_MagPoint_MipPoint,
+            TextureMin.LinearMipmapNearest => magLinear ? SamplerFilter.MinLinear_MagLinear_MipPoint : SamplerFilter.MinLinear_MagPoint_MipPoint,
+            TextureMin.NearestMipmapLinear => magLinear ? SamplerFilter.MinPoint_MagLinear_MipLinear : SamplerFilter.MinPoint_MagPoint_MipLinear,
+            TextureMin.LinearMipmapLinear => magLinear ? SamplerFilter.MinLinear_MagLinear_MipLinear : SamplerFilter.MinLinear_MagPoint_MipLinear,
+            _ => SamplerFilter.MinLinear_MagLinear_MipPoint,
+        };
+    }
+
+    /// <summary>
+    /// No-op compatibility shim: shadow-map depth-compare sampling is a sampler feature that has not
+    /// been ported to the Graphite sampler path yet.
+    /// </summary>
+    public void SetDepthCompareMode(bool enabled) { }
+
+    /// <summary>
+    /// Sets the texture coordinate wrapping modes for when a texture is sampled outside the [0, 1] range.
+    /// </summary>
+    public void SetWrapModes(SamplerAddressMode u, SamplerAddressMode v, SamplerAddressMode w = SamplerAddressMode.Wrap)
+    {
+        AddressModeU = u;
+        AddressModeV = v;
+        AddressModeW = w;
+        RebuildSampler();
+    }
+
+    /// <summary>
+    /// Generates mipmaps for this <see cref="Texture"/>. The actual mip generation is recorded
+    /// onto a command buffer that the frame loop flushes, since Graphite requires it to run inside
+    /// an open frame.
     /// </summary>
     /// <exception cref="InvalidOperationException"/>
     public void GenerateMipmaps()
@@ -83,22 +142,32 @@ public abstract class Texture : EngineObject
         if (isNotMipmappable)
             throw new InvalidOperationException(string.Concat("This texture type is not mipmappable! Type: ", Type.ToString()));
 
-        Graphics.GenerateMipmap(Handle);
+        Graphics.RequestMipmapGeneration(Handle);
         IsMipmapped = true;
-        Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
+        SetTextureFilters(DefaultMipmapFilter);
     }
 
     public override void OnDispose()
     {
-        Handle.Dispose();
+        Handle?.Dispose();
+        Sampler?.Dispose();
     }
 
     /// <summary>
     /// Gets whether the specified <see cref="TextureType"/> type is mipmappable.
     /// </summary>
-    public static bool IsTextureTypeMipmappable(TextureType textureType)
+    public static bool IsTextureTypeMipmappable(PixelFormat format, TextureSampleCount sampleCount)
     {
-        return textureType == TextureType.Texture2D || textureType == TextureType.Texture3D
-            || textureType == TextureType.TextureCubeMap;
+        return format == PixelFormat.D24_UNorm_S8_UInt || format == PixelFormat.D32_Float_S8_UInt
+            || sampleCount != TextureSampleCount.Count1;
+    }
+
+    /// <summary>Number of mip levels in the full chain for a texture of the given dimensions.</summary>
+    private protected static uint ComputeMipLevels(uint width, uint height)
+    {
+        uint levels = 1;
+        uint size = Math.Max(width, height);
+        while (size > 1) { size /= 2; levels++; }
+        return levels;
     }
 }

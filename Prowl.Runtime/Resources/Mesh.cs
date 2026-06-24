@@ -6,9 +6,8 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
+using Prowl.Graphite;
 using Prowl.Vector;
-
-using static Prowl.Runtime.VertexFormat;
 
 namespace Prowl.Runtime.Resources;
 
@@ -194,9 +193,11 @@ public class Mesh : EngineObject, ISerializable
     public int VertexCount => vertices?.Length ?? 0;
     public int IndexCount => indices?.Length ?? 0;
 
-    public GraphicsVertexArray? VertexArrayObject => vertexArrayObject;
-    public GraphicsBuffer VertexBuffer => vertexBuffer;
-    public GraphicsBuffer IndexBuffer => indexBuffer;
+    // Graphite has no vertex-array-object concept; the VAO path is part of the Stage-2 draw
+    // pipeline that has not been ported yet.
+    // public GraphicsVertexArray? VertexArrayObject => vertexArrayObject;
+    public DeviceBuffer? VertexBuffer => vertexBuffer;
+    public DeviceBuffer? IndexBuffer => indexBuffer;
 
     public bool HasNormals => (normals?.Length ?? 0) > 0;
     public bool HasTangents => (tangents?.Length ?? 0) > 0;
@@ -356,10 +357,9 @@ public class Mesh : EngineObject, ISerializable
 
     private static Texture2D CreateMorphTexture(int width, int height, Float4[] data)
     {
-        var tex = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Float4);
-        tex.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-        Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-        Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
+        var tex = new Texture2D((uint)width, (uint)height, false, PixelFormat.R32_G32_B32_A32_Float);
+        tex.SetTextureFilters(SamplerFilter.MinPoint_MagPoint_MipPoint);
+        tex.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
         tex.SetData<Float4>(data.AsMemory());
         return tex;
     }
@@ -416,19 +416,19 @@ public class Mesh : EngineObject, ISerializable
     IndexFormat indexFormat = IndexFormat.UInt16;
     Topology meshTopology = Topology.Triangles;
 
-    GraphicsVertexArray? vertexArrayObject;
-    GraphicsBuffer vertexBuffer;
-    GraphicsBuffer indexBuffer;
+    // GraphicsVertexArray? vertexArrayObject;
+    DeviceBuffer? vertexBuffer;
+    DeviceBuffer? indexBuffer;
 
     // Instanced rendering - cached VAO and buffer (created lazily on first instanced draw)
-    GraphicsVertexArray? instancedVAO;
-    GraphicsBuffer? instanceBuffer;
-    int instanceBufferCapacity = 0;
+    // GraphicsVertexArray? instancedVAO;
+    // GraphicsBuffer? instanceBuffer;
+    // int instanceBufferCapacity = 0;
 
     // Track last uploaded state for buffer reuse optimization
     private int lastVertexCount = 0;
     private int lastIndexCount = 0;
-    private VertexFormat lastVertexLayout = null;
+    private int lastVertexStride = 0;
 
     public Mesh() { }
 
@@ -454,7 +454,7 @@ public class Mesh : EngineObject, ISerializable
 
     public void Upload()
     {
-        if (changed == false && vertexArrayObject != null)
+        if (changed == false && vertexBuffer != null)
             return;
 
         changed = false;
@@ -487,39 +487,25 @@ public class Mesh : EngineObject, ISerializable
                 break;
         }
 
-        VertexFormat layout = GetVertexLayout(this);
-
-        if (layout == null)
-        {
-            Debug.LogError($"[Mesh] Failed to get vertex layout for this mesh!");
-            return;
-        }
-
-        byte[] vertexBlob = MakeVertexDataBlob(layout);
+        int stride = ComputeVertexStride();
+        byte[] vertexBlob = MakeVertexDataBlob(stride);
         if (vertexBlob == null)
             return;
 
-        // Check if we can reuse existing buffers
-        bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && VertexLayoutMatches(lastVertexLayout, layout);
-        bool canReuseIndexBuffer = indexBuffer != null && lastIndexCount == indices.Length;
+        ResourceFactory factory = Graphics.Device.ResourceFactory;
 
-        // Resource creation and reuse both flow through CommandBuffers submitted in
-        // order: Graphics.CreateBuffer enqueues a create+upload CB, and reuses encode
-        // an UpdateBuffer here. Any rendering CB submitted after this Upload is
-        // guaranteed to see the new data because the executor preserves submit order.
-        using var cmd = Graphics.GetCommandBuffer("Mesh.Upload");
-
-        if (canReuseVertexBuffer)
-        {
-            cmd.UpdateBuffer<byte>(vertexBuffer, vertexBlob);
-        }
-        else
+        // Recreate the vertex buffer when its size/stride changed, otherwise reuse and update in place.
+        bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && lastVertexStride == stride;
+        if (!canReuseVertexBuffer)
         {
             vertexBuffer?.Dispose();
-            vertexBuffer = Graphics.CreateBuffer(BufferType.VertexBuffer, vertexBlob, true);
+            vertexBuffer = factory.CreateBuffer(new BufferDescription((uint)vertexBlob.Length, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
             lastVertexCount = vertices.Length;
-            lastVertexLayout = layout;
+            lastVertexStride = stride;
         }
+        Graphics.Device.UpdateBuffer(vertexBuffer, 0u, vertexBlob);
+
+        bool canReuseIndexBuffer = indexBuffer != null && lastIndexCount == indices.Length;
 
         if (indexFormat == IndexFormat.UInt16)
         {
@@ -531,63 +517,47 @@ public class Mesh : EngineObject, ISerializable
                 data[i] = (ushort)indices[i];
             }
 
-            if (canReuseIndexBuffer)
-            {
-                cmd.UpdateBuffer<ushort>(indexBuffer, data);
-            }
-            else
+            if (!canReuseIndexBuffer)
             {
                 indexBuffer?.Dispose();
-                indexBuffer = Graphics.CreateBuffer(BufferType.ElementsBuffer, data, true);
+                indexBuffer = factory.CreateBuffer(new BufferDescription((uint)(data.Length * sizeof(ushort)), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
                 lastIndexCount = indices.Length;
             }
+            Graphics.Device.UpdateBuffer(indexBuffer, 0u, data);
         }
         else if (indexFormat == IndexFormat.UInt32)
         {
-            if (canReuseIndexBuffer)
-            {
-                cmd.UpdateBuffer<uint>(indexBuffer, indices);
-            }
-            else
+            if (!canReuseIndexBuffer)
             {
                 indexBuffer?.Dispose();
-                indexBuffer = Graphics.CreateBuffer(BufferType.ElementsBuffer, indices, true);
+                indexBuffer = factory.CreateBuffer(new BufferDescription((uint)(indices.Length * sizeof(uint)), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
                 lastIndexCount = indices.Length;
             }
-        }
-
-        Graphics.Submit(cmd);
-
-        // VAO recreation must come AFTER the upload submit so the create-VAO CB is
-        // sequenced behind the buffer create/update CBs. CreateGLObject (run later on
-        // the render thread) then binds buffers whose handles are already valid.
-        if (!canReuseVertexBuffer || !canReuseIndexBuffer || vertexArrayObject == null)
-        {
-            vertexArrayObject?.Dispose();
-            vertexArrayObject = Graphics.CreateVertexArray(layout, vertexBuffer, indexBuffer);
-            Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
+            Graphics.Device.UpdateBuffer(indexBuffer, 0u, indices);
         }
     }
 
+    /// <summary>Packed byte stride of one vertex for the current attribute set.</summary>
+    private int ComputeVertexStride()
+    {
+        int stride = 3 * sizeof(float); // position
+        if (HasUV) stride += 2 * sizeof(float);
+        if (HasUV2) stride += 2 * sizeof(float);
+        if (HasNormals) stride += 3 * sizeof(float);
+        if (HasColors || HasColors32) stride += 4 * sizeof(float);
+        if (HasTangents) stride += 4 * sizeof(float);
+        if (HasBoneIndices) stride += 4 * sizeof(float);
+        if (HasBoneWeights) stride += 4 * sizeof(float);
+        return stride;
+    }
+
+    // Graphite has no VAO/vertex-format abstraction; GPU instancing is part of the Stage-2 draw
+    // path that has not been ported yet. Preserved verbatim for the later pass.
+    /*
     /// <summary>
     /// Ensures the instanced rendering VAO and buffer exist for this mesh with
-    /// enough capacity for <paramref name="instanceCount"/> instances. Does NOT
-    /// upload data caller must encode a <c>cmd.UpdateBuffer(instanceBuffer, ...)</c>
-    /// in the same CommandBuffer as their <c>cmd.DrawIndexedInstanced</c> so the
-    /// upload is sequenced against the draw.
-    ///
-    /// <para>
-    /// The instanceBuffer is shared per-mesh across all InstancedMeshRenderables
-    /// using this mesh. Multiple batches can encode different uploads + draws into
-    /// one CommandBuffer; the executor processes them in order so each draw sees
-    /// its own data. If <paramref name="instanceCount"/> exceeds current capacity,
-    /// the old buffer is queued for DEFERRED dispose (after frame end) so previously
-    /// encoded commands holding the old handle still execute against valid GL state.
-    /// </para>
+    /// enough capacity for instanceCount instances.
     /// </summary>
-    /// <param name="instanceCount">Maximum number of instances this call needs to draw.</param>
-    /// <param name="instanceBuf">Output: the instance buffer to upload data into via cmd.UpdateBuffer.</param>
-    /// <returns>The instanced VAO to bind for drawing.</returns>
     public GraphicsVertexArray EnsureInstanceVAO(int instanceCount, out GraphicsBuffer instanceBuf)
     {
         Upload();
@@ -655,6 +625,7 @@ public class Mesh : EngineObject, ISerializable
 
         return true;
     }
+    */
 
     public void RecalculateBounds()
     {
@@ -1326,19 +1297,17 @@ public class Mesh : EngineObject, ISerializable
 
     private void DeleteGPUBuffers()
     {
-        vertexArrayObject?.Dispose();
-        vertexArrayObject = null;
         vertexBuffer?.Dispose();
         vertexBuffer = null;
         indexBuffer?.Dispose();
         indexBuffer = null;
 
-        // Clean up instanced rendering resources
-        instancedVAO?.Dispose();
-        instancedVAO = null;
-        instanceBuffer?.Dispose();
-        instanceBuffer = null;
-        instanceBufferCapacity = 0;
+        // Clean up instanced rendering resources (instancing not yet ported to Graphite).
+        // instancedVAO?.Dispose();
+        // instancedVAO = null;
+        // instanceBuffer?.Dispose();
+        // instanceBuffer = null;
+        // instanceBufferCapacity = 0;
 
         // Morph delta textures will be rebuilt from CPU blend-shape data on next use.
         DisposeMorphTextures();
@@ -1362,6 +1331,10 @@ public class Mesh : EngineObject, ISerializable
         target = value;
     }
 
+    // The Prowl VertexFormat type was removed; Graphite declares vertex layouts on the
+    // GraphicsProgram instead. The mesh's vertex-attribute order is mirrored by
+    // ComputeVertexStride + MakeVertexDataBlob. Preserved for the Stage-2 draw-path port.
+    /*
     internal static VertexFormat GetVertexLayout(Mesh mesh)
     {
         List<Element> elements = [new Element(VertexSemantic.Position, VertexType.Float, 3)];
@@ -1389,10 +1362,11 @@ public class Mesh : EngineObject, ISerializable
 
         return new VertexFormat([.. elements]);
     }
+    */
 
-    internal byte[] MakeVertexDataBlob(VertexFormat layout)
+    internal byte[] MakeVertexDataBlob(int stride)
     {
-        byte[] buffer = new byte[layout.Size * vertices.Length];
+        byte[] buffer = new byte[stride * vertices.Length];
 
         void Copy(byte[] source, ref int index)
         {
@@ -1410,7 +1384,7 @@ public class Mesh : EngineObject, ISerializable
         int index = 0;
         for (int i = 0; i < vertices.Length; i++)
         {
-            if (index % layout.Size != 0)
+            if (index % stride != 0)
                 throw new InvalidOperationException("[Mesh] Exceeded expected byte count while generating vertex data blob");
 
             //Copy position

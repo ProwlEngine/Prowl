@@ -4,8 +4,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Graphite;
+using Prowl.Graphite.Variants;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Vector;
@@ -29,7 +32,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             var mat = new Material();
             mat.SetColor("_MainColor", Color.White);
             return mat;
-        } 
+        }
     }
 
     /// <summary>
@@ -45,6 +48,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         // configuration objects, not heavy resources.
         if (BuiltInAssets.Get(BuiltInAssets.GuidFor(material)) is Material template)
             return new Material(template);
+
         // Fallback if BuiltInAssets isn't initialized ParseDefault already returns a
         // fresh instance, no clone needed.
         return ParseDefault(material);
@@ -58,10 +62,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         string fileName = material switch
         {
-            Prowl.Runtime.Resources.DefaultMaterial.Standard => "Standard.mat",
-            Prowl.Runtime.Resources.DefaultMaterial.Particle => "Particle.mat",
-            Prowl.Runtime.Resources.DefaultMaterial.Terrain => "Standard Terrain.mat",
-            Prowl.Runtime.Resources.DefaultMaterial.Grass => "Grass.mat",
+            Resources.DefaultMaterial.Standard => "Standard.mat",
+            Resources.DefaultMaterial.Particle => "Particle.mat",
+            Resources.DefaultMaterial.Terrain => "Standard Terrain.mat",
+            Resources.DefaultMaterial.Grass => "Grass.mat",
             _ => throw new ArgumentException($"Unknown default material: {material}")
         };
 
@@ -71,7 +75,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         string text = reader.ReadToEnd();
         var echo = EchoObject.ReadFromString(text);
         var mat = Serializer.Deserialize<Material>(echo);
-        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
+
         return mat;
     }
 
@@ -84,25 +88,25 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         set => SetShader(value);
     }
 
-    [SerializeField]
-    public PropertyState _properties;
-
-    /// <summary>Names of properties the user has explicitly set (vs auto-filled
+    /// <summary>
+    /// Names of properties the user has explicitly set (vs auto-filled
     /// shader defaults). When the shader's defaults change, only NON-overridden
     /// entries get refreshed user customizations are preserved. Without this,
-    /// stale defaults stick around forever.</summary>
+    /// stale defaults stick around forever.
+    /// </summary>
     [SerializeField]
-    public HashSet<string> _overrides = new();
+    public HashSet<string> PropertyOverrides = new();
 
     [SerializeIgnore]
-    internal Dictionary<string, bool> _localKeywords;
+    internal Dictionary<int, Keyword> _localKeywords;
 
-    // Material batching optimization: materials with identical state (uniforms) are batched together
-    // to minimize GPU state changes. The hash represents the current uniform values.
+    // Serializable mirror of every property value set on this material
+    [SerializeField]
+    internal Dictionary<string, MaterialProperty> _properties;
+
     [SerializeIgnore]
     private ulong _stateHash;
 
-    // Dirty flag tracks when material properties have changed, triggering hash recalculation
     [SerializeIgnore]
     private bool _isDirty = true;
 
@@ -110,27 +114,29 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public Material() : base("New Material")
     {
         _properties = new();
-        _localKeywords = [];
+        _localKeywords = new();
+
         // Default to Standard shader so new materials are immediately usable
         var standard = Shader.LoadDefault(DefaultShader.Standard);
+
         if (standard != null)
-            SetShader(standard);
+            Shader = standard;
     }
 
-    public Material(Shader shader, PropertyState? properties = null, Dictionary<string, bool>? keywords = null) : base("New Material")
+
+    public Material(Shader shader) : base("New Material")
     {
         ArgumentNullException.ThrowIfNull(shader);
 
         _properties = new();
-        _localKeywords = keywords ?? [];
+        _localKeywords = new();
 
         Shader = shader;
-        if (properties != null)
-            _properties.ApplyOverride(properties);
     }
 
+
     /// <summary>
-    /// Copy constructor deep-clone every property value + a fresh keyword dict. The
+    /// Copy constructor deep-clone every property value + a fresh keyword set. The
     /// <see cref="Shader"/> reference is shared (shaders are immutable after parse).
     /// Use this when you need a mutable material seeded from <see cref="LoadDefault"/>
     /// or any other shared material so your mutations don't leak to other callers.
@@ -140,29 +146,121 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         ArgumentNullException.ThrowIfNull(source);
 
         _shader = source._shader;
-        _properties = new PropertyState(source._properties);
-        _localKeywords = new Dictionary<string, bool>(source._localKeywords ?? []);
+
+        _properties = new Dictionary<string, MaterialProperty>(source._properties ?? []);
+
+        _localKeywords = new(source._localKeywords ?? []);
+        PropertyOverrides = new(source.PropertyOverrides ?? []);
     }
+
 
     /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
     public Material Clone() => new Material(this);
 
-    public void SetKeyword(string keyword, bool value) => _localKeywords[keyword] = value;
+    /// <summary>Records a local keyword as currently set on this material.</summary>
+    public void SetKeyword(Keyword keyword)
+    {
+        _localKeywords[keyword.NameId] = keyword;
+    }
+
+    /// <summary>
+    /// Sets a boolean feature keyword (e.g. "HAS_NORMALS"). Bridges the old string+bool keyword API
+    /// onto the variant-system <see cref="Keyword"/> (value "true"/"false").
+    /// </summary>
+    public void SetKeyword(string name, bool enabled)
+        => SetKeyword(new Keyword(name, enabled ? "true" : "false"));
+
+    private void Store(string name, MaterialProperty value)
+    {
+        _properties[name] = value;
+        MarkDirty();
+    }
 
     // Every public Set marks the property as user-overridden so subsequent shader
     // default-refreshes won't stomp the user's value.
-    public void SetColor(string name, Color value)        { _overrides.Add(name); _properties.SetColor(name, value); MarkDirty(); }
-    public void SetVector(string name, Float2 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float3 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float4 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetFloat(string name, float value)        { _overrides.Add(name); _properties.SetFloat(name, value); MarkDirty(); }
-    public void SetInt(string name, int value)            { _overrides.Add(name); _properties.SetInt(name, value); MarkDirty(); }
-    public void SetMatrix(string name, Float4x4 value)    { _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
-    public void SetTexture(string name, Texture2D value)  { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture(string name, AssetRef<Texture2D> value) { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture3D(string name, Texture3D value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
-    public void SetTextureCube(string name, Cubemap value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
-    public void SetTextureCube(string name, AssetRef<Cubemap> value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
+    public void SetColor(string name, Color value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromColor(value)); }
+    public void SetVector(string name, Float2 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
+    public void SetVector(string name, Float3 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
+    public void SetVector(string name, Float4 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromVector(value)); }
+    public void SetFloat(string name, float value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromFloat(value)); }
+    public void SetInt(string name, int value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromInt(value)); }
+    public void SetMatrix(string name, Float4x4 value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromMatrix(value)); }
+    public void SetTexture(string name, Texture2D value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture(new AssetRef<Texture2D>(value))); }
+    public void SetTexture(string name, AssetRef<Texture2D> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture(value)); }
+    public void SetTexture3D(string name, Texture3D value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture3D(new AssetRef<Texture3D>(value))); }
+    public void SetTextureCube(string name, Cubemap value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTextureCube(new AssetRef<Cubemap>(value))); }
+    public void SetTextureCube(string name, AssetRef<Cubemap> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTextureCube(value)); }
+
+    /// <summary>
+    /// Builds a fresh runtime <see cref="PropertySet"/> from this material's stored
+    /// property values. Numeric values map to their typed uniform setters; textures
+    /// are resolved from their <see cref="AssetRef{T}"/> and bound with their sampler,
+    /// skipping any that aren't currently loaded.
+    /// </summary>
+    public PropertySet BuildPropertySet()
+    {
+        var set = new PropertySet(_properties.Count);
+
+        foreach (KeyValuePair<string, MaterialProperty> kv in _properties)
+        {
+            string name = kv.Key;
+            MaterialProperty prop = kv.Value;
+
+            switch (prop.Type)
+            {
+                case MaterialPropertyType.Float:
+                    set.SetFloat(name, prop.Value.X);
+                    break;
+
+                case MaterialPropertyType.Int:
+                    set.SetInt(name, (int)prop.Value.X);
+                    break;
+
+                case MaterialPropertyType.Vector2:
+                    set.SetFloat2(name, new Float2(prop.Value.X, prop.Value.Y));
+                    break;
+
+                case MaterialPropertyType.Vector3:
+                    set.SetFloat3(name, new Float3(prop.Value.X, prop.Value.Y, prop.Value.Z));
+                    break;
+
+                case MaterialPropertyType.Vector4:
+                case MaterialPropertyType.Color:
+                    set.SetFloat4(name, prop.Value);
+                    break;
+
+                case MaterialPropertyType.Matrix:
+                    set.SetMatrix(name, prop.Matrix);
+                    break;
+
+                case MaterialPropertyType.Texture2D:
+                    {
+                        Texture2D? tex = prop.Tex2D.Res;
+                        if (tex?.Handle != null)
+                            set.SetTexture(name, tex.Handle, tex.Sampler);
+                        break;
+                    }
+
+                case MaterialPropertyType.Texture3D:
+                    {
+                        Texture3D? tex = prop.Tex3D.Res;
+                        if (tex?.Handle != null)
+                            set.SetTexture(name, tex.Handle, tex.Sampler);
+                        break;
+                    }
+
+                case MaterialPropertyType.TextureCube:
+                    {
+                        Cubemap? tex = prop.TexCube.Res;
+                        if (tex?.Handle != null)
+                            set.SetTexture(name, tex.Handle, tex.Sampler);
+                        break;
+                    }
+            }
+        }
+
+        return set;
+    }
 
     /// <summary>Forget the user override for <paramref name="name"/> next sync
     /// will refill it from the shader's current default. Useful for an inspector
@@ -176,26 +274,26 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// </remarks>
     public void RevertProperty(string name)
     {
-        _overrides.Remove(name);
-        _properties?.RemoveProperty(name);
+        PropertyOverrides.Remove(name);
+        _properties.Remove(name);
         MarkDirty();
     }
 
     /// <summary>True if the user has explicitly set this property (vs holding the
     /// shader's default value). Inspector uses this to highlight overridden fields.</summary>
-    public bool IsOverridden(string name) => _overrides.Contains(name);
+    public bool IsOverridden(string name) => PropertyOverrides.Contains(name);
 
     #region Global Properties
 
-    public static void SetGlobalColor(string name, Color value) => PropertyState.SetGlobalColor(name, value);
-    public static void SetGlobalVector(string name, Float2 value) => PropertyState.SetGlobalVector(name, value);
-    public static void SetGlobalVector(string name, Float3 value) => PropertyState.SetGlobalVector(name, value);
-    public static void SetGlobalVector(string name, Float4 value) => PropertyState.SetGlobalVector(name, value);
-    public static void SetGlobalFloat(string name, float value) => PropertyState.SetGlobalFloat(name, value);
-    public static void SetGlobalInt(string name, int value) => PropertyState.SetGlobalInt(name, value);
-    public static void SetGlobalMatrix(string name, Float4x4 value) => PropertyState.SetGlobalMatrix(name, value);
-    public static void SetGlobalTexture(string name, Texture2D value) => PropertyState.SetGlobalTexture(name, value);
-    public static void SetGlobalTexture3D(string name, Texture3D value) => PropertyState.SetGlobalTexture3D(name, value);
+    public static void SetGlobalColor(string name, Color value) => GlobalPropertySet.SetFloat4(name, value);
+    public static void SetGlobalVector(string name, Float2 value) => GlobalPropertySet.SetFloat2(name, value);
+    public static void SetGlobalVector(string name, Float3 value) => GlobalPropertySet.SetFloat3(name, value);
+    public static void SetGlobalVector(string name, Float4 value) => GlobalPropertySet.SetFloat4(name, value);
+    public static void SetGlobalFloat(string name, float value) => GlobalPropertySet.SetFloat(name, value);
+    public static void SetGlobalInt(string name, int value) => GlobalPropertySet.SetInt(name, value);
+    public static void SetGlobalMatrix(string name, Float4x4 value) => GlobalPropertySet.SetMatrix(name, value);
+    public static void SetGlobalTexture(string name, Texture2D value) { if (value?.Handle != null) GlobalPropertySet.SetTexture(name, value.Handle, value.Sampler); }
+    public static void SetGlobalTexture3D(string name, Texture3D value) { if (value?.Handle != null) GlobalPropertySet.SetTexture(name, value.Handle, value.Sampler); }
 
     #endregion
 
@@ -204,39 +302,39 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         switch (property.PropertyType)
         {
             case ShaderPropertyType.Texture2D:
-                _properties.SetTexture(property.Name, property.Texture2DValue);
+                Store(property.Name, MaterialProperty.FromTexture(new AssetRef<Texture2D>(property.Texture2DValue)));
                 break;
 
             case ShaderPropertyType.Texture3D:
-                _properties.SetTexture3D(property.Name, property.Texture3DValue);
+                Store(property.Name, MaterialProperty.FromTexture3D(new AssetRef<Texture3D>(property.Texture3DValue)));
                 break;
 
             case ShaderPropertyType.Float:
-                _properties.SetFloat(property.Name, (float)property);
+                Store(property.Name, MaterialProperty.FromFloat((float)property));
                 break;
 
             case ShaderPropertyType.Int:
-                _properties.SetInt(property.Name, (int)property);
+                Store(property.Name, MaterialProperty.FromInt((int)property));
                 break;
 
             case ShaderPropertyType.Vector2:
-                _properties.SetVector(property.Name, (Float2)property);
+                Store(property.Name, MaterialProperty.FromVector((Float2)property));
                 break;
 
             case ShaderPropertyType.Vector3:
-                _properties.SetVector(property.Name, (Float3)property);
+                Store(property.Name, MaterialProperty.FromVector((Float3)property));
                 break;
 
             case ShaderPropertyType.Vector4:
-                _properties.SetVector(property.Name, (Float4)property);
+                Store(property.Name, MaterialProperty.FromVector((Float4)property));
                 break;
 
             case ShaderPropertyType.Color:
-                _properties.SetColor(property.Name, (Color)property);
+                Store(property.Name, MaterialProperty.FromColor((Color)property));
                 break;
 
             case ShaderPropertyType.Matrix:
-                _properties.SetMatrix(property.Name, (Float4x4)property);
+                Store(property.Name, MaterialProperty.FromMatrix((Float4x4)property));
                 break;
         }
     }
@@ -250,6 +348,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             return;
 
         _shader = new AssetRef<Shader>(shader);
+
         // Intentionally do NOT pre-fill _properties with shader defaults defaults
         // are read live from the shader at access time (see DrawShaderProperty
         // fallback + ApplyMaterialUniformsWithDefaults). Pre-filling would mark
@@ -267,10 +366,29 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         if (_isDirty)
         {
-            _stateHash = _properties.ComputeHash();
+            _stateHash = ComputeHash();
             _isDirty = false;
         }
         return _stateHash;
+    }
+
+    /// <summary>
+    /// Computes an FNV-1a 64-bit hash over every stored property. Entries are ordered
+    /// by name so the result is stable regardless of dictionary iteration order.
+    /// </summary>
+    private ulong ComputeHash()
+    {
+        ulong hash = 14695981039346656037UL; // FNV-1a offset basis
+
+        foreach (KeyValuePair<string, MaterialProperty> kv in _properties.OrderBy(x => x.Key, StringComparer.Ordinal))
+        {
+            hash ^= (ulong)kv.Key.GetHashCode();
+            hash *= 1099511628211UL;
+            hash ^= (ulong)kv.Value.GetHashCode();
+            hash *= 1099511628211UL;
+        }
+
+        return hash;
     }
 
     /// <summary>
@@ -290,11 +408,13 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         // _overrides populated, but their _properties dictionary holds values the
         // user actually set. Treat every existing entry as an override so saved
         // values are preserved when the override-aware code paths take over.
-        if (_overrides == null) _overrides = new HashSet<string>();
-        if (_overrides.Count == 0 && _properties != null)
+        if (PropertyOverrides == null) PropertyOverrides = new HashSet<string>();
+        _properties ??= new();
+        _localKeywords ??= new();
+        if (PropertyOverrides.Count == 0)
         {
-            foreach (var name in _properties.EnumerateNames())
-                _overrides.Add(name);
+            foreach (string name in _properties.Keys)
+                PropertyOverrides.Add(name);
         }
         // No SyncShaderDefaults defaults are read live from the shader at access
         // time (see PropertyState.ApplyMaterialUniformsWithDefaults + the inspector's
@@ -316,25 +436,10 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         foreach (ShaderProperty prop in shader.Properties)
         {
             // User-set values are sacred leave them alone.
-            if (_overrides.Contains(prop.Name)) continue;
+            if (PropertyOverrides.Contains(prop.Name))
+                continue;
+
             UpdatePropertyState(prop);
         }
-    }
-
-    private bool HasProperty(string name, ShaderPropertyType type)
-    {
-        return type switch
-        {
-            ShaderPropertyType.Float => _properties.HasFloat(name),
-            ShaderPropertyType.Int => _properties.HasInt(name),
-            ShaderPropertyType.Vector2 => _properties.HasVector2(name),
-            ShaderPropertyType.Vector3 => _properties.HasVector3(name),
-            ShaderPropertyType.Vector4 => _properties.HasVector4(name),
-            ShaderPropertyType.Color => _properties.HasColor(name),
-            ShaderPropertyType.Matrix => _properties.HasMatrix(name),
-            ShaderPropertyType.Texture2D => _properties.HasTexture(name),
-            ShaderPropertyType.Texture3D => _properties.HasTexture3D(name),
-            _ => false,
-        };
     }
 }

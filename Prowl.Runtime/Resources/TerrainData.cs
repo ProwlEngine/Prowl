@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+using Prowl.Runtime.Rendering;
 using System;
 using System.Collections.Generic;
 
@@ -572,7 +574,7 @@ public sealed class TerrainData : EngineObject, ISerializable
                 _heightmapFloatBuffer[i] = Heights[i] * scale;
 
             _heightmapTexture?.Dispose();
-            _heightmapTexture = new Texture2D((uint)HeightmapResolution, (uint)HeightmapResolution, false, TextureImageFormat.Float);
+            _heightmapTexture = new Texture2D((uint)HeightmapResolution, (uint)HeightmapResolution, false, PixelFormat.R32_Float);
             _heightmapTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             Graphics.SetWrapS(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
             Graphics.SetWrapT(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
@@ -616,7 +618,7 @@ public sealed class TerrainData : EngineObject, ISerializable
                         buffer[p * 4 + c] = Splats[p * lc + baseChannel + c];
                 }
 
-                var tex = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float4);
+                var tex = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, PixelFormat.R32_G32_B32_A32_Float);
                 tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
                 Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
                 Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
@@ -647,7 +649,7 @@ public sealed class TerrainData : EngineObject, ISerializable
                 _holesFloatBuffer[i] = Holes[i] > 0 ? 1f : 0f;
 
             _holesTexture?.Dispose();
-            _holesTexture = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float);
+            _holesTexture = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, PixelFormat.R32_Float);
             _holesTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
             Graphics.SetWrapS(_holesTexture.Handle, TextureWrap.ClampToEdge);
             Graphics.SetWrapT(_holesTexture.Handle, TextureWrap.ClampToEdge);

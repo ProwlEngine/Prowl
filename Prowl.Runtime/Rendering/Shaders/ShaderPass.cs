@@ -1,10 +1,12 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Graphite;
+using Prowl.Graphite.Variants;
 
 namespace Prowl.Runtime.Rendering.Shaders;
 
@@ -14,17 +16,18 @@ public sealed class ShaderPass
 
     [SerializeField] private Dictionary<string, string> _tags;
     [SerializeField] private Dictionary<string, int> _tagSortOffsets;
-    [SerializeField] private RasterizerState _rasterizerState;
-
-    [SerializeField] private string _vertexSource;
-    [SerializeField] private string _fragmentSource;
-    [SerializeField] private string _fallbackAsset;
 
     [SerializeField] private string _grabTextureName; // If not empty, captures screen before rendering
     [SerializeField] private string _grabDepthTextureName; // If not empty, also captures the depth buffer
 
-    [SerializeIgnore]
-    private Dictionary<string, GraphicsProgram> _variants = [];
+    /// <summary>
+    /// The compiled variants of this pass: every keyword permutation paired with its per-backend
+    /// program descriptions. This is the serialized source of truth the runtime
+    /// <see cref="VariantSet{T}"/> is reconstructed from it.
+    /// </summary>
+    [SerializeField] private ShaderVariant[] _variants;
+
+    [SerializeIgnore] private VariantSet<GraphicsProgram> _variantSet;
 
 
     /// <summary>
@@ -41,11 +44,6 @@ public sealed class ShaderPass
     /// The sort offsets for tags (e.g., "Transparent+1000" has offset 1000)
     /// </summary>
     public IReadOnlyDictionary<string, int> TagSortOffsets => _tagSortOffsets;
-
-    /// <summary>
-    /// The blending options to use when rendering this <see cref="ShaderPass"/>
-    /// </summary>
-    public RasterizerState State => _rasterizerState;
 
     /// <summary>
     /// The name of the texture uniform to bind the grabbed colour texture to. Empty if this pass doesn't grab.
@@ -67,93 +65,72 @@ public sealed class ShaderPass
     /// </summary>
     public bool HasGrabDepth => !string.IsNullOrEmpty(_grabDepthTextureName);
 
-    public IEnumerable<KeyValuePair<string, GraphicsProgram>> Variants => _variants;
+    /// <summary>
+    /// The compiled variants this pass was built with.
+    /// </summary>
+    public IEnumerable<ShaderVariant> Variants => _variants;
+
+    /// <summary>
+    /// The program for the keyword state currently selected via <see cref="SetKeyword"/> /
+    /// <see cref="SetKeywords"/>.
+    /// </summary>
+    public GraphicsProgram ActiveProgram => VariantSet.ActiveVariant;
 
 
     private ShaderPass() { }
 
-    public ShaderPass(string name, Dictionary<string, string>? tags, Dictionary<string, int>? tagSortOffsets, RasterizerState state, string vertexSource, string fragmentSource, string fallbackAsset, string grabTextureName = "", string grabDepthTextureName = "")
+    public ShaderPass(string name, Dictionary<string, string>? tags, Dictionary<string, int>? tagSortOffsets, ShaderVariant[] variants, string grabTextureName = "", string grabDepthTextureName = "")
     {
         _name = name;
 
         _tags = tags ?? [];
         _tagSortOffsets = tagSortOffsets ?? [];
-        _rasterizerState = state;
 
-        _vertexSource = vertexSource;
-        _fragmentSource = fragmentSource;
-        _fallbackAsset = fallbackAsset;
+        _variants = variants ?? [];
 
         _grabTextureName = grabTextureName;
         _grabDepthTextureName = grabDepthTextureName;
-
-        _variants = [];
     }
 
-    public bool TryGetVariantProgram(Dictionary<string, bool>? keywordID, out GraphicsProgram variant)
+    /// <summary>
+    /// Sets a keyword on the pass's current state, updating <see cref="ActiveProgram"/>.
+    /// </summary>
+    public void SetKeyword(Keyword keyword) => VariantSet.SetKeyword(keyword);
+
+    /// <summary>
+    /// Sets a batch of keywords on the pass's current state, updating <see cref="ActiveProgram"/>.
+    /// </summary>
+    public void SetKeywords(params Keyword[] keywords) => VariantSet.SetKeywords(keywords);
+
+    private VariantSet<GraphicsProgram> VariantSet => _variantSet ??= BuildVariantSet();
+
+    private VariantSet<GraphicsProgram> BuildVariantSet()
     {
-        string keywords = string.Empty;
-        if (keywordID != null)
+        GraphicsBackend backend = Graphics.Device.BackendType;
+
+        var programs = new GraphicsProgram[_variants.Length];
+        var keywords = new Keyword[_variants.Length][];
+
+        for (int i = 0; i < _variants.Length; i++)
         {
-            foreach (KeyValuePair<string, bool> kvp in keywordID)
-            {
-                if (kvp.Value)
-                    keywords += $"{kvp.Key};";
-            }
+            ShaderDescription description = PickBackend(_variants[i], backend);
+
+            programs[i] = Graphics.Device.ResourceFactory.CreateGraphicsProgram(description);
+            keywords[i] = _variants[i].Keywords;
         }
 
-        if (_variants.TryGetValue(keywords, out variant))
-            return true;
+        return new VariantSet<GraphicsProgram>(programs, keywords);
+    }
 
-        string frag = _fragmentSource;
-        string vert = _vertexSource;
-        if (string.IsNullOrEmpty(frag)) throw new Exception($"Failed to compile shader pass of {Name}. Fragment Shader is null or empty.");
-        if (string.IsNullOrEmpty(vert)) throw new Exception($"Failed to compile shader pass of {Name}. Vertex Shader is null or empty.");
-
-        frag = frag.Insert(0, $"#define FRAGMENT_VERSION 1\n");
-        vert = vert.Insert(0, $"#define FRAGMENT_VERSION 1\n");
-
-        if (keywordID != null)
+    private ShaderDescription PickBackend(ShaderVariant variant, GraphicsBackend backend)
+    {
+        foreach (ShaderVariantBackend entry in variant.Backends)
         {
-            foreach (KeyValuePair<string, bool> kvp in keywordID)
-            {
-                if (!kvp.Value) continue;
-
-                frag = frag.Insert(0, $"#define {kvp.Key}\n");
-                vert = vert.Insert(0, $"#define {kvp.Key}\n");
-            }
+            if (entry.Backend == backend)
+                return entry.Description;
         }
 
-        frag = frag.Insert(0, $"#version 410\n");
-        vert = vert.Insert(0, $"#version 410\n");
-
-
-        Debug.Log("Compiling shader pass " + Name + " with keywords: " + keywords);
-
-        try
-        {
-            variant = Graphics.CompileProgram(frag, vert, null);
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"Failed to compile shader pass of {Name}. Exception: {e.Message}");
-
-            // Use the Invalid shader as fallback
-            var fallbackShader = Resources.Shader.LoadDefault(Resources.DefaultShader.Invalid);
-            if (fallbackShader.IsValid())
-            {
-                if (!fallbackShader.GetPass(0).TryGetVariantProgram(null, out variant))
-                    throw new Exception($"Failed to compile shader pass of {Name}. Fallback shader also failed to compile.");
-            }
-            else
-            {
-                throw new Exception($"Failed to compile shader pass of {Name}. Fallback shader is null.");
-            }
-        }
-
-        _variants.Add(keywords, variant);
-
-        return true;
+        throw new NotSupportedException($"Shader pass '{_name}' was not compiled for backend {backend}.");
     }
 
     public bool HasTag(string tag, string? tagValue = null)

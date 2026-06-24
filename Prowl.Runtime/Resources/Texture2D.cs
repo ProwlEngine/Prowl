@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -7,6 +7,7 @@ using System.IO;
 using ImageMagick;
 
 using Prowl.Echo;
+using Prowl.Graphite;
 
 namespace Prowl.Runtime.Resources;
 
@@ -22,7 +23,24 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
     public uint Height { get; private set; }
 
-    public Texture2D() : base(TextureType.Texture2D, TextureImageFormat.Color4b) { }
+    private bool _generateMipmaps;
+
+    /// <summary>Extra usage flags OR'd into the texture (e.g. RenderTarget/DepthStencil for render targets).</summary>
+    private TextureUsage _extraUsage;
+
+    public Texture2D() : base(TextureType.Texture2D, PixelFormat.R8_G8_B8_A8_UNorm) { }
+
+    /// <summary>
+    /// Creates a <see cref="Texture2D"/> usable as a framebuffer attachment with the given extra usage
+    /// (RenderTarget for color targets, DepthStencil for depth targets).
+    /// </summary>
+    internal Texture2D(uint width, uint height, PixelFormat imageFormat, TextureUsage extraUsage)
+        : base(TextureType.Texture2D, imageFormat)
+    {
+        _extraUsage = extraUsage;
+        RecreateImage(width, height);
+        SetTextureFilters(DefaultFilter);
+    }
 
     /// <summary>
     /// Creates a <see cref="Texture2D"/> with the desired parameters but no image data.
@@ -31,43 +49,33 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="height">The height of the <see cref="Texture2D"/>.</param>
     /// <param name="generateMipmaps">Whether to generate mipmaps for this <see cref="Texture2D"/>.</param>
     /// <param name="imageFormat">The image format for this <see cref="Texture2D"/>.</param>
-    public Texture2D(uint width, uint height, bool generateMipmaps = false, TextureImageFormat imageFormat = TextureImageFormat.Color4b)
+    public Texture2D(uint width, uint height, bool generateMipmaps = false, PixelFormat imageFormat = PixelFormat.R8_G8_B8_A8_UNorm)
         : base(TextureType.Texture2D, imageFormat)
     {
-        RecreateImage(width, height); //This also binds the texture
+        _generateMipmaps = generateMipmaps;
+        RecreateImage(width, height);
 
         if (generateMipmaps)
             GenerateMipmaps();
 
-        Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
-        MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
-        MagFilter = DefaultMagFilter;
+        SetTextureFilters(IsMipmapped ? DefaultMipmapFilter : DefaultFilter);
     }
 
     /// <summary>
     /// Sets the data of an area of the <see cref="Texture2D"/>.
     /// </summary>
-    /// <param name="ptr">The pointer from which the pixel data will be read.</param>
-    /// <param name="rectX">The X coordinate of the first pixel to write.</param>
-    /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
-    /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
-    /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
     public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
     {
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
-        Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
+        uint bytes = rectWidth * rectHeight * ImageFormat.GetSizeInBytes();
+        Graphics.Device.UpdateTexture(Handle, (nint)ptr, bytes,
+            (uint)rectX, (uint)rectY, 0, rectWidth, rectHeight, 1, 0, 0);
     }
 
     /// <summary>
     /// Sets the data of an area of the <see cref="Texture2D"/>.
     /// </summary>
-    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
-    /// <param name="data">A <see cref="Memory{T}"/> containing the new pixel data.</param>
-    /// <param name="rectX">The X coordinate of the first pixel to write.</param>
-    /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
-    /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
-    /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
     public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
     {
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
@@ -75,14 +83,12 @@ public sealed class Texture2D : Texture, ISerializable
             throw new ArgumentException("Not enough pixel data", nameof(data));
 
         fixed (void* ptr = data.Span)
-            Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
+            SetDataPtr(ptr, rectX, rectY, rectWidth, rectHeight);
     }
 
     /// <summary>
     /// Sets the data of the entire <see cref="Texture2D"/>.
     /// </summary>
-    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
-    /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
         SetData(data, 0, 0, Width, Height);
@@ -91,95 +97,25 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>
     /// Gets the data of the entire <see cref="Texture2D"/>.
     /// </summary>
-    /// <param name="ptr">The pointer to which the pixel data will be written.</param>
     public unsafe void GetDataPtr(void* ptr)
     {
-        Graphics.GetTexImage(Handle, 0, ptr);
+        throw new NotSupportedException("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture).");
     }
 
     /// <summary>
     /// Gets the data of the entire <see cref="Texture2D"/>.
     /// </summary>
-    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
-    /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
-        if (data.Length < Width * Height)
-            throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
-
-        fixed (void* ptr = data.Span)
-            Graphics.GetTexImage(Handle, 0, ptr);
+        throw new NotSupportedException("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture).");
     }
 
-    public int GetSize()
-    {
-        int size = (int)Width * (int)Height;
-        switch (ImageFormat)
-        {
-            case TextureImageFormat.UnsignedInt:
-            case TextureImageFormat.Int:
-            case TextureImageFormat.Float:
-                return size * 4;
-            case TextureImageFormat.UnsignedInt2:
-            case TextureImageFormat.Int2:
-            case TextureImageFormat.Float2:
-                return size * 4 * 2;
-            case TextureImageFormat.UnsignedInt3:
-            case TextureImageFormat.Int3:
-            case TextureImageFormat.Float3:
-                return size * 4 * 3;
-            case TextureImageFormat.UnsignedInt4:
-            case TextureImageFormat.Int4:
-            case TextureImageFormat.Float4:
-                return size * 4 * 4;
-            case TextureImageFormat.Depth16f:
-                return size * 2;
-            case TextureImageFormat.Depth24f:
-                return size * 3;
-            case TextureImageFormat.Depth32f:
-                return size * 4;
-
-            case TextureImageFormat.Short:
-            case TextureImageFormat.UnsignedShort:
-                return size * 1 * 2;
-            case TextureImageFormat.Short2:
-            case TextureImageFormat.UnsignedShort2:
-                return size * 2 * 2;
-            case TextureImageFormat.Short3:
-            case TextureImageFormat.UnsignedShort3:
-                return size * 3 * 2;
-            case TextureImageFormat.Short4:
-            case TextureImageFormat.UnsignedShort4:
-                return size * 4 * 2;
-
-            default: return size * 4;
-        }
-    }
-
-    /// <summary>
-    /// Sets the texture coordinate wrapping modes for when a texture is sampled outside the [0, 1] range.
-    /// </summary>
-    /// <param name="sWrapMode">The wrap mode for the S (or texture-X) coordinate.</param>
-    /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
-    public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode)
-    {
-        Graphics.SetWrapS(Handle, sWrapMode);
-        Graphics.SetWrapT(Handle, tWrapMode);
-    }
-
-    /// <summary>
-    /// Enable hardware depth-comparison sampling on this (depth) texture, so a
-    /// <c>sampler2DShadow</c> uniform performs the depth test in fixed-function hardware.
-    /// Pair with LINEAR filtering for free 2x2 PCF.
-    /// </summary>
-    public void SetDepthCompareMode(bool enabled) => Graphics.SetTextureCompareMode(Handle, enabled);
+    public int GetSize() => (int)(Width * Height * ImageFormat.GetSizeInBytes());
 
     /// <summary>
     /// Recreates this <see cref="Texture2D"/>'s image with a new size,
     /// resizing the <see cref="Texture2D"/> but losing the image data.
     /// </summary>
-    /// <param name="width">The new width for the <see cref="Texture2D"/>.</param>
-    /// <param name="height">The new height for the <see cref="Texture2D"/>.</param>
     public unsafe void RecreateImage(uint width, uint height)
     {
         ValidateTextureSize(width, height);
@@ -187,7 +123,15 @@ public sealed class Texture2D : Texture, ISerializable
         Width = width;
         Height = height;
 
-        Graphics.TexImage2D(Handle, 0, Width, Height, 0, (void*)0);
+        Handle?.Dispose();
+
+        uint mipLevels = _generateMipmaps ? ComputeMipLevels(width, height) : 1;
+        TextureUsage usage = TextureUsage.Sampled | _extraUsage;
+        if (_generateMipmaps)
+            usage |= TextureUsage.GenerateMipmaps;
+
+        Handle = Graphics.Device.ResourceFactory.CreateTexture(
+            TextureDescription.Texture2D(width, height, mipLevels, 1, ImageFormat, usage));
     }
 
     private void ValidateTextureSize(uint width, uint height)
@@ -223,9 +167,9 @@ public sealed class Texture2D : Texture, ISerializable
         compoundTag.Add("Height", new(Height));
         compoundTag.Add("IsMipMapped", new(IsMipmapped));
         compoundTag.Add("ImageFormat", new((int)ImageFormat));
-        compoundTag.Add("MinFilter", new((int)MinFilter));
-        compoundTag.Add("MagFilter", new((int)MagFilter));
-        compoundTag.Add("Wrap", new((int)WrapMode));
+        compoundTag.Add("Filter", new((int)Filter));
+        compoundTag.Add("AddressU", new((int)AddressModeU));
+        compoundTag.Add("AddressV", new((int)AddressModeV));
         Memory<byte> memory = new byte[GetSize()];
         GetData(memory);
         compoundTag.Add("Data", new(memory.ToArray()));
@@ -236,12 +180,12 @@ public sealed class Texture2D : Texture, ISerializable
         Width = value["Width"].UIntValue;
         Height = value["Height"].UIntValue;
         bool isMipMapped = value["IsMipMapped"].BoolValue;
-        TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
-        var MinFilter = (TextureMin)value["MinFilter"].IntValue;
-        var MagFilter = (TextureMag)value["MagFilter"].IntValue;
-        var Wrap = (TextureWrap)value["Wrap"].IntValue;
+        PixelFormat imageFormat = (PixelFormat)value["ImageFormat"].IntValue;
+        var filter = (SamplerFilter)value["Filter"].IntValue;
+        var addressU = (SamplerAddressMode)value["AddressU"].IntValue;
+        var addressV = (SamplerAddressMode)value["AddressV"].IntValue;
 
-        Type[] param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
+        Type[] param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(PixelFormat) };
         object[] values = new object[] { Width, Height, false, imageFormat };
         typeof(Texture2D).GetConstructor(param).Invoke(this, values);
 
@@ -251,8 +195,8 @@ public sealed class Texture2D : Texture, ISerializable
         if (isMipMapped)
             GenerateMipmaps();
 
-        SetTextureFilters(MinFilter, MagFilter);
-        SetWrapModes(Wrap, Wrap);
+        SetTextureFilters(filter);
+        SetWrapModes(addressU, addressV);
     }
 
     #region ImageMagick integration
@@ -261,15 +205,13 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>
     /// Creates a <see cref="Texture2D"/> from a <see cref="MagickImage"/>.
     /// </summary>
-    /// <param name="image">The image to create the <see cref="Texture2D"/> with.</param>
-    /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
     public static Texture2D FromImage(MagickImage image, bool generateMipmaps = false)
     {
         ArgumentNullException.ThrowIfNull(image);
 
         image.Flip();
 
-        TextureImageFormat format = TextureImageFormat.UnsignedShort4;
+        PixelFormat format = PixelFormat.R16_G16_B16_A16_UNorm;
         image.ColorSpace = ColorSpace.sRGB;
         image.ColorType = ColorType.TrueColorAlpha;
 
@@ -278,10 +220,9 @@ public sealed class Texture2D : Texture, ISerializable
         Texture2D texture = new(image.Width, image.Height, false, format);
         try
         {
-
             unsafe
             {
-                Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, (void*)pixels);
+                texture.SetDataPtr((void*)pixels, 0, 0, image.Width, image.Height);
             }
 
             if (generateMipmaps)
@@ -299,8 +240,6 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>
     /// Creates a <see cref="Texture2D"/> from a <see cref="Stream"/>.
     /// </summary>
-    /// <param name="stream">The stream from which to load an image.</param>
-    /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
     public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
     {
         var image = new MagickImage(stream);
@@ -310,8 +249,6 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>
     /// Creates a <see cref="Texture2D"/> by loading an image from a file.
     /// </summary>
-    /// <param name="file">The file containing the image to create the <see cref="Texture2D"/> with.</param>
-    /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
     public static Texture2D FromFile(string file, bool generateMipmaps = false)
     {
         var image = new MagickImage(file);
@@ -337,9 +274,7 @@ public sealed class Texture2D : Texture, ISerializable
     }
 
     /// <summary>
-    /// Get the shared instance of a default embedded texture. Returns the same GPU
-    /// texture across the whole app callers that need a unique mutable copy should
-    /// call <see cref="FromImage"/>/<see cref="FromStream"/> directly.
+    /// Get the shared instance of a default embedded texture.
     /// </summary>
     public static Texture2D LoadDefault(DefaultTexture texture)
     {
@@ -372,7 +307,6 @@ public sealed class Texture2D : Texture, ISerializable
         string resourcePath = $"Assets/Defaults/{fileName}";
         using Stream stream = EmbeddedResources.GetStream(resourcePath);
         return FromStream(stream, true);
-        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after this returns.
     }
 
     internal const string ImageNotContiguousError = "To load/save an image, it's backing memory must be contiguous. Consider using smaller image sizes or changing your ImageSharp memory allocation settings to allow larger buffers.";

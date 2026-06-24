@@ -6,21 +6,24 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Graphite;
 
 namespace Prowl.Runtime.Resources;
 
 public sealed class RenderTexture : EngineObject, ISerializable
 {
-    public GraphicsFrameBuffer frameBuffer { get; private set; }
+    public Framebuffer frameBuffer { get; private set; }
     public Texture2D MainTexture => InternalTextures[0];
     public Texture2D[] InternalTextures { get; private set; }
     public Texture2D InternalDepth { get; private set; }
+
+    private const PixelFormat DepthFormat = PixelFormat.D24_UNorm_S8_UInt;
 
     public int Width { get; private set; }
     public int Height { get; private set; }
     private int numTextures;
     private bool hasDepthAttachment;
-    private TextureImageFormat[] textureFormats;
+    private PixelFormat[] textureFormats;
 
     public RenderTexture() : base("RenderTexture")
     {
@@ -31,35 +34,34 @@ public sealed class RenderTexture : EngineObject, ISerializable
         textureFormats = [];
     }
 
-    public RenderTexture(int Width, int Height, bool hasDepthAttachment, TextureImageFormat[] formats) : base("RenderTexture")
+    public RenderTexture(int Width, int Height, bool hasDepthAttachment, PixelFormat[] formats) : base("RenderTexture")
     {
         this.Width = Width;
         this.Height = Height;
         numTextures = formats?.Length ?? throw new ArgumentNullException(nameof(formats), "Texture formats cannot be null.");
         this.hasDepthAttachment = hasDepthAttachment;
 
-        if (numTextures < 0 || numTextures > Graphics.MaxFramebufferColorAttachments)
-            throw new Exception("Invalid number of textures! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
-
         textureFormats = formats;
 
-        GraphicsFrameBuffer.Attachment[] attachments = new GraphicsFrameBuffer.Attachment[numTextures + (hasDepthAttachment ? 1 : 0)];
         InternalTextures = new Texture2D[numTextures];
+        Graphite.Texture[] colorTargets = new Graphite.Texture[numTextures];
         for (int i = 0; i < numTextures; i++)
         {
-            InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, textureFormats[i]);
-            InternalTextures[i].SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            InternalTextures[i].SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
-            attachments[i] = new GraphicsFrameBuffer.Attachment { Texture = InternalTextures[i].Handle, IsDepth = false };
+            InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, textureFormats[i], TextureUsage.RenderTarget);
+            InternalTextures[i].SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
+            InternalTextures[i].SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
+            colorTargets[i] = InternalTextures[i].Handle;
         }
 
+        Graphite.Texture depthTarget = null;
         if (hasDepthAttachment)
         {
-            InternalDepth = new Texture2D((uint)Width, (uint)Height, false, TextureImageFormat.Depth24f);
-            attachments[numTextures] = new GraphicsFrameBuffer.Attachment { Texture = InternalDepth.Handle, IsDepth = true };
+            InternalDepth = new Texture2D((uint)Width, (uint)Height, DepthFormat, TextureUsage.DepthStencil);
+            depthTarget = InternalDepth.Handle;
         }
 
-        frameBuffer = Graphics.CreateFramebuffer(attachments, (uint)Width, (uint)Height);
+        frameBuffer = Graphics.Device.ResourceFactory.CreateFramebuffer(
+            new FramebufferDescription(depthTarget, colorTargets));
     }
 
     public override void OnDispose()
@@ -81,9 +83,11 @@ public sealed class RenderTexture : EngineObject, ISerializable
         compoundTag.Add("Height", new(Height));
         compoundTag.Add("NumTextures", new(numTextures));
         compoundTag.Add("HasDepthAttachment", new((byte)(hasDepthAttachment ? 1 : 0)));
+
         EchoObject textureFormatsTag = EchoObject.NewList();
-        foreach (TextureImageFormat format in textureFormats)
-            textureFormatsTag.ListAdd(new((byte)format));
+        foreach (PixelFormat format in textureFormats)
+            textureFormatsTag.ListAdd(new((int)format));
+
         compoundTag.Add("TextureFormats", textureFormatsTag);
     }
 
@@ -93,25 +97,25 @@ public sealed class RenderTexture : EngineObject, ISerializable
         Height = value["Height"].IntValue;
         numTextures = value["NumTextures"].IntValue;
         hasDepthAttachment = value["HasDepthAttachment"].ByteValue == 1;
-        textureFormats = new TextureImageFormat[numTextures];
+        textureFormats = new PixelFormat[numTextures];
+
         EchoObject? textureFormatsTag = value.Get("TextureFormats");
         for (int i = 0; i < numTextures; i++)
-            textureFormats[i] = (TextureImageFormat)textureFormatsTag[i].ByteValue;
+            textureFormats[i] = (PixelFormat)textureFormatsTag[i].IntValue;
 
-
-        Type[] param = new[] { typeof(int), typeof(int), typeof(bool), typeof(TextureImageFormat[]) };
-        object[] values = new object[] { Width, Height, hasDepthAttachment, textureFormats };
+        Type[] param = [typeof(int), typeof(int), typeof(bool), typeof(PixelFormat[])];
+        object[] values = [Width, Height, hasDepthAttachment, textureFormats];
         typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
     }
 
     #region Pool
 
-    private struct RenderTextureKey(int width, int height, bool hasDepth, TextureImageFormat[] format)
+    private struct RenderTextureKey(int width, int height, bool hasDepth, PixelFormat[] format)
     {
         public int Width = width;
         public int Height = height;
         public bool HasDepth = hasDepth;
-        public TextureImageFormat[] Format = format;
+        public PixelFormat[] Format = format;
 
         public override bool Equals(object? obj)
         {
@@ -133,7 +137,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
             hash = hash * 23 + Width.GetHashCode();
             hash = hash * 23 + Height.GetHashCode();
             hash = hash * 23 + HasDepth.GetHashCode();
-            foreach (TextureImageFormat format in Format)
+            foreach (PixelFormat format in Format)
                 hash = hash * 23 + ((int)format).GetHashCode();
             return hash;
         }
@@ -146,7 +150,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
     private const int MaxUnusedFrames = 10;
     private const int MaxActiveFrames = 3; // Warn if held longer than 3 frames
 
-    public static RenderTexture GetTemporaryRT(int width, int height, bool hasDepth, TextureImageFormat[] format)
+    public static RenderTexture GetTemporaryRT(int width, int height, bool hasDepth, PixelFormat[] format)
     {
         var key = new RenderTextureKey(width, height, hasDepth, format);
 

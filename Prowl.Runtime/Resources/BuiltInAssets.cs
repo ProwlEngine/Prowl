@@ -50,15 +50,9 @@ public static class BuiltInAssets
         if (_initialized) return;
         _initialized = true;
 
-        // Shaders loader calls the raw parse so LoadDefault can route through the cache
-        // without recursing through itself.
-        foreach (DefaultShader s in Enum.GetValues<DefaultShader>())
-        {
-            var shader = s;
-            Register($"$Default:Shader/{shader}", shader.ToString(), typeof(Shader),
-                () => Shader.ParseDefault(shader));
-        }
-
+        // Default shaders are compiled by the editor build pipeline into the asset database;
+        // there is no runtime parser, so they are not registered here. Shader.LoadDefault
+        // resolves them by GUID once compiled.
 
         // Default meshes (parsed directly from embedded OBJ files)
         foreach (DefaultModel m in Enum.GetValues<DefaultModel>())
