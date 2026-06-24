@@ -3,6 +3,7 @@
 
 using System.Runtime.InteropServices;
 
+using Prowl.Graphite;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.Rendering;
@@ -53,7 +54,7 @@ public struct GlobalUniformsData
 /// </summary>
 public static class GlobalUniforms
 {
-    private static GraphicsBuffer? s_uniformBuffer;
+    private static DeviceBuffer? s_uniformBuffer;
     private static GlobalUniformsData s_data;
     private static bool s_isDirty = true;
 
@@ -64,20 +65,14 @@ public static class GlobalUniforms
     {
         if (s_uniformBuffer == null)
         {
-            // Create a dynamic uniform buffer
-            s_uniformBuffer = Graphics.CreateBuffer<GlobalUniformsData>(
-                BufferType.UniformBuffer,
-                [s_data],
-                true
-            );
+            s_uniformBuffer = Graphics.Device.ResourceFactory.CreateBuffer(
+                new BufferDescription((uint)GlobalUniformsData.SizeInBytes, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
             s_isDirty = true;
         }
     }
 
     /// <summary>
-    /// Updates the GPU buffer if data has changed. Encodes through a CommandBuffer
-    /// so any subsequent rendering CB sees the new uniforms (submit order is
-    /// preserved by the executor).
+    /// Updates the GPU buffer if data has changed.
     /// </summary>
     public static void Upload()
     {
@@ -85,9 +80,7 @@ public static class GlobalUniforms
 
         if (s_isDirty && s_uniformBuffer != null)
         {
-            using var cmd = Graphics.GetCommandBuffer("GlobalUniforms.Upload");
-            cmd.UpdateBuffer<GlobalUniformsData>(s_uniformBuffer, new[] { s_data });
-            Graphics.Submit(cmd);
+            Graphics.Device.UpdateBuffer(s_uniformBuffer, 0u, new[] { s_data });
             s_isDirty = false;
         }
     }
@@ -100,7 +93,7 @@ public static class GlobalUniforms
     /// draw) creates the buffer, so by submit order it is non-null here. Returns
     /// null only before the first Upload; PrepareDraw skips the bind in that case.
     /// </summary>
-    public static GraphicsBuffer? GetBuffer() => s_uniformBuffer;
+    public static DeviceBuffer? GetBuffer() => s_uniformBuffer;
 
     /// <summary>
     /// Cleans up the global uniform buffer resources
