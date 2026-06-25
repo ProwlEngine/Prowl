@@ -72,6 +72,19 @@ public class D3D11CompilationTests
     }
 
 
+    // A combined Sampler2D<> currently crashes native Slang HLSL codegen (process exit 139), so the HLSL
+    // target cannot compile the CombinedSampler shader the way Vulkan can. Skipped until the upstream
+    // Slang crash is resolved; the body documents the intended assertion so it runs once unblocked.
+    [SkippableFact]
+    public void CombinedSampler_CompilesToHlsl()
+    {
+        Skip.If(true, "Slang HLSL codegen segfaults on combined Sampler2D<>; D3D11 support deferred upstream.");
+
+        ShaderDescription d = Compile("CombinedSampler");
+        Assert.NotEmpty(d.Stages);
+    }
+
+
     // Two raw constant buffers take b0/b1 (register slots are profile-independent for plain cbuffers).
     [Fact]
     public void ConstantBuffers_ReflectBlocksAndFields()

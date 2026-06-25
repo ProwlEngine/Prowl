@@ -28,6 +28,8 @@ internal partial class OpenGLCommandBuffer : CommandBuffer
         : base(gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
     {
         _gd = gd;
+
+        Constructor_RecordAllocation();
     }
 
     public override void Begin()
@@ -275,6 +277,8 @@ internal partial class OpenGLCommandBuffer : CommandBuffer
             }
 
             _disposed = true;
+
+            DestroyResources_RecordFree();
         }
     }
 }

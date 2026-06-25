@@ -79,6 +79,8 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         _cb = GetNextCommandBuffer();
         RefCount = new ResourceRefCount(DisposeCore);
+
+        Constructor_RecordAllocation();
     }
 
     private Silk.NET.Vulkan.CommandBuffer GetNextCommandBuffer()
@@ -1743,6 +1745,8 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             {
                 buffer.Dispose();
             }
+
+            DisposeCore_RecordFree();
         }
     }
 

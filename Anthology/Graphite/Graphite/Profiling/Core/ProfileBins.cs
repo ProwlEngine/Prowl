@@ -50,7 +50,12 @@ public enum AllocBin
     /// <summary>
     /// Bin index Vulkan descriptor sets; unused on D3D11/OpenGL, so counts will be 0
     /// </summary>
-    ResourceSet
+    ResourceSet,
+
+    /// <summary>
+    /// Bin index for <see cref="Graphite.CommandBuffer"/>.
+    /// </summary>
+    CommandBuffer
 }
 
 /// <summary>

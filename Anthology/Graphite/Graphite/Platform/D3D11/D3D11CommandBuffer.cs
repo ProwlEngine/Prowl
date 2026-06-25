@@ -116,6 +116,8 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             _uda = default;
             _uda.Handle = pUda;
         }
+
+        Constructor_RecordAllocation();
     }
 
     public ID3D11CommandList* DeviceCommandList => _commandList;
@@ -1493,6 +1495,8 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             _availableStagingBuffers.Clear();
 
             _disposed = true;
+
+            Dispose_RecordFree();
         }
     }
 
