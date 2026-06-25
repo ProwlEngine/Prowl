@@ -185,6 +185,8 @@ public abstract partial class ResourceFactory
                 $"{nameof(ShaderDescription)} must include a vertex stage.");
         }
 
+        CreateGraphicsProgram_ValidatePipelineStateArrays(ref description);
+
         RasterizerStateDescription rasterizerState = description.RasterizerState;
         BlendStateDescription blendState = description.BlendState;
         if (!rasterizerState.DepthClipEnabled && !Features.DepthClipDisable)
@@ -192,7 +194,7 @@ public abstract partial class ResourceFactory
             throw new RenderException(
                 "RasterizerState.DepthClipEnabled must be true if GraphicsDeviceFeatures.DepthClipDisable is not supported.");
         }
-        if (!Features.IndependentBlend && blendState.AttachmentStates != null && blendState.AttachmentStates.Length > 0)
+        if (!Features.IndependentBlend && blendState.AttachmentStates.Length > 0)
         {
             BlendAttachmentDescription attachmentState = blendState.AttachmentStates[0];
             for (int i = 1; i < blendState.AttachmentStates.Length; i++)
@@ -237,6 +239,15 @@ public abstract partial class ResourceFactory
                         $"The vertex layout's stride ({layoutDesc.Stride}) is less than the full size of the vertex ({minOffset})");
                 }
             }
+        }
+    }
+
+    private static void CreateGraphicsProgram_ValidatePipelineStateArrays(ref ShaderDescription description)
+    {
+        if (description.BlendState.AttachmentStates == null)
+        {
+            throw new RenderException(
+                $"{nameof(ShaderDescription)}.{nameof(ShaderDescription.BlendState)}.{nameof(BlendStateDescription.AttachmentStates)} must not be null. Use an empty array if the program has no color attachments.");
         }
     }
 
