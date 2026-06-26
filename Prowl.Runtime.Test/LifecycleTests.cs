@@ -51,48 +51,10 @@ public class TestLifecycleComponent : MonoBehaviour
 /// <summary>
 /// Comprehensive tests for MonoBehaviour lifecycle methods.
 /// Ported from the LifecycleTest sample project.
+/// Scene/GameObject creation, play-mode setup and teardown come from <see cref="RuntimeTestBase"/>.
 /// </summary>
-public class LifecycleTests : IDisposable
+public class LifecycleTests : RuntimeTestBase
 {
-    private readonly List<Scene> _scenes = [];
-    private readonly List<GameObject> _gameObjects = [];
-
-    public void Dispose()
-    {
-        // Clean up all created scenes and game objects
-        foreach (var scene in _scenes)
-        {
-            if (!scene.IsDisposed)
-            {
-                if (scene.IsActive)
-                    scene.Disable();
-                scene.Dispose();
-            }
-        }
-        _scenes.Clear();
-
-        foreach (var go in _gameObjects)
-        {
-            if (!go.IsDisposed)
-                go.Dispose();
-        }
-        _gameObjects.Clear();
-    }
-
-    private Scene CreateScene()
-    {
-        var scene = new Scene();
-        _scenes.Add(scene);
-        return scene;
-    }
-
-    private GameObject CreateGameObject(string name = "TestObject")
-    {
-        var go = new GameObject(name);
-        _gameObjects.Add(go);
-        return go;
-    }
-
     /// <summary>
     /// Test 1: Adding GameObject to DISABLED Scene
     /// Expected: OnAddedToScene called, OnEnable NOT called (scene disabled)
@@ -337,7 +299,6 @@ public class LifecycleTests : IDisposable
         comp.ClearEvents();
 
         go.Dispose();
-        _gameObjects.Remove(go); // Already disposed
 
         Assert.Contains("OnDisable", comp.Events);
         Assert.Contains("OnDispose", comp.Events);
@@ -359,7 +320,6 @@ public class LifecycleTests : IDisposable
         comp.ClearEvents();
 
         go.Dispose();
-        _gameObjects.Remove(go); // Already disposed
 
         // Neither OnDisable nor OnDispose should be called
         Assert.DoesNotContain("OnDisable", comp.Events);
@@ -515,8 +475,6 @@ public class LifecycleTests : IDisposable
 
         comp.ClearEvents();
         scene.Dispose();
-        _scenes.Remove(scene); // Already disposed
-        _gameObjects.Remove(go); // Disposed with scene
 
         Assert.Contains("OnDispose", comp.Events);
     }
@@ -537,8 +495,6 @@ public class LifecycleTests : IDisposable
         comp.ClearEvents();
 
         scene.Dispose();
-        _scenes.Remove(scene); // Already disposed
-        _gameObjects.Remove(go); // Disposed with scene
 
         Assert.DoesNotContain("OnDisable", comp.Events);
         Assert.DoesNotContain("OnDispose", comp.Events);
