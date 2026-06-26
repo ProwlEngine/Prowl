@@ -248,8 +248,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>Drop the cached probe volume so the next access rebuilds it (call after a rebake).</summary>
     public void InvalidateProbeVolume() => _probeVolume = null;
 
-    /// <summary> The number of registered objects. </summary>
-    public int Count => _allObj.Count;
+    /// <summary> The number of registered, non-disposed objects. </summary>
+    public int Count => _allObj.Count(o => !o.IsDisposed);
 
     /// <summary> Enumerates all registered objects. </summary>
     public IEnumerable<GameObject> AllObjects => _allObj.Where(o => !o.IsDisposed);
