@@ -41,7 +41,7 @@ public abstract class EditorTestHarness : IDisposable
         Directory.CreateDirectory(_root);
 
         Project = Project.Create(_root, "TestProject");
-        Project.SetActive();
+        Project.SetActive(addToRecent: false); // don't pollute the user's recent-projects list
 
         Assets = new EditorAssetDatabase(Project);
         Assets.Initialize(); // registers itself as AssetDatabase.Current
@@ -84,8 +84,8 @@ public abstract class EditorTestHarness : IDisposable
     {
         try { if (Scene.Current != null) Scene.Unload(); } catch { }
 
-        Assets.Dispose(); // stops the FileSystemWatcher
-        AssetDatabase.Current = null;
+        Assets.Dispose(); // stops the FileSystemWatcher and clears AssetDatabase.Current / Instance
+        Project.CloseCurrent();
 
         Application.IsEditor = _prevIsEditor;
         Application.IsPlaying = _prevIsPlaying;
