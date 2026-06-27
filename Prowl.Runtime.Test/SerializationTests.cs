@@ -24,6 +24,12 @@ public sealed class TestAsset : EngineObject
     public TestAsset() : base() { }
 }
 
+/// <summary>A component that references another component, to probe reference round-tripping.</summary>
+public sealed class CrossRefComponent : MonoBehaviour
+{
+    public MonoBehaviour? Other;
+}
+
 #endregion
 
 /// <summary>
@@ -100,6 +106,44 @@ public class SerializationTests : RuntimeTestBase
         Assert.True(clone.IsStatic);
         Assert.Equal(HideFlags.DontSave, clone.HideFlags);
         Assert.False(clone.Enabled);
+    }
+
+    [Fact]
+    public void GameObject_RoundTrip_OneWayComponentReference_Rewires()
+    {
+        var root = CreateGameObject("Root");
+        var refComp = root.AddComponent<CrossRefComponent>();
+        var child = CreateGameObject("Child");
+        var target = child.AddComponent<SerializableComponent>();
+        child.SetParent(root);
+        refComp.Other = target;
+
+        var clone = RoundTrip(root);
+
+        // A one-way reference to another object in the same graph rewires to the cloned target.
+        Assert.Same(clone.Children[0].GetComponent<SerializableComponent>(), clone.GetComponent<CrossRefComponent>()!.Other);
+    }
+
+    [Fact]
+    public void GameObject_RoundTrip_CyclicComponentReferences_ArePreserved()
+    {
+        // Two components referencing each other across the parent/child boundary must both survive a
+        // round trip. This relies on GameObject.Deserialize visiting Components before Children to
+        // match the serialization order (Echo's reference encoding is single-pass, definition-first).
+        var root = CreateGameObject("Root");
+        var a = root.AddComponent<CrossRefComponent>();
+        var child = CreateGameObject("Child");
+        var b = child.AddComponent<CrossRefComponent>();
+        child.SetParent(root);
+        a.Other = b;
+        b.Other = a;
+
+        var clone = RoundTrip(root);
+
+        var ca = clone.GetComponent<CrossRefComponent>()!;
+        var cb = clone.Children[0].GetComponent<CrossRefComponent>()!;
+        Assert.Same(cb, ca.Other);
+        Assert.Same(ca, cb.Other);
     }
 
     [Fact]
