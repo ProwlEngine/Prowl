@@ -176,18 +176,53 @@ public abstract class Collider : MonoBehaviour
         if (_attachedRigidbody3D != null)
         {
             // SetMassInertia(mass) sums inertia from all shapes, then scales to the requested mass.
-            // TriangleShape has no volume so it throws NotSupportedException; fall back to an
-            // identity tensor so the body still gets a finite, usable mass.
+            // TriangleShape has no volume so it throws NotSupportedException; fall back to treating the
+            // body as a solid box sized to the shapes' combined bounds so it still rotates plausibly.
             try
             {
                 _attachedBody.SetMassInertia(_attachedRigidbody3D.Mass);
             }
             catch (NotSupportedException)
             {
-                _attachedBody.SetMassInertia(JMatrix.Identity, _attachedRigidbody3D.Mass);
+                JMatrix inertia = ApproximateBoxInertia(_attachedShapes, _attachedRigidbody3D.Mass);
+                _attachedBody.SetMassInertia(inertia, _attachedRigidbody3D.Mass);
             }
         }
         // Static bodies don't need mass or inertia.
+    }
+
+    /// <summary>
+    /// Builds an inertia tensor for a body whose shapes have no usable volume (e.g. concave
+    /// TriangleShapes). The shapes are approximated as a single solid box sized to their combined
+    /// local-space bounds, using the same formula as <c>BoxShape</c>. The tensor is taken about the box
+    /// centre rather than the body's centre of mass, which is a close enough approximation for the
+    /// fallback case (the alternative is a meaningless identity tensor).
+    /// </summary>
+    private static JMatrix ApproximateBoxInertia(RigidBodyShape[] shapes, float mass)
+    {
+        if (shapes == null || shapes.Length == 0)
+            return JMatrix.Identity;
+
+        JVector min = new(float.MaxValue, float.MaxValue, float.MaxValue);
+        JVector max = new(float.MinValue, float.MinValue, float.MinValue);
+        foreach (RigidBodyShape shape in shapes)
+        {
+            shape.CalculateBoundingBox(JQuaternion.Identity, JVector.Zero, out JBoundingBox box);
+            min = JVector.Min(min, box.Min);
+            max = JVector.Max(max, box.Max);
+        }
+
+        // Clamp to a small positive size so the tensor stays positive-definite (invertible) even for
+        // perfectly flat or degenerate meshes.
+        float sx = Maths.Max(max.X - min.X, 1e-3f);
+        float sy = Maths.Max(max.Y - min.Y, 1e-3f);
+        float sz = Maths.Max(max.Z - min.Z, 1e-3f);
+
+        JMatrix inertia = JMatrix.Identity;
+        inertia.M11 = (1.0f / 12.0f) * mass * (sy * sy + sz * sz);
+        inertia.M22 = (1.0f / 12.0f) * mass * (sx * sx + sz * sz);
+        inertia.M33 = (1.0f / 12.0f) * mass * (sx * sx + sy * sy);
+        return inertia;
     }
 
     /// <summary>
