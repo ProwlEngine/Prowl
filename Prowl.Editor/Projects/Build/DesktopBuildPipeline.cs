@@ -285,7 +285,23 @@ public class DesktopBuildPipeline : BuildPipeline
             using System.Runtime.InteropServices;
             using System.Runtime.Loader;
 
-            new DesktopPlayer().Run("{{productName}}", {{desktopProfile.WindowWidth}}, {{desktopProfile.WindowHeight}});
+            var __game = new DesktopPlayer();
+            var __args = Environment.GetCommandLineArgs();
+            if (__args.Contains("--headless") || __args.Contains("-headless"))
+            {
+                var __opts = new Prowl.Runtime.HeadlessRunOptions();
+                for (int __i = 0; __i < __args.Length - 1; __i++)
+                {
+                    if (__args[__i] == "--frames" && long.TryParse(__args[__i + 1], out var __f)) __opts.MaxFrames = __f;
+                    else if (__args[__i] == "--seconds" && double.TryParse(__args[__i + 1], System.Globalization.CultureInfo.InvariantCulture, out var __s)) __opts.MaxSeconds = __s;
+                    else if (__args[__i] == "--fps" && int.TryParse(__args[__i + 1], out var __fps)) __opts.TargetFps = __fps;
+                }
+                __game.RunHeadless(__opts);
+            }
+            else
+            {
+                __game.Run("{{productName}}", {{desktopProfile.WindowWidth}}, {{desktopProfile.WindowHeight}});
+            }
 
             internal static class ModuleInitializer
             {

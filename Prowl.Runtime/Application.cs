@@ -19,6 +19,12 @@ public static class Application
     public static bool IsEditor { get; set; }
 
     /// <summary>
+    /// True when running without a window or graphics device (e.g. a dedicated server, or a build
+    /// launched with --headless). Gameplay, physics and scripts still run; rendering does not.
+    /// </summary>
+    public static bool IsHeadless { get; set; }
+
+    /// <summary>
     /// True when play mode is paused. Update/FixedUpdate/LateUpdate stop, but rendering continues.
     /// </summary>
     public static bool IsPaused { get; set; }
