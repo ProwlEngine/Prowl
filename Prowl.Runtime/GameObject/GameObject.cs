@@ -1188,16 +1188,6 @@ public class GameObject : EngineObject, ISerializable
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.GameObject = this;
 
-        EchoObject children = value["Children"];
-        Children = [];
-        foreach (EchoObject childTag in children.List)
-        {
-            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
-            if (child.IsNotValid()) continue;
-            child._parent = this;
-            Children.Add(child);
-        }
-
         EchoObject comps = value["Components"];
         _components = [];
         foreach (EchoObject compTag in comps.List)
@@ -1234,6 +1224,21 @@ public class GameObject : EngineObject, ISerializable
         // Attach all components
         foreach (MonoBehaviour comp in _components)
             comp.AttachToGameObject(this);
+
+        // Children are deserialized AFTER components so the visit order matches serialization
+        // (Serialize writes Components then Children). Echo's reference encoding is single-pass and
+        // definition-first, so visiting out of order would turn intra-object references (e.g. a
+        // component referencing another component, including across the parent/child boundary, or a
+        // cyclic reference) into broken forward refs.
+        EchoObject children = value["Children"];
+        Children = [];
+        foreach (EchoObject childTag in children.List)
+        {
+            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
+            if (child.IsNotValid()) continue;
+            child._parent = this;
+            Children.Add(child);
+        }
     }
 
     /// <summary>
