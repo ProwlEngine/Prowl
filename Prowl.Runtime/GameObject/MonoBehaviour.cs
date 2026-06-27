@@ -44,6 +44,11 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [SerializeIgnore]
     private bool? _executeAlwaysCached;
 
+    /// <summary>Whether this component is currently in its scene's update registry. Guards against
+    /// double-registration and lets the registry skip already-tracked components.</summary>
+    [SerializeIgnore]
+    internal bool _updateRegistered;
+
     /// <summary>
     /// Whether this component's gameplay methods should execute.
     /// True when in play mode, or when the component has [ExecuteAlways].
@@ -368,6 +373,9 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     internal void InternalOnEnable()
     {
         _hasBeenEnabled = true;
+        // Register for ticking whenever enabled in an active scene, regardless of play mode; the
+        // per-tick gate (ShouldExecuteGameplay) decides whether the callbacks actually run.
+        GameObject?.Scene?.ComponentRegistry.Register(this);
         if (!ShouldExecuteGameplay) return;
         try { OnEnable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnEnable() threw: {ex.Message}\n{ex.StackTrace}"); }
@@ -376,6 +384,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Gated OnDisable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnDisable()
     {
+        GameObject?.Scene?.ComponentRegistry.Unregister(this);
         if (!ShouldExecuteGameplay) return;
         try { OnDisable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnDisable() threw: {ex.Message}\n{ex.StackTrace}"); }

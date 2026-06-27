@@ -480,21 +480,6 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// Performs pre-update operations on the GameObject's components.
-    /// </summary>
-    internal void PreUpdate()
-    {
-        foreach (MonoBehaviour component in _components)
-        {
-            if (!component.HasStarted)
-                if (component.EnabledInHierarchy)
-                {
-                    component.InternalStart();
-                }
-        }
-    }
-
-    /// <summary>
     /// Adds a component of type T to the GameObject.
     /// </summary>
     /// <typeparam name="T">The type of component to add.</typeparam>
@@ -536,8 +521,6 @@ public class GameObject : EngineObject, ISerializable
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
 
-        SortComponents();
-
         // Trigger OnEnable if the GameObject is in an active scene and enabled
         Scene? scene = Scene;
         if (scene.IsValid() && scene.IsActive && newComponent.EnabledInHierarchy)
@@ -577,8 +560,6 @@ public class GameObject : EngineObject, ISerializable
         comp.AttachToGameObject(this);
         _components.Add(comp);
         _componentCache.Add(comp.GetType(), comp);
-
-        SortComponents();
 
         // Trigger OnEnable if the GameObject is in an active scene and enabled
         Scene? scene = Scene;
@@ -944,18 +925,6 @@ public class GameObject : EngineObject, ISerializable
         }
         dependentType = null;
         return false;
-    }
-
-    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
-        Justification = "GetExecutionOrder reads [DefaultExecutionOrder] from the live component types, which are kept alive by their attribute references.")]
-    private void SortComponents()
-    {
-        _components.Sort((a, b) =>
-        {
-            int orderA = RuntimeUtils.GetExecutionOrder(a) ?? 0;
-            int orderB = RuntimeUtils.GetExecutionOrder(b) ?? 0;
-            return orderA.CompareTo(orderB);
-        });
     }
 
     /// <summary>
