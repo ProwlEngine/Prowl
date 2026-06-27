@@ -298,18 +298,19 @@ public class ComponentTests : RuntimeTestBase
     // ---- ExecutionOrder ----
 
     [Fact]
-    public void ExecutionOrder_SortsComponentsAscending()
+    public void GetComponents_ReturnsInsertionOrder()
     {
+        // Component storage is insertion-ordered; execution order is applied by the scene update
+        // loop, not by GetComponents() (see UpdateLoopTests for the execution-order behavior).
         var go = CreateGameObject();
-        // Add out of order to prove sorting, not insertion order, drives the result.
-        go.AddComponent<LateComponent>();
-        go.AddComponent<EarlyComponent>();
-        go.AddComponent<PlainComponent>(); // default order 0
+        go.AddComponent<LateComponent>();   // [ExecutionOrder(100)]
+        go.AddComponent<EarlyComponent>();  // [ExecutionOrder(-100)]
+        go.AddComponent<PlainComponent>();  // default order 0
 
         var types = go.GetComponents().Select(c => c.GetType()).ToList();
 
         Assert.Equal(
-            [typeof(EarlyComponent), typeof(PlainComponent), typeof(LateComponent)],
+            [typeof(LateComponent), typeof(EarlyComponent), typeof(PlainComponent)],
             types);
     }
 }
