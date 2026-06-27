@@ -31,6 +31,20 @@ public sealed class ExecuteAlwaysCounter : MonoBehaviour
     public override void Update() => UpdateCount++;
 }
 
+/// <summary>Shared log + components with distinct [ExecutionOrder] to verify update ordering.</summary>
+public static class TickLog
+{
+    public static readonly List<string> Entries = [];
+}
+
+[ExecutionOrder(-50)]
+public sealed class EarlyTick : MonoBehaviour { public override void Update() => TickLog.Entries.Add("early"); }
+
+public sealed class MidTick : MonoBehaviour { public override void Update() => TickLog.Entries.Add("mid"); }
+
+[ExecutionOrder(50)]
+public sealed class LateTick : MonoBehaviour { public override void Update() => TickLog.Entries.Add("late"); }
+
 /// <summary>
 /// Tests for the per-frame update loop driven through <see cref="Resources.Scene.Update"/> and
 /// <see cref="Resources.Scene.FixedUpdate"/>: Start/Update/LateUpdate/FixedUpdate dispatch, ordering,
@@ -149,6 +163,22 @@ public class UpdateLoopTests : RuntimeTestBase
 
         Assert.Equal(0, comp.StartCount);
         Assert.Equal(0, comp.UpdateCount);
+    }
+
+    [Fact]
+    public void Update_RunsComponentsInExecutionOrder_RegardlessOfAddOrder()
+    {
+        TickLog.Entries.Clear();
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        go.AddComponent<LateTick>();   // added first, runs last
+        go.AddComponent<EarlyTick>();
+        go.AddComponent<MidTick>();
+        scene.Add(go);
+
+        Update(scene);
+
+        Assert.Equal(["early", "mid", "late"], TickLog.Entries);
     }
 
     [Fact]
