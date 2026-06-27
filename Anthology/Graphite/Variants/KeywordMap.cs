@@ -74,6 +74,34 @@ internal sealed class KeywordMap
     }
 
 
+    /// <summary>
+    /// Returns the exact variant for <paramref name="state"/> if one was compiled, otherwise the
+    /// compiled variant that shares the most keyword slots with it. Always returns a valid index
+    /// (there is at least one variant), so a requested combination that was never compiled degrades
+    /// to the closest available variant instead of failing.
+    /// </summary>
+    public int FindNearest(KeywordState state)
+    {
+        int exact = Find(state);
+        if (exact >= 0)
+            return exact;
+
+        int best = 0;
+        int bestScore = -1;
+        for (int i = 0; i < _states.Length; i++)
+        {
+            int score = _states[i].MatchScore(state);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+
     private int Bucket(ulong hash)
     {
         return (int)(hash & ((uint)_buckets.Length - 1));

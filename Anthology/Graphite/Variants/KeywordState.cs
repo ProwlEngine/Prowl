@@ -33,15 +33,41 @@ internal struct KeywordState
     }
 
 
-    public void SetKeyword(Keyword keyword)
+    /// <summary>
+    /// Applies a keyword to the matching slot. Returns <c>false</c> (leaving the state unchanged)
+    /// when the keyword's name is not part of this set, so callers can report unknown keywords
+    /// instead of throwing.
+    /// </summary>
+    public bool SetKeyword(Keyword keyword)
     {
-        int slot = _nameIDToSlot[keyword.NameId];
+        if (!_nameIDToSlot.TryGetValue(keyword.NameId, out int slot))
+            return false;
+
         int oldValue = _valueIDs[slot];
 
         _hash ^= HashSlot(keyword.NameId, oldValue);
         _valueIDs[slot] = keyword.ValueId;
         _values[slot] = keyword;
         _hash ^= HashSlot(keyword.NameId, keyword.ValueId);
+        return true;
+    }
+
+
+    /// <summary>
+    /// Counts how many keyword slots hold the same value as <paramref name="other"/>. Used to pick
+    /// the closest compiled variant when no exact match exists.
+    /// </summary>
+    public readonly int MatchScore(KeywordState other)
+    {
+        int minLength = Math.Min(_values.Length, other._values.Length);
+        int score = 0;
+        for (int i = 0; i < minLength; i++)
+        {
+            if (_values[i].Equals(other._values[i]))
+                score++;
+        }
+
+        return score;
     }
 
 

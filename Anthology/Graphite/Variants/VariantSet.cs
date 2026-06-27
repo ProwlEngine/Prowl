@@ -62,25 +62,32 @@ public sealed class VariantSet<T>
 
 
     /// <summary>
-    /// Sets a given keyword on the set's current state and updates the active variant.
+    /// Sets a given keyword on the set's current state and updates the active variant to the
+    /// closest compiled variant. Returns <c>false</c> if the keyword's name is not part of this set
+    /// (the unknown keyword is ignored); otherwise <c>true</c>.
     /// </summary>
-    /// <param name="keyword"></param>
-    public void SetKeyword(Keyword keyword)
+    /// <param name="keyword">The keyword to apply.</param>
+    public bool SetKeyword(Keyword keyword)
     {
-        _state.SetKeyword(keyword);
-        ActiveVariant = _variants[_keywordMap.Find(_state)];
+        bool known = _state.SetKeyword(keyword);
+        ActiveVariant = _variants[_keywordMap.FindNearest(_state)];
+        return known;
     }
 
 
     /// <summary>
-    /// Sets a list of keywords on the set's current state and updates the active variant. 
-    /// Faster than calling <see cref="SetKeyword"/> in succession since it batches the hash lookup.
+    /// Sets a list of keywords on the set's current state and updates the active variant to the
+    /// closest compiled variant. Faster than calling <see cref="SetKeyword"/> in succession since
+    /// it batches the lookup. Returns <c>false</c> if any keyword name is not part of this set
+    /// (unknown keywords are ignored); otherwise <c>true</c>.
     /// </summary>
-    public void SetKeywords(params Keyword[] keywords)
+    public bool SetKeywords(params Keyword[] keywords)
     {
+        bool allKnown = true;
         for (int i = 0; i < keywords.Length; i++)
-            _state.SetKeyword(keywords[i]);
+            allKnown &= _state.SetKeyword(keywords[i]);
 
-        ActiveVariant = _variants[_keywordMap.Find(_state)];
+        ActiveVariant = _variants[_keywordMap.FindNearest(_state)];
+        return allKnown;
     }
 }
