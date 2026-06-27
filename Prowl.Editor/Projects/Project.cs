@@ -125,10 +125,15 @@ public class Project
     /// <summary>
     /// Set this project as the currently active project.
     /// </summary>
-    public void SetActive()
+    /// <param name="addToRecent">
+    /// When true (default) the project is added to the user's recent-projects list. Tests and other
+    /// non-interactive callers pass false to avoid polluting that list.
+    /// </param>
+    public void SetActive(bool addToRecent = true)
     {
         Current = this;
-        RecentProjects.AddRecent(RootPath, Name);
+        if (addToRecent)
+            RecentProjects.AddRecent(RootPath, Name);
         Runtime.Debug.Log($"Opened project: {Name} at {RootPath}");
     }
 
