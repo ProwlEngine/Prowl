@@ -19,12 +19,23 @@ namespace Prowl.Runtime;
 /// </summary>
 public static unsafe class Graphics
 {
-    public static int MaxTextureSize { get; internal set; }
-    public static int MaxCubeMapTextureSize { get; internal set; }
-    public static int MaxArrayTextureLayers { get; internal set; }
-    public static int MaxFramebufferColorAttachments { get; internal set; }
+    // Defaulted to conservative real-world minimums so CPU-side validation (e.g. texture size
+    // checks) passes before/without a GL context. Initialize() overwrites them with real device
+    // limits when a graphics device is present.
+    public static int MaxTextureSize { get; internal set; } = 16384;
+    public static int MaxCubeMapTextureSize { get; internal set; } = 16384;
+    public static int MaxArrayTextureLayers { get; internal set; } = 2048;
+    public static int MaxFramebufferColorAttachments { get; internal set; } = 8;
 
     public static GL GL;
+
+    /// <summary>
+    /// True when there is no graphics device (no window / render thread) - a dedicated server or a
+    /// build launched with --headless. GPU command submission becomes a no-op so gameplay code that
+    /// creates or touches GPU resources (materials, terrain, render textures, etc.) runs without
+    /// crashing; read-backs return their default (zeroed) contents.
+    /// </summary>
+    public static bool IsHeadless => GL == null;
 
     public static GraphicsProgram CurrentProgram => GraphicsProgram.currentProgram;
 
@@ -62,6 +73,14 @@ public static unsafe class Graphics
         if (cmd == null) return;
         if (cmd._inPool)
             throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
+        // No graphics device: drop GPU work and recycle the buffer instead of queueing it for a
+        // render thread that will never drain it (which would leak the buffer).
+        if (IsHeadless)
+        {
+            cmd._ownerReleased = true;
+            CommandBufferPool.Return(cmd);
+            return;
+        }
         cmd._submitted = true;
         cmd._ownerReleased = true;
         s_renderQueue.Add(new CBJob { Cmd = cmd });
@@ -75,6 +94,14 @@ public static unsafe class Graphics
         if (cmd == null) return;
         if (cmd._inPool)
             throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
+        // No graphics device: nothing executes, so don't block waiting on a render thread. Any
+        // read-back this would have filled keeps its default (zeroed) contents.
+        if (IsHeadless)
+        {
+            cmd._ownerReleased = true;
+            CommandBufferPool.Return(cmd);
+            return;
+        }
         cmd._submitted = true;
         cmd._ownerReleased = true;
         var job = new CBJob { Cmd = cmd, Done = new System.Threading.ManualResetEventSlim(false) };
