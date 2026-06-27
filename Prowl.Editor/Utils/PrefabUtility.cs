@@ -603,7 +603,21 @@ public static class PrefabUtility
             {
                 // Parse the path to find the target
                 ParseOverridePath(root, ov.Path, out var targetObj, out string fieldPath);
-                if (targetObj == null || string.IsNullOrEmpty(fieldPath)) continue;
+                if (targetObj == null || string.IsNullOrEmpty(fieldPath))
+                {
+                    // The structure shifted (component/child added, removed or reordered) so this
+                    // index-based path no longer resolves. Skip rather than mis-applying the value.
+                    Runtime.Debug.LogWarning($"[Prefab] Override path '{ov.Path}' no longer resolves on the instance; skipping.");
+                    continue;
+                }
+
+                // Validate the field still exists on the resolved target before writing, so a path
+                // that now points at a different component type doesn't silently land on the wrong field.
+                if (GetFieldByPath(targetObj, fieldPath) == null)
+                {
+                    Runtime.Debug.LogWarning($"[Prefab] Override '{ov.Path}' has no matching field on the current instance; skipping.");
+                    continue;
+                }
 
                 ApplyFieldValue(targetObj, fieldPath, ov.Value);
             }
