@@ -401,7 +401,39 @@ public class Mesh : EngineObject, ISerializable
         changed = true;
     }
 
-    bool changed = true;
+    private bool _changed = true;
+    // Setting changed=true bumps the geometry Version (changed=false on Upload does not), so every
+    // existing mutation site advances Version without per-site edits.
+    private bool changed
+    {
+        get => _changed;
+        set
+        {
+            _changed = value;
+            if (value) _version++;
+        }
+    }
+
+    [SerializeIgnore] private uint _version = 1;
+
+    /// <summary>
+    /// Monotonic version that advances whenever the mesh's data changes (vertices, indices, topology,
+    /// submeshes, ...). Mirrors <see cref="Prowl.Vector.Transform.Version"/>. Useful for invalidating
+    /// caches derived from this mesh (e.g. baked physics meshes - see <see cref="PhysicsWorld.BakeMesh"/>).
+    /// </summary>
+    public uint Version => _version;
+
+    /// <summary>
+    /// True if <see cref="Version"/> differs from <paramref name="lastVersion"/>; updates the reference
+    /// to the current version so the next call compares against today's state.
+    /// </summary>
+    public bool HasChanged(ref uint lastVersion)
+    {
+        if (_version == lastVersion) return false;
+        lastVersion = _version;
+        return true;
+    }
+
     Float3[]? vertices;
     Float3[]? normals;
     Float4[]? tangents;
