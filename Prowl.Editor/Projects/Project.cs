@@ -138,6 +138,12 @@ public class Project
     }
 
     /// <summary>
+    /// Clears the active project (<see cref="Current"/> becomes null). Used when closing a project
+    /// or tearing down a test environment.
+    /// </summary>
+    public static void CloseCurrent() => Current = null;
+
+    /// <summary>
     /// Check if a directory looks like a valid Prowl project.
     /// </summary>
     public static bool IsValidProject(string path)
