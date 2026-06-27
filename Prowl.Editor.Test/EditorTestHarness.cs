@@ -28,7 +28,7 @@ public abstract class EditorTestHarness : IDisposable
     protected Project Project { get; }
 
     /// <summary>The live asset database for the project.</summary>
-    protected EditorAssetDatabase Assets { get; }
+    protected EditorAssetDatabase Assets { get; private set; }
 
     protected EditorTestHarness()
     {
@@ -78,6 +78,18 @@ public abstract class EditorTestHarness : IDisposable
     {
         Assets.CreateAsset(scene, relativePath);
         return scene.AssetID;
+    }
+
+    /// <summary>
+    /// Disposes the current asset database and opens a fresh one over the same project, simulating
+    /// closing and re-opening the editor (re-scan, reading .meta files and the metadata cache).
+    /// </summary>
+    protected EditorAssetDatabase ReopenDatabase()
+    {
+        Assets.Dispose();
+        Assets = new EditorAssetDatabase(Project);
+        Assets.Initialize();
+        return Assets;
     }
 
     public virtual void Dispose()
