@@ -1348,5 +1348,10 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         _watcher?.Dispose();
         _watcher = null;
+
+        // Clear the global registrations if they still point at this instance, so a torn-down
+        // database (e.g. between tests) doesn't leave dangling statics behind.
+        if (Instance == this) Instance = null;
+        if (Runtime.AssetDatabase.Current == this) Runtime.AssetDatabase.Current = null;
     }
 }
