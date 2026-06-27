@@ -32,6 +32,19 @@ public class LayerMaskTests
     }
 
     [Fact]
+    public void SetLayer31_TopBit_IsDetectedInIsolation()
+    {
+        // Isolates the top bit: Everything (all bits set) can't distinguish a signed 1<<31 shift bug,
+        // but setting only layer 31 and checking it directly does (the regression this guards).
+        var m = new LayerMask();
+        m.SetLayer(31);
+
+        Assert.True(m.HasLayer(31));
+        Assert.False(m.HasLayer(30));
+        Assert.Equal(0x80000000u, m.Mask);
+    }
+
+    [Fact]
     public void OrCombinesMasks()
     {
         var a = new LayerMask(); a.SetLayer(1);

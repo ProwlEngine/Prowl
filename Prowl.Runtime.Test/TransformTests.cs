@@ -59,13 +59,25 @@ public class TransformTests : RuntimeTestBase
     [Fact]
     public void TransformDirection_IgnoresPositionAndScale()
     {
+        var rot = Quaternion.AxisAngle(Float3.UnitY, 0.7f);
         var t = NewTransform();
         t.LocalPosition = new Float3(100, 50, -20);
         t.LocalScale = new Float3(3, 3, 3);
-        t.LocalRotation = Quaternion.AxisAngle(Float3.UnitY, 0.7f);
+        t.LocalRotation = rot;
 
-        // Direction transform is rotation-only: equals Rotation * dir, unaffected by pos/scale.
-        AssertVec(t.Rotation * Float3.UnitX, t.TransformDirection(Float3.UnitX), 4);
+        var d = t.TransformDirection(Float3.UnitX);
+
+        // Scale must not leak in - a direction is rotation-only, so length stays 1 (a scaled impl
+        // would give length 3). LengthSquared is an independent check, not derived from the Rotation getter.
+        Assert.Equal(1.0, Float3.LengthSquared(d), 4);
+
+        // Position must not leak in - a rotation-only transform yields the identical direction.
+        var rotationOnly = NewTransform("rotOnly");
+        rotationOnly.LocalRotation = rot;
+        AssertVec(rotationOnly.TransformDirection(Float3.UnitX), d, 4);
+
+        // And the rotation was actually applied (guards a "returns input unchanged" bug): X != 1.
+        Assert.True(d.X < 0.99f);
     }
 
     [Fact]

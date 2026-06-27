@@ -121,12 +121,15 @@ public class SceneManagementTests : RuntimeTestBase
         scene.Add(drop);
 
         drop.Dispose();
-        // Count and AllObjects both exclude disposed objects immediately.
+        // Count and AllObjects both exclude disposed objects immediately (before Flush), so they
+        // alone can't prove Flush does anything - verify Flush actually removes it from the scene.
         Assert.Equal(1, scene.Count);
         Assert.DoesNotContain(drop, scene.AllObjects);
+        Assert.NotNull(drop.Scene); // still owned by the scene until flushed
 
         scene.Flush();
 
+        Assert.Null(drop.Scene); // Flush detached it from the scene
         Assert.Equal(1, scene.Count);
         Assert.Contains(keep, scene.AllObjects);
     }

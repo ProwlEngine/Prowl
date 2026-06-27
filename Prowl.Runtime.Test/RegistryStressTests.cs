@@ -157,22 +157,19 @@ public class RegistryStressTests : RuntimeTestBase
     public void DisablingGameObjectMidUpdate_SkipsItsOtherComponents()
     {
         var (scene, go) = NewSceneGo();
+        var driver = go.AddComponent<UpdateActionComponent>();
         var other = CreateGameObject("Other");
         var otherCounter = other.AddComponent<PlainUpdateCounter>();
+        driver.Action = () => other.Enabled = false;
+
+        // 'go' is registered first so the driver runs before 'otherCounter' in the snapshot - it
+        // disables the other GameObject before that GameObject's components would have ticked.
+        scene.Add(go);
         scene.Add(other);
 
-        var driver = go.AddComponent<UpdateActionComponent>();
-        driver.Action = () => other.Enabled = false;
-        scene.Add(go);
-
         Update(scene);
 
-        // Whether 'other' ticks depends on registration order vs 'go'; the guarantee is no crash and
-        // that once disabled it stops next frame.
-        Update(scene);
-        int afterTwoFrames = otherCounter.Updates;
-        Update(scene);
-        Assert.Equal(afterTwoFrames, otherCounter.Updates); // stays disabled, no further ticks
+        Assert.Equal(0, otherCounter.Updates); // disabled mid-frame, before its turn this frame
     }
 
     [Fact]

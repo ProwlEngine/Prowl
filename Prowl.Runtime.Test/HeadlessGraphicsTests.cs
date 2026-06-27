@@ -43,7 +43,9 @@ public class HeadlessGraphicsTests
         // Material's ctor loads the default shader, which parses a default texture - the exact path
         // that used to crash headless when texture creation hit an uninitialized GL device.
         var mat = new Material();
-        Assert.NotNull(mat);
+        // Assert the default-shader load actually completed (that's the path that used to crash
+        // headless), not merely that the ctor returned non-null.
+        Assert.NotNull(mat.Shader);
     }
 
     [Fact]

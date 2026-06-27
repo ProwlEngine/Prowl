@@ -446,10 +446,14 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var original = instance.GetComponent<OverrideComp>()!;
         original.A = 42;
 
-        // Detecting overrides on the shifted component must not throw or mis-record.
         PrefabUtility.DetectComponentOverrides(instance, original);
 
-        // Whatever the engine decides, the instance's own value is intact and nothing crashed.
+        // With the index shifted, the source has no component at index 1, so detection BAILS rather
+        // than mis-recording the override onto the now-wrong component (the VecComp at c0). The key
+        // safety property: no corrupt/misindexed override entry is written. (This is the known
+        // index-based-path fragility under structural drift; the apply side is covered by
+        // StaleOverridePath_IsSkipped_NotMisapplied_OnRefresh.)
+        Assert.Empty(instance.PrefabOverrides);
         Assert.Equal(42, original.A);
     }
 }

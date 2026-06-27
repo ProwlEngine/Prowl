@@ -42,9 +42,12 @@ public class MetaFileTests : IDisposable
         var meta = MetaFile.EnsureMeta(asset, "SceneImporter", 2);
 
         Assert.True(File.Exists(asset + ".meta"));
-        Assert.NotEqual(Guid.Empty, meta.Guid);
-        Assert.Equal("SceneImporter", meta.ImporterType);
-        Assert.Equal(2, meta.ImporterVersion);
+        // Re-read from disk so we verify what was actually written, not just the returned object.
+        var onDisk = MetaFile.Read(asset + ".meta");
+        Assert.NotEqual(Guid.Empty, onDisk.Guid);
+        Assert.Equal(meta.Guid, onDisk.Guid);
+        Assert.Equal("SceneImporter", onDisk.ImporterType);
+        Assert.Equal(2, onDisk.ImporterVersion);
     }
 
     [Fact]
@@ -97,7 +100,11 @@ public class MetaFileTests : IDisposable
 
         var meta = MetaFile.EnsureMeta(asset, "SceneImporter");
 
-        Assert.NotEqual(Guid.Empty, meta.Guid); // recovered with a fresh, valid meta
+        // The corrupt .meta must be rewritten to a valid, re-readable file - not just returned in-memory.
+        var recovered = MetaFile.Read(asset + ".meta");
+        Assert.NotEqual(Guid.Empty, recovered.Guid);
+        Assert.Equal(meta.Guid, recovered.Guid);
+        Assert.Equal("SceneImporter", recovered.ImporterType);
     }
 
     [Fact]

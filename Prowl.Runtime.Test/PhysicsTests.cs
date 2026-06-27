@@ -201,9 +201,11 @@ public class PhysicsTests : RuntimeTestBase
         scene.Add(go);
         StepPhysics(scene, 2);
 
-        // Just inside the +X face, then well outside it.
+        // Just inside the +X face (0.45), then just outside it (0.65). The outside probe is close to
+        // the true 0.5 face so a 2x-extent bug (treating Size as half-extent) would be caught -
+        // a box reaching to 1.0 would (wrongly) report the 0.65 probe as inside.
         Assert.True(scene.Physics.CheckSphere(new Float3(0.4f, 0, 0), 0.05f));
-        Assert.False(scene.Physics.CheckSphere(new Float3(2f, 0, 0), 0.05f));
+        Assert.False(scene.Physics.CheckSphere(new Float3(0.7f, 0, 0), 0.05f));
     }
 
     [Fact]
