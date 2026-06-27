@@ -100,7 +100,6 @@ public sealed class MeshCollider : Collider
         _cachedConvexShape = null;
         _cachedHullTris = null;
         base.OnValidate();
-        Debug.Log("OnInvalidate called");
     }
 
     public override void OnEnable()
