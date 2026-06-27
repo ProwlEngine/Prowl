@@ -758,7 +758,9 @@ public static class GameObjectInspector
                     : $"{goPath}.c{compIdx}.";
 
                 var overridden = new HashSet<string>();
-                foreach (var ov in go.PrefabOverrides)
+                // Overrides are stored on the instance root with root-relative paths.
+                var overrideHost = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
+                foreach (var ov in overrideHost.PrefabOverrides)
                 {
                     if (ov.Path.StartsWith(pathPrefix))
                         overridden.Add(ov.Path[pathPrefix.Length..].Split('.')[0]);
@@ -1035,6 +1037,8 @@ public static class GameObjectInspector
     private static void DrawOverridesContent(Paper paper, Prowl.Scribe.FontFile font, GameObject go)
     {
         float fs = EditorTheme.FontSize;
+        // Overrides for the whole prefab instance are stored on its root.
+        go = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
         var overrides = go.PrefabOverrides;
 
         using (paper.Column("gi_prefab_ov_list")

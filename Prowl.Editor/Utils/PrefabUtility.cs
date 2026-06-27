@@ -315,7 +315,8 @@ public static class PrefabUtility
         var ovPath = ov.Path;
         var ovValue = ov.Value;
         var prefabGuid = instanceGO.PrefabAssetId;
-        var goRef = instanceGO;
+        // Overrides live on the prefab instance root.
+        var goRef = GetPrefabInstanceRoot(instanceGO) ?? instanceGO;
 
         var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData);
         if (source == null) return;
@@ -334,8 +335,8 @@ public static class PrefabUtility
             db.Reimport(entry.Guid);
         }
 
-        // Remove this override from the instance
-        instanceGO.PrefabOverrides.Remove(ov);
+        // Remove this override from the instance (stored on the root)
+        goRef.PrefabOverrides.Remove(ov);
 
         Undo.RegisterAction("Apply Single Override",
             undo: () =>
@@ -378,15 +379,19 @@ public static class PrefabUtility
         var sourceField = GetFieldByPath(sourceTarget, sourceFieldPath);
         if (sourceField == null) return;
 
+        // Overrides live on the prefab instance root, with root-relative paths, so resolve and
+        // mutate against the root rather than whichever GO the inspector happened to pass in.
+        var root = GetPrefabInstanceRoot(instanceGO) ?? instanceGO;
+
         // Find the instance target
-        ParseOverridePath(instanceGO, overridePath, out var instanceTarget, out string instanceFieldPath);
+        ParseOverridePath(root, overridePath, out var instanceTarget, out string instanceFieldPath);
         if (instanceTarget == null) return;
 
         // Capture old instance value for undo
         var oldInstanceValue = GetFieldValue(instanceTarget, instanceFieldPath);
         var oldInstanceEcho = Serializer.Serialize(sourceField.FieldType, oldInstanceValue);
-        var removedOverrides = instanceGO.PrefabOverrides.Where(o => o.Path == overridePath).ToList();
-        var goRef = instanceGO;
+        var removedOverrides = root.PrefabOverrides.Where(o => o.Path == overridePath).ToList();
+        var goRef = root;
         var path = overridePath;
 
         // Copy source value to instance
@@ -394,7 +399,7 @@ public static class PrefabUtility
         SetFieldValue(instanceTarget, instanceFieldPath, sourceValue);
 
         // Remove the override entry
-        instanceGO.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
+        root.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
 
         Undo.RegisterAction("Revert Single Override",
             undo: () =>
@@ -466,14 +471,15 @@ public static class PrefabUtility
     public static bool IsPropertyOverridden(GameObject go, string path)
     {
         if (!go.IsPrefabInstance) return false;
-        return go.PrefabOverrides.Any(o => o.Path == path);
+        // Overrides are stored on the instance root with root-relative paths.
+        return (GetPrefabInstanceRoot(go) ?? go).PrefabOverrides.Any(o => o.Path == path);
     }
 
-    /// <summary>Check if a GameObject has any overrides at all.</summary>
+    /// <summary>Check if a prefab instance has any overrides at all.</summary>
     public static bool HasAnyOverrides(GameObject go)
     {
         if (!go.IsPrefabInstance) return false;
-        return go.PrefabOverrides.Count > 0;
+        return (GetPrefabInstanceRoot(go) ?? go).PrefabOverrides.Count > 0;
     }
 
     // ================================================================
@@ -712,8 +718,10 @@ public static class PrefabUtility
             ? $"c{compIndex}"
             : $"{goPath}.c{compIndex}";
 
-        // Compare fields
-        CompareFields(instanceComp, sourceComp, pathPrefix, instanceGO.PrefabOverrides);
+        // Compare fields. Overrides are stored on the instance root (paths are root-relative) so
+        // that apply/revert/refresh - which operate on the root - can see overrides on any child.
+        var root = GetPrefabInstanceRoot(instanceGO) ?? instanceGO;
+        CompareFields(instanceComp, sourceComp, pathPrefix, root.PrefabOverrides);
     }
 
     /// <summary>
@@ -731,7 +739,8 @@ public static class PrefabUtility
         if (sourceGO == null) return;
 
         string pathPrefix = string.IsNullOrEmpty(goPath) ? "$" : $"{goPath}.$";
-        var overrides = instanceGO.PrefabOverrides;
+        // Stored on the instance root (root-relative paths) so refresh/apply can find child overrides.
+        var overrides = (GetPrefabInstanceRoot(instanceGO) ?? instanceGO).PrefabOverrides;
 
         // Compare GO-level fields (excluding Name and Transform those are per-instance)
         CompareField(pathPrefix, "TagIndex", instanceGO.TagIndex, sourceGO.TagIndex, overrides);
