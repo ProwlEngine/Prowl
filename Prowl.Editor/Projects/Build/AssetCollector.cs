@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace Prowl.Editor.Build;
@@ -73,7 +74,45 @@ public static class AssetCollector
             }
         }
 
+        // Exclude editor-only files (importers flag non-shippable types; plus anything in an Editor/ folder).
+        var editorOnlyImporters = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var editorOnly = new HashSet<Guid>();
+        foreach (var entry in db.GetAllEntries())
+        {
+            if (!IsEditorOnly(entry, editorOnlyImporters)) continue;
+            editorOnly.Add(entry.Guid);
+            if (entry.SubAssets != null)
+                foreach (var sub in entry.SubAssets)
+                    editorOnly.Add(sub.Guid);
+        }
+        allAssets.ExceptWith(editorOnly);
+        foreach (var kv in resourcesMap.Where(kv => editorOnly.Contains(kv.Value)).ToList())
+            resourcesMap.Remove(kv.Key);
+
         return new CollectionResult { AllAssets = allAssets, ResourcesMap = resourcesMap };
+    }
+
+    /// <summary>
+    /// An asset is editor-only (excluded from build packaging) when it lives under an Editor/ folder,
+    /// or when its importer declares <see cref="Importers.AssetImporter.IsEditorOnlyAsset"/> (scripts,
+    /// plugins, assembly definitions - things that aren't real runtime data assets).
+    /// </summary>
+    /// <param name="importerCache">Per-collection cache of importer-type-name -> editor-only.</param>
+    public static bool IsEditorOnly(AssetEntry entry, Dictionary<string, bool> importerCache)
+    {
+        var segments = entry.Path.Split('/', '\\');
+        if (segments.Any(s => s.Equals("Editor", StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        if (string.IsNullOrEmpty(entry.ImporterType))
+            return false;
+
+        if (!importerCache.TryGetValue(entry.ImporterType, out bool editorOnly))
+        {
+            editorOnly = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType)?.IsEditorOnlyAsset ?? false;
+            importerCache[entry.ImporterType] = editorOnly;
+        }
+        return editorOnly;
     }
 
     /// <summary>Check if an asset path is under a Resources/ folder.</summary>
