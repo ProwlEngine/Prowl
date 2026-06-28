@@ -358,7 +358,8 @@ namespace Prowl.Vector.Geometry
         /// </summary>
         public Face? AddFace(params Vertex[] fVerts)
         {
-            if (fVerts.Length == 0) return null;
+            // A face needs at least 3 vertices; fewer would create self- or degenerate edges.
+            if (fVerts.Length < 3) return null;
 
             var fEdges = new Edge[fVerts.Length];
             for (int i = 0, iPrev = fVerts.Length - 1; i < fVerts.Length; iPrev = i++)
@@ -422,15 +423,13 @@ namespace Prowl.Vector.Geometry
             Debug.Assert(vert1 != vert2);
             if (vert1.Edge == null || vert2.Edge == null) return null;
 
-            var e1 = vert1.Edge;
-            var e2 = vert2.Edge;
+            // Walk vert1's full edge ring; the connecting edge, if any, contains vert2.
+            var it = vert1.Edge;
             do
             {
-                if (e1.ContainsVertex(vert2)) return e1;
-                if (e2.ContainsVertex(vert1)) return e2;
-                e1 = e1.Next(vert1);
-                e2 = e2.Next(vert2);
-            } while (e1 != vert1.Edge && e2 != vert2.Edge);
+                if (it.ContainsVertex(vert2)) return it;
+                it = it.Next(vert1);
+            } while (it != null && it != vert1.Edge);
             return null;
         }
 
@@ -618,8 +617,10 @@ namespace Prowl.Vector.Geometry
         public bool HasVertexAttribute(string name) => VertexAttributes.Any(a => a.Name == name);
         public AttributeDefinition AddVertexAttribute(string name, AttributeBaseType baseType, int dimensions)
         {
+            var existing = VertexAttributes.FirstOrDefault(a => a.Name == name);
+            if (existing != null) return existing;
+
             var attrib = new AttributeDefinition(name, baseType, dimensions);
-            if (HasVertexAttribute(name)) return attrib;
             VertexAttributes.Add(attrib);
             foreach (var v in Vertices)
                 v.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);
@@ -638,8 +639,10 @@ namespace Prowl.Vector.Geometry
         public bool HasEdgeAttribute(string name) => EdgeAttributes.Any(a => a.Name == name);
         public AttributeDefinition AddEdgeAttribute(string name, AttributeBaseType baseType, int dimensions)
         {
+            var existing = EdgeAttributes.FirstOrDefault(a => a.Name == name);
+            if (existing != null) return existing;
+
             var attrib = new AttributeDefinition(name, baseType, dimensions);
-            if (HasEdgeAttribute(name)) return attrib;
             EdgeAttributes.Add(attrib);
             foreach (var e in Edges)
                 e.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);
@@ -658,8 +661,10 @@ namespace Prowl.Vector.Geometry
         public bool HasLoopAttribute(string name) => LoopAttributes.Any(a => a.Name == name);
         public AttributeDefinition AddLoopAttribute(string name, AttributeBaseType baseType, int dimensions)
         {
+            var existing = LoopAttributes.FirstOrDefault(a => a.Name == name);
+            if (existing != null) return existing;
+
             var attrib = new AttributeDefinition(name, baseType, dimensions);
-            if (HasLoopAttribute(name)) return attrib;
             LoopAttributes.Add(attrib);
             foreach (var l in Loops)
                 l.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);
@@ -678,8 +683,10 @@ namespace Prowl.Vector.Geometry
         public bool HasFaceAttribute(string name) => FaceAttributes.Any(a => a.Name == name);
         public AttributeDefinition AddFaceAttribute(string name, AttributeBaseType baseType, int dimensions)
         {
+            var existing = FaceAttributes.FirstOrDefault(a => a.Name == name);
+            if (existing != null) return existing;
+
             var attrib = new AttributeDefinition(name, baseType, dimensions);
-            if (HasFaceAttribute(name)) return attrib;
             FaceAttributes.Add(attrib);
             foreach (var f in Faces)
                 f.Attributes[attrib.Name] = AttributeValue.Copy(attrib.DefaultValue);

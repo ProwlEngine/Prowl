@@ -70,7 +70,7 @@ namespace Prowl.Vector.Geometry
         /// <param name="destination">The vertex to write interpolated attributes to.</param>
         /// <param name="v1">First source vertex.</param>
         /// <param name="v2">Second source vertex.</param>
-        /// <param name="t">Interpolation factor (0 = v1, 1 = v2).</param>
+        /// <param name="t">Interpolation factor (0 = v1, 1 = v2). Unclamped: values outside [0, 1] extrapolate.</param>
         public static void AttributeLerp(GeometryData mesh, GeometryData.Vertex destination,
             GeometryData.Vertex v1, GeometryData.Vertex v2, float t)
         {
@@ -92,7 +92,7 @@ namespace Prowl.Vector.Geometry
                             var val = new GeometryData.FloatAttributeValue { Data = new float[n] };
                             for (int i = 0; i < n; ++i)
                             {
-                                val.Data[i] = Maths.Lerp(val1.Data[i], val2.Data[i], t);
+                                val.Data[i] = Maths.LerpUnclamped(val1.Data[i], val2.Data[i], t);
                             }
                             destination.Attributes[attr.Name] = val;
                             break;
@@ -108,7 +108,7 @@ namespace Prowl.Vector.Geometry
                             var val = new GeometryData.IntAttributeValue { Data = new int[n] };
                             for (int i = 0; i < n; ++i)
                             {
-                                val.Data[i] = (int)Math.Round(Maths.Lerp(val1.Data[i], val2.Data[i], t));
+                                val.Data[i] = (int)Math.Round(Maths.LerpUnclamped(val1.Data[i], val2.Data[i], t));
                             }
                             destination.Attributes[attr.Name] = val;
                             break;
@@ -253,12 +253,10 @@ namespace Prowl.Vector.Geometry
                 }
             }
 
-            // Remove vertices (this will also remove connected edges and faces)
+            // Remove vertices (this will also remove connected edges and faces).
+            // Each vertex is collected once and removing one never removes another, so no presence check is needed.
             foreach (var v in verticesToRemove)
-            {
-                if (mesh.Vertices.Contains(v))
-                    mesh.RemoveVertex(v);
-            }
+                mesh.RemoveVertex(v);
         }
 
         /// <summary>
@@ -282,12 +280,10 @@ namespace Prowl.Vector.Geometry
                 }
             }
 
-            // Remove vertices (this will also remove connected edges and faces)
+            // Remove vertices (this will also remove connected edges and faces).
+            // Each vertex is collected once and removing one never removes another, so no presence check is needed.
             foreach (var v in verticesToRemove)
-            {
-                if (mesh.Vertices.Contains(v))
-                    mesh.RemoveVertex(v);
-            }
+                mesh.RemoveVertex(v);
         }
 
         #endregion
