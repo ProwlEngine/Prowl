@@ -14,7 +14,7 @@ namespace Prowl.Runtime;
 /// The GL backend and render thread it used to own were removed in the Graphite port:
 /// Graphite manages its own threading, and the frame loop lives in <see cref="Window"/>.
 /// </summary>
-public static unsafe class Graphics
+public static class Graphics
 {
     // Defaulted to conservative real-world minimums so CPU-side validation (e.g. texture size
     // checks) passes before/without a GL context. Initialize() overwrites them with real device
@@ -24,67 +24,6 @@ public static unsafe class Graphics
     public static int MaxArrayTextureLayers { get; internal set; } = 2048;
     public static int MaxFramebufferColorAttachments { get; internal set; } = 8;
 
-    /// <summary>
-    /// True when there is no graphics device (no window / render thread) - a dedicated server or a
-    /// build launched with --headless. GPU command submission becomes a no-op so gameplay code that
-    /// creates or touches GPU resources (materials, terrain, render textures, etc.) runs without
-    /// crashing; read-backs return their default (zeroed) contents.
-    /// </summary>
-    public static bool IsHeadless => CurrentProgram == null;
-
-    public static GraphicsProgram CurrentProgram => GraphicsProgram.currentProgram;
-
-    /// <summary>Long-lived executor so its raster-state cache survives across CBs.</summary>
-    internal static readonly CommandExecutor Executor = new();
-
-    public static CommandBuffer GetCommandBuffer(string? name = null) => CommandBufferPool.Rent(name);
-
-    // Render thread protocol:
-    //   The render thread holds the GL context for its whole life and continuously
-    //   drains the queue, executing CBs in submit order as they arrive. This means
-    //   resource creation and SubmitAndWait jobs enqueued at ANY time (between frames,
-    //   or from background threads) are serviced promptly rather than waiting for the
-    //   next BeginFrame.
-    //   main: BeginFrame      -> arm frameDone for this frame
-    //   main: encode CBs        (main has no context; render is draining)
-    //   main: EndFrameAndWait -> push frame-end sentinel, block on frameDone
-    //   render: hits sentinel, SwapBuffers, signal frameDone
-
-    private sealed class CBJob
-    {
-        public CommandBuffer? Cmd;
-        public System.Threading.ManualResetEventSlim? Done;
-        public System.Runtime.ExceptionServices.ExceptionDispatchInfo? Error;
-        public bool IsFrameEnd;
-    }
-
-    private static readonly System.Collections.Concurrent.BlockingCollection<CBJob> s_renderQueue = new();
-    private static System.Threading.Thread? s_renderThread;
-    private static readonly System.Threading.ManualResetEventSlim s_renderFrameDone = new(true);
-
-    /// <summary>Enqueue a CB for the render thread to execute. Fire-and-forget.</summary>
-    public static void Submit(CommandBuffer cmd)
-    {
-        if (cmd == null) return;
-        if (cmd._inPool)
-            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
-        // No graphics device: drop GPU work and recycle the buffer instead of queueing it for a
-        // render thread that will never drain it (which would leak the buffer).
-        if (IsHeadless)
-        {
-            cmd._ownerReleased = true;
-            CommandBufferPool.Return(cmd);
-            return;
-        }
-        cmd._submitted = true;
-        cmd._ownerReleased = true;
-        s_renderQueue.Add(new CBJob { Cmd = cmd });
-    }
-
-    /// <summary>Enqueue and block until the render thread has finished the CB.
-    /// Use for read-backs, shader compile error propagation, and FBO completeness
-    /// checks. Render-thread exceptions rethrow on the caller's thread.</summary>
-    public static void SubmitAndWait(CommandBuffer cmd)
     /// <summary>
     /// The single ambient Prowl.Graphite device. Created during window load and read
     /// internally by the resource wrappers to allocate GPU resources.
@@ -117,24 +56,22 @@ public static unsafe class Graphics
     /// </summary>
     public static void QueryDeviceLimits()
     {
-        if (cmd == null) return;
-        if (cmd._inPool)
-            throw new System.InvalidOperationException("CommandBuffer has already been submitted (it's in the pool).");
-        cmd._submitted = true;
-        cmd._ownerReleased = true;
-        var job = new CBJob { Cmd = cmd, Done = new System.Threading.ManualResetEventSlim(false) };
-        s_renderQueue.Add(job);
-        job.Done.Wait();
-        job.Done.Dispose();
-        job.Error?.Throw();
-    }
+        if (Device.GetPixelFormatSupport(PixelFormat.R8_G8_B8_A8_UNorm,
+            TextureType.Texture2D, TextureUsage.Sampled, out PixelFormatProperties props2D))
+        {
+            MaxTextureSize = (int)props2D.MaxWidth;
+            MaxArrayTextureLayers = (int)props2D.MaxArrayLayers;
+        }
 
-    internal static void BeginFrame()
-    {
-        // Arm the frame-done gate so EndFrameAndWait blocks until THIS frame's
-        // sentinel is processed. The render thread is always draining, so there's
-        // nothing to wake.
-        s_renderFrameDone.Reset();
+        if (Device.GetPixelFormatSupport(PixelFormat.R8_G8_B8_A8_UNorm,
+            TextureType.Texture2D,
+            TextureUsage.Sampled | TextureUsage.Cubemap, out PixelFormatProperties propsCube))
+        {
+            MaxCubeMapTextureSize = (int)propsCube.MaxWidth;
+        }
+
+        // Graphite exposes no color-attachment-count query; 8 is the value every backend guarantees.
+        MaxFramebufferColorAttachments = 8;
     }
 
     // Pooled command buffers. Submit returns a CB to this pool; GetCommandBuffer rents from it.
