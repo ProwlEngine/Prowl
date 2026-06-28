@@ -12,7 +12,11 @@ namespace Prowl.Editor.Projects.Scripting;
 
 /// <summary>
 /// Generates .csproj files for user scripts and compiles them via `dotnet build`.
-/// Produces two assemblies: Game (runtime scripts) and Editor (editor-only scripts).
+///
+/// User code is split into one assembly per <see cref="AssemblyDefinition"/> (.asmdef), plus two
+/// default assemblies for scripts not covered by any asmdef: <c>{Project}.Game</c> (runtime) and
+/// <c>{Project}.Editor</c> (editor-only). Managed plugins under <c>Plugins/</c> folders are
+/// referenced automatically (or explicitly via an asmdef's precompiled references).
 /// </summary>
 public static class ScriptCompiler
 {
@@ -23,91 +27,386 @@ public static class ScriptCompiler
         public string Errors;
     }
 
-    /// <summary>
-    /// Generate .csproj files and compile both assemblies.
-    /// Game assembly compiles first; Editor assembly depends on it.
-    /// </summary>
+    /// <summary>A single user assembly to be generated and compiled.</summary>
+    internal sealed class CompilationUnit
+    {
+        public required string Name;
+        public bool IsEditor;       // editor-side define/reference context
+        public bool IsEditorOnly;   // never shipped in a build
+        public bool AllowUnsafe = true;
+        public bool NoEngineReferences;
+        public AsmDefFile? Source;  // null for the default Game/Editor assemblies
+        public readonly List<string> Scripts = new();
+        public readonly List<string> AssemblyReferences = new();   // other unit names
+        public readonly List<string> ManagedPluginPaths = new();   // absolute .dll paths
+
+        public string CsprojPath = "";
+        public string OutputDllPath = "";
+    }
+
+    // ================================================================
+    //  Public entry point
+    // ================================================================
+
+    /// <summary>Generate .csproj files for all user assemblies and compile them in dependency order.</summary>
     public static CompileResult CompileAll(Project project)
     {
-        var (gameScripts, editorScripts) = ClassifyScripts(project);
+        var (units, error) = BuildPlan(project);
+        if (error != null)
+            return new CompileResult { Success = false, Errors = error };
 
-        if (gameScripts.Count == 0 && editorScripts.Count == 0)
+        var compileUnits = units.Where(u => u.Scripts.Count > 0).ToList();
+        if (compileUnits.Count == 0)
             return new CompileResult { Success = true, Output = "No scripts to compile." };
 
-        // Generate .csproj files
-        GenerateGameCsproj(project, gameScripts);
-        GenerateEditorCsproj(project, editorScripts);
+        foreach (var unit in compileUnits)
+            GenerateCsproj(project, unit, units);
 
         var output = new StringBuilder();
         var errors = new StringBuilder();
 
-        // Compile Game assembly first. `-t:Rebuild` forces a full recompile even when
-        // MSBuild thinks inputs are unchanged avoids the stale-DLL bug where users
-        // edit a script, see "compilation successful", restart, and the old code runs.
-        // Incremental build can miss changes when the engine's Prowl.Runtime.dll is
-        // updated but user sources weren't touched (cache references old symbols).
-        if (gameScripts.Count > 0)
+        // Compile in dependency order so each unit's referenced DLLs already exist on disk.
+        // `-t:Rebuild` forces a full recompile even when MSBuild thinks inputs are unchanged,
+        // avoiding the stale-DLL bug where edits appear to compile but the old code still runs.
+        foreach (var unit in compileUnits)
         {
-            Runtime.Debug.Log($"[ScriptCompiler] Compiling {project.Name}.Game ({gameScripts.Count} scripts)...");
-            var gameResult = RunDotnetCommand($"build \"{project.GameCsprojPath}\" --configuration Release -t:Rebuild", project.RootPath);
-            output.AppendLine(gameResult.stdout);
-            if (!string.IsNullOrEmpty(gameResult.stderr))
-                errors.AppendLine(gameResult.stderr);
+            Runtime.Debug.Log($"[ScriptCompiler] Compiling {unit.Name} ({unit.Scripts.Count} scripts)...");
+            var result = RunDotnetCommand($"build \"{unit.CsprojPath}\" --configuration Release -t:Rebuild", project.RootPath);
+            output.AppendLine(result.stdout);
+            if (!string.IsNullOrEmpty(result.stderr))
+                errors.AppendLine(result.stderr);
 
-            if (gameResult.exitCode != 0)
+            if (result.exitCode != 0)
             {
-                Runtime.Debug.LogError($"[ScriptCompiler] Game assembly compilation failed.");
-                LogBuildOutput(gameResult.stdout, gameResult.stderr);
+                Runtime.Debug.LogError($"[ScriptCompiler] {unit.Name} compilation failed.");
+                LogBuildOutput(result.stdout, result.stderr);
                 return new CompileResult { Success = false, Output = output.ToString(), Errors = errors.ToString() };
             }
-            Runtime.Debug.Log($"[ScriptCompiler] Game assembly compiled successfully.");
-        }
-
-        // Compile Editor assembly (depends on Game).
-        // BuildProjectReferences=false avoids redundantly rebuilding Game, which we
-        // already built above and which -t:Rebuild would otherwise force again.
-        if (editorScripts.Count > 0)
-        {
-            Runtime.Debug.Log($"[ScriptCompiler] Compiling {project.Name}.Editor ({editorScripts.Count} scripts)...");
-            var editorResult = RunDotnetCommand($"build \"{project.EditorCsprojPath}\" --configuration Release -t:Rebuild -p:BuildProjectReferences=false", project.RootPath);
-            output.AppendLine(editorResult.stdout);
-            if (!string.IsNullOrEmpty(editorResult.stderr))
-                errors.AppendLine(editorResult.stderr);
-
-            if (editorResult.exitCode != 0)
-            {
-                Runtime.Debug.LogError($"[ScriptCompiler] Editor assembly compilation failed.");
-                LogBuildOutput(editorResult.stdout, editorResult.stderr);
-                return new CompileResult { Success = false, Output = output.ToString(), Errors = errors.ToString() };
-            }
-            Runtime.Debug.Log($"[ScriptCompiler] Editor assembly compiled successfully.");
+            Runtime.Debug.Log($"[ScriptCompiler] {unit.Name} compiled successfully.");
         }
 
         return new CompileResult { Success = true, Output = output.ToString(), Errors = errors.ToString() };
     }
 
-    /// <summary>Classify .cs files into game scripts and editor scripts.</summary>
+    /// <summary>
+    /// Output DLL paths for every user assembly that has scripts, in dependency order.
+    /// Used by the assembly manager to load them all into the editor.
+    /// </summary>
+    public static List<string> GetEditorAssemblyPaths(Project project)
+    {
+        var (units, _) = BuildPlan(project);
+        return units.Where(u => u.Scripts.Count > 0).Select(u => u.OutputDllPath).ToList();
+    }
+
+    /// <summary>A user assembly destined for a player build.</summary>
+    public readonly record struct BuildAssembly(string Name, string DllPath);
+
+    /// <summary>
+    /// Game-side user assemblies (not editor-only, included for the target platform) in dependency
+    /// order. These are copied next to the player and loaded at startup.
+    /// </summary>
+    public static List<BuildAssembly> GetBuildAssemblies(Project project, string targetPlatform)
+    {
+        var (units, _) = BuildPlan(project);
+        var result = new List<BuildAssembly>();
+        foreach (var unit in units)
+        {
+            if (unit.IsEditorOnly || unit.Scripts.Count == 0) continue;
+            if (unit.Source != null && !unit.Source.Definition.IncludedFor(targetPlatform)) continue;
+            result.Add(new BuildAssembly(unit.Name, unit.OutputDllPath));
+        }
+        return result;
+    }
+
+    // ================================================================
+    //  Build plan
+    // ================================================================
+
+    private static (List<CompilationUnit> units, string? error) BuildPlan(Project project)
+    {
+        var asmdefs = AssemblyDefinitionDatabase.LoadAll(project);
+
+        // Reject duplicate assembly names early - they would clobber each other's output.
+        var dupes = asmdefs.GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).ToList();
+        if (dupes.Count > 0)
+            return (new(), $"Duplicate assembly definition name(s): {string.Join(", ", dupes.Select(d => d.Key))}");
+
+        string defaultDefines = $"PROWL;PROWL_EDITOR;{GetVersionDefine()}";
+        var activeDefines = new HashSet<string>(defaultDefines.Split(';'), StringComparer.OrdinalIgnoreCase);
+
+        var units = new List<CompilationUnit>();
+        var byName = new Dictionary<string, CompilationUnit>(StringComparer.OrdinalIgnoreCase);
+
+        // Default assemblies (scripts not owned by any asmdef).
+        var defaultGame = new CompilationUnit { Name = $"{project.Name}.Game", IsEditor = false, IsEditorOnly = false };
+        var defaultEditor = new CompilationUnit { Name = $"{project.Name}.Editor", IsEditor = true, IsEditorOnly = true };
+        units.Add(defaultGame);
+        units.Add(defaultEditor);
+
+        // Asmdef-defined assemblies (only those whose define constraints are satisfied).
+        var asmdefUnits = new List<(AsmDefFile file, CompilationUnit unit)>();
+        foreach (var file in asmdefs)
+        {
+            if (!EvaluateDefineConstraints(file.Definition.DefineConstraints, activeDefines))
+                continue;
+
+            var unit = new CompilationUnit
+            {
+                Name = file.Name,
+                IsEditor = file.Definition.IncludedFor(BuildPlatforms.Editor),
+                IsEditorOnly = file.Definition.IsEditorOnly,
+                AllowUnsafe = file.Definition.AllowUnsafeCode,
+                NoEngineReferences = file.Definition.NoEngineReferences,
+                Source = file,
+            };
+            units.Add(unit);
+            asmdefUnits.Add((file, unit));
+        }
+
+        foreach (var unit in units)
+            byName[unit.Name] = unit;
+
+        // Classify scripts into their owning assembly.
+        if (Directory.Exists(project.AssetsPath))
+        {
+            foreach (var script in Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories))
+            {
+                var owner = AssemblyDefinitionDatabase.FindOwner(script, asmdefs);
+                if (owner != null && byName.TryGetValue(owner.Name, out var ownerUnit))
+                {
+                    ownerUnit.Scripts.Add(script);
+                }
+                else
+                {
+                    bool isEditor = IsEditorPath(project, script);
+                    (isEditor ? defaultEditor : defaultGame).Scripts.Add(script);
+                }
+            }
+        }
+
+        // Resolve plugin and assembly references.
+        var plugins = PluginScanner.ScanAll(project);
+        var autoManaged = plugins.Where(p => p.IsManaged && p.AutoReferenced).ToList();
+        var managedByFile = plugins.Where(p => p.IsManaged)
+            .ToDictionary(p => p.FileName, p => p, StringComparer.OrdinalIgnoreCase);
+
+        // Set of unit names that actually produce a DLL (have scripts) - only these are referenceable.
+        var producing = new HashSet<string>(units.Where(u => u.Scripts.Count > 0).Select(u => u.Name), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var unit in units)
+        {
+            // Managed plugin references.
+            IEnumerable<PluginInfo> pluginRefs;
+            if (unit.Source is { Definition.OverrideReferences: true } src)
+            {
+                pluginRefs = src.Definition.PrecompiledReferences
+                    .Select(name => managedByFile.GetValueOrDefault(name))
+                    .Where(p => p != null)!;
+            }
+            else
+            {
+                // Game assemblies may only reference non-editor-only plugins (build separation);
+                // editor-side assemblies can reference everything.
+                pluginRefs = autoManaged.Where(p => unit.IsEditor || unit.IsEditorOnly || !p.EditorOnly);
+            }
+            foreach (var p in pluginRefs)
+                unit.ManagedPluginPaths.Add(p!.AbsolutePath);
+
+            // Assembly references.
+            if (unit.Source != null)
+            {
+                foreach (var refName in unit.Source.Definition.References)
+                {
+                    if (producing.Contains(refName))
+                        unit.AssemblyReferences.Add(refName);
+                    else if (byName.ContainsKey(refName))
+                        { /* referenced asmdef has no scripts -> nothing to link */ }
+                    else
+                        Runtime.Debug.LogWarning($"[ScriptCompiler] {unit.Name} references unknown assembly '{refName}'.");
+                }
+            }
+        }
+
+        // Default assemblies auto-reference auto-referenced asmdef assemblies, so loose scripts can
+        // use asmdef code without an explicit reference.
+        foreach (var (file, unit) in asmdefUnits)
+        {
+            if (unit.Scripts.Count == 0 || !file.Definition.AutoReferenced) continue;
+            if (!unit.IsEditorOnly) defaultGame.AssemblyReferences.Add(unit.Name);
+            defaultEditor.AssemblyReferences.Add(unit.Name);
+        }
+        if (defaultGame.Scripts.Count > 0)
+            defaultEditor.AssemblyReferences.Add(defaultGame.Name);
+
+        // Fill in generated file paths.
+        foreach (var unit in units)
+        {
+            unit.CsprojPath = Path.Combine(project.RootPath, $"{unit.Name}.csproj");
+            unit.OutputDllPath = Path.Combine(project.ScriptAssemblyPath, $"{unit.Name}.dll");
+        }
+
+        // Order by dependency (referenced assemblies build first).
+        var (ordered, cycle) = TopologicalSort(units, byName);
+        if (cycle != null)
+            return (new(), $"Cyclic assembly references detected: {cycle}");
+
+        return (ordered, null);
+    }
+
+    private static (List<CompilationUnit> ordered, string? cycle) TopologicalSort(
+        List<CompilationUnit> units, Dictionary<string, CompilationUnit> byName)
+    {
+        var ordered = new List<CompilationUnit>();
+        var state = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase); // 0=unseen,1=visiting,2=done
+        string? cycle = null;
+
+        void Visit(CompilationUnit u, List<string> stack)
+        {
+            if (cycle != null) return;
+            state.TryGetValue(u.Name, out int s);
+            if (s == 2) return;
+            if (s == 1)
+            {
+                cycle = string.Join(" -> ", stack.SkipWhile(n => !n.Equals(u.Name, StringComparison.OrdinalIgnoreCase)).Append(u.Name));
+                return;
+            }
+
+            state[u.Name] = 1;
+            stack.Add(u.Name);
+            foreach (var dep in u.AssemblyReferences)
+                if (byName.TryGetValue(dep, out var depUnit))
+                    Visit(depUnit, stack);
+            stack.RemoveAt(stack.Count - 1);
+            state[u.Name] = 2;
+            ordered.Add(u);
+        }
+
+        foreach (var u in units)
+            Visit(u, new List<string>());
+
+        return (cycle == null ? ordered : new(), cycle);
+    }
+
+    // ================================================================
+    //  csproj generation
+    // ================================================================
+
+    private static void GenerateCsproj(Project project, CompilationUnit unit, List<CompilationUnit> allUnits)
+    {
+        string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
+        string outputDir = Path.GetRelativePath(project.RootPath, project.ScriptAssemblyPath);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
+        sb.AppendLine("  <PropertyGroup>");
+        sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
+        // EnableDefaultItems=false stops MSBuild from auto-globbing DLLs sitting next to the
+        // project; every reference is added explicitly below.
+        sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");
+        sb.AppendLine($"    <AllowUnsafeBlocks>{(unit.AllowUnsafe ? "true" : "false")}</AllowUnsafeBlocks>");
+        sb.AppendLine("    <Nullable>enable</Nullable>");
+        sb.AppendLine($"    <OutputPath>{outputDir}</OutputPath>");
+        sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
+        sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");
+        sb.AppendLine($"    <AssemblyName>{unit.Name}</AssemblyName>");
+        sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{GetVersionDefine()}</DefineConstants>");
+        sb.AppendLine("  </PropertyGroup>");
+
+        sb.AppendLine("  <ItemGroup>");
+
+        // Engine references (Private=true forces use of the HintPath instead of local probing).
+        if (!unit.NoEngineReferences)
+        {
+            AppendReference(sb, "Prowl.Runtime", Path.Combine(engineDir, "Prowl.Runtime.dll"), copyLocal: true);
+            AppendReference(sb, "Prowl.Editor", Path.Combine(engineDir, "Prowl.Editor.dll"), copyLocal: true);
+
+            foreach (var dll in Directory.EnumerateFiles(engineDir, "*.dll"))
+            {
+                string name = Path.GetFileNameWithoutExtension(dll);
+                if (name == "Prowl.Runtime" || name == "Prowl.Editor" || name.StartsWith(project.Name)) continue;
+                AppendReference(sb, name, dll, copyLocal: true);
+            }
+        }
+
+        // Managed plugin references.
+        foreach (var pluginPath in unit.ManagedPluginPaths)
+            AppendReference(sb, Path.GetFileNameWithoutExtension(pluginPath), pluginPath, copyLocal: true);
+
+        // Other user assemblies (built earlier; share OutputPath so they must not be copied over).
+        foreach (var refName in unit.AssemblyReferences)
+        {
+            string dll = Path.Combine(project.ScriptAssemblyPath, $"{refName}.dll");
+            AppendReference(sb, refName, dll, copyLocal: false);
+        }
+
+        sb.AppendLine("  </ItemGroup>");
+
+        // NuGet packages: non-editor packages flow to every assembly; editor-only packages only to
+        // editor-side assemblies (preserving "any script may use any non-editor package").
+        AppendNuGetPackages(sb, project, isEditorAssembly: false);
+        if (unit.IsEditor || unit.IsEditorOnly)
+            AppendNuGetPackages(sb, project, isEditorAssembly: true);
+
+        // Compile items.
+        sb.AppendLine("  <ItemGroup>");
+        foreach (var script in unit.Scripts)
+            sb.AppendLine($"    <Compile Include=\"{Path.GetRelativePath(project.RootPath, script)}\" />");
+        sb.AppendLine("  </ItemGroup>");
+
+        sb.AppendLine("</Project>");
+
+        File.WriteAllText(unit.CsprojPath, sb.ToString());
+    }
+
+    private static void AppendReference(StringBuilder sb, string include, string hintPath, bool copyLocal)
+    {
+        sb.AppendLine($"    <Reference Include=\"{include}\">");
+        sb.AppendLine($"      <HintPath>{hintPath}</HintPath>");
+        sb.AppendLine($"      <Private>{(copyLocal ? "true" : "false")}</Private>");
+        sb.AppendLine("    </Reference>");
+    }
+
+    // ================================================================
+    //  Helpers (kept stable for callers outside this class)
+    // ================================================================
+
+    /// <summary>Classify every .cs file into game vs editor scripts (by an "Editor" folder segment).</summary>
     internal static (List<string> game, List<string> editor) ClassifyScripts(Project project)
     {
         var game = new List<string>();
         var editor = new List<string>();
-
         if (!Directory.Exists(project.AssetsPath)) return (game, editor);
 
         foreach (var file in Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories))
-        {
-            string relative = Path.GetRelativePath(project.AssetsPath, file);
-            string[] segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-            bool isEditor = segments.Any(s => s.Equals("Editor", StringComparison.OrdinalIgnoreCase));
-
-            if (isEditor)
-                editor.Add(file);
-            else
-                game.Add(file);
-        }
+            (IsEditorPath(project, file) ? editor : game).Add(file);
 
         return (game, editor);
+    }
+
+    private static bool IsEditorPath(Project project, string absolutePath)
+    {
+        string relative = Path.GetRelativePath(project.AssetsPath, absolutePath);
+        return relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(s => s.Equals("Editor", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Evaluates asmdef define constraints (supports "SYMBOL" and "!SYMBOL").</summary>
+    private static bool EvaluateDefineConstraints(List<string> constraints, HashSet<string> defined)
+    {
+        foreach (var raw in constraints)
+        {
+            string c = raw.Trim();
+            if (c.Length == 0) continue;
+            if (c.StartsWith('!'))
+            {
+                if (defined.Contains(c[1..])) return false;
+            }
+            else if (!defined.Contains(c))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     internal static string GetVersionDefine()
@@ -117,158 +416,16 @@ public static class ScriptCompiler
             ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.1";
         int plus = version.IndexOf('+');
         if (plus >= 0) version = version[..plus];
-        // Convert "0.0.1" to "PROWL_0_0_1"
         return "PROWL_" + version.Replace('.', '_').Replace('-', '_').ToUpperInvariant();
-    }
-
-    private static void GenerateGameCsproj(Project project, List<string> scripts)
-    {
-        string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-        string runtimeDll = Path.Combine(engineDir, "Prowl.Runtime.dll");
-        string editorDll = Path.Combine(engineDir, "Prowl.Editor.dll");
-        string outputDir = Path.GetRelativePath(project.RootPath, project.ScriptAssemblyPath);
-        string versionDefine = GetVersionDefine();
-
-        var sb = new StringBuilder();
-        sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
-        sb.AppendLine("  <PropertyGroup>");
-        sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
-        // EnableDefaultItems=false prevents the CandidateAssemblyFiles to include Dlls
-        // in the Builds\ path, if it's in the same folder as the project. This won't cause any issues as other compile
-        // references are directly added below.
-        sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");
-        sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
-        sb.AppendLine("    <Nullable>enable</Nullable>");
-        sb.AppendLine($"    <OutputPath>{outputDir}</OutputPath>");
-        sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
-        sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");
-        sb.AppendLine($"    <AssemblyName>{project.Name}.Game</AssemblyName>");
-        sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{versionDefine}</DefineConstants>");
-        sb.AppendLine("  </PropertyGroup>");
-
-        // References Game assembly can reference Editor when compiling in-editor (PROWL_EDITOR)
-        // Private=true forces MSBuild to use HintPath instead of probing local directories
-        sb.AppendLine("  <ItemGroup>");
-        sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");
-        sb.AppendLine($"      <HintPath>{runtimeDll}</HintPath>");
-        sb.AppendLine("      <Private>true</Private>");
-        sb.AppendLine("    </Reference>");
-        sb.AppendLine($"    <Reference Include=\"Prowl.Editor\">");
-        sb.AppendLine($"      <HintPath>{editorDll}</HintPath>");
-        sb.AppendLine("      <Private>true</Private>");
-        sb.AppendLine("    </Reference>");
-
-        // Add transitive dependencies from Prowl.Runtime
-        foreach (var dll in Directory.EnumerateFiles(engineDir, "*.dll"))
-        {
-            string name = Path.GetFileNameWithoutExtension(dll);
-            if (name == "Prowl.Runtime" || name == "Prowl.Editor" || name.StartsWith(project.Name)) continue;
-            sb.AppendLine($"    <Reference Include=\"{name}\">");
-            sb.AppendLine($"      <HintPath>{dll}</HintPath>");
-            sb.AppendLine("      <Private>true</Private>");
-            sb.AppendLine("    </Reference>");
-        }
-        sb.AppendLine("  </ItemGroup>");
-
-        // NuGet packages (Game gets non-EditorOnly packages; Editor inherits these via ProjectReference)
-        AppendNuGetPackages(sb, project, isEditorAssembly: false);
-
-        // Compile items
-        sb.AppendLine("  <ItemGroup>");
-        foreach (var script in scripts)
-        {
-            string rel = Path.GetRelativePath(project.RootPath, script);
-            sb.AppendLine($"    <Compile Include=\"{rel}\" />");
-        }
-        sb.AppendLine("  </ItemGroup>");
-
-        sb.AppendLine("</Project>");
-
-        File.WriteAllText(project.GameCsprojPath, sb.ToString());
-    }
-
-    private static void GenerateEditorCsproj(Project project, List<string> scripts)
-    {
-        if (scripts.Count == 0) return;
-
-        string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-        string runtimeDll = Path.Combine(engineDir, "Prowl.Runtime.dll");
-        string editorDll = Path.Combine(engineDir, "Prowl.Editor.dll");
-        string gameCsprojRel = Path.GetFileName(project.GameCsprojPath);
-        string outputDir = Path.GetRelativePath(project.RootPath, project.ScriptAssemblyPath);
-
-        var sb = new StringBuilder();
-        sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
-        sb.AppendLine("  <PropertyGroup>");
-        sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
-        // Same as above
-        sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");
-        sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
-        sb.AppendLine("    <Nullable>enable</Nullable>");
-        sb.AppendLine($"    <OutputPath>{outputDir}</OutputPath>");
-        sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
-        sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");
-        sb.AppendLine($"    <AssemblyName>{project.Name}.Editor</AssemblyName>");
-        sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{GetVersionDefine()}</DefineConstants>");
-        sb.AppendLine("  </PropertyGroup>");
-
-        // References. Game is referenced via ProjectReference so its <PackageReference>s flow
-        // here transitively (so the user only marks a package "Editor Only" when they want to
-        // hide it from Game). Private=false avoids copying Game.dll on top of itself, since
-        // both csprojs share the same OutputPath.
-        sb.AppendLine("  <ItemGroup>");
-        sb.AppendLine($"    <Reference Include=\"Prowl.Runtime\">");
-        sb.AppendLine($"      <HintPath>{runtimeDll}</HintPath>");
-        sb.AppendLine("      <Private>true</Private>");
-        sb.AppendLine("    </Reference>");
-        sb.AppendLine($"    <Reference Include=\"Prowl.Editor\">");
-        sb.AppendLine($"      <HintPath>{editorDll}</HintPath>");
-        sb.AppendLine("      <Private>true</Private>");
-        sb.AppendLine("    </Reference>");
-        sb.AppendLine($"    <ProjectReference Include=\"{gameCsprojRel}\">");
-        sb.AppendLine("      <Private>false</Private>");
-        sb.AppendLine("    </ProjectReference>");
-
-        // Transitive dependencies
-        foreach (var dll in Directory.EnumerateFiles(engineDir, "*.dll"))
-        {
-            string name = Path.GetFileNameWithoutExtension(dll);
-            if (name == "Prowl.Runtime" || name == "Prowl.Editor" || name.StartsWith(project.Name)) continue;
-            sb.AppendLine($"    <Reference Include=\"{name}\">");
-            sb.AppendLine($"      <HintPath>{dll}</HintPath>");
-            sb.AppendLine("      <Private>true</Private>");
-            sb.AppendLine("    </Reference>");
-        }
-        sb.AppendLine("  </ItemGroup>");
-
-        // NuGet packages (Editor csproj only emits packages flagged EditorOnly; the rest flow
-        // in transitively from the Game ProjectReference).
-        AppendNuGetPackages(sb, project, isEditorAssembly: true);
-
-        // Compile items
-        sb.AppendLine("  <ItemGroup>");
-        foreach (var script in scripts)
-        {
-            string rel = Path.GetRelativePath(project.RootPath, script);
-            sb.AppendLine($"    <Compile Include=\"{rel}\" />");
-        }
-        sb.AppendLine("  </ItemGroup>");
-
-        sb.AppendLine("</Project>");
-
-        File.WriteAllText(project.EditorCsprojPath, sb.ToString());
     }
 
     internal static void AppendNuGetPackages(StringBuilder sb, Project project, bool isEditorAssembly)
     {
-        // Read packages from the PackageSettings (via ProjectSettingsRegistry)
         try
         {
             var pkgSettings = ProjectSettingsRegistry.Get<PackageSettings>();
             if (pkgSettings.Packages.Count == 0) return;
 
-            // Editor csproj only declares EditorOnly packages; non-EditorOnly packages live
-            // on the Game csproj and flow into Editor via the ProjectReference.
             var filtered = pkgSettings.Packages.Where(p => p.EditorOnly == isEditorAssembly).ToList();
             if (filtered.Count == 0) return;
 
@@ -281,12 +438,6 @@ public static class ScriptCompiler
         {
             // Fallback: no packages
         }
-    }
-
-    private class PackageRef
-    {
-        public string Name { get; set; } = "";
-        public string Version { get; set; } = "";
     }
 
     internal static (int exitCode, string stdout, string stderr) RunDotnetCommand(string args, string workingDir)
@@ -309,7 +460,7 @@ public static class ScriptCompiler
 
             string stdout = process.StandardOutput.ReadToEnd();
             string stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit(60_000); // 60s timeout
+            process.WaitForExit(120_000); // 120s timeout (multiple assemblies may build)
 
             return (process.ExitCode, stdout, stderr);
         }
