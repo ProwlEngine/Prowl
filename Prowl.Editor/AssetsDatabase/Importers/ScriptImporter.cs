@@ -15,6 +15,8 @@ public class ScriptImporter : AssetImporter
 {
     public override int Version => 1;
 
+    public override bool IsEditorOnlyAsset => true;
+
     public override bool Import(ImportContext ctx)
     {
         // Only request recompile if the script is newer than the compiled assembly
