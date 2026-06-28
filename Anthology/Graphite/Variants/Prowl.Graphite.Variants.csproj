@@ -6,7 +6,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <PackageId>Prowl.Graphite.Shaders</PackageId>
+        <PackageId>Prowl.Graphite.Variants</PackageId>
         <Description>The shared keyword and shader-variant system for Prowl.Graphite.</Description>
         <PackageTags>graphics shader variant keyword</PackageTags>
     </PropertyGroup>
